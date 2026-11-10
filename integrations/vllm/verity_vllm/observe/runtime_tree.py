@@ -8,7 +8,7 @@ lowered from (that is `verity_vllm.correspondence.runtime`, read by `acquire.cor
 The runner is not built on the meta path; its facts are declared (`runner.source`) -- the two facts `NativeHostCommitter.install` /
 `_select_modules` read from a live engine: the runner exposes `sample()` (True) and whether its `sampler` attribute is an nn.Module
 (`--sampler-module`; default False: the pinned vLLM's live engine shows no such module -- m1_capture's runtime_tree.json on the l40s
-b64 reference row, 2026-09-23 -- so the class tables' `runner.sampler` forward hook is not registered there either).
+b64 reference row -- so the class tables' `runner.sampler` forward hook is not registered there either).
 A live engine's tree carries the observed facts; `--runner-facts <live runtime_tree.json>` copies them.
 """
 from __future__ import annotations
@@ -37,10 +37,6 @@ class RuntimeTree:
 
     def classes(self, path: str) -> set[str]:
         return set(self.modules.get(path) or ())
-
-    def class_name(self, path: str) -> str | None:
-        m = self.modules.get(path)
-        return m[0] if m else None
 
     def to_json(self) -> dict[str, Any]:
         return {"schema": RUNTIME_TREE_SCHEMA, "source": self.source, "runner": dict(self.runner), "modules": {k: list(v) for k, v in sorted(self.modules.items())},
@@ -73,11 +69,8 @@ def runtime_tree_of(model: Any, runner: Any = None, *, source: str = "live") -> 
     r: dict[str, Any] = {"sample": bool(runner is not None and hasattr(runner, "sample")), "sampler_module": False, "source": "engine runner" if runner is not None else "no runner"}
     if runner is not None:
         smp = getattr(runner, "sampler", None)
-        try:
-            import torch
-            r["sampler_module"] = isinstance(smp, torch.nn.Module)
-        except ImportError:                                                        # pragma: no cover
-            r["sampler_module"] = smp is not None
+        import torch
+        r["sampler_module"] = isinstance(smp, torch.nn.Module)
         if r["sampler_module"]:
             r["sampler_class"] = mro_names(smp)
     return RuntimeTree(modules=mods, buffers=bufs, runner=r, source=source)

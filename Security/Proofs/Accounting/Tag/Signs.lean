@@ -1,5 +1,7 @@
-import Proofs.Accounting.Tag.Basic
-import Models.Accounting.Guarantees.Sketch
+module
+
+public import Proofs.Accounting.Tag.Basic
+public import Definitions.Accounting.Guarantees.Sketch
 
 /-!
 # ±1 rows: non-collision
@@ -10,6 +12,10 @@ half the rows have a given inner product (`card_level_le`), and `k` independent 
 at most `2^-k` (`card_rows_le`). `nonCollision` is `Accounting.Guarantees.Sketch.NonCollision`; `commitThenProject`
 (`Accounting.Guarantees.Sketch.CommitThenProject`) applies the same bound to a column where `C` and `A·B` differ.
 -/
+
+@[expose] public section
+
+open Verity.Game renaming prPMF → prob
 
 namespace Accounting.TagProofs
 

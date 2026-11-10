@@ -1,15 +1,32 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink
-import Proofs.Flock.Soundness.Discharge.ZkExec
-import Proofs.Flock.Soundness.Discharge.ZkView
-import Proofs.Flock.Soundness.Discharge.ZkBind
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind
+public import Proofs.Flock.Soundness.Discharge.ZkExec
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.Discharge.ZkView
+public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+public import Proofs.Flock.Soundness.Refine.Regions
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# A draw's `--zk` table: its coins and sizes
+# A sample's `--zk` table: its coins and sizes
 
 What `coinedOf` (`Composed/Coined.lean`) and `innerOf` (`Composed/Inner.lean`) both read:
 
 * `CoinsZK`: a table's coin vector, the coins `refused_coins` reads (`β`, `ρ`) and the others (`rest`).
-* `RestZK`, `RestOf`: the other coins at a draw, every coin `verify --zk` draws for a rep, in its order: level 0's queries,
+* `RestZK`, `RestOf`: the other coins at a sample, every coin `verify --zk` samples for a rep, in its order: level 0's queries,
   the zerocheck's (`rSkip`, `rOuter`, `z`, the residual rounds' `ρ`), the lincheck's (`α`, `β`, its rounds', `r′`), the ring
   switch's (`rpp` per claim, `γ` per claim), level 0's out-of-domain and lane coins, Ligerito's coins after `T'`, and the inner proof's (`ε`, its
   constraints' `γ`, its queries).
@@ -19,6 +36,8 @@ What `coinedOf` (`Composed/Coined.lean`) and `innerOf` (`Composed/Inner.lean`) b
 * `eqWord`, `maskWordsOf`: the rank check's weights and the mask slot's words.
 * `regionPtOf`, `pubRegOf`: the region claims' points and public ring-switch messages at the link points.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -36,14 +55,14 @@ structure CoinsZK (Rest : Type) where
   rest : Rest
 
 /-- **A `--zk` table's other coins**: the session's two link points (`mP` coordinates, shared by both reps,
-the region claims' points through `st.extra`), then each rep's, in the order `verify --zk` draws them: `q₀` level-0 queries over `L₀`
+the region claims' points through `st.extra`), then each rep's, in the order `verify --zk` samples them: `q₀` level-0 queries over `L₀`
 positions; the zerocheck's skip coins, outer coins (rounds `7 … m−7`), `z` and the residual rounds' `ρ`; the lincheck's
 `α`, `β`, its `kLog − 6` rounds' coins and `r′`; the ring switch's 7 coins per claim and `γ` per claim (`nCl` claims);
 level 0's out-of-domain points (`z ← sampleVec (m − 7)`) and coins (`b`), and its lane challenges; then, after the restart
-`T'` (and `CoinsZK.rho`), every coin `ZkLigerito.ligerito` draws from there on (`ligZ` … `ligB`, below); the triple's
+`T'` (and `CoinsZK.rho`), every coin `ZkLigerito.ligerito` samples from there on (`ligZ` … `ligB`, below); the triple's
 sacrifice coin `ε`; the inner proof's constraints' `γ` (ten); its `Q` queries.
 
-Ligerito's coins after `T'`, for `R + 1` levels with `qs j` queries at level `j`, in draw order: at each split `j < R` (level
+Ligerito's coins after `T'`, for `R + 1` levels with `qs j` queries at level `j`, in sample order: at each split `j < R` (level
 0's after the lane phase, then level `j`'s inside fold round `j − 1`), two out-of-domain samples (`oodIntro`: a point
 `z ← sampleVec (m − 6 − k0 − 3j)` and its coin `b`); level 0's consistency coins `α` (`queryLevel0`; its query coins are
 `q0s`, as positions) and its batching coin `b₀`; then per fold round `i < R` its four challenges (F256) and, at level `i + 1`,
@@ -87,7 +106,7 @@ def padLenOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ := (Zk.PadLayout.new st.m 
 def padNOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ℕ :=
   (padLenOf Tz st + Zk.K_PAD).nextPowerOfTwo * 2 ^ Zk.INNER_LOG_INV_RATE
 
-/-- **The draw's other coins**: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions, the
+/-- **The sample's other coins**: `q₀ = t_pad / 2` level-0 queries (`Zk.schedule`) over `2^logLen` positions, the
 executable statement's `m` and `kLog`, a claim per region and link point besides `ab` and `c` (`extraClaims`), and the layout's one out-of-domain
 coin, the statement's `mPts` link coordinates, and Ligerito's `R = |levels| − 1` fold rounds with each level's query count. -/
 abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
@@ -95,11 +114,11 @@ abbrev RestOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : Type :=
     (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).nOod0 st.mPts (Tz.sch.levels.length - 1)
     (fun j => (Tz.sch.levels.getD j default).queries)
 
-/-- **The draw's value lists** (`Table`'s `VL`): Ligerito's restart `T'` (a clear K message, `Level0Msgs.tPrime`) and levels
+/-- **The sample's value lists** (`Table`'s `VL`): Ligerito's restart `T'` (a clear K message, `Level0Msgs.tPrime`) and levels
 ≥ 1's bytes. -/
 abbrev VLOf : Type := FlockLevel3.GF256 × ByteArray
 
-/-- The draw's hidden-salt type. -/
+/-- The sample's hidden-salt type. -/
 abbrev HiOf (Tz : TabZK 𝔽 mPts) : Type := Fin (hiCount Tz) → ZkView.Salt
 
 /-- **Rep `r`'s claims** (`abcClaims`) at its coins: `ab` at the lincheck's point, `c` at the zerocheck's. -/

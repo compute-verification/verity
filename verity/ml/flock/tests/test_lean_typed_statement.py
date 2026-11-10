@@ -14,12 +14,11 @@ import pytest
 
 from verity.ml.circuits.codec import canonical_json
 
-pytest.importorskip("verity_numerical")
-pytest.importorskip("verity_vllm.program.registry.prims")
+pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import typed_statement as TS  # noqa: E402
-from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import lowerings  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
@@ -123,14 +122,17 @@ def test_a_typed_statement_with_other_row_nets_is_refused(rope, name, what):
 
 
 #: a typed RoPE (`rope-head/d64/neox-bf16`, a flat class, 4 instances) staged by `typed_statement.stage`, and every CPU
-#: selftest case of its flock-circuit (seed-injection build, #273 at 8505c540), recorded
+#: selftest case of its flock-circuit (seed-injection build at 8505c540), recorded
 RUST_SESSIONS = "art:48f286b4"
 
 
+@pytest.mark.slow
 def test_it_refuses_the_rust_provers_sessions(tmp_path):
-    """A typed statement is a form the soundness proof does not cover (§16.15): on `flock-circuit`'s own recorded sessions
-    for a flat class, the statement sets up and the verifier refuses every case, the 3 honest ones for that reason, once
-    every check has passed, and every other case for the check that catches it."""
+    """A typed statement is a form the soundness proof does not cover (`Flock.ProvedScope`): on `flock-circuit`'s own recorded sessions
+    for a flat class, the statement sets up and the verifier's checks agree with upstream's verdict on each case: the 3 honest
+    ones pass every check and are refused for that reason, and every other case fails the check that catches it. That build
+    has no zk patch, so its plain files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes,
+    which `verify` refuses and `agree --upstream-plain` reads (`Flock.Proof`)."""
     import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
@@ -145,12 +147,15 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
                    check=True, capture_output=True)
     sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())
     statement = "verity/flock-circuit/types@210d32e1+seed-injection"
-    p = subprocess.run([str(BIN), "verify", "--statement", statement,
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({str(s): json.loads((s / "case.json").read_text())["live"]["accepted"] for s in sessions}))
+    p = subprocess.run([str(BIN), "agree", "--statement", statement,
                         "--circuit", str(root / "stage" / "circuit.txt"), "--public", str(root / "stage" / "pub-4.bin"),
-                        "--session", *map(str, sessions)], capture_output=True, text=True)
-    got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
+                        "--upstream-plain", "--upstream-verdicts", str(upstream), "--session", *map(str, sessions)],
+                       capture_output=True, text=True)
+    got = {Path(v["session"]).name: v for v in (json.loads(ln[10:]) for ln in p.stdout.splitlines() if ln.startswith("AGREEMENT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
     refused = f"refused: {statement}, a typed statement: a statement form the soundness proof does not cover"
-    assert not any(got[n]["accepted"] for n in want)
-    assert {n: got[n]["why"] == refused for n in want} == want, {n: got[n]["why"] for n in want}
+    assert p.returncode == 0 and all(got[n]["agree"] and "accepted" not in got[n] for n in want), p.stdout
+    assert {n: got[n]["check"] == "" and got[n]["refusal"] == refused for n in want} == want, {n: got[n]["check"] for n in want}
     assert sum(want.values()) == 3 and len(want) == 19

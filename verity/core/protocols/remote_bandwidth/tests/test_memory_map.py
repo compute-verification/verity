@@ -111,9 +111,9 @@ def test_replay_turns_each_step_into_appends_releases_and_plan_changes() -> None
 
 def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     """The map drives both sides: the prover appends each step's pages (their digests the map's, at its indices) and
-    sends the append's root and the released runs; the verifier takes them (`Session.append`, `Session.release`), and
+    sends the append's root and the released runs; the verifier takes them (`AuditRun.append`, `AuditRun.release`), and
     each pass's plan travels as `Replay.take`'s change for the step it names, the one after the step just applied.
-    Every receipt is drawn and every window accepted, and the record keeps each pass's step."""
+    Every receipt is sampled and every window accepted, and the record keeps each pass's step."""
     st = store()
     head = Header(st.registration.digest, N)
     run = Run(st)
@@ -141,9 +141,9 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     assert (rec.appended, rec.released) == (6, 7)
 
 
-def test_a_registered_block_freed_at_its_values_last_read_leaves_every_later_plan() -> None:
-    """A free of a slot below N releases its registered block: the writer records it at the step that reads the
-    block's values for the last time (a weight only some steps read), so no later pass holds it and none credits it.
+def test_a_registered_block_freed_at_its_values_last_reader_leaves_every_later_plan() -> None:
+    """A free of a slot below N releases its registered block: the writer records it at the block's values' last
+    structural reader (a weight only the first steps read), so no later pass holds it and none credits it.
     The verifier takes the release, and a plan that still holds the block is refused (`plan`)."""
     st = store()
     replay, run = Replay(Header(st.registration.digest, N), st.registration), Run(st)
@@ -184,7 +184,7 @@ def test_a_block_whose_write_is_recorded_two_steps_after_it_completed_is_residen
     whose attention reads it encoded, so its write is recorded at step 3, two steps after it was completed.  Until then
     it is in no record: the passes at steps 2 and 3 don't hold it, and the pass at step 4 adds it.  The verifier takes
     the append before the record writes the block, the record's write names the append's index and digest, and every
-    pass is accepted with every receipt drawn."""
+    pass is accepted with every receipt sampled."""
     st = store()
     head = Header(st.registration.digest, N)
     replay, run = Replay(head, st.registration), Run(st)

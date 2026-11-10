@@ -3,8 +3,12 @@ The `--zk` verifier (`Flock.Zk`) over the hash oracle (`Flock.With.Hashes`): `Zk
 every hash call the oracle's, the inner proof's `τ` commitment and its pads' Merkle paths included, and `Zk.verifyWith h`
 runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text.
 -/
-import Flock.With.Verify
-import Flock.Zk
+module
+
+public import Flock.With.Verify
+public import Flock.Zk
+
+@[expose] public section
 
 namespace Flock.Zk
 
@@ -244,7 +248,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
         liftLM (claimPow p)
         let bb ← liftW (sampleWith hs)
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"
@@ -293,7 +297,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
   return rec
 
 /-- `Zk.verifyRep` with the oracle's hashes. -/
-def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -345,6 +349,33 @@ def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (recor
     let c0 ← verifyRepWith hs spec st sch tPad sess i 0 proofs[2 * i]!
     let c1 ← verifyRepWith hs spec st sch tPad sess i 1 proofs[2 * i + 1]!
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+/-- `Zk.verifyWithM` at the record's parsed value `j` (`Record.decodeJWith`); at a record that parses to `j` it is
+`Zk.verifyWithM` (`verifyWithM_of_parse`). -/
+def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json) (proofs : Array ByteArray) :
+    M Unit := do
+  if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
+  if spec.coinTree.isNone then throw "zk: the session's coins are not the keyed coin tree"
+  let sess ← Record.decodeJWith hs spec j
+  for (st, p) in tabs.zip sess.publics do st.publics p
+  let schs ← tabs.mapM fun st => schedule st.m
+  let want := spec.repStreams
+  if proofs.size != want.size then throw s!"{want.size} proofs expected"
+  if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
+    throw s!"S17: proof_{spec.dk} does not list exactly the tables' rep streams"
+  for ((_, _, w), b) in want.zip proofs do
+    if (sess.proofSha.find? (·.1 == w)).map (·.2) != some (hexOf (← spec.dgWith hs b)) then
+      throw s!"S17: {w}: the proof is not the one the server received"
+  for i in [0:tabs.size] do
+    let (st, (sch, tPad)) := (tabs[i]!, schs[i]!)
+    let c0 ← verifyRepWith hs spec st sch tPad sess i 0 proofs[2 * i]!
+    let c1 ← verifyRepWith hs spec st sch tPad sess i 1 proofs[2 * i + 1]!
+    if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
+    verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
+  simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 
 /-- The `--zk` verifier with SHA-512 replaced by `h`, every other hash the deployed one; `Zk.verifyWith Sha512.hash` is
 `Zk.verify` (`Flock.Zk.verify_eq_verifyWith`). -/

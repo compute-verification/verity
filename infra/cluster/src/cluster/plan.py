@@ -10,15 +10,14 @@ The rules, each enforced here and checked by `tests/test_simulation.py` on rando
    guest's CPUs come from its share; a node's reserved CPU pools go only to jobs naming them, even while idle.
 2. **Standing, then share, then priority.** A job displaces an allocation only when its rank (`Cluster.rank`: owner before
    guest, then running within its workstream's own GPUs before borrowing, then priority class) is strictly higher, and only
-   a `requeue` allocation is evicted. A guest must be preemptible and may not be quiet, so an owner's work always gets its
+   a `requeue` allocation past its grace (`in_grace`) is evicted. A guest must be preemptible and may not be quiet, so an owner's work always gets its
    node back; a workstream's work within its own GPUs gets them back from any borrower, whatever its priority. A
    workstream never runs beyond its GPUs plus its `borrow_gpus`.
 3. **Quiet jobs** (timed windows) run with nothing else active on their node: GPU-holding allocations are evicted (a frozen
    CUDA context still holds its GPU), CPU-only ones frozen and thawed afterwards; only a `quiet_safe` service keeps running.
    A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation. A quiet job asking
    for some but not all of its node's GPUs (a 1-GPU `gpu-lease --timed`) still clears the rest of the node, but starts
-   beside what it may not displace when it fits, as `gpu-lease` starts it: a design divergence kept until the 7 Oct clamp
-   (infra's and PoUW's rulings).
+   beside what it may not displace when it fits, as `gpu-lease` starts it: a design divergence kept until the clamp.
 4. **Reservation and backfill.** The highest-ranked blocked job with a known start (the ends of the allocations it may not
    displace) reserves its node from then. Lower jobs start ahead of it only if they end before then or it may evict them,
    so a whole-node request is never starved and GPUs never idle behind it.
@@ -39,7 +38,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Iterable, Union
 
-from .model import GUEST, OWNER, Allocation, Cluster, Job, Node
+from .model import GUEST, OWNER, Allocation, Cluster, Job, Node, iso
 
 
 @dataclass(frozen=True)
@@ -116,7 +115,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
         if share.max_job_memory_gib is not None and job.memory_gib > share.max_job_memory_gib:
             return f"{job.project}'s jobs on {node} get at most {share.max_job_memory_gib} GiB each"
         if share.until is not None and (now >= share.until or (length is not None and now + length > share.until)):
-            return f"{job.project}'s share on {node} ends at {share.until}"
+            return f"{job.project}'s share on {node} ends at {iso(share.until)}, from the description"
     if job.workstream is not None:
         w = cluster.workstream(job.workstream, node)
         if w is None or standing != OWNER:
@@ -125,7 +124,8 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
             return f"larger than workstream {w.name} may hold on {node} ({w.gpus} GPUs + {w.borrow_gpus} borrowed)"
     ends = n.admission_ends
     if ends is not None and (now >= ends or (length is not None and now + length > ends)):
-        return f"would run past {node}'s admission end {ends}"
+        return (f"would run past {node}'s admission end {iso(ends)}: its stop {iso(n.stops_at)}, from {n.stops_at_source}, "
+                f"less its {n.drain_s} s drain")
     if job.pool is not None and job.pool not in n.pools:
         return f"{node} has no CPU pool {job.pool!r}"
     allowed = allowed_cpus(cluster, n, job)
@@ -330,11 +330,23 @@ def whole_quiet(cluster: Cluster, node: str, job: Job) -> bool:
     return job.quiet and not 0 < job.gpus < len(cluster.nodes[node].gpus)
 
 
+#: a `requeue` allocation's grace before an ordinary job may evict it: its own `max_s`, at most GRACE_MAX_S, else GRACE_S;
+#: `gpu-lease`'s own rule (GPU_LEASE_PREEMPT_GRACE_S, _MAX_S) on node 2 (a shorter grace
+#: SIGTERMs benchmark points minutes into 40-50 min leases, so none finish). A quiet job still clears its node at once.
+GRACE_S = 600
+GRACE_MAX_S = 2400
+
+
+def in_grace(a: Allocation, now: int) -> bool:
+    grace = min(a.job.max_s, GRACE_MAX_S) if a.job.max_s is not None else GRACE_S
+    return a.running_s(now) < grace
+
+
 def _ordinary(cluster, node, job, occ, held_locks, arank, mine, now):
     got = fit(cluster, node, job, occ, held_locks)
     if not isinstance(got, str):
         return [], [], got
-    movable = sorted((a for a in occ if a.job.preempt == "requeue" and arank(a) < mine),
+    movable = sorted((a for a in occ if a.job.preempt == "requeue" and arank(a) < mine and not in_grace(a, now)),
                      key=lambda a: (arank(a), -a.started, a.id))
     chosen: list[Allocation] = []
     for a in movable:

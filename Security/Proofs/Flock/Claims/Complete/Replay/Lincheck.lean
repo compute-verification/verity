@@ -1,17 +1,55 @@
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
-import Proofs.Flock.VBridge.Algebra.Lincheck
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+import Flock.With.Eq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
 
 /-!
 # Lincheck replays the honest prover's rounds
 
 `lincheckWith_of`: from the honest prover's lincheck (`lincheckP`) in the pure session, the verifier's lincheck
-(`lincheckWith`, PROTOCOL.md §10) replayed on rounds that carry the prover's returns the prover's `LcOut`, consuming
+(`lincheckWith`, `Flock.Piop`) replayed on rounds that carry the prover's returns the prover's `LcOut`, consuming
 exactly the prover's rounds, when the statement's circuit fold at the prover's coins is some `comb` of width 64 and the
 rounds' claim from `α·v_A + v_B + β` ends at `dot comb z_partial` (the lincheck's algebra).
 
 * **The prover in closed form** (`lincheckP_go`): its rounds and `z_partial` (`Lc.proof`), its output (`Lc.out`) and
   transcript (`Lc.tEnd`), at the coins of the replies to its sends, where the circuit fold returns `full`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

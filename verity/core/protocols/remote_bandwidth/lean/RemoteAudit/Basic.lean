@@ -1,10 +1,11 @@
-import Flock.Hash
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # Bytes, SHA-512 and frame-v3-sha512
 
-The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`), C-Flock's SHA-512, and
+The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`), Flock's SHA-512, and
 `verity.ml.commitments.merkle.verify_opening` over a `CommitmentDomain` with `hash = "sha512"` and positions
 `RangeIndexedDomain(start, stop)`: a receipt tree and the payload tree start at 0, an append's tree at its first index.
 
@@ -17,6 +18,8 @@ The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_byt
 `frame` is the merkle frame v3, `FRAME ‖ u32be |tag| ‖ tag ‖ (u64be |part| ‖ part)*`, and `uint` `_uint`'s minimal
 big-endian bytes (`FlockSoundness.Randomness.natBytes`).
 -/
+
+@[expose] public section
 
 namespace RemoteAudit
 
@@ -87,6 +90,9 @@ def Domain.leaf (d : Domain) (rank position : Nat) (schema : String) (value : By
 
 def Domain.node (d : Domain) (level index : Nat) (left right : ByteArray) : ByteArray :=
   hash "node" [d.id, uint level, uint index, left, right]
+
+/-- The leaf at `rank` past a tree's `count` leaves, up to its `2^depth`: `H(frame "pad" [id, uint rank])`. -/
+def Domain.pad (d : Domain) (rank : Nat) : ByteArray := hash "pad" [d.id, uint rank]
 
 /-- `merkle_depth`. -/
 def depth (count : Nat) : Nat := if count ≤ 1 then 0 else Nat.log2 (count - 1) + 1

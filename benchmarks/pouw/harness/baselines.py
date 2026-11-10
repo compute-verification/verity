@@ -101,7 +101,7 @@ def fill_units(fmt: int, nbytes: int) -> int:
 @dataclass
 class Candidate:
     """One kernel of one family at one shape: its source (cublaslt; cutlass, or verity for nvf4_plain.cu's entries in the
-    same registry), id and config."""
+    same registry; cutlass-vllm or deepgemm through torch), id and config."""
 
     family: str
     source: str
@@ -112,6 +112,7 @@ class Candidate:
     sf_bytes: tuple[int, int] = (0, 0)
     ws: int = 0
     ltlib: object = None    # the native.LtLib that owns the plan
+    bridge: object = None   # torch_baselines.Bridge, for a library called through torch (bench.py --bridge)
 
 
 @dataclass
@@ -132,8 +133,10 @@ class BaselineCall:
     def __init__(self, dev, cand: Candidate, shape: Shape, ops: Operands, lt_ws: Buffer):
         self.dev, self.cand, self.shape, self.ops = dev, cand, shape, ops
         self.outputs = {"d": ops.d}
-        self._h, self._own_ws = None, None
-        if cand.cutlass is not None:
+        self._h, self._own_ws, self._bridged = None, None, None
+        if cand.bridge is not None:
+            self._bridged = cand.bridge.prepare(cand, shape, ops)
+        elif cand.cutlass is not None:
             ws = lt_ws
             if cand.source == "verity":
                 ws = self._own_ws = dev.alloc(max(cand.ws, PLAIN_WORKSPACE))
@@ -152,7 +155,9 @@ class BaselineCall:
 
     def launch(self, stream: int) -> None:
         d, o = self.dev, self.ops
-        if self.cand.cutlass is not None:
+        if self._bridged is not None:
+            self._bridged(stream)
+        elif self.cand.cutlass is not None:
             d.ck(d.lib.ph_cutlass_launch(C.c_void_p(self._h), C.c_void_p(stream)), self.cand.name)
         else:
             plan, c = self.cand.lt
@@ -164,6 +169,7 @@ class BaselineCall:
         pass
 
     def free(self) -> None:
+        self._bridged = None
         if self._h:
             self.dev.lib.ph_cutlass_release(C.c_void_p(self._h))
             self._h = None
@@ -248,8 +254,12 @@ class LtPick:
                 "names": None if self.names is None else len(self.names)}
 
 
+#: the default pick: every configuration, up to the default limit
+EVERY = LtPick()
+
+
 def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: list[int], seen: set,
-                  refused: list[str] | None = None, pick: LtPick = LtPick()) -> tuple[list[Candidate], dict]:
+                  refused: list[str] | None = None, pick: LtPick = EVERY) -> tuple[list[Candidate], dict]:
     """Every configuration of every algorithm `lt` has for the family's types that cublasLtMatmulAlgoCheck accepts at the
     shape (lt.cu's ph_lt_enumerate) and `pick` takes, less those in `seen` (the heuristic's, by `lt_key`). Returns them
     and what was tried: configurations checked, accepted, whether the limit cut the list short, the sha256 of the
@@ -357,7 +367,7 @@ def cutlass_swizzles(tile: tuple[int, int], shape: Shape, swap: int) -> list[int
 
 
 def registry_source(name: str) -> str:
-    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (#543's NVFP4, #570's FP8), else ``cutlass``."""
+    """A registry kernel's source: ``verity`` for nvf4_plain.cu's (NVFP4 and FP8), else ``cutlass``."""
     return "verity" if name.startswith("verity_") else "cutlass"
 
 

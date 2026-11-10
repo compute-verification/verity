@@ -36,10 +36,10 @@ step (`encode_lag_ms`: from written to encoded; `encode_records`: each decode en
 the GPU's clock, and its tokens). `--encode-grid 0` encodes decode tokens in their own step too, as prompts are. The
 codec passes its gate against `kv.encode_word` first.
 
-Each policy runs in each receipt mode of `--modes` (read, b3, sk16: `topup.cu`'s). A window's registered bytes are
-the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM head, and each
-scheduled request's context of KV, 128 KiB a token: its pages, a lower bound on attention's reads) plus the filler
-bytes the top-up read inside it, its chunks on the GPU's clock placed on the host's by one sync; R comes from
+Each policy runs in each mode of `--modes` (read, or a fill mode of `bench.FILL_WARPS`: `topup.cu`'s). A window's
+registered bytes are the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM
+head, and each scheduled request's context of KV, 128 KiB a token: its pages, a lower bound on attention's reads) plus
+the filler bytes the top-up read inside it, its chunks on the GPU's clock placed on the host's by one sync; R comes from
 `bench.py`'s read (`--R`). The trace is generated from `--seed` (bursts of requests at exponential gaps, each burst's
 requests at once), the same for every policy; a step's time is the host's between consecutive scheduler updates, and
 each model step's interval on the GPU is recorded beside it (`gpu_steps`: events before its forward and after its
@@ -50,10 +50,11 @@ sets vLLM's, which the record states either way. The prefix cache is emptied bef
 KV append, with `--wt-lib`, `--reader-lib` and `--paged-lib`), `--stack pstack` on its plain form; a step's registered
 weight bytes are then the stack's stores, and the engine captures the stack's decode sizes.
 
-`--partition F` splits the SMs before the engine starts (`topup.cu`'s `sq_green`, green contexts): the filler's F and
-the step's rest. The step's stream is torch's current stream from then on, so vLLM captures its graphs and launches its
-eager kernels there, the stack's side streams are made on the step's context (`stack.new_stream`), and the device's SM
-count reads as the step's (`multi_processor_count`, which sizes the stack's and vLLM's grids). The confinement is
+`--partition F` splits the SMs before the engine starts (`green.py`, `topup.cu`'s `sq_green`, green contexts): the
+filler's F and the step's rest. The step's stream is torch's current stream from then on, so vLLM launches its eager
+kernels and replays its graphs there, every graph is captured on a stream of the step's context (vLLM's own capture
+stream is the device's), the stack's side streams are made on the step's context (`stack.new_stream`), and the device's
+SM count reads as the step's (`multi_processor_count`, which sizes the stack's and vLLM's grids). The confinement is
 checked (`green`: the SMs a stream's CTAs ran on, directly and from a graph), and each run records the streams
 `execute_model` ran on, which must be the step's.
 
@@ -64,7 +65,6 @@ same token ids as the first policy's (`token_gate` in each run; a mismatch refus
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
 import random
@@ -79,6 +79,7 @@ sys.path.insert(0, str(HERE))
 
 import analyze  # noqa: E402
 from bench import FILL_WARPS, RUN_SEED, Codec, K, Seq, Topup, codec_gate, mode_of  # noqa: E402
+from green import partition, spread_checks  # noqa: E402
 
 KV_TOKEN_BYTES = 32 * 2 * 8 * 128 * 2  # Llama-3.1-8B, bf16 KV
 # torch's caching allocator over a run: a retry frees the cache (cudaFree, a device-wide sync) and allocates again
@@ -101,7 +102,7 @@ LOGF = None
 
 def trace(seed: int, seconds: float, burst_gap_s: float, burst_mean: int, prompts, outputs) -> list[dict]:
     """Bursts at exponential gaps (mean `burst_gap_s`), each of 1 + Poisson(`burst_mean` − 1) requests arriving
-    together, prompt and output lengths drawn from the lists."""
+    together, prompt and output lengths sampled from the lists."""
     rng = random.Random(seed)
     t, out = rng.expovariate(1 / burst_gap_s) * 0.25, []
     while t < seconds:
@@ -205,67 +206,6 @@ def on_gpu_clock(records: list[dict], gpu_steps: list) -> list[dict]:
                    for i, s in enumerate(records) if 0 <= i + sh < len(gpu_steps)), key=lambda s: s["t0"])
 
 
-class _StepProps:
-    """The device's properties with the step's SM count: what a kernel launched on the step's green context can use."""
-
-    def __init__(self, props, sms: int) -> None:
-        self._props, self.multi_processor_count = props, sms
-
-    def __getattr__(self, name):
-        return getattr(self._props, name)
-
-
-def partition(tu, torch, fill_sms: int):
-    """`--partition`: the green contexts (`sq_green`), the step's stream made torch's current one, and the device's SM
-    count read as the step's; returns the record, the step's stream and the stack's side-stream factory."""
-    v, i = ctypes.c_void_p, ctypes.c_int
-    tu.so.sq_green.argtypes = [i, ctypes.POINTER(v), i, ctypes.POINTER(i)]
-    tu.so.sq_green_stream.argtypes = [i, i, ctypes.POINTER(v)]
-    tu.so.sq_smid.argtypes = [v, i, ctypes.c_ulonglong, v]
-    s, got = v(), (i * 4)()
-    if rc := tu.so.sq_green(fill_sms, ctypes.byref(s), 0, got):
-        raise SystemExit(f"sq_green: {rc}")
-    rec = {"fill_sms": got[0], "step_sms": got[1], "min_partition": got[2], "alignment": got[3],
-           "device_sms": torch.cuda.get_device_properties(0).multi_processor_count}
-    step = torch.cuda.ExternalStream(s.value)
-    torch.cuda.set_stream(step)
-    gdp = torch.cuda.get_device_properties
-    torch.cuda.get_device_properties = lambda *x, **kw: _StepProps(gdp(*x, **kw), got[1])
-
-    def new_stream(which: int = 0):
-        p = v()
-        if rc := tu.so.sq_green_stream(which, 0, ctypes.byref(p)):
-            raise RuntimeError(f"sq_green_stream: {rc}")
-        return torch.cuda.ExternalStream(p.value)
-
-    return rec, step, new_stream
-
-
-def spread_checks(tu, torch, step, new_stream, rec: dict) -> dict:
-    """The SMs that 4 CTAs an SM ran on: on the step's stream (directly and from a graph captured there), on a side
-    stream of the stack's, and on a stream of the filler's context; the step's must be within its count."""
-    n = 4 * rec["device_sms"]
-
-    def sms(s, graph: bool) -> int:
-        out = torch.full((n,), -1, dtype=torch.int32, device="cuda")
-        if graph:
-            g = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(g, stream=s):
-                tu.so.sq_smid(out.data_ptr(), n, 20000, s.cuda_stream)
-            with torch.cuda.stream(s):
-                g.replay()
-        elif tu.so.sq_smid(out.data_ptr(), n, 20000, s.cuda_stream):
-            raise RuntimeError("sq_smid")
-        torch.cuda.synchronize()
-        return int(torch.unique(out).numel())
-
-    got = {"step": sms(step, False), "step_graph": sms(step, True), "side": sms(new_stream(0), False),
-           "side_graph": sms(new_stream(0), True), "fill": sms(new_stream(1), False)}
-    got["confined"] = (max(got["step"], got["step_graph"], got["side"], got["side_graph"]) <= rec["step_sms"]
-                       and got["fill"] <= rec["fill_sms"])
-    return got
-
-
 def main() -> int:
     global LOGF
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -278,7 +218,7 @@ def main() -> int:
     ap.add_argument("--kv-gib", type=float, default=12.0)
     ap.add_argument("--headroom-gib", type=float, default=6.0)
     ap.add_argument("--policies", type=lambda s: s.split(","), default=["none", "idle", "throttle", "full", "gemm"])
-    ap.add_argument("--modes", type=lambda s: s.split(","), default=["sk16"])
+    ap.add_argument("--modes", type=lambda s: s.split(","), default=["fill"])
     ap.add_argument("--throttle-ctas", type=int, default=32)
     ap.add_argument("--R", type=float, default=1540.0)
     ap.add_argument("--seconds", type=float, default=40.0)
@@ -343,7 +283,7 @@ def main() -> int:
 
     import torch
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
+    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -374,8 +314,8 @@ def main() -> int:
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t:.1f} s ({a.pool})")
     eng = llm.llm_engine
-    runner = get_model_runner(llm)
-    sched = get_scheduler(llm)
+    runner = handle.model_runner(llm)
+    sched = handle.scheduler(llm)
     cache = eng.vllm_config.cache_config
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)
@@ -442,8 +382,6 @@ def main() -> int:
             save()
             return 7
     sq = Seq(tu)
-    tu.so.tu_pause.argtypes = [ctypes.c_int]
-    tu.so.tu_throttle.argtypes = [ctypes.c_int]
     least, greatest = torch.cuda.Stream.priority_range()
     least, greatest = max(least, greatest), min(least, greatest)
     eside = torch.cuda.Stream(priority=least)

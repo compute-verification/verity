@@ -2,7 +2,7 @@
 `make_wrapper` module for the rank's export: the stochastic wrappers' `seed` and `splits` come after the prompt, in the TP1 order, and
 the peers (`peers_<k>`, one per collective) after them, so the replay and the manifest find the sampler's inputs by the names TP1 gives
 them (`check.replay.index.SEED_PARAM`, `query.manifest.format.SPLITS_PARAM`).  The plain `WithPeers` took the prompt alone, and the seed
-landed in the peers: derive_step failed with `forward() missing 1 required positional argument: 'seed'` (r20261002-184501-2bea).  The
+landed in the peers: derive_step failed with `forward() missing 1 required positional argument: 'seed'`.  The
 greedy rank Program is the `WithPeers` one, its digest unchanged.
 
 The model is a stand-in for a TP rank's vLLM model (`forward(input_ids, positions)`, `compute_logits`) with one all-reduce per forward
@@ -23,7 +23,7 @@ from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_bindings.collectives import AllReduce2Rule
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 PROF = {"mode": "profile", "profile": "b1-eager-v3"}
 LP, T = 3, 2
@@ -95,6 +95,7 @@ def _base(n) -> str:
     return getattr(n.fn, "base_id", None) or n.fn.id.split("[")[0].split("{")[0]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kind,sampling,form", [("request", STOCH, vm.SplitsWithPeers), ("step", STOCH, vm.SplitsWithPeers),
                                                 ("request", SINGLE, vm.SeededWithPeers), ("step", SINGLE, vm.SeededWithPeers)],
                          ids=["request-derived-S", "step-derived-S", "request-single-S", "step-single-S"])

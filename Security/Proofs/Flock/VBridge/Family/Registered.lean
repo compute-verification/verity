@@ -1,11 +1,25 @@
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
+module
+
+public import Proofs.Flock.VBridge.Family.Openings
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G at V*'s family: what a session's acceptance says of its registered reads
 
 A session's acceptance (`Accepted`: `LiveAcceptsZKR` and a `Good` layer) constrains its registered reads `zo.rd` in one
-direction only: every registered read is a row of a port `own` names, at a drawn unit (`ZkOuter.hown`, `OwnReads`), and
+direction only: every registered read is a row of a port `own` names, at a sampled proof block (`ZkOuter.hown`, `OwnReads`), and
 the layer agrees with the registrant there (`RegAgree`). It never says that a row is read, and `rd` is a field of the
 session the family builds, so which rows are registered reads, and what the registrant's value there is, are the
 family's choice.
@@ -21,6 +35,8 @@ family's choice.
   rows `own` names (`RowsRegistered`); `hRowsAgree_of`: `HRowsAgree` from those, the two parts' columns keying one bit
   of rows at one registered root and position (`SameRow`), and one registrant row there (`RowsShared`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -106,8 +122,8 @@ def RowsRegistered : Prop :=
 row-port column `rowColOf` of part `p`'s unit is an input column whose Δ key (`Aliased.srcKey`, copy 0) is message bit
 `k` of a row port `q'`, within its row, and the session's reads file names `q'`. A fact about V*'s `InnerRepCheck`
 circuit (its row ports are the inputs from column 0, `rowCol`) and its reads file (`rec_vstage.py:356-357`: each row
-port is a read of `regs[nm]`); established from the parse of the part's circuit (`keyProg_parse`, the lane that proves
-`HStruct`) and the session's `own` (the lane that proves `HFiles`). -/
+port is a read of `regs[nm]`); established from the parse of the part's circuit (`keyProg_parse`, as for
+`HStruct`) and the session's `own` (as for `HFiles`). -/
 def RowColKeys : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ p, p < (partsOf F.sh).size →
     ∀ q < 128 * (nsOf F.sh p).sum, rowColOf F.sh p q < (Rows.ofNet (F.Vs (F.sess p)).hU).nIn ∧
@@ -130,8 +146,8 @@ parts `p` and `p'` hold the same element of `w` at positions `a` and `a'`, the k
 same bit `b` of rows `q`, `q'`, and where both rows are registered reads at rep `r`'s units, they are at one registered
 root and one position.
 V*'s part sessions read element `i` of `w` as row `r` of one registration `regs[nm]` (`rec_vstage.py:356-357`);
-established from the parse of the parts' circuits (the bit, the lane that proves `HStruct`) and the sessions' reads
-files with `OwnReads` (the root and the position, the lane that proves `HFiles`). -/
+established from the parse of the parts' circuits (the bit, as for `HStruct`) and the sessions' reads
+files with `OwnReads` (the root and the position, as for `HFiles`). -/
 def SameRow : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o → ∀ (r : Fin 2) (p p' a a' e : ℕ),
     p < (partsOf F.sh).size → p' < (partsOf F.sh).size → ∀ (ha : a < (wIOf F.sh p).size)

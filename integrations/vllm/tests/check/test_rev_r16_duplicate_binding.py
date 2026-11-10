@@ -1,12 +1,12 @@
-"""rev R16 F-r16-08 -- one identity, TWO leaf bindings: coverage passes, the replay silently reads the first.
+"""One identity, TWO leaf bindings: coverage passes, the replay silently reads the first.
 
-BRIEF §3 C1: "every required identity has ONE unambiguous binding".  `binding.coverage_check` enforces ">= 1" (duplicates of ANOTHER
+"every required identity has ONE unambiguous binding".  `binding.coverage_check` enforces ">= 1" (duplicates of ANOTHER
 identity cannot hide a missing one -- that part holds) and only REPORTS `physical_copies_n`; `opening.CommittedStore` keys the
 committed words by (request, step, op_path, member) and keeps the first entry (min invocation), so a second binding of the SAME identity
 to a different buffer is never read by form (A) and is not a named failure anywhere on the (A) path.  Honest records have 0 copies
-(153/153 R15/R16 coverage records), so gating on it costs nothing.
+(153/153 coverage records), so gating on it costs nothing.
 
-rev's file documented the hole with two plain tests + two strict xfails; the fix (pin, F-r16-08) flips them: `coverage_check` counts a
+This file documented the hole with two plain tests + two strict xfails; the fix flips them: `coverage_check` counts a
 required identity bound by >1 covering leaf entry as AMBIGUOUS (`ambiguous_n`, `unambiguous`, first 12 named with where each copy lives)
 and `ok` requires `ambiguous_n == 0`; `CommittedStore` keeps every entry of a key and `words` refuses by name when more than one entry of
 the lowest invocation covers the requested slice.  The honest shapes (one entry per identity; chunked entries with DISJOINT ranges; a
@@ -47,7 +47,7 @@ def test_two_bindings_of_one_required_identity_are_ambiguous_and_coverage_is_not
 
 
 def test_committed_store_no_longer_reads_the_first_binding_silently():
-    """rev's attack: honest bytes first, arbitrary bytes second under the same identity -- neither copy is read; the VU fails by name."""
+    """The attack: honest bytes first, arbitrary bytes second under the same identity -- neither copy is read; the VU fails by name."""
     honest = bytes(range(16))
     forged = bytes(16)
     stream = {0: honest, 64: forged}
@@ -60,7 +60,7 @@ def test_committed_store_no_longer_reads_the_first_binding_silently():
     st = CommittedStore(bm, committed)
     w, why = st.words("r0", 0, "model.norm", "out", 0, 8)
     assert w is None and why.startswith("ambiguous binding: 2 entries for (r0, step 0, model.norm/out) [invocation 0] cover [0, 8)")
-    assert "model.norm/out@0" in why and "model.norm/out#2@64" in why and "F-r16-08" in why
+    assert "model.norm/out@0" in why and "model.norm/out#2@64" in why and "one unambiguous binding per required identity" in why
     # the order of the entries does not matter (forged first): still refused, never 'first wins'
     bm2 = _bmap([_leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64), _leaf("model.norm/out", lo=0, hi=8, stream_offset=0)])
     w, why = CommittedStore(bm2, committed).words("r0", 0, "model.norm", "out", 2, 6)
@@ -71,14 +71,14 @@ def test_committed_store_no_longer_reads_the_first_binding_silently():
 
 
 def test_fixed_coverage_refuses_an_ambiguous_binding():
-    """rev's strict xfail, flipped."""
+    """The former strict xfail, flipped."""
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     cov = coverage_check(_population(), bm)
     assert cov["ok"] is False and cov.get("unambiguous") is False
 
 
 def test_fixed_committed_store_names_the_ambiguity():
-    """rev's strict xfail, flipped."""
+    """The former strict xfail, flipped."""
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     st = CommittedStore(bm, lambda *_: bytes(16))
     w, why = st.words("r0", 0, "model.norm", "out", 0, 8)
@@ -130,7 +130,7 @@ def test_duplicate_of_another_identity_does_not_hide_a_missing_one():
 
 def test_commit_verdict_names_the_ambiguous_binding():
     """The row verdict reads coverage.ok: an ambiguous binding (all bound, none missing) FAILs with the C1 text naming the identity + copies."""
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
     bm = _bmap([_leaf("model.norm/out", lo=0, hi=8, stream_offset=0), _leaf("model.norm/out#2", lo=0, hi=8, stream_offset=64)])
     cov = coverage_check(_population(), bm)
     rec = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},

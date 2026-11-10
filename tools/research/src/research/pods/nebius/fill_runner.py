@@ -3,7 +3,7 @@
 
 A fill job is an executable script in FILL_DIR/queue/.  Its header says what it needs:
 
-    # fill: owner=bc-0de2d624 gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
+    # fill: owner=bc-... gpus=1 max_min=25 cpus=8 project=pous mem_gb=128
     #   gpus 0 or 1 (default 1), or 2 for a Commit guest (a TP2 row: two idle GPUs on one NUMA node); max_min <= 30 (default
     #   25), a Commit guest's <= FILL_COMMIT_MAX_MIN (120), a job FILL_DIR/max-min names <= what it allows (infra's exceptions,
     #   each with an end: `pous-honest-soak-* 540 2026-10-02T14:45Z  # who, why`); cpus: threads it may use (OMP_NUM_THREADS; default 8); on: the GPU
@@ -49,6 +49,9 @@ Every POLL_S seconds the runner:
     then the rest of Verity's (only with 2+ GPUs free), and a Commit that finds no free GPU stops the newest proofs or pous
     GPU job outside a window; and CPU jobs up to CPU_SLOTS, pinned
     to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits;
+  - gives each job of the Verity pool (a lent one too) `cpus` CPUs of VERITY_CPU_SET off the fences in whole cores of its own,
+    claimed in CLAIMS beside node 2's queued runs (research's cores.py), at nice 0 in a scope that holds them (AllowedCPUs);
+    a job whose cores aren't free, or any while a queued run waits in the claims' line, stays queued;
   - runs the CPU jobs of an owner listed in FILL_DIR/cpu-sets (`<owner> <cpus> <slots> [mem_gb]  # why`, read each tick) on
     those CPUs instead, up to that many at a time, at nice 19 and ionice idle, with their memory cap lowered to mem_gb if
     given, and paused (none started) while a train check holds FILL_YIELD_LOCK if those CPUs meet FILL_YIELD_CPUS; and logs
@@ -99,11 +102,11 @@ RESERVE = int(os.environ.get("FILL_RESERVE", "0"))
 CPU_SLOTS = int(os.environ.get("FILL_CPU_SLOTS", "4"))
 CPU_SET = os.environ.get("FILL_CPU_SET", "96-127")
 CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
-# PoUW's terms for CPU fill on NUMA 0 (bc-2aa33ad8, 30 Sep): CPU jobs freeze from the moment a window waits, not only once it is
+# PoUW's terms for CPU fill on NUMA 0: CPU jobs freeze from the moment a window waits, not only once it is
 # timed, and pous and lent CPU jobs keep their memory off NUMA 0 (numactl --membind=<node>).
 FREEZE_ON_WAIT = os.environ.get("FILL_FREEZE_ON_WAIT", "0") == "1"
 CPU_MEMBIND = os.environ.get("FILL_CPU_MEMBIND", "")
-# slot d's train checks on 0-47 (top-level, 1 Oct 1:52 AM PDT) run in a login session's cgroup, beside fill's user scopes, so
+# slot d's train checks on 0-47 run in a login session's cgroup, beside fill's user scopes, so
 # nice 19 can't make a CPU job yield to one: a cpu-sets job on those CPUs pauses while a check holds the slot's lock
 YIELD_LOCK = Path(os.environ.get("FILL_YIELD_LOCK", "/workspace/research/locks/check-d.lock"))
 YIELD_CPUS = os.environ.get("FILL_YIELD_CPUS", "0-47")
@@ -119,7 +122,12 @@ VERITY_DISK_PCT = float(os.environ.get("FILL_VERITY_DISK_PCT", "55"))
 VERITY_UNTIL = datetime.fromisoformat(os.environ.get("FILL_VERITY_UNTIL", "2026-10-07T12:00:00+00:00"))
 VERITY_STOP = datetime.fromisoformat(os.environ.get("FILL_VERITY_STOP", "2026-10-07T13:00:00+00:00"))
 VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
-# the pool lends its idle slots to queued pous CPU jobs (Daniel 19:12Z: borrowing goes both ways); a Verity job that can't start
+# at nice 19 on all of 48-95, nice would order nothing between the pool's scopes and node 2's queued runs' (a suite could get
+# under one core): each job claims whole cores in the registry the queued runs claim theirs in (research's
+# cores.py): CLAIMS/<name>.cpus, live while its job holds it flock'ed, taken under CLAIMS/.lock; CLAIMS/wait.* are the runs
+# waiting for cores, which the pool lets go first
+CLAIMS = Path(os.environ.get("FILL_CPU_CLAIMS_DIR", "/workspace/research/locks/cpu-claims"))
+# the pool lends its idle slots to queued pous CPU jobs (borrowing goes both ways); a Verity job that can't start
 # takes a slot back by requeueing the newest lent job (143, as a preempted job)
 VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
 COMMIT_PREFIX = "verity-commit-"
@@ -283,6 +291,9 @@ def header(p: Path, t: float | None = None) -> dict:
         h["mem_gb"] = whole("mem_gb")
     if h["timing"]:
         h["cpus"] = min(max(whole("cpus"), 1), TIMING_MAX_CPUS)
+    elif not h["gpus"] and h["project"] == "verity":
+        # the pool's job gets that many CPUs of its own, in whole cores
+        h["cpus"] = min(max(whole("cpus"), 1), len(gpu_set(VERITY_CPU_SET, 1 << 16) or ()) or 1)
     # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
     cap = max_min_exception(p.name, t)
     if cap is None:
@@ -298,7 +309,7 @@ def header(p: Path, t: float | None = None) -> dict:
 
 
 def cpu_sets() -> dict[str, dict]:
-    """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (verity-top, 1 Oct: compute accounting's verifies on 0-47)."""
+    """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (such as verifies on 0-47)."""
     out = {}
     try:
         lines = (FILL / "cpu-sets").read_text().splitlines()
@@ -433,7 +444,9 @@ def stop(name: str, why: str, requeue: bool = True) -> None:
     event("stop", name, why=why)
 
 
-def start(p: Path, h: dict, backfill: bool = False) -> None:
+def start(p: Path, h: dict, backfill: bool = False, claim_fd: int | None = None) -> None:
+    """Start a queued job.  A pool job's h["pool_cpus"] are its claimed cores, whose claim `claim_fd` holds: the job inherits it,
+    and the runner's own copy is closed once the job is started."""
     name = p.name
     run = FILL / "running" / name
     shutil.move(str(p), run)
@@ -444,7 +457,8 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     in_pool = verity or h.get("lent")
     unit_name = None
     own = h.get("cpuset") if not h["gpus"] else None
-    cpus = own or (VERITY_CPU_SET if in_pool else CPU_SET)
+    pool_cpus = h.get("pool_cpus") if in_pool else None
+    cpus = own or pool_cpus or (VERITY_CPU_SET if in_pool else CPU_SET)
     fs = fences()
     mine = fence_for(name, fs)
     fenced = set().union(*(gpu_set(f["cpus"], 1 << 16) or set() for f in fs))
@@ -452,7 +466,7 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     cpus = mine["cpus"] if mine else cpu_list((gpu_set(cpus, 1 << 16) or set()) - fenced) or cpus
     rc_file = FILL / "running" / f".{name}.rc"
     rc_file.unlink(missing_ok=True)
-    cmd = ["nice", "-n", "19", "taskset", "-c", cpus, "bash", "-c", RC_WRAP, "fill-rc", str(rc_file), str(run)]
+    cmd = [*([] if pool_cpus else ["nice", "-n", "19"]), "taskset", "-c", cpus, "bash", "-c", RC_WRAP, "fill-rc", str(rc_file), str(run)]
     if own:
         cmd = ["ionice", "-c3", *cmd]
     if CPU_MEMBIND and not h["gpus"] and not verity:
@@ -483,9 +497,15 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
         kind = "cpuset" if own else "verity" if verity else "lent"
         unit_name = f"fill-{kind}-{int(time.time() * 1000)}" if in_pool or own else None
         unit = ["--unit", unit_name] if unit_name else []
+        held_cpus = ["-p", f"AllowedCPUs={cpus}"] if pool_cpus else []
         cmd = ["systemd-run", "--user", "--scope", "--quiet", "--collect", *unit, "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G",
-               "-p", "MemorySwapMax=0", "--", *cmd]
-    proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, cwd=str(FILL), start_new_session=True)
+               "-p", "MemorySwapMax=0", *held_cpus, "--", *cmd]
+    try:
+        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, cwd=str(FILL), start_new_session=True,
+                                pass_fds=() if claim_fd is None else (claim_fd,))
+    finally:
+        if claim_fd is not None:
+            os.close(claim_fd)
     log.close()
     if h["gpus"] and not timing:
         unit_name = f"gpu-lease-{proc.pid}"         # gpu-lease runs CMD in the scope named by its own pid
@@ -497,7 +517,7 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     running[name] = {"pid": proc.pid, "proc": proc, "h": h, "t0": time.monotonic(), "started": now(), "paused": False,
                      "unit": unit_name}
     event("start", name, owner=h["owner"], gpus=h["gpus"], project=h["project"], backfill=backfill,
-          **({"timing_cpus": timing} if timing else {}))
+          **({"timing_cpus": timing} if timing else {}), **({"cpus": cpus} if pool_cpus else {}))
 
 
 def gpu_set(on, n: int) -> set[int] | None:
@@ -638,7 +658,7 @@ def repin(f: dict, fs: list[dict]) -> None:
 
 
 def rank(name: str, h: dict) -> int:
-    """Node 2's order (Daniel): circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
+    """Node 2's order: circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
     return 0 if name.startswith(COMMIT_PREFIX) else 1 if h["project"] != "verity" else 2
 
 
@@ -754,6 +774,47 @@ def reap() -> None:
         del running[name]
 
 
+def claim(name: str, k: int) -> tuple[str, int] | None:
+    """k CPUs of VERITY_CPU_SET in whole cores that no fence and no live claim in CLAIMS holds, claimed for job `name`: the CPUs
+    and the descriptor that holds the claim (start passes it to the job).  None while they don't fit, or while a queued run waits
+    for cores (a live CLAIMS/wait.*), which goes first; a claim or ticket nobody holds is a leftover, removed."""
+    try:
+        CLAIMS.mkdir(parents=True, exist_ok=True)
+        with open(CLAIMS / ".lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            free = gpu_set(VERITY_CPU_SET, 1 << 16) or set()
+            free -= set().union(*(gpu_set(f["cpus"], 1 << 16) or set() for f in fences()))
+            waiting = False
+            for f in sorted(CLAIMS.iterdir()):
+                if not (f.name.startswith("wait.") or f.name.endswith(".cpus")):
+                    continue
+                if not held(f):
+                    f.unlink(missing_ok=True)
+                elif f.name.startswith("wait."):
+                    waiting = True
+                else:
+                    free -= gpu_set(f.read_text().strip(), 1 << 16) or set()
+            got = None if waiting else carve(free, free, k)
+            if got is None:
+                return None
+            # written and locked under a name no reader looks at, then renamed into place, so nobody takes it for a leftover;
+            # a name of its own each start, since a requeued job's last claim may still be held
+            path = CLAIMS / f"fill-{time.time_ns()}-{name}.cpus"
+            tmp = CLAIMS / f".tmp-{os.getpid()}-{path.name}"
+            fd = os.open(tmp, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o664)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                os.write(fd, f"{got}\n".encode())
+                os.replace(tmp, path)
+            except OSError:
+                os.close(fd)
+                raise
+            return got, fd
+    except OSError as e:
+        event("claim-failed", name, error=str(e)[:200])
+        return None
+
+
 def disk_pct(path: str) -> float:
     s = os.statvfs(path)
     return 100.0 * (1 - s.f_bavail / s.f_blocks)
@@ -780,10 +841,11 @@ def verity_pool(queued: list) -> None:
         left.remove(best)
         p, h, _ = best
         need = min(int(h.get("mem_gb", CPU_MEM_GB)), VERITY_MEM_MAX_GB)
-        if slots <= 0 or mem + need > VERITY_MEM_TOTAL_GB:
+        got = claim(p.name, int(h["cpus"])) if slots > 0 and mem + need <= VERITY_MEM_TOTAL_GB else None
+        if got is None:
             held = True
             continue
-        start(p, {**h, "mem_gb": need})
+        start(p, {**h, "mem_gb": need, "pool_cpus": got[0]}, claim_fd=got[1])
         counts[h["owner"]] += 1
         mem += need
         slots -= 1
@@ -801,7 +863,10 @@ def verity_pool(queued: list) -> None:
         need = min(int(h.get("mem_gb", CPU_MEM_GB)), VERITY_MEM_MAX_GB)
         if mem + need > VERITY_MEM_TOTAL_GB:
             continue
-        start(p, {**h, "mem_gb": need, "lent": True})
+        got = claim(p.name, h["cpus"] if isinstance(h["cpus"], int) and h["cpus"] > 0 else HEADER["cpus"])
+        if got is None:
+            break
+        start(p, {**h, "mem_gb": need, "lent": True, "pool_cpus": got[0]}, claim_fd=got[1])
         counts[h["owner"]] += 1
         mem += need
         slots -= 1
@@ -990,6 +1055,7 @@ def tick(n: int) -> str:
     for k, j in running.items():
         lines.append(f"  running {k} owner={j['h']['owner']} gpus={j['h']['gpus']} since={j['started']}"
                      f"{' timing cpus=' + j['h']['timing_cpus'] if j['h'].get('timing_cpus') else ''}"
+                     f"{' cpus=' + j['h']['pool_cpus'] if j['h'].get('pool_cpus') else ''}"
                      f"{' PAUSED' if j['paused'] else ''}{' stopping: ' + j['why'] if j.get('stopping') else ''}")
     lines.extend(f"  fence {f['line'].split('#')[0].strip()}" for f in fs)
     (FILL / "status.txt").write_text("\n".join(lines) + "\n")

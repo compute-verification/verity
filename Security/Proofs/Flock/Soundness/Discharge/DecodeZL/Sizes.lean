@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The lengths of a decoded proof
@@ -11,6 +27,8 @@ The reader program is stepped through in the logic of `Post x Q`: every value th
 and `post_bind_caps` step over a `vecExact`, a vector of digests, the ring switches and the recursive caps' loop, with
 their lengths.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 
@@ -172,7 +190,7 @@ theorem post_bind_caps {β : Type} {R n : ℕ} {want : ℕ → ℕ} {w : ℕ →
       vecExact (want i) (Reader.bytes n) (w i) >>= fun x => pure (ForInStep.yield (s.push x))) >>= f) Q :=
   post_bind fun a ha => h a (yields_capsLoop ha).1 (yields_capsLoop ha).2
 
-/-- A ring switch's `s_hat_v` (PROTOCOL.md §8): 128 values, then a zero grinding nonce. -/
+/-- A ring switch's `s_hat_v` (`Flock.Proof`): 128 values, then a zero grinding nonce. -/
 theorem post_switch :
     Post (do
         let v ← vecExact 128 f128 "s_hat_v"
@@ -195,11 +213,10 @@ theorem post_bind_switches {β : Type} {want : ℕ} {w : String} {f : Array (Arr
 `vecExact` it returns has its length, the caps hold `hashLen`-byte digests and the ring switches 128 values. -/
 theorem decodeProof_sizes : DecodeSizes := by
   intro sh bytes p h
-  unfold decodeProof at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
-  refine (?_ : Post _ (ProofSizes sh)) p' ⟨_, _, hrun⟩
+  replace h := (Flock.decodeProof_read h).1
+  unfold decodeRead at h
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runPlain_ok h
+  refine (?_ : Post _ (ProofSizes sh)) p ⟨_, _, hrun⟩
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_
   refine post_bind fun m _ => post_bind fun lir _ => post_bind fun lbs _ => post_bind fun profile _ => ?_

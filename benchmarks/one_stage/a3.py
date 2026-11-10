@@ -1,4 +1,4 @@
-"""One-stage audit, run A3: every unit type M0's statement proves in one #101 decoder layer, as one audit with one draw and
+"""One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one sample and
 one integrity profile.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
@@ -7,17 +7,18 @@ one integrity profile.
 
 * **Population.** The captured instances of layer `--layer` in each set under `--sets` (one directory per template, in the
   layer's order), staged by M0 as one stand-in population per template (`stage_subset.py`: the frame domains bind the
-  selection). The program is `TemplatePopulations` over the templates' Definitions, and the partition is
+  selection). The program is `TemplatePopulations_v1` over the templates' Definitions, and the partition is
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One draw, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole population.
-  With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very draw, so the audited
-  draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` samples k units over the whole
+  population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
+  With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very sample, so the audited
+  sample is the verifier's; without it, the Lean sample fixes only how many units fall in each template and each server samples
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
   k-subset of the union is uniform within each template). The per-template sessions are one table each (M0 has no
   multi-table statement yet).
-* **Stand-in.** The values are #101's served values, committed afresh; every record says so.
+* **Stand-in.** The values are the Llama-3.2-1B row's served values, committed afresh; every record says so.
 """
 from __future__ import annotations
 
@@ -32,9 +33,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 
@@ -57,8 +59,9 @@ def stage_member(set_dir: Path, indices: list[int], layer: int, out: Path, m0_pa
     return {"dir": out, "meta": json.loads(text.split("\n", 2)[1][5:]), "pin": hashlib.sha512(text.encode()).hexdigest(), **info}
 
 
-def lean_split(lean: str, n: int, k: int, out: Path) -> dict:
-    p = a0.run([lean, "draw", "--population", str(n), "--k", str(k)], out / "split-draw.log")
+def lean_split(lean: str, n: int, k: int, registration: str, out: Path) -> dict:
+    p = a0.challenger_draw(lean, ["--population", str(n), "--k", str(k)], {"law": "subset", "k": k}, n, registration,
+                           out / "split-draw.log")
     line = next(x for x in p.stdout.splitlines() if x.startswith("DRAW "))
     return json.loads(line.split(" ", 1)[1])
 
@@ -113,8 +116,8 @@ def main() -> int:
         assert tid == P.template_id(m["defn"]) and cnt == m["n"]
         m["base"] = base
 
-    # one registration, before the draw
-    law = D.parse_law(f"subset:{a.k}")
+    # one registration, before the sample
+    law = D.parse_design(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:
         mine = a0.stand_in_ports(m["st"]["name"], m["st"]["content_digest"], m["st"]["meta"], m["n"])
@@ -127,7 +130,7 @@ def main() -> int:
     prov = {m["name"]: {"selected": m["n"], "selection_digest": m["st"]["content_digest"],
                         **{k: v for k, v in a0.stand_in(str(m["dir"])).items() if k in ("row", "run", "run_root", "model")}}
             for m in members}
-    window = {"kind": "stand-in", "of": "vllm-v1 commitment of served row #101", "layer": a.layer, "sets": prov,
+    window = {"kind": "stand-in", "of": "vllm-v1 commitment of the served Llama-3.2-1B row", "layer": a.layer, "sets": prov,
               "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
     rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -146,8 +149,8 @@ def main() -> int:
         print("A3 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}))
         return 1
 
-    # the draw: the verifier's split over the union, then each template's live draw of its share
-    split = lean_split(a.lean, n, a.k, out)
+    # the sample: the verifier's split over the union, then each template's live sample of its share
+    split = lean_split(a.lean, n, a.k, R.digest(rec), out)
     counts = {m["name"]: sum(1 for u in split["units"] if m["base"] <= u < m["base"] + m["n"]) for m in members}
     (out / "split.json").write_text(json.dumps({"lean_draw": split, "counts": counts}, indent=1))
     union_units, proved, instances, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
@@ -163,7 +166,9 @@ def main() -> int:
             local = sorted(u - m["base"] for u in split["units"] if m["base"] <= u < m["base"] + m["n"])
             dfile.write_text(json.dumps({"law": "subset", "population": m["n"], "k": k_t, "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, draw_file=dfile)
+        # on the keyed coin tree, verified under --coins tree: Lean refuses a plain session on a seed's coins
+        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{k_t}", a.port + j, sdir, draw_file=dfile,
+                                  env={"FC_COINS": "tree"})
         m["session_s"] = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": k_t})
@@ -177,14 +182,14 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir), "tool": "flock-verify verify --archive (PR #118)"}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "tree")), "tool": "flock-verify verify --archive"}
         statement[m["name"]] = {k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest", "public_sha512", "sigma")}
         statement[m["name"]]["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")}
         statement[m["name"]]["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
         statement[m["name"]]["timing"]["lean_verify_s"] = verdicts[f"lean-verify/{m['name']}"].get("verify_s")
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
     union = {"law": "subset", "population": n, "k": a.k, "units": sorted(union_units)}
-    # with --draw-file the audited draw is the verifier's Lean draw, and every session must have served exactly its share
+    # with --draw-file the audited sample is the verifier's Lean sample, and every session must have served exactly its share
     audited, served = (split, sorted(union_units)) if a.draw_file else (union, None)
     result = V.audit_record(rec, receipt, audited, law, sorted(proved), instances, statement, verdicts, a.delta,
                             sessions=sessions, served=served, session_roots=session_roots)
@@ -197,7 +202,7 @@ def main() -> int:
 
     # negatives
     neg: dict[str, dict] = {}
-    fewer = P.mixed_population_program([(m["defn"], m["n"] - (1 if i == 0 else 0)) for i, m in enumerate(members)])
+    fewer = R2.program([(m["defn"], m["n"]) for m in members], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)

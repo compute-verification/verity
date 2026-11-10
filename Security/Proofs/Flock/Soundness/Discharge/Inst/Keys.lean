@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Prog
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+module
+
+public import Proofs.Flock.Soundness.Discharge.Inst.Prog
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 /-!
 # `lay` and `rs` at the program of the whole template instance
@@ -14,14 +19,16 @@ stacked inputs no wire fills: it holds where a computed row reads a stacked inpu
   net `n`'s slot `i` (`feed_of_wire_key`), which sits where the key's column does (`pos_wire_key`);
 * `instRowOf_wire`: a column of unit `u`'s own instance on a row bit of unit `u'` is a composite input of `u = u'` with
   that message key;
-* `instProg_copies`: Δ's copies (`copy_site_inst` at each drawn unit's template instance and block);
-* `instProg_bcPinned`: the rows' `b ‖ c` is the registration's (`bc_site_of`), at each drawn unit's site (`BcSite`, which
+* `instProg_copies`: Δ's copies (`copy_site_inst` at each sampled proof block's template instance and block);
+* `instProg_bcPinned`: the rows' `b ‖ c` is the registration's (`bc_site_of`), at each sampled proof block's site (`BcSite`, which
   `Layout.bcSite_keyProg` gives here too);
 * `instProg_valPinned`: the single gates hold the registration's bits, when every composite input a row reads has a row
   key (`InstKeysRow`).
 
 `instLayout` and `instHmRows` are `lay` and `rs` there.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -357,9 +364,9 @@ theorem inst_single_gate (outs : Finset (Fin (instN c n))) (hkeys : InstKeysRow 
       · rw [h, hgate_in (by show 1 < 2 + n * instB c; omega)] at hm
         cases hm
 
-/-! ## At a drawn unit's site -/
+/-! ## At a sampled proof block's site -/
 
-/-- **A drawn unit's message-keyed composite input holds its row's bit**: in a satisfying witness of an accepted
+/-- **A sampled proof block's message-keyed composite input holds its row's bit**: in a satisfying witness of an accepted
 statement, at block `o` and template instance `g`, the composite input `x` whose Δ key is message bit `bit` of byte
 `byte` of row port `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
 `Layout.copy_site` at the template instance's rows. -/
@@ -393,7 +400,7 @@ variable {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabS
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (si : Sites plan tab)
 
-/-- **Row port `q`'s salt at a drawn unit's site**: `saltCol` at the unit's template instance, in its block
+/-- **Row port `q`'s salt at a sampled proof block's site**: `saltCol` at the unit's template instance, in its block
 (`Layout.keySaltAddr` on `instProg`'s gates). -/
 noncomputable def instSaltAddr (saltCol : Flock.Circuit → ℕ → ℕ → ℕ → ℕ → ℕ) (S : Finset (Fin n)) (R : Reg)
     (u : Fin n) (q : (Fin n × Fin c.ports.size) ⊕ Fin (instN c n)) (j : Fin 192) (t : Fin 8) :
@@ -427,7 +434,7 @@ noncomputable def instReaders : Readers ((instProg c n).circuit outs) plan tab :
 variable {rowW}
 
 include hparse in
-/-- **Δ's copies at `instProg`'s sites**: each column of a drawn unit on a row bit holds the witness's bit at the
+/-- **Δ's copies at `instProg`'s sites**: each column of a sampled proof block on a row bit holds the witness's bit at the
 message column of its key (`copy_site_inst`), in the block by the parse (`msgCol_lt_of_parse`). -/
 theorem instProg_copies :
     (instReaders rowW hparse outs saltCol popOf outBit).Copies (instPlace hparse outs) := by

@@ -24,8 +24,10 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
     for r in reqs:
         for s in range(int(r["max_tokens"])):
             by_engine.setdefault(int(r.get("arrive_step", 0)) + s, []).append((r["request_id"], s))
-    hidden_family = parts[reqs[0]["request_id"]]["query"]["attention_hidden_family"]
     ids: list[dict[str, Any]] = []
+    engine_of = {(rid, s): e for e, members in by_engine.items() for rid, s in members}
+    unreturned = [dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=engine_of.get((rid, row["step"]), row.get("engine_step")))
+                  for rid, p in parts.items() for row in p.get("unreturned") or ()]
     seen_w: set = set()
     for rid, p in parts.items():
         for row in p["identities"]:
@@ -41,31 +43,10 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
         for rid, s in members:
             emb = next((x for x in parts[rid]["identities"] if x["family"] == "input_token_ids" and x["step"] == s), None)
             rows_of[rid] = int(emb["rows"]) if emb else 0
-        attn_union: dict[str, dict[str, Any]] = {}
         for rid, s in members:
             for row in parts[rid]["identities"]:
-                if row["step"] != s or row["family"] == "weights":
-                    continue
-                g = dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=e)
-                if row["family"] == hidden_family:
-                    a = attn_union.setdefault(row["op_path"], {"requests": [], "n_seq": 0, "max_rows": 0, "T_max": 0, "module": row.get("attention_module")})
-                    a["requests"].append(rid); a["n_seq"] += 1
-                    a["max_rows"] = max(a["max_rows"], int(row["geometry"]["rows"])); a["T_max"] = max(a["T_max"], int(row["geometry"]["seqlen_k"]))
-                else:
-                    ids.append(g)
-        for op, a in sorted(attn_union.items()):
-            comp = parts[a["requests"][0]]
-            pre = next(x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 0)
-            dec = next((x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 1), None)
-            D = int(pre["geometry"]["D"])
-            NH = int(pre["geometry"]["HB"])
-            KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
-            fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
-            HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
-            ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
-                        "op_path": op, "output_member": gname, "element_range": [0, fmt.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
-                        "geometry": {"HB": HB, "M": M, "NB": NB, "BN": BN, "D": D, "seqlen_k": a["T_max"], "rows": a["max_rows"] * a["n_seq"], "n_seq": a["n_seq"]},
-                        "attention_module": a["module"]})
+                if row["step"] == s and row["family"] != "weights":
+                    ids.append(dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=e))
         engine_steps_out.append({"engine_step": e, "members": [{"request_id": rid, "step": s, "rows": rows_of[rid]} for rid, s in members],
                                  "rows": sum(rows_of.values()), "n_seq": len(members)})
     ids.sort(key=fmt.row_key)
@@ -75,9 +56,6 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
         if r["family"] in ("input_token_ids", "sampled_token_ids") and r["family"] not in ref:
             ref[r["family"]] = {"op_path": r["op_path"], "output_member": r["output_member"], "per_row": 1}
     q0 = parts[reqs[0]["request_id"]]["query"]
-    applied: Counter = Counter()
-    for p in parts.values():
-        applied.update(p["query"].get("residuals_applied") or {})
     return {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig, "program_digest_kind": pdig_kind, "component_digests": component_digests,
             "global": True, "addressing": "request-local", "composition_reference": ref,
             "fixture": {k: v for k, v in fixture.items() if k in ("schema", "fixture", "model", "revision", "sampling", "expected_engine_steps", "case")}
@@ -91,12 +69,12 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
                                "digests": sorted({d for p in parts.values() if (d := (p.get("correspondence") or {}).get("digest"))})},
             "complete": all(p.get("complete", True) for p in parts.values()),
             "unmodelled": {k: v for p in parts.values() for k, v in (p.get("unmodelled") or {}).items()},
-            "query": _with_partitions(dict(q0, residuals_applied=dict(sorted(applied.items()))), "by_component", {rid: p["query"] for rid, p in parts.items()}),
+            "query": _with_partitions(dict(q0), "by_component", {rid: p["query"] for rid, p in parts.items()}),
             "op_path_aliases": parts[reqs[0]["request_id"]]["op_path_aliases"],
             "ranks": ranks, "rank": rank,
             "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
             "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, **fmt.unreturned_block(unreturned)}
 
 
 def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -110,7 +88,7 @@ def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[
 
 
 def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
-    """The manifest of a TP row from its W rank manifests (TP-04, v1's rank rule): ranks 0..W-1 each exactly once under one world, one
+    """The manifest of a TP workload from its W rank manifests (v1's rank rule): ranks 0..W-1 each exactly once under one world, one
     Program digest per rank, the same engine-step composition on every rank.  Every row keeps its rank's digest (`program_digest_per_rank`);
     the header digest is the labelled fold of the rank digests (`tp-ranks-fold`).  `tp_peer_binding`: every collective output and rank-local
     partial of rank r has each peer's partial at the same (request, step, invocation, module) -- an unbound one makes the merge incomplete."""
@@ -140,9 +118,6 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
         unmodelled[f"tp peer binding: {binding['n_unbound']} collective output(s) / partial(s) without the peer identity "
                    f"(first: {binding['unbound'][0]})"] = binding["n_unbound"]
     p0 = parts[ranks.index(0)]
-    applied: Counter = Counter()
-    for p in parts:
-        applied.update(p["query"].get("residuals_applied") or {})
     return {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": fmt.tp_ranks_fold_digest(comp),
             "program_digest_kind": "tp-ranks-fold", "component_digests": comp, "program_digest_per_rank": per_rank,
             "parts": [{"program_digest": p["program_digest"], "request_id": p["requests"], "steps": p["steps"], "rank": r} for r, p in zip(ranks, parts)],
@@ -150,10 +125,11 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
             "correspondence": {"source": sorted({s for p in parts for s in _as_list((p.get("correspondence") or {}).get("source", "v1_annotations"))}),
                                "digests": sorted({d for p in parts for d in _as_list((p.get("correspondence") or {}).get("digest") or
                                                                                         (p.get("correspondence") or {}).get("digests") or [])})},
-            "query": _with_partitions(dict(p0["query"], residuals_applied=dict(sorted(applied.items()))), "by_rank",
+            "query": _with_partitions(dict(p0["query"]), "by_rank",
                                       {str(r): p["query"] for r, p in zip(ranks, parts)}),
             "op_path_aliases": aliases, "ranks": world,
             "steps": sorted({s for p in parts for s in p["steps"]}), "requests": list(dict.fromkeys(rq for p in parts for rq in p["requests"])),
             "complete": all(p.get("complete", True) for p in parts) and not binding["unbound"], "unmodelled": unmodelled,
             "populations": {"identities": len(ids), "by_family": dict(Counter(r["family"] for r in ids))},
-            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding}
+            "manifest_digest": fmt.manifest_digest(ids), "identities": ids, "tp_peer_binding": binding,
+            **fmt.unreturned_block([r for p in parts for r in p.get("unreturned") or ()])}

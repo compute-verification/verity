@@ -17,11 +17,14 @@
 from __future__ import annotations
 
 import bisect
+import math
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
-from .refs import Affine, Coll, Explicit, Refs, concat
-from .types import Array, Tuple as TupleT, Type, Value, remove_axis
+from .ports import bind_ports
+from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat
+from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
@@ -62,12 +65,43 @@ class FunctionDefinition:
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 
+#: a Definition's conformance label, the word its ``conformance`` text starts with (`conformance_label`), and what it says: how
+#: far the Definition is known to compute what the model computes (completeness, checked empirically and never proved). The
+#: rest of the text qualifies it (the capture, the tested domain, the replacement) and starts with a character that isn't a
+#: lower-case letter or a hyphen, as in ``"exact-model-tested: ..."``.
+CONFORMANCE = {
+    "exact-model-tested": "gives the model's outputs exactly on every input its tests compare (captures of the served kernel, "
+                          "or the model run), which the text names",
+    "model-untested": "read from the model's sources (its kernels, their PTX, a spec) and not yet held to a capture; the text "
+                      "names the check that would",
+    "not-yet-established": "nothing established either way (the default)",
+    "reference-defined": "its evaluator is its definition (a reference operation, an index into its operand), held to another "
+                         "implementation only on the domain the text names",
+    "protocol-defined": "a protocol's own function, with no model to match: the Definition is the specification",
+    "quarantine": "held only to op-level evidence (a difftest against one operation), not to a capture of the served kernel",
+    "superseded": "a later version replaces it, which the text names, with why",
+    "derived": "built from other Definitions by a tool (a difftest, the derive frontend, a prediction, a capture fold): what is "
+               "established is its callees' labels",
+}
+_LABEL = re.compile(r"[a-z][a-z-]*")
+
+
+def conformance_label(text: str, of: str = "a Definition") -> str:
+    """The label of `CONFORMANCE` that the conformance ``text`` starts with; a ValueError, naming ``of`` and the fix, for any
+    other text."""
+    m = _LABEL.match(text) if isinstance(text, str) else None
+    if m is None or m.group(0) not in CONFORMANCE:
+        raise ValueError(f"{of}: conformance {str(text)[:80]!r} doesn't start with a label of "
+                         f"verity.ml.circuits.defs.CONFORMANCE ({', '.join(CONFORMANCE)}): start it with the label that "
+                         "holds, then ': ' and the qualification, or add a new label to CONFORMANCE with what it says")
+    return m.group(0)
+
 
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
     """`tables`: every table the primitive's definition reads by index (its evaluator, or the circuit that proves it), as
     ``(name, kind)`` with a kind of `TABLE_KINDS`. Such a table is no gate of the program, so only its declaration shows it
-    (`constants.program_data`)."""
+    (`constants.program_data`). `ports`: its port types (`ports.Ports`, PROTOCOL.md §12), None when it declares none."""
 
     name: str
     version: int
@@ -75,18 +109,21 @@ class PrimitiveDefinition(FunctionDefinition):
     ret: Value
     evaluate: Callable[..., int] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"  # exact-model-tested | model-untested | not-yet-established
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     tables: tuple[tuple[str, str], ...] = ()
+    ports: Any = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.ret, Value):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
+        conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
         if bad:
             raise ValueError(f"{self.id}: a table is a {' or '.join(TABLE_KINDS)} table, not {bad}")
+        self.port_types = bind_ports(self.id, self.params, self.ret, self.ports, primitive=True)
         if self.register:
             REGISTRY.add(self)
 
@@ -117,7 +154,8 @@ class PrimitiveDefinition(FunctionDefinition):
 class CompositeDefinition(FunctionDefinition):
     """`signature(S)` -> (params, ret); `body(B, S, *args)` -> Coll of type ret. `S` is a namespace over the
     statics (attribute access). Statics with default `None` must be bound before use. `refuse(bindings)`, given the
-    statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None."""
+    statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None. `ports`: its
+    port types (`ports.Ports`, PROTOCOL.md §12), or a function of `S` giving them; None when it declares none."""
 
     name: str
     version: int
@@ -125,11 +163,13 @@ class CompositeDefinition(FunctionDefinition):
     signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]] = field(repr=False)
     body: Callable[..., Coll] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
+    ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        conformance_label(self.conformance, self.id)
         self.statics = tuple(self.statics)
         self._cache: dict[tuple, "SpecializedDefinition"] = {}
         if self.register:
@@ -160,7 +200,9 @@ def _static_key(v: StaticValue):
         return ("fn", v.id)
     if isinstance(v, (list, tuple)):
         return ("tuple",) + tuple(_static_key(x) for x in v)
-    if isinstance(v, (int, str, bool)) or v is None:
+    if isinstance(v, bool):  # True == 1 and hash(True) == hash(1): untagged, FLAG=1 would hit FLAG=True's entry
+        return ("bool", v)
+    if isinstance(v, (int, str)) or v is None:
         return v
     if isinstance(v, float):
         return ("float", v.hex())
@@ -170,8 +212,8 @@ def _static_key(v: StaticValue):
 
 
 class IdentityConflict(ValueError):
-    """`E_IDENTITY`: two different definitions claim the same fully qualified id within one program (frontend
-    rulings §8.1/§8.3). Never resolved first-wins — neither by the binding cache nor by the codec."""
+    """`E_IDENTITY`: two different definitions claim the same fully qualified id within one program. Never
+    resolved first-wins — neither by the binding cache nor by the codec."""
 
 
 def same_definition(a: "FunctionDefinition", b: "FunctionDefinition") -> bool:
@@ -184,7 +226,7 @@ def same_definition(a: "FunctionDefinition", b: "FunctionDefinition") -> bool:
     if type(a) is not type(b) or a.id != b.id:
         return False
     if isinstance(a, PrimitiveDefinition):
-        return a.params == b.params and a.ret == b.ret
+        return a.params == b.params and a.ret == b.ret and a.port_types == b.port_types
     if isinstance(a, CompositeDefinition):
         if a.statics != b.statics:
             return False
@@ -220,7 +262,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
-    same id is a conflict (ruling §8.1), not a silent reuse of the first body."""
+    same id is a conflict, not a silent reuse of the first body."""
     if isinstance(F, SpecializedDefinition):
         merged = dict(F.bindings)
         merged.update(kw)
@@ -291,6 +333,9 @@ class Body:
         return k
 
 
+_UNBOUND = object()
+
+
 class SpecializedDefinition(FunctionDefinition):
     """A composite definition with (some) statics bound. Fully-bound specializations have a cached body."""
 
@@ -299,6 +344,8 @@ class SpecializedDefinition(FunctionDefinition):
         self.bindings = dict(bindings)
         self.key = key
         self._body: Body | None = None
+        self._port_types: Any = _UNBOUND
+        self._id: str | None = None
 
     @property
     def name(self) -> str:
@@ -315,11 +362,17 @@ class SpecializedDefinition(FunctionDefinition):
 
     @property
     def id(self) -> str:
-        """Function identity = definition + static bindings: `Name_vN{K=..,..}` (bare `Name_vN` if static-free)."""
+        """Function identity = definition + static bindings: `Name_vN{K=..,..}` (bare `Name_vN` if static-free). A complete
+        specialization's is formatted once: its bindings are final (the decoder fills an incomplete one's)."""
         if not self.defn.statics:
             return self.base_id
+        if self._id is not None:
+            return self._id
         parts = [f"{k}={_fmt_static(self.bindings[k])}" for k in self.defn.statics if k in self.bindings]
-        return self.base_id + "{" + ",".join(parts) + "}"
+        out = self.base_id + "{" + ",".join(parts) + "}"
+        if self.complete:
+            self._id = out
+        return out
 
     @property
     def statics(self) -> dict:
@@ -360,6 +413,19 @@ class SpecializedDefinition(FunctionDefinition):
 
     def set_body(self, body: Body) -> None:  # used by the decoder
         self._body = body
+
+    @property
+    def port_types(self) -> Any:
+        """Its declared ports bound to its signature (`ports.PortTypes`), None when it declares none."""
+        if self._port_types is _UNBOUND:
+            decl = self.defn.ports
+            if callable(decl):
+                decl = decl(self.S())
+            self._port_types = None if decl is None else bind_ports(self.id, *self.signature(), decl)
+        return self._port_types
+
+    def set_port_types(self, pt: Any) -> None:  # used by the decoder and the lowering
+        self._port_types = pt
 
     def intrinsic(self) -> "IntrinsicSummary":
         """Intrinsic summary (IR §D.1): facts reusable for every instance of this specialization — gate
@@ -419,8 +485,245 @@ def _build_body(sp: SpecializedDefinition) -> Body:
     return B.finish(out)
 
 
+def _first_other(T: Type, base: int, n: int, w: int) -> int | None:
+    """The first of leaves [base, base + n) of `T` whose width is not `w` (as an offset from `base`), None when there is none."""
+    if range_widths(T, base, base + n) == {w}:
+        return None
+    if n == 1:
+        return 0
+    h = n // 2
+    k = _first_other(T, base, h, w)
+    if k is not None:
+        return k
+    k = _first_other(T, base + h, n - h, w)
+    return None if k is None else h + k
+
+
+def _span(p: Affine | Strided) -> tuple[int, int]:
+    """The least and the greatest leaf a non-empty `Affine` or `Strided` part names."""
+    if isinstance(p, Affine):
+        return p.base, p.base + p.count - 1
+    q, last = divmod(p.count - 1, p.inner)
+    vals = [p.base + a * p.outer_stride + b * p.inner_stride
+            for a, b in [(0, 0), (0, min(p.inner, p.count) - 1), (q, 0), (q, last)] + ([(q - 1, p.inner - 1)] if q else [])]
+    return min(vals), max(vals)
+
+
+def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
+    """The smallest subtree of `t` holding leaves [lo, hi), and its first leaf's offset in `t`."""
+    off = 0
+    while True:
+        if isinstance(t, Array) and t.elem.leaves:
+            L = t.elem.leaves
+            i = (lo - off) // L
+            if (hi - 1 - off) // L != i:
+                return t, off
+            t, off = t.elem, off + i * L
+        elif isinstance(t, (RecordType, TupleT)) and 0 <= lo - off < t.leaves:
+            starts = field_starts(t)
+            i = field_at(t, lo - off)
+            if hi - off > starts[i + 1]:
+                return t, off
+            t, off = field_types(t)[i], off + starts[i]
+        else:
+            return t, off
+
+
+def _cyclic_widths(E: Type, r: int, n: int) -> frozenset:
+    """The widths of `n` consecutive leaves of an array of `E`s, from leaf `r` of an element on."""
+    L = E.leaves
+    if n >= L:
+        return E.width_set()
+    if r + n <= L:
+        return range_widths(E, r, r + n)
+    return range_widths(E, r, L) | range_widths(E, 0, r + n - L)
+
+
+def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | None:
+    """{k * stride mod L : k < count}, or None when it has more than `cap` members."""
+    g = math.gcd(stride, L)
+    if count >= L // g:
+        return set(range(0, L, g)) if L // g <= cap else None
+    return {k * stride % L for k in range(count)} if count <= cap else None
+
+
+class _Widths:
+    """The leaf widths a body's references name, for `Builder.finish`'s reinterpretation check (`E_REINTERPRET`). A reference
+    that names no leaf is not this check's: the decoder and the checkers refuse it. Nor is one to node `below` or later, which
+    node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
+    (PROTOCOL.md §4.4)."""
+
+    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
+        self.params, self.nodes = params, nodes
+        self.below = len(nodes)
+        self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
+        self.token = object()  # this check's entry in a `PartLog`'s memo
+        self._src: dict[tuple[str, int], tuple[Type | None, int | None, int]] = {}
+        self._same: dict[tuple[int, int], bool] = {}
+
+    def src(self, s: str, i: int) -> tuple[Type | None, int | None, int]:
+        """(type, homogeneous width, leaves) of parameter or node `i`; (None, None, 0) when there is none, or when `i` is node
+        `below` or later."""
+        if s == "n" and i >= self.below:
+            self.forward = True
+            return (None, None, 0)
+        hit = self._src.get((s, i))
+        if hit is None:
+            T = (self.params[i][1] if s == "p" and 0 <= i < len(self.params) else
+                 self.nodes[i].out if s == "n" and 0 <= i < len(self.nodes) else None)
+            hit = self._src[(s, i)] = (None, None, 0) if T is None else (T, T.homogeneous_width(), T.leaves)
+        return hit
+
+    def leaf(self, s: str, i: int, j: int) -> int | None:
+        T, h, n = self.src(s, i)
+        if T is None or not 0 <= j < n:
+            return None
+        if h is not None:
+            return h
+        (w,) = range_widths(T, j, j + 1)
+        return w
+
+    def other(self, p: Refs, w: int) -> int | None:
+        """The first leaf of part `p` (no `Concat`) whose width is not `w`, as an offset into `p`; None when there is none."""
+        if isinstance(p, Explicit):
+            return next((k for k, (s, i, j) in enumerate(p.items) if self.leaf(s, i, j) not in (None, w)), None)
+        if not p.count:
+            return None
+        T, h, n = self.src(p.space, p.idx)  # type: ignore[attr-defined]
+        if T is None or h == w:
+            return None
+        lo, hi = _span(p)  # type: ignore[arg-type]
+        if lo < 0 or hi >= n:
+            return None
+        if h is not None:
+            return 0
+        if isinstance(p, Affine):
+            return _first_other(T, p.base, p.count, w)
+        if range_widths(T, lo, hi + 1) == {w} or self._periodic(T, p, lo, hi, w):  # type: ignore[arg-type]
+            return None
+        return next((k for k, (s, i, j) in enumerate(p) if self.leaf(s, i, j) != w), None)
+
+    @staticmethod
+    def _periodic(T: Type, p: Strided, lo: int, hi: int, w: int) -> bool:
+        """Every leaf `p` names is of width `w`, by the offsets it reads within the elements of the array that holds them all."""
+        node, off = _cover(T, lo, hi + 1)
+        if not isinstance(node, Array):
+            return False
+        L = node.elem.leaves
+        A = _residues(p.outer_stride, -(-p.count // p.inner), L)
+        r0 = (p.base - off) % L
+        if A is not None and p.inner_stride == 1 and len(A) <= 4096:
+            # each outer step reads `inner` consecutive leaves (fewer at a short last step), so a superset of the leaves `p`
+            # names is the window of `inner` leaves from each step's first, cyclically within an element
+            return all(_cyclic_widths(node.elem, (r0 + a) % L, min(p.inner, p.count)) == {w} for a in A)
+        B = _residues(p.inner_stride, p.inner, L)
+        if A is None or B is None or len(A) * len(B) > 4096:
+            return False
+        return all(range_widths(node.elem, r, r + 1) == {w} for r in {(r0 + a + b) % L for a in A for b in B})
+
+    def misread(self, t: Type, pos: int, p: Refs) -> int | None:
+        """The first leaf of part `p` (no `Concat`), read at leaves pos.. of a `t`, whose width is not the one `t` gives that leaf,
+        as an offset into `p`; None when there is none."""
+        n = p.count
+        if not n:
+            return None
+        ws = range_widths(t, pos, pos + n)
+        if len(ws) == 1:
+            return self.other(p, next(iter(ws)))
+        if isinstance(p, Affine) and self._same_layout(t, pos, p):
+            return None
+        node, off = _cover(t, pos, pos + n)
+        if isinstance(node, Array):
+            L = node.elem.leaves
+            first = (pos - off) // L
+            bounds = [off + k * L for k in range(first, (pos + n - 1 - off) // L + 2)]
+        else:
+            starts = field_starts(node)  # type: ignore[arg-type]
+            first, last = field_at(node, pos - off), field_at(node, pos + n - 1 - off)  # type: ignore[arg-type]
+            bounds = [off + s for s in starts[first:last + 2]]
+        for a, b in zip(bounds, bounds[1:]):
+            a, b = max(a, pos), min(b, pos + n)
+            if a < b:
+                k = self.misread(t, a, p.slice(a - pos, b - pos))
+                if k is not None:
+                    return a - pos + k
+        return None
+
+    def _same_layout(self, t: Type, pos: int, p: Affine) -> bool:
+        """Leaves pos.. of `t` have the widths of the leaves `p` names (True also when `p` names no leaf), by structure."""
+        T, _h, nT = self.src(p.space, p.idx)
+        n = p.count
+        if T is None or p.base < 0 or p.base + n > nT:
+            return True
+        if n <= 64:
+            return all(range_widths(t, pos + k, pos + k + 1) == range_widths(T, p.base + k, p.base + k + 1) for k in range(n))
+        a, ao = _cover(t, pos, pos + n)
+        b, bo = _cover(T, p.base, p.base + n)
+        if pos - ao == p.base - bo and (a is b or a == b):
+            return True
+        if isinstance(a, Array) and isinstance(b, Array) and a.elem.leaves == b.elem.leaves:
+            L = a.elem.leaves
+            return (pos - ao) % L == (p.base - bo) % L and self._same_widths(a.elem, b.elem)
+        return False
+
+    def _same_widths(self, E: Type, F: Type) -> bool:
+        key = (id(E), id(F))
+        if key not in self._same:
+            self._same[key] = E is F or E == F or (E.leaves <= 4096 and E.leaf_widths() == F.leaf_widths())
+        return self._same[key]
+
+    def first(self, c: Coll) -> tuple[int, tuple[str, int, int]] | None:
+        """(position, reference) of the first leaf of `c` that names a leaf of another width than `c.type` gives it, None when
+        there is none. A `Concat` cut from a `PartLog` costs only its parts past the longest cut checked at that width."""
+        return self._first(c.type, c.refs, 0) if c.refs.count else None
+
+    def _first(self, t: Type, r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
+        # A method, not a closure: a recursive closure is a reference cycle, which only the cyclic collector frees, and this
+        # runs for every argument of every node.
+        if not isinstance(r, Concat):
+            k = self.misread(t, pos, r)
+            return None if k is None else (pos + k, r[k])
+        first = 0
+        if r.prefix is not None and not self.forward:
+            log, j = r.prefix
+            ws = range_widths(t, pos, pos + log.starts[j])
+            if len(ws) == 1:
+                (w,) = ws
+                owner, done = log.memo.get("defs.widths", (None, None))
+                if owner is not self.token:
+                    done = {}
+                    log.memo["defs.widths"] = (self.token, done)
+                for k in range(done.get(w, 0), j):
+                    hit = self._first(t, log.parts[k], pos + log.starts[k])
+                    if hit is not None:
+                        return hit
+                if not self.forward:
+                    done[w] = max(done.get(w, 0), j)
+                first = j
+        for k in range(first, len(r.parts)):
+            hit = self._first(t, r.parts[k], pos + r.starts[k])
+            if hit is not None:
+                return hit
+        return None
+
+    def refuse(self, what: str, t: Type, hit: tuple[int, tuple[str, int, int]]) -> TypeError:
+        pos, (s, i, j) = hit
+        (want,) = range_widths(t, pos, pos + 1)
+        src = f"parameter {self.params[i][0]!r}" if s == "p" else f"node {i}"
+        return TypeError(f"E_REINTERPRET: {what}: leaf {pos} is typed Value<{want}> but names leaf {j} of {src}, a "
+                         f"Value<{self.leaf(s, i, j)}>: a silent reinterpretation. A word is read only at the width it was "
+                         f"committed with; a runtime word is split into limbs only by a registered LimbSplit Definition, which "
+                         f"computes the limbs and their carries")
+
+
 class Builder:
-    """Collects the explicit dataflow of one composite body, in function-body order."""
+    """Collects the explicit dataflow of one composite body, in function-body order.
+
+    `finish` refuses a body in which a node's argument or the return names a leaf at another width than its type gives that
+    position (`E_REINTERPRET`, PROTOCOL.md §4.4): an s32 word typed as s8 lanes is a silent reinterpretation, a limb split no
+    gate computes. A runtime word is split into limbs only by a Definition that computes them (a registered `LimbSplit`, with
+    its carries). The check runs at `finish`, when the parameters' types are final (a frontend may declare one before it knows
+    its fields) and every node a reference names exists."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
         self.params = params
@@ -529,30 +832,42 @@ class Builder:
             raise TypeError("composite body must return a Coll")
         if out.type != self.ret_type:
             raise TypeError(f"body returns {out.type!r}, declared {self.ret_type!r}")
+        W = _Widths(self.params, self.nodes)
+        for k, node in enumerate(self.nodes):
+            W.below = k
+            for i, a in enumerate(node.args):
+                hit = W.first(a)
+                if hit is not None:
+                    raise W.refuse(f"node {k} ({node.form} {node.fn.id}) argument {node.fn.signature()[0][i][0]!r}", a.type, hit)
+        W.below = len(self.nodes)
+        hit = W.first(out)
+        if hit is not None:
+            raise W.refuse("the body's return", out.type, hit)
         return Body(self.params, self.ret_type, self.nodes, out.refs, self.offsets)
 
 
 def primitive(name: str, version: int, params: Sequence[tuple[str, Type]], ret: Value, doc: str = "",
-              conformance: str = "not-yet-established", tables: Sequence[tuple[str, str]] = ()):
+              conformance: str = "not-yet-established", tables: Sequence[tuple[str, str]] = (), ports: Any = None):
     """Decorator: register a one-output primitive with a total evaluator on encodings."""
 
     def deco(fn: Callable[..., int]) -> PrimitiveDefinition:
         return PrimitiveDefinition(name, version, tuple(params), ret, fn, doc=doc or (fn.__doc__ or ""), conformance=conformance,
-                                   tables=tuple(tables))
+                                   tables=tuple(tables), ports=ports)
 
     return deco
 
 
 def composite(name: str, version: int, statics: Sequence[str], signature, doc: str = "",
-              conformance: str = "not-yet-established", refuse: Callable[[dict], str | None] | None = None):
+              conformance: str = "not-yet-established", refuse: Callable[[dict], str | None] | None = None,
+              ports: Any = None):
     """Decorator: register a composite; the decorated function is the body builder `(B, S, *args) -> Coll`."""
 
     def deco(fn: Callable[..., Coll]) -> CompositeDefinition:
         return CompositeDefinition(name, version, tuple(statics), signature, fn, doc=doc or (fn.__doc__ or ""),
-                            conformance=conformance, refuse=refuse)
+                            conformance=conformance, refuse=refuse, ports=ports)
 
     return deco
 
 
 __all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
-           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
+           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]

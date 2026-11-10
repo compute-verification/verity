@@ -1,5 +1,11 @@
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.C3.Fork.CouplingLock
+module
+
+public import Proofs.Flock.C3.Fork.CouplingLock
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Order.CompletePartialOrder
+import Proofs.Flock.Soundness.Game
+import VCVio.Prelude.Core
 
 /-!
 # a1l, step 4: the coupling's oracle game is no better than the oracle table
@@ -9,6 +15,8 @@ import Proofs.Flock.C3.Fork.CouplingLock
 (`holoRep_eq_map`), so where both reps' Ligerito accept, the two games are the same; elsewhere the oracle game
 rejects.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

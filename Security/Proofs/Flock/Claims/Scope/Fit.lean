@@ -1,7 +1,44 @@
-import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Claims.Scope.Tables
+module
+
+public import Proofs.Flock.Claims.Scope.InScope
+public import Proofs.Flock.Claims.Scope.Tables
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
 /-!
 # Every table the verifier parses fits the first table's blocks
@@ -13,6 +50,8 @@ blocks (`Tab.Fits`). `relS_layout`: at such a statement, `RelS` of the readable 
 `Layout.model` at `regionsOf`, the statement the soundness proof reads, satisfied by its share of the hidden values
 (`zOf`, the tables' bits interleaved).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -58,8 +97,8 @@ theorem tableAt {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht :
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have hp := (Hidden.setupHidden_spec' hd).parse
-    rw [parseH_tagsAt ht] at hp
-    refine ⟨?_, Hidden.hidden_layout' ht' hd, Hidden.setupHidden_wf hd⟩
+    rw [parseCommit_tagsAt ht] at hp
+    refine ⟨?_, Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj), Hidden.setupHidden_wf hd⟩
     simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
 
 /-- **Every table fits the first table's blocks**: the same circuit (so `k_log`), the same link points (so `nbl` and

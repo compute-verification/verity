@@ -6,14 +6,13 @@
 # form exists because Cursor caps a secret at 4096 bytes: an RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) is refused,
 # while its DER (~2348 bytes) encodes to ~3132.  The two decode unambiguously: PEM text starts `-----BEGIN`, DER starts byte 0x30.
 # The key must be one line: a multi-line secret's body lines pass through `env | cut -d= -f1` and escape
-# Cursor's redaction, which is how the old multi-line NEBIUS_SA_PRIVATE_KEY leaked six times by 2 Oct and again on 3 Oct. It is
-# refused, so that nobody keeps it as a Cursor secret.
+# Cursor's redaction, so a multi-line NEBIUS_SA_PRIVATE_KEY leaks. It is refused, so that nobody keeps it as a Cursor secret.
 # The key is written to a mode-600 file in a mode-700 directory made for this process and removed when it exits; the CLI's profile
 # lives there too (`nebius -c`), so nothing is written to ~/.nebius or the repository and no value is ever printed.  Never run these
 # with `bash -x`.
 
 NEBIUS_REGION=${NEBIUS_REGION:-uk-south2}
-NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the service account is editor there only
+NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the launcher is editor in uk-south2, us-central1, us-north1 and eu-north1 only
 NEBIUS_PROJECT_NAME=${NEBIUS_PROJECT_NAME:-vy-nebius}                    # only when NEBIUS_PROJECT_ID is set empty
 VM_NAME=${NEBIUS_VM_NAME:-vy-nebius-1}
 PRESET=${NEBIUS_PRESET:-8gpu-192vcpu-1744gb}
@@ -23,6 +22,7 @@ BOOT_GIB=${NEBIUS_BOOT_GIB:-256}
 BOOT_TYPE=network_ssd
 DATA_GIB=${NEBIUS_DATA_GIB:-5022}                  # 54 x 93 GiB (non-replicated disks come in 93 GiB units) = 4.90 TiB
 DATA_TYPE=${NEBIUS_DATA_TYPE:-network_ssd_non_replicated}
+DATA_NAME=${NEBIUS_DATA_DISK:-$VM_NAME-data}       # another VM's kept data disk (detached), to boot on its /workspace as it is
 DATA_DEVICE_ID=data                                # the guest sees /dev/disk/by-id/virtio-data
 SG_NAME=${VM_NAME}-ssh
 SSH_CIDRS=${NEBIUS_SSH_CIDRS:-0.0.0.0/0}           # comma-separated, at most 8; port 22 only either way
@@ -135,14 +135,17 @@ print(ids[0])') || die "tenant lookup failed"
 vm_id() { nb compute instance list --parent-id "$PROJECT_ID" --all | by_name "$VM_NAME"; }
 disk_id() { nb compute disk list --parent-id "$PROJECT_ID" --all | by_name "$1"; }
 
-# wait_state ID STATE [TRIES]: poll the VM every 10 s until status.state is STATE
+# wait_state ID STATE [TRIES]: poll the VM every NEBIUS_POLL_S (default 10) s until status.state is STATE.  A start Nebius refuses (no capacity) goes
+# STARTING, then back to STOPPED, so waiting for RUNNING ends there instead of using up TRIES (30 min by default).
 wait_state() {
-  local id=$1 want=$2 tries=${3:-180} st=""
+  local id=$1 want=$2 tries=${3:-180} st="" started=""
   while [ "$tries" -gt 0 ]; do
     st=$(nb compute instance get --id "$id" | jf status.state | tr '[:lower:]' '[:upper:]')
     [ "$st" = "$want" ] && return 0
+    [ "$st" = STARTING ] && started=1
+    [ "$want" = RUNNING ] && [ "$st" = STOPPED ] && [ -n "$started" ] && die "VM $id went back to STOPPED: Nebius refused its start"
     tries=$((tries - 1))
-    sleep 10
+    sleep "${NEBIUS_POLL_S:-10}"
   done
   die "VM $id is $st, not $want, after waiting"
 }

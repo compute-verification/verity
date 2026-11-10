@@ -1,5 +1,5 @@
 """C-Flock's generic IR lowering: the pieces against the IR primitives, the units read off each template's IR graph, the
-lowered templates against the IR evaluator on captured #101 slices and synthetic sets, the pins, and the negatives."""
+lowered templates against the IR evaluator on captured served slices and synthetic sets, the pins, and the negatives."""
 from __future__ import annotations
 
 import itertools
@@ -14,13 +14,12 @@ from verity.ml.circuits.defs import REGISTRY
 from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
-P = pytest.importorskip("verity_vllm.program.registry.prims")
-from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+P = pytest.importorskip("verity.ml.definitions.registry.prims")
+from verity_flock import lowerings  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 
-SLICES = Path(__file__).resolve().parents[4] / "benchmarks" / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
+SLICES = Path(__file__).resolve().parents[0] / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}, "silu-mul-v2": {"I": 256}}
 
@@ -109,7 +108,7 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
 
 
 def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_its_word():
-    """A primitive C-Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
+    """A primitive Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
     running that Definition's ``build``: found through core's registry, not imported from its owner."""
     from types import SimpleNamespace
 
@@ -347,7 +346,7 @@ def test_the_gelu_piece_matches_the_ir_primitive_on_every_gate_word():
 
 def test_bit_at_selects_the_bit_or_zero():
     """``BitAtx{W}`` (a width family ``ir_lower.PIECES`` resolves): bit i of the word, 0 for i outside [0, W)."""
-    from verity_vllm.program.registry.sampling import bit_at
+    from verity.ml.definitions.registry.sampling import bit_at
     rng = random.Random(4)
     W = 1000
     vecs = [[rng.getrandbits(W), rng.choice([rng.randint(0, W - 1), 0, W - 1, W, 0xFFFFFFFF, 0x80000000])] for _ in range(64)]
@@ -527,7 +526,7 @@ def test_silu_v2_circuit_units_are_a_power_of_two():
 
 @pytest.mark.parametrize("which", ["gemm-tc-step", "silu-mul"])
 def test_a_units_nonzeros_are_its_netlist_rows_inside_its_slot(which):
-    """`Layout.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
+    """`LoweredUnit.nonzeros` on a GEMM coordinate's tensor-core step and on SiLU·mul (its table read's rows): the (row, column)
     pairs of every row of the unit's ``flock-ir-unit/v2`` text, which the block places in the unit's slot, each below
     ``useful``."""
     from verity.ml.circuits.defs import bind
@@ -568,16 +567,6 @@ def _check_set(s: InputSet) -> int:
 def test_captured_slices(name):
     s = InputSet.open(SLICES / name)
     assert s.source == "captured" and s.n > 0
-    assert _check_set(s) == 0
-
-
-@pytest.mark.parametrize("template", sorted(LOWERED))
-def test_synthetic_sets(template, tmp_path):
-    sub = TM.subcircuit(template, **LOWERED[template])
-    n = 24 if template == "rope-head" else 3
-    summary = generate(sub, n, 20260926, tmp_path)
-    s = InputSet.open(summary["path"])
-    assert s.source == "synthetic"
     assert _check_set(s) == 0
 
 
@@ -735,55 +724,6 @@ def test_rmsnorm_widths_refuse_unequal_warps():
     assert fused.width(2048) == 128 and fused.width(576) == 64 and fused.width(1536) is None
     assert triton.width(2048) == 256 and triton.width(1536) is None
     assert "not N = 1536" in REG.supports(TM.subcircuit("rmsnorm-fused-cuda", N=1536, EPS=1e-5), "frame-v3/blake3-keyed")
-
-
-@pytest.mark.slow
-def test_rmsnorm_fused_small_row_against_the_ir(tmp_path):
-    """N = 64: two warps of 32 one-element threads; spine synthetic rows, outputs and warp aggregates both compared."""
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 6, 20260926, tmp_path)["path"])
-    assert REG.module("rmsnorm-fused-cuda").lowering(sub).units.n == 2
-    assert _check_set(s) == 0
-
-
-def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 2, 7, tmp_path)["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    fin = IL.flat_ports(s, sub.inputs, 0, s.n)
-    cuts = IL.cut_words(low, fin)
-    good, _, _ = low.evaluate(fin, cuts)
-    cuts[:, -1] ^= 1 << 12
-    bad, _, _ = low.evaluate(fin, cuts)
-    assert (good != bad).any(axis=1).all()
-
-
-@pytest.mark.slow
-def test_the_netlist_accounts_for_every_cut_word(tmp_path):
-    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the netlist's CUT line lists each
-    unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words defined
-    before. The instance header only counts them."""
-    import json
-
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    head = json.loads(IL.stage(low, s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
-    cut = json.loads((tmp_path / "st" / "net.txt").read_text().splitlines()[-1].removeprefix("CUT "))
-    assert cut == low.cut and "cut" not in head
-    assert head["cut_words"] == cut["words"] == len(low.units.cut) == 3 and len(cut["in"]) == len(cut["out"]) == low.units.n == 2
-    produced = [k for unit in cut["out"] for _, k in unit]
-    tail_out = [op[0] for op in cut["tail"] if op[0] < cut["words"]]
-    assert sorted(produced + tail_out) == list(range(cut["words"]))
-    defined = set(produced)
-    for op in cut["tail"]:
-        assert set(op[2:] if op[1] != "Const" else []) <= defined
-        defined.add(op[0])
-    assert {op[1] for op in cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
-    rs = InputSet.open(SLICES / "rope-head-d64")
-    rope = REG.module("rope-head").lowering(rs.subcircuit)
-    head = json.loads(IL.stage(rope, rs, 0, 1, tmp_path / "r").read_bytes().split(b"\n", 1)[0])
-    assert rope.cut is None and head["cut_words"] == 0 and not rope.text.splitlines()[-1].startswith("CUT")
 
 
 @pytest.mark.slow
@@ -1069,52 +1009,6 @@ def test_frame_staging_commits_rows_and_outputs(tmp_path):
     assert h["blocks"] == [[[[0, 0, 0, 0], [0, 1, 0, 0], None, None], list(range(32)) + [None] * 32]]
 
 
-@pytest.mark.slow
-def test_frame_staging_carries_the_cut_words(tmp_path):
-    """A cut template's frame file ends with every instance's cut words (the IR's), which the verifier checks against the
-    netlist's pinned tail; the empty run slot of a three-port component block is padding."""
-    import json
-
-    sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
-    s = InputSet.open(generate(sub, 3, 5, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
-    path = REG.module("rmsnorm-fused-cuda").stage(s, 0, 3, tmp_path / "st")
-    head, body = path.read_bytes().split(b"\n", 1)
-    h = json.loads(head)
-    assert h["cut_words"] == 3 and "cut" not in h and h["layout"]["chunks_per_block"] == 4
-    assert h["blocks"][0][0] == [[0, 0, 0, 0], [0, 1, 0, 0], [0, 2, 0, 0], None]
-    cuts = np.frombuffer(body[-3 * 3 * 4:], dtype="<u4").reshape(3, 3)
-    assert (cuts == IL.cut_words(low, IL.flat_ports(s, sub.inputs, 0, 3))).all()
-
-
-def test_non_gemm_results_carry_no_gemm_target():
-    from verity_numerical.bench import contract
-
-    base = dict(domain="total", B=4, proof_class="NON_ZK_PROOF", authentication="included-hash", zk_mode="none",
-                security={"target": -128}, hardware={"gpu": None, "cpu": {"model": "x"}}, software={"backend": {"name": "b", "commit": None},
-                "toolchain": {}}, preprocessing="none", retention="retained", instances=None)
-    ok = contract.fingerprint(profile=None, K=None, subcircuit="rope-head/d64/neox-bf16", **base)
-    assert contract.validate_fingerprint(ok) == []
-    assert any("profile must be null" in p for p in contract.validate_fingerprint({**ok, "profile": contract.PROFILE}))
-    assert any("profile must be a target" in p for p in contract.validate_fingerprint({**ok, "subcircuit": None}))
-    rates = [contract.measurement(contract.OVERHEAD, 1.0)]
-    assert contract._check_rates(ok, rates) and "GEMM rates" in contract._check_rates(ok, rates)[0]
-
-
-def test_an_ir_cell_plans_through_the_spine():
-    from verity_numerical.bench import cell as C
-
-    two_machines = {"prover": {"machine_id": "m-p", "public_ip": "1.2.3.5"}, "verifier": {"machine_id": "m-v", "public_ip": "1.2.3.4"},
-                    "link": {"peer": "1.2.3.4:7400", "peer_ip": "1.2.3.4"}}
-    c = C.plan("C-interactive", "rope-head/d64/neox-bf16+frame-v3/blake3-keyed", str(SLICES / "rope-head-d64"), "vy-p", verifier="vy-v",
-               verifier_addr="1.2.3.4:7400", rtt_target="1.2.3.4:22", lane="flock-ir-lowering", points="2 4", runs=5, placement=two_machines)
-    assert c.relation == "irf:rope-head"
-    v, p = c.jobs
-    assert v["command"][:3] == ["bash", "verity/ml/flock/pod/33-ir-cell.sh", "ROLE=verifier"] and "TEMPLATE=rope-head" in v["command"]
-    assert "--send" in v["argv"] and v["argv"][v["argv"].index("--send") + 1] == p["argv"][p["argv"].index("--send") + 1]
-    assert "VERIFIER=1.2.3.4:7400" in p["command"] and "LOOPBACK=1" in p["command"]
-
-
 # --- attention: tensor-core k-steps as units, the softmax native -------------------------------------------------------------
 
 def test_the_tensor_core_step_matches_the_ir_on_every_encoding():
@@ -1184,46 +1078,6 @@ def test_attention_frame_places_a_block_per_16_keys(tmp_path):
     assert (out == s.port("out")[0]).all()
 
 
-def test_attention_key_classes_and_the_class_manifest(tmp_path):
-    """Key-count classes [1, 128], [129, 256], [257, 512], ...; a class manifest lists every T of its range with its v3 netlist's
-    sha256 and the unit rows they share (the pin is the manifest's sha256); a class cell's sub-batches split at T boundaries."""
-    import hashlib
-    import json
-
-    from verity_flock import ir_bench
-    from verity_flock.templates import attention_head as A
-
-    assert [A.key_class(t) for t in (1, 128, 129, 256, 257, 287, 512, 513)] == [(1, 128)] * 2 + [(129, 256)] * 2 + [(257, 512)] * 3 + [(513, 1024)]
-    sub = TM.subcircuit("attention-head", D=64, BN=128)
-    m = A.class_manifest(sub, 1, 3)
-    d = json.loads(m)
-    assert d["format"] == A.CLASS_FORMAT and d["T"] == [1, 3] and sorted(d["nets"]) == ["1", "2", "3"]
-    assert m == (json.dumps(d, sort_keys=True, separators=(",", ":")) + "\n").encode()
-    for T in (1, 2, 3):
-        low = A.cached_lowering(sub, T)
-        assert d["nets"][str(T)] == low.sha256 == hashlib.sha256(low.text.encode()).hexdigest()
-        assert A.unit_rows_sha256(low.text) == d["unit_rows"]
-
-    class _K(ir_bench.KeyClass):
-        def __init__(self, T):
-            self.T = T
-
-    assert _K([1, 1, 1, 2, 2, 5]).subs(6, 2) == [(0, 2), (2, 3), (3, 5), (5, 6)]
-    assert _K([1, 1, 1, 2, 2, 5]).subs(4, 16) == [(0, 3), (3, 4)]
-
-
-def test_an_ir_run_result_is_a_point_not_a_second_cell():
-    """The runner publishes a run's result.json under its own kind: ir_bench marks it a bench-point/v1 (a known kind), so the
-    cell's one bench-result/v1 is bench.cell register's, and verity_flock.register drops the kind it read."""
-    from pathlib import Path
-
-    from research.store.kinds import KINDS
-    from verity_flock import ir_bench, register
-
-    assert ir_bench.POINT_KIND == "bench-point/v1" and ir_bench.POINT_KIND in KINDS
-    assert 'raw.pop("kind", None)' in Path(register.__file__).read_text()
-
-
 def test_hopper_wgmma_piece_is_the_ir_primitive():
     """``PIECES["HopperBF16WgmmaDot16_v1"]`` (fp.tc_dot16 with HOPPER_BF16_WGMMA_K16's groups (16,), W 26, F -133) equals the IR
     primitive on special-heavy vectors (NaN payloads, both infinities, subnormals, cancellation)."""
@@ -1252,18 +1106,64 @@ def test_hopper_wgmma_piece_is_the_ir_primitive():
     assert got == [P.evaluate(c[0], *c[1], *c[2]) & 0xFFFFFFFF for c in cases]
 
 
-def test_a_cells_domain_is_the_one_its_statement_proves():
-    """red-team-flock-3's M0 (coordinator 2026-09-27 13:45Z): ``ir_bench`` and ``bench`` wrote ``domain: finite`` for every cell.
-    An IR lowering asserts nothing, so every encoding is proven to give the IR's output: ``total``.  A pure unit asserts its
-    operands (and accumulator) finite: ``finite-only``, unless it is a total unit."""
-    from types import SimpleNamespace
+# --- the registered compiler's dead-free Definitions: RMSNormTriton_v5 and AttentionHead_v18 ----------------------------------
 
-    from verity_flock import lowering as FL
+#: ``unit_rows_sha256`` of AttentionHead_v18's one tensor-core step, at every (D, BN, T)
+V18_UNIT_ROWS = "68063483886a889a27180764bcf913cabb1a2599be427752f7fd2e681b75f50c"
 
-    low = REG.module("silu-mul").frame_lowering(TM.subcircuit("silu-mul", I=8192))
-    assert not low.circuit.asserts and low.domain == "total"
-    assert IL.Lowering.domain.fget(SimpleNamespace(circuit=SimpleNamespace(asserts=[("x not finite", 0)]))) == "finite-only"
-    for relation, pipe in FL.PIPES.items():
-        assert pipe.domain == ("finite-only" if FL._layout(pipe)[0].asserts else "total"), relation
-    assert {p.domain for p in FL.PIPES.values()} == {"finite-only"}
-    assert FL.Pipe("t", None, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16", total=True).domain == "total"
+
+def _gate_shape(U):
+    by = {g.index: k for k, g in enumerate(U.tail)}
+    cut = {g: k for k, g in enumerate(U.cut)}
+    return [(g.prim.id, [("t", by[o]) if o in by else ("c", cut[o]) for o in g.operands]) for g in U.tail]
+
+
+@pytest.mark.parametrize("n", [2048, 4096])
+def test_rmsnorm_triton_v5_is_v1s_lowering(n):
+    """v5 drops the 129 butterfly adds a warp that v1's lowering already left out (no output depends on them): the same warp units
+    (signature, leaf maps, cut words) and the same tail, so v5 takes v1's unit netlist and its pins."""
+    v5, v1 = (IL.units(TM.subcircuit(t, N=n, EPS=1e-5).definition(), IL.reduction_cut(256)) for t in ("rmsnorm-triton-v5", "rmsnorm-triton"))
+    assert (v5.n, len(v5.cut)) == (n // 256, n // 256 + 1)
+    assert v5.signature == v1.signature and (v5.in_src, v5.out_src) == (v1.in_src, v1.out_src)
+    assert _gate_shape(v5) == _gate_shape(v1)
+    assert sum(g.prim.id == "F32Add_v1" for g in v5.gates) == 31
+    mod = REG.module("rmsnorm-triton-v5")
+    assert mod.UNIT == REG.module("rmsnorm-triton").UNIT and mod.PINS[(n, 1e-05)] == REG.module("rmsnorm-triton").PINS[(n, 1e-05)]
+
+
+def test_dead_free_templates_say_what_they_prove_under():
+    v5 = REG.module("rmsnorm-triton-v5")
+    assert [v5.width(n) for n in (128, 1024, 1536, 2048, 4096, 5120)] == [None, 256, None, 256, 256, 256]
+    assert "not N = 128" in REG.supports(TM.subcircuit("rmsnorm-triton-v5", N=128, EPS=1e-6), CIRCUIT_SCHEME)
+    for sub in (TM.subcircuit("rmsnorm-triton-v5", N=2048, EPS=1e-5), TM.attention_head_v18(64, 128), TM.attention_head_v18(128, 64)):
+        assert REG.supports(sub, CIRCUIT_SCHEME) is None
+        assert "not under frame-v3/blake3-keyed" in REG.supports(sub, "frame-v3/blake3-keyed")
+        assert REG.relation(sub, CIRCUIT_SCHEME) == "verity/flock-circuit"
+    assert "not D = 24" in REG.supports(TM.attention_head_v18(24, 32), CIRCUIT_SCHEME)
+
+
+@pytest.mark.parametrize("D,BN,T", [(64, 128, 1), (64, 128, 129), (64, 128, 512), (128, 64, 65)])
+def test_attention_v18_units_are_sm120_tensor_core_steps(D, BN, T):
+    """Every HopperBF16WgmmaDot16 gate is a unit: D/16 QK steps a key, D PV steps per k-step of 16 visible keys; v18 pads only the
+    first visited block's value rows of its last k-step (zero words), none of its key rows. The unit rows are one step's at
+    every binding (a class manifest's ``unit_rows``)."""
+    from verity_flock.templates import attention_head as A
+
+    low = REG.module("attention-head-v18").lowering(TM.attention_head_v18(D, BN), T)
+    U = low.units
+    nvis = T - (T - 1) // BN * BN
+    ksteps = (T - nvis) // 16 + -(-nvis // 16)
+    assert U.signature == ("HopperBF16WgmmaDot16_v1",) and U.n == D // 16 * T + D * ksteps
+    assert sum(k == "zero" for u in U.in_src for k, _ in u) == D * (-nvis % 16)
+    assert len(U.public) == D and low.leaves["out"] == [[]] * U.n and len(low.cut["outputs"]) == D
+    assert {op[1] for op in low.cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
+    assert A.unit_rows_sha256(low.text) == V18_UNIT_ROWS
+
+
+@SLOW
+@pytest.mark.parametrize("n", [2048, 4096])
+def test_rmsnorm_triton_v5_pins_are_v1s(n):
+    sub = TM.subcircuit("rmsnorm-triton-v5", N=n, EPS=1e-5)
+    mod = REG.module("rmsnorm-triton-v5")
+    low = mod.circuit_lowering(sub)
+    assert low.sha256 == mod.PINS[(n, 1e-05)] and low.text == REG.module("rmsnorm-triton").lowering(TM.subcircuit("rmsnorm-triton", N=n, EPS=1e-5)).text

@@ -1,9 +1,21 @@
-import Proofs.Flock.C3.Compose.SparseEnds
-import Proofs.Flock.C3.Compose.SrcClauses
-import Proofs.Flock.C3.Compose.Tied
-import Proofs.Flock.C3.RegLevels.LigWhole
-import Proofs.Flock.C3.Reps.RepCoins
-import Proofs.Flock.Recursive.HoloCoins
+module
+
+public import Proofs.Flock.C3.Compose.SparseEnds
+public import Proofs.Flock.C3.RegLevels.LigWhole
+public import Proofs.Flock.C3.Reps.RepCoins
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `StageCoins` at the guarantee's coin types
@@ -13,10 +25,12 @@ history's rounds as it has coins, at a run whose stages are tied. Each tied stag
 `holoRepShape` (`repKinds_of_tie`), a sparse phase `sparseKinds` (`sparseKinds_of_tie`), R's opening `opShape` at two
 claims (`opening_exact`) and R's Ligerito `ligShape` (`ligeritoC_exact`). So the stages' coins add up to `holoKinds`',
 which `holoCTs` counts after the link points (`coins_total_holo`, the bound `h5`'s rounds read).
-`stageCoins_holo`: `srcOK_holo`'s `hcoins` at `holoCTs` and the tied source of `repsOfVals`. The reps' two conjuncts
-come from custody's coins half (`repCoins_repsOfVals`) at some of the map's draws (`custody_sel`), and the rest from
+`stageCoins_holo`: `hcoins` at `holoCTs` and the tied source of `repsOfVals`. The reps' two conjuncts
+come from custody's coins half (`repCoins_repsOfVals`) at some of the map's samples (`custody_sel`), and the rest from
 `LaterCoins`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -55,7 +69,7 @@ def LaterCoins {r : ℕ} {CT : Fin r → Type} {e : ExecHolo} (cs : List ((k : F
       (nCoins u.lg) u.lg
 
 /-- **A tied run's stages take `holoKinds`' coins**, `holoCTs`' count after the link points: each tied stage takes its
-whole shape. It bounds the rounds `laterCoins_of_held`'s `h4`, `h5` read (`RegLevels.stagesHeld_of_run`'s `htot`). -/
+whole shape. -/
 theorem coins_total_holo {st : Flock.Stmt} {hp : HoloParams} {u : C3Run (holoAt st hp)} {cap₀ : Cap Dig}
     {sh : Flock.Shape} {w : Array F128} {ops : FlockVBridge.AccChain.Openings}
     (hr : ∀ i, RepTie (holoAt st hp) u i) (hs : ∀ i, FlockC3.Sparse.SparseTie (holoAt st hp) u i)
@@ -94,7 +108,7 @@ variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp
 
-/-- **Custody at some of the map's draws**: custody's coins half at `m`'s draws holds at any `sel` among them. -/
+/-- **Custody at some of the map's samples**: custody's coins half at `m`'s samples holds at any `sel` among them. -/
 theorem custody_sel {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : FlockSoundness.Assumptions.InnerRecordMap Cm Coin} {sel : ℕ → String → ℕ → Prop}
@@ -102,10 +116,10 @@ theorem custody_sel {Cm Coin : Type} {wr : List (Cm × Coin) → Lean.Json × St
     FlockSoundness.Assumptions.InnerRecordCustody wr held sparse { m with selC := sel } := fun t =>
   ⟨fun i e he => ⟨((h t).1 i e he).1, fun _ _ hs => ((h t).1 i e he).2 _ _ (hsel _ _ _ hs)⟩, (h t).2⟩
 
-/-- **`srcOK_holo`'s `hcoins` at `holoCTs`**, at the tied source of `repsOfVals` whose stages are tied: the reps'
-coins from custody's coins half (`repCoins_repsOfVals` at the map's draws `sel`, `custody_sel`), the link points' and
-the later stages' from `LaterCoins`. The reps' rounds need be encoded (`henc`) and drawn (`hdr`) only at `sel`, some
-of the map's draws (`hsel`): at `holoMap`, its one-round draws (`holoSelOne`, `coinsEncoded_holoMap`), since a sparse
+/-- **`hcoins` at `holoCTs`**, at the tied source of `repsOfVals` whose stages are tied: the reps'
+coins from custody's coins half (`repCoins_repsOfVals` at the map's samples `sel`, `custody_sel`), the link points' and
+the later stages' from `LaterCoins`. The reps' rounds need be encoded (`henc`) and sampled (`hdr`) only at `sel`, some
+of the map's samples (`hsel`): at `holoMap`, its one-round samples (`holoSelOne`, `coinsEncoded_holoMap`), since a sparse
 phase's round of `n > 1` coins is not encoded as one. -/
 theorem stageCoins_holo {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}

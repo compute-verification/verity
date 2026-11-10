@@ -28,7 +28,7 @@ its operands are the indexer's top-k row, the request's block-table row and the 
              block row the request's block ids and junk words past them; two padding tokens after them (byte 0, request 0).
              `edge`: six requests' tokens in a shuffled map, several to a request; bytes 0, 1, 2, 0x80 and 0xFF (a bool tensor's
              bytes, true when nonzero); rows empty, short, full, of the negative kinds (-1, -2, -BS, INT32_MIN, random), of the
-             block edges and the row's last slot, and draws; block rows whose products by BS wrap int32 (2^25 and up, INT32_MAX,
+             block edges and the row's last slot, and samples; block rows whose products by BS wrap int32 (2^25 and up, INT32_MAX,
              negative words, random words).  Each launch twice, then the kernel itself once at the wrapper's arguments into
              sentinel-filled buffers: every token's TOPK slots and its length against `dsv4_decode_indices_twin.global_topk` (the
              kernel's stores) and the reference `Dsv4GlobalTopk_v1` on every token (every 16th served one under --quick); the
@@ -47,6 +47,8 @@ the selection, the PTX and the bindings.
     $PY tests/properties/dsv4_decode_index_row_capture_gpu.py --out DIR [--scratch DIR] [--quick]
 """
 from __future__ import annotations
+
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import argparse
 import glob
@@ -70,8 +72,8 @@ from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import dsv4_decode_indices_twin as T
-from verity_vllm.program.registry import dsv4_decode_indices as R
+from verity.ml.definitions.numerics import dsv4_decode_indices_twin as T
+from verity.ml.definitions.registry import dsv4_decode_indices as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-index-row-capture/v1"
@@ -159,7 +161,7 @@ def edge_table(case: str, rng) -> np.ndarray:
 def edge_row(kind: str, case: str, rng) -> np.ndarray:
     """One edge top-k row of ``kind``: `empty` (every index -1), `negative` (the negative kinds), `short` (a prefix of 1, 63, 64,
     65 or 1023 indices, then -1), `full`, `edges` (the block edges, the row's last slot NB * BS - 1 and the negatives around
-    them), or `mix` (the twin's draws, a valid one past the row folded into it)."""
+    them), or `mix` (the twin's samples, a valid one past the row folded into it)."""
     st = statics(case)
     K, BS, span = st["TOPK"], st["BS"], st["NB"] * st["BS"]
     if kind == "empty":

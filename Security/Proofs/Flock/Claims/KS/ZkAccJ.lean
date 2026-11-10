@@ -1,6 +1,45 @@
-import Proofs.Flock.Claims.KS.ZkLiveJ
-import Proofs.Flock.Claims.KS.Escapes
-import Proofs.Flock.Claims.KS.OnAcc
+module
+
+public import Proofs.Flock.Claims.Bridge.Returns
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
+public import Proofs.Flock.Claims.KS.ZkLiveJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Every masked table's bound with escapes on accepted runs
@@ -24,6 +63,8 @@ accepted runs (`zk_tableBoundJAccAt_of_liveJ`, through `zk_le_sessionsJ`). At th
 gives table 0's, `TableBoundθAccAt` with the same escapes (`TableBoundJAccAt.tableBoundθAccAt`), so the masked
 `plain_tableBoundθAccAt` follows from `ZkLiveAccJ` where some run accepts (`zk_tableBoundθAccAt`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -137,7 +178,7 @@ theorem width₀_pos {mPts : ℕ} (T : TabZK 𝔽 mPts) : 0 < width₀ T := by
 width or at a level's `2^lanes`, and its pads pairs are all `(0, 0)`. -/
 theorem not_selfClashZ_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] {mPts : ℕ} (Hs : Hashes 𝔽 D Sl)
     (T : TabZK 𝔽 mPts) {out : OutZC 𝔽 D Sl} (h : out.opens = nulOpZ) : ¬ SelfClashZ Hs T out := by
-  rintro (⟨x, hx, -, -, -, hv, -⟩ | ⟨r, -, ℓ, -, cap, -, hc⟩ | ⟨r, -, root, jj, -, jj', -, p, -, -, hne⟩)
+  rintro (⟨x, hx, -, -, -, hv, -⟩ | ⟨r, -, ℓ, -, cap, -, hc⟩ | ⟨r, -, root, jj, -, jj', -, p, -, -, -, -, hne⟩)
   · refine not_verifiedZ_nil Hs.H Hs.E Hs.Lf out.cap₀ (width₀_pos T) _ ?_ hv
     unfold opens₀Z at hx
     rcases List.mem_append.1 hx with hx | hx
@@ -272,6 +313,7 @@ def ZkLiveAccAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabite
           (rootB₀ : Array ByteArray)
           (_hok : ∀ o, ok (finJ T hj) o → o.accepted = true ∧
             ¬ (Off₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o ∧ ¬ SelfClashZ Hs (T j) o))
+          (_hacc : ∀ i o, ok i o → o.accepted = true)
           (hdec : ∀ i, DecodesTable (outJ Hs (tabsJ (tables true x).length T)) ok pL opn dec one fin capOf
             (repJ A Hs (tabsJ (tables true x).length T)) i)
           (τ : Type) (_ : Fintype τ) (_ : Nonempty τ)
@@ -310,10 +352,10 @@ theorem zkLiveAtJ_of_acc {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
   intro Ω _ _ P
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, -, -, hω⟩ := hl Ω P
   refine ⟨rd, hrd, ev, ev₁, tied, tied₁, fun ω j hj C hok => ?_⟩
-  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau, hsc⟩ :=
-    hω ω j hj C hok
-  exact ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hdec, τ, inferInstance, inferInstance, σL, hσ, htr,
-    hadv, hP, hTau, le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
+  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hacc', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau,
+    hsc⟩ := hω ω j hj C hok
+  exact ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hacc', hdec, τ, inferInstance, inferInstance, σL, hσ,
+    htr, hadv, hP, hTau, le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
       (finJ T hj) (tabsJ_get _ T _)) hsc⟩
 
 /-- **Every masked table's bound at a statement with escapes on accepted runs, from the live sessions' bound** at the
@@ -344,8 +386,8 @@ theorem zk_tableBoundJAccAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Deci
       (fun j hj => (hT j hj).2.2.1) _ (fun j hj => (hT j hj).2.2.2.2.2.2.2.2.2) rd ev ev₁ tied tied₁,
     fun ω j hj C hok hg => ?_⟩
   rw [hn] at hj
-  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau, hsc⟩ :=
-    hω ω j hj C hok
+  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hacc', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau,
+    hsc⟩ := hω ω j hj C hok
   have hlen := take_gamesZC_length A Hs (tabsJ (tables true x).length T) (capOf rootB₀) (finJ T hj)
   refine zk_le_sessionsJ A hA Hs st hst T hT P rd hrd ev ev₁ tied tied₁ ω hj C (hnc j hj C hok hg) _ _
     (capOf rootB₀ (finJ T hj)) (fun u => simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u)
@@ -354,7 +396,8 @@ theorem zk_tableBoundJAccAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Deci
       (finJ T hj) (tabsJ_get _ T _)) ?_)
     rw [hlen]
     exact div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ =>
-      expect_mono (ind_mono fun outs h => hok' _ h) _ _) (Nat.cast_nonneg _)
+      expect_mono (ind_mono fun outs h =>
+        ⟨accUpTo_of_okAll ok hacc' (finJ T hj).isLt h, (hok' _ (h _)).2⟩) _ _) (Nat.cast_nonneg _)
   · rw [hlen]
     exact le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
       (finJ T hj) (tabsJ_get _ T _)) hsc
@@ -376,7 +419,7 @@ theorem zkLiveJ_of_acc {x : Claims.Msg} (hl : ZkLiveAccJ x) : ZkLiveJ x :=
 
 /-- **Every masked table's bound at a statement in scope, with escapes on accepted runs**: at tables of full-width
 columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAccAt_of_liveJ` at
-C-Flock ZK's padded tables (`zk_atTabs`). -/
+Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)

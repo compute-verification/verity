@@ -8,8 +8,8 @@ directory's form replaces an earlier one's. Then it prices FOLD 5 with its MOV a
 the column form's 713-cycle ceiling leaves out. Each run after `--price` (a wide word's, say) is priced with both fits,
 not fitted: every form against its measured cycles, and each form with its MOV and SEL removed.
 
-    python3 cycle_fit.py ~/.research/runs/r20261012-175857-517b ... ~/.research/runs/r20261012-185914-35f2 \
-      [--price ~/.research/runs/r20261012-194528-b277 ...]
+    python3 cycle_fit.py ~/.research/runs/<sq.sh run> ... \
+      [--price ~/.research/runs/<price run> ...]
 """
 
 from __future__ import annotations

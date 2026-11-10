@@ -5,8 +5,7 @@
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py snapshot OUT.json
     uv run python integrations/vllm/tools/migrate/superseded_quarantine.py verify BEFORE.json AFTER.json
 
-The plan is note:20261004T2058Z-draft-repo-organization-principles, under Daniel's rulings of 4 Oct 2026: `verity/experimental/` is a
-top-level directory, `verity/` holds only what cited claims depend on, and a superseded catalog Definition version stays only so
+The layout it moves toward: `verity/experimental/` is a top-level directory, `verity/` holds only what cited claims depend on, and a superseded catalog Definition version stays only so
 that old records replay. A superseded version that no kept Program or record names may be deleted, but only after a
 `circuits/<slug>` superseded approach entry citing the last commit that has it is recorded (`commands` prints those entries).
 
@@ -15,7 +14,7 @@ that old records replay. A superseded version that no kept Program or record nam
 the quarantine lanes in `MOVE` to `<DEST>/<PACKAGE>/<lane>` (`--dest`, by default `experimental/vllm/quarantine`; the package's
 import name is the one constant `PACKAGE`, and its distribution's name is derived from it), rewrites their imports, test paths
 and the lint and dead-code lists that name them, and registers the new workspace member. Before that it promotes the lanes core
-binds into the registry as ordinary Definitions (`PROMOTE`, under top's ruling of 5 Oct 2026, Slack 1791150333.889129): each
+binds into the registry as ordinary Definitions (`PROMOTE`): each
 module's Definitions keep their bodies verbatim, so every id and descriptor digest stays what it was; the code that imports them
 imports the registry module instead, the lists keyed by them follow them or drop them, the target facts they carry out of P8's
 home are allowlisted where they now live (`P08_ADDED`), and an emptied lane package goes; core's quarantine package stays, the
@@ -202,7 +201,7 @@ def _lanes(lanes) -> str:
 
 
 PACKAGE_DOC = f'''"""{PACKAGE} — the vLLM registry's quarantine lanes that core does not bind, moved out of
-`{QUARANTINE_MODULE}` (note:20261004T2058Z-draft-repo-organization-principles): {_lanes(MOVE)}.
+`{QUARANTINE_MODULE}`: {_lanes(MOVE)}.
 The lanes core bound ({_lanes(PROMOTED_LANES)}) were promoted into `{REGISTRY_MODULE}`.
 
 Each lane is a sub-package of provisional numerical Definitions pending admission, or of re-exports of Definitions already promoted
@@ -291,7 +290,7 @@ def library_importers(root: Path, prefixes: tuple[str, ...]) -> list[str]:
 # --- deleting versions -------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class Site:
+class SourceSpan:
     path: str
     start: int           # 1-based, first decorator included
     end: int             # inclusive
@@ -313,7 +312,7 @@ def _bound(node: ast.AST) -> tuple[str, ...]:
     return tuple(n.id for t in targets for n in ast.walk(t) if isinstance(n, ast.Name))
 
 
-def find_sites(root: Path, version_id: str) -> list[Site]:
+def find_sites(root: Path, version_id: str) -> list[SourceSpan]:
     m = re.fullmatch(r"(\w+)_v(\d+)", version_id)
     if not m:
         raise Refused(f"{version_id}: not a Definition version id (Name_vN)")
@@ -327,7 +326,7 @@ def find_sites(root: Path, version_id: str) -> list[Site]:
             for node in ast.parse(p.read_text(encoding="utf-8")).body:
                 if _declares(node, name, version):
                     first = min([node.lineno, *(x.lineno for x in getattr(node, "decorator_list", []))])
-                    sites.append(Site(rel, first, node.end_lineno, _bound(node)))
+                    sites.append(SourceSpan(rel, first, node.end_lineno, _bound(node)))
     return sites
 
 
@@ -517,7 +516,7 @@ def promote_edits(dest: str | None) -> tuple[tuple[str, str, str], ...]:
          '    assert layer_norm.VEC == 4 and layer_norm.NTHREADS == 128 and layer_norm.MEAN_FMA_ORDER == "A"\n'),
         ("tests/engine/test_gen_ln.py", "bind(layer_norm_aten.LayerNormAten,", "bind(layer_norm.LayerNormAten,"),
         ("tests/engine/test_gen_ov_sampling.py", "# quarantine Definition `GumbelArgmaxBf16_v1`", "# registry Definition `GumbelArgmaxBf16_v1`"),
-        # the promoted norm and GELU table join the dense family's Definition modules (`split_dense.py`'s boundary)
+        # the promoted norm and GELU table join the dense family's Definition modules (that test's boundary)
         ("tests/program/test_dense_family_boundary.py", '          "boolean_rope", "gemm_bias")\n',
          '          "boolean_rope", "gemm_bias", "layer_norm", "gelu_erf_table")\n'),
         ("tests/program/test_layer_norm_aten.py", "(`quarantine/ln/layer_norm_aten_difftest.py`, on the GPU)",

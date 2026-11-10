@@ -8,10 +8,10 @@
 // slot u and layer l are the store-order/v0 block u layers + l, whose words are K of every head then V of every head.
 // Thus a token-layer is exactly one registered 4 KiB block and all three paths agree on its codec indices. A token-layer
 // written after the codec seed is encoded under its bound key: each path takes the layer's offsets bj, [physical
-// slot][NL] (null: the seed's key), slot u's the remote audit's b_j (`codec.binding` of the token-layer's digest d_j and
+// slot][NL] (null: the seed's key), slot u's b_j under PoUB (`codec.binding` of the token-layer's digest d_j and
 // its store index j), plus tau (j TLW - store_base - (u layers + l) TLW) mod p when j is not the slot's own block.
 //
-// A token-layer the remote audit appends is written plaintext and encoded in place once its append coin c_a arrives
+// A token-layer that PoUB appends is written plaintext and encoded in place once its append coin c_a arrives
 // (deferred residency, remote_bandwidth's PROTOCOL.md §4), so an encoded cache may hold plaintext slots: each path takes
 // the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
 // which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each
@@ -628,6 +628,20 @@ __global__ void __launch_bounds__(256) pg_reduce_kernel(const float *__restrict_
   *reinterpret_cast<__nv_bfloat162 *>(out + i + 2) = __floats2bfloat162_rn(a.z * sc, a.w * sc);
 }
 
+// A timing span's mark (step_spans.py, whose `account` is its reference): acc is [the stream's last mark (ns, 0:
+// none), the current kind, then each kind's parts' ns and marks]. One thread, ordered by its stream alone.
+__global__ void pg_span_kernel(unsigned long long *acc, int part, int kind, int parts) {
+  unsigned long long t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  if (kind >= 0) acc[1] = (unsigned long long)kind;
+  if (acc[0]) {
+    unsigned long long *k = acc + 2 + acc[1] * 2 * parts;
+    k[part] += t - acc[0];
+    k[parts + part] += 1;
+  }
+  acc[0] = t;
+}
+
 }  // namespace kv
 
 extern "C" {
@@ -638,9 +652,8 @@ int kv_fold6() { return kv::FOLD6; }
 // wt_pass's device midstate, so no seed or prefix crosses the host on the measured path.
 int pg_rc_gate_pass(const uint32_t *bits, const uint8_t *prefix, cudaStream_t s) {
   if (!bits || !prefix || !kv::RC3_OK) return -1;
-  uint64_t h[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
-                   0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
-  uint64_t w[16];
+  uint64_t h[8], w[16];
+  sx::iv(h);
   for (int i = 0; i < 16; ++i) {
     w[i] = 0;
     for (int b = 0; b < 8; ++b) w[i] = w[i] << 8 | prefix[8 * i + b];
@@ -871,6 +884,14 @@ int pg_reduce(const float *part, int nch, int M, int N, const float *xs, int xs_
   const int mn = M * N;
   kv::pg_reduce_kernel<<<(mn / 4 + 255) / 256, 256, 0, s>>>(part, nch, N, mn, xs, xs_rows, ws,
                                                              static_cast<__nv_bfloat16 *>(out));
+  return launched();
+}
+
+// A span mark on s: the time since s's last mark into part `part` (of `parts`) of the current kind, set to `kind`
+// first when kind >= 0 (of `kinds`).
+int pg_span(unsigned long long *acc, int part, int kind, int parts, int kinds, cudaStream_t s) {
+  if (!acc || parts < 1 || part < 0 || part >= parts || kinds < 1 || kind >= kinds) return -1;
+  kv::pg_span_kernel<<<1, 1, 0, s>>>(acc, part, kind, parts);
   return launched();
 }
 }

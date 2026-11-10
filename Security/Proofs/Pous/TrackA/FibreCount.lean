@@ -1,14 +1,9 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Models.Pous.Assumptions
-import Proofs.Pous.Statements
+module
+
+public import Definitions.Pous.Model.Inc
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Thm1.Theorem1iiSeq
 import Proofs.Pous.Thm1.Theorem1iiiTimed
 
@@ -22,6 +17,8 @@ probability at least `1 − π`. At a fixed `ω` the fibres over `W` partition t
 than `2^(t + B·ℓ)/2^β` values of `W` have any fibre above `2^β`. Summing over `W` and the setup (double counting)
 gives `(1 − π)·2^n·2^β ≤ 2^(t + B·ℓ)`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

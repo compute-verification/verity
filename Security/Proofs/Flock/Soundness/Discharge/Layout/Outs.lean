@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -18,7 +24,7 @@ open Flock FlockLevel3 Audit Placed
 
 /-- **A committed gate a unit computes is an output**, when every unit reads, besides its own computed gates, only input
 gates. -/
-theorem computed_committed_output {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
+theorem computed_committed_output {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none)
     {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hgu : P.unit g = some u) : g ∈ C.outputs := by
@@ -34,11 +40,11 @@ theorem computed_committed_output {C : Audit.Circuit} {n : ℕ} {P : Audit.Parti
   · exfalso
     rcases hh : P.unit h with _ | u'
     · have hi := (P.input_iff h).1 hh
-      cases hop : C.op h <;> simp only [hop, Audit.Op.isInput, Audit.Op.args] at hi hgh <;>
+      cases hop : C.op h <;> simp only [hop, Verity.Boolean.Op.isInput, Verity.Boolean.Op.args] at hi hgh <;>
         first | exact absurd hi (by decide) | exact absurd hgh (List.not_mem_nil)
     · obtain ⟨i, rfl⟩ := (I u').onto h hh
       rw [(I u').op i] at hgh
-      simp only [Audit.Op.args, List.mem_append, List.mem_map] at hgh
+      simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hgh
       obtain ⟨y, -, rfl⟩ : ∃ y, y ∈ (R u').a i ++ (R u').b i ∧ (I u').wire y = g := by
         rcases hgh with ⟨y, hy, e⟩ | ⟨y, hy, e⟩
         · exact ⟨y, List.mem_append_left _ hy, e⟩
@@ -85,11 +91,6 @@ theorem keyProg_reads (outs : Finset (Fin (keyN c hU n))) (u : Fin n) (y : Fin (
         (hone := Placed.insOf_ne_one n (keyB c hU) (Aliased.keyIdx c (keyB c hU))) n u
     rw [h0]
     exact Fin.isLt _
-
-/-- **The returned outputs' bits**: the gates the units' instances put on returned outputs' columns (`OutColAt`). -/
-noncomputable def outsOf : Finset (Fin (keyN c hU n)) :=
-  @Finset.filter _ (fun g => ∃ u x, (Const.Prog.rowsWireC (keyProg c hU n) u).wire x = g ∧
-    ∃ u' j t, OutColAt c hU x.val u' j t) (Classical.decPred _) Finset.univ
 
 /-- **`OutsOut` at the returned outputs' bits**: every committed gate a unit computes is on a returned output's column of
 the unit's instance. -/

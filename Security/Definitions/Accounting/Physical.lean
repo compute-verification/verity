@@ -1,10 +1,11 @@
-import Definitions.Accounting.Confidence
+module
+
+public import Definitions.Accounting.Confidence
 
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.8, `SequentialSpeed`
-and `Links` v2.7), sections 1 and 3.
+The actual-circuit model's physical assumptions.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
 certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the
@@ -14,9 +15,10 @@ resource:
 | Constraint | What it says | What its failure frees |
 | --- | --- | --- |
 | `Causal ℓ` | a gate reads `a` at least `ℓ (x a) (x g)` ticks after `a` | answers before questions |
+| `LatencyAtMost X Y ℓ⁺` | a gate in `Y` reads one in `X` at most `ℓ⁺` ticks after it | answers sent before their questions, landing after them |
 | `ComputeRate 𝒳 π Φ` | `π(A[X, [a, b))) ≤ Φ_X (b − a)` | compute faster than declared |
 | `SequentialSpeed ring D span` | a path through more than `D` computed gates at the location of the ring's multiplications spans more than `span` (`Δ + RTT`) ticks | answering faster than `D` sequential multiplications modulo `p` |
-| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` | hidden storage |
+| `Memory 𝒳 M` | `mem_X(t) ≤ M_X` (`MemoryAt 𝒳 M T`: at the ticks `T` only) | hidden storage |
 | `Links ends β link` | every wire between two leaves has a computed source and runs on a declared link joining them; each way, link `e` delivers at most `β_e (b − a)` bits read during `[a, b)` (v2.7) | side channels, hidden bandwidth |
 | `TrustedUnits S 𝒱 cert …` | a strategy `S`: gates in `𝒱`, the auditor's devices on machines the prover doesn't control, are the protocol's; what each certifier sends outside itself during `[a, b)` is a function of its own record before `b` and of its own jitter word, one of `χ` classes a bucket (v2.8) | forged records, timing channels |
 
@@ -36,9 +38,11 @@ Four constraints read what the circuit doesn't carry, taken as parameters: which
 location of the ring's multiplications modulo `p` (`ring`), the certifiers' leaves (`cert`) and record cells
 (`record`, v2.6: a certifier's record is its gates in them, `Actual.Run.record`), the trusted devices' leaves (`𝒱`) with
 what the protocol says each of their gates does (`Spec`), and the buckets of ticks over which a certifier's jitter is
-counted. `Hardware` bundles the parameters that don't depend on `A`, and `Annotation A` those of the constraints on one
+counted. `Hardware` bundles the parameters that don't depend on `A`, and `Usage A` those of the constraints on one
 run that name its gates; `TrustedUnits` takes each run's `Spec`.
 -/
+
+@[expose] public section
 
 namespace Accounting
 
@@ -55,6 +59,15 @@ def IsPath {k : ℕ} (p : Fin (k + 1) → Fin A.N) : Prop :=
 /-- **Causality** at latency `ℓ`: a gate placed at `y` reads a gate placed at `x` at least `ℓ x y` ticks after it. -/
 def Causal (ℓ : L → L → ℕ) : Prop :=
   ∀ g, ∀ a ∈ A.reads g, A.t a + ℓ (A.x a) (A.x g) ≤ A.t g
+
+/-- **A latency ceiling** (the listed claim `latency-ceiling`) of `ℓ⁺` from `X` to `Y`: a gate placed in `Y` reads a
+gate placed in `X` at most `ℓ⁺` ticks after it. `Causal` bounds latency from below only, so without a ceiling a value
+sent before a tick can be read at any later one, and what a device sees arrive says nothing about when it was sent.
+One physical premise on a run: `X`'s links into `Y` (a server's egress links into the network certifier on them, which
+the auditor places) deliver within `ℓ⁺`, measured on those links, and nothing between them holds a value longer: a
+delay outside `X` is a leaf of its own, whose wires into `Y` don't come from `X`. -/
+def LatencyAtMost (X Y : Finset L) (ℓmax : ℕ) : Prop :=
+  ∀ g, ∀ a ∈ A.reads g, A.x a ∈ X → A.x g ∈ Y → A.t g ≤ A.t a + ℓmax
 
 /-- **Compute rate**: each location `X` of `𝒳` does at most `compute X` (`Φ_X`) work a tick, at the pricing `π`. -/
 def ComputeRate (𝒳 : Set (Finset L)) (π : Fin A.N → ℕ) (compute : Finset L → ℕ) : Prop :=
@@ -74,6 +87,10 @@ def SequentialSpeed (ring : Finset L) (D span : ℕ) : Prop :=
 /-- **Memory**: each location `X` of `𝒳` carries at most `M X` bits across every tick. -/
 def Memory (𝒳 : Set (Finset L)) (M : Finset L → ℕ) : Prop :=
   ∀ X ∈ 𝒳, ∀ t, A.state X t ≤ M X
+
+/-- **Memory at the ticks `T`**: `Memory` read only at the ticks of `T`; `Memory` is it at every tick. -/
+def MemoryAt (𝒳 : Set (Finset L)) (M : Finset L → ℕ) (T : Set ℕ) : Prop :=
+  ∀ X ∈ 𝒳, ∀ t ∈ T, A.state X t ≤ M X
 
 open Classical in
 /-- The bits link `e` carries to the leaf `y`, read during `I`: the gates whose wire to a reader placed at `y` during `I`,
@@ -204,16 +221,16 @@ structure Hardware (L : Type*) (E : Type*) where
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
   X ∈ H.units ∧ uncertifiedCapacity H.ends H.β H.cert X = 0
 
-/-- What the physical assumptions on one run read about `A` that its gates don't carry: the pricing `π` and which link
-each wire runs on. -/
-structure Annotation {L : Type*} (A : Placed L) (E : Type*) where
+/-- **A run's usage**: what the physical assumptions on one run read about `A` that its gates don't carry, what each
+gate uses of its location's compute (`π`, its work) and the link each wire uses (`link`). -/
+structure Usage {L : Type*} (A : Placed L) (E : Type*) where
   π : Fin A.N → ℕ
   link : Fin A.N → Fin A.N → E
 
-/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `ann`.
+/-- **The feasible set**: `A` meets every physical assumption on one run on the hardware `H`, read with `usage`.
 `TrustedUnits`, on a strategy, is taken beside it. -/
-def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (ann : Annotation A E) : Prop :=
-  A.Causal H.ℓ ∧ A.ComputeRate H.units ann.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
-    A.Memory H.units H.M ∧ A.Links H.ends H.β ann.link
+def Feasible {L E : Type*} (H : Hardware L E) (A : Placed L) (usage : Usage A E) : Prop :=
+  A.Causal H.ℓ ∧ A.ComputeRate H.units usage.π H.compute ∧ A.SequentialSpeed H.ring H.D H.span ∧
+    A.Memory H.units H.M ∧ A.Links H.ends H.β usage.link
 
 end Accounting

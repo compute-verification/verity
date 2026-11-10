@@ -11,8 +11,9 @@ keeps each side's four returns in `seen`.
 `Attention.forward` is `DeepseekV4FlashMLAAttention.forward` on small widths (the map's head counts and cache row widths): the
 input projections, `fused_q_kv_rmsnorm` by its call-time global, `_prepare_and_attn` (the query insert, which writes the SWA cache
 rows, then on a CSA layer the indexer, then the compressor, sequentially as `execute_in_parallel` does without aux streams),
-`_sparse_indexer_and_attn` (the indexer op on the scored route, then `forward_mqa`, which calls `_forward_prefill` on the prefill
-rows and `_forward_decode`, and so `flash_mla_with_kvcache`, on the decode rows) and `_o_proj` (`deep_gemm_fp8_o_proj`'s
+`_sparse_indexer_and_attn` (the indexer op on the scored route, then `forward_mqa`, which calls `_forward_prefill`, and so
+`flash_mla_sparse_fwd` over a workspace laid out as vLLM's, on the prefill rows and `_forward_decode`, and so
+`flash_mla_with_kvcache`, on the decode rows) and `_o_proj` (`deep_gemm_fp8_o_proj`'s
 `fused_inv_rope_fp8_quant` and `fp8_einsum`; wo_b is a tanh).  The indexer returns (None, None, None) on its short route, when the
 step's longest sequence has at most TOPK * CSA_R tokens, after its compressor and the top-k fill.  A compressor writes its state
 rows and, for each token whose position + 1 is a multiple of its ratio and whose slots are set, a compressed row, as the pinned
@@ -20,6 +21,8 @@ kernels do (and the step's compressed slots are set at exactly those tokens, as 
 every slot's scale bytes), and the step's per-cache metadata is the forward context's (`CONTEXT`, which `run_step` sets).
 Each module keeps what it computed (`seen`) for the tests to compare with what a source bound."""
 from __future__ import annotations
+
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import json
 import types
@@ -92,6 +95,11 @@ def flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, t
                            extra_indices_in_kvcache=None, topk_length=None, extra_topk_length=None, out=None):
     out.copy_(q * 2)
     return out, None
+
+
+def flash_mla_sparse_fwd(q, kv, indices, sm_scale, d_v=512, attn_sink=None, topk_length=None, out=None):
+    out.copy_(q * 3)
+    return out, None, None
 
 
 def fused_inv_rope_fp8_quant(o, positions, cos_sin_cache, n_groups, heads_per_group, nope_dim=448, rope_dim=64, quant_group_size=128,
@@ -337,7 +345,25 @@ class Attention(torch.nn.Module):
         self.seen["rows"].append(("decode", q.shape[0]))
 
     def _forward_prefill(self, q, positions, compressed_k_cache, swa_k_cache, output, attn_metadata, swa_metadata) -> None:
-        output.copy_(q * 3)
+        """One chunk: the workspace holds the compressed rows the chunk can read at [0, N) and its window rows at [chunk_N, ..), each
+        a distinct row and the rows between and past them unread; token p's indices are its compressed rows, then its window, then an
+        unread row past its length and -1s.  `seen["gather"]` is the Program's gather, each row at its first read (a token's
+        compressed rows, then its window)."""
+        p = positions.long().tolist()
+        lo, n = max(p[0] - SW + 1, 0), (p[-1] + 1) // self.compress_ratio
+        chunk_n = n + 3
+        kv = (torch.arange(chunk_n + p[-1] - lo + 3, dtype=torch.float32)[:, None] * 0.5 + self.layer
+              + torch.arange(HD_S) * 1e-2).to(torch.bfloat16)
+        reads = [[*range((t + 1) // self.compress_ratio), *(chunk_n + r - lo for r in range(max(t - SW + 1, lo), t + 1))] for t in p]
+        width = max(map(len, reads)) + 4
+        indices = torch.full((len(p), width), -1, dtype=torch.int32)
+        for i, r in enumerate(reads):
+            indices[i, :len(r)] = torch.tensor(r, dtype=torch.int32)
+            indices[i, len(r)] = len(kv) - 1
+        order = list(dict.fromkeys(j for r in reads for j in r))
+        self.seen["gather"] = kv[order]
+        flash_mla_sparse_fwd(q=q, kv=kv.view(-1, 1, HD_S), indices=indices.unsqueeze(1), sm_scale=1.0, attn_sink=None,
+                             topk_length=torch.tensor(list(map(len, reads)), dtype=torch.int32), out=output)
         self.seen["rows"].append(("prefill", q.shape[0]))
 
 

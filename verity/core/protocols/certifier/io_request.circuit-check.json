@@ -1,0 +1,42 @@
+{
+ "definitions": {
+  "IoTieRequestEnd_v1": {
+   "and": 65
+  },
+  "IoTieRequestFrame_v1{B=4096}": {
+   "and": 166615,
+   "type": "dadd0d916ddc6be4385ab72e20fe8615f7730ecbc40c1507b4199421965875f6f1d43948dee581cf20856de084e9fb968e1defd73e069c7299604faaf725854e"
+  },
+  "IoTieRequestFrame_v1{B=512}": {
+   "and": 20876
+  },
+  "IoTieRequestStep_v1": {
+   "and": 135
+  },
+  "IoTieRequest_v1{B=4096,L=1,R=1}": {
+   "and": 166811,
+   "type": "b709bec777e0e888ad1de914ca890416e3d578acf4cdc5d41c12e7e888e20bf5348f6937565ab0d796439e769cff50258e87e0c1b5a0fd9546285c31c5041824"
+  },
+  "IoTieRequest_v1{B=512,L=1,R=2}": {
+   "and": 42082
+  },
+  "IoTieRequest_v1{B=512,L=4,R=4}": {
+   "and": 336419,
+   "type": "f4dc1c592da240953db8119f00e4aa18ad702e80d8700fd7970abf3f440a6e750da6a1e08c6956925a027910f35288399bd511de8ea35029325bf4761373de24"
+  }
+ },
+ "digests": {
+  "IoTieRequest_v1{B=4096,L=1,R=1}": {
+   "sha512": "7ce3d6d3f1c8b757e165d03e20dc4d5918254c5676820014cf5f439af8688f9fb16145cf09e0cd308a964ecfffe31d60f6574f2793e32e90f40d980c8be81595"
+  },
+  "IoTieRequest_v1{B=512,L=1,R=2}": {
+   "sha512": "d5549b88b09fb0b469dc3185634928d1f8ece88dfeca9f8c1ca94b77931d2f7ecba980d318119553c489d138b328abb276fa733d6b7f8f8074438af2e8467432"
+  },
+  "IoTieRequest_v1{B=512,L=2,R=2}": {
+   "sha512": "50e912adef6d213b639226f539f98b0073753c03acc7eb2893127e28b5eafd62a02fae4773d710a347835462a10fc523366e78cf23a47741fc6bef8c719832bd"
+  },
+  "IoTieRequest_v1{B=512,L=4,R=4}": {
+   "sha512": "0b3e674c3eb79afc269e36304eb1b7c814c9e1a55e26873eaa0a4884299146dfa768d7025a4a54c86d834dd2d881bc2ccdd64611f47cf4b1b229f6b54f64503e"
+  }
+ }
+}

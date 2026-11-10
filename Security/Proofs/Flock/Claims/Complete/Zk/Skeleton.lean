@@ -1,14 +1,49 @@
-import Proofs.Flock.Claims.Complete.Skeleton
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.Complete.Zk.Sim
-import Proofs.Flock.Claims.Complete.Zk.Verdict
+module
+
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Complete.Zk.Sim
+public import Proofs.Flock.Claims.Complete.Zk.Verdict
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Encode
+import Proofs.Flock.Claims.Scope.Sizes
 
 /-!
 # The masked completeness proof's skeleton
 
 `complete_zk_of_goals`: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`
-(`Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
-pass.
+(`CompleteWith H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
+pass and the rank bound (`MaskRank.MaskRankBound`, which `pr_badZk_le` reads).
 
 * **The setting.** A good case (`CaseZk`): a statement in scope that the masked verifier can accept at one table
   (`readyZk H`), at its setup, a witness in the relation, a masked tape, and coins outside `BadZk`. The honest run at it
@@ -23,12 +58,14 @@ pass.
   replay of zerocheck and lincheck (`Replay`, in place of `Goals`' `zerocheck` and `lincheck`), the ring switch on the
   claims valued by their checks (`RingSwitchZk`), the masked Ligerito (`LigeritoZk`), level 0's lane phase
   (`LaneConstraints`) and the inner proof (`Inner`).
-* **Proved here**, as in `Skeleton`: the last message's statement, the scope check (`CaseZk.scope_ok`), a drawn
+* **Proved here**, as in `Skeleton`: the last message's statement, the scope check (`CaseZk.scope_ok`), a sampled
   session, the link and last messages read back given their lengths, and S18 from S16; and the keyed coin tree
   (`coinTree_goal`, from `readyZk`).
 * **The composition**: `RunZk.rep_ok` (`zk_verifyRepWith_ok`), `RunZk.verdict_ok` (`zk_verifyWith_ok`),
   `RunZk.checks_ok'` (`checks_ok`), then `RunZk.acc` (`run_acc_of_zk`), and `complete_zk_of_goals` (`complete_zk_of`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -98,7 +135,7 @@ def live (o : RunZk H rel) : Live :=
   | .error _ => ⟨#[], #[], #[], #[]⟩
 
 /-- The record, decoded. -/
-def sess (o : RunZk H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+def sess (o : RunZk H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s `--zk` schedule. -/
 def sch (o : RunZk H rel) (i : ℕ) : Schedule := (zkSchedsOf o.tabs)[i]!.1
@@ -181,12 +218,15 @@ def FinalFitsZk : Prop :=
 
 /-! ### B's checks -/
 
-/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
+/-- **The record's sample is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatchesZk : Prop :=
   ∀ o : RunZk H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReadsZk : Prop := ∀ o : RunZk H rel, liveOf o.spec o.record = .ok o.live
+
+/-- **The record is in its canonical text** (S0, `Flock.RecordText.check`). -/
+def RecordCanonicalZk : Prop := ∀ o : RunZk H rel, Flock.RecordText.check o.record = .ok ()
 
 /-- **Custody: the record's `root_B` is the link message's.** -/
 def CustodyRootBZk : Prop := ∀ o : RunZk H rel, (o.live.rootB.toList == o.link.1) = true
@@ -296,7 +336,7 @@ def ConsumedZk : Prop :=
 def CapCommittedZk : Prop :=
   ∀ o : RunZk H rel, ∀ i < o.tabs.size, ∀ r < 2, (flat (o.zp i r).proof.cap != o.sess.rootB[i]!) = false
 
-/-- **The masked goals**, every check but the six proved here (the statement, the scope, a drawn session, the link and
+/-- **The masked goals**, every check but the six proved here (the statement, the scope, a sampled session, the link and
 last messages read back given their lengths, S18 from S16, and the coin tree). The fields are `Goals`' where the check
 is the plain one's. -/
 structure GoalsZk : Prop where
@@ -330,6 +370,7 @@ structure GoalsZk : Prop where
   inner : Inner H rel
   consumed : ConsumedZk H rel
   capCommitted : CapCommittedZk H rel
+  canonical : RecordCanonicalZk H rel
 
 end Goals
 
@@ -339,11 +380,11 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, the
+/-- `readyZk` at the case's setup: one table, the session samples a unit, the statement is under `2^64` bytes, every
 table's regions fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest
 masked record fits. -/
 theorem CaseZk.ready_all (c : CaseZk H rel) :
-    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true ∧
       RecordFitsZkAt H c.x c.spec c.sts := by
   have h := c.ready
@@ -351,7 +392,7 @@ theorem CaseZk.ready_all (c : CaseZk H rel) :
   rw [c.setup] at h
   simpa [and_assoc] using h
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, the
+/-- `readyZk` at the case's setup: one table, the session samples a unit, the statement is under `2^64` bytes, the
 setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
 theorem CaseZk.ready_parts (c : CaseZk H rel) :
     c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧
@@ -361,7 +402,7 @@ theorem CaseZk.ready_parts (c : CaseZk H rel) :
 
 /-- `readyZk` at the case's setup: the table's regions fit, and the honest masked record fits its length word. -/
 theorem CaseZk.ready_fits (c : CaseZk H rel) :
-    (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
+    (∀ st ∈ c.sts, RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
   ⟨c.ready_all.2.2.2.1, c.ready_all.2.2.2.2.2.2⟩
 
 /-- **The printed honest masked record is under `2^64` bytes**: `readyZk` asks it of every honest masked session, which
@@ -369,7 +410,7 @@ the pure session's run is (`sessionPZk_sim`). -/
 theorem RunZk.recordFits (o : RunZk H rel) : o.record.toUTF8.size < 2 ^ 64 := by
   refine o.ready_fits.2 o.w o.ω o.r o.record o.proofs ?_
   obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (tracesOf o.sts o.w) o.ω #[]
+    (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω #[]
   have hran := o.ran
   unfold sessionSZk at hran
   rw [hran] at h1
@@ -382,7 +423,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk none`. -/
+/-- **A sampled session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem CaseZk.drawn (c : CaseZk H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.2.1
   cases h : c.s.read.draw
@@ -453,6 +494,7 @@ theorem RunZk.checks_ok' (g : GoalsZk H rel) (o : RunZk H rel) :
     checks true o.s o.spec o.x o.link (Claims.coinSeq o.r 0) o.mids o.final = .ok () :=
   checks_ok o.stmt_ok (g.draw o) (g.liveReads o)
     (custody_ok (g.rootB o) (g.publicsLink o) (g.points o) (g.count o) (g.rounds o)) o.scope_ok o.drawn
+    (g.canonical o)
 
 /-- **The honest masked prover is accepted** at every honest masked run at a good case. -/
 theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
@@ -493,10 +535,10 @@ theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
 end Proved
 
 /-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`,
-given each goal. -/
+given each goal and the rank bound. -/
 theorem complete_zk_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : GoalsZk H rel) : Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
-  refine complete_zk_of H rel fun x w hsc hr hready ω r hgood => ?_
+    (hMR : MaskRank.MaskRankBound) (g : GoalsZk H rel) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
+  refine complete_zk_of H rel hMR fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold readyZk at hready
     split at hready

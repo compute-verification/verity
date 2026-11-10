@@ -1,8 +1,29 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+module
+
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# Ligerito's rounds carry its messages (R11b)
+# Ligerito's rounds carry its messages (`DecodesOn`'s message half)
 
 `lig_carries`: Ligerito's frames `ligFrames`, read by `wLIG`, are `ligMsgs`, cut at `ligShape`'s coins. `Carries` reads
 the spine only through its coin pattern, so the rounds are proved at a pattern (`CarriesP`) and glued with
@@ -12,6 +33,8 @@ the level loop (`carriesP_levels`, by recursion on the levels left, ending at `y
 schedules fold 4 lanes above level 0, so `ligShape`'s pattern is the rounds' (`isCoin_rec`), and their caps and query
 counts fit the frames' bounds (`fast100_small`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

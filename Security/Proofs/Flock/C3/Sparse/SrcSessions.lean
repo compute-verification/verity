@@ -1,4 +1,20 @@
-import Proofs.Flock.C3.Sparse.MsgsLayers
+module
+
+public import Proofs.Flock.C3.Compose.Tied
+public import Proofs.Flock.C3.Sparse.SessionAt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The sparse tie at the tied source, from V*'s sessions
@@ -13,6 +29,8 @@ stage conjunct holds at its tied source by definition, and its tied reps are `st
 public values being the coins' (`pubOf`, check 5's `rec-sparse-v`) and its `h` w's first 64 elements (RecSparse's `h`
 registered as the table's h round, `RecVStar.ownPorts`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

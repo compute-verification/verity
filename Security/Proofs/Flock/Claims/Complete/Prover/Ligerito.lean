@@ -1,17 +1,20 @@
-import Proofs.Flock.Claims.Complete.Prover.Piop
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Piop
+public import Flock.Ligerito
 
 /-!
 # The honest prover's Ligerito opening
 
-PROTOCOL.md §13–§14 from the prover's side. Ligerito proves `Σ_y t(y)·W(y) = s` for the committed table `t` and a weight
+`Flock.Ligerito`, `Flock.Merkle` from the prover's side. Ligerito proves `Σ_y t(y)·W(y) = s` for the committed table `t` and a weight
 `W` that starts as the batched basis `b` (`basisVals`) with `s = T`; every claim the verifier adds (an out-of-domain
 value, a consistency sum) adds its weight to `W`, scaled by its coin.
 
-* **Commitments** (`commitP`, §13.1, §14). A level's F-table `g` of `2^(lanes + cols)` entries has lanes
+* **Commitments** (`commitP`, `Flock.Ligerito`, `Flock.Merkle`). A level's F-table `g` of `2^(lanes + cols)` entries has lanes
   `M[ℓ][c] = g[c·2^lanes + ℓ]`, codeword `C[q][ℓ] = Σ_c M[ℓ][c]·X̂_c(ω_q)` for `q < 2^d` (the verifier's `whats`), leaf `q`
   the scheme's leaf of row `C[q]` under its salt, and the Merkle cap the `2^cap` nodes `d − cap` levels up. An opening
   (`openP`) is the rows at the query positions, their siblings leaf side first, and their salts.
-* **Sumcheck** (§13.2). The table and the weight are K-tables, folded at each challenge on the low variable
+* **Sumcheck** (`Flock.Ligerito`). The table and the weight are K-tables, folded at each challenge on the low variable
   (`foldK`); a message is `(q(0), q`'s leading coefficient`)` for `q(X) = Σ_{x'} t(X, x')·W(X, x')` (`roundPoly`).
 * **Splits.** After a level's last challenge the folded K-table `f = f₀ + u·f₁` is split into the next level's F-table
   `g(b, x) = f_b(x)` (`splitK`, `b` the new low variable), and the weight into `W'(b, x) = u^b·W(x)` (`liftU`), so
@@ -19,8 +22,12 @@ value, a consistency sum) adds its weight to `W`, scaled by its coin.
 * **Claims.** An out-of-domain sample `z` at a level adds `β·eq(z, ·)` with value `g̃(z)` (`mleF`); level `i`'s queries
   add `β·u^b·V` on the next level's table, `V(c) = Σ_j eq(α)[j]·X̂_c(ω_{pos_j})` (`consW`).
 * **The last level** sends `yr`, the folded K-table as `F` pairs. The message read after its last challenge enters no
-  equation (§13.3); the prover sends the round polynomial of the split coordinate as at every other level.
+  equation (`Flock.Ligerito`); the prover sends upstream's plain fold message there, the round polynomial of the folded, unsplit
+  K-table and weight in their next variable (`recursive_prover_with_basis_impl`, whose last round at the last level is
+  `sumcheck.fold`), not the split coordinate's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -130,19 +137,15 @@ def sendMsg (m : F256 × F256) : LP M Unit := do
   liftT (liftTM (absorbK m.1))
   liftT (liftTM (absorbK m.2))
 
-/-- A grinding nonce from the tape onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message. -/
-def powP (nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
+/-- A grinding nonce onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message: `0`, the only one the
+verifier accepts (R4), so the tape's nonces are unread. -/
+def powP (_nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
   let st ← get
-  let i := match kind with
-    | 0 => st.qn.size
-    | 1 => st.cn.size
-    | _ => st.cbn.size
-  let v := nonce kind i
   set (match kind with
-    | 0 => { st with qn := st.qn.push v }
-    | 1 => { st with cn := st.cn.push v }
-    | _ => { st with cbn := st.cbn.push v })
-  liftT (liftTM (pow v))
+    | 0 => { st with qn := st.qn.push 0 }
+    | 1 => { st with cn := st.cn.push 0 }
+    | _ => { st with cbn := st.cbn.push 0 })
+  liftT (liftTM (pow 0))
 
 /-- A challenge: fold the table and the weight at it; then the next message, after splitting when `split`. -/
 def challengeP (io : Asks M) (split : Bool) : LP M F256 := do
@@ -175,7 +178,7 @@ def queryP (io : Asks M) (nonce : Nat → Nat → UInt64) (ms : MerkleScheme) (l
   let alpha ← liftT (sampleVecP io (Nat.log2 (lv.q - 1) + 1))
   return (openP ms cm lv pos, consW lv.cols pos alpha)
 
-/-- **The Ligerito prover** (§13.3) on the table `t` committed at level 0 as `cm0`, for the claim `Σ t·b = T`: the
+/-- **The Ligerito prover** (`Flock.Ligerito`) on the table `t` committed at level 0 as `cm0`, for the claim `Σ t·b = T`: the
 recursive levels' commitments are salted from `salt l` (level `l ≥ 1`), the nonces read from `nonce`. -/
 def ligeritoP (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit)
     (t b : Array F128) (salt : Nat → Nat → ByteArray) (nonce : Nat → Nat → UInt64) : TMW M LigeritoProof := do
@@ -220,10 +223,12 @@ def ligeritoP (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule)
         if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
-          f := (← get).tab
+          let d ← get
+          f := d.tab
           modify fun st => { st with tab := embedF (splitK st.tab), w := liftU st.w }
           let st ← get
-          sendMsg (roundPoly st.tab st.w)
+          -- nothing reads the last level's split: it sends upstream's plain fold message, of the unsplit table
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
         else
           let _ ← challengeP io false
       let ext := splitDim - 4

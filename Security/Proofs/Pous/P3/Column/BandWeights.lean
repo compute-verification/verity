@@ -1,9 +1,9 @@
-import Proofs.Pous.P3.Column.BandComb
-import Definitions.Pous
-import Models.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Proofs.Pous.P3.Column.BandComb
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # Weighted starts and ends in the band
@@ -16,6 +16,8 @@ Two peeling lemmas with weights, and the window/block counting they are used wit
 * `weighted_ends`: dually, `Σ_{u ∈ U} ψ(r u) ≤ Σ_{x ∈ ends U} Θ(r x)` whenever `ψ x + Θ (x − 1) ≤ Θ x` and `Θ` is
   non-decreasing. With `ψ x = x − t` and `Θ x = tri (x − t)`, each dropped segment is charged to its end.
 -/
+
+@[expose] public section
 
 namespace PousP3Column
 

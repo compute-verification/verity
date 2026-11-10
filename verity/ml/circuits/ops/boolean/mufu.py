@@ -9,7 +9,7 @@ bits, with every table read a plain And/Xor/Not circuit.
     DivFullScaleA_v3    (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>           word view: DivFullScaleA_v1
     MufuTanh_v2         (x: Array<32, Value<1>>) -> Array<32, Value<1>>              word view: MufuTanh_v1
 
-The exponent, sign and special-encoding rules around the tables are C-Flock's (`verity_flock.tail_pieces`, from
+The exponent, sign and special-encoding rules around the tables are Flock's (`verity_flock.tail_pieces`, from
 ``fa2_model.cpp`` and ``rms_triton_model.cpp``). The range scalings by 0.25 and 2^24 are not multiplies: the exponent moves,
 a subnormal is normalized by its leading-zero count (`_times_2_24`), and only `DivFullScaleA_v3` (which reads no table) rounds,
 where a * 0.25 is subnormal.
@@ -55,7 +55,7 @@ from .softmax import _eq_const
 from verity.ml.circuits.boolean.trace import definition
 
 __all__ = ["QUADRATIC", "TANH_QUADRATIC", "DivFullRcp", "DivFullScaleA", "Fit", "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz",
-           "MufuTanh", "RsqrtApprox", "TanhFit", "fit", "overrides", "table_word", "tanh_fit", "tanh_table"]
+           "MufuTanh", "RsqrtApprox", "TanhFit", "div_full_scale_a_gpu", "fit", "overrides", "table_word", "tanh_fit", "tanh_table"]
 
 F32 = Array(32, BL.BIT)
 QUADRATIC = "mufu_quadratic.json"
@@ -279,7 +279,7 @@ def table_word(C, name: str, idx):
     return y[:23] + exp
 
 
-# --- the bit rules (C-Flock's `tail_pieces`, the table read above) ---------------------------------------------------------
+# --- the bit rules (Flock's `tail_pieces`, the table read above) ---------------------------------------------------------
 
 def _ult_const(C, w, k: int):
     """``w < k`` for an unsigned word and a constant."""
@@ -413,6 +413,20 @@ def div_full_scale_a(C, a, b):
     big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
     small = _ult_const(C, mag, 0x00800000)
     return mux(C, big, _quarter_rn(C, a), mux(C, small, _times_2_24_rn(C, a), list(a)))
+
+
+def div_full_scale_a_gpu(C, a, b):
+    """``DivFullScaleA_v2`` (`verity_vllm`'s, beside its word primitive): `div_full_scale_a` with each scaling an FMUL whose NaN
+    result is 0x7FFFFFFF; neither scaling makes a NaN of a non-NaN a, so that is a NaN a's word on a scaled path, and an unscaled
+    a passes through untouched, a NaN's payload included."""
+    mag = b[:31]
+    big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
+    small = _ult_const(C, mag, 0x00800000)
+    nan = C.AND(and_reduce(C, a[23:31]), or_reduce(C, a[:23]))
+
+    def gpu(r):
+        return mux(C, nan, const_bits(0x7FFFFFFF, 32), r)
+    return mux(C, big, gpu(_quarter_rn(C, a)), mux(C, small, gpu(_times_2_24_rn(C, a)), list(a)))
 
 
 # --- MUFU.TANH -------------------------------------------------------------------------------------------------------------------

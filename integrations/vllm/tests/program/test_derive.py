@@ -20,8 +20,8 @@ from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.refs import Coll
-from verity_vllm.program.registry import b1, prims as P
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.registry import b1, prims as P
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend import examples
 from verity_vllm.program.frontend.correspond import correspond_rebound
@@ -246,7 +246,7 @@ def test_gpt2_greedy_request_reference_mode_tokens_match_torch():
     assert kinds["ArgmaxRef_v1"] == 3 and kinds["I64ToI32_v1"] == 4 and kinds["EagerAttentionRef_v1"] == 2 * (2 + 3 + 4)
     assert "IntCatNarrow[reference]_v1" in rep.provenance["rules_applied"]
     ids = torch.tensor([3, 17])
-    from verity_vllm.program.kernels.serve3_reference import materialize
+    from verity.ml.definitions.numerics.serve3_reference import materialize
     wbits = np.concatenate([_bits(dict(g.named_parameters())[w["name"]]) for w in rep.provenance["weights"]])
     t = materialize(rep.program, [[int(v) for v in ids.tolist()], [int(v) for v in wbits]])
     got = [int(t[o]) for o in rep.program.circuit.root_outputs()]
@@ -387,6 +387,24 @@ def test_s3_tiny_greedy_serve_matches_serve_v1():
     assert rep.provenance["mutation_effects"] == []
 
 
+def test_s3_a_stop_config_returns_the_length_rule_as_the_programs_last_check():
+    """With a `stop` config (the Build's `--stop`) the derived Program returns `StopCheck_v1` over its outputs as its last check,
+    the Call `predict.build` makes for the same config, and claims no family; a config the rule can't take is refused."""
+    from verity.ml.circuits.defs import bind as ir_bind
+    from verity.ml.definitions.registry import stop_check as SC
+    from verity_vllm.program.frontend import stop_rule as SR
+    LP, STEPS = 3, 2
+    C, stop = _tiny_config(), SR.spec([7, 9], max_tokens=8, prompt_len=LP, max_model_len=64, outputs=STEPS + 1, finish=1)
+    with torch.device("meta"):
+        m = ex.GreedyServe(C, STEPS)
+    rep = derive_report(m, (_meta(LP, dtype=torch.int32),), **PROF, config={**C, "stop": stop}, name="Serve")
+    assert rep.ok, rep.unsupported
+    rule = rep.flat_definition.body.nodes[-1]
+    assert rule.fn.id == ir_bind(SC.StopCheck, T=STEPS + 1, STOP=(7, 9), MAX_TOKENS=8, PROMPT_LEN=LP, MAX_MODEL_LEN=64, FINISH=1).id
+    assert rep.provenance["checks"]["of"] == [SR.what(stop)] and not rep.family
+    _unsupported(m, (_meta(LP, dtype=torch.int32),), "shape", **PROF, config={**C, "stop": {**stop, "stops": []}})
+
+
 def test_s3_final_norm_on_all_rows_is_a_different_program():
     C = _tiny_config()
     with torch.device("meta"):
@@ -508,11 +526,11 @@ def test_neg_profile_mode_refuses_a_batch_invariant_linear_on_a_target_without_b
     "fused,expected",
     [
         (False, "RMSNormCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=768}"),
-        (True, "RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=1024}"),
+        (True, "RMSNormFusedCudaVector8_v3{N=6144,EPS=1e-05,BLOCK=1024}"),
     ],
 )
 def test_profile_mode_binds_the_non_batch_invariant_cuda_rmsnorm(fused, expected, monkeypatch):
-    """The rule asks #1970's selector for the served M=4 block and binds one CUDA vector-8 call per token."""
+    """The rule asks its selector for the served M=4 block and binds one CUDA vector-8 call per token."""
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as VB
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -560,7 +578,7 @@ PROF_V2 = dict(mode="profile", profile="b1-eager-v2")
 
 
 def _serve_v3_oracle_digest(C3, LP, D_MAX) -> str:
-    from verity_vllm.program.registry import serve3
+    from verity.ml.definitions.registry import serve3
     return program_digest(Program(serve3.serve_v3(C3, LP, D_MAX)))
 
 
@@ -901,6 +919,7 @@ def test_moe_routing_is_refused_not_approximated():
     assert isinstance(r, Unsupported) and r.reason in ("numerics_unregistered", "dynamic_control_flow") and "topk" in str(r), r
 
 
+@pytest.mark.slow
 def test_hf_greedy_request_reference_mode_tokens_match_torch():
     """Bounded HF request (prefix recomputed each step): the STEPS+1 greedy tokens equal torch CPU's. Each step's rotary table is
     its own derived input (the source computes it per call; positions recorded — the prefix relation between them is not asserted)."""

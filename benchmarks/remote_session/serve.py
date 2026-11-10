@@ -1,6 +1,6 @@
 """vLLM serving under the remote bandwidth audit: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
-with `verity_vllm.store.binder.Binder` on it registers its weights and KV pool in a `Store`, and
-`verity_vllm.store.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
+with `verity_vllm.protocols.remote_bandwidth.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
+`verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
 reads every live block at it (`prover.py`'s serve modes: ``serve``, or ``servedrop:K``, which withholds the first K
 blocks appended).
@@ -12,7 +12,7 @@ blocks appended).
 
 The engine serves `TINY`, the vLLM tests' tiny Llama with 64-wide heads (so a KV page's plane is a 4 KiB block, the
 memory map's), under random weights (``load_format="dummy"``), eager and without prefix caching (the binder refuses a
-prefix hit), one session a process: a `Store` serves one session.  The trace: a request every `EVERY` steps, and one
+prefix hit), one session a process: a `NodeMemory` serves one session.  The trace: a request every `EVERY` steps, and one
 whenever none is in flight, so every step schedules; their prompt and output lengths cycle through `SHAPES`, and a
 prompt longer than a step's `BUDGET` tokens is prefilled over several steps, so pages fill across steps, requests
 finish and free theirs, and freed pages are reused.
@@ -20,7 +20,7 @@ finish and free theirs, and freed pages are reused.
 OUT/serve.json holds the store (`Binder.stats`), the requests, the prover's session result and, with --local, the
 verifier's (its record and ledgers, the memory line among them: on the pass clock a window's span is ticks, which
 the rebuild charge reads as nanoseconds, so it credits nothing there and only the held and read bytes mean anything).
-It needs `verity_vllm.store.remote.StoreBackend` and vLLM on a GPU (`tests/test_vllm_serve.py`).
+It needs `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` and vLLM on a GPU (`tests/test_vllm_serve.py`).
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "integrations" / "vllm")]
 
-import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 64, "num_hidden_layers": 2, "vocab_size": 256,
@@ -158,10 +158,11 @@ def backend_class(remote):
 
 
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
-    import verifier
+    from verity.core.protocols.remote_bandwidth.session import verifier
 
     sock, _ = lsock.accept()
     lsock.close()
+    v = None
     try:
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
@@ -171,6 +172,9 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     except BaseException as e:  # noqa: BLE001
         out["error"] = e
         raise
+    finally:
+        if v is not None:
+            v.stop()
 
 
 def main() -> int:
@@ -188,14 +192,14 @@ def main() -> int:
     ap.add_argument("--lifetime", type=int, default=1, help="with --local: L, windows")
     a = ap.parse_args()
     if "," in a.plan:
-        ap.error("one session a process: a Store serves one session")
+        ap.error("one session a process: a NodeMemory serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.store import remote
-    from verity_vllm.store.binder import Binder
-    from verity_vllm.store.registry import Store
+    from verity_vllm.protocols.remote_bandwidth import remote
+    from verity_vllm.protocols.remote_bandwidth.binder import Binder
+    from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
-    store = Store()
+    store = NodeMemory()
     binder = Binder(store, passes=False).install()
     with tempfile.TemporaryDirectory() as work:
         trace = Trace(engine(Path(work)))

@@ -1,6 +1,41 @@
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.Scope.Split
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Claims.DeployCode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The deployed records' tables are the parsed statement's
@@ -16,6 +51,8 @@ its own statement's (`relS_split`). So `assemble`, which takes each table's firs
 statement, returns only witnesses in the relation (`relS_of_assemble`), and at one table, whose own statement is the
 statement, both records' `assemble` reads as before (`assemble_deployZk_one`, `assemble_deployPlain_one`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -59,6 +96,10 @@ theorem setupTables_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     | (simp only [List.size_toArray, List.length_singleton]; omega)
     | (obtain ⟨hsz, -⟩ := range_mapM_ok (by assumption); omega)
 
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
 /-- **A setup makes as many tables as the parsed statement counts.** -/
 theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
     {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {s : Claims.Flock.Stmt}
@@ -76,6 +117,19 @@ theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.R
   have hsize : sts.size = max 1 i.read.I.count := setupTables_size hr
   rw [hsize, Claims.Flock.Stmt.tables, hform]
 
+end KS.Gen
+
+/-- **A setup makes as many tables as the parsed statement counts.** -/
+theorem setupOf_size_eq_tables {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {s : Claims.Flock.Stmt}
+    (h : setupOf zk x = some (i, spec, sts)) (hp : parse zk rel x = some s) : sts.size = s.tables :=
+  KS.Gen.setupOf_size_eq_tables (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (i := i) (spec := spec) (sts := sts)
+    (s := s) (h := h) (hp := hp)
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
 /-- **The records' tables are the parsed statement's**: where the statement sets up, the session's tables number
 `Claims.Flock.Stmt.tables` of the parsed statement. -/
 theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
@@ -86,10 +140,23 @@ theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} 
   rw [h, List.length_map, Array.length_toList]
   exact setupOf_size_eq_tables h hp
 
+end KS.Gen
+
+/-- **The records' tables are the parsed statement's**: where the statement sets up, the session's tables number
+`Claims.Flock.Stmt.tables` of the parsed statement. -/
+theorem tables_length {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {s : Claims.Flock.Stmt} (hp : parse zk rel x = some s) (hx : (setupOf zk x).isSome) :
+    (tables zk x).length = s.tables :=
+  KS.Gen.tables_length (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (s := s) (hp := hp) (hx := hx)
+
 /-- **A statement the verifier parses has `max 1 count` tables.** -/
 theorem size_of_parses {p : Readable.Parsed} (hp : Readable.Parses p) : p.sts.size = max 1 p.I.count := by
   obtain ⟨spec, hset⟩ := Readable.setup_of_tablesOf (Readable.tablesOf_of_parses hp)
   exact setupTables_size hset
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
 
 /-- **What the claims' parser accepts**: the readable form of a statement the verifier parses, whose tables number
 `Claims.Flock.Stmt.tables`, and each table's own statement (`table`) is its table alone. -/
@@ -102,6 +169,20 @@ theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation
   have hP := Readable.parses_of_parse hrp
   refine ⟨p, hp, rfl, hP, (size_of_parses hP).trans rfl, fun j => ?_⟩
   simp only [table, Readable.tableOf, hp, Option.map_some]
+
+end KS.Gen
+
+/-- **What the claims' parser accepts**: the readable form of a statement the verifier parses, whose tables number
+`Claims.Flock.Stmt.tables`, and each table's own statement (`table`) is its table alone. -/
+theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}
+    {s : Claims.Flock.Stmt} (hs : parse zk rel x = some s) :
+    ∃ p : Readable.Parsed, Readable.parseBytes (readOf zk) x = some p ∧ s = Readable.toReadable rel p ∧
+      Readable.Parses p ∧ p.sts.size = s.tables ∧ ∀ j, table zk rel x j = some (Readable.toReadable rel (p.only j)) :=
+  KS.Gen.parsed_of_parse (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (s := s) (hs := hs)
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
 
 /-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
 relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation
@@ -116,6 +197,17 @@ theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have hpi' : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hpi])
   rw [Readable.relS_only hP ht hpi' w, ← hsz]
   simp only [htab, Option.some.injEq, exists_eq_left']
+
+end KS.Gen
+
+/-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
+relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation
+of table `j`'s own statement (`table`). -/
+theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
+    Claims.Flock.RelS s w ↔ ∀ j < s.tables, ∃ t, table zk Readable.relation x j = some t ∧
+      Claims.Flock.RelS t (Readable.tableWit s.tables w j) :=
+  KS.Gen.relS_split (S := KS.S₀) (zk := zk) (x := x) (s := s) (hs := hs) (hin := hin) (w := w)
 
 /-- **At one table, the table's own statement is the statement.** -/
 theorem table_zero_of_tables_eq_one {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}

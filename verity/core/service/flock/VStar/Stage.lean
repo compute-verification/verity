@@ -1,4 +1,8 @@
-import VStar.Parts
+module
+
+public import VStar.Cap
+public import VStar.Link
+public import VStar.Parts
 
 /-!
 # V*'s statements over an inner session (`verity_flock.rec_vstage.stage`)
@@ -14,18 +18,28 @@ Candidate 3's session adds, under `stage --sparse` (`rec_vstage.stage_sparse`, `
 (`RecOpen{LANES, H}` over `q` instances, named `rec-open-stacked/l<LANES>-h<H>` so that no name is both one of R's levels
 and one of the table's: `stacked/L<level>`), and each part of R's registered opening (`InnerRepCheck{S}` at R's
 opening-only shape, one instance, `rec-opening/m<m>-c<claims>-p<j>`: `stacked/open/p<j>`).
+
+Every session ends with a `RecCap` per later Ligerito level `l`, over both reps' `2 · 2^cap_l` nodes of its tops
+(`rec-cap/n<N>-l<l>`: `cap/L<l>`, `levelCapStatements`), then `RecCap` over the `2^cap₀` nodes of the table's level-0 cap
+(`rec-cap/n<N>`: `cap`, `capStatement`), which hold each node of every level's committed tops at a fixed row whatever the
+coins sample. A session whose statement carries the inner population's link table has, just before that last cap, the
+table's `RecLink{UB, PB}` over its `N = grid(L)` rows, instance `i` checking row `i` (`rec-link/u<UB>-p<PB>`: `links`).
 -/
+
+@[expose] public section
 
 namespace VStar
 
 /-- One of V*'s statements. `sparse`'s `hRound` is the table's round whose message is its port `h`; `opening`'s `ports`
-are its part's row ports, `[name, elements]`, and `nv` its v elements. -/
+are its part's row ports, `[name, elements]`, and `nv` its v elements; `link`'s `N` is the link table's rows. -/
 inductive Stmt where
   | recOpen (level LANES H n : Nat)
   | inner (j : Nat) (name : String) (part : Part)
   | recOpenStacked (level LANES H n : Nat)
   | sparse (sh : Flock.RecSparse.Shape) (hRound : Nat)
   | opening (m c j : Nat) (S : Flock.RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat)
+  | cap (level N : Nat)
+  | link (UB PB N : Nat)
   deriving Inhabited
 
 def recOpenSub (LANES H : Nat) : Sub :=
@@ -63,6 +77,8 @@ def Stmt.name : Stmt → String
   | .recOpenStacked _ L H _ => recOpenStackedName L H
   | .sparse sh _ => Flock.RecSparse.unitName sh
   | .opening m c j .. => Flock.RecOpening.unitName m c j
+  | .cap l N => capName l N
+  | .link UB PB _ => linkName UB PB
 
 def Stmt.instances : Stmt → Nat
   | .recOpen _ _ _ n => n
@@ -70,6 +86,8 @@ def Stmt.instances : Stmt → Nat
   | .recOpenStacked _ _ _ n => n
   | .sparse .. => 2
   | .opening .. => 1
+  | .cap _ N => N
+  | .link _ _ N => N
 
 def Stmt.dir : Stmt → String
   | .recOpen level .. => s!"L{level}"
@@ -77,6 +95,9 @@ def Stmt.dir : Stmt → String
   | .recOpenStacked level .. => s!"stacked/L{level}"
   | .sparse .. => "sparse"
   | .opening _ _ j .. => s!"stacked/open/p{j}"
+  | .cap 0 _ => "cap"
+  | .cap (l + 1) _ => s!"cap/L{l + 1}"
+  | .link .. => "links"
 
 def Stmt.sub : Stmt → Sub
   | .recOpen _ L H _ => recOpenSub L H
@@ -85,6 +106,8 @@ def Stmt.sub : Stmt → Sub
   | .sparse sh _ => sparseSub sh
   | s@(.opening _ _ _ _ ports _) =>
     { id := s.name, template := "rec-residuals", inputs := ports.map (·.1) ++ ["v"], outputs := ["out"] }
+  | .cap l N => capSub l N
+  | .link UB PB _ => linkSub UB PB
 
 def Stmt.unit : Stmt → Except String UnitC
   | .recOpen _ L H _ => recOpenUnit L H
@@ -92,6 +115,8 @@ def Stmt.unit : Stmt → Except String UnitC
   | .recOpenStacked _ L H _ => do pure { ← recOpenUnit L H with name := recOpenStackedName L H }
   | .sparse sh _ => sparseUnit sh
   | s@(.opening _ _ _ S ports nv) => pure (openingUnit s.name S ports nv)
+  | .cap l N => pure (capUnit l N)
+  | .link UB PB _ => linkUnit UB PB
 
 /-- V*'s statements over an inner session of shape `sh`, in `stage`'s order. -/
 def statements (sh : Algebra.Shape) : Except String (Array Stmt) := do
@@ -104,5 +129,18 @@ def statements (sh : Algebra.Shape) : Except String (Array Stmt) := do
   for j in [0:ps.size] do
     out := out.push (.inner j s!"rec-residuals/m{sh.m}-k{sh.kLog}-c{sh.claims}-p{j}" ps[j]!)
   pure out
+
+/-- The level-0 cap's statement over an inner session of shape `sh`: `RecCap` over the `2^cap₀` nodes of `root_B`, `cap₀`
+the cap of `fast100(m)`'s level 0. -/
+def capStatement (sh : Algebra.Shape) : Except String Stmt := do
+  let s ← sh.sched
+  let some lv := s.levels[0]? | throw s!"the inner session's schedule (m {sh.m}) has no level 0"
+  pure (.cap 0 (2 ^ lv.cap))
+
+/-- Each later Ligerito level's cap statement over an inner session of shape `sh`: `RecCap` at level `l` over both reps'
+`2 · 2^cap_l` nodes of its tops, for `l` from 1 to the last level of `fast100(m)`, in order. -/
+def levelCapStatements (sh : Algebra.Shape) : Except String (Array Stmt) := do
+  let s ← sh.sched
+  pure ((Array.range (s.levels.size - 1)).map fun i => .cap (i + 1) (2 * 2 ^ (s.levels[i + 1]!).cap))
 
 end VStar

@@ -1,7 +1,7 @@
 """Half-open integer interval sets, and the leaf intervals a reference sequence names.
 
 An `Intervals` value is a tuple of `(lo, hi)` pairs, sorted, disjoint and non-empty; `norm` makes one from any pairs.
-The IR analyses (`liveness`, `boundary`, `query_ast`) keep sets of leaves, members and gates in this form, so a
+The Program analyses (`liveness`, `boundary`, `query_ast`) keep sets of leaves, members and gates in this form, so a
 weight table, a KV cache or a `batch` output stays O(#runs) instead of O(#leaves).
 """
 from __future__ import annotations
@@ -121,18 +121,27 @@ def strided_intervals(r: Strided, add: Callable[[int, int], None]) -> None:
         raise IntervalLimit(f"{r!r} has no interval structure and {n} leaves")
 
 
-def ref_intervals(r: Refs, out: dict[tuple[str, int], list]) -> None:
-    """Accumulate the leaf intervals referenced by `r` into `out`, grouped by (space, idx) (unnormalised)."""
+def ref_intervals(r: Refs, out: dict[tuple[str, int], list], seen: set | None = None) -> None:
+    """Accumulate the leaf intervals referenced by `r` into `out`, grouped by (space, idx) (unnormalised).
+
+    With `seen`, a `Strided` already in it adds nothing (the caller has its intervals already) and one not in it is
+    added to it: a table column every token reads (`[V][k]` read with stride k, no interval structure) is then
+    enumerated once, not once per read."""
     if isinstance(r, Affine):
         if r.count:
             out.setdefault((r.space, r.idx), []).append((r.base, r.base + r.count))
     elif isinstance(r, Concat):
         for p in r.parts:
-            ref_intervals(p, out)
+            ref_intervals(p, out, seen)
     elif isinstance(r, Explicit):
         for s, i, leaf in r.items:
             out.setdefault((s, i), []).append((leaf, leaf + 1))
     elif isinstance(r, Strided):
+        if seen is not None:
+            key = (r.space, r.idx, r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
+            if key in seen:
+                return
+            seen.add(key)
         lst = out.setdefault((r.space, r.idx), [])
         strided_intervals(r, lambda lo, hi: lst.append((lo, hi)))
     else:  # pragma: no cover - unknown Refs subclass

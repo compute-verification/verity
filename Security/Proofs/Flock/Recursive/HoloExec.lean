@@ -1,10 +1,23 @@
-import Flock.RecVStar
-import Flock.RecCoins
-import Flock.Firewall
-import Proofs.Flock.Recursive.Holo
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Soundness.Model.HoloCompiled
+module
+
+public import Flock.RecCoins
+public import Definitions.Flock.Recursive.Holo
+public import Proofs.Flock.Recursive.ExecClass
+public import Definitions.Flock.HoloCompiled
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Recursion: candidate 3's inner protocol as the executable runs it
@@ -17,7 +30,7 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   padded to `PAD_TO` as the verifier opens R (the default, whose empty levels reject R, where `ℓ` is out of
   `[6, k_log]`, which the verifier refuses: `SparseRangeOk`).
 * `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
-  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
+  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditHolo` does
   not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
 * `StackedTopAt lv st reg cap salt bcs'`: `cap` is R's registered top at the explicit commit strings `bcs'` under the
   held salts `salt` (`registrant-holds-openings`), the `stacked`
@@ -41,6 +54,8 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 * `vstarCount ish`: the length of V*'s statement list as the verifier builds it (`RecVStar.statements`), zero where it
   refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -142,7 +157,16 @@ def TopOf (lv : Level) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray) (bcs : 
 names `stacked` under its `program`, and the entry's five structural fields are exactly those computed from `bcs`.
 `TopOf` ties the same explicit strings to `cap` under `salt`, the salts the prover's workers committed R's level-0 top
 rows under (`registrant-holds-openings`: they hold them, and the guarantee is applied at the held salts); no choice is
-hidden in this relation. -/
+hidden in this relation.
+
+Assumption record. Claim: `registrant-holds-openings`. It assumes that the registrant holds the commit strings `bcs`
+it registered. The registered `stacked` entry is the one computed from `bcs` (the first two conjuncts), and `cap` and
+`salt` are a tree and salts whose commit strings are `bcs` (`TopOf`). Those are the prover's workers' own tree and
+salts, behind the ZK server. That is reasonable because an honest registrant registers the entry of the rows it
+committed and holds them. A prover that registers strings it can't open is outside the guarantee. The first two
+conjuncts are the verifier's checks only at a transcript's own top.
+At the held `bcs` they are part of the premise: `TopColl.collision` reads them to turn a held top other than `bcs` into
+a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
   ∃ (prog : String) (e : Lean.Json),
@@ -150,7 +174,7 @@ def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Ref
       Flock.RecVStar.topEntryFields prog bcs e = .ok true ∧ TopOf lv cap salt bcs
 
 /-- **The verifier's hold of the inner transcript**: `RecVStar.innerCommits` as `RecSetup.commits` calls it, at the
-coin server's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
+challenger's live-coin part's record of V*'s inner session `tr` (`--rec-inner-transcript`), the inner session's record
 `record` (`--rec-inner-session`), R's registration `reg` (`--rec-inner-registration`), and the digest and R's shape the
 inner statement's META names (`metaRegistration`, `RecVStar.stackedShapeOf`). It refuses a registration META does not
 bind, and a binding round of R's stream whose top does not make the registered `stacked` entry. -/

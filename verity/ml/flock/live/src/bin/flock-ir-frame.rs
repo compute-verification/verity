@@ -1,6 +1,6 @@
 //! flock-ir-frame: an IR template's units bound to their frame-v3 rows (`flock_live::ir_frame`, `verity/flock-ir-frame/v3`),
 //! proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a flock-128-r2 live session.
-//! Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu.
+//! The session protocol is flock-pure-gpu's.
 //!
 //!   flock-ir-frame serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
 //!   flock-ir-frame prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W] [--dump DIR]
@@ -648,7 +648,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }
@@ -674,6 +674,7 @@ fn refuse(why: String) -> ! {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(load(&arg("--instances", "frame.bin")));

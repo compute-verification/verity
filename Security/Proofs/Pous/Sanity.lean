@@ -1,8 +1,11 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Fin
-import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Tactic.NormNum
-import Models.Pous.Guarantees
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Fin
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Mathlib.Tactic.NormNum
+public import Definitions.Pous.Guarantees
+public import Proofs.Pous.Prob
 
 /-!
 # Sanity theorems: the definitions are not vacuous
@@ -16,6 +19,8 @@ import Models.Pous.Guarantees
   with probability 1. `W` and `pp` really are free, and security is not automatic.
 -/
 
+@[expose] public section
+
 namespace Pous
 
 open scoped ENNReal
@@ -27,10 +32,6 @@ variable {M : IdealModel}
 section pr
 
 variable {α β : Type} [Fintype α] [Fintype β]
-
-theorem pr_def (P : α → Prop) [DecidablePred P] :
-    pr P = ((Finset.univ.filter P).card : ℝ≥0∞) / Fintype.card α := by
-  unfold pr; congr
 
 theorem pr_eq_one [Nonempty α] {P : α → Prop} (h : ∀ x, P x) : pr P = 1 := by
   classical
@@ -76,7 +77,7 @@ def trunc {a b : ℕ} (h : a ≤ b) (x : Bits b) : Bits a := fun i => x (Fin.cas
 theorem trunc_pad {a b : ℕ} (h : a ≤ b) (x : Bits a) : trunc h (pad x) = x :=
   funext fun i => by simp [trunc, pad]
 
-theorem ret_bounded {α : Type} (a : α) (D Q : ℕ) : (Prog.ret a : Prog M α).Bounded D Q :=
+theorem ret_bounded {α : Type} (a : α) (D Q : ℕ) : (OracleAlgorithm.ret a : OracleAlgorithm M α).Bounded D Q :=
   fun _ => ⟨Nat.zero_le _, Nat.zero_le _⟩
 
 /-- A sequential responder that never changes its state answers `is` by `g σ`. -/
@@ -85,7 +86,7 @@ theorem seqAnswers_const {ℓ S B : ℕ} (f : M.Qry → M.Ans) (g : Bits S → F
       seqAnswers f (fun _ σ i => .ret (g σ i, σ)) j is σ = is.map (g σ)
   | _, [], _ => rfl
   | j, i :: is, σ => by
-      simp only [seqAnswers, Prog.run, List.map_cons, seqAnswers_const f g (j + 1) is σ]
+      simp only [seqAnswers, OracleAlgorithm.run, List.map_cons, seqAnswers_const f g (j + 1) is σ]
 
 /-! ### The honest prover -/
 
@@ -105,7 +106,7 @@ def honestSeq (sch : Scheme M) : SeqResponder sch (sch.B * sch.ℓ) 0 0 where
 
 theorem honest_sim_accepted (sch : Scheme M) (k : ℕ) (W : Bits sch.n) :
     pr (simAccepts sch W (honestPre sch) (honestSim sch k)) = 1 :=
-  pr_eq_one fun x => by simp [simAccepts, honestPre, honestSim, Prog.run]
+  pr_eq_one fun x => by simp [simAccepts, honestPre, honestSim, OracleAlgorithm.run]
 
 theorem honest_seq_accepted (sch : Scheme M) (k : ℕ) (W : Bits sch.n) :
     pr (seqAccepts sch k W (honestPre sch) (honestSeq sch)) = 1 :=
@@ -147,7 +148,7 @@ theorem raw_sim_accepted (D Q k : ℕ) (W : Bits sch.n) :
     ((m : ℝ≥0∞) / sch.B) ^ k ≤ pr (simAccepts sch W (rawPre sch hm) (rawSim sch h D Q k)) := by
   rw [← pr_all_lt k sch.B m hm, ← pr_snd (α := sch.Coins), ← pr_snd (α := M.Ω)]
   refine pr_mono fun x hx => ?_
-  simp only [simAccepts, rawSim, Prog.run]
+  simp only [simAccepts, rawSim, OracleAlgorithm.run]
   funext j
   exact rawAnswer_eq sch h hm _ _ _ _ _ (hx j)
 
@@ -217,7 +218,7 @@ theorem plain_short_coins_insecure (sch : Scheme IdealModel.plain) (S k : ℕ)
     fun W => pr_eq_one fun x => ?_⟩
   obtain ⟨ω, r, I⟩ := x
   have hex : ∃ r', sch.enc W () r' = ((sch.enc W ω r).1, (sch.enc W ω r).2) := ⟨r, rfl⟩
-  simp only [simAccepts, Prog.run, coinGuess, hex, dite_true, Function.leftInverse_invFun e.injective _]
+  simp only [simAccepts, OracleAlgorithm.run, coinGuess, hex, dite_true, Function.leftInverse_invFun e.injective _]
   rw [hex.choose_spec]
 
 /-! ### Degenerate requirements are excluded -/

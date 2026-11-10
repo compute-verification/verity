@@ -1,31 +1,34 @@
-"""`research queue drive`: one tick lands what passed, syncs `next`, and checks its tip, with no agent in between; what it refuses
-goes to the lander once.  On `test_queue`'s throwaway origin, with the launch, the runs' states and the merge-thread post injected."""
+"""`research queue drive`: what a tick reads of a failed run (the files it implicates, a kill), what it tells and to whom, and the
+branch sweep, on `test_queue`'s throwaway origin with the launch, the runs' states and the merge-thread post injected.  `Harness` is
+the drive `test_drive_review` and `test_drive_stale` build on."""
 from __future__ import annotations
 
-import os
 import pytest
 
 from research import merge
-from research.drive import PUBLISH_GRACE_S, Driver
-from research.cli import main as research_main
-from test_merge_gate import CHECKED
+from research.drive import AFTER_LANDING, Driver
 from test_queue import World, _git
 
 
 class Harness:
+    """A drive on ``world`` whose lock-run launches are recorded (`launched`) and whose after-landing launches are recorded
+    (`posted`) as `r-post-N`, each running until a test sets its state in `run_state`."""
+
     def __init__(self, world: World, monkeypatch, **kw):
-        self.world, self.launched, self.posts, self.after, self.cancelled = world, [], [], [], []
+        self.world, self.launched, self.posted, self.posts, self.after, self.cancelled = world, [], [], [], [], []
         self.run_state: dict[str, tuple] = {}
         self.clock = 1_000_000.0
         monkeypatch.setattr(merge, "caught_up", lambda repo, remote, tool, since="", log=print, runs=None:
                             self.after.append((since, runs)))
-        monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+        monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
         monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
+        self.q.now = lambda: self.clock
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
+        self.d.launch_postland = self.launch_post
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -33,19 +36,25 @@ class Harness:
         self.run_state[rid] = ("running", None, None)
         return [rid], ""
 
+    def launch_post(self, repo, commit, machine, steps, **kw):
+        rid = f"r-post-{len(self.posted)}"
+        self.posted.append((commit, steps, kw))
+        self.run_state[rid] = ("running", None, None)
+        return [rid], ""
+
     def tick(self, **kw) -> str:
         return self.d.tick(**kw)
 
-
-def _check(world: World, monkeypatch, commit: str, command=CHECKED) -> None:
-    """A recorded `check` attempt of `commit` that runs `command` (CHECKED passes)."""
-    monkeypatch.setenv("RESEARCH_STORE", str(world.tmp / "store"))
-    tree = world.tmp / f"check-{commit[:12]}"
-    _git(world.dev, "fetch", "-q", "origin")
-    _git(world.dev, "worktree", "add", "-q", "--detach", str(tree), commit)
-    monkeypatch.chdir(tree)
-    research_main(["run", "--runs-dir", str(world.tmp / "runs"), "--project", "t", "--no-sampler", "--tool", "mytools.decl_check:T",
-                   "--cwd", "source", "--", *command])
+    def baseline(self) -> None:
+        """Drive's state with `main` verified on every after-landing step, as a passed after-landing run of it leaves it, so a
+        tick lands without first running one."""
+        self.q._clone()
+        self.q.fetch()
+        state = self.q.load_state()
+        state.setdefault("drive", {})["postland"] = {
+            "verified": _git(self.world.origin, "rev-parse", "main"), "pending": [], "run": None,
+            "verified_as": {"steps": list(AFTER_LANDING), "no_cache": None}}
+        self.q.save_state(state)
 
 
 def _tip(world: World) -> str:
@@ -55,157 +64,6 @@ def _tip(world: World) -> str:
 @pytest.fixture
 def world(tmp_path):
     return World(tmp_path)
-
-
-def test_an_unchecked_tip_is_checked_once_with_agreement_only_for_a_guarantee_change(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    assert h.tick().startswith("launched")
-    assert h.launched == [(_tip(world), "m1", False)]
-    assert "running" in h.tick() and len(h.launched) == 1          # its launch is still running: no second check
-    world.gh.put(2, world.change({"pkg/lean-audit.json": "{}\n"}))
-    h.tick()
-    assert h.launched[-1] == (_tip(world), "m1", True)             # a new tip, and it changes a lean-audit.json
-
-
-def test_launches_wait_while_max_running_checks_of_next_run(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    h.d.max_running = 1
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    assert "waits" in h.tick() and len(h.launched) == 1
-
-
-def test_a_passing_tip_fast_forwards_main_and_the_landing_post_names_its_check(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()
-    tip, before = _tip(world), _git(world.origin, "rev-parse", "main")
-    _check(world, monkeypatch, tip)
-    assert h.tick().startswith("landed #2")
-    assert _git(world.origin, "rev-parse", "main") == tip           # exactly the checked commit
-    (since, runs), = h.after
-    assert since == before and set(runs.values()) == {next(iter(runs.values()))} and tip in runs
-    lines = merge.landing_lines(h.q.workdir, before, tip, runs=runs)
-    assert [ln.split(" ", 4)[-1] for ln in lines] == [f"#1; checked by {runs[tip]}", f"#2; checked by {runs[tip]}"]
-
-
-def test_the_steps_after_a_landing_run_with_the_queues_credentials_and_git_never_prompts(world, monkeypatch):
-    """12 Oct 08:49Z: `caught_up`'s `ls-remote` in the queue's clone, which has no credential helper, waited on a password."""
-    h = Harness(world, monkeypatch)
-    seen = []
-    monkeypatch.setattr(merge, "caught_up", lambda *a, **kw: seen.append({k: os.environ.get(k) for k in
-                                                                           ("GIT_TERMINAL_PROMPT", "GIT_CONFIG_COUNT")}))
-    monkeypatch.delenv("GIT_TERMINAL_PROMPT", raising=False)
-    monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
-    h.q.auth = ("-c", "credential.helper=!h get")
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world))
-    assert h.tick().startswith("landed #1")
-    assert seen == [{"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1"}]
-    assert "GIT_TERMINAL_PROMPT" not in os.environ and "GIT_CONFIG_COUNT" not in os.environ
-
-
-def test_a_tip_checked_before_main_moved_lands_as_a_merge_commit_when_they_share_no_file(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    tip = _tip(world)
-    _check(world, monkeypatch, tip)
-    other = world.change({"c.txt": "outside the queue\n"})
-    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
-    assert h.tick().startswith("landed #1")
-    main = _git(world.origin, "rev-parse", "main")
-    assert _git(world.origin, "rev-list", "--parents", "-n", "1", main).split()[1:] == [other, tip]
-    body = _git(world.origin, "log", "-1", "--format=%B", main)
-    assert body.startswith(f"Merge {tip[:12]} (") and "\nChecked: r" in body and f"Skipped-check: main " in body
-
-
-def test_a_tip_checked_before_main_moved_over_one_of_its_files_is_rebuilt_and_checked_again(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    lines = [f"{i}\n" for i in range(8)]
-    _git(world.dev, "push", "-q", "origin", f"{world.change({'m.txt': ''.join(lines)})}:refs/heads/main")
-    world.gh.put(1, world.change({"m.txt": "".join(["first\n", *lines[1:]])}))
-    h.tick()
-    old = _tip(world)
-    _check(world, monkeypatch, old)
-    other = world.change({"m.txt": "".join([*lines[:-1], "last\n"])})
-    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
-    assert h.tick().startswith("launched")
-    assert _git(world.origin, "rev-parse", "main") == other and h.launched[-1][0] == _tip(world) != old
-
-
-def test_a_main_that_changed_check_tooling_is_never_landed_on_unchecked(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    old = _tip(world)
-    _check(world, monkeypatch, old)
-    other = world.change({"tools/verity/check/check.py": "# a new step\n"})
-    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
-    assert h.tick().startswith("launched")
-    assert _git(world.origin, "rev-parse", "main") == other and h.launched[-1][0] == _tip(world) != old
-
-
-def test_a_failed_check_and_a_launch_that_registers_nothing_are_told_to_the_lander_once(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.tick()
-    h.tick()
-    assert len(h.posts) == 1 and "failed its check" in h.posts[0] and h.posts[0].startswith("@ci ")
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.d.launch = lambda *a: ([], "train: no parent store key")
-    h.tick()
-    h.tick()
-    assert len(h.posts) == 2 and "registered no run: train: no parent store key" in h.posts[1]
-
-
-def test_a_failure_is_told_even_when_the_same_ticks_rebuild_takes_its_commit_off_next(world, monkeypatch):
-    """12 Oct 17:23Z: check 3d11 failed, a re-mark of a `--first` PR rebuilt `next` in the tick that would have seen it, and the
-    failure was never told: the train's PRs went straight back into the next check."""
-    h = Harness(world, monkeypatch, first=(2,))
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    world.gh.put(2, world.change({"b.txt": "2\n"}))                 # `--first`: below #1, so #1's commit leaves `next`
-    h.tick()
-    assert len(h.posts) == 1 and "failed its check" in h.posts[0] and "(#1)" in h.posts[0]
-
-
-def test_a_dry_run_tells_nobody_and_a_real_tick_after_it_still_does(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.tick(dry_run=True)
-    assert h.posts == [] and any("would tell" in x and "[dry run]" in x for x in world.logs)
-    h.tick()
-    assert len(h.posts) == 1 and "failed its check" in h.posts[0]
-
-
-def test_a_check_that_has_already_failed_is_told_while_it_keeps_going_and_its_rebuild_cancels_it(world, monkeypatch):
-    """12 Oct: cc39's repository suite failed at 20:25Z and drive told it at 20:55Z, when `--keep-going` let the check end.  What
-    a running check has failed so far is a failure now.  Once the PR is ejected the rebuild cancels it (17 Oct: two such checks,
-    kept for the full picture, held train slots 40 min with 32 PRs queued)."""
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.d.train_size = 2
-    h.tick()
-    (rid,) = h.run_state
-    h.run_state[rid] = ("running", None, None, "suite repository (tests/test_repository.py::test_x)")
-    h.tick()
-    assert len(h.posts) == 1 and "failed its check" in h.posts[0] and "has already failed: suite repository" in h.posts[0]
-    h.tick()
-    assert len(h.posts) == 1 and h.cancelled == []
-    h.q.eject(2, "breaks the repository suite", "ci")
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled == [rid]
 
 
 def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-suites", "status": "failed"}\n'):
@@ -219,40 +77,6 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
                                                      "log": "/workspace/research/runs/r/suites/pkg.log"}]))
     (d / "suites" / "pkg.log").write_text(f"E       NameError: name '_once' is not defined\n\n{trace}: NameError\n")
     return d
-
-
-def test_a_failure_only_one_trains_change_reaches_ejects_that_pr_and_tells_ci_and_its_owner(world, monkeypatch, tmp_path):
-    """13 Oct: f476d3d63's check failed at 01:57Z on #1847's new call of a helper `main` had moved, and the notice went to the
-    other Project's lander, who acts on none of it: the train sat until another lane read the log.  Only #1847 changed the
-    failing test's file, so drive ejects it."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    _once()\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and h.posts[0].startswith("@ci ") and "Ejected #2" in h.posts[0], h.posts
-    assert "pkg/tests/test_x.py" in h.posts[0] and "@old-circuits-and-proofs" not in h.posts[0]
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1] and len(h.posts) == 1
-
-
-def test_a_failure_two_changes_reach_ejects_both(world, monkeypatch, tmp_path):
-    """16 Oct (Daniel, through top): every failed train that waited on a lander stalled landing for hours; drive ejects every
-    PR whose change the failure reaches, and the rest of the train goes on."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"pkg/helpers.py": "X = 2\n"}))
-    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/workspace/research/src/abc/pkg/helpers.py", line 1')]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #1 #2: their change touches pkg/helpers.py, pkg/tests/test_x.py" in h.posts[0], h.posts
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == []
 
 
 LEAN_AUDIT_LOG = """lean-audit: verity/core/primitives/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
@@ -275,7 +99,7 @@ def _lean_run(tmp_path, log: str = LEAN_AUDIT_LOG):
 
 
 def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_path):
-    """16 Oct: three trains failed in lean-audit (#2143, #2168, #2174), each told as naming no file, each attributed by hand."""
+    """A train that fails in lean-audit isn't told as naming no file, to be attributed by hand."""
     from research.drive import implicated, lean_errors
 
     assert lean_errors(LEAN_AUDIT_LOG) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean",
@@ -284,76 +108,12 @@ def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_p
     assert implicated(_lean_run(tmp_path / "b", "AUDIT /x/lean-audit-scratch-1/Security: FAIL\n    error: build failed\n")) is None
 
 
-def test_a_lean_audit_failure_ejects_the_pr_that_changed_the_failing_file(world, monkeypatch, tmp_path):
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"Security/Definitions/Claims/Sampling.lean": "theorem x : True := trivial\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_lean_run(tmp_path)]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "Sampling.lean" in h.posts[0], h.posts
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1]
-
-
-def test_a_suite_failure_whose_files_no_pr_touches_ejects_the_pr_that_changed_the_suites_inputs(world, monkeypatch, tmp_path):
-    """16 Oct: #2164's train failed in benchmarks/pouw's suite (its test in tests/), and the cause was its own change to that
-    suite's pyproject.toml inputs."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"pkg/pyproject.toml": "[tool.verity.tests]\ninputs = ['data/x.json']\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "suite pkg's inputs" in h.posts[0], h.posts
-
-
-def test_a_failure_nothing_in_the_train_reaches_is_resent_as_a_machines_fault(world, monkeypatch, tmp_path):
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    launched = len(h.launched)
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert not h.posts and len(h.launched) == launched + 1 and any("resent" in x for x in world.logs)
-
-
 def _killed_run(tmp_path, name: str):
     d = tmp_path / name
     d.mkdir(parents=True)
     (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed", "rc": -9, "log": "circuit-check.log"}\n')
     (d / "circuit-check.log").write_text("")
     return d
-
-
-def test_a_killed_check_that_names_no_file_is_resent_once_and_told_when_killed_again(world, monkeypatch, tmp_path):
-    """16 Oct 21:22Z and 00:09Z: a node stop and an OOM kill failed three trains; each waited on a hand resend."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()
-    tip = _tip(world)
-    _check(world, monkeypatch, tip, ("false",))
-    h.evidence = [_killed_run(tmp_path, "one")]
-    launched = len(h.launched)
-    h.tick()
-    assert not h.posts and len(h.launched) == launched + 1 and h.launched[-1][0] == tip     # resent, nothing told or ejected
-    assert any("resent" in x and "no PR is ejected" in x for x in world.logs)
-    assert "running" in h.tick() and [m.pr for m in h.q.chain()] == [1, 2]
-    rid = h.d.q.load_state()["drive"]["launched"][tip]["ids"][0]
-    h.run_state[rid] = ("done", 1, None)
-    h.clock += PUBLISH_GRACE_S + 1                                       # killed again, and no attempt of it published
-    h.evidence = [_killed_run(tmp_path, "two")]
-    h.tick()
-    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0] and len(h.launched) == launched + 1, h.posts
 
 
 LINT_LOG = """..........F........                                                      [100%]
@@ -380,22 +140,6 @@ def _lint_run(tmp_path, log: str = LINT_LOG):
     return d
 
 
-def test_a_lint_failure_only_one_trains_change_reaches_ejects_that_pr(world, monkeypatch, tmp_path):
-    """13 Oct 07:35Z: 898eae8a1f74 failed `preflight-lints` because the store README one PR edited was 17 bytes over its cap,
-    and drive rang ci: the offender is named in the lint's assertion, and drive read only the suites' tracebacks."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    world.gh.put(2, world.change({"tools/research/src/research/store/README.md": "big\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_lint_run(tmp_path)]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "store/README.md" in h.posts[0], h.posts
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1]
-
-
 def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_name(tmp_path):
     from research.drive import implicated
 
@@ -414,8 +158,8 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
 
 
 def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
-    """Train 21b3d26fe1a6 (14 Oct 21:08Z): verity-lean-audit failed with 146/146 tests passing — the read guard alone — and
-    drive said "the failure names no file", so attribution took an agent's archaeology. The suite's record names the files
+    """A suite can fail with every test passing — the read guard alone — and then "the failure names no file" would leave
+    attribution to an agent's archaeology. The suite's record names the files
     read outside the inputs and the test module that read each (`outside`, path -> module; a child's reads in
     `child_outside`), and those implicate the PR that added the reading test or changed the file read."""
     import json
@@ -457,122 +201,20 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
             remote.fetch(tmp_path, also=(bad,))
 
 
-def test_each_launched_runs_state_is_read_once_a_tick(world, monkeypatch):
-    """A tick asks of a running launch for `held`, before the sync, for the running count and for its train; each read is a
-    `research status` over ssh (12 Oct: 4 of them were 25 s of a 52 s tick)."""
-    h = Harness(world, monkeypatch)
-    reads: list[str] = []
-    states = h.d.states
-    h.d.states = lambda repo, ids: reads.extend(ids) or states(repo, ids)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    assert "running" in h.tick()
-    (rid,) = h.run_state
-    assert reads == [rid]
-    h.run_state[rid] = ("failed", 75, None)
-    h.tick()                                        # the next tick reads it afresh, sees no twin started, and relaunches
-    assert reads == [rid, rid] and len(h.launched) == 2
-
-
-def test_a_launch_that_ended_without_an_attempt_is_lost_after_the_grace_and_one_whose_twins_never_started_is_relaunched(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    (rid,) = h.run_state
-    h.run_state[rid] = ("failed", 75, None)
-    h.tick()
-    assert len(h.launched) == 2                                     # no twin took a slot: launched again
-    rid = sorted(h.run_state)[-1]
-    h.run_state[rid] = ("done", 0, None)
-    assert "running" in h.tick() and not h.posts                    # its attempt may still be on its way to the store
-    h.clock += PUBLISH_GRACE_S + 1
-    h.tick()
-    assert len(h.posts) == 1 and "no attempt reached the store" in h.posts[0]
-
-
-def test_next_is_checked_in_stacked_trains_and_a_failed_train_holds_up_only_the_ones_above_it(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 2, 3
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt"), (5, "e.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    h.tick()
-    members = h.q.chain()
-    assert [c for c, _, _ in h.launched] == [members[1].commit, members[3].commit, members[4].commit]
-    _check(world, monkeypatch, members[1].commit)
-    _check(world, monkeypatch, members[3].commit, ("false",))
-    h.tick()
-    assert _git(world.origin, "rev-parse", "main") == members[1].commit       # the train below the failure lands
-    assert len(h.posts) == 1 and f"{members[3].commit[:12]} on `next` (#3 #4) failed" in h.posts[0]
-
-
-def test_a_pr_that_makes_circuit_check_run_cold_goes_above_the_warm_ones_and_they_get_a_check_of_their_own(world, monkeypatch):
-    """15 Oct: Lean-only PRs from proofs sat for hours in trains with a circuits change, whose check ran circuit-check cold."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 6
-    for n, f in ((1, "a.txt"), (2, "verity/ml/circuits/library.py"), (3, "Security/X.lean")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    head2 = next(p.head for p in world.gh.open_prs() if p.number == 2)
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 3]                          # #2 pre-warms off `next`
-    assert h.launched[0][0] == head2 and len(h.launched) == 2
-    warm = h.launched[1][0]
-    (pre, *_) = sorted(h.run_state)
-    h.run_state[pre] = ("done", 1, None)                                  # its pre-warm ended, passed or not
-    h.tick()                                                              # it's marked done after this tick's sync
-    h.tick()
-    members = h.q.chain()
-    assert [m.pr for m in members] == [1, 3, 2] and members[1].commit == warm
-    assert h.launched[-1][0] == members[2].commit
-
-
-def test_a_cold_pr_already_on_next_leaves_it_to_pre_warm_and_comes_back_above_the_warm_ones(world, monkeypatch):
-    """17 Oct 07:44Z: #2199 (tools/verity/circuit_check/) became the bottom of `next` when the PRs below it landed, and every
-    train above it ran circuit-check cold until top, as lander, ejected it by hand (CI-47)."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size = 6
-    world.gh.put(1, world.change({"tools/verity/circuit_check/x.py": "1\n"}))
-    h.d.q.warming = None                                                  # admitted before pre-warming existed
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1]
-    h.d.q.warming = h.d.warming
-    world.gh.put(2, world.change({"a.txt": "2\n"}))
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [2]
-    assert any("pre-warming #1" in x for x in world.logs)
-
-
-def test_two_cold_prs_side_by_side_share_one_cold_train(world, monkeypatch):
-    """16 Oct 06:38Z: #2113 and #2115, both cold, were cut into two trains, and two nodes each ran circuit-check cold."""
-    h = Harness(world, monkeypatch)
-    assert h.d.trains(6, frozenset({4, 5})) == [3, 5]
-    assert h.d.trains(6, frozenset({2, 4})) == [1, 3, 5]
-
-
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
     assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
-    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # #2114: 907 targets rerun
+    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
     assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
     assert not forces_cold([])
 
 
-def test_shadow_launches_lands_and_tells_nothing(world, monkeypatch):
-    h = Harness(world, monkeypatch, shadow=True)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    before = _git(world.origin, "rev-parse", "main")
-    assert h.tick().startswith("would check")
-    _check(world, monkeypatch, _git(world.origin, "rev-parse", "refs/heads/queue-shadow"), ("false",))
-    h.tick()
-    assert not h.launched and not h.posts and _git(world.origin, "rev-parse", "main") == before
-    assert any("would tell @ci" in s for s in world.logs)
-
-
 def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_path, monkeypatch):
-    """12 Oct, drive's first live tick: train.sh's `git fetch` in the queue's clone, which has no credential helper of its own,
-    waited on a password at the tty, and drive with it."""
+    """train.sh's `git fetch` in the queue's clone, which has no credential helper of its own, mustn't wait on a password at
+    the tty, and drive with it."""
     from research.drive import train_launch
 
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
@@ -587,93 +229,8 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
     assert "prompt=0 n=3 credential.helper= credential.helper=!h get" in tail and "stdin:" not in tail
 
 
-def test_a_disjoint_move_of_main_keeps_next_while_its_check_runs_and_a_shared_one_rebuilds_it(world, monkeypatch):
-    """12 Oct: the lander held a passed PR rather than land it beside drive's running check, since any move of `main` rebuilt
-    `next` and wasted the check."""
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    old = _tip(world)
-    other = world.change({"z.txt": "lander's\n"})
-    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
-    assert "stays on" in h.tick() and _tip(world) == old and len(h.launched) == 1
-    _check(world, monkeypatch, old)
-    assert h.tick().startswith("landed #1")
-    assert _git(world.origin, "rev-parse", "main^1", "main^2").split() == [other, old]
-
-
-def test_a_disjoint_landing_of_a_commit_a_member_is_stacked_on_keeps_next(world, monkeypatch):
-    """12 Oct 10:53Z: #1847, on `next` and stacked on #1793, made #1793's head a second common ancestor of `main` and `next` once
-    the e2e train's merge commit landed; `merge-base` picked it, the chain read empty, and a disjoint check was cancelled."""
-    h = Harness(world, monkeypatch)
-    h.d.max_running = 1                                             # drive's live setting: #2's train waits
-    main0 = _git(world.origin, "rev-parse", "main")
-    _git(world.dev, "push", "-q", "origin", f"{world.change({'z.txt': 'z\n'})}:refs/heads/main")
-    monkeypatch.setenv("GIT_COMMITTER_DATE", "2030-01-01T00:00:00Z")          # newer than `main`'s: `merge-base` prefers it
-    below = world.change({"x.txt": "landed by the lander\n"}, base=main0)     # on a `main` that has moved on since
-    monkeypatch.delenv("GIT_COMMITTER_DATE")
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    world.gh.put(2, world.change({"y.txt": "stacked\n"}, base=below))
-    h.tick()                                                        # #2 joins `next` above #1, whose check runs
-    old = _tip(world)
-    _git(world.dev, "fetch", "-q", "origin")
-    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
-    _git(world.dev, "merge", "-q", "--no-ff", "-m", "Merge the e2e train", below)
-    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
-    assert "stays on" in h.tick() and _tip(world) == old and h.cancelled == []
-
-
-def test_a_move_of_main_sharing_a_file_with_the_running_train_rebuilds_next(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    old = _tip(world)
-    other = world.change({"a.txt": "lander's\n"})
-    _git(world.dev, "push", "-q", "origin", f"{other}:refs/heads/main")
-    h.tick()
-    assert _tip(world) != old
-    assert h.cancelled == ["r20261012-000000-abcd"]               # the old tip's check, still waiting, is cancelled
-
-
-def test_first_goes_above_the_train_a_running_check_covers_and_cancels_nothing(world, monkeypatch):
-    """12 Oct 16:08Z: restarting drive with `--first 1869` restacked `next` under the running f6ee and cancelled it, 35 minutes
-    of check thrown away.  A running check's members keep their place; `--first` starts the train after them."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 2, 1
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    h.tick()
-    running = h.q.chain()[1].commit
-    assert [c for c, _, _ in h.launched] == [running]
-    world.gh.put(9, world.change({"fix.txt": "fix\n"}))
-    h.q.first = (9,)
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 2, 9, 3] and h.q.chain()[1].commit == running
-    assert h.cancelled == []
-
-
-def test_a_train_whose_check_ended_before_its_attempt_reached_the_store_keeps_its_place(world, monkeypatch):
-    """12 Oct 19:47Z: 5897 passed, and the tick that ran in the seconds before its attempt reached the store took its train for
-    ended, restacked `next` under `--first 1826` and dropped the pass."""
-    import time as _time
-
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 2, 1
-    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
-        world.gh.put(n, world.change({f: f"{n}\n"}))
-    h.tick()
-    running = h.q.chain()[1].commit
-    (rid,) = h.run_state
-    h.run_state[rid] = ("done", 0, _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(h.clock)))
-    world.gh.put(9, world.change({"fix.txt": "fix\n"}))
-    h.q.first = (9,)
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1, 2, 9, 3] and h.q.chain()[1].commit == running
-
-
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
-    """12 Oct: drive's ejection posts named only the lander's subteam, so an owner heard of a conflict through a relay.  The
+    """An ejection post names the PR's owner too, not only drive's own handle, so the owner doesn't hear of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or
     the agent whose id ends in the branch's suffix."""
     import dataclasses
@@ -700,9 +257,76 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
         assert q.handle(pr) == want
 
 
+def _lanes(world: World, *ns: int) -> None:
+    """Main's registry with the handle `lane-N` for each of ``ns``, so each PR's owner is tagged."""
+    import json
+
+    reg = {"handles": [{"handle": f"lane-{n}", "holder": f"the lane-{n} lane"} for n in ns]}
+    main = world.change({".agents/skills/using-slack/registry.json": json.dumps(reg)})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+
+
+def _conflict_with_dependants(world: World, h: Harness, deps: tuple[int, ...]) -> str:
+    """#1 on `next`, #2 conflicting with it, and ``deps`` each built on #2; #2's head."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, two := world.change({"a.txt": "two\n"}))
+    for n in deps:
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}, base=two))
+    return two
+
+
+def test_a_pr_that_didnt_merge_is_told_once_naming_every_pr_it_takes_out(world, monkeypatch):
+    """#2 at one head stopped merging and drive posted a refusal for each PR containing it, each owner apart: one root cause is one
+    post, naming why, every PR it takes out and each owner once; an identical sync posts nothing."""
+    _lanes(world, 1, 2, 3, 4, 5)
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append((text, to)) or True
+    two = _conflict_with_dependants(world, h, (3, 4, 5))
+    h.tick()
+    assert sent == [(f"@ci @lane-2 @lane-3 @lane-4 @lane-5 queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt "
+                     "(touched by #1). It takes out #3, #4, #5, which contain it", ("@ci", "@lane-2", "@lane-3", "@lane-4", "@lane-5"))]
+    assert h.q.load_state()["drive"]["out"] == {"2": [two, [3, 4, 5], "conflicts with `next` in a.txt (touched by #1)"]}
+    h.tick()
+    assert len(sent) == 1
+    assert h.q.status()[4].why == "contains #2, which is refused: conflicts with `next` in a.txt (touched by #1) (at the last sync)"
+
+
+def test_a_root_cause_is_told_again_once_when_the_prs_it_takes_out_change(world, monkeypatch):
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append(text) or True
+    two = _conflict_with_dependants(world, h, (3,))
+    h.tick()
+    assert sent == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out #3, "
+                    "which contains it"]
+    world.gh.put(6, world.change({"f6.txt": "6\n"}, base=two))
+    h.tick()
+    h.tick()
+    assert sent[1:] == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out "
+                        "#3, #6, which contain it"]
+
+
+def test_two_independent_root_causes_are_two_posts(world, monkeypatch):
+    """Each PR left out for a reason of its own is its own root, told with the PRs it takes out and only those."""
+    h = Harness(world, monkeypatch)
+    sent = []
+    h.d.post = lambda text, to: sent.append(text) or True
+    two = _conflict_with_dependants(world, h, (3,))
+    world.gh.put(7, world.change({"b.txt": "seven\n"}))
+    world.gh.put(8, eight := world.change({"b.txt": "eight\n"}))
+    world.gh.put(9, world.change({"f9.txt": "9\n"}, base=eight))
+    h.tick()
+    h.tick()
+    assert sent == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out #3, "
+                    "which contains it",
+                    f"@ci queue: #8 at {eight[:8]} is out of `next`: conflicts with `next` in b.txt (touched by #7). It takes out #9, "
+                    "which contains it"]
+
+
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
-    """13 Oct: `research msg send` refuses a `--to` naming the sender, and drive posted as ci to @ci, so from 05:07Z no notice
-    was posted. The sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    """`research msg send` refuses a `--to` naming the sender, so drive posting to its own handle would post no notice at all.
+    The sender is also selectable (`queue eject --by lean`), so its handle, not always drive's own, must be dropped."""
     from research import drive
 
     argv = []
@@ -715,6 +339,7 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert drive.merge_thread_post("x", ("@ci", "@lean"), sender="lean")
     assert argv[-1][argv[-1].index("--as") + 1] == "lean"
     assert argv[-1][argv[-1].index("--to"):argv[-1].index("--quiet")] == ["--to", "@ci"]
+    assert all("--report" in cmd for cmd in argv)                       # a report, held to no post length
 
     h = Harness(world, monkeypatch)
     logged = []
@@ -729,10 +354,10 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
 
 
-@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+@pytest.mark.parametrize("to, sender", [(("@lean",), "lean"), (("@lean", "@circuits"), "lean"), (("@lean", "@infra"), "infra")])
 def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
-    """13 Oct 17:41Z: train b22a's failure, for @ci alone, started `@ci queue:`, and `msg send` refused it as a post that wakes
-    only its author.  A stand-in for `msg send` had hidden that refusal, so here each post goes through `msg send` itself."""
+    """A notice for its sender alone, starting `@SENDER queue:`, is refused by `msg send` as a post that wakes only its author.  A
+    stand-in for `msg send` would hide that refusal, so here each post goes through `msg send` itself."""
     from research import drive, slack
 
     monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))
@@ -745,33 +370,6 @@ def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to,
     assert drive.merge_thread_post(f"{' '.join(to)} queue: b22a0c54d29e on `next` (#1 #2) failed its check", to, sender=sender)
 
 
-def test_a_pr_that_reruns_every_suite_pre_warms_too(world, monkeypatch):
-    """17 Oct 09:21Z (CI-50): #2241 changed tools/verity/check/suites.py and sat low on `next`; every train above it reran every
-    suite."""
-    from research.queue import reruns_suites
-
-    assert reruns_suites(["tools/verity/check/suites.py"]) and not reruns_suites(["tools/verity/check/tests/test_x.py"])
-    assert not reruns_suites(["tools/verity/check/README.md", "Security/X.lean"])
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"tools/verity/check/suites.py": "x\n"}))
-    world.gh.put(2, world.change({"a.txt": "2\n"}))
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [2] and any("pre-warming #1" in x for x in world.logs)
-
-
-def test_a_twin_stopped_by_sigterm_is_no_verdict_and_its_sibling_still_decides(world, monkeypatch):
-    """17 Oct 11:47Z: twin 30ce of train bd74745daa5f, SIGTERMed while it waited for a slot, was read as the train failing,
-    while its sibling 4af6 ran on cpu-2."""
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    (rid,) = h.run_state
-    h.run_state[rid] = ("done", 143, None)
-    assert h.d.verdict(_tip(world), _git(world.origin, "rev-parse", "main"), h.d.q.load_state()["drive"]).state == "none"
-    h.tick()
-    assert len(h.launched) == 2 and not h.posts                          # launched again, nothing told
-
-
 def _steps_run(tmp_path, name: str, steps: dict[str, str]):
     import json
 
@@ -781,49 +379,9 @@ def _steps_run(tmp_path, name: str, steps: dict[str, str]):
     return d
 
 
-def test_defer_lands_a_train_whose_other_steps_passed_and_reverts_it_when_a_deferred_step_fails(world, monkeypatch, tmp_path):
-    """17 Oct (CI-30's interim, Daniel through top): a train lands on the Lean check and the fast steps, with circuit-check
-    running on after landing; a deferred step that fails reverts the landing."""
-    from research.drive import CHECK_STEPS
-
-    h = Harness(world, monkeypatch)
-    h.d.defer = frozenset({"circuit-check"})
-    base = _git(world.origin, "rev-parse", "main")
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.tick()
-    tip = _tip(world)
-    (rid,) = h.run_state
-    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "circuit-check"})]
-    h.tick()
-    assert _git(world.origin, "rev-parse", "main") == tip and h.cancelled == []      # landed; its check runs on
-    h.run_state[rid] = ("done", 1, None)
-    h.evidence = [_steps_run(tmp_path, rid + "-end", {"circuit-check": "failed"})]
-    h.tick()
-    assert _git(world.origin, "diff", "--stat", base, "main") == "" and any("reverted on `main`" in x for x in h.posts), h.posts
-
-
-def test_the_lean_check_is_never_deferred(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    from research.drive import Driver
-
-    d = Driver(h.q, on="m1", defer=frozenset({"lean-audit", "circuit-check"}))
-    assert d.defer == {"circuit-check", "flock-rust-tests"}                 # the step after circuit-check in its group
-
-
-def test_with_circuit_check_deferred_no_pr_pre_warms_and_running_pre_warms_are_cancelled(world, monkeypatch):
-    """17 Oct 13:40Z: under --defer, eight pre-warms took every slot drive counts, and no train ran."""
-    h = Harness(world, monkeypatch)
-    world.gh.put(1, world.change({"verity/ml/circuits/x.py": "1\n"}))
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [] and len(h.launched) == 1          # pre-warming
-    h.d.defer = frozenset({"circuit-check", "flock-rust-tests"})
-    h.tick()
-    assert [m.pr for m in h.q.chain()] == [1] and h.cancelled                   # admitted; the pre-warm is cancelled
-
-
 def test_a_collection_error_names_its_test_module(tmp_path):
-    """17 Oct 14:19Z: filler's suite failed collecting #2299's tests/test_capacity_of.py (a vector only #2286 adds); the
-    failure named no file, and the fallback on the suite's inputs ejected 8 PRs instead of #2299."""
+    """A suite that fails collecting one PR's test module (one reading a vector only another PR adds) names that module, so
+    the fallback on the suite's inputs doesn't eject every PR touching them instead of the one."""
     import json
 
     from research.drive import implicated
@@ -837,9 +395,24 @@ def test_a_collection_error_names_its_test_module(tmp_path):
     assert "benchmarks/pouw/filler/tests/test_capacity_of.py" in implicated(d)
 
 
+def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
+    """An orphan file or an out-of-layer import names a file drive matches, so it ejects the one PR rather than resending the
+    train."""
+    from research.drive import lean_errors
+
+    flock = "verity/core/service/flock"
+    log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
+           "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
+           " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/core/protocols/pouw/lean/check: FAIL  944 declarations in 13 modules\n"
+           "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
+    assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
+                                "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean"}
+
+
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
-    """17 Oct 15:10Z: three trains' lean-audit failed with the build's error lines scrolled out of the step's log; drive found
-    no Lean file, fell back on every PR touching Lean, and ejected nine."""
+    """With the build's error lines scrolled out of the step's log, drive still finds the Lean files from Lake's list of
+    failed modules, rather than falling back on every PR touching Lean."""
     from research.drive import lean_errors
 
     log = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
@@ -849,48 +422,9 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
 
 
-def test_a_new_head_keeps_the_running_train_at_the_head_it_checks_and_rejoins_above_it(world, monkeypatch):
-    """17 Oct 07:56Z: two re-marked heads (#2222, #2235) took their PRs off `next` and cancelled two running trains; top ruled a
-    new head no longer cancels a running train: it runs on at the head the owner marked, and the new head rejoins above."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 2, 1
-    old = world.change({"a.txt": "1\n"})
-    world.gh.put(1, old)
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()
-    running = h.q.chain()[1].commit
-    world.gh.put(1, world.change({"a.txt": "1 fixed\n"}, base=old))                # #1's owner pushes a new head
-    h.tick()
-    chain = h.q.chain()
-    assert [(m.pr, m.head) for m in chain[:1]] == [(1, old)] and chain[1].commit == running and h.cancelled == []
-
-
-def test_a_new_head_after_its_own_train_failed_rebuilds_without_waiting(world, monkeypatch, tmp_path):
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 1, 2
-    old = world.change({"a.txt": "1\n"})
-    world.gh.put(1, old)
-    world.gh.put(2, world.change({"b.txt": "2\n"}))
-    h.tick()                                                              # #1's own train, and the one above it with #2
-    own = h.q.chain()[0].commit
-    _check(world, monkeypatch, own, ("false",))
-    h.evidence = [_killed_run(tmp_path, "one")]
-    h.tick()                                                              # resent
-    rid = h.d.q.load_state()["drive"]["launched"][own]["ids"][0]
-    h.run_state[rid] = ("done", 1, None)
-    h.clock += PUBLISH_GRACE_S + 1
-    h.evidence = [_killed_run(tmp_path, "two")]
-    h.tick()                                                              # failed again: told, nobody ejected
-    assert len(h.posts) == 1 and "failed again on its resend" in h.posts[0], h.posts
-    fixed = world.change({"a.txt": "1 fixed\n"}, base=old)
-    world.gh.put(1, fixed)                                                # the train above still runs, but #1's own failed
-    h.tick()
-    assert [m.head for m in h.q.chain() if m.pr == 1] == [fixed]
-
-
-def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
-    """17 Oct, r20261017-104751-c19c on cpu-2: the Security/Proofs replay was OOM-killed (exit 137), lean-audit failed with rc 1,
-    and the fallback on Lean sources ejected #2224 and #2231, whose heads had passed."""
+def test_a_lean_audit_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+    """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
+    on Lean sources mustn't revert landings that broke nothing."""
     from research.drive import killed
 
     d = tmp_path / "run"
@@ -902,8 +436,30 @@ def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     (d / "lean-audit.log").write_text("AUDIT /x/lean-audit-scratch-1/Security/Proofs: FAIL\n    error: build failed\n")
     assert not killed(d)
 
+
+def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fault(tmp_path):
+    """Targets OOM-killed (as PoUS's SHA-512 targets can be, at 150 GiB or so) fail circuit-check with rc 1; that is the
+    machine's fault, and drive mustn't blame circuit-check's inputs and revert every landing since the last verified `main`."""
+    from research.drive import killed
+
+    d = tmp_path / "run"
+    d.mkdir()
+    step = '{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}\n'
+    (d / "steps.jsonl").write_text(step)
+    died = ("FAIL circuit-check/killed PousSha512Head_v1: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n"
+            "FAIL circuit-check/killed PousSha512Mid_v1{M=1}: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n")
+    tail = "circuit-check: 5211 target(s), 2 failure(s), 0 unchecked\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
+    (d / "circuit-check.log").write_text(died + tail)
+    assert killed(d)
+    (d / "circuit-check.log").write_text(died + "FAIL partition/unchecked PousSha512Ctr_v1: an output bit is free\n" + tail)
+    assert not killed(d), "a real failure beside the killed ones is the code's"
+    (d / "circuit-check.log").write_text(died + tail)
+    (d / "steps.jsonl").write_text(step + '{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}\n')
+    assert not killed(d), "another failed step is judged on its own"
+
+
 def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
-    """CI-48: nothing deleted a landed PR's branch or an idle one, and the repository reached 3,543 branches."""
+    """Something deletes landed PRs' branches and idle ones, or the repository's branches pile up by the thousand."""
     from research.drive import BRANCH_SWEEP_S
 
     h = Harness(world, monkeypatch)
@@ -917,108 +473,168 @@ def test_drive_sweeps_the_repositorys_branches_once_a_day(world, monkeypatch):
     assert len(calls) == 2
 
 
-def test_a_failure_ejects_no_pr_that_a_running_train_below_it_still_checks(world, monkeypatch, tmp_path):
-    """18 Oct 01:55Z: 2671bd's test_dc failure fell back to the suite's inputs and ejected 13 PRs, #2348 and others among them
-    from the 15-PR train below it, which was 11 steps in and lands only if none of its PRs leaves: its check was cancelled.  A
-    PR the lower train covers is left to that train's own check."""
+def test_drive_deletes_the_head_branch_of_a_pr_it_closed_as_landed_unless_something_still_needs_it(world, monkeypatch):
+    """A PR drive closes once `main` reaches it (`_close_carried`) leaves no branch behind, but drive keeps one an open PR
+    uses as its head or base, a fork's, one of `KEEP_BRANCHES`, and one pushed to since (the lease)."""
+    import dataclasses
+
     h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 1, 2
-    world.gh.put(1, world.change({"pkg/data.json": "1\n"}))
-    world.gh.put(2, world.change({"pkg/other.py": "2\n"}))
-    h.tick()
-    low, tip = h.q.chain()[0].commit, _tip(world)
-    assert [c for c, *_ in h.launched] == [low, tip]
-    _check(world, monkeypatch, tip, ("false",))
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #2" in h.posts[0] and "#1" not in h.posts[0].split("Ejected")[1], h.posts
-    h.tick()
-    (kept,) = h.d.q.load_state()["drive"]["launched"][low]["ids"]
-    assert [m.pr for m in h.q.chain()] == [1] and h.q.chain()[0].commit == low and kept not in h.cancelled
+    h.q._clone()
+    heads = {}
+    for n, branch, base, fork in ((1, "lane/one", "main", False), (2, "lane/two", "main", False), (3, "lane/three", "lane/two", False),
+                                  (4, "lane/four", "main", True), (5, "lane/five", "main", False), (6, "next", "main", False)):
+        heads[n] = world.change({f"{n}.txt": f"{n}\n"})
+        world.gh.put(n, heads[n])
+        world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], branch=branch, base=base, fork=fork)
+        _git(world.origin, "update-ref", f"refs/heads/{branch}", heads[n])
+    _git(world.origin, "update-ref", "refs/heads/lane/five", world.change({"5.txt": "pushed since\n"}))
+    for n in (1, 2, 4, 5, 6):
+        h.d._delete_head(n, heads[n])
+    left = {r.split("refs/heads/")[1] for r in _git(world.origin, "for-each-ref", "--format=%(refname)", "refs/heads/").split()}
+    assert {"lane/two", "lane/three", "lane/four", "lane/five", "next"} <= left and "lane/one" not in left
+    logs = [x for x in world.logs if "#1's head" in x or "kept" in x]
+    assert f"research queue drive: deleted origin's lane/one, #1's head at {heads[1][:12]}" in logs
+    assert "research queue drive: kept lane/two, #2's head: another open PR's head or base" in logs
+    assert "research queue drive: kept lane/four, #4's head: a fork's" in logs
+    assert "research queue drive: kept next, #6's head: kept by drive" in logs
+    assert any(x.startswith("research queue drive: kept lane/five, #5's head: ") and "stale info" in x for x in logs), logs
 
 
-def test_pre_warms_run_one_at_a_time_and_count_against_the_running_checks(world, monkeypatch):
-    """18 Oct 00:43Z: with circuit-check back in the gate, drive launched four pre-warms in one tick (16 runs) beside four train
-    checks, against six check slots, and no new train could start."""
+def test_a_branch_sweep_at_its_limit_sweeps_again_the_next_tick(world, monkeypatch):
+    """A sweep pushes at most `SWEEP_LIMIT` deletions; the rest go on the ticks after, not a day later."""
+    from research.merge import SWEEP_LIMIT
+
     h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 6, 4
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(a) or ((SWEEP_LIMIT, 0) if len(calls) == 1 else (3, 0)))
     h.tick()
-    assert len(h.launched) == 1                                           # #1's train
-    for n in (2, 3, 4, 5):
-        world.gh.put(n, world.change({f"verity/ml/circuits/x{n}.py": f"{n}\n"}))
+    assert any(f"at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" in x for x in world.logs)
     h.tick()
-    assert len(h.launched) == 2 and sum("pre-warming #" in x for x in world.logs) == 1, world.logs
+    h.tick()
+    assert len(calls) == 2
 
 
-def test_a_lean_audit_record_failure_ejects_only_the_prs_that_touch_the_failing_package(world, monkeypatch, tmp_path):
-    """18 Oct 03:30Z: two trains failed lean-audit on verity/core/primitives/requirement's stale record (#2386's); no error line
-    names a file, and the fallback on every Lean source ejected #2341, #2370 and #2371 too, whose changes are in other packages."""
+def _live_run(tmp_path, rid: str, commit: str, records: dict[str, str | None]):
+    """A check still running, as `merge.fetch_run` reads its run dir from its node: (that dir, a fetch of it, the fetches made).
+    Its Lean report names a regenerated lock for each package of ``records``, holding its text (None: the report names it, and
+    the file isn't there)."""
+    import json
+
+    d = tmp_path / "live" / rid
+    (d / "lean-audit").mkdir(parents=True)
+    regen = {}
+    for pkg, text in records.items():
+        rel = f"lean-audit/audit-{pkg.replace('/', '-')}/lean-audit.json"
+        regen[pkg] = f"/workspace/research/runs/{rid}/{rel}"
+        if text is not None:
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text(text)
+    (d / "lean-audit" / "audit.json").write_text(json.dumps({"passed": True, "regenerated": regen}))
+    fetched: list[tuple[str, list[str]]] = []
+
+    def fetch(r, names):
+        fetched.append((r, names))
+        return (d, {"dir": str(d), "tree_sha": commit}) if r == rid else None
+    return d, fetch, fetched
+
+
+def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_cache(tmp_path):
+    """Drive's after-landing run reuses no suite or Lean pass (`after_landing_no_cache`) but circuit-check's per-target ones: a
+    cold `circuit-check --all` (~4 h) would outlast every after-landing run, so `main` would never be verified."""
+    from research.drive import train_launch
+
+    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    extra = {"agreement": False, "no_cache": True, "circuit_cache": True, "no_regenerate": True}    # `start_postland`'s
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
+    assert ids == ["r20261027-120000-aaaa"]
+    assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="ratchet-gate", base="b" * 40, ratchet_base="a" * 40)
+    assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
+
+
+def test_the_lock_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
+    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`) when the queue's clone's train.sh
+    takes the flag (`takes_bookkeeping`); a train.sh that predates it would refuse every lock run, so it isn't given it."""
+    from research.drive import takes_bookkeeping, train_launch
+
+    sh = tmp_path / "tools" / "verity" / "check" / "train.sh"
+    sh.parent.mkdir(parents=True)
+    assert not takes_bookkeeping(tmp_path)
+    sh.write_text('# --bookkeeping-warn\necho "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    assert takes_bookkeeping(tmp_path)
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="lean-audit", bookkeeping_warn=True)
+    assert ids == ["r20261027-120000-aaaa"] and f"argv: {'c' * 40} m1 --deferred lean-audit --bookkeeping-warn" in tail, tail
+    sh.write_text('echo "argv: $*"\n')
+    assert not takes_bookkeeping(tmp_path)
+
+
+def test_the_after_landing_run_and_the_lock_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
+    """Each part of the after-landing run (a shard, circuit-check's records step) and the lock run ask for their check slot at
+    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever drive's own environment
+    says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a
+    `train.sh` launched by hand."""
+    import contextlib
+    import os
+    import tempfile
+    import types
+
+    from research.drive import POSTLAND_SLOT_RANK, launched
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setenv("CHECK_SLOT_RANK", "7")
+    repo = tmp_path / "clone"
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check" / "train.sh").write_text(
+        'echo "rank=[$CHECK_SLOT_RANK]"\necho "RUN r20261103-140000-aaaa"\n')
+    d = Driver(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
+
+    def tail(job: dict) -> str:
+        with contextlib.suppress(ChildProcessError):                     # its end, not a clock
+            os.waitpid(job["pid"], 0)
+        return launched(job)[1]
+
+    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "circuit-check", cc_records=True))
+    assert ranked in tail(d.launch_locks(repo, "c" * 40, "m1"))
+
+
+def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
+    """A queue clone seeded from a copy without the drivers (or with another value) gets every `RECORD_DRIVER` key on a tick,
+    logged once, and a later tick only reads them; then a git without `git_env`'s settings merges two PRs' lean-audit.json
+    records in that clone through merge.py rather than line by line."""
+    import json
+    import os
+    from pathlib import Path
+
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    wd = world.tmp / "q" / "verity"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
+    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
     h = Harness(world, monkeypatch)
-    h.d.train_size = 2
-    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
-    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
-    h.tick()
-    _check(world, monkeypatch, _tip(world), ("false",))
-    h.evidence = [_lean_run(tmp_path, "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: the .olean files of the "
-                                      "modules the package imports from toolchain differ from the record\n"
-                                      "AUDIT /w/lean-audit-scratch-1-x/pkgB: PASS\n")]
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0] and "Lean package pkgA" in h.posts[0], h.posts
+    assert h.q.workdir == wd
 
+    def said() -> list[str]:
+        return [x for x in world.logs if "set the record merge drivers" in x]
 
-def test_a_train_that_passed_by_regenerating_locks_lands_with_them_committed_on_top(world, monkeypatch, tmp_path):
-    """CI-64 (Daniel through top, 18 Oct): lean-audit failed 9 trains in 36 h on lock records each PR had regenerated on its
-    own base.  A train's Lean check now passes by regenerating them, and drive commits those locks onto the train it lands,
-    naming them in a `Regenerated:` trailer that `research merge`'s gate reads (`regenerated_parent`)."""
-    h = Harness(world, monkeypatch)
-    h.d.regenerate_locks = True
-    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
     h.tick()
-    tip = _tip(world)
-    _check(world, monkeypatch, tip)
-    rec = tmp_path / "regen.json"
-    rec.write_text('{"records": 2}\n')
-    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
-    assert h.tick().startswith("landed #1")
-    main = _git(world.origin, "rev-parse", "main")
-    assert _git(world.origin, "rev-parse", f"{main}^") == tip                       # the checked train, then its locks
-    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
-    assert "Regenerated: pkg/lean-audit.json" in _git(world.origin, "log", "-1", "--format=%B", main)
-    assert any("with the locks it regenerated for pkg" in x for x in world.logs)
-
-
-def test_a_train_that_regenerated_locks_waits_for_a_new_check_when_main_moved(world, monkeypatch, tmp_path):
-    h = Harness(world, monkeypatch)
-    h.d.regenerate_locks = True
-    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n"}))
+    (line,) = said()
+    assert line.endswith(", ".join(RECORD_DRIVER)), line
+    assert {k: _git(wd, "config", "--local", "--get", k) for k in RECORD_DRIVER} == RECORD_DRIVER
     h.tick()
-    _check(world, monkeypatch, _tip(world))
-    _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'outside the queue\n'})}:refs/heads/main")
-    rec = tmp_path / "regen.json"
-    rec.write_text('{"records": 2}\n')
-    monkeypatch.setattr(merge, "regenerated_records", lambda store, rid, dest=None: {"pkg": ("sha", rec)})
-    assert not h.tick().startswith("landed")
-    assert any("by regenerating pkg's locks" in x for x in world.logs)
+    assert said() == [line]
 
-
-def test_of_several_failed_trains_drive_acts_on_the_lowest_only(world, monkeypatch, tmp_path):
-    """18 Oct 10:30Z: c93469 (#2478 #2479 #2480 #2484) failed lean-audit on #2484's Security change, and 5c00b3 above it failed
-    too. In one tick drive ejected #2484 for the lower and, for the upper, whose lower train was by then failed rather than
-    running, #2478 and #2486 as well. A train above a failed one holds its failure; its own check runs again once `next` is
-    rebuilt."""
-    h = Harness(world, monkeypatch)
-    h.d.train_size, h.d.max_running = 1, 2
-    world.gh.put(1, world.change({"pkgA/A.lean": "theorem a : True := trivial\n"}))
-    world.gh.put(2, world.change({"pkgB/B.lean": "theorem b : True := trivial\n"}))
-    h.tick()
-    low, tip = h.q.chain()[0].commit, _tip(world)
-    _check(world, monkeypatch, low, ("false",))
-    _check(world, monkeypatch, tip, ("false",))
-    lower = [_lean_run(tmp_path / "low", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\n  dependencies: differ\n")]
-    upper = [_lean_run(tmp_path / "up", "AUDIT /w/lean-audit-scratch-1-x/pkgA: FAIL\nAUDIT /w/lean-audit-scratch-1-x/pkgB: FAIL\n")]
-    ids = {c: v["ids"] for c, v in h.d.q.load_state()["drive"]["launched"].items()}
-    h.d.evidence = lambda repo, rids: lower if rids == ids[low] else upper
-    h.tick()
-    assert len(h.posts) == 1 and "Ejected #1:" in h.posts[0], h.posts
-    assert [m.pr for m in h.q.chain()] == [2]
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    a, b = (world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}, base=base)
+            for g in "AB")
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    _git(wd, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    tree = _git(wd, f"--attr-source={base}", "merge-tree", "--write-tree", "--no-messages", a, b)
+    assert set(json.loads(_git(wd, "show", f"{tree}:pkg/lean-audit.json"))["guarantees"]) == {"T", "A", "B"}

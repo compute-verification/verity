@@ -4,8 +4,9 @@ wrap one engine step (forward -> compute_logits -> greedy argmax) as an ordinary
 Everything here is model-agnostic structural scaffolding (counted in the REPORT): no layer order, no op sequence, no
 family flags. The architecture comes from whatever `vllm_config.model_config.architectures` resolves to.
 
-Environment knobs of the pinned vLLM that the construction sets (declared, not hidden; `engine.env.EXPORT`):
-  VLLM_BATCH_INVARIANT=1     the admitted profile (selects the BI code paths: fused_add_rms_norm / Triton rms_norm / BI GEMM)
+Environment knobs of the pinned vLLM that the construction sets (declared, not hidden; `engine.env.EXPORT`; batch invariance
+is not among them: `pipeline/build.derive_step` applies the target's `VLLM_BATCH_INVARIANT`, the row's execution label's, before
+this module is imported):
   VLLM_USE_LAYERNAME=0       layer names as plain `str` op arguments (torch>=2.11 default wraps them in an opaque `LayerName`
                              object, which export would lift as a custom object); the vLLM source documents this switch.
   VLLM_DISABLE_SHARED_EXPERTS_STREAM=1  a shared expert runs on the main stream: `SharedExperts.__init__` would otherwise make a CUDA
@@ -15,10 +16,9 @@ Environment knobs of the pinned vLLM that the construction sets (declared, not h
 
 from __future__ import annotations
 
-import os
 import socket
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any
 
 from verity_vllm.engine import env as engine_env
@@ -29,6 +29,8 @@ import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
 PIN = {"model": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2", "dtype": "bfloat16"}
+#: the engine args a compiled `TargetProfile.engine_args()` adds for the execution it serves; `make_vllm_config` sets its own
+COMPILED_KEYS = ("enforce_eager", "compilation_config")
 
 
 def _free_port() -> int:
@@ -44,8 +46,11 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
     """vLLM's own `EngineArgs.create_engine_config()` for the eager, bf16 profile at `tensor_parallel_size` (no engine, no GPU allocation).
     `attention_backend` is the TargetProfile's knob (`EngineArgs(attention_backend=AttentionBackendEnum[name])`; None = vLLM's
     selector) — the ONLY attention-backend input this vLLM pin reads (env `VLLM_ATTENTION_BACKEND` is not defined in its `envs`).
-    [R13 tp] `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group."""
+    `tensor_parallel_size` is the row's TP structural input: the parallel layers shard from `parallel_config` + the TP group.
+    The config is eager whatever the target executes: a compiled target's `COMPILED_KEYS` are its served engine's, which the Build
+    declares through `TargetProfile.modelled_engine()`, so they are left out here; its other engine args pass through."""
     from vllm.engine.arg_utils import EngineArgs
+    kw = {k: v for k, v in kw.items() if k not in COMPILED_KEYS}
     if attention_backend is not None:
         from vllm.v1.attention.backends.registry import AttentionBackendEnum
         kw["attention_backend"] = AttentionBackendEnum[attention_backend]
@@ -57,10 +62,11 @@ def make_vllm_config(model: str = PIN["model"], revision: str = PIN["revision"],
 
 
 class WithPeers(nn.Module):
-    """[R13 tp] A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
+    """A rank's wrapper with its PEER INPUTS: `forward(prompt, *peers)` hands the peers (the other rank's collective partials,
     in collective call order) to the rank's `CollectiveBus` and runs the inner wrapper; the k-th collective of this forward consumes
-    peer k (see `tp_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
-    (`SeededWithPeers`, `SplitsWithPeers`; `with_peers` picks the form): the Program's parameters are the TP1 Program's, then the peers."""
+    peer k (see `export_ops.CollectiveBus`).  A stochastic inner wrapper's own inputs come before the peers, in its order
+    (`SeededWithPeers`, `SplitsWithPeers`); `with_peers` picks the form: the Program's parameters are the TP1 Program's, then the
+    peers."""
 
     def __init__(self, inner: nn.Module, bus) -> None:
         super().__init__()
@@ -76,7 +82,7 @@ class WithPeers(nn.Module):
     def _run(self, own: tuple, peers: tuple):
         self.bus.reset("trace", list(peers))
         out = self.inner(*own)
-        if self.bus.cursor * (self.bus.world - 1) != len(peers):    # [lane vllm-tp-n] world-1 peer inputs per collective
+        if self.bus.cursor * (self.bus.world - 1) != len(peers):    # world-1 peer inputs per collective
             raise RuntimeError(f"rank {self.bus.rank}: {self.bus.cursor} collectives consumed x {self.bus.world - 1} peers, {len(peers)} peer inputs given")
         return out
 
@@ -99,13 +105,16 @@ def with_peers(inner: nn.Module, inputs: tuple, bus) -> tuple[nn.Module, tuple]:
     """A tensor-parallel rank's traced wrapper over `inner` (a `make_wrapper` module) and its example inputs: `inner`'s own inputs (the
     prompt, and a stochastic wrapper's `seed` and `splits`), then the bus's example peers in collective order."""
     forms = {1: WithPeers, 2: SeededWithPeers, 3: SplitsWithPeers}
+    if getattr(inner, "C", 0):
+        raise ValueError(f"with_peers: a rank Program with a cached prefix (C={inner.C}) has no peer form yet (its prefix is the rank's own "
+                         f"KV heads, an input before the peers)")
     if len(inputs) not in forms:
         raise ValueError(f"with_peers: a wrapper takes 1 to 3 inputs of its own (prompt, seed, splits), {type(inner).__name__} takes {len(inputs)}")
     return forms[len(inputs)](inner, bus), tuple(inputs) + tuple(bus.example_peers())
 
 
 def probe_collectives(inner: nn.Module, inputs: tuple, vllm_config, num_tokens: int, bus, profile=None) -> list[dict]:
-    """[R13 tp] One probe export of the rank's wrapper with the bus in `probe` mode (graph discarded): records every collective's kind,
+    """One probe export of the rank's wrapper with the bus in `probe` mode (graph discarded): records every collective's kind,
     shape, dtype and call order — the peer-input signature of the Program.  Same mechanism and shims as the real export (the fused CUDA
     ops have fake impls under export's FakeTensorMode, not Meta kernels for a plain meta forward)."""
     from .export_compat import export_compat
@@ -134,7 +143,7 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
             try:
                 init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"tcp://127.0.0.1:{_free_port()}", local_rank=0, backend=backend)
                 break
-            except Exception as e:  # noqa: BLE001 -- torch's DistNetworkError; only the port race is retried
+            except Exception as e:  # torch's DistNetworkError; only the port race is retried
                 if "EADDRINUSE" not in str(e) or attempt == _PORT_TRIES - 1:
                     raise
         ensure_model_parallel_initialized(1, 1)
@@ -157,10 +166,13 @@ class _CudaFactoriesOnMeta(torch.overrides.TorchFunctionMode):
 
 def instantiate_meta(vllm_config) -> nn.Module:
     """The registered model class for `vllm_config.model_config` (vLLM's registry), constructed on `meta` (shapes only); a buffer
-    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`)."""
+    vLLM puts on the CUDA device explicitly is on `meta` too (`_CudaFactoriesOnMeta`), and a CUDA stream or event it makes is an
+    inert stand-in (`export_compat.cuda_streams_inert`)."""
     from vllm.config import set_current_vllm_config
     from vllm.model_executor.model_loader.utils import get_model_architecture
     from vllm.utils.torch_utils import set_default_torch_dtype
+
+    from .export_compat import cuda_streams_inert
     model_cls, arch = get_model_architecture(vllm_config.model_config)
     # worker parity (vllm/v1/worker/worker_base.py: "IR op priority and torch-wrap state are constant for the worker's lifetime"):
     # without these, vLLM's `ir.ops.*` (e.g. GemmaRMSNorm's unfused norm) stay opaque `vllm_ir.*` torch ops instead of running
@@ -172,97 +184,11 @@ def instantiate_meta(vllm_config) -> nn.Module:
     except Exception:  # noqa: BLE001
         pass
     with set_current_vllm_config(vllm_config), set_default_torch_dtype(vllm_config.model_config.dtype), torch.device("meta"), \
-            _CudaFactoriesOnMeta():
+            _CudaFactoriesOnMeta(), cuda_streams_inert():
         model = model_cls(vllm_config=vllm_config)
     model.eval()
     model._verity_arch = arch  # annotation only
     return model
-
-
-def retie_lm_head_as_the_loader_does(model: nn.Module, vllm_config) -> dict:
-    """[R15 fp8] Loader parity for a checkpoint whose config says `tie_word_embeddings` but which SHIPS an `lm_head.weight` of its own
-    (quantisation tooling keeps a redundant copy: Qwen3-4B-Instruct-2507-FP8).  vLLM's `ModelConfig.maybe_untie_word_embeddings`
-    then builds the head untied (`hf_config.tie_word_embeddings = False`, `word_embeddings_untied_by_checkpoint = True`), loads both
-    tensors, and `maybe_retie_word_embeddings` (model_loader/utils.py, `process_weights_after_loading`) re-ties them -- ONE shared
-    Parameter -- iff `torch.equal(lm_head.weight, embed_tokens.weight)`.  A meta instantiation never loads, so without this the
-    derived Program carries two Inputs (embed, lm_head) where the served model has one root: a structural mismatch at Match.
-
-    The decision is reproduced exactly as the loader makes it, from the pinned checkpoint's bytes (a checkpoint fact, read like its
-    config.json -- never assumed): the two tensors are read from the snapshot's safetensors on the CPU and compared with `torch.equal`;
-    equal -> vLLM's own `_UntiedLMHead.tie` on the meta model (the head's `weight` becomes the embedding's Parameter, which
-    `derive._weights_of` collapses to one leaf with an alias).  Not equal -> left untied, as the loader leaves it (and the checkpoint
-    is then genuinely untied: two fields).  Returns the fact as consulted for the report; `{"applies": False}` when vLLM did not untie."""
-    fact: dict[str, Any] = {"applies": False}
-    mc = vllm_config.model_config
-    if not bool(getattr(mc, "word_embeddings_untied_by_checkpoint", False)):
-        return fact
-    from vllm.model_executor.model_loader.weight_tying import _get_untied_lm_head
-    untied = _get_untied_lm_head(model)
-    fact.update(applies=True, config_tie_word_embeddings=True, untied_for_loading=True, head=None if untied is None else untied.name)
-    if untied is None:
-        fact["note"] = "no single unquantised (lm_head, embed_tokens) pair of one shape: the loader leaves the model untied"
-        return fact
-    import glob
-    import json as _json
-    import struct
-    from safetensors import safe_open
-    root = mc.model
-    if not os.path.isdir(root):
-        raise RuntimeError(f"retie_lm_head: model path {root!r} is not a local snapshot directory (HF_HUB_OFFLINE resolution failed)")
-    names = {"embed": None, "lm_head": None}
-    files = sorted(glob.glob(os.path.join(root, "*.safetensors")))
-    for f in files:
-        with open(f, "rb") as fh:
-            n = struct.unpack("<Q", fh.read(8))[0]
-            keys = set(_json.loads(fh.read(n)))
-        for tag, nm in (("embed", "model.embed_tokens.weight"), ("lm_head", "lm_head.weight")):
-            if nm in keys:
-                names[tag] = (f, nm)
-    if names["embed"] is None or names["lm_head"] is None:
-        raise RuntimeError(f"retie_lm_head: checkpoint {root!r} lacks one of model.embed_tokens.weight / lm_head.weight in {files}")
-    tensors = {}
-    for tag, (f, nm) in names.items():
-        with safe_open(f, framework="pt", device="cpu") as sf:
-            tensors[tag] = sf.get_tensor(nm)
-    equal = tensors["embed"].shape == tensors["lm_head"].shape and tensors["embed"].dtype == tensors["lm_head"].dtype \
-        and bool(torch.equal(tensors["embed"], tensors["lm_head"]))
-    fact.update(checkpoint_files={k: os.path.basename(v[0]) for k, v in names.items()},
-                shapes={k: list(t.shape) for k, t in tensors.items()}, dtypes={k: str(t.dtype) for k, t in tensors.items()},
-                lm_head_equals_embed=equal, retied=equal,
-                rule="vllm.model_executor.model_loader.weight_tying.maybe_retie_word_embeddings: torch.equal -> tie_weights")
-    del tensors
-    if equal:
-        untied.tie(model)
-        fact["shared_parameter"] = bool(untied.lm_head.weight is untied.embed_tokens.weight)
-    return fact
-
-
-def mla_absorbed_weights_as_the_loader_does(model: nn.Module, vllm_config) -> dict:
-    """Loader parity for MLA (DeepSeek-V3.2, GLM-5.3): `MLAAttention.process_weights_after_loading` (mla_attention.py:1150-1252) splits
-    the dequantised `kv_b_proj` weight into the absorbed projections and registers them on the layer, `W_UK_T` [N, P, L] and `W_UV`
-    [N, L, V] (`replace_parameter`), which the forward reads (`bmm(q_nope^T, W_UK_T)`, `bmm(attn^T, W_UV)`).  A meta instantiation
-    never loads, so each MLA layer without them gets them here, empty, in the served shapes and the activation dtype: the Program then
-    reads them as weights under the served names, the roots the collector commits.  A layer on the AMX or aiter bmm paths (other
-    platforms' packed `W_K` / `W_V`) is listed, not given them."""
-    from vllm.model_executor.layers.attention import MLAAttention
-    fact: dict[str, Any] = {"layers": [], "skipped": []}
-    dt = vllm_config.model_config.dtype
-    for name, m in model.named_modules():
-        if not isinstance(m, MLAAttention) or (hasattr(m, "W_UV") and hasattr(m, "W_UK_T")):
-            continue
-        if any(getattr(m, f, False) for f in ("is_amx_bmm_enabled", "is_aiter_triton_fp4_bmm_enabled", "is_aiter_triton_fp8_bmm_enabled")):
-            fact["skipped"].append(name)
-            continue
-        w = m.kv_b_proj.weight
-        N, P, L, V = m.num_heads, m.qk_nope_head_dim, m.kv_lora_rank, m.v_head_dim
-        m.register_parameter("W_UK_T", nn.Parameter(torch.empty((N, P, L), dtype=dt, device=w.device), requires_grad=False))
-        m.register_parameter("W_UV", nn.Parameter(torch.empty((N, L, V), dtype=dt, device=w.device), requires_grad=False))
-        fact["layers"].append(name)
-    if fact["layers"]:
-        fact.update(dtype=str(dt).removeprefix("torch."), W_UK_T=[N, P, L], W_UV=[N, L, V],
-                    rule=f"{MLAAttention.__qualname__}.process_weights_after_loading: replace_parameter(W_UV = "
-                         "W_UV.transpose(0, 1), W_UK_T = W_UK.permute(1, 2, 0)) from kv_b_proj")
-    return fact
 
 
 @contextmanager
@@ -305,7 +231,7 @@ class GreedyRequest(nn.Module):
     each consuming the previous step's greedy sample. Returns the T+1 sampled ids (int32). The KV cache is implicit vLLM
     state: the frontend's per-layer history (UnifiedAttentionWithOutput[vllm]) accumulates across the steps of this graph.
 
-    Generic: any vLLM `*ForCausalLM`; `LP`, `T` and greedy sampling are the request's structural inputs (BRIEF: prompt
+    Generic: any vLLM `*ForCausalLM`; `LP`, `T` and greedy sampling are the request's structural inputs (prompt
     length, max_tokens, sampling kind)."""
 
     DERIVE_SOURCE = "verity-vllm/greedy-request/v1"
@@ -314,23 +240,72 @@ class GreedyRequest(nn.Module):
         super().__init__()
         self.model, self.LP, self.T = model, LP, T
 
-    def _step(self, ids: torch.Tensor, pos0: int) -> torch.Tensor:
-        positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
-        hidden = self.model(ids, positions)
-        logits = self.model.compute_logits(hidden[-1:])
-        return torch.argmax(logits, dim=-1).to(torch.int32)
+    def _step(self, ids: torch.Tensor, pos0: int, s: int) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        with launch_region(s, "tokens"):
+            positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
+            hidden = self.model(ids, positions)
+        with launch_region(s, "sampled"):
+            logits = self.model.compute_logits(hidden[-1:])
+            return torch.argmax(logits, dim=-1).to(torch.int32)
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        tok = self._step(prompt, 0)
+        return self._decode(self._step(prompt, 0, 0))
+
+    def _decode(self, tok: torch.Tensor, s0: int = 1) -> torch.Tensor:
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s)
+            tok = self._step(tok, self.LP + s, s0 + s)
             toks.append(tok)
         return torch.cat(toks)
 
 
+class ChunkedGreedyRequest(GreedyRequest):
+    """`GreedyRequest` for a prompt the engine prefilled in launches of `chunks` rows in turn (vLLM V1's chunked prefill: class G's
+    long-prefill threshold and step budget): chunk j forwards prompt rows a_j.. at those positions as launch step j, each layer's
+    history holding the chunks before; only the last chunk's last row is sampled (vLLM discards the sample of a prompt not yet
+    complete); the T decodes follow at launch steps len(chunks).. Its source class is the request wrapper's, its chunks the
+    derive config (`{"chunks": [...]}`), as `predict.build.build_program(chunks=...)` states it."""
+
+    def __init__(self, model: nn.Module, LP: int, T: int, chunks) -> None:
+        super().__init__(model, LP, T)
+        self.chunks = tuple(int(n) for n in chunks)
+        if len(self.chunks) < 2 or min(self.chunks) < 1 or sum(self.chunks) != LP:
+            raise ValueError(f"prefill chunks {list(self.chunks)}: a chunked request's chunks are its {LP} prompt rows in two or more "
+                             f"launches of at least one")
+
+    def forward(self, prompt: torch.Tensor) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        a = 0
+        for j, n in enumerate(self.chunks):
+            with launch_region(j, "tokens"):
+                hidden = self.model(prompt[a:a + n], torch.arange(a, a + n, dtype=torch.int64))
+            a += n
+        with launch_region(len(self.chunks) - 1, "sampled"):
+            tok = torch.argmax(self.model.compute_logits(hidden[-1:]), dim=-1).to(torch.int32)
+        return self._decode(tok, len(self.chunks))
+
+
+class CachedGreedyRequest(GreedyRequest):
+    """`GreedyRequest` for a request whose first `C` prompt rows vLLM's prefix cache serves: `forward(prompt, prefix)` hands `prefix`
+    (bf16 [L, 2, C, KVH*D]: every attention layer's cached key and value rows, layers in forward order) to `vllm_iface.kv_prefix`, so
+    each layer's history opens with them; prefills the uncached suffix prompt[C:] at positions C..LP-1 (the engine's launch rows), then
+    decodes as `GreedyRequest`.  The whole prompt stays the token input (Match wires prompt rows by position); no gate reads rows 0..C-1."""
+
+    DERIVE_SOURCE = "verity-vllm/cached-greedy-request/v1"
+
+    def __init__(self, model: nn.Module, LP: int, T: int, C: int) -> None:
+        super().__init__(model, LP, T)
+        self.C = C
+
+    def forward(self, prompt: torch.Tensor, prefix: torch.Tensor) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_iface import iface
+        iface.kv_prefix(prefix)
+        return self._decode(self._step(prompt[self.C:], self.C, 0))
+
+
 class PaddedGreedyRequest(nn.Module):
-    """The FIXED padded request rectangle `prefill | decode 1 .. decode D_MAX` (BRIEF "Padding"; serve3-spec §3–§8) over the
+    """The FIXED padded request rectangle `prefill | decode 1 .. decode D_MAX` over the
     actual vLLM model: liveness is a value — `live_0 = 1`, `live_{g+1} = live_g & ~(y_g == EOS)` on the raw sample; the
     emitted slot is `live ? y : PAD(0)`; the next step consumes the muxed slot; after every decode step the engine's
     step-boundary cache clear `vllm_iface.unified_cache_pad(live_in, zero, slot)` makes every layer's appended K/V row
@@ -377,13 +352,13 @@ class PaddedGreedyRequest(nn.Module):
 
 
 class StochasticEngineStep(nn.Module):
-    """[R15 stoch] `EngineStep` with the row's STOCHASTIC policy: the last row's logits -> `vllm_iface.gumbel_topp_token_select(logits,
+    """`EngineStep` with the row's STOCHASTIC policy: the last row's logits -> `vllm_iface.gumbel_topp_token_select(logits,
     seed, temperature, top_p, pos, splits)` (vLLM d9105ea80 `Sampler.sample` with temperature + top-p and an explicit per-request seed:
     f32 widening -> `_temperature_kernel` -> `_apply_topp_split` -> `_gumbel_sample_kernel` + argmax).  `seed` (int64 [1]) is a forward
     INPUT (the request's `SamplingParams.seed`: a runtime value of the Program); temperature / top_p are the declared policy (structural
-    inputs, constants of the Program); `pos` = the sampled logits row's position (pos0 + M - 1).  [R16 stoch, coord M-0169] `splits`
+    inputs, constants of the Program); `pos` = the sampled logits row's position (pos0 + M - 1).  `splits`
     (int32 [1]) is a forward INPUT too: the event's split count S = SplitsFor_v1(|live|, num_SMs), a DERIVED value of the workload.
-    In a single-request workload `S` is the constant SplitsFor_v1(1, num_SMs) and the forward takes no `splits`."""
+    With `S` given (the registered split count, `topp_geometry.registered_splits`) the forward takes no `splits`."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-engine-step/v1"
 
@@ -404,19 +379,19 @@ class StochasticEngineStep(nn.Module):
 
 
 class StochasticRequest(nn.Module):
-    """[R15 stoch] `GreedyRequest` with the row's STOCHASTIC policy (temperature + top-p, explicit seed): prefill of `LP` tokens, then
+    """`GreedyRequest` with the row's STOCHASTIC policy (temperature + top-p, explicit seed): prefill of `LP` tokens, then
     exactly `T` decode steps, every sampled token `gumbel_topp_token_select(logits, seed, temperature, top_p, pos, splits[s])` with `pos`
     the position of the logits row (LP-1 for the prefill sample, LP-1+k for the k-th sample: vLLM's `positions[logits_indices]`, the
     stream offset of `tl.randint(seed, pos)`).  `seed` is a forward INPUT (one per request; B2/B8 rows have one per component).
 
-    [R16 stoch, coord M-0169 / global M-0189 (1)] `splits` (int32 [T+1]) is the request-owned DERIVED-S INPUT: entry s is the split
+    `splits` (int32 [T+1]) is the request-owned DERIVED-S INPUT: entry s is the split
     count of sampling event s (the prefill sample = event 0), S_t = SplitsFor_v1(|live(t)|, num_SMs) at the engine step t the event runs
     in -- a value of the WORKLOAD (the live set), bound at Match to the split kernels' constexpr and checked against the relation there
     (GM-01 G6 'sampler geometry').  The Program carries no S schedule: the forward reads `splits[s:s+1]` per event (a static view of
     the Input).  Parameter order [prompt, seed, splits] so the workload Program's layout stays [prompts, seeds, splits, weights...].
 
-    [single-request workloads] With `S` given (the workload's one request: S = SplitsFor_v1(1, num_SMs) at
-    every event) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
+    [registered S] With `S` given (`topp_geometry.registered_splits(num_SMs)` = SplitsFor_v1(1, num_SMs), every event of every
+    workload) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
 
     DERIVE_SOURCE = "verity-vllm/stochastic-request/v1"
 
@@ -426,52 +401,107 @@ class StochasticRequest(nn.Module):
         self.temperature, self.top_p = float(temperature), float(top_p)
         self.S = S
 
-    def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
+    def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, splits: torch.Tensor | None, s: int) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
         from verity_vllm.program.frontend.rules.vllm_iface import iface
-        positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
-        hidden = self.model(ids, positions)
-        logits = self.model.compute_logits(hidden[-1:])
-        return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
+        with launch_region(s, "tokens"):
+            positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
+            hidden = self.model(ids, positions)
+        with launch_region(s, "sampled"):
+            logits = self.model.compute_logits(hidden[-1:])
+            return iface.gumbel_topp_token_select(logits, seed, self.temperature, self.top_p, pos0 + ids.shape[0] - 1, splits, S=self.S)
 
     def forward(self, prompt: torch.Tensor, seed: torch.Tensor, splits: torch.Tensor | None = None) -> torch.Tensor:
-        entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
-        tok = self._step(prompt, 0, seed, entry(0))
+        return self._request(prompt, 0, seed, splits)
+
+    def _request(self, prompt: torch.Tensor, C: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
+        entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])
+        tok = self._step(prompt[C:] if C else prompt, C, seed, entry(0), 0)
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s, seed, entry(s + 1))
+            tok = self._step(tok, self.LP + s, seed, entry(s + 1), s + 1)
             toks.append(tok)
         return torch.cat(toks)
 
 
-def single_request_splits(sampling: dict) -> int | None:
-    """The single-request constant S of a stochastic policy: `sampling["splits"]` when it is an int, the
-    policy's geometry is one request's (`sampler_batch == 1`) and the int is SplitsFor_v1(1, num_SMs) of that geometry; else None."""
-    from verity_vllm.program.registry.topp_geometry import splits_for_v1
+class CachedStochasticRequest(StochasticRequest):
+    """`StochasticRequest` with a cached prefix of `C` rows (see `CachedGreedyRequest`): `forward(prompt, seed, [splits,] prefix)`, the
+    prefix after the request's other inputs."""
+
+    DERIVE_SOURCE = "verity-vllm/cached-stochastic-request/v1"
+
+    def __init__(self, model: nn.Module, LP: int, T: int, temperature: float, top_p: float, C: int, S: int | None = None) -> None:
+        super().__init__(model, LP, T, temperature, top_p, S=S)
+        self.C = C
+
+    def forward(self, prompt: torch.Tensor, seed: torch.Tensor, *rest: torch.Tensor) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_iface import iface
+        iface.kv_prefix(rest[-1])
+        return self._request(prompt, self.C, seed, rest[0] if len(rest) == 2 else None)
+
+
+def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
+    """The example `prefix` input of a cached request wrapper: bf16 [L, 2, C, KVH*D] over the model's L attention layers (one KV
+    geometry for every layer; MLA's latent cache has no such prefix yet)."""
+    impls = attention_impls(model)
+    if not impls or any(v.get("kind") == "mla" for v in impls.values()):
+        raise ValueError(f"a cached prefix is a dense attention cache's rows; this model's attention layers are {sorted({v.get('kind', 'dense') for v in impls.values()})}")
+    geo = {(v["num_kv_heads"], v["head_size"]) for v in impls.values()}
+    if len(geo) != 1:
+        raise ValueError(f"a cached prefix holds one KV geometry for every layer; the layers have (KVH, D) in {sorted(geo)}")
+    (kvh, d), = geo
+    return torch.empty((len(impls), 2, C, kvh * d), dtype=torch.bfloat16, device="meta")
+
+
+def registered_policy_splits(sampling: dict) -> int | None:
+    """The registered split count S of a stochastic policy: `sampling["splits"]` when it is an int equal to
+    `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`); else None."""
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
-    if isinstance(S, bool) or not isinstance(S, int) or g.get("sampler_batch") != 1 or g.get("num_sms") is None:
+    if isinstance(S, bool) or not isinstance(S, int) or g.get("num_sms") is None:
         return None
-    return S if S == int(splits_for_v1(1, int(g["num_sms"]))) else None
+    return S if S == int(registered_splits(int(g["num_sms"]))) else None
+
+
+def cached_wrapper(mod: nn.Module, inputs: tuple, model: nn.Module, C: int) -> tuple[nn.Module, tuple]:
+    """The request wrapper `mod` (with its example `inputs`) for a request whose first `C` prompt rows the prefix cache serves
+    (`CachedGreedyRequest`, `CachedStochasticRequest`), the prefix (`prefix_input`) its last input."""
+    if type(mod) not in (GreedyRequest, StochasticRequest) or not 0 < C < mod.LP:
+        raise ValueError(f"a cached prefix of C={C} rows needs a request wrapper and 0 < C < LP, got {type(mod).__name__}")
+    if isinstance(mod, StochasticRequest):
+        mod = CachedStochasticRequest(model, mod.LP, mod.T, mod.temperature, mod.top_p, C, S=mod.S)
+    else:
+        mod = CachedGreedyRequest(model, mod.LP, mod.T, C)
+    return mod, (*inputs, prefix_input(model, C))
 
 
 def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: int = 8, T: int = 4, eos_id: int = 0,
-                 sampling: dict | None = None) -> tuple[nn.Module, tuple]:
-    """(module, example inputs on meta) for `kind` in {step, request, padded}.  [X-05] `sampling` is the row's declared policy: the greedy
-    wrappers author `torch.argmax`; [R15 stoch] `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
-    authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and [R16, coord M-0169] the derived split
+                 sampling: dict | None = None, C: int = 0, chunks=()) -> tuple[nn.Module, tuple]:
+    """(module, example inputs on meta) for `kind` in {step, request, padded}; `C` > 0: the request wrapper's `cached_wrapper`;
+    two or more `chunks`: the greedy request's `ChunkedGreedyRequest` (with a cached prefix or another policy, refused).
+    [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
+    authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and the derived split
     count `splits` (int32, one entry per sampling event: [1] for the step wrapper, [T+1] for the request wrapper) as a third (step /
-    request wrappers; padded is greedy-only).  [single-request workloads] A numeric `splits` is the single-request constant S =
-    SplitsFor_v1(1, num_SMs) (`build.sampler_geometry`, `geometry.sampler_batch == 1`): the wrapper takes no `splits` input.  Any other
-    numeric `splits` (R15's static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
+    request wrappers; padded is greedy-only).  A numeric `splits` is the registered S = SplitsFor_v1(1, num_SMs) the served engine
+    pins (`build.sampler_geometry`, `registered_policy_splits`): the wrapper takes no `splits` input.  Any other numeric `splits`
+    (the earlier static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
+    if len(chunks or ()) > 1:
+        if (kind, C, (sampling or {"kind": "greedy"}).get("kind")) != ("request", 0, "greedy"):
+            raise ValueError(f"make_wrapper authors a prefill in chunks for the greedy request without a cached prefix only, not a "
+                             f"{(sampling or {}).get('kind', 'greedy')} {kind} with C={C}")
+        return ChunkedGreedyRequest(model, LP, T, chunks), (torch.empty((LP,), dtype=torch.int32, device="meta"),)
+    if C:
+        return cached_wrapper(*make_wrapper(kind, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos_id, sampling=sampling), model, C)
     kind_s = (sampling or {"kind": "greedy"}).get("kind")
     if kind_s == "stochastic":
         s = sampling or {}
         if int(s.get("top_k", 0) or 0) != 0 or not s.get("seeded", False):
             raise ValueError(f"make_wrapper authors the seeded temperature + top-p select only (top_k == 0, seeded): {sampling}")
-        S = single_request_splits(s)
+        S = registered_policy_splits(s)
         if s.get("splits") != "derived" and S is None:
-            raise ValueError(f"make_wrapper: sampling.splits must be 'derived' (S_t = SplitsFor_v1(|live(t)|, num_SMs), a request-owned Input of "
-                             f"the Program; coord M-0169) or, for a single-request workload, the constant SplitsFor_v1(1, num_SMs) of its geometry "
-                             f"-- any other static S or a declared schedule is not a Program the Match can hold, got {s.get('splits')!r}")
+            raise ValueError(f"make_wrapper: sampling.splits must be the registered SplitsFor_v1(1, num_SMs) of its geometry (the S the served "
+                             f"engine pins) or 'derived' (a request-owned Input of the Program) -- any other static S or a declared "
+                             f"schedule is not a Program the Match can hold, got {s.get('splits')!r}")
         temp, p = float(s["temperature"]), float(s.get("top_p", 1.0))
         seed_in = torch.empty((1,), dtype=torch.int64, device="meta")
         if kind == "step":
@@ -496,9 +526,9 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
     raise ValueError(kind)
 
 
-#: environment variables this construction SETS (module top) — recorded as consulted only if the pinned vLLM's `envs` defines them
+#: environment variables this construction SETS (module top, or the target's `env()`) — recorded as consulted only if the pinned vLLM's `envs` defines them
 _ENV_SET_BY_BUILDER = ("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "HF_HUB_OFFLINE", "VLLM_LOGGING_LEVEL", "TOKENIZERS_PARALLELISM", "VLLM_ATTENTION_BACKEND",
-                       "VLLM_USE_DEEP_GEMM")   # [R15 fp8] the block-scaled FP8 kernel knob `TargetProfile.fp8_block_gemm` applies
+                       "VLLM_USE_DEEP_GEMM")   # the block-scaled FP8 kernel knob `TargetProfile.fp8_block_gemm` applies
 
 
 def consulted_facts(vllm_config) -> dict:
@@ -507,17 +537,18 @@ def consulted_facts(vllm_config) -> dict:
     `env_consulted` = variables the builder sets AND the pinned vLLM's `envs` module defines (so vLLM reads them);
     `env_ignored`   = variables set in the process that this vLLM pin does NOT define (e.g. `VLLM_ATTENTION_BACKEND`, dead in d9105ea80)
     — never reported as declared facts. The target facts themselves (capability, SM count, BI switch) live in `target.declared/applied`."""
-    import os
+    from verity_vllm import settings
     facts: dict = {}
     try:
         import vllm.envs as envs
         defined = set(getattr(envs, "environment_variables", {}) or {})
     except Exception:  # noqa: BLE001
         defined = set()
-    facts["env_consulted"] = {k: os.environ.get(k) for k in _ENV_SET_BY_BUILDER if k in defined and k in os.environ}
-    facts["env_ignored"] = {k: {"value": os.environ.get(k), "reason": "not defined in this vLLM pin's `vllm.envs`; never read"}
-                            for k in _ENV_SET_BY_BUILDER if k not in defined and k in os.environ and k.startswith("VLLM_")}
-    facts["env_set_not_vllm"] = {k: os.environ.get(k) for k in _ENV_SET_BY_BUILDER if k not in defined and k in os.environ and not k.startswith("VLLM_")}
+    env = {k: settings.raw(k) for k in _ENV_SET_BY_BUILDER if settings.is_set(k)}
+    facts["env_consulted"] = {k: v for k, v in env.items() if k in defined}
+    facts["env_ignored"] = {k: {"value": v, "reason": "not defined in this vLLM pin's `vllm.envs`; never read"}
+                            for k, v in env.items() if k not in defined and k.startswith("VLLM_")}
+    facts["env_set_not_vllm"] = {k: v for k, v in env.items() if k not in defined and not k.startswith("VLLM_")}
     try:
         facts["model_dtype"] = str(vllm_config.model_config.dtype)
         facts["enforce_eager"] = bool(vllm_config.model_config.enforce_eager)
@@ -556,10 +587,14 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     """`torch.export.export(strict=False)` of a wrapper module on meta under vLLM's forward context + the export shims for the
     TargetProfile `profile` (default profile if None). `intercept_triton`: direct Python-level Triton launches become opaque
     `verity_cba::triton_launch` nodes (triton_capture.py). `applied_out`, if given, receives `read_back_applied()` taken INSIDE the
-    export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile)."""
+    export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
+    Under a declared launch batch the graph keeps each node's `launch_region` tag."""
+    import torch.fx.traceback as fxt
     from .export_compat import export_compat, read_back_applied
+    from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
-    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces():
+    with (torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces(),
+          fxt.preserve_node_meta() if launch_batch_declared() else nullcontext()):
         if intercept_triton:
             with intercept_triton_launches(launch_log):
                 ep = torch.export.export(mod, inputs, strict=strict)
@@ -586,9 +621,8 @@ def op_histogram(ep) -> dict[str, int]:
 
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
-           "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
-           "attention_impls", "export_facts", "BI_TRITON_KERNELS", "retie_lm_head_as_the_loader_does",
-           "mla_absorbed_weights_as_the_loader_does"]
+           "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
+           "attention_impls", "export_facts", "BI_TRITON_KERNELS"]
 
 
 def attention_impls(model: nn.Module) -> dict:
@@ -597,9 +631,11 @@ def attention_impls(model: nn.Module) -> dict:
     in batch-invariant mode (single-split combine). Keyed by `layer_name` — what the exported `unified_attention_with_output`
     node carries — so the attention rule can select the Definition from the layer that will run, not from an env string.  Each
     `MLAAttention` layer has an entry with `"kind": "mla"`: its impl, backend name, kv dtype, heads, scale, context-parallel sizes,
-    dense-MHA prefill backend, the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
+    dense-MHA prefill backend (with its FA version, whether it pads v to the qk head and its scale), the FA3 split count its impl's module calls `flash_attn_varlen_func` with (`num_splits`: the one
     `engine.sparse_mla`'s pin marks, None for vLLM's heuristic), and from the layer's vLLM config the query heads per rank its
-    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads."""
+    metadata builder keys the decode threshold on and `sparse_mla_force_mqa`, what `rules/vllm_dsa.py` reads.  Any other attention
+    layer (`AttentionLayerBase`: DeepSeek-V4's sparse MLA, its window, indexer and compressor-state caches) has an entry with `"kind":
+    "layer"` under its prefix: its class, its backend's name and its kv cache dtype."""
     from vllm.model_executor.layers.attention import Attention, MLAAttention
     out = {}
     for name, mod in model.named_modules():
@@ -616,6 +652,8 @@ def attention_impls(model: nn.Module) -> dict:
                   "dcp_world_size", "pcp_world_size", "num_queries_per_kv", "kv_sharing_target_layer_name"):
             v = getattr(impl, k, "<absent>")
             obs[k] = list(v) if isinstance(v, tuple) else (None if isinstance(v, torch.Tensor) and v.numel() == 0 else ("tensor" if isinstance(v, torch.Tensor) else v))
+        if callable(kb := getattr(impl, "k_scale_bits", None)):      # the int8 backend's K scales (engine.int8_attention_vllm)
+            obs["int8_k_scales"] = [b & 0xFFFFFFFF for b in kb(getattr(mod, "layer_name", name))]
         out[getattr(mod, "layer_name", name)] = obs
     for name, mod in model.named_modules():
         if not isinstance(mod, MLAAttention):
@@ -627,6 +665,8 @@ def attention_impls(model: nn.Module) -> dict:
         vc = mod._vllm_config
         out[getattr(mod, "layer_name", name)] = {
             "prefill_backend": None if pb is None else f"{type(pb).__module__}.{type(pb).__qualname__}",
+            "prefill_fa_version": getattr(pb, "vllm_flash_attn_version", None),
+            "prefill_requires_v_padding": getattr(pb, "requires_v_padding", None), "prefill_scale": getattr(pb, "scale", None),
             "kind": "mla", "impl": f"{type(impl).__module__}.{type(impl).__qualname__}",
             "backend": backend.get_name() if hasattr(backend, "get_name") else str(backend),
             "kv_cache_dtype": getattr(impl, "kv_cache_dtype", None), "layer_kv_cache_dtype": getattr(mod, "kv_cache_dtype", None),
@@ -636,6 +676,12 @@ def attention_impls(model: nn.Module) -> dict:
             "use_sparse": getattr(mod, "use_sparse", None), "num_splits": getattr(fa, "verity_sparse_mla_splits", None),
             "q_heads_per_rank": vc.model_config.get_num_attention_heads(vc.parallel_config),
             "sparse_mla_force_mqa": bool(vc.attention_config.sparse_mla_force_mqa)}
+    base = getattr(sys.modules.get("vllm.model_executor.layers.attention_layer_base"), "AttentionLayerBase", None)
+    for name, mod in model.named_modules():
+        if base is None or isinstance(mod, (Attention, MLAAttention)) or not isinstance(mod, base):
+            continue
+        out[getattr(mod, "prefix", name)] = {"kind": "layer", "impl": f"{type(mod).__module__}.{type(mod).__qualname__}",
+                                             "backend": mod.get_attn_backend().get_name(), "kv_cache_dtype": getattr(mod, "kv_cache_dtype", None)}
     return out
 
 
@@ -681,7 +727,7 @@ def export_facts(op_hist: dict, launch_kernels) -> dict:
 
 
 def mean_dim_override_facts() -> dict | None:
-    """[R15 dense] The installed vLLM's `aten::mean.dim` batch-invariant override, read in-process (never assumed): the Triton
+    """The installed vLLM's `aten::mean.dim` batch-invariant override, read in-process (never assumed): the Triton
     `mean_kernel`'s qualified name and source sha (`JITFunction.src`, the same text the eager capture hashes as `src_sha`), the
     `mean_dim` / `mean_batch_invariant` Python sources' shas (BLOCK_SIZE, the `(M, N, 1)` view, the per-dim reduction order), and
     whether `enable_batch_invariant_mode` registers `aten::mean.dim` at all (grep of its source).  `MeanDimBIRule` checks these against

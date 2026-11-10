@@ -5,6 +5,8 @@ reads the code before the file table; a job takes the twin's words and finds a f
 refutation; and `main` end to end (the GPU run is `tests/properties/glm53_fused_rmsnorm_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 from pathlib import Path
 
@@ -14,9 +16,9 @@ import pytest
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as X
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import dsa_norm_rows as NR
-from verity_vllm.program.registry import dsa_norm as DN
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import dsa_norm_rows as NR
+from verity.ml.definitions.registry import dsa_norm as DN
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 WIDTHS = [N for _, N, _, _ in X.NORMS]
@@ -166,7 +168,7 @@ def _rec(case: str, norm: str, **over) -> dict:
 
 
 def _doc(comparisons: list[dict]) -> dict:
-    return {"gate": {"ok": True}, "errors": {}, "ptx": {"ok": True}, "bind": {"ok": True},
+    return {"gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "ptx": {"ok": True}, "bind": {"ok": True},
             "launches": [{"case": c, "checks": {"deterministic": True, "mla_kv_c": True}} for c in X.CASES], "summary": X.summary(comparisons)}
 
 
@@ -182,6 +184,7 @@ def test_the_verdict_needs_every_case_and_every_refutation() -> None:
     low[0] = good[0] | {"refuted": good[0]["refuted"] | {"warp_pairs": X.PER_ALT - 1}}
     assert not X._verdict(_doc(low))
     for key, bad in (("ptx", {"ok": False}), ("bind", {"ok": False}), ("errors", {"compare/x": "boom"}), ("gate", {"ok": False}),
+                     ("served", {"ok": False}), ("served", {}),
                      ("launches", [{"case": "served", "checks": {"deterministic": True, "mla_kv_c": True}}]),
                      ("launches", [{"case": c, "checks": {"deterministic": c != "probe", "mla_kv_c": True}} for c in X.CASES])):
         assert not X._verdict(_doc(good) | {key: bad}), key
@@ -204,7 +207,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     monkeypatch.setattr(X, "PTX_COUNTS", rec["counts"])
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
-    monkeypatch.setattr(X.DS, "environment", lambda work: {})
+    monkeypatch.setattr(X.DS, "environment", lambda work: ({}, {"VLLM_USE_DEEP_GEMM": "0"}))
+    monkeypatch.setattr(X.DS, "served", lambda: {"VLLM_USE_DEEP_GEMM": True, "VLLM_BATCH_INVARIANT": False, "ok": True})
 
     def gpu(work, doc):
         (work / "triton_cache" / "k").mkdir(parents=True)
@@ -217,9 +221,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"]) == code
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is (code == 0) and not doc["errors"] and doc["ptx"]["ok"]
+    assert doc["env_cleared"] == {"VLLM_USE_DEEP_GEMM": "0"} and doc["served"]["ok"] is True
     cases = doc["summary"]["cases"]
     assert {k: t["rows"] for k, t in cases.items()} == {f"{c}/{n}": 40 for c in X.CASES for n, *_ in X.NORMS}
     assert cases["served/q_c"]["mismatch"] == int(flip) and sum(t["mismatch"] for t in cases.values()) == int(flip)
     assert all(n >= X.PER_ALT for alt in doc["summary"]["refuted"].values() for n in alt.values())
     printed = capsys.readouterr().out
-    assert line in printed and "launches_ok=2/2 ptx=True bind=True" in printed
+    assert line in printed and " served=True " in printed and "launches_ok=2/2 ptx=True bind=True" in printed

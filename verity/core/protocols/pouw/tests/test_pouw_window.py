@@ -1,5 +1,5 @@
-"""PoUW's audit window (`pouw.window`): the grid a window's tile count is padded to and the q it gives the leakage bound,
-L3's K′, the entry row and side trees of the layout for gates, the map from a drawn index to a tile, the window statement
+"""PoUW's audit execution phase (`pouw.window`): the grid an execution phase's tile count is padded to and the q it gives the leakage bound,
+L3's K′, the entry row and side trees of the layout for gates, the map from a sampled index to a tile, the execution phase statement
 on the entry rows, and the tile instances' public inputs."""
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def test_the_grid_is_the_numbers_of_at_most_s_plus_1_significant_bits():
 
 
 def test_q_over_the_declared_ranges():
-    """The window registers one level: log2 q bits.  304 levels over [1, 2^40], 161 over [2^10, 2^30]."""
+    """The execution phase registers one level: log2 q bits.  304 levels over [1, 2^40], 161 over [2^10, 2^30]."""
     assert Wd.levels(1, 1 << 40) == 304 and Wd.levels(1 << 10, 1 << 30) == 161
     assert round(math.log2(304), 2) == 8.25
 
@@ -127,6 +127,22 @@ def test_k_prime_at_the_cap_and_at_2_to_the_60():
         assert 1 <= k <= n and not (k > 1 and Wd.miss_at_most(q, k - 1, delta))
         assert k == n or Wd.miss_at_most(q, k, delta)
     assert Wd.k_prime(eps, delta, 1, 1 << 60, 1) == 1 << 60
+
+
+def test_eps_at_inverts_k_prime():
+    """`eps_at` is the least grid ε whose K′ is at most K: K′ at it is at most K, and at the grid point below more."""
+    grid, delta = Fraction(1, 1 << Wd.EPS_BITS), Fraction(1, 2 ** 40)
+    for k, credited, n, w in ((27_713, 10**9, 10**9, 1), (1, 5, 5, 1), (200, 100, 400, 1), (4, 1 << 20, 1 << 20, 1),
+                              (10**6, 1 << 40, 1 << 40, 1), (30, 7, 8, 1)):
+        eps = Wd.eps_at(k, delta, credited, n, w)
+        assert Wd.k_prime(eps, delta, credited, n, w) <= k
+        assert eps == grid or Wd.k_prime(eps - grid, delta, credited, n, w) > k
+    assert Wd.eps_at(1, delta, 5, 5, 1) == 1
+    for bad in ((0, delta, 1, 1, 1), (True, delta, 1, 1, 1), (3, Fraction(1), 1, 1, 1), (3, delta, 9, 4, 2)):
+        with pytest.raises(ValueError):
+            Wd.eps_at(*bad)
+    with pytest.raises(ValueError, match="establishes no"):
+        Wd.eps_at(2, delta, 1, 100, 1)
 
 
 def _d(n: int) -> bytes:
@@ -283,13 +299,13 @@ def test_the_window_statement_refuses_each_departure_from_the_layout():
     assert Wd.window_problem(_rows([es[0], replace(es[1], tile0=9)] + es[2:]), w, 5, H3) is None
     with pytest.raises(ValueError, match="64 bytes"):
         Wd.window_problem(_rows(es), w, 5, H3[:32])
-    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "drawn", "root_W"}
+    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "length", "drawn", "root_W"}
     assert set(Wd.REGISTERED) == {p[0] for p in Wd.PUBLIC if p[2] != "outcome"}
 
 
 def test_a_side_tree_is_its_rows_then_frame_v3_pads_to_two_to_the_d():
     """`side_levels` and `side_path` are `tree_levels` over the n leaves and the domain's pad leaves at ranks n..2^D − 1,
-    computed without the pads' own leaves; and each window's side domains are its own, one per side, at the public depth."""
+    computed without the pads' own leaves; and each execution phase's side domains are its own, one per side, at the public depth."""
     small = CommitmentDomain(hashlib.sha512(b"side").digest(), -1, RangeIndexedDomain(0, 16), hash="sha512")
     leaves = [hashlib.sha512(bytes([i])).digest() for i in range(16)]
     for n in (1, 3, 5, 8, 16):
@@ -320,9 +336,9 @@ def _registration(n=9, k=3, root=_d(7), dom=_d(8)):
 
 
 def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile():
-    """F_σ is C-Flock's ``verity/flock-public-inputs/v1`` (a key-sorted JSON header line, then the instances' words, u16 LE,
-    instance-major, the ports in order): t as a u128, the window root, its domain, the two side domains and the pass's -h3
-    tile domain, from the registration, the draw and the pass alone.  Session σ of ⌈K′/cap⌉ holds drawn[σ·cap ..], then
+    """F_σ is Flock's ``verity/flock-public-inputs/v1`` (a key-sorted JSON header line, then the instances' words, u16 LE,
+    instance-major, the ports in order): t as a u128, the execution phase root, its domain, the two side domains and the pass's -h3
+    tile domain, from the registration, the sample and the pass alone.  Session σ of ⌈K′/cap⌉ holds sampled[σ·cap ..], then
     N − 1."""
     reg, drawn, h3 = _registration(), [1, 4, 6], _d(11)
     assert Wd.sessions(3, 2) == 2 and Wd.sessions(4, 2) == 2 and Wd.sessions(1, 4096) == 1
@@ -353,7 +369,7 @@ def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile()
         Wd.sessions(3, 0)
 
 
-#: the served sizing points (ε, δ) and the levels a served window registers
+#: the served sizing points (ε, δ) and the levels a served execution phase registers
 POINTS = ((Fraction(1, 1000), Fraction(1, 2**40)), (Fraction(1, 100), Fraction(1, 2**128)))
 LEVELS = range(87, 144)
 
@@ -362,7 +378,7 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
     """Over levels 87 to 143 (N from 9,216 to 1,179,648) K′ is N at the small levels and at most 31,178 at ε = 0.1%,
     δ = 2^-40 (27,713 unpadded, times up to g_(ℓ+1)/g_ℓ = 9/8), and at most 9,937 at ε = 1%, δ = 2^-128, both at level 143.
     A session of the tile unit at k_log 24 (`Pc8TileLeafH3`'s) holds at most 2,048 instances (m <= 35), so S is 16 and 5;
-    at k_log 25, 31 and 10.  F_σ at the largest draw is every session's `cap` instances, the last padded with N − 1."""
+    at k_log 25, 31 and 10.  F_σ at the largest sample is every session's `cap` instances, the last padded with N − 1."""
     assert (Wd.point(87), Wd.Work.at(87).n, Wd.point(143), Wd.Work.at(143).n) == (8192, 9216, 1 << 20, 1179648)
     assert [Wd.session_cap(k) for k in (24, 25)] == [2048, 1024] and Wd.session_cap(24, 4) == 8192
     for bad in (0, 33):
@@ -387,9 +403,9 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
 
 
 def test_the_pinned_vectors_are_the_layout():
-    """``vectors/window.json`` is `window_vectors.vectors()`: the toy window's entry rows, its records and side rows'
+    """``vectors/window.json`` is `window_vectors.vectors()`: the toy execution phase's entry rows, its records and side rows'
     indices, each real tile's (p, at), a side tree, the root and F_σ.  The rows are dense (call 0 keeps A rows 0, 1 and 70
-    of 80), and the vectors agree with the window statement, records and indices included."""
+    of 80), and the vectors agree with the execution phase statement, records and indices included."""
     pinned = json.loads(V.OUT.read_text())
     assert pinned == json.loads(json.dumps(V.vectors()))
     rows = [bytes.fromhex(e["row"]) for e in pinned["entries"]]

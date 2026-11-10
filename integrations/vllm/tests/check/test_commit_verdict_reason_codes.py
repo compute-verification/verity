@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.c2_rules import _replay_seed_of_record
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 
 from .test_commit_verdict_hopper_no_evaluator_gap import BASE, K_GEMM2, OC_COMPLETE, SR_HOPPER, _bnd
 
@@ -29,7 +29,7 @@ def test_a_reworded_reason_grades_by_its_code():
     sr = _coded({gap: 3616, dom: 4592}, {gap: RC.reason_code("no-evaluator", "Gemm_v2"),
                                          dom: RC.reason_code("state-linked", "Attention_v2", domain=True)})
     ok, why = _verdict(sr)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1)): 3616 VUs not evaluable by name (no-evaluator)"), why
+    assert not ok and why.startswith("C2 of record not established: 3616 VUs not evaluable by name (no-evaluator)"), why
     assert "form (B) absent" in why and f"3616 x {gap}" in why and dom not in why
     ok, why = _verdict(sr, OC_COMPLETE)
     assert ok and "over 3616 VUs not evaluable by name (no-evaluator)" in why, why

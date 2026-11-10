@@ -1,6 +1,6 @@
-# facet_break: try to beat every facet of the machine model
+# facet_break: try to beat every facet of the ACCEL model
 
-The machine model (`../machine_model/`) bounds what a program can issue on sm_120 by a polytope of facets: row r says
+The ACCEL model (`../machine_model/`) bounds what a program can issue on sm_120 by a polytope of facets: row r says
 Σ_k c_kr·x_k ≤ 1 for the program's warp instructions x_k of census class k a SMSP-cycle. ε is proved conditional on every
 facet being a true ceiling. This directory is the standing search for programs that beat one: it generates MMA + lane
 programs around each facet's vertices, times them with opcode_probe's gates, and loads every measured program (its own and
@@ -15,7 +15,7 @@ any other probe's or tensor_kinds' records) on every facet.
 | `run.sh` | One batch under `research run`: generate, build, gate, drop the refusals by name, rebuild in chunks of 64, time under one `gpu-lease`, then `loads.py table` and `summary` into `$OUT` |
 
 ~~~bash
-research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --custody-ttl 12h \
+research run --on MACHINE --project verity --source . --cwd source --custody-ttl 12h \
   --env GPU_LEASE_WHO=facet-break -- bash benchmarks/pouw/facet_break/run.sh --seed 2 --n 300
 python benchmarks/pouw/facet_break/loads.py summary ~/.research/runs/*/out/rows.jsonl ~/.research/runs/*/out/tensor_kinds.jsonl
 python benchmarks/pouw/facet_break/loads.py refit RUN/out/rows.jsonl --row R1
@@ -27,7 +27,7 @@ A load counts only the gate's pinned opcodes, each in its class when the class i
 and ISETP have none, MOV is NOROW and a uniform instruction is UNI), so it is a lower bound and a reported violation is
 real. `--full` counts the rest of a single-loop program's timed loop too, from its run's gate verdicts and `sass/`: each
 other loop instruction runs once an iteration, at a pinned instruction's rate, in its class, or on `issue` alone when it
-has none. The machine model's `Run.n` counts every executed instruction, so the full load is the one a row must hold, and
+has none. The ACCEL model's `Run.n` counts every executed instruction, so the full load is the one a row must hold, and
 it is still a lower bound. A TLD's class is its width, which its
 opcode doesn't show, so a generated program's name carries it (`_tld4_`). A load whose class has no line at the epoch
 (LDS.64, LDG.E.64, the 256-bit load and the L1-skipping loads before VF3q-16: Π prices it at 0) is listed by `summary`

@@ -1,0 +1,72 @@
+{
+ "definitions": {
+  "F32AddZero_v1": {
+   "and": 399,
+   "type": "d4834ca7cc7e29a2be7e79681699fa7fd525b4915b191fced88f74750bec37f193e1c1e28f564b617d7b2c1e950bbd9a84ebb22a8684194da0de0ac96206baa5"
+  },
+  "MeanCombineTriton_v1{N=1030}": {
+   "and": 5897,
+   "type": "1345b58108d65ab9a05f10cc81aef62d7a90f71a955cd3344bf844c42efbec9164c2f2ba2244852acf7d34b825bc06004fc2bb4dcc263f46ea5cecfc656c79e0"
+  },
+  "MeanCombineTriton_v1{N=16}": {
+   "and": 1896,
+   "type": "d1565ea7e4ce524c65efe2ff0e676663190609c95bcf75a87f0e35b564dacd1957654ae711c34ad6ebe00ab4f641745aa5a0947f44c246fe67bd2a68954a93fe"
+  },
+  "MeanDivTriton_v1{N=1030}": {
+   "and": 1452,
+   "type": "5540da2ecf6fadff110bb050fa52b887fdd6dbaced88f4151b741008029250ddfb96d4ee1a1adbdb331c9b6a9116a983adaa37a0065dc3a17b51ae7df054d92c"
+  },
+  "MeanDivTriton_v1{N=16}": {
+   "and": 699,
+   "type": "0421c25507fc0b26d98a85b6f81ac2ee17f3d2ef4a758a9f94214d004bae7f30cf4f03310f6164f8f6b0ebdcf34c1bd39ddfd81ab0730637cb9e9303ee31b634"
+  },
+  "MeanThreadTriton_v1{K=1}": {
+   "and": 2793,
+   "type": "79b72c1d10bcdfeb6da43dcb831fc65763595afbd793f1108f06824c1dc23a5dd6390b82bb2cf6d9b945994c5a8dbeb79dad2bbda5938ac9fdac6d69a587002f"
+  },
+  "MeanThreadTriton_v1{K=4}": {
+   "and": 4032,
+   "type": "0b01b7dc908e2d10ce8f25a9d76086930fa3db55614f6d9eb4d17ee33a46673d52ad9a140d1c65d1fc888876ab7412d2ff84bcea9d46c9c7ee013d14588e95a9"
+  },
+  "MeanThreadTriton_v1{K=8}": {
+   "and": 5684,
+   "type": "8cee53a92759fe7701454f4abe06d74d04ff57f6fd07c6d4918e994b4adc7a887e99096ffc751cfddda4e3ff7cb5b4c8cff6eeee5be7b9e401d3e9742e1ea94d"
+  },
+  "MeanThreadsTriton_v1{N=16}": {
+   "and": 16128,
+   "type": "1f5264e25735861b454a48ad03eac7cde3541f54be0d46a1702836757725c9eb25d3a6867775a3a70cc34c9ccffedd3f09f68c3e824af8175f4a43748c8e41ed"
+  },
+  "MeanTriton_v2{N=16}": {
+   "and": 25248,
+   "type": "908c335a6605a47c845e4c786cab3a2a88c415b9e82eb79062c3ebda22cecdcd5ade3b546a7b35b92b404934108f71bc528fe317156febd038b0e4e325f931fc"
+  },
+  "MeanWarpTriton_v1{L=32}": {
+   "and": 25172,
+   "type": "96675375355ee897926be2d9f4272b39f334cd86a9f0196d06888a8a6a39e9d7e86b71ea1bb8494ebae4ec477a9b9d75f5b03b2c004551fa6df5405d7bd0ce2a"
+  },
+  "MeanWarpTriton_v1{L=4}": {
+   "and": 7224,
+   "type": "ff24c112fa03d661669ce9b10412d92173f34369c44bda493093e7d690bc68e4a05d6044d2de301de6690094d3f89814a0e6422dcd5ef6d0d2b4f454ea78e5ab"
+  },
+  "MeanWarpTriton_v1{L=6}": {
+   "and": 9646,
+   "type": "8401c8e8eb77a97867320af2a8035f2aa37ddd09d7efa566fc2e52164c1f189e7cdb5589b3718f7b59c291195d475209603fb418c9947d5887e2328797c4d1db"
+  },
+  "MeanWarpsTriton_v1{N=16}": {
+   "and": 7224,
+   "type": "ff24c112fa03d661669ce9b10412d92173f34369c44bda493093e7d690bc68e4a05d6044d2de301de6690094d3f89814a0e6422dcd5ef6d0d2b4f454ea78e5ab"
+  },
+  "NarrowF32ToBf16El_v1": {
+   "and": 66,
+   "type": "b64a9584361359c6e2d707afbd08450004ee2c3196ff2d6582359f061329b3c8cbb88c0347515e514f8d30f6b3b24541c1159f2bc362449fbf50d9c799b0e2d8"
+  },
+  "NarrowF32ToBf16_v2{N=16}": {
+   "and": 1056,
+   "type": "d16b215f6e2fd69b5fce9bea4a217db292182f1208ec7730604d836ca8272119665d8529f4dea1c1e83ff0b2d0de256494538728f18a682a8bf83a9f252c48fd"
+  },
+  "RsqrtF32_v2{N=1,RSQRT=RsqrtApprox_v2}": {
+   "and": 1134,
+   "type": "bc26df560ee04c2314fcd56acd281b8f1c2542741c71a3e64e70cbf5b3ad8c740912040777929447f9bf7eea8bb7060f0ac639c361dcfe915ae8f9915a615005"
+  }
+ }
+}

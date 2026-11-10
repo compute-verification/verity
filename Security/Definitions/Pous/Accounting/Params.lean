@@ -1,10 +1,14 @@
-import Mathlib.Algebra.Order.Floor.Semiring
-import Mathlib.Data.Rat.Floor
-import Definitions.Pous.Model.Audit
+module
+
+public import Mathlib.Algebra.Order.Floor.Semiring
+public import Mathlib.Data.Rat.Floor
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The problem statement's parameters, and the requirement at them
 -/
+
+@[expose] public section
 
 namespace Pous
 
@@ -25,7 +29,7 @@ def expansion : ℚ := 21 / 20
 def secParam : ℕ := 128
 
 /-- The largest `ε_crypto` a construction may claim: `2^-λ`. **Provisional:** the problem statement names `λ = 128`
-but does not bound `ε_crypto`; waiting on Daniel. -/
+but does not bound `ε_crypto`, so this bound is not yet confirmed. -/
 noncomputable def εMax : ℝ≥0∞ := 2⁻¹ ^ secParam
 
 end Params

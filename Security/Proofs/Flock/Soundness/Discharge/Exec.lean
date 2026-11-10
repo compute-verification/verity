@@ -1,46 +1,50 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Discharge.Exec.Headline
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchAccL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
-import Proofs.Flock.Soundness.Discharge.Exec.E2EL
-import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
-import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
-import Proofs.Flock.Soundness.Discharge.Exec.Live
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Discharge.Exec.Decode
-import Proofs.Flock.Soundness.Discharge.Exec.Emit
-import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Proofs.Flock.Soundness.Discharge.Exec.Rounds
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Discharge.Exec.Pts
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
-import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Discharge.Exec.Headline
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkedL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockPublicL
+public import Proofs.Flock.Soundness.Discharge.Exec.E2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+public import Proofs.Flock.Soundness.Discharge.Exec.Decode
+public import Proofs.Flock.Soundness.Discharge.Exec.Emit
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesLigerito
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.Exec.Pts
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 
 /-!
-# R11: flock-verify's acceptance and the audit as Lean defines it
+# The refinement: flock-verify's acceptance and the audit as Lean defines it
 
 The acceptance lemmas (`accepts_*`) are about public-output statements only: each takes `hh : hiddenOutputs = false`,
 since with hidden outputs flock-verify sets up its tables with `setupHidden`, about which nothing here is proved.
 
 * `Event`: flock-verify's verdict on a session directory (`Accepts`), the live audit whose outcome carries it
-  (`auditLive`), and R11 at one strategy pair (`ExecRefines`);
+  (`auditLive`), and the refinement at one strategy pair (`ExecRefines`);
 * `SessionL`: the batched session under a leaf scheme (`tableAfterL`, `sessionBL`, `batchedSessionL`), and over any
   table run (`sessionG`, `batchedSessionG`);
 * `Setup`: under a tag without hidden outputs, flock-verify's acceptance sets up each table with `setupH`
@@ -53,6 +57,8 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
 * `Retained`: every `hm96Rows` tag pinned today retains round bytes, so, without hidden outputs, every round of a
   record flock-verify accepts carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every
   stream satisfies `Refine/Frames.lean`'s `AllRetained` (`accepts_allRetained`);
+* `VerifyK`: what the acceptance walkers read of `verify`, at the verdict with its digest comparisons read through
+  `keep` (`AcceptsK`, `verifyK_ok_tables`, `decodeWithK_points`, `decodeWithK_allRetained`), `verify`'s at `keep := id`;
 * `CompiledL`: compiled soundness of one table under any leaf scheme (`table_sound_compiledL`), the salted form of
   `table_sound_compiled`;
 * `CompiledTableL`: the same for any level-0 table (`table_sound_compiled_of_tableL`), the reps' terms independent of
@@ -73,9 +79,9 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
   `flock_headline_exec_L`);
 * `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
-  at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for R11;
-* `Live`: R11 for one-table sessions of the challenger, with `bad = ⊥`, given `Decodes` (`execRefines_one`), and
-  the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
+  at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for the refinement;
+* `Live`: the refinement for one-table sessions of the challenger, with `bad = ⊥`, given `Decodes` (`execRefines_one`),
+  and the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
 * `Decode`: two pieces of `DecodesAll`: a run on two lists is a run on one tape with those messages and coins
   (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`);
 * `Emit`, `FramesLigerito`, `FramesRep`: the frames a run emits, round by round (`Emitted`, `chunks`), for each phase
@@ -90,15 +96,17 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the
   same messages and coins are runs on the same tape (`repC_tape`);
 * `Pts`: a `setupH` statement's link points, `mPtsOf` of the circuit's `g` and the units it proves (`setupH_facts`),
-  for a drawn session the draw's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two draws
+  for a sampled session the sample's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two samples
   that prove as many units (`setupH_mPts_eq`);
-* `LiveOn`: `Live`'s R11 and headline with the decoder right at the law's draws only (`DecodesOn`, `execRefines_on`,
-  `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
-* `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
-  source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
+* `LiveOn`: `Live`'s refinement and headline with the decoder right at the sampling design's samples only (`DecodesOn`,
+  `execRefines_on`, `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
+* `LawDraw`: every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit where the run reads past the
+  source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a sample file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);
 * `SessionLDecisive`: some run of the salted batched session accepts (the all-zero run) and, on a plan with a table,
   some run rejects, and every message type is inhabited, so the session and the audit over it are decisive
   (`batchedSessionL_decisive`, `audit_tile_decisive`, `audit_tile_decisive_verdict`). These are existential over the
   coins; completeness of the reference prover stays open.
 -/
+
+@[expose] public section

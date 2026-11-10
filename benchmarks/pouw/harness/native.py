@@ -12,8 +12,10 @@ from pathlib import Path
 
 from arm import Buffer
 from identity import uuid_string
+from verity_config.settings import of
 
 HERE = Path(__file__).parent
+settings = of(__file__)
 u64, vp, sz, i32 = C.c_uint64, C.c_void_p, C.c_size_t, C.c_int
 
 
@@ -41,13 +43,13 @@ class LtCandidate(C.Structure):
 
 
 def lib_path() -> Path:
-    return Path(os.environ.get("POUW_HARNESS_LIB", HERE / "native" / "build" / "libpouw_harness.so"))
+    return Path(settings.POUW_HARNESS_LIB or HERE / "native" / "build" / "libpouw_harness.so")
 
 
 def lt2_path() -> Path | None:
     """The second cuBLASLt's library (build.sh with LT2_HOME): POUW_HARNESS_LT2, else libpouw_lt2.so beside the harness's
     library if the build made one; POUW_HARNESS_LT2=none leaves it out. A named library that can't load is an error."""
-    v = os.environ.get("POUW_HARNESS_LT2")
+    v = settings.POUW_HARNESS_LT2
     if v == "none":
         return None
     if v:
@@ -146,6 +148,15 @@ class Device:
             L.ph_derive.restype = L.ph_stream_wait_event.restype = i32
             L.ph_derive.argtypes = [i32, vp, i32, i32, i32, vp, vp, i32, vp]
             L.ph_stream_wait_event.argtypes = [vp, vp]
+        #: NVTX ranges (nsys attributes each timed item's kernels by them); a library built before them has none
+        self.has_nvtx = hasattr(L, "ph_nvtx_push")
+        if self.has_nvtx:
+            L.ph_nvtx_push.restype = L.ph_nvtx_pop.restype = i32
+            L.ph_nvtx_push.argtypes = [C.c_char_p]
+        #: the profiler's capture range around the traced pass (`bench.py --traced`), beside NVTX
+        self.has_profiler = self.has_nvtx and hasattr(L, "ph_profiler_start")
+        if self.has_profiler:
+            L.ph_profiler_start.restype = L.ph_profiler_stop.restype = i32
         self._side = None
         if C.sizeof(Info) != L.ph_info_size():
             raise NativeError("libpouw_harness.so's structs don't match native.py's")
@@ -220,7 +231,7 @@ class Device:
         self.ck(self.lib.ph_read(vp(self._flush.ptr), self._flush.nbytes, 1, vp(self._sink.ptr), 4, vp(stream or self.stream)))
 
     def write_flush(self, stream: int | None = None) -> None:
-        """The write flush (#475's, the W5 control only): zeroing 4x the L2 leaves dirty lines."""
+        """The write flush (the W5 control only): zeroing 4x the L2 leaves dirty lines."""
         self.ck(self.lib.ph_fill(8, vp(self._flush.ptr), self._flush.nbytes, u64(0), vp(stream or self.stream)))
 
     def event(self) -> int:
@@ -257,6 +268,22 @@ class Device:
         ms = C.c_float()
         self.ck(self.lib.ph_event_ms(C.byref(ms), vp(a), vp(b)))
         return ms.value
+
+    def nvtx_push(self, text: str) -> None:
+        if not self.has_nvtx:
+            raise NativeError("this libpouw_harness.so has no NVTX ranges: rebuild it (native/build.sh)")
+        self.lib.ph_nvtx_push(text.encode())
+
+    def nvtx_pop(self) -> None:
+        self.lib.ph_nvtx_pop()
+
+    def profiler_start(self) -> None:
+        if not self.has_profiler:
+            raise NativeError("this libpouw_harness.so has no profiler API: rebuild it (native/build.sh)")
+        self.ck(self.lib.ph_profiler_start(), "profiler start")
+
+    def profiler_stop(self) -> None:
+        self.ck(self.lib.ph_profiler_stop(), "profiler stop")
 
     def capture(self, body) -> Graph:
         """A CUDA graph of whatever `body(stream)` enqueues on the timing stream (thread-local capture mode: a sync,
@@ -305,20 +332,14 @@ class Device:
 
 #: throttle (clock event) reasons that mean the clock was pulled down by power, heat or the board
 BAD_THROTTLE = {0x4: "sw_power_cap", 0x8: "hw_slowdown", 0x20: "sw_thermal", 0x40: "hw_thermal", 0x80: "hw_power_brake"}
-THROTTLE_NAMES = {0x1: "gpu_idle", 0x2: "applications_clocks_setting", 0x10: "sync_boost", 0x100: "display_clock", **BAD_THROTTLE}
 CLOCK_GRAPHICS, CLOCK_SM, CLOCK_MEM = 0, 1, 2
-
-
-def throttle_names(mask: int) -> list[str]:
-    return [n for bit, n in sorted(THROTTLE_NAMES.items()) if mask & bit] + ([hex(mask & ~sum(THROTTLE_NAMES))]
-                                                                              if mask & ~sum(THROTTLE_NAMES) else [])
 
 
 class Nvml:
     """One GPU's NVML handle, by UUID. `sample()` is the per-rep record; `identity()` the card's."""
 
     def __init__(self, uuid: str):
-        self.lib = C.CDLL(os.environ.get("POUW_LIBNVML", "libnvidia-ml.so.1"))
+        self.lib = C.CDLL(settings.POUW_LIBNVML)
         self.uuid = uuid
         self._ck(self.lib.nvmlInit_v2())
         self.h = vp()
@@ -415,7 +436,7 @@ def versions(dev: Device) -> dict:
         if build is not None and Path(t["path"]).parent == lib.parent and (lt2 or {}).get("lib_sha256") != t["sha256"]:
             raise RuntimeError(f"{build_json} describes another libpouw_lt2.so ({(lt2 or {}).get('lib_sha256')}, loaded "
                                f"{t['sha256']})")
-    nvcc = shutil.which("nvcc") or (os.environ.get("CUDA_HOME", "/usr/local/cuda") + "/bin/nvcc")
+    nvcc = shutil.which("nvcc") or ((settings.CUDA_HOME or "/usr/local/cuda") + "/bin/nvcc")
     maps = Path("/proc/self/maps")
     loaded = sorted({line.split()[-1] for line in maps.read_text().splitlines() if "libcublasLt" in line}) \
         if maps.exists() else None

@@ -1,4 +1,4 @@
-"""R11 cb-harden (1) — mutation / alias effects of the Bet A circuit builder (`torch.export(strict=False)` training IR ->
+"""Mutation / alias effects of the Bet A registered compiler (`torch.export(strict=False)` training IR ->
 `verity_vllm.program.frontend.derive`).
 
 What is under test. `derive` translates the pre-dispatch export graph WITH in-place ops kept in place (no functionalisation):
@@ -16,7 +16,7 @@ evaluated with `materialize` (registered gate semantics) and compared to eager: 
 tolerance and are DISCRIMINATING — every case also has the "wrong read" alternative (pre- vs post-mutation value), which
 differs from the right one by O(1), and the test asserts the derived value is NOT the wrong one.
 
-Cases (verdict semantics in the docstrings; the R11 report table is built from `RESULTS`):
+Cases (verdict semantics in the docstrings; the report table is built from `RESULTS`):
     A  disjoint aliases: rotary writes q,k through split views; v (disjoint) stays readable       -> Program == eager
     B  read-before-mutation snapshot (`q.clone()` before rotary), q returned after              -> Program == eager (snap = pre, q = post)
     C  pre-taken view of the mutated operand read after the mutation                              -> refuse(stale) | Program == eager(post)
@@ -28,6 +28,8 @@ Cases (verdict semantics in the docstrings; the R11 report table is built from `
     I  view of `residual` taken before fused_add_rms_norm, read after                              -> refuse(stale) | Program == eager(post)
     J  alloc written through a same-shape view, BASE returned (vLLM Attention's `output` pattern) -> refuse(uninitialised) | Program == eager
     K  view of an alloc taken BEFORE the write, read after                                         -> refuse(uninitialised) | Program == eager
+    L  alloc written through a slice, a NEW slice of the base over that region read (DeepSeek-V4)  -> Program == eager; a second write
+       through the base or a sub-region re-slice                                                  -> refuse(uninitialised)
     X  export-level facts: in-place op kept (no auto_functionalized), USER_OUTPUT-only signature; buffer / user-input mutations
        through a CUSTOM mutable op are NOT surfaced in `graph_signature.output_specs` (measured; ATen `add_` on a buffer is) —
        derive's own storage tracking refuses the buffer write and declares the input write (`mutation_effects`)
@@ -49,7 +51,7 @@ import torch.nn as nn
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import vllm_iface as vi
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager")
 C = dict(T=3, NH=2, KVH=1, D=8, H=16, MAX_POS=16, EPS=1e-5, POS0=2)
@@ -319,6 +321,23 @@ class K_AllocViewBefore(_Norm):
         return ov.view(x.shape[0], C["H"])
 
 
+class L_AllocReSliced(_Norm):
+    """`out[:, :H]` written, then a NEW slice of the base over the same region read (`DeepseekV4Attention`'s `o_padded[:, :NH]`);
+    `writes == 2`: the other half written too; `read_h`: the re-slice's width."""
+
+    def __init__(self, writes: int = 1, read_h: int = C["H"]) -> None:
+        super().__init__()
+        self.writes, self.read_h = writes, read_h
+
+    def forward(self, x, y):
+        h = x + y
+        out = torch.empty(x.shape[0], 2 * C["H"], dtype=BF)
+        torch.ops.vllm_iface.rms_norm(out[:, :C["H"]], h, self.weight, C["EPS"])
+        if self.writes == 2:
+            torch.ops.vllm_iface.rms_norm(out[:, C["H"]:], x, self.weight, C["EPS"])
+        return out[:, :self.read_h]
+
+
 class X_UserInputMutation(_Norm):
     def forward(self, x, r):
         torch.ops.vllm_iface.fused_add_rms_norm(x, r, self.weight, C["EPS"])  # writes two prescribed inputs
@@ -520,6 +539,22 @@ def test_K_alloc_view_before_write_read_after():
                      rules=_alloc_view_rules())
 
 
+def test_L_a_new_view_of_an_allocation_over_its_one_written_region_is_the_written_value():
+    inputs = _inputs(2, C["H"], 13)
+    m = L_AllocReSliced()
+    rep = _derive(m, inputs, rules=_alloc_view_rules())
+    assert rep.ok, _reason(rep)
+    assert "AllocView_v3" in rep.provenance["rules_applied"]
+    diffs = _check_program_matches("L", rep, m, inputs, _eager(m, inputs), None)
+    _record("L alloc written through out[:, :H]; a new slice out[:, :H] of the base read (DeepSeek-V4's o_padded)", "Program == eager",
+            f"Program; max|Δ|={max(diffs):.3g}", "PASS")
+    for case, m, why in (("L1", L_AllocReSliced(writes=2), "two writes through the base"),
+                         ("L2", L_AllocReSliced(read_h=C["H"] // 2), "the new slice is a sub-region of the written one")):
+        rep = _derive(m, inputs, rules=_alloc_view_rules())
+        assert not rep.ok and rep.unsupported.reason == "mutation" and "uninitialised" in rep.unsupported.hint, (case, rep.unsupported)
+        _record(f"{case} new slice of an alloc: {why}", "refuse(mutation, uninitialised)", f"refused: {_reason(rep)[:200]}", "PASS (fail-closed)")
+
+
 # ---------------------------------------------------------------------------------------------------------
 # X: what torch.export records, and that derive consumes it
 # ---------------------------------------------------------------------------------------------------------
@@ -650,7 +685,7 @@ class Y_AsStrided(nn.Module):
 
 
 class Y_WeightDataWrite(_Norm):
-    """R10 open item A6: a write through `.data` of a parameter inside forward (rebinding weight storage) must be refused."""
+    """A write through `.data` of a parameter inside forward (rebinding weight storage) must be refused."""
 
     def forward(self, x, y):
         self.weight.data.mul_(2.0)
@@ -686,7 +721,7 @@ def _test_Y(cls):
 # ---------------------------------------------------------------------------------------------------------
 # T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
 # tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings.py`) decide from the pinned kernel
-# (name + source sha256 + constexprs + geometry) which operand the kernel actually writes. R10 open item A1: input_ptr /
+# (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.
 # ---------------------------------------------------------------------------------------------------------
 

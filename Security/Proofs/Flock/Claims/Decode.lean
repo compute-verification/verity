@@ -1,5 +1,45 @@
-import Proofs.Flock.Claims.Counted
-import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
+module
+
+public import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
+public import Mathlib.NumberTheory.LucasLehmer
+public import Proofs.Flock.Claims.Counted
+import Definitions.Claims
+import Mathlib
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A list decoder for interleaved Reed–Solomon codes, from Guruswami–Sudan
@@ -30,10 +70,12 @@ The Johnson count is `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1`, the small
   message that agrees with all of them, at a cost at least their number
   (`Flock.ListComplete.card_le_eval_of_agree`).
 
-Before ruling 2 (16 Oct) `ListComplete` had no `nMin`, which is `nMin = 0`: it put every message in the list of the
+In its first form `ListComplete` had no `nMin`, which is `nMin = 0`: it put every message in the list of the
 empty input (`Flock.ListComplete.mem_nil`), so a `DecoderComplexity` whose step count is at least its output's length
 had `|T| ≤ p(size [])` (`Flock.ListComplete.card_le_eval`).
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -42,8 +84,8 @@ open Polynomial
 /-! ## The `nMin` form of the list-decoding spec -/
 
 /-- **List decoding from `nMin` opened columns**: from opened columns at distinct positions, at least `nMin M` of them,
-`decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. The spec's form until
-16 Oct, when the radius form (`Flock.ListWithin`) replaced it; the decoders here still meet it, with `nMin M` the
+`decode` lists every trace `M` whose encoding agrees with at least a fraction `agree` of them. The spec's form before
+the radius form (`Flock.ListWithin`) replaced it; the decoders here still meet it, with `nMin M` the
 smallest count above the Johnson bound of `M`'s code. -/
 def Flock.ListComplete {Col T : Type} [DecidableEq Col] (enc : T → ℕ → Col) (agree : ℝ) (nMin : T → ℕ)
     (decode : List (ℕ × Col) → List T) : Prop :=
@@ -382,8 +424,8 @@ theorem ListComplete.mem_nil {Col T : Type} [DecidableEq Col] {enc : T → ℕ �
     {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree (fun _ => 0) decode) (M : T) : M ∈ decode [] :=
   h [] M List.nodup_nil le_rfl (by simp)
 
-/-- **The reason for ruling 2**: under the spec as first frozen (`nMin = 0`), a complete decoder's complexity polynomial
-is at least `|T|` at the empty input, when its step count is at least the length of its output there. -/
+/-- **Why the spec counts `nMin` columns**: under the spec as first frozen (`nMin = 0`), a complete decoder's complexity
+polynomial is at least `|T|` at the empty input, when its step count is at least the length of its output there. -/
 theorem ListComplete.card_le_eval {Col T : Type} [DecidableEq Col] [Fintype T] {enc : T → ℕ → Col} {agree : ℝ}
     {decode : List (ℕ × Col) → List T} (h : ListComplete enc agree (fun _ => 0) decode)
     {counted : List (ℕ × Col) → List T × ℕ} {size : List (ℕ × Col) → ℕ} {p : Polynomial ℕ}

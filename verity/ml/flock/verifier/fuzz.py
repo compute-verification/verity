@@ -1,17 +1,18 @@
-"""Fuzzing for the agreement check (PROTOCOL.md §17.1 item 2): random single mutations of an honest session.
+"""Fuzzing for the agreement check (`verity/ml/flock/verifier/README.md` item 2): random single mutations of an honest session.
 
     python fuzz.py SESSION_DIR OUT_DIR --seed S --n N [--upstream-checks link_sigma]
 
 Each case edits one thing, chosen with `random.Random(seed)`:
 - `proof-byte`: a bit of one rep's proof file, with its `proof_sha256` updated (so S17 passes) and nothing else. The
-  transcript (R2) or the decoder must reject, unless the bit lies past the proof pair (§8.1: ignored).
+  transcript (R2) or the decoder must reject (past the pair in its statement's pinned form, `Flock.Proof` refuses every byte: D17).
 - `proof-value`: one field element or hash of one rep's proof, with that rep's round digests rebuilt (`redigest.py`). It must
-  be rejected, unless the field is a proof-of-work nonce, which is a message that no check reads (§6.1).
-- `coin`: one bit of one recorded coin. No expectation: an unused coin (§19 A1) or the high bits of a query coin (§13.5)
+  be rejected; a proof-of-work nonce by the Lean verifier's decoder only, which refuses every nonce but `0` (R4), divergence
+  D21.
+- `coin`: one bit of one recorded coin. No expectation: an unused coin (`verity/ml/flock/verifier/README.md` A1) or the high bits of a query coin (`Flock.Ligerito`)
   leave the verdict unchanged; the verifiers must only agree.
 - `digest`: one bit of one round's `msg_sha256`. Must be rejected (R2).
 - `record`: one bit of `root_b`, `sigma`, a link point, `y`, `link_sha256` or a proof's `sha256`. Must be rejected (a
-  flipped `sigma` by the Lean verifier only, divergence D3, unless `--upstream-checks link_sigma`: PR #83 from b3baabd8).
+  flipped `sigma` by the Lean verifier only, divergence D3, unless `--upstream-checks link_sigma`: M0 from b3baabd8).
 
 Writes OUT_DIR/<case>/ and OUT_DIR/fuzz.json (the `--expect` form of `agree.py`; cases without an expectation are omitted).
 Use a fixed seed per CI run and a rolling seed for nightly runs.
@@ -65,7 +66,7 @@ def main():
             tc.replay(st["rounds"], st["label"].encode(), rd.digest_of(rec), tc.decode(bytes(pf[rep])))
             what = f"rep{rep} {field} @ {o}"
             if field in NONCES:
-                want = {"accepted": True, "why": ""}
+                want["upstream_accepted"] = True
         elif kind == "coin":
             r = rng.randrange(len(st["rounds"]))
             c = rng.randrange(len(st["rounds"][r]["coins"]))
@@ -83,7 +84,7 @@ def main():
                 l["root_b"][table] = flip_hex(l["root_b"][table], rng.randrange(256))
             elif which == "sigma":
                 l["sigma"] = flip_hex(l["sigma"], rng.randrange(256))
-                # D3 before PR #83 b3baabd8: upstream's from_record ignored link.sigma (Σ is bound by Hello and root_F)
+                # D3 before M0 b3baabd8: upstream's from_record ignored link.sigma (Σ is bound by Hello and root_F)
                 want = {"accepted": False, "why": "S4"}
                 if "link_sigma" not in a.upstream_checks.split(","):
                     want["upstream_accepted"] = True
@@ -105,7 +106,7 @@ def main():
         name = f"fuzz-{a.seed}-{k:03d}-{kind}"
         d = a.out / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(rec))
+        (d / "session.json").write_text(rd.session_text(rec))
         for r in (0, 1):
             (d / f"{table}.rep{r}.bin").write_bytes(pf[r])
         (d / "what.txt").write_text(what + "\n")

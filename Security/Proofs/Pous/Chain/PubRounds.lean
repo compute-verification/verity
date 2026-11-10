@@ -1,3 +1,9 @@
+module
+
+public import Definitions.Pous.Accounting.PubMeets
+public import Definitions.Pous.Model.BandChain
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Chain.FamilyRounds
 
 /-!
@@ -8,6 +14,8 @@ import Proofs.Pous.Chain.FamilyRounds
 `FamilyRounds.lean` proves the latter at `D = 2`, `k = 97` and at `D = 1`, `k = 93`. `Pous.SecurityProofs` proves the
 guarantees `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` from them.
 -/
+
+@[expose] public section
 
 namespace PousPub
 

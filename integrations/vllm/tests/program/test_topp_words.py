@@ -1,5 +1,5 @@
-"""The top-p keep word as word gates (`registry.topp_words`): `TopPKeepWord_v1{V,S}` is `topp_keep(x, p, S)` on every row, as the IR's
-evaluator computes it from its word gates, including #169's constructed rows whose warp halves disagree on stopping;
+"""The top-p keep word as word gates (`registry.topp_words`): `TopPKeepWord_v1{V,S}` is `topp_keep(x, p, S)` on every row, as the circuit's
+evaluator computes it from its word gates, including the constructed rows whose warp halves disagree on stopping;
 `GumbelTopPTokenSelect_v2{V,S}` is v1 wherever `splits` is S; the program codec round-trips them; `Q_word` cuts the keep word into
 word-sized units with no recomputed value; the new word gates are exact."""
 from __future__ import annotations
@@ -14,15 +14,15 @@ from verity.ml.circuits.codec import decode_program, encode_program
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import topp_split as TS
-from verity_vllm.program.registry import topp_keep_builder as TKB
-from verity_vllm.program.registry import topp_word_gates as TWGates
-from verity_vllm.program.registry import topp_words as TWG
-from verity_vllm.program.registry.prims import BIT, F32
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import topp_split as TS
+from verity.ml.definitions.registry import topp_keep_builder as TKB
+from verity.ml.definitions.registry import topp_word_gates as TWGates
+from verity.ml.definitions.registry import topp_words as TWG
+from verity.ml.definitions.registry.prims import BIT, F32
 
 f32 = np.float32
-#: #169's constructed rows (`test_topp_split_halves`): ordinary logits at V = 3000, S = 16, p = 0.5, the step kernels' partials
+#: the constructed rows (`test_topp_split_halves`): ordinary logits at V = 3000, S = 16, p = 0.5, the step kernels' partials
 #: constructed so that each warp half's own scalars decide `nomask`; {seed: the halves' stops}, both orders
 HALVES = {35: [False, True], 50: [False, True], 17: [True, False], 47: [True, False]}
 
@@ -49,7 +49,7 @@ def _rows(V, n, seed):
 
 
 def _halves(monkeypatch):
-    """The keep word's own body (`topp_words.keep_word_body`) with #169's partials in place of its step kernels', and the rows,
+    """The keep word's own body (`topp_words.keep_word_body`) with their partials in place of its step kernels', and the rows,
     `topp_split`'s step kernels given the same partials."""
     V, S, P = 3000, 16, f32(0.5)
     parts = np.zeros((TS.SPLIT_ROUNDS, S, TS.SPLIT_FANOUT, 3), f32)
@@ -74,8 +74,8 @@ def _halves(monkeypatch):
     return bind(fn), rows, S
 
 
-@pytest.mark.parametrize("V,S,n", [(16, 4, 10), (64, 32, 8), (300, 8, 8), (1025, 32, 6), (3000, 16, "halves")])
-@pytest.mark.slow
+@pytest.mark.parametrize("V,S,n", [(16, 4, 10)] + [pytest.param(*a, marks=pytest.mark.slow)
+                                       for a in [(64, 32, 8), (300, 8, 8), (1025, 32, 6), (3000, 16, "halves")]])
 def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
     if n == "halves":
         fn, rows, S = _halves(monkeypatch)
@@ -88,6 +88,7 @@ def test_the_keep_word_as_word_gates_is_topp_keep(V, S, n, monkeypatch):
         assert n != "halves" or (ref.any() and not ref.all())
 
 
+@pytest.mark.slow
 def test_the_select_at_a_constant_split_count_is_v1_there():
     V, rng = 64, np.random.default_rng(3)
     for i in range(3):
@@ -98,6 +99,7 @@ def test_the_select_at_a_constant_split_count_is_v1_there():
                 evaluate(bind(SM.GumbelTopPTokenSelect, V=V), *args, spl)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("fam,V,S", [("TopPKeepWord", 300, 8), ("TopPKeepWord", 1025, 32), ("GumbelTopPTokenSelectV2", 300, 8)])
 def test_the_codec_round_trips_it(fam, V, S):
     """The Definition as one Call of a Program, through `encode_program` and `decode_program` as a Build's workload compose reads it.
@@ -111,8 +113,9 @@ def test_the_codec_round_trips_it(fam, V, S):
     assert D.gates == P.gates and D.root.id == P.root.id
 
 
+@pytest.mark.slow
 def test_q_word_cuts_it_into_word_units():
-    from verity_vllm.query import word as WQ
+    from verity.ml.definitions import word as WQ
 
     r = WQ.unit_rule(bind(TWG.TopPKeepWord, V=300, S=8), 16, 32)
     assert not r["violations"] and r["max_out_bits"] <= 32 and r["units_per_call"] > 1000

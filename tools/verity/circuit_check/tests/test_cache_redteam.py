@@ -1,4 +1,4 @@
-"""Red-team probes of `circuit_check.cache` v2 (PR #1126): edits that change a target's verdict while its key stays the same.
+"""Adversarial probes of `circuit_check.cache`: edits that change a target's verdict while its key stays the same.
 
 Each test states the property a sound cache keeps (an edit that changes the verdict reruns the target), on the synthetic tree
 of `test_cache`: a cold run, the edit, a run under a fresh cache (the verdict as it is now), and a run under the first cache.
@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from test_cache import FILES, HARNESS, REPO, _edit, _entry
+from test_cache import HARNESS, REPO, _edit, _entry, _tree
 
 #: the real correspondence check (the reference, `kernels` and `self_check`), not `test_cache`'s stand-in
 CHECK_CORR = """
@@ -23,7 +23,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": F.warnings, "realizations": corr["realizations"]}
 """
 
-#: a kernel module of the kind `verity_vllm.program.kernels.rows` is: imported with the registries (`load_registries`), before
+#: a kernel module of the kind `verity.ml.definitions.numerics.rows` is: imported with the registries (`load_registries`), before
 #: any check, registering kernels for Definitions defined elsewhere
 KERN = """
 import numpy as np
@@ -39,15 +39,6 @@ def _harness(registries: str, check: str) -> str:
     h = h.replace("from syn import catalog, check\n", f"from syn import catalog\nfrom syn import {check} as check\n")
     return h.replace('print(json.dumps({"stats"',
                      'print(json.dumps({"targets": {t["target"]: {k: t.get(k) for k in ("failures", "value")} for t in rep["targets"]}, "stats"')
-
-
-def _tree(tmp: Path, extra: dict[str, str]) -> Path:
-    subprocess.run(["git", "init", "-q", str(tmp)], check=True)
-    for rel, text in {**FILES, **extra}.items():
-        p = tmp / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(text.lstrip("\n"))
-    return tmp
 
 
 def _run(root: Path, harness: str, cache: str = "cache") -> dict:

@@ -1,8 +1,8 @@
-"""Dead gates of a `Program`: hierarchical liveness over the typed IR (frontend rulings, §8.6).
+"""Dead gates of a `Program`: hierarchical liveness over the typed Program.
 
 A gate is *dead* when no other gate consumes its value and it is not protected (not a root output). Dead
 gates are legal in every mode; they are counted toward the described computation, they are **not** boundary
-values of any gate selection by existence (`S.out` is the graph boundary — a value nobody reads is not on it), and
+values of any gate set by existence (`S.out` is the graph boundary — a value nobody reads is not on it), and
 frontends report them (count + ids).
 
 The analysis never expands the circuit. It runs once per (specialised definition, set of live return leaves):
@@ -90,10 +90,12 @@ class Liveness:
     `transitive=False` (the default) computes **dead gates** in the sense of §8.6: no consumer and not
     protected — every consumer counts, even one that is itself dead. `transitive=True` computes the gates with
     **no dependency path to a protected output** (dead gates plus everything that only feeds dead gates):
-    the "can its value affect the protected result?" question of §8.6, a superset of the first."""
+    the "can its value affect the protected result?" question of §8.6, a superset of the first.  A batch argument whose
+    members read more than `member_limit` partial pieces in all is taken as read whole (`approximate`); None: never."""
 
-    def __init__(self, transitive: bool = False) -> None:
+    def __init__(self, transitive: bool = False, member_limit: int | None = _MEMBER_LIMIT) -> None:
         self.transitive = transitive
+        self.member_limit = member_limit
         self._cache: dict[tuple[int, Intervals], BodyLiveness] = {}
         self._keep: list = []  # keep the specialisations alive (ids are the cache key)
 
@@ -103,9 +105,43 @@ class Liveness:
         if hit is not None:
             return hit
         self._keep.append(sd)
-        res = self._analyse(sd.body, live_ret)
+        res = self._dead(sd.body) if self.transitive and not live_ret else self._analyse(sd.body, live_ret)
         self._cache[key] = res
         return res
+
+    def _dead(self, body: Body) -> BodyLiveness:
+        """`_analyse(body, ())` when transitive: nothing is live, so nothing is read and every gate is dead, counted without
+        marking (a batch's other owners' requests, in R1's separability, are this)."""
+        dead_c = dead_i = 0
+        approx = False
+        scan_runs: dict[int, list[tuple[Intervals, int]]] = {}
+        for k, node in enumerate(body.nodes):
+            fn = node.fn
+            if node.form == "primitive":
+                if getattr(fn, "family", None) == "Input":
+                    dead_i += 1
+                else:
+                    dead_c += 1
+            elif node.form == "call":
+                sub = self.analyse(fn, ())
+                dead_c += sub.dead_computed
+                dead_i += sub.dead_input
+                approx |= sub.approximate
+            elif node.form == "batch":
+                if not isinstance(fn, PrimitiveDefinition):
+                    dead_c += node.n * fn.gates
+                elif getattr(fn, "family", None) == "Input":
+                    dead_i += node.n
+                else:
+                    dead_c += node.n
+            else:
+                if node.n:
+                    sub = self.analyse(fn, ())
+                    dead_c += node.n * sub.dead_computed
+                    dead_i += node.n * sub.dead_input
+                    approx |= sub.approximate
+                scan_runs[k] = [((), node.n)] if node.n else []
+        return BodyLiveness(((),) * len(body.params), dead_c, dead_i, [()] * len(body.nodes), scan_runs, approx)
 
     # -- one body -----------------------------------------------------------------------------------
     def _analyse(self, body: Body, live_ret: Intervals) -> BodyLiveness:
@@ -118,6 +154,7 @@ class Liveness:
         scan_runs: dict[int, list[tuple[Intervals, int]]] = {}
 
         marked: dict[int, list] = {}  # id(PartLog) -> [log, how many of its parts are marked]
+        seen: set = set()  # the strided reads marked so far (ref_intervals)
 
         def mark(refs: Refs) -> None:
             t: dict[tuple[str, int], list] = {}
@@ -127,12 +164,12 @@ class Liveness:
                 if m is None or m[0] is not log:
                     m = marked[id(log)] = [log, 0]
                 for p in log.parts[m[1]:j]:
-                    ref_intervals(p, t)
+                    ref_intervals(p, t, seen)
                 m[1] = max(m[1], j)
                 for p in refs.parts[j:]:
-                    ref_intervals(p, t)
+                    ref_intervals(p, t, seen)
             else:
-                ref_intervals(refs, t)
+                ref_intervals(refs, t, seen)
             for (space, idx), ivs in t.items():
                 (live if space == "n" else pread)[idx].extend(ivs)
 
@@ -148,7 +185,7 @@ class Liveness:
         for lo, hi in live_ret:
             mark(body.ret.slice(lo, hi))
 
-        transitive = self.transitive
+        transitive, limit = self.transitive, self.member_limit
         for k in range(len(nodes) - 1, -1, -1):
             node = nodes[k]
             fn = node.fn
@@ -222,7 +259,7 @@ class Liveness:
                                 Lp = a.type.elem.leaves
                                 if total(rd) == Lp:
                                     mark(a.refs.slice(m_lo * Lp, m_hi * Lp))
-                                elif cnt * len(rd) <= _MEMBER_LIMIT:
+                                elif limit is None or cnt * len(rd) <= limit:
                                     for m in range(m_lo, m_hi):
                                         for lo, hi in rd:
                                             mark(a.refs.slice(m * Lp + lo, m * Lp + hi))

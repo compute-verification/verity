@@ -1,10 +1,26 @@
-import Flock.RecSetup
-import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.Recursive.HoloExec
+module
+
+public import Flock.RecSetup
+public import Proofs.Flock.C3.VStarList.Range
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 /-!
 # Piece (h): `AcceptsC3` from the verifier's acceptance
@@ -23,10 +39,14 @@ covers check (`RecVStar.checkCovers`). So:
 * Every candidate-3 session either setup accepts is one these read: the verifier holds the inner files
   (`files_of_checkInner`), the inner transcript (`commits_of_checks`) and R's registration, both JSON
   (`held_of_commits`).
+* At the verifier's inner shape `commits` reads the challenger's live-coin part's record in its own format (`reads_of_commits`), and
+  what it reads there is what the JSON readers read (`checkReads_ok`).
 * `sparse_of_acceptsC3`: `AcceptsC3` names a RecSparse shape (`checkInnerStmt`), so `hcoins_of_acceptsC3`: at an
   accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
-  against, never `--rec-inner-coins`'s record, which `checkAtC3` refuses there.
+  against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 
@@ -90,7 +110,7 @@ theorem sparse_of_acceptsC3 (h : AcceptsC3 ish st tr record reg) : ish.sparse.is
 
 /-- **Check 5's source at an accepted candidate-3 session is the files of its record**, `_hcoins`'s form at the record
 `r`: `AcceptsC3` at `r` names a RecSparse shape (`sparse_of_acceptsC3`), where `checkInner` refuses every source but
-the inner statement's files (`files_of_checkInner`: `--rec-inner-coins` is refused there), and the verifier holds the
+the inner statement's files (`files_of_checkInner`: a `Source.coins` is refused there), and the verifier holds the
 inner transcript against its source's record (`hrec`: `verify` reads it as `recCoins.map (·.record)`), so the files'
 record is `r`. -/
 theorem hcoins_of_acceptsC3 {coins : String → Option RecCoins.Source} {r : String}
@@ -112,6 +132,7 @@ theorem checkInner_ok (hsp : ish.sparse.isSome = true)
   obtain ⟨_, spec, st, hf, hst, hr⟩ := checkAtC3_spec h1 hsp
   cases hf
   simp only [hsp, ↓reduceIte] at h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   exact ⟨spec, st, hst, hr, h⟩
 
 theorem checks_ok
@@ -134,34 +155,121 @@ theorem commits_of_checks {commits : Option RecVStar.InnerCommits} (hsp : ish.sp
     simp only [RecSetup.checks, Option.bind_some, hsp, Option.isNone_none, Bool.and_self, ↓reduceIte, throw,
       throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at h
 
-theorem commits_ok (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
+/-- **The verifier's hold of the inner transcript, and the transcript on its schedule**: `commits` at the verifier's
+inner shape is `innerCommits` on the files' parses, and it holds the transcript to the schedule
+(`RecVStar.checkSchedule`). -/
+theorem commits_ok (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (h : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs) :
-    ∃ d sh, bound = .ok (d, sh) ∧ RecVStar.innerCommits tr record (some reg) d sh = .ok cs := by
+    ∃ d sh, bound = .ok (d, sh) ∧ RecVStar.innerCommits tr record (some reg) d sh = .ok cs ∧
+      RecVStar.checkSchedule ish tr = .ok () := by
   unfold RecSetup.commits at h
   cases hb : bound with
   | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg] at h
   | ok b =>
     obtain ⟨d, sh⟩ := b
     refine ⟨d, sh, rfl, ?_⟩
-    simpa [hb, bind, Except.bind, pure, Except.pure, hreg, htr] using h
+    cases hi : RecVStar.innerCommits tr record (some reg) d sh with
+    | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi] at h
+    | ok cs' =>
+      cases hs : RecVStar.checkSchedule ish tr with
+      | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
+      | ok u =>
+        cases hr : RecSetup.checkReads ish tt tr record cs' with
+        | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs, hr] at h
+        | ok u' =>
+          simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs, hr] at h
+          subst h
+          exact ⟨rfl, rfl⟩
+
+/-- **`commits` at the verifier's inner shape reads the record in its own format** (`RecSetup.checkReads`). -/
+theorem reads_of_commits {r : Except String (Option String)} (htr : Flock.JsonParse.parse tt = .ok tr)
+    (h : RecSetup.commits (some ish) (.ok tt) r bound record = .ok cs) :
+    RecSetup.checkReads ish tt tr record cs = .ok () := by
+  unfold RecSetup.commits at h
+  simp only [bind, Except.bind, pure, Except.pure, htr] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+/-- What `checkReads` holds of rep `x`'s salted tops and `c_k`: the record's, read in its own format, are the JSON's. -/
+def RepAgrees (r : RecRecord.Record) (lk : RecVStar.InnerLink) (cs : RecVStar.InnerCommits) (x : ℕ) : Prop :=
+  RecSetup.repTops r s!"{lk.table}/rep{x}".toUTF8.toList =
+      (lk.tops.getD x #[]).toList.map (fun (k, top) => (k, top.toList.map (·.toList))) ∧
+    RecSetup.repCommits r s!"{lk.table}/rep{x}".toUTF8.toList =
+      (cs.reps.getD x #[]).toList.map fun (k, c) => (k, [c.toList])
+
+/-- **What `checkReads` holds**: the challenger's live-coin part's record reads in its own format (`RecRecord.readFull`), and what it
+reads there is what the JSON readers read: Hello's tables are the circuit table alone, `link.roots` that table's
+`root_B` alone, the link points the JSON's, the rounds the schedule's, and each rep's salted tops and `c_k` the
+JSON's. -/
+theorem checkReads_ok (h : RecSetup.checkReads ish tt tr record cs = .ok ()) :
+    ∃ lk r want, RecVStar.innerLink tr record = .ok lk ∧ RecRecord.readFull tt.toUTF8.toList = some r ∧
+      r.hello.tables = [lk.table.toUTF8.toList] ∧
+      r.roots = [(lk.table.toUTF8.toList, lk.root.toList.map (·.toList))] ∧
+      r.points = (lk.points.toList.map (·.toList)).flatten ∧
+      RecVStar.scheduleOf ish lk.table = some want ∧
+      r.rounds.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
+        want.toList.flatMap (fun (s, _, _, rs) => rs.toList.mapIdx fun k w => (s.toUTF8.toList, k, w.1, w)) ∧
+      RepAgrees r lk cs 0 ∧ RepAgrees r lk cs 1 := by
+  unfold RecSetup.checkReads at h
+  obtain ⟨lk, hlk, h⟩ := ebind_ok h
+  have hb : ∀ {α : Type} [BEq α] [LawfulBEq α] {a b : α}, ¬(a != b) = true → a = b := by
+    intro α _ _ a b h; simpa using h
+  split at h
+  · rename_i r hr
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    rename_i h1
+    split at h
+    · cases h
+    rename_i h2
+    split at h
+    · cases h
+    rename_i h3
+    split at h
+    · rename_i want hw
+      split at h
+      · cases h
+      rename_i h4
+      simp only [List.forIn_cons, List.forIn_nil, bind, Except.bind] at h
+      have hT : ∀ x : ℕ, ¬(RecSetup.repTops r (toString lk.table ++ toString "/rep" ++ toString x).toUTF8.toList !=
+          List.map (fun x => (x.fst, List.map (fun x => x.toList) x.snd.toList)) (lk.tops.getD x #[]).toList) = true →
+          ¬(RecSetup.repCommits r (toString lk.table ++ toString "/rep" ++ toString x).toUTF8.toList !=
+            List.map (fun x => (x.fst, [x.snd.toList])) (cs.reps.getD x #[]).toList) = true → RepAgrees r lk cs x :=
+        fun x a b => ⟨hb a, hb b⟩
+      by_cases a0 : (RecSetup.repTops r (toString lk.table ++ toString "/rep" ++ toString 0).toUTF8.toList !=
+          List.map (fun x => (x.fst, List.map (fun x => x.toList) x.snd.toList)) (lk.tops.getD 0 #[]).toList) = true
+      · simp only [a0, ↓reduceIte] at h; simp at h
+      by_cases b0 : (RecSetup.repCommits r (toString lk.table ++ toString "/rep" ++ toString 0).toUTF8.toList !=
+          List.map (fun x => (x.fst, [x.snd.toList])) (cs.reps.getD 0 #[]).toList) = true
+      · simp only [a0, b0, ↓reduceIte] at h; simp at h
+      by_cases a1 : (RecSetup.repTops r (toString lk.table ++ toString "/rep" ++ toString 1).toUTF8.toList !=
+          List.map (fun x => (x.fst, List.map (fun x => x.toList) x.snd.toList)) (lk.tops.getD 1 #[]).toList) = true
+      · simp only [a0, b0, a1, ↓reduceIte] at h; simp at h
+      by_cases b1 : (RecSetup.repCommits r (toString lk.table ++ toString "/rep" ++ toString 1).toUTF8.toList !=
+          List.map (fun x => (x.fst, [x.snd.toList])) (cs.reps.getD 1 #[]).toList) = true
+      · simp only [a0, b0, a1, b1, ↓reduceIte] at h; simp at h
+      exact ⟨lk, r, want, hlk, hr, hb h1, hb h2, hb h3, hw, hb h4, hT 0 a0 b0, hT 1 a1 b1⟩
+    · cases h
+  · cases h
 
 /-- **A candidate-3 session holds R's registration**, and both files are JSON: `commits` refuses one without it. -/
 theorem held_of_commits {t : Except String String} {r : Except String (Option String)}
     (hsp : ish.sparse.isSome = true) (h : RecSetup.commits (some ish) t r bound record = .ok cs) :
-    ∃ tt tr rt reg, t = .ok tt ∧ Json.parse tt = .ok tr ∧ r = .ok (some rt) ∧ Json.parse rt = .ok reg := by
+    ∃ tt tr rt reg, t = .ok tt ∧ Flock.JsonParse.parse tt = .ok tr ∧ r = .ok (some rt) ∧ Flock.JsonParse.parse rt = .ok reg := by
   unfold RecSetup.commits at h
   replace h := ebind_ok h
   obtain ⟨_ | rt, rfl, h⟩ := h
   · simp only [Option.bind_some, hsp, ↓reduceIte, throw, throwThe, MonadExceptOf.throw, bind, Except.bind,
       reduceCtorEq] at h
   dsimp only at h
-  rcases hreg : Json.parse rt with e | reg <;> rw [hreg] at h
+  rcases hreg : Flock.JsonParse.parse rt with e | reg <;> rw [hreg] at h
   · cases h
   rcases bound with e | _
   · cases h
   rcases t with e | tt
   · cases h
-  rcases htr : Json.parse tt with e | tr
+  rcases htr : Flock.JsonParse.parse tt with e | tr
   · dsimp only [pure, Except.pure, bind, Except.bind] at h
     rw [htr] at h
     cases h
@@ -184,9 +292,10 @@ theorem statements_of_checkStmt
     obtain ⟨ss, hss, -⟩ := check_ok (checkCircuit_ok hs).1
     simp [hss, Except.isOk, Except.toBool]
 
-/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, with no program. -/
+/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, under their program. -/
 theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.stmt u = .ok (spec', st')) :
-    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st' := by
+    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
+      .ok st' := by
   unfold RecCoins.Files.stmt at h
   split at h
   · rename_i x hx
@@ -229,9 +338,9 @@ parses `tr` and `reg`) to `cs`, and its checks of a session's statements `sts` p
 the inner statement `st` set up from the files' circuit and public file, as `AcceptsStmt` sets it up, `AcceptsC3`
 holds, check 5's verdict included (its sparse refusals and its inner shape). -/
 theorem c3_of_checks (hsp : ish.sparse.isSome = true)
-    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
+    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
-    (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
+    (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())
     (hck : RecSetup.checks (some ish) (some cs) tags tables sts circuitB partition program registered part bindings
@@ -243,9 +352,9 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
   rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hpub with ⟨-, st₀, hst₀, -, hsts₀⟩ | ⟨hc1, -⟩
   · obtain rfl : st = st₀ := by simpa using hsts₀
     obtain ⟨hcc, hmm, hrr⟩ := setupHidden_same hst₀ (stmt_setupHidden hst')
-    rw [HiddenExec.setupHidden_parseC hst₀] at hc
+    rw [HiddenExec.setupHidden_parseC (HmOut.parse_isTmpl hc) hst₀] at hc
     cases hc
-    obtain ⟨d, sh, hb, hic⟩ := commits_ok htr hreg hcs
+    obtain ⟨d, sh, hb, hic, -⟩ := commits_ok htr hreg hcs
     obtain ⟨hsh, hd⟩ := metaBound_ok (hmb.trans hb)
     have hmr : metaRegistration st = d := by subst hd; rfl
     have hat : innerCommitsAt tr record st reg = .ok cs := by
@@ -266,9 +375,9 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
 `flock_verify_sound` reads it). -/
 theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
     (hset : Exec.setupOf I r = .ok (spec', sts)) (hsp : ish.sparse.isSome = true)
-    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
+    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
-    (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
+    (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())
     (hck : RecSetup.checks (some ish) (some cs) tags tables sts circuitB partition program registered part bindings

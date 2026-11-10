@@ -5,7 +5,7 @@ verifier's record has h in a round of its own after z_partial's coinless one on 
 `rec_vstage` stages the holo algebra from that record, with h read from the session's rows, and it holds (Lean's fold of
 the fixture, `fixtures/inner_claims.json`, split as public comb + h). The stacked table's stream, as candidate 3's
 opening-only prover sends it (``flock-circuit stacked``), is held to `rec_live.schedule_for`'s, and the relay runs each
-rep's sparse phase (`rec_sparse.prove`) on the coin server's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
+rep's sparse phase (`rec_sparse.prove`) on the challenger's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
 full fold (``InnerFold.lean --hide``) is the pod's (``pod/88-rec-c3-inner.sh``, `check_fold`)."""
 from __future__ import annotations
 
@@ -21,11 +21,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as RG, registration as R
+from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity.ml.circuits.types import Value
+from verity.ml.commitments import coin_tree as CT
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
 from verity_flock import rec_algebra as A
@@ -75,14 +76,14 @@ def _registered_top(stage: Path, cap: bytes, seed: int) -> tuple[dict, str, dict
 @pytest.mark.parametrize("shape", [(25, 22, 8), (22, 10, 2)], ids=str)
 def test_the_holo_schedule_gives_h_a_round_after_z_partials_coinless_one(shape):
     """z_partial's round squeezes nothing and h's round (64 elements) squeezes r′; every other round is the plain schedule's,
-    the message rounds are the holo algebra's (`rec_algebra.rounds`), and only the coinless round is no draw."""
+    the message rounds are the holo algebra's (`rec_algebra.rounds`), and only the coinless round is no sample."""
     m, k_log, claims = shape
     plain, holo, k = RL.rep_rounds(m, k_log, claims), RL.holo_rounds(m, k_log, claims), RL.zp_round(m, k_log)
     assert plain[k] == (1, [], 0, 64) and holo[k:k + 2] == [(0, [], 0, 64), (1, [], 0, 64)]
     assert holo[:k] + holo[k + 2:] == plain[:k] + plain[k + 1:]
     hs = A.Shape(m, k_log, claims, holo=True)
     assert [e for *_, e in holo if e] == [len(r) for r in A.rounds(hs)] and A.h_round(hs) == sum(1 for *_, e in holo[:k + 1] if e)
-    c = A.Coins([[1], [], [2, 3]])
+    c = A.CoinSource([[1], [], [2, 3]])
     assert (c.vec(1), c.vec(0), c.vec(2)) == ([1], [], [2, 3])
     sch = RL.schedule_for({"dense_m": m, "k_log": k_log, "nbl": 3, "regions": (claims - 2) // 2}, holo=True)
     assert sch["streams"]["circuit/rep0"]["rounds"] == len(plain) + 1
@@ -156,9 +157,9 @@ def test_h_is_the_dense_fold_of_the_hidden_slots(tmp_path):
         RS.hidden_circuits(tmp_path / "wide.txt", ("unit", "aux"))
 
 
-def _client(addr: str, rec: dict) -> list:
-    """The fake prover: the fixture's honest session as C-Flock's live prover sends it (its Hello without the coin scheme:
-    the session ran on seeded coins), each answer kept."""
+def _client(addr: str, rec: dict, tree: dict | None = None) -> list:
+    """The fake prover: the fixture's honest session as Flock's live prover sends it (its Hello without the coin scheme:
+    the session ran on seeded coins; ``tree``: naming the coin tree, as under ``FC_COINS=tree``), each answer kept."""
     host, port = addr.rsplit(":", 1)
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
     got = []
@@ -170,6 +171,8 @@ def _client(addr: str, rec: dict) -> list:
 
         hello = json.loads(rec["hello"])
         del hello["coins"]
+        if tree is not None:
+            hello["coins"] = tree
         lk = rec["link"]
         send(RL.REQ_HELLO, json.dumps(hello))
         send(RL.REQ_COMMIT, bytes.fromhex(lk["root_f"]), [(t, bytes.fromhex(v)) for t, v in lk["root_b"].items()], [])
@@ -186,8 +189,8 @@ def _client(addr: str, rec: dict) -> list:
 
 @pytest.fixture(scope="module")
 def served(tmp_path_factory):
-    """`rec_session.serve` on loopback, its coin server returning the fixture's recorded coins in the order the prover's
-    rounds drew them (z_partial's coinless round draws none), and the fake prover's answers."""
+    """`rec_session.serve` on loopback, its challenger returning the fixture's recorded coins in the order the prover's
+    rounds drew them (z_partial's coinless round samples none), and the fake prover's answers."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
@@ -230,7 +233,7 @@ def _rep(record: dict, stream: str) -> list[dict]:
 
 def test_the_prover_sees_its_own_session_and_the_verifier_h_in_its_own_round(served):
     """The prover's every round is answered with its recorded coins, and ``prover/session.json`` is its session (each
-    round's message, coin count and coins), what upstream's replay checks its proofs against. The coin server's record has
+    round's message, coin count and coins), what upstream's replay checks its proofs against. The challenger's record has
     the holo schedule: z_partial's round with a ``c_k`` and no coins, then h's round with a ``c_k`` and r′, on the same
     stream; its h is the hidden circuits' fold at the rep's fold points, which the fixture's coins give."""
     out, summary, got, rec = served
@@ -258,6 +261,48 @@ def test_the_prover_sees_its_own_session_and_the_verifier_h_in_its_own_round(ser
         assert prv[k + 1]["rows"] == RL.message_rows(hs[r])
 
 
+def test_on_the_coin_tree_the_relay_opens_each_of_its_rounds_in_order(tmp_path):
+    """Under the challenger's coin tree (``--coin-tree``) every coin of the relayed session is the tree's: ``Hello`` is
+    answered with its root and key, z_partial's coinless round and h's round each open their own round of the rep's
+    stream, in order, and the prover gets h's round's coins (r′) as z_partial's answer. The session record names the tree
+    the challenger drew."""
+    from test_rec_live import _Logged
+
+    rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
+    src, q = _Logged(random.Random(5).randbytes), queue.Queue()
+
+    def run():
+        try:
+            q.put(("done", RS.serve("127.0.0.1:0", tmp_path, STATEMENT, SET / "stage" / "circuit.txt",
+                                    ready=lambda addr: q.put(("ready", addr)), tree=RL.INNER_COIN_SPEC, source=src)))
+        except BaseException as e:  # noqa: BLE001 - handed to the test, which raises it
+            q.put(("error", e))
+
+    th = threading.Thread(target=run)
+    th.start()
+    kind, addr = q.get()
+    if kind == "error":
+        raise addr
+    got = _client(addr, rec, {**RL.INNER_COIN_SPEC.to_json(), "nonce": "77" * CT.NONCE_BYTES})
+    kind, summary = q.get()
+    th.join()
+    if kind == "error":
+        raise summary
+    assert summary["session"], summary
+    [(root, tree)] = src.trees.items()
+    assert got[0] == ((RL.REQ_HELLO,), (RL.RESP_COINS, CT.words(root) + CT.words(tree.key)))
+    k = RL.zp_round(M, K_LOG)
+    for r in (0, 1):
+        stream = f"circuit/rep{r}"
+        asked = [(rnd, n) for s, rnd, n, _ in src.asked if s == stream]
+        assert [rnd for rnd, _ in asked] == list(range(len(_rep(rec, stream)) + 1))
+        assert asked[k:k + 2] == [(k, 0), (k + 1, 1)]
+        mine = [resp for (req, resp) in got if req == (RL.REQ_ROUND, stream)]
+        assert mine[k] == (RL.RESP_COINS, tree.open(RL.INNER_COIN_SPEC.streams.index(stream), k + 1, 1)[0])
+    session = json.loads((tmp_path / "session" / "session.json").read_text())
+    assert session["coin_tree"] == tree.record() and session["coin_seed"] is None
+
+
 def _holo_fold(hs: list[list[int]]) -> dict:
     """``InnerFold.lean --hide unit``'s output as the fixture gives it: Lean's whole fold (InnerClaims' dump) less h."""
     return {"m": INNER["m"], "k_log": INNER["k_log"], "extras": INNER["reps"][0]["extras"], "hidden": ["unit"],
@@ -267,7 +312,7 @@ def _holo_fold(hs: list[list[int]]) -> dict:
 
 def test_rec_vstage_stages_the_holo_algebra_with_h_read_from_the_session(served):
     """`rec_vstage` on the holo session: the fold points from the coins as the plain session's (z_partial's coinless round
-    is no draw), the shape holo, h's round among the message rounds (its row the one its ``c_k`` commits), and per rep the
+    is no sample), the shape holo, h's round among the message rounds (its row the one its ``c_k`` commits), and per rep the
     holo algebra's residuals zero on the rounds' rows with the public comb; h's row one bit off moves the lincheck alone.
     A plain verifier (no hidden circuits) refuses the session: it has one message round too many."""
     out, _, _, rec = served
@@ -324,7 +369,7 @@ def test_the_relay_splits_z_partials_round_and_refuses_another():
     """At z_partial's index the relay sends z_partial's frames ending in a squeeze of no coins, then h's 64 elements and the
     prover's own squeeze, computing h between them at the fold points of the coins the prover has had; the prover gets r′.
     A round there that is not z_partial's (64 elements, then a squeeze of one coin) stops the session before the proxy sees
-    it, and an h the relay cannot compute stops it before r′ is drawn."""
+    it, and an h the relay cannot compute stops it before r′ is sampled."""
     k, zp = RL.zp_round(M, K_LOG), [G.of_hex(f"{i:032x}") for i in range(64)]
     prefix = [[0] * 6, [0] * (M - 13)] + [[i + 1] for i in range(k - 2)]
     content = RS.observe(zp) + RS._frame(RL.OP_SQUEEZE, RL.KIND_SCALAR, 1)
@@ -470,13 +515,13 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
 
 def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_path):
     """The hole the registration closes: R is built from the hidden circuit after the coins that fix its opening point, and
-    its root reaches the coin server only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
+    its root reaches the challenger only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
     at staging (`rec_live.register_top`, `inner_registered.bind`): one more registered value, ``stacked``, of the circuit
     registration, the ``verity/registration/v2`` record one-stage ``registration.record`` writes over the partition object
     META names (one-stage's ``stratified`` law, the statement's scheme, no roots, window ``stand-in``), beside the other
     values registered at staging (a description's): 128 rows of 64 words, one a node, each under its own salt, which only
     the prover's file holds. META's ``registration`` is the record's digest, so the circuit's SHA-512 (both files' headers)
-    and the statement digest bind it, and the same circuit and salts give the same record. The firewall refuses a
+    and the statement digest bind it, and the same circuit and salts give the same record. The ZK server refuses a
     registration whose digest is not META's, a binding round when R has no registered top, or binds a cap that is not it;
     a top is registered only before Hello and before any coin, once, only with an opening that opens it and whose top makes
     the registration's entry, and never for a table whose root Commit carries. The schedule names no registered value.
@@ -644,8 +689,8 @@ def _toy_circuit(d: Path, seed: int) -> tuple[Path, dict]:
     stage.mkdir(parents=True)
     (stage / "circuit.txt").write_text(text)
     head = {"circuit_sha512": FC.digest(text), "instances": 1, "units": {"classes": [FC.class_digest(text)]}}
-    for f in ("inst-1.bin", "pub-1.bin"):
-        (stage / f).write_bytes(json.dumps(head).encode() + b"\n")
+    (stage / "inst-1.bin").write_bytes(json.dumps(dict(head, rows=True)).encode() + b"\n")
+    (stage / "pub-1.bin").write_bytes(FC.public_file(head, b""))
     return stage / "circuit.txt", rng
 
 
@@ -699,7 +744,7 @@ def sparse_session(tmp_path_factory):
 
 def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_coin_servers_coins(sparse_session):
     """At the prover's Finish the relay opens each rep's sparse stream as its child at its end and runs `rec_sparse.prove`
-    there (h the rep's, entries the hidden circuit's), each message a round of its own on the coin server's coins: the
+    there (h the rep's, entries the hidden circuit's), each message a round of its own on the challenger's coins: the
     record is `schedule_for(..., sparse=)`'s, both reps' rounds before either sparse stream's; `rec_vstage.sparse_reps`
     reads back from the public record and the prover's rows the coins and messages the relay ran (v2's coinless round
     skipped), which the reference accepts; the prover's own record holds only its reps. Entries that are not h's circuit
@@ -732,7 +777,7 @@ def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_coin_serve
 @pytest.mark.slow
 def test_rec_vstage_stages_the_relays_sparse_phase_as_rec_sparse(sparse_session, tmp_path):
     """`rec_vstage.stage_sparse` stages the relay's sparse phase as RecSparse over both reps, its message ports the rows the
-    firewall committed (h the algebra's h round's), and both instances hold. Building RecSparse's statement is the cost."""
+    ZK server committed (h the algebra's h round's), and both instances hold. Building RecSparse's statement is the cost."""
     ss = sparse_session
     program = O.session_program((ss.d / "inner" / "public.json").read_bytes())
     regs, own = S.messages(program, S.message_rounds(ss.public, ss.private, ss.vf.sh))
@@ -776,7 +821,7 @@ def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_sessi
     passes the prover's Hello and Commit on as they are, and once both reps' sparse streams have run opens R at their
     registered claims (P.json) on a connection of its own into the same session, answering its Finish itself: the record is
     `schedule_for(..., sparse=, stacked=table_m)`'s, R's stream last, its binding round absorbing the circuit reps'
-    statement digest (``--statement-digest``, the firewall's) and committing ROOT.json's cap as the
+    statement digest (``--statement-digest``, the ZK server's) and committing ROOT.json's cap as the
     registered top, ``b || c`` for ``b || c`` (`rec_vstar.registered` accepts it); `rec_vstar` accepts R's openings, and the
     opening-only model's residuals at the verifier's points and the sparse phase's claims are zero; the verifier's record
     and the prover's have one Hello, the prover's bytes, and the circuit table's Commit. R registered with cell 0 flipped
@@ -838,7 +883,7 @@ def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_
     prover row opens. A prover that exchanges c0 and c1 (the two claims' ring switches, equal in size) registers round 1's row
     as c0 and round 0's as c1, and the verifier's per-row check refuses both; a record whose message sits at a round that
     absorbs none is refused before anything is registered."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     r = stacked_session.read
     program = O.session_program((stacked_session.d / "inner" / "public.json").read_bytes())

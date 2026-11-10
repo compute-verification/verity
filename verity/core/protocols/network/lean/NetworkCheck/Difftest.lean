@@ -1,5 +1,7 @@
-import NetworkCheck.Certificate
-import Lean.Data.Json
+module
+
+public import NetworkCheck.Certificate
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: the network certificate's encodings against `certificate.py`, on generated instances
@@ -11,16 +13,19 @@ and not a proof.
 
 An instance is a window's grid parameters and Σ_sync (or none), its grid, the link, direction, window, status and
 deadline of its record, and the queries on it: a frame list (`frames`, the grid's real frames or another), the frames
-to open, `verify_frame` queries, record heads given field by field, certificate messages and nodes. `evaluate` gives,
-with `null` where Python raises `ValueError`:
+to open, `verify_frame` queries, record heads given field by field, signed digests, certificate messages and nodes.
+`evaluate` gives, with `null` where Python raises `ValueError`:
 * `depth` and `empty`, `E_0 … E_D`;
 * `real_frames` of the grid; `leaves`, `frame_leaf` of each frame of `frames`; `root`, `frames_root` of `frames`;
   `opens`, `open_frame` of `frames` at each k; `verifies`, each query's `verify_frame`;
 * `manifest`, the canonical JSON `parameters_digest` hashes, and `parameters`, the digest;
 * `record_head`, the encoding and digest of `record_head` of the grid under that digest; `heads`, each given head's;
+* `digests`, each `certificate_digest` of a salt and a record digest;
 * `messages`, each `certificate_message`, sessions of 31 and 33 bytes among them, which both refuse; `nodes`, each
   `node`.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.Difftest
 
@@ -87,6 +92,9 @@ def evaluate (j : Json) : Except String Json := do
     let #[root, k, frame, path] ← arrOf q | throw s!"not [root, k, frame, path]: {q.compress}"
     pure (← bytesOf root, ← k.getInt?, ← bytesOf frame, ← (← arrOf path).mapM bytesOf)
   let heads ← (← arrOf (← j.getObjVal? "heads")).mapM headOf
+  let digests ← (← arrOf (← j.getObjVal? "digests")).mapM fun d => do
+    let #[salt, record] ← arrOf d | throw s!"not [salt, record]: {d.compress}"
+    pure (← bytesOf salt, ← bytesOf record)
   let messages ← (← arrOf (← j.getObjVal? "messages")).mapM fun m => do
     let #[i, s, l, d, w, g] ← arrOf m
       | throw s!"not [key_id, session, link, direction, window, digest]: {m.compress}"
@@ -103,17 +111,18 @@ def evaluate (j : Json) : Except String Json := do
     ("root", orNull hexJson (framesRoot frames p)),
     ("opens", .arr (opens.map fun k => orNull (.arr ∘ Array.map hexJson) (openFrame frames p k))),
     ("verifies", .arr (verifies.map fun (r, k, f, path) => toJson (verifyFrame r p k f path))),
-    ("manifest", orNull Json.str (canon (parametersManifest p ss))),
+    ("manifest", orNull Json.str (canonUtf8 (parametersManifest p ss))),
     ("parameters", orNull hexJson parameters),
     ("record_head", headJson do recordHead link direction window grid status p (← parameters) deadline),
     ("heads", .arr (heads.map (headJson ∘ pure))),
+    ("digests", .arr (digests.map fun (salt, record) => hexJson (certificateDigest salt record))),
     ("messages", .arr (messages.map fun (i, s, l, d, w, g) => orNull hexJson (certificateMessage i s l d w g))),
     ("nodes", .arr (nodes.map fun (a, b) => hexJson (node a b)))]
 
 /-- The results' fields, in the order they are compared. -/
 def fields : List String :=
   ["depth", "empty", "real_frames", "leaves", "root", "opens", "verifies", "manifest", "parameters", "record_head",
-   "heads", "messages", "nodes"]
+   "heads", "digests", "messages", "nodes"]
 
 /-- How the Lean side's results for instance line `i` differ from Python's, one line per field that differs. -/
 def differences (i : Nat) (inst python : String) : List String :=

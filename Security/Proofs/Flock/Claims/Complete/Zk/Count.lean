@@ -1,5 +1,48 @@
-import Proofs.Flock.Claims.Complete.Count
-import Proofs.Flock.Claims.Complete.Zk.Link
+module
+
+public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Zk.Link
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Flock.With.SimVerify
+import Flock.With.SimWalk
+import Flock.With.SimZk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The honest masked session's sends fit the masked verifier's rounds
@@ -14,6 +57,8 @@ import Proofs.Flock.Claims.Complete.Zk.Link
   (`innerCommitP_quiet`); the table's `--zk` schedule keeps fast100's at least one lane round and two levels
   (`zkSchedule_shape`), so that is `repRounds true`, and `sendCountZk_goal` is the goal `SendCountZk`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 
@@ -99,18 +144,25 @@ theorem ligeritoPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArr
     all_goals cost_walk
   · omega
 
+/-- The rank check sends nothing. -/
+theorem rankCheckP_sends (m kLog : ℕ) (prior : Array (List F128)) (words : List ℕ) :
+    (sendsC.st Transcript).P (rankCheckP m kLog prior words : TMW PS Unit) 0 := by
+  unfold rankCheckP
+  refine (sendsC.st Transcript).bind0 sendsC.get fun t => (sendsC.st Transcript).mono
+    (Cost.ite _ (fun _ => (sendsC.st Transcript).pure ()) fun _ => (sendsC.st Transcript).throw _ 0) (by simp)
+
 /-- **A masked rep** sends at most the sum of its steps. -/
 theorem repPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) :
+    (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) :
     (sendsC.st Transcript).P (repPZk (asksS resp) (Hashes.ofSha512 h) st sch tPad rep dom tr t cm0 extras pads ic
-      extra lanePad salt nonce)
+      extra lanePad salt nonce prior words)
       ((3 + (st.m - 6)) + (3 + (st.fold.kLog - 6)) + (2 + extras.size + 1) +
         (2 + ((sch.k0 - 1) * 1 + 3) + 7 + ((sch.levels.size - 1 - 1) * 11 + 7)) + 4) := by
   apply (sendsC.st Transcript).mono
   · unfold repPZk
-    cost_walk [zerocheckPZk_sends resp, lincheckPZk_sends resp, ringSwitchP_abc_sends resp,
+    cost_walk [zerocheckPZk_sends resp, lincheckPZk_sends resp, rankCheckP_sends, ringSwitchP_abc_sends resp,
       ligeritoPZk_sends resp h, innerP_sends resp h]
   · omega
 
@@ -124,9 +176,10 @@ theorem innerCommitP_quiet (h : ByteArray → ByteArray) (p : PadsZk) (salt : �
 
 /-- **The masked session after the link** sends at most two masked reps' rounds. -/
 theorem afterLinkPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Stmt)
-    (v : Schedule × ℕ) (trs : Array Trace) (tape : TapeZk) (tbls : Array (Array F128)) (cms : Array Commit)
-    (c1 : ℕ → F128) (hspec : spec.tables.size = 1) :
-    sendsC.P (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec #[Setup.ofCircuit st] trs tape #[v] tbls cms c1)
+    (v : Schedule × ℕ) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) (tbls : Array (Array F128))
+    (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = 1) :
+    sendsC.P (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec #[Setup.ofCircuit st] words trs tape #[v] tbls cms
+      c1)
       (2 * ((3 + (st.m - 6)) + (3 + (st.c.kLog - 6)) + (2 + spec.points * st.regions.size + 1) +
         (2 + ((v.1.k0 - 1) * 1 + 3) + 7 + ((v.1.levels.size - 1 - 1) * 11 + 7)) + 4)) := by
   unfold afterLinkPZk
@@ -205,18 +258,17 @@ theorem sendCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
   have htabs : tabsOf o.sts = #[Setup.ofCircuit st] := by rw [hsts]; simp [tabsOf]
   have h1 : o.spec.tables.size = 1 := by rw [hspec]; rfl
   have hP : sendsC.P (sessionPZk (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.spec (tabsOf o.sts)
-      (tracesOf o.sts o.w) o.ω) (1 + rounds true o.spec o.sts) := by
+      (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω) (1 + rounds true o.spec o.sts) := by
     rw [sessionPZk_eq, htabs]
     refine sendsC_quiet_bind (schedsPZk_quiet _) fun schs hs => ?_
     obtain ⟨⟨sch, tp⟩, hv, rfl⟩ := schedsPZk_one hs
     refine sendsC_quiet_bind (commitsPZk_quiet _ _ _ _ _) fun cms _ => ?_
     refine sendsC.mono (sendsC.bind (sendsC_link _ _ _) fun c1 =>
-      afterLinkPZk_sends _ _ o.spec st (sch, tp) _ _ _ cms c1 h1) ?_
+      afterLinkPZk_sends _ _ o.spec st (sch, tp) _ _ _ _ cms c1 h1) ?_
     obtain ⟨hk0, hL⟩ := zkSchedule_shape hv
     simp only [hsts, rounds, repRounds, hv, List.foldl_toArray', List.foldl_cons, List.foldl_nil, ↓reduceIte]
     simp only at hk0 hL ⊢
     omega
-  have := hP #[] _ _ o.ran
-  simpa using this
+  exact sendsC_ran hP o.ran
 
 end FlockComplete

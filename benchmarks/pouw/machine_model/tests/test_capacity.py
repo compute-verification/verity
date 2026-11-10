@@ -8,6 +8,7 @@ import pytest
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
+from verity_machine_model.model import device
 
 VEC = "VF3n-16"
 
@@ -18,34 +19,52 @@ def pi():
 
 
 def test_the_empty_gpu_certifies_nothing_and_offers_a_full_tensor_pipe(pi):
-    x = C.window(pi, [(1.0, C.Work("empty", {}))])
+    x = C.cell(pi, [(1.0, C.Work("empty", {}))])
     assert x.sigma() == pytest.approx(0.0) and x.credit() == 0.0
     assert x.pooled.mix[C.MMA] == pytest.approx(1 / C.TENSOR_CYCLES)
     assert x.empty > 1 / C.TENSOR_CYCLES  # the scalar pipes add useful work beside the tensor pipe
 
 
+@pytest.mark.parametrize("dev", ["sm_80", "sm_89", "sm_90", "sm_100"])
+def test_every_devices_empty_gpu_offers_its_own_tensor_pipe(dev):
+    """USEFUL names sm_120's MMA only: on another device the hidden program must still find that device's tensor class,
+    or σ ignores the tensor pipe (sm_100's empty GPU read 0.0195 slots a SMSP-cycle, its lanes, against 0.52)."""
+    data = device(dev)
+    pi_d = E.machine("", data)
+    cls = {E.honest(p, data).cls for p in E.profiles(data)}
+    assert C.MMA not in cls
+    u = C.useful_of(data)
+    x = C.cell(pi_d, [(1.0, C.Work("empty", {}))], u)
+    tensor = sum(u[k] * v for k, v in x.pooled.mix.items() if k in cls)
+    assert tensor > 0.75 * x.empty and x.empty > 3 * C.hidden(pi_d, C.Work("empty", {})).hidden
+
+
+def test_useful_of_sm120_is_useful():
+    assert C.useful_of() == C.USEFUL
+
+
 def test_the_tensor_pipe_alone_leaves_the_scalar_pipes_open(pi):
-    full = C.window(pi, [(1.0, C.tensor_filler(1.0, "none"))])
+    full = C.cell(pi, [(1.0, C.tensor_filler(1.0, "none"))])
     assert full.tensor() == pytest.approx(1.0) and full.credit() == pytest.approx(1.0)
     assert 0.7 < full.sigma() < 0.85 and C.MMA not in full.pooled.mix
 
 
 def test_certified_lane_chains_that_saturate_issue_leave_nothing(pi):
-    x = C.window(pi, [(1.0, C.lane_filler(1.0))])
+    x = C.cell(pi, [(1.0, C.lane_filler(1.0))])
     assert x.sigma() == pytest.approx(1.0) and "issue" in [r for r, v in x.pooled.load.items() if v >= 1 - 1e-9]
 
 
 def test_sigma_grows_with_certified_work(pi):
-    s = [C.window(pi, [(1.0, C.tensor_filler(0.6, "duo") + C.lane_filler(x))]).sigma() for x in (0, 0.1, 0.2, 0.3)]
+    s = [C.cell(pi, [(1.0, C.tensor_filler(0.6, "duo") + C.lane_filler(x))]).sigma() for x in (0, 0.1, 0.2, 0.3)]
     assert s == sorted(s) and s[0] == pytest.approx(0.6411, abs=1e-4) and s[-1] > 0.95
 
 
 def test_the_pooled_reading_never_credits_more_than_an_attested_placement(pi):
     groups = [(0.75, C.tensor_filler(0.6, "duo") + C.lane_filler(0.3)), (0.25, C.served(0.05))]
-    x = C.window(pi, groups)
+    x = C.cell(pi, groups)
     assert x.sigma() <= x.sigma_placed() + 1e-12
     assert x.sigma() < x.sigma_placed() - 0.01  # here the placement matters: the step SMs' open MMAs move
-    same = C.window(pi, [(0.5, C.tensor_filler(0.6, "duo")), (0.5, C.tensor_filler(0.6, "duo"))])
+    same = C.cell(pi, [(0.5, C.tensor_filler(0.6, "duo")), (0.5, C.tensor_filler(0.6, "duo"))])
     assert same.sigma() == pytest.approx(same.sigma_placed())
 
 
@@ -56,7 +75,7 @@ def test_a_load_over_a_row_is_reported_not_credited(pi):
 
 def test_the_shares_of_the_cell_must_sum_to_one(pi):
     with pytest.raises(SystemExit, match="sum to 0.5"):
-        C.window(pi, [(0.5, C.lane_filler(0.1))])
+        C.cell(pi, [(0.5, C.lane_filler(0.1))])
 
 
 def test_parse_reads_each_term_as_its_constructor():

@@ -1,4 +1,42 @@
-import Proofs.Flock.Claims.KS.Deploy
+module
+
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.KS.Deploy
+public import Proofs.Flock.Claims.KS.Flock
+import all Init.Data.Array.Basic
+import all Init.Data.Nat.Power2.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
@@ -14,6 +52,8 @@ At `H = SHA-512` the deployed verifier accepts only by a decision (`next_decide_
 (`plain_of_oneWait_sha512`, `zk_of_oneWait_sha512`).
 -/
 
+@[expose] public section
+
 namespace FlockDeploy.KS
 
 open Flock
@@ -21,7 +61,7 @@ open Flock
 /-- **A run accepts only at an accepting reply**: some prover messages on which the verifier's step returns `.acc`. -/
 theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω vnext n hist as t).out = .acc → ∃ as', ((vnext as').eval H).1 = .acc := by
   intro n
   induction n with
@@ -35,6 +75,10 @@ theorem stepWith_acc {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
       exact ⟨_, heq⟩
     · simp at h
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **An accepting step at SHA-512 is an accepting verdict** at the statement's setup. -/
 theorem next_acc_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
@@ -45,6 +89,15 @@ theorem next_acc_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs 
   | coin c => simp [next_coin sha512 ha] at h
   | decide s spec sts link c₁ mids f =>
     exact ⟨s, spec, sts, f.record, f.proofs, act_decide ha, ((next_decide_sha512 ha).1 h).1⟩
+
+end Gen
+
+/-- **An accepting step at SHA-512 is an accepting verdict** at the statement's setup. -/
+theorem next_acc_sha512 {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
+    ∃ s spec sts record proofs, setupOf zk x = some (s, spec, sts) ∧
+      (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () :=
+  Gen.next_acc_sha512 (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
 
 theorem fast100_range {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some s) : 22 ≤ m ∧ m ≤ 35 :=
   ⟨FlockSoundness.Refine.exec_fast100_ge h, by
@@ -91,6 +144,10 @@ theorem served_zk {spec : SessionSpec} {sts : Array Stmt} {record : String} {pro
 theorem zkLen_ge : ∀ i : Claims.Flock.ZkIdx, 10 ≤ Claims.Flock.zkLen i := by
   decide +kernel
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- `N₀` at a statement that sets up a table is at least table 0's level-0 codeword length. -/
 theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (h : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
@@ -108,6 +165,14 @@ theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionS
         positivity
     linarith
 
+end Gen
+
+/-- `N₀` at a statement that sets up a table is at least table 0's level-0 codeword length. -/
+theorem N₀_ge_of_setup {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf zk x = some (s, spec, sts)) (h0 : 0 < sts.size) :
+    (2 : ℝ) ^ (if zk then Claims.Flock.zkLevel0 sts[0].m else Claims.Flock.plainLevel0 sts[0].m).d ≤ N₀ zk x :=
+  Gen.N₀_ge_of_setup (S := S₀) (zk := zk) (x := x) (s := s) (spec := spec) (sts := sts) (h := h) (h0 := h0)
+
 /-- `k ≥ 8` once `N₀ ≥ 2^10`. -/
 theorem eight_le_k {Col T : Type} {D : Claims.Flock.Deploy Coin Col T} {x : Claims.Msg} (hN : 2 ^ 10 ≤ D.N₀ x) :
     8 ≤ D.k x := by
@@ -116,6 +181,10 @@ theorem eight_le_k {Col T : Type} {D : Claims.Flock.Deploy Coin Col T} {x : Clai
   omega
 
 theorem two_pow_le {d : ℕ} (hd : 10 ≤ d) : (2 : ℝ) ^ 10 ≤ 2 ^ d := pow_le_pow_right₀ (by norm_num) hd
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- An accepting run at SHA-512 of the deployed verifier, as an accepting verdict at the statement's setup. -/
 theorem acc_verdict {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
@@ -126,6 +195,14 @@ theorem acc_verdict {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc s
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact next_acc_sha512 has
+
+end Gen
+
+/-- An accepting run at SHA-512 of the deployed verifier, as an accepting verdict at the statement's setup. -/
+theorem acc_verdict {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+    ∃ s spec sts record proofs, setupOf zk x = some (s, spec, sts) ∧
+      (if zk then Zk.verify spec (tabsOf sts) record proofs else verify spec (tabsOf sts) record proofs) = .ok () :=
+  Gen.acc_verdict (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 /-- **The plain verifier's `k` range**: at every statement, `k ≥ 8` or the verifier accepts no run at SHA-512. -/
 theorem k_range_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
@@ -147,6 +224,10 @@ theorem k_range_plain (rel : Readable.Parsed → Readable.Relation) (x : Claims.
   show 2 ^ 10 ≤ N₀ false x
   exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The masked verifier's `k` range**: at every statement, `k ≥ 8` or the verifier accepts no run at SHA-512. -/
 theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
     8 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x := by
@@ -167,6 +248,13 @@ theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg
   show 2 ^ 10 ≤ N₀ true x
   exact le_trans (two_pow_le hlen) (N₀_ge_of_setup hs h0)
 
+end Gen
+
+/-- **The masked verifier's `k` range**: at every statement, `k ≥ 8` or the verifier accepts no run at SHA-512. -/
+theorem k_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) :
+    8 ≤ (deployZk rel).k x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x :=
+  Gen.k_range_zk (S := S₀) (rel := rel) (x := x)
+
 /-- **The deployed plain verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged, where the
 relation splits by table wherever the verifier accepts some run. -/
 theorem plain_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
@@ -180,5 +268,19 @@ theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
     (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
     (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
   zk_of_oneWait sha512 rel (fun x => (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The deployed masked (`--zk`) verifier at SHA-512: KS from one wait's bound**, with the `k` range discharged,
+where the relation splits by table wherever the verifier accepts some run. -/
+theorem zk_of_oneWait_sha512 (rel : Readable.Parsed → Readable.Relation)
+    (hsp : ∀ x, Claims.Flock.Splits (deployZk rel) x ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x)
+    (h : Claims.Flock.OneWait sha512 (deployZk rel)) : Claims.Flock.KS sha512 (deployZk rel) :=
+  zk_of_oneWait sha512 rel (fun x => (k_range_zk rel x).elim (fun hk => (hsp x).imp (fun h => ⟨hk, h⟩) id) .inr) h
+
+end Gen
 
 end FlockDeploy.KS

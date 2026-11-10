@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from . import CLASSIFIER_VERSION, FAILURE_SCHEMA
-from .events import ReadReport, iter_records, read_all, spans
+from .events import read_all, spans
 from .job import read_status, write_json_atomic
 
 CUDA_RE = re.compile(r"CUDA out of memory|cudaErrorMemoryAllocation|CUBLAS_STATUS_ALLOC_FAILED|CUDA error: out of memory|torch\.OutOfMemoryError", re.I)
@@ -421,11 +421,6 @@ def classify(attempt_dir: str | Path, rc: int | None = None, sig: int | None = N
         return {"class": "OOM_UNRESOLVED_ORIGIN", "certainty": "ambiguous", "detail": detail,
                 "why": "SIGKILL exit and an oom_kill increment in the shared pod cgroup, but the victim could not be attributed to this job's tree",
                 "limitations": ["shared cgroup OOM: victim identity unresolved (an outsider vanished in the same window, or no tree process did)"]}
-
-    def oom_window_overlaps(t: float | None, slack: float = 1.0) -> bool:
-        if t is None:
-            return False
-        return any(float(w["window_start_mono"]) - slack <= t <= float(w["window_end_mono"]) + slack for w in delta_windows if "oom_kill" in w["counter"])
 
     # ---- rules -------------------------------------------------------------------------------------------------------------------------------
     cls, certainty, why = None, "established", ""

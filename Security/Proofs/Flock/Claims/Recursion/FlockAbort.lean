@@ -1,4 +1,44 @@
-import Proofs.Flock.Claims.Recursion.Gap
+module
+
+public import Proofs.Flock.Claims.Recursion.Gap
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `Claims.Flock.KS` does not give `Inner.KSAbort`
@@ -12,7 +52,7 @@ after the second, whatever either message says (`qV_out`). A run opens one colum
 (`qCols_run`), and the code is the one word `(1, 1)` at radius `0`.
 
 * **`qDI` meets `Claims.Flock.KS`.** No prover makes the verifier reject, so no prover's acceptance depends on the query
-  position. `E^rep`'s first wait sees both positions opened unless its first three reruns draw one position, so
+  position. `E^rep`'s first wait sees both positions opened unless its first three reruns sample one position, so
   `PrBad ≤ 1/4 ≤ κ` at every prover and every decoder within the radius.
 * **It fails `Inner.KSAbort`.** A prover that aborts its run at position `0` reads only the run's own coin 0 and no
   fresh coins (`A = Unit`, `qKeep`). `E^rep`'s accepted reruns then open position `1` alone, from which the decoder
@@ -25,6 +65,8 @@ prover can thin acceptance on the query position: its `ε_table = 0` is no table
 at position `0` alone, is opened consistently at every run that queries position `1`, half the runs.
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims
@@ -34,7 +76,7 @@ open Claims
 /-- The query position, as the length of the verifier's message: `1` at coin `true`, `0` at `false`. -/
 def qPos (b : Bool) : Msg := if b then [0] else []
 
-/-- **The toy verifier**: two rounds. It answers the first message with the query position its coin 0 draws and accepts
+/-- **The toy verifier**: two rounds. It answers the first message with the query position its coin 0 samples and accepts
 after the second, whatever either message says. -/
 def qV : Verifier Bool :=
   ⟨fun _ => 2, fun _ as cs => .ret (if as.length < 2 then .msg (qPos (cs.getD 0 false)) else .acc)⟩
@@ -64,6 +106,9 @@ noncomputable def qDI : Flock.Deploy Bool ℕ Unit where
   weight := fun _ => 0
   waits := fun _ => 2
   cap := fun _ => 204800
+  Tape := Unit
+  P := fun _ => ⟨fun _ _ _ => .ret []⟩
+  δc := fun _ _ => 0
 
 /-- A decoder within the radius: the word, where both positions read `1`. -/
 def qDec (os : List (ℕ × ℕ)) : List Unit :=
@@ -81,10 +126,10 @@ theorem qV_vLog (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω
     (run H P qV x ω r).vLog = [] := by
   simp [run, stepWith, qV, OC.eval]
 
-/-- A run opens `1` at the query position its coin 0 draws. -/
+/-- A run opens `1` at the query position its coin 0 samples. -/
 theorem qCols_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (qV.k x) → Bool) :
     qCols (run H P qV x ω r).seen = [(if coinSeq r 0 then 1 else 0, 1)] := by
-  cases h : coinSeq r 0 <;> simp [run, stepWith, qV, OC.eval, Trace.seen, qCols, qPos]
+  cases h : coinSeq r 0 <;> simp [run, stepWith, qV, OC.eval, Transcript.seen, qCols, qPos]
   · exact h
   · exact congrArg List.length (ite_eq_left h)
 
@@ -153,7 +198,7 @@ theorem qκ_lt (x : Msg) : Flock.κ qDI x < 1 / 2 := by
 /-! ## Waits -/
 
 /-- **A wait where every rerun accepts** collects the first reruns it needs. -/
-theorem waitAcc_all {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (hacc : ∀ r, (run r).out = .acc) :
+theorem waitAcc_all {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (hacc : ∀ r, (run r).out = .acc) :
     ∀ (rs : List R) (acc : List Seen),
       ((waitAcc k rs acc).eval H run).1 = acc ++ (rs.take (k - acc.length)).map fun r => (run r).seen
   | [], acc => by simp [waitAcc, RP.eval]
@@ -172,7 +217,7 @@ theorem waitAcc_all {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (
 
 /-- **A wait collects only accepted reruns**: where every accepted rerun is `good`, so is everything a wait collects
 from `good` runs. -/
-theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (good : Seen → Prop)
+theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (good : Seen → Prop)
     (hgood : ∀ r, (run r).out = .acc → good (run r).seen) :
     ∀ (rs : List R) (acc : List Seen), (∀ v ∈ acc, good v) → ∀ v ∈ ((waitAcc k rs acc).eval H run).1, good v
   | [], acc, h => by simpa [waitAcc, RP.eval] using h
@@ -190,9 +235,9 @@ theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) 
           exact hgood r ho
       · exact h
 
-/-- **`E^rep`'s waits where every rerun accepts**: if the first wait's first `k` draws assemble a candidate `check`
+/-- **`E^rep`'s waits where every rerun accepts**: if the first wait's first `k` samples assemble a candidate `check`
 accepts, `firstWait` returns it. -/
-theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k m K : ℕ)
+theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k m K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (hacc : ∀ r, (run r).out = .acc)
     (hm : 0 < m) (ρ : Fin m → Fin K → R) (w : W)
     (ha : assemble ((((List.finRange K).map (ρ ⟨0, hm⟩)).take k).map (fun r => (run r).seen) |>.flatMap opens) =
@@ -209,7 +254,7 @@ theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → T
   simp [hc, RP.eval]
 
 /-- **`firstWait` gives up** where nothing the waits can collect assembles. -/
-theorem firstWait_none_of {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_none_of {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (good : Seen → Prop)
     (hgood : ∀ r, (run r).out = .acc → good (run r).seen)
     (ha : ∀ vs : List Seen, (∀ v ∈ vs, good v) → assemble (vs.flatMap opens) = none) :
@@ -275,14 +320,14 @@ theorem qDec_ok : decOK qDI qDec := by
 
 /-! ## `Claims.Flock.KS` holds -/
 
-/-- The query coins of `E^rep`'s first three draws in its first wait. -/
+/-- The query coins of `E^rep`'s first three samples in its first wait. -/
 def q3 {n m K : ℕ} (hm : 0 < m) (hK : 3 ≤ K) (ρ : Fin m → Fin K → Fin n → Bool) : Fin 3 → Bool :=
   fun i => coinSeq (ρ ⟨0, hm⟩ (Fin.castLE hK i)) 0
 
-/-- Three query coins not all one draw both positions. -/
+/-- Three query coins not all one sample both positions. -/
 theorem bool3 : ∀ f : Fin 3 → Bool, ¬ (f 0 = f 1 ∧ f 1 = f 2) → ∀ b, ∃ j, f j = b := by decide
 
-/-- **`E^rep` succeeds** unless its first wait's first three reruns draw one query position: two that differ open both
+/-- **`E^rep` succeeds** unless its first wait's first three reruns sample one query position: two that differ open both
 positions, so a decoder within the radius lists the word. -/
 theorem qE_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hdec : Flock.ListWithin qDI.len qDI.enc qDI.θ decode) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -290,7 +335,7 @@ theorem qE_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hne : ¬ (q3 hw hK ρ 0 = q3 hw hK ρ 1 ∧ q3 hw hK ρ 1 = q3 hw hK ρ 2)) :
     ((Flock.E qDI decode).eval H P x ω r₀ ρ).1 = some ⟨[]⟩ := by
   have hacc : ∀ r, (run H P qDI.V x ω r).out = .acc := fun r => qV_out H P x ω r
-  simp only [Flock.E, ERep, Extractor.eval, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Flock.E, ERep, Extractor.eval, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   refine firstWait_finRange_some H (run H P qDI.V x ω) (qDI.k x) (qDI.waits x) (qDI.cap x)
     (fun v => [qDI.cols v]) _ _ hacc hw ρ (⟨[]⟩ : Flock.Wit) ?_ (by simp [Flock.check, qDI, gRelS])
   have hall : ∀ p ∈ ((((List.finRange (qDI.cap x)).map (ρ ⟨0, hw⟩)).take (qDI.k x)).map
@@ -336,7 +381,7 @@ theorem Pr_bool3 : Pr (fun f : Fin 3 → Bool => f 0 = f 1 ∧ f 1 = f 2) = 1 / 
   norm_num
 
 /-- **`qDI` meets `Claims.Flock.KS`**: at every prover and every decoder within the radius, `E^rep` fails only where its
-first wait's first three reruns draw one query position, a quarter of the draws, and `κ ≥ 1/4`. -/
+first wait's first three reruns sample one query position, a quarter of the samples, and `κ ≥ 1/4`. -/
 theorem qFlockKS (H : Msg → Msg) : Flock.KS H qDI := by
   intro decode hdec x Ω _ _ P
   have hw : 0 < qDI.waits x := by show 0 < 2; omega
@@ -390,7 +435,7 @@ theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
     · rename_i hkeep
       rw [ite_eq_left hkeep, qCols_run H qP [] ω t.1, show coinSeq t.1 0 = true from hkeep]
       rfl
-    · exact absurd ht (by simp [abortTrace])
+    · exact absurd ht (by simp [abortTranscript])
   · have hos : ∀ p ∈ vs.flatMap fun v => qDI.cols v 0, p = (1, 1) := fun p hp => by
       obtain ⟨v, hv, hpv⟩ := List.mem_flatMap.1 hp
       rw [show qDI.cols v 0 = qCols v from rfl, hvs v hv, List.mem_singleton] at hpv
@@ -400,7 +445,7 @@ theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
     refine qAssemble_none qDec [] vs ?_
     simp [qDec, h0]
 
-/-- The judged run's coin 0 is `true` half the time, whatever else is drawn. -/
+/-- The judged run's coin 0 is `true` half the time, whatever else is sampled. -/
 theorem Pr_coin0 {n : ℕ} (h0 : 0 < n) {Y : Type} [Fintype Y] [Nonempty Y] :
     Pr (fun s : Unit × ((Fin n → Bool) × Unit) × Y => coinSeq s.2.1.1 0 = true) = 1 / 2 := by
   have hc : UnifMap (fun r : Fin n → Bool => coinSeq r 0) := by
@@ -436,7 +481,7 @@ theorem qKSAbort_fails (H : Msg → Msg) :
             simp only [abortRun, qKeep, hs, ↓reduceIte]
             exact qV_out H qP [] s.1 s.2.1.1
           · have hacc : (abortRun H qP qV [] qKeep s.1 s.2.1).seen.out = .acc := by
-              show (if qKeep s.1 s.2.1.1 s.2.1.2 then run H qP qV [] s.1 s.2.1.1 else abortTrace).out = .acc
+              show (if qKeep s.1 s.2.1.1 s.2.1.2 then run H qP qV [] s.1 s.2.1.1 else abortTranscript).out = .acc
               simp only [qKeep, hs, ↓reduceIte]
               exact qV_out H qP [] s.1 s.2.1.1
             show ¬ (Flock.R qDI.parse).ext [] ((erep (qDI.waits []) (qDI.k []) (qDI.cap [])

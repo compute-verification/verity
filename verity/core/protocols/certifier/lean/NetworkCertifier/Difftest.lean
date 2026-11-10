@@ -1,6 +1,8 @@
-import NetworkCertifier.Ingress
-import NetworkCertifier.Schedule
-import Lean.Data.Json
+module
+
+public import NetworkCertifier.Ingress
+public import NetworkCertifier.Schedule
+public import Lean.Data.Json
 
 /-!
 # The difftest: the certifier program against the Python audit, on random instances
@@ -21,11 +23,11 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
 `evaluate` gives, from the definitions themselves:
 * `rows`: `expectedRow` of each egress link's frames under the syncs that link declares, for every bucket of the
   horizon (Python's `expected_grids`);
-* `verdicts`, per egress link-window, in the order `check_link` checks: `no-verdict` when the window isn't recorded,
+* `verdicts`, per egress execution phase, in the order `check_link` checks: `no-verdict` when the window isn't recorded,
   `status:<reason>` when one of the link's statuses in it is not complete, `advice` when the declared sync is outside
   `Σ_sync` or other than link 0's (the spatial unit's, which `Audit.syncs` keeps), `mismatch` when a recorded row is
   not the link's `expectedRow`; and `diff`, the first such bucket of a recorded window;
-* `status`, per boundary link-window: `check_ingress_link`'s verdict from the statuses alone;
+* `status`, per boundary execution phase: `check_ingress_link`'s verdict from the statuses alone;
 * for every prefix of `m ≤ W` whole windows, `accepted`: `Accepted` of the constant-rate Program on the first `m·T`
   steps, by `decide`, with link 0's syncs as the declared advice (one clock per spatial unit), and no link declaring a
   sync outside `Σ_sync` or other than link 0's in those windows: such a declaration is no value of the advice type
@@ -33,6 +35,8 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
   which the Program's rows before step `m·T` don't read; Python computes each link's grids from its own declaration;
 * for every prefix, `complete`: `StatusComplete` on the first `m·T` steps, by `decide`.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.Difftest
 
@@ -46,8 +50,8 @@ instance decEqFinFun {n : Nat} {α : Type} [DecidableEq α] : DecidableEq (Fin n
 instance decidableExistsProp {p : Prop} {q : p → Prop} [Decidable p] [∀ h, Decidable (q h)] : Decidable (∃ h, q h) :=
   if hp : p then decidable_of_iff (q hp) ⟨fun h => ⟨hp, h⟩, fun ⟨_, h⟩ => h⟩ else isFalse fun ⟨h, _⟩ => hp h
 
-instance decidableAccepted {L K S : Nat} {In Adv : Type} (P : Program L S In Adv) (op : Nat → List (Obs L K S) → In)
-    (k : Nat) (o : List (Obs L K S)) (a : Adv) : Decidable (Accepted P op k o a) := by
+instance decidableAccepted {L K S : Nat} {In Adv : Type} (P : EgressPrediction L S In Adv)
+    (op : Nat → List (Obs L K S) → In) (k : Nat) (o : List (Obs L K S)) (a : Adv) : Decidable (Accepted P op k o a) := by
   unfold Accepted; infer_instance
 
 instance decidableStatusComplete {L K S : Nat} (k : Nat) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
@@ -177,7 +181,7 @@ def evaluate (r : Raw) : Except String Json := do
   let o : List (Obs L K S) := (List.range r.rows.size).map fun t =>
     { rows := fun ℓ s => ((r.rows.getD t #[]).getD ℓ #[]).getD s none, jitter := 0
       status := fun κ => (r.status.getD t #[]).getD κ .complete }
-  let P : Program L S Unit (Unit × (Fin W → ss.Elem)) := constantRate T W ss fun _ _ ℓ => frames ℓ
+  let P : EgressPrediction L S Unit (Unit × (Fin W → ss.Elem)) := constantRate T W ss fun _ _ ℓ => frames ℓ
   let op : Nat → List (Obs L K S) → Unit := fun _ _ => ()
   let σ : Fin W → ss.Elem := fun w => elem (unit w)
   let recorded (w : Nat) : Bool := (w + 1) * T ≤ o.length

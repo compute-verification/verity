@@ -30,7 +30,7 @@ Dot16 = prim("TDot16", [("acc", V32), ("a", A16), ("b", A16)], V32, lambda acc, 
 Cvt16 = prim("TCvt16", [("a", V32)], V16, lambda a: a >> 16)
 Gather16 = prim("TGather16", [("i", V32), ("xs", Array(16, V16))], V16, lambda i, *xs: xs[i % 16])
 
-# the IR running example: Inference{B, M, act} = batch of Linear{M} = batch of Row = act(Dot(x, w))
+# the running example of veritor's IR doc: Inference{B, M, act} = batch of Linear{M} = batch of Row = act(Dot(x, w))
 Dot2 = comp("TDot2", [("x", A2), ("w", A2)], V16,
             lambda Bd, S, x, w: Bd.call(Add16, Bd.call(Mul16, x[0], w[0]), Bd.call(Mul16, x[1], w[1])))
 Row = CompositeDefinition("TRow", 1, ("act",), lambda S: ((("x", A2), ("w", A2)), V16),
@@ -88,6 +88,23 @@ def _views(Bd, S, M):
     return tuple_of(gap, cols)
 
 
+Gather8 = prim("TGather8", [("i", V32), ("xs", Array(8, V32))], V32, lambda i, *xs: xs[i % 8])
+
+
+def _columns(Bd, S, x, table):
+    """Every token gathers from columns 0 and 2 of an `[8][3]` table, a hash router's token-to-expert table: a column is
+    read with stride 3 (no interval structure), and column 1 is never read."""
+    acc = None
+    for t in range(3):
+        for c in (0, 2):
+            g = Bd.call(Gather8, x[t], Coll(Array(8, V32), strided_view(table, c, 8, 24, 3, 8)))
+            acc = g if acc is None else Bd.call(Add32, acc, g)
+    return acc
+
+
+Columns = comp("TColumns", [("x", Array(3, V32)), ("table", Array(8, Array(3, V32)))], V32, _columns)
+
+
 def _scan_pt(Bd, S, init, xs):
     res = Bd.scan(StepPT, init, xs=(xs,))
     return tuple_of(res[0][0], res[1][0])
@@ -103,6 +120,7 @@ def programs():
     yield "re-returned nested return", Program(comp("TReRet", [("x", Array(1, V32))], V32, lambda Bd, S, x: Bd.call(Middle, x[0])[0]))
     yield "dead inputs", Program(comp("TDeadIn", [("x", Array(4, V32))], V32, lambda Bd, S, x: Bd.call(Add32, x[0], x[1])))
     yield "strided views", Program(comp("TViews", [("M", Array(4, Array(6, V32)))], Tuple(Array(4, V32), Array(3, V32)), _views))
+    yield "table columns every token reads", Program(Columns)
     yield "scan with pass-through carry", Program(comp("TScanPT", [("init", Tuple(V32, V32)), ("xs", Array(3, V32))],
                                                        Tuple(V32, V32), _scan_pt))
 
@@ -148,6 +166,22 @@ def test_transitive_dead_gates_are_a_superset():
         assert set(direct.ids) <= set(trans.ids), label
 
 
+def test_a_transitive_activation_with_nothing_live_is_the_walks_own_result():
+    """`Liveness._dead`, which a transitive analysis takes when no return leaf is live, gives what the walk gives, on every
+    body each program reaches (its root, and the callees of every call, batch and scan)."""
+    for label, P in programs():
+        todo, seen = [P.root], set()
+        while todo:
+            fn = todo.pop()
+            if isinstance(fn, PrimitiveDefinition) or id(fn) in seen:
+                continue
+            seen.add(id(fn))
+            todo.extend(n.fn for n in fn.body.nodes)
+            lv = Liveness(transitive=True)
+            assert lv._dead(fn.body) == lv._analyse(fn.body, ()), (label, fn.id)
+        assert Liveness(transitive=True).analyse(P.root, ()).reads == ((),) * len(P.root.body.params), label
+
+
 def test_dead_gate_ids_are_a_prefix_under_a_limit():
     P = Program(bind(Butterfly, L=32))
     full = dead_gates(P, limit=10 ** 9)
@@ -167,7 +201,7 @@ def test_report_json():
 def test_parameter_reads_match_gate_operands():
     """`Liveness.analyse(spec, all returns live).reads` = per parameter, the leaves some gate of the lowered Program
     reads (every consumer counts, dead ones included)."""
-    for spec in (bind(Inference, B=2, M=5, act=Relu16), bind(Gemm, K=32, N=6), bind(Butterfly, L=32), bind(Embedding)):
+    for spec in (bind(Inference, B=2, M=5, act=Relu16), bind(Gemm, K=32, N=6), bind(Butterfly, L=32), bind(Embedding), bind(Columns)):
         P = Program(spec)
         C = P.circuit
         read = bytearray(C.size)
@@ -181,3 +215,16 @@ def test_parameter_reads_match_gate_operands():
             gates = [ref[2] for ref in P.input_coll(pi).refs]
             expect = [leaf for leaf, g in enumerate(gates) if read[g]]
             assert [leaf for lo, hi in iv for leaf in range(lo, hi)] == expect, (spec.id, pi)
+
+
+def test_a_column_every_token_reads_is_expanded_once(monkeypatch):
+    """Each distinct strided read is expanded once per body walk, not once per reader: DeepSeek-V4-Pro's three hash
+    layers read their 129,280-row table's 6 columns once per token, 668M singleton intervals per rank otherwise."""
+    from verity.ml.circuits import intervals
+
+    calls = []
+    real = intervals.strided_intervals
+    monkeypatch.setattr(intervals, "strided_intervals", lambda r, add: (calls.append(r.base), real(r, add)))
+    r = dead_gates(Program(Columns), limit=10 ** 9)
+    assert sorted(calls) == [0, 2]  # columns 0 and 2, once each, though 3 tokens read each
+    assert r.input == 8  # column 1

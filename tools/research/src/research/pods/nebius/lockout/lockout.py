@@ -17,9 +17,8 @@
 Without --apply every step says what it would do and changes nothing. A step with --apply stops at its first failure. Each
 step's --back undoes it; what a step moves aside goes to BACKUP (root's), never deleted.
 
-The allowlist is ALLOW below, one Rule per command form with the evidence for it (a count in the nodes' sudo journal on
-2026-10-07, over the 3 days before, or the repository file that runs it); EXCLUDED says why each other form research ran is
-not in it. The sudoers step installs it beside a fallback that grants research ALL again until its `# expires` line, which
+The allowlist is ALLOW below, one Rule per command form with the evidence for it (a count in the nodes' sudo journal, or the
+repository file that runs it); EXCLUDED says why each other form research ran is not in it. The sudoers step installs it beside a fallback that grants research ALL again until its `# expires` line, which
 vy-sudo-fallback-expire.timer (root, every 10 min and at boot) enforces: past it, or without a readable one, the file goes.
 """
 from __future__ import annotations
@@ -220,7 +219,7 @@ class Loop:
 
 #: Each node's loops in switch order: observers first, then the workers, the GPU leases, and the dispatcher last, which drives
 #: the rest. Stop order for --back is the reverse. Node 1's other tmux sessions (fp-feed, gm-*, kueue-shadow, q30b-backstop) are
-#: lanes' and stay research's; node 2's pouw-infra-* units are held in deploy.toml (compute accounting's freeze list).
+#: lanes' and stay research's; node 2's pouw-infra-* are compute accounting's user units (deploy.toml), not switched here.
 SWITCH = {
     "vy-nebius-1": (
         Loop("vy-write-probe@vy-nebius-1.service", "write-probe"),
@@ -246,10 +245,10 @@ SWITCH = {
              writes=("/workspace/jobs/dispatch", "/workspace/verity-guest", "/workspace/monitoring/alerts/outbox")),
         Loop("vy-custody.timer", None, root=True, code=("/usr/local/bin/vy-custody", "/workspace/custody"),
              writes=("/workspace/research/custody-n1",)),
-        Loop("vy-monitors.timer", None),
     ),
     "vy-nebius-2": (
         Loop("vy-write-probe@vy-nebius-2.service", "write-probe"),
+        Loop("vy-monitors.timer", None),
     ),
 }
 COMMON_CODE = ("/etc/vy/env", K3S_CONFIG)

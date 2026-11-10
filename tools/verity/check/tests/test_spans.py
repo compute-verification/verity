@@ -1,11 +1,13 @@
 """`tools/verity/check/spans.py`: the frozen trace/v1 span shape, the root-open/children/root-close protocol over a run's
-`spans.jsonl`, and `Steps` writing one span line per step record.  The shape is a contract the observability watcher
-builds against (frozen 14 Oct 2026 19:13Z), so these tests pin its exact keys and value domains."""
+`spans.jsonl`, and `Steps` writing one span line per step record.  The shape is a frozen contract the observability watcher
+builds against, so these tests pin its exact keys and value domains."""
 from __future__ import annotations
 
 import importlib.util
 import json
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -23,6 +25,34 @@ FROZEN_KEYS = ["trace_id", "span_id", "parent_span_id", "name", "start_utc", "en
 
 def lines(out: Path) -> list[dict]:
     return [json.loads(l) for l in (out / "spans.jsonl").read_text().splitlines()]
+
+
+@pytest.fixture(autouse=True)
+def outside_a_scope(monkeypatch):
+    """These tests may run inside a check in its own scope, whose memory would otherwise join the pinned attributes."""
+    monkeypatch.delenv(SPANS.SCOPE_ENV, raising=False)
+
+
+def test_a_check_in_its_own_scope_records_its_memory_and_a_shared_scope_records_none(tmp_path, monkeypatch):
+    cg = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope"
+    cg.mkdir(parents=True)
+    (cg / "memory.peak").write_text("312400000000\n")
+    (cg / "memory.current").write_text("120049999999\n")
+    (tmp_path / "proc/self").mkdir(parents=True)
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope\n")
+    assert SPANS.check_memory(tmp_path) == {}, "no scope named: nothing"
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    assert SPANS.check_memory(tmp_path) == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0}
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r2")
+    assert SPANS.check_memory(tmp_path) == {}, "a cgroup that isn't the named scope (a shared session) is other runs' too"
+    monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    monkeypatch.setattr(SPANS, "check_memory", lambda root=Path("/"): {"mem_peak_gb": 312.4, "mem_current_gb": 120.0})
+    log = SPANS.SpanLog(tmp_path, trace_id="r-test")
+    log.step({"step": "pytest", "status": "passed", "rc": 0, "seconds": 1.0, "ended_utc": "2026-10-14T20:00:00Z"})
+    log.close("ok")
+    got = lines(tmp_path)
+    assert got[1]["attributes"]["mem_peak_gb"] == 312.4 and got[-1]["attributes"] == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0}
+    assert all(list(line) == FROZEN_KEYS for line in got)
 
 
 def test_every_line_has_exactly_the_frozen_keys_and_flat_scalar_attributes(tmp_path):
@@ -88,3 +118,22 @@ def test_steps_mirrors_each_record_into_spans_jsonl(tmp_path):
     assert [s["status"] for s in got[1:]] == ["ok", "failed"]
     recs = [json.loads(l) for l in (tmp_path / "steps.jsonl").read_text().splitlines()]
     assert [r["step"] for r in recs] == [s["name"] for s in got[1:]]
+
+
+def test_a_step_opens_its_span_as_it_starts_and_its_record_completes_the_same_span(tmp_path):
+    """A running step is an open child (`research status RUN` shows it running, since its own start); its record completes
+    that span_id from that start, and a step that never started (a skip) is still one completed line."""
+    CHECK = _load("check")
+    steps = CHECK.Steps(tmp_path, keep_going=True)
+    with open(tmp_path / "x.log", "w") as log:
+        p = steps.start("circuit-check", ["true"], tmp_path, {}, log)
+        p.wait()
+    opened = lines(tmp_path)[1]
+    assert (opened["name"], opened["end_utc"], opened["status"], opened["attributes"]) == ("circuit-check", None, None,
+                                                                                          {"step": "circuit-check"})
+    steps.end({"step": "circuit-check", "status": "passed", "rc": 0, "seconds": 0.1})
+    steps.end({"step": "lean-agreement", "status": "skipped", "seconds": 0.0})
+    got = lines(tmp_path)
+    assert [s["span_id"] for s in got[1:3]] == [opened["span_id"]] * 2 and got[2]["start_utc"] == opened["start_utc"]
+    assert got[2]["status"] == "ok" and got[3]["name"] == "lean-agreement" and got[3]["span_id"] != opened["span_id"]
+    assert all(list(line) == FROZEN_KEYS for line in got)

@@ -1,4 +1,24 @@
-import Proofs.Flock.VBridge.Decode
+module
+
+public import Proofs.Flock.VBridge.Decode
+public import Proofs.Flock.VBridge.Verifier
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.VBridge.PartS
 
 /-!
 # The verifier's `rec-residuals/…` unit
@@ -20,6 +40,8 @@ net, at the bridge's `residualForms` (`gfsOf S`), which needs no range hypothesi
 * The size. `part_small`: the verifier's part has at most 16 residuals, as `laid_part` asks: `groups` adds a residual to
   a part only where `8 (size + 1) ≤ 128` (`groups_small`), and `partS` keeps its group's residuals.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 
@@ -378,7 +400,7 @@ open FlockSoundness FlockSoundness.Audit
 (`laid_part`). Let the verifier build `net` from `RecResiduals.unitLaid S ns nv` (`netOf`), and let unit `u` be an
 instance of `k` stacked copies of the net's rows, the transcript `tr` carrying 1 at the stack's constant. Then at copy
 `j`'s column values (`copyVal`), `laid_part` holds. -/
-theorem unit_part {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_part {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (tr : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : tr (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ) (hres : 8 * S.res.length ≤ RecResiduals.RES_OUT_WORDS)

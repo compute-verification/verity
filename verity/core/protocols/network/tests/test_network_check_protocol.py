@@ -5,13 +5,16 @@ The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module
 `check_link` on each egress link, then `check_ingress_link` on each ingress link, under the certifier's `LmsKey` in its
 session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
-a small LMS key in a drawn certifier session, then one change
-(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence."""
+a small LMS key in a sampled certifier session, then one change
+(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
+certifies no incomplete record, so the `status` change either leaves its faulted window uncertified or signs its head
+anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import itertools
 import shutil
 from collections import Counter
 from fractions import Fraction
@@ -26,9 +29,9 @@ from verity_difftest import protocol as P
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord, Direction,
-                                                                Issuer, LmsKey, RecordHead, SignerRefused,
-                                                                certificate_message, parameters_digest)
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
+                                                                Direction, Issuer, LmsKey, RecordHead, SignerRefused,
+                                                                certificate_digest, parameters_digest, record_head)
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import encode
@@ -36,8 +39,8 @@ from verity.core.protocols.certifier.service import encode
 LEAN = Path(__file__).resolve().parents[1] / "lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-certificate/v3"
-COMMITMENT_TAG = "verity-network-certifier/certificates/v2"
+ID = "verity/network-certificate/v4"
+COMMITMENT_TAG = "verity-network-certifier/certificates/v3"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 REASONS = {code: reason for reason, code in STATUS_CODES.items()}
 
@@ -171,9 +174,9 @@ def commitment(b: bytes) -> tuple[list[CertifiedRecord], bytes]:
         if any(n > r for n in counts):
             raise D.Reject("a count past the allocation")
         head = RecordHead(link, d, window, T, r, B, tau, Status(REASONS[code]), bool(deadline), parameters, counts, take(64))
-        key_id = take(be(2))
+        salt, key_id = take(64), take(be(2))
         c_link, c_d, c_window, digest = text(), direction(), be(8), take(64)
-        out.append(CertifiedRecord(head, Certificate(key_id, c_link, c_d, c_window, digest, take(be(4)))))
+        out.append(CertifiedRecord(head, salt, Certificate(key_id, c_link, c_d, c_window, digest, take(be(4)))))
     return out, b
 
 
@@ -297,6 +300,16 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
+def _signed_anyway(issuer: Issuer, record: Record, direction: Direction, g: GridParams, parameters: bytes,
+                   deadline: bool) -> CertifiedRecord | None:
+    """A certificate of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
+    head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
+                       deadline=deadline)
+    salt = issuer.coins(SALT_BYTES)
+    c = issuer.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+    return None if c is None else CertifiedRecord(head, salt, c)
+
+
 def _flip(b: bytes, i: int) -> bytes:
     i %= len(b)
     return b[:i] + bytes([b[i] ^ 1]) + b[i + 1:]
@@ -313,9 +326,10 @@ def _grid_json(g: GridParams) -> dict:
 
 @dataclasses.dataclass
 class Drawn:
-    """A generated spatial unit before it is encoded: the change `m` (drawn with `n`), its parameters as JSON, the
-    certified records, each link-window's raw record and grid by `(direction, link, window)`, the egress links' frames and
-    syncs, and the link-window the change aims at (`target`, and an egress one, `egress_target`, when there is one)."""
+    """A generated spatial unit before it is encoded: the change `m` (sampled with `n`), its parameters as JSON, the
+    certified records, each execution phase's raw record and grid by `(direction, link, window)`, the egress links'
+    frames and syncs, and the execution phase the change aims at (`target`, and an egress one, `egress_target`, when
+    there is one)."""
 
     m: str
     n: int
@@ -369,6 +383,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     egress_parameters, ingress_parameters = parameters_digest(grid, ss), parameters_digest(ingress_grid)
     certified_grid = ingress_grid
     refuse, unsettled = set(), set()
+    forge_status = False
     targets = [("egress", l, w) for l in egress for w in range(W)] + [("ingress", l, w) for l in ingress for w in range(W)]
     target = targets[n % len(targets)]
     if m == "replay-link":
@@ -386,6 +401,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         T_d = grid.buckets if d == "egress" else ingress_grid.buckets
         bucket = tw * T_d + n % T_d
         faults[(d, tl)] = {bucket: draw(st.sampled_from(list(Reason)))}
+        forge_status = draw(st.sampled_from([True, False]))
     elif m == "advice-outside":
         l, w = egress_target
         s = syncs[l][w]
@@ -416,7 +432,9 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         ingress_parameters = parameters_digest(certified_grid)
 
     signer = _Signer(key)
-    issuer = Issuer(signer, session)
+    drawn_salts = itertools.count()
+    issuer = Issuer(signer, session,
+                    coins=lambda k: hashlib.shake_256(session + next(drawn_salts).to_bytes(8, "big")).digest(k))
     records: list[CertifiedRecord] = []
     raws: dict[tuple[str, str, int], tuple[Record, GridParams]] = {}
 
@@ -425,6 +443,8 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         raws[lw] = (record, g)
         signer.refuse = lw in refuse
         r = issuer.certify(record, direction, g, parameters, deadline=lw not in unsettled)
+        if r is None and forge_status and not record.status.complete:
+            r = _signed_anyway(issuer, record, direction, g, parameters, lw not in unsettled)
         if r is not None:
             records.append(r)
 
@@ -454,29 +474,31 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
                  "replay-direction": ("ingress" if d == "egress" else "egress", tl, tw)}[m]
         o = find(*other)
         if o is not None:
-            head, c = records[at].head, records[o].certificate
-            records[at] = CertifiedRecord(head, draw(st.sampled_from([
+            head, salt, c = records[at].head, records[at].salt, records[o].certificate
+            records[at] = CertifiedRecord(head, salt, draw(st.sampled_from([
                 c, dataclasses.replace(c, link=head.link, direction=head.direction, window=head.window),
-                dataclasses.replace(c, link=head.link, direction=head.direction, window=head.window, digest=head.digest())])))
+                dataclasses.replace(c, link=head.link, direction=head.direction, window=head.window,
+                                    digest=certificate_digest(salt, head.digest()))])))
     elif m == "other-key" and at is not None:
         r = records[at]
         same_id = draw(st.booleans())
         k2 = _key(ki, 1, same_id)
         c = dataclasses.replace(r.certificate, key_id=k2.I)
-        records[at] = CertifiedRecord(r.head, dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
+        records[at] = CertifiedRecord(r.head, r.salt,
+                                      dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
     elif m == "other-session" and at is not None:
         # the same key's certificate of the same record in another of the certifier's sessions
         r = records[at]
         c = r.certificate
         other = draw(st.sampled_from([_flip(session, n), bytes(lms.SESSION_BYTES), bytes(range(lms.SESSION_BYTES))])
                      .filter(lambda s: s != session))
-        records[at] = CertifiedRecord(r.head, dataclasses.replace(
+        records[at] = CertifiedRecord(r.head, r.salt, dataclasses.replace(
             c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(other)).encode()))
     elif m == "forged" and at is not None:
         r = records[at]
         sig = r.certificate.signature
         sig = draw(st.sampled_from([_flip(sig, n), sig[:-1], sig + b"\0", b"", bytes(len(sig))]))
-        records[at] = CertifiedRecord(r.head, dataclasses.replace(r.certificate, signature=sig))
+        records[at] = CertifiedRecord(r.head, r.salt, dataclasses.replace(r.certificate, signature=sig))
     elif m == "tampered" and at is not None:
         r = records[at]
         h = r.head
@@ -487,13 +509,17 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
             dataclasses.replace(h, parameters=_flip(h.parameters, n)), dataclasses.replace(h, deadline=not h.deadline),
             dataclasses.replace(h, status=COMPLETE if h.status.reason else Status(Reason.DROPPED)),
             dataclasses.replace(h, bucket_ms=h.bucket_ms + 1)]))
-        c = r.certificate
-        records[at] = CertifiedRecord(head, draw(st.sampled_from([c, dataclasses.replace(c, digest=head.digest())])))
+        c, salt = r.certificate, r.salt
+        records[at] = draw(st.sampled_from([
+            CertifiedRecord(head, salt, c),
+            CertifiedRecord(head, salt, dataclasses.replace(c, digest=certificate_digest(salt, head.digest()))),
+            CertifiedRecord(head, salt, dataclasses.replace(c, digest=head.digest())),
+            CertifiedRecord(h, _flip(salt, n), c)]))
     elif m == "missing" and at is not None:
         del records[at]
     elif m == "duplicate" and at is not None:
         r = records[at]
-        records.append(draw(st.sampled_from([r, CertifiedRecord(r.head, dataclasses.replace(
+        records.append(draw(st.sampled_from([r, CertifiedRecord(r.head, r.salt, dataclasses.replace(
             r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session)).encode()))])))
     elif m == "extra":
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))

@@ -1,15 +1,16 @@
-import PouwCommit.Coins
-import PouwCommit.Draws
-import PouwCommit.Rows
-import Lean.Data.Json
+module
+
+public import PouwCommit.Draws
+public import PouwCommit.Rows
+public import Lean.Data.Json.Parser
 
 /-!
-# The difftest: PoUW's commitments in Lean against the Python, on generated cases
+# The difftest: the Python held to PoUW's commitments in Lean, its verifier, on generated cases
 
-`tests/difftest_vectors.py` writes `difftest/cases.jsonl`, one case a line: `{"kind", "in", "python"}`, and `"lean"`
-where Lean refuses by name what Python refuses another way (the case's `"why"` says how). An outcome is `{"ok": v}`,
-`{"reason": text}` (a coin refused, in `coin_reason`'s words) or `{"error": …}` (Python raised; Lean threw), and errors
-agree by kind alone. `main` computes each case's outcome from the port and fails unless it is the one expected. The kinds:
+`tests/difftest_vectors.py` writes `difftest/cases.jsonl`, one case a line: `{"kind", "in", "python"}`. An outcome is
+`{"ok": v}`, `{"reason": text}` (a coin refused, in `coin_reason`'s words) or `{"error": …}` (Python raised; Lean threw),
+and errors agree by kind alone. `main` computes each case's outcome from the Lean and fails on every case where Python's
+is not it, naming the Lean's. The kinds:
 
 * `tagged`: `protocol.tagged` of a tag and parts (`{"b": hex}`, `{"s": text}`, `{"i": n}`);
 * `bindings`: `weight_binding`, `activation_binding`, `weights_root` and `transcript_binding`;
@@ -18,11 +19,14 @@ agree by kind alone. `main` computes each case's outcome from the port and fails
 * `transcript`: the transcript tree's root over tile digests (`Prover.prove`);
 * `verify`: `verify_opening` against `rows_domain`, of openings Python's trees made and of tampered ones;
 * `coins`: `coin_reason` of `CoinCommitment.from_json` and `CoinOpening.from_json`, honest and tampered;
-* `salt_of`, `unverified_salt`: the epoch's salt from a coin, and `Epoch.unverified`'s from a seed;
+* `salt_of`, `unverified_salt`: the execution phase's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
-* `key`: the audit, draw and replay keys and `draw_after`;
-* `sampled`, `pearl_draw`: `Sampled.select`'s and `pearl_c_work.draw`'s work-weighted draws over given tickets.
+* `key`: the audit, sample and replay keys and `draw_after`;
+* `sampled`, `pearl_draw`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
+  `clear_work.draw`'s (`benchmarks/pouw/clear`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit.Difftest
 
@@ -96,7 +100,7 @@ def outcome (kind : String) (i : Json) : E Json := do
       | .str s => pure (some (← unhex s))
       | _ => throw "salt_key is hex or null"
     return hexJ (← commitRows (← unhexField i "binding") (← int i "owner") (← hexes i "rows") (← str i "hash") key
-      (← nat i "nonce") (← bool i "digests"))
+      (← nat i "nonce") (← bool i "digests") (← bool i "public"))
   | "transcript" =>
     return hexJ (← transcriptRoot (← unhexField i "salt") (← unhexField i "weights_root") (← hexes i "digests")
       (← str i "hash") (← unhexField i "salt_key"))
@@ -175,16 +179,16 @@ def wrap (kind : String) : E Json → Json
 
 def isError (j : Json) : Bool := (j.getObjVal? "error").toOption.isSome
 
-/-- The case's differences: none when Lean's outcome is the expected one. -/
+/-- The case's differences: none when Python's outcome is the Lean's. -/
 def differences (n : Nat) (line : String) : List String :=
   match Json.parse line with
   | .error e => [s!"case {n}: not JSON: {e}"]
   | .ok c =>
     let kind := (c.getObjValAs? String "kind").toOption.getD ""
-    let want := (c.getObjVal? "lean").toOption.getD ((c.getObjVal? "python").toOption.getD .null)
-    let got := wrap kind (outcome kind ((c.getObjVal? "in").toOption.getD .null))
-    if (isError want && isError got) || want == got then []
-    else [s!"case {n} ({kind}): expected {want.compress}, Lean gives {got.compress}"]
+    let python := (c.getObjVal? "python").toOption.getD .null
+    let lean := wrap kind (outcome kind ((c.getObjVal? "in").toOption.getD .null))
+    if (isError python && isError lean) || python == lean then []
+    else [s!"case {n} ({kind}): Python gives {python.compress} where the Lean, of record, gives {lean.compress}"]
 
 def main (args : List String) : IO UInt32 := do
   let [cases, n] := args | IO.eprintln "usage: PouwCommit/DifftestMain.lean CASES N"; return 2

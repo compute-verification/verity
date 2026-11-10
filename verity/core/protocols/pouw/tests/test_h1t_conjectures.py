@@ -1,4 +1,4 @@
-"""Falsification tests of H-1T's two conjectures (`Security/Models/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean`), the
+"""Falsification tests of H-1T's two conjectures (`Security/Definitions/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean`), the
 tests that `shape.conjectures` in `Security/lean-audit.json` names:
 
 * `DistinctLiveH1T`: on a legal unit `U`, `U.word` is injective and no credited word is free (a constant or a raw XOF
@@ -114,7 +114,7 @@ SUBNORMAL = [c for c in FINITE if (c >> 3) & 0xF == 0 and c & 7]
 @dataclass(frozen=True)
 class Case:
     """A unit, swept over every value of the salt fields its words read (`live`: the real lanes whose columns aren't all
-    zero) or over `salts` sampled unit salts."""
+    zero) or over `salts` sampled proof block salts."""
     unit: Unit
     live: tuple[int, ...] | None = None
     salts: int = N

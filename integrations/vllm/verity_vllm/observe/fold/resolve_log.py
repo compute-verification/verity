@@ -1,7 +1,7 @@
-"""Resolve a raw observation log against a pinned profile (lane L3; torch-free).
+"""Resolve a raw observation log against a pinned profile (torch-free).
 
     uv run verity-vllm resolve-log data/logs/m1.jsonl.gz \
-        [--profile vllm_d9105ea80_sm89_eager] [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
+        --profile vllm_d9105ea80_sm89_eager [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
 
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the
 preamble plus the step's prompt-row Roots —, the profile's C, the profile), `resolve_step`, and the op histogram with
@@ -26,17 +26,15 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from verity_vllm.config import option
-from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink
+from verity_vllm.observe.events import Event, Note, Root, RunHeader, StepLink, StorageAlloc, ViewDesc
 from verity_vllm.observe.log import read_log, split_steps
 from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, label, members
-from verity_vllm.observe.fold.resolver import Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent, spec_module, Unsupported, resolve_step
+from verity_vllm.observe.fold.resolver import (Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent,
+                                               external_buffers, spec_module, Unsupported, resolve_step)
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 
-DEFAULT_PROFILE = "vllm_d9105ea80_sm89_eager"
-
-
 def load_profile(name: str) -> tuple[Profile, Any]:
-    mod_name = name if "." in name else f"verity_vllm.engine.profiles.{name}"
+    mod_name = name if "." in name else f"verity_vllm.observe.fold.profiles.{name}"
     mod = importlib.import_module(mod_name)
     return mod.PROFILE, mod
 
@@ -57,7 +55,7 @@ class StepResult:
     error: str | None = None
     seconds: float = 0.0
     target: dict | None = None                 # [X-01] per-step target-fact acceptances (patterns.X01_SCRATCH_KEY), None when none fired
-    gemm_target: dict | None = None            # [R13 ampere] per-step registered GEMM target selection (patterns.GEMM_TARGET_SCRATCH_KEY)
+    gemm_target: dict | None = None            # per-step registered GEMM target selection (patterns.GEMM_TARGET_SCRATCH_KEY)
 
     @property
     def unsupported(self) -> list[Unsupported]:
@@ -95,10 +93,11 @@ def collect_roots(events: list[Event], into: dict[int, list[Root]]) -> None:
             into.setdefault(ev.view.alloc, []).append(ev)
 
 
-def make_context(header: RunHeader, se: StepEvents, roots: dict[int, list[Root]], profile: Profile) -> StepContext:
+def make_context(header: RunHeader, se: StepEvents, roots: dict[int, list[Root]], profile: Profile,
+                 buffers: dict[str, ViewDesc] | None = None) -> StepContext:
     step_roots: dict[int, list[Root]] = {k: list(v) for k, v in roots.items()}
     collect_roots(se.other, step_roots)
-    return StepContext(header, se.start, se.sample, list(se.links), step_roots, dict(profile.config), profile)
+    return StepContext(header, se.start, se.sample, list(se.links), step_roots, dict(profile.config), profile, buffers=buffers or {})
 
 
 def resolve_log(path: str | Path, profile: Profile, only_step: int | None = None,
@@ -107,12 +106,17 @@ def resolve_log(path: str | Path, profile: Profile, only_step: int | None = None
     roots: dict[int, list[Root]] = {}
     notes: list[Note] = []
     results: list[StepResult] = []
+    devices: dict[int, str] = {}
+    buffers: dict[str, ViewDesc] = {}
     for pre, step in split_steps(read_log(path)):
         for ev in pre:
             if isinstance(ev, RunHeader):
                 header = ev
+            elif isinstance(ev, StorageAlloc):
+                devices[ev.alloc] = ev.device
             elif isinstance(ev, Note):
                 notes.append(ev)
+                buffers.update(external_buffers(ev, lambda a: devices.get(a, "")))
         collect_roots(pre, roots)
         if not step:
             continue
@@ -121,7 +125,7 @@ def resolve_log(path: str | Path, profile: Profile, only_step: int | None = None
             continue
         if header is None:
             header = RunHeader("?", "", "", {}, {}, {})
-        ctx = make_context(header, se, roots, profile)
+        ctx = make_context(header, se, roots, profile, buffers)
         t0 = time.perf_counter()
         n_events = sum(len(r.ids()) for r in se.roots)
         try:
@@ -163,7 +167,7 @@ def short_label(r: Resolution) -> str:
     if isinstance(r, Transparent):
         extra = getattr(r, "also", ())
         return f"Transparent {r.effect}" + (f" (+{len(extra)} grouped)" if extra else "")
-    if isinstance(r, Group):   # SHARED-CODE (lane ov-moe): a `resolver.Group` root (D70) is neither spelling above
+    if isinstance(r, Group):   # a `resolver.Group` root is neither spelling above
         kinds = Counter("Compute" if isinstance(p, Compute) else "Transparent" if isinstance(p, Transparent) else type(p).__name__
                         for p in r.parts)
         return f"Group of {len(r.parts)}: " + ", ".join(f"{n} {k}" for k, n in sorted(kinds.items()))
@@ -287,7 +291,7 @@ def _target_facts(header: RunHeader | None, results: list[StepResult]) -> dict:
                  "num_sms_pinned_from_target": {"launches": sum(int(a.get("launches", 0)) for a in acc), "steps": len(acc)}}
     if acc:
         out["num_sms_pinned_from_target"].update({k: acc[0][k] for k in ("pinned", "source", "profile_default", "basis") if k in acc[0]})
-    gts = [sr.gemm_target for sr in results if sr.gemm_target]   # [R13 ampere] which registered GEMM specialization pinned the launch geometry
+    gts = [sr.gemm_target for sr in results if sr.gemm_target]   # which registered GEMM specialization pinned the launch geometry
     out["gemm_target"] = None if not gts else {**{k: gts[0].get(k) for k in ("target", "dot", "refusal", "compute_capability", "header_tuned_gemm_arch_family",
                                                                               "tuned_table_sha256", "basis")},
                                                "launches": sum(int(g.get("launches", 0)) for g in gts), "steps": len(gts)}
@@ -366,7 +370,7 @@ def report_markdown(rep: dict) -> str:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     log: str = option("log")
-    profile: str = option("--profile", default=DEFAULT_PROFILE)
+    profile: str = option("--profile", help="the profile to resolve against: a module of verity_vllm.observe.fold.profiles, or a dotted path")
     step: int | None = option("--step", type=int, default=None, help="resolve (and dump) only this step")
     dump_trees: bool = option("--dump-trees", default=False, action="store_true")
     max_depth: int = option("--max-depth", type=int, default=6)

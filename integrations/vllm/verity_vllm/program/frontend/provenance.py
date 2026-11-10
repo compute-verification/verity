@@ -1,4 +1,4 @@
-"""Provenance records of an export (frontend rulings, §8.1 and §8.4).
+"""Provenance records of an export.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
@@ -38,7 +38,7 @@ RULE_KINDS = ("hierarchy-around-unchanged-gates", "region-replacement")
 def registry_version(registry=REGISTRY) -> dict:
     """The primitive-vocabulary version: ids + signatures + conformance of every primitive, ids + statics of
     every composite, and the SHA-256 of the registry sources; `digest` is the SHA-256 of that record."""
-    from verity_vllm.program.registry import b1, prims  # noqa: F401  (registration)
+    from verity.ml.definitions.registry import b1, prims  # registration
     # The record is computed over the DECLARED vocabulary (module-level definitions of `registry.prims` / `registry.b1`),
     # not over `registry.defs` at call time: after a program is built the registry also holds shape-instantiated
     # primitives (`GatherBf16x49152_v1`, `Const32[…]`, `Input16_v1`) and the digest would depend on process state

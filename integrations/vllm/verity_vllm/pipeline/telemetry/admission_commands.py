@@ -10,8 +10,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from verity_vllm.config import option
-from verity_vllm.pipeline.telemetry.admission import (GiB, RowConfig, cgroup_memory_max, compare, plan_row, predict,
+from verity_vllm.config import option, workload_arg
+from verity_vllm.pipeline.telemetry.admission import (GiB, RowScale, cgroup_memory_max, compare, plan_row, predict,
                                                       render_compare_md, render_points_md, retain_exclude_families,
                                                       row_config_from_attempt, row_config_from_workload)
 
@@ -19,7 +19,7 @@ from verity_vllm.pipeline.telemetry.admission import (GiB, RowConfig, cgroup_mem
 @dataclass(frozen=True, kw_only=True)
 class PlanOptions:
     """ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one line, exit 0"""
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     row: str | None = option("--row", default=None)
     out: str | None = option("--out", default=None)
     stages: str = option("--stages", default="build,match,commit")
@@ -30,9 +30,9 @@ class PlanOptions:
     host_limit_bytes: int | None = option("--host-limit-bytes", default=None, type=int, help="default: this cgroup's memory.max")
     largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true")
     retain: str | None = option("--retain", default=None, choices=["host", "device", "none", "sample"], help="the run's --retain (default: the workload's / host)")
-    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="the run uses --bounded-staging (R19 admit fix (a) with --retain host --retain-exclude hidden_m1)")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="the run uses --bounded-staging (with --retain host --retain-exclude hidden_m1)")
     retain_exclude: str | None = option("--retain-exclude", default=None, help="the run's --retain-exclude families (hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
-    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="model the pre-R19 forked pool (no gc.freeze before the fork: two children may copy the C2 heap, F-r17-24)")
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="model a forked pool without gc.freeze before the fork (two children may copy the C2 heap)")
     cmd: str = field(default="plan", init=False)
 
 
@@ -43,7 +43,7 @@ class CompareOptions:
     md: bool = option("--md", default=False, action="store_true")
     points: bool = option("--points", default=False, action="store_true", help="also print the commit-point tables")
     largest_vu_in_parent: bool = option("--largest-vu-in-parent", default=False, action="store_true", help="predict with the FIX: the largest strata evaluated in the parent, forked workers are 250 MiB workers")
-    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="predict with the pre-R19 forked pool (the R17/R18 records were made without gc.freeze)")
+    no_fork_gc_freeze: bool = option("--no-fork-gc-freeze", default=False, action="store_true", help="predict with a forked pool without gc.freeze (as records made without it ran)")
     json_out: str | None = option("--json-out", default=None)
     cmd: str = field(default="compare", init=False)
 
@@ -91,7 +91,7 @@ def main(a: PlanOptions | CompareOptions | PredictOptions) -> int:
             print(f"ADMISSION advisory unavailable: {type(e).__name__}: {e}")
         return 0
     if a.cmd == "predict":
-        cfg = RowConfig(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
+        cfg = RowScale(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
                         replay_workers=a.replay_workers, host_limit_bytes=int(a.host_limit_gib * GiB) if a.host_limit_gib else None, n_instances=a.n_instances,
                         scheduled_raw_bytes=a.raw_bytes, largest_vu_in_parent=a.largest_vu_in_parent, retain=a.retain,
                         fork_gc_freeze=not a.no_fork_gc_freeze, bounded_staging=a.bounded_staging, retain_exclude=retain_exclude_families(a.retain_exclude))

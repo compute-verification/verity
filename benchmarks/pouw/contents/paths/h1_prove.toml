@@ -1,0 +1,4 @@
+order = 162
+path = "`h1_prove/`"
+runs_on = "CPU"
+what = "Drawn H1 tile units (`PouwH1Tile`) of a recorded int8 Llama-3.1-8B window through sampled proofs: committed, drawn by the live coin, proved by C-Flock `--zk` and verified by the Lean verifier against the verifier's own files, with planted negatives (`job.sh`)"

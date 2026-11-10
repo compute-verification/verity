@@ -1,6 +1,6 @@
 //! flock-vllm-v1: the Flock backend's relation over operands committed under `vllm-v1` (`flock_live::vllm_block`,
 //! `verity/flock-vllm-block/v1`), proved by the CPU prover or by Flock-CUDA (`--gpu`, feature `gpu`) in a flock-128-r2
-//! live session. The CLI and output lines are flock-pure-gpu's, so flock-backend's bench.py drives it.
+//! live session. The CLI and output lines are flock-pure-gpu's, so `flock-pure`'s bench.py drives it.
 //!
 //!   flock-vllm-v1 serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--sessions N] [--operator LANE]
 //!   flock-vllm-v1 prove    --verifier ADDR --instances FILE --netlist FILE [--gpu] [--runs N] [--warm W] [--dump DIR]
@@ -620,6 +620,7 @@ fn selftest(st: &Arc<VllmStmt>, inst: &Arc<Instances>, gpu: bool) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(Instances::load(&arg("--instances", "instances.bin")));
@@ -799,7 +800,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }

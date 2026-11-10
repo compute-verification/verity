@@ -16,8 +16,8 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.boolean import trace as TR
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_fp8 as BF
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -62,6 +62,7 @@ AGREEMENT = [bind(BF.Fp8RowScaleV2), bind(BF.Fp8RowAbsMaxV2, K=256), bind(BF.Fp8
              bind(BF.ScaledMmFp8NoSwapCoordinateV2, K=64, BIAS=True, DOT=SM120),
              bind(BF.ScaledMmFp8NoSwapCoordinateV2, K=64, BIAS=False, DOT=HOPPER),
              bind(BF.ScaledMmFp8NoSwapV2, K=64, N=3, BIAS=True, DOT=SM120)]
+SLOW_AGREEMENT = ("QuantLinearFp8_v2{K=256,N=2,BIAS=True}", "Fp8ActQuant_v2{K=256}")
 
 #: bf16 words that reach the quantiser's guards: signed zeros, subnormals, the normal range's ends, infinities, NaNs
 BF16_SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x807F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1], np.uint16)
@@ -110,7 +111,7 @@ def test_pinned_counts_and_digests(target) -> None:
     assert codec.program_digest(codec.encode_program(prog)) == digest
 
 
-@pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id in SLOW_AGREEMENT else t for t in AGREEMENT], ids=lambda t: t.id)
 def test_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k == "DOT" else x) for k, x in target.bindings.items()}

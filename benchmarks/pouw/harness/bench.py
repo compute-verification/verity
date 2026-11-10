@@ -3,18 +3,22 @@
 
   python bench.py --gpu 5 --expect-uuid GPU-... [--arm module:Class ...] [--arm-path DIR] [--shapes LABEL ... | headline]
                   [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F]
-                  [--decode-method dependent-chain|independent] --out run.json
+                  [--decode-method dependent-chain|independent] [--bridge] [--traced] [--twins] --out run.json
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
+
+On an RTX PRO 6000 (sm_120), or an H200 (sm_90: native/build.sh with PH_ARCH=sm_90a, cuBLASLt in the library and vLLM's
+CUTLASS and DeepGEMM through torch with --bridge). A shape is any panel or model label, or any `m{m}-n{n}-k{k}`.
 
 The contract with arms is `arm.py`. Per run: identity (`identity.py`), the fill and derive preflights; the SASS gate
 (`sass_gate.py`) on every arm's declared binaries and every mapped library with device code; per shape: operand sets; gates,
 with the negative controls at the first shape before anything is timed; the baselines' autotune; at decode shapes, the
 dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; a warm-up of the same schedule
 to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
-replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
-gate; after the timed items, each arm's transcript from poisoned buffers and its no-write control (`poison_dump`, for an arm
-with `dump`: panel rule, 11:50Z); the report (`report.py`), whose panel rows carry both sides' reps and clocks
-(08:50Z). Every failure stops what it guards and writes no timing for it.
+replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; with
+`--traced`, the traced pass beside it for a profiler; the consistency gate; after the timed items, each arm's transcript
+from poisoned buffers and its no-write control (`poison_dump`, for an arm with `dump`: a panel rule); the report
+(`report.py`), whose panel rows carry both sides' reps and clocks. Every failure stops what it guards and writes no timing
+for it.
 
 Exit codes: 0 ok; 2 identity or usage (also a configuration --lt-enumerate-names names that the enumeration didn't take); 3 a
 device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its gate, or it couldn't run); 6 the
@@ -67,6 +71,8 @@ MEMORY_SHARE = 0.85
 WARMUP_MS, WARMUP_MAX_MS, STEADY = 10_000.0, 60_000.0, 0.005
 #: a timed item's device ms at least (every entry's sized to the same); the panel's "clock gap" between the sides' medians
 ITEM_MS, CLOCK_GAP = 40.0, 0.005
+#: `--traced`'s priming: a profiler start taking this long (s) found the profiler not yet collecting; at most this many
+PRIME_READY_S, PRIME_TRIES = 5.0, 4
 
 
 class NegativeControlFailed(RuntimeError):
@@ -117,7 +123,8 @@ class Timer:
     """Times an entry: a read-only L2 flush, NVML, an event, the burst (`burst`: B calls enqueued from Python; `graph`: the
     same B calls replayed from one CUDA graph; a chain's `replays` replays of its `length` calls), an event, NVML while the
     GPU runs it (`during`), NVML once it is done. A `-wflush` method uses the write flush instead (the W5 control). Per-call
-    time is the item's over its calls."""
+    time is the item's over its calls. `cpu_s` is the process's CPU seconds enqueueing the item; with a `mark` the enqueue
+    is an NVTX range of that text (the traced pass's), by which nsys attributes the item's kernels."""
 
     def __init__(self, dev, sensors):
         self.dev, self.sensors = dev, sensors
@@ -137,22 +144,28 @@ class Timer:
             self.dev.graph_destroy(e.graph)
             e.graph = None
 
-    def time(self, e: Entry, method: str, burst: int) -> dict:
+    def time(self, e: Entry, method: str, burst: int, mark: str | None = None) -> dict:
         d = self.dev
         unit = self.unit(e, burst)
         (d.write_flush if method.endswith("-wflush") else d.flush)()
         before = self.sensors.sample()
         d.record(self.e0)
+        if mark is not None:
+            d.nvtx_push(mark)
+        cpu = time.process_time()
         for _ in range(e.replays):
             if method.startswith("graph"):
                 d.graph_launch(e.graph)
             else:
                 e.enqueue(d.stream, unit)
+        cpu = time.process_time() - cpu
+        if mark is not None:
+            d.nvtx_pop()
         d.record(self.e1)
         during = self.sensors.sample()
         ms = d.elapsed_ms(self.e0, self.e1)
         calls = unit * e.replays
-        return {"ms_per_call": ms / calls, "burst_ms": ms, "burst": calls,
+        return {"ms_per_call": ms / calls, "burst_ms": ms, "burst": calls, "cpu_s": cpu,
                 "sensors": {"before": before, "during": during, "after": self.sensors.sample()}}
 
 
@@ -193,9 +206,13 @@ class Bench:
         self.items: list[dict] = []
         self.rejected: list[dict] = []
         self.chained = False
-        self.sass: SG.Gate | None = None
+        self.sass: SG.SassChecker | None = None
         self.warmups: list[dict] = []
         self.poisoning: list[dict] = []
+        #: the traced pass beside the timed one (--traced), its items apart; the stock libraries through torch (--bridge)
+        self.traced = False
+        self.traced_items: list[dict] = []
+        self.bridge = None
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -215,7 +232,7 @@ class Bench:
         t0 = self.clock()
         try:
             ok, detail = fn()
-        except Exception as ex:  # noqa: BLE001 - a control that can't run shows nothing; the run stops
+        except Exception as ex:
             self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}",
                                    "wall_s": self.clock() - t0})
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} couldn't run: {ex}") from ex
@@ -264,11 +281,28 @@ class Bench:
                 per[e.key][m].append(t["ms_per_call"])
         return per
 
+    def traced_pass(self, entries: list[Entry], burst: int, seed: int) -> None:
+        """The traced pass beside the timed one (`--traced`): `reps` more reps of every entry by the burst method, in a seeded
+        order, between the profiler's start and stop, each item's enqueue an NVTX range "item <its index in `traced_items`>".
+        A profiler capturing only between them (`nsys profile --capture-range=cudaProfilerApi`) never touches a timed item."""
+        self.dev.profiler_start()
+        try:
+            for r, order in enumerate(S.rep_orders(list(range(len(entries))), self.reps, seed)):
+                for pos, i in enumerate(order):
+                    e = entries[i]
+                    self.ledger.require(e.gate_key or e.key)
+                    t = self.timer.time(e, "burst", burst, f"item {len(self.traced_items)}")
+                    self.traced_items.append({"key": list(e.key), "method": "burst", "rep": r, "pos": pos, **t})
+        finally:
+            self.dev.profiler_stop()
+
     def warmup(self, entries: list[Entry], burst: int, seed: int, min_ms: float = WARMUP_MS,
-               max_ms: float = WARMUP_MAX_MS) -> dict:
+               max_ms: float = WARMUP_MAX_MS, item_ms: float | None = None) -> dict:
         """Rounds of the timed schedule (every entry and method once, in a seeded order), kept apart from the reps, until the
         GPU is at steady state: at least `min_ms` of device time, and a round's median SM clock within STEADY of the round's
-        before. `max_ms` bounds it (`steady` False). `per_call`: each entry's median per-call ms in the last round."""
+        before. `max_ms` bounds it (`steady` False). With `item_ms`, the first round's per-call times size every item as
+        `equalize` does, so the rounds after it run the timed items: items of a few calls would spend the warm-up on the
+        host's per-item flush and NVML reads, not on the GPU. `per_call`: each entry's median per-call ms in the last round."""
         pairs = [(e, m) for e in entries for m in self.methods]
         rng = random.Random(seed)
         total, clocks, per, steady = 0.0, [], {}, False
@@ -289,14 +323,17 @@ class Bench:
             steady = len(clocks) >= 2 and None not in clocks[-2:] and abs(clocks[-1] - clocks[-2]) <= STEADY * clocks[-2]
             if (steady and total >= min_ms) or total >= max_ms:
                 break
+            if item_ms is not None and len(clocks) == 1:
+                self.equalize(entries, {k: statistics.median(v) for k, v in per.items()}, burst, item_ms)
         return {"rounds": len(clocks), "device_ms": total, "round_sm_mhz": clocks, "steady": steady, "min_ms": min_ms,
                 "max_ms": max_ms, "per_call": {k: statistics.median(v) for k, v in per.items()}}
 
     def equalize(self, entries: list[Entry], per_call: dict, burst: int, item_ms: float = ITEM_MS) -> dict:
         """Sizes every entry's timed item to about the same device time, the larger of `item_ms` and the longest item at the
-        shape's burst: in calls for a burst or a graph (re-captured), in replays for a chain."""
+        shape's burst: in calls for a burst or a graph (re-captured), in replays for a chain. Sizing items already sized
+        (as the warm-up does) gives the same target."""
         unit = self.timer.unit
-        natural = {e.key: per_call[e.key] * unit(e, burst) for e in entries if per_call.get(e.key, 0) > 0}
+        natural = {e.key: per_call[e.key] * (e.length or burst) for e in entries if per_call.get(e.key, 0) > 0}
         target = max([item_ms, *natural.values()])
         graphs = "graph" in {m.split("-")[0] for m in self.methods}
         out = []
@@ -312,6 +349,23 @@ class Bench:
             out.append({"key": list(e.key), "ms_per_call": ms, "calls": unit(e, burst) * e.replays, "replays": e.replays,
                         "item_ms": ms * unit(e, burst) * e.replays})
         return {"target_ms": target, "entries": out}
+
+
+def prime_profiler(dev, clock=time.monotonic, ready_s: float = PRIME_READY_S, tries: int = PRIME_TRIES) -> dict:
+    """Empty capture ranges before the first shape (`--traced`), until a profiler start returns within `ready_s`. A
+    profiler's first start is slow (nsys's can block about 30 s), and one that returns before the profiler collects loses
+    its range: nsys ignores the stop and collects on to the next one, through whatever ran between them. `start_s`: each
+    start's seconds."""
+
+    starts: list[float] = []
+    while len(starts) < tries:
+        t0 = clock()
+        dev.profiler_start()
+        starts.append(clock() - t0)
+        dev.profiler_stop()
+        if starts[-1] < ready_s:
+            break
+    return {"start_s": starts, "ready_s": ready_s, "ready": starts[-1] < ready_s}
 
 
 def free_entries(bench: Bench, entries: list[Entry]) -> None:
@@ -379,7 +433,7 @@ def _flip_control(dev, arm, shape, flags, call, checked: dict):
     return run
 
 
-#: what fills every buffer a transcript reads before the call it dumps (the panel rule, 11:50Z)
+#: what fills every buffer a transcript reads before the call it dumps (the panel rule)
 POISON = 0xA5
 
 
@@ -550,7 +604,7 @@ def names_not_taken(fam: str, label: str, missing: list[str], enumeration: dict,
 
 
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
-                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick(),
+                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.EVERY,
                    sched_fams: frozenset = frozenset()) -> dict:
     """Every family's candidates, each gated on the gate set (cuBLASLt's configurations enumerated for the families in
     `enumerate_fams`, those `pick` takes; the CUTLASS 3.x kernels in every tile order for those in `sched_fams`); at the
@@ -578,6 +632,8 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
             if missing:
                 raise NamesNotTaken(names_not_taken(fam.name, shape.label, missing, enumeration, pick))
         cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels, fam.name in sched_fams)
+        bridged, bridge_refused = bench.bridge.candidates(fam, shape) if bench.bridge is not None else ([], [])
+        cuts += bridged
         gated = []
         for c in lts + cuts:
             key = ("baseline", shape.label, fam.name, c.name)
@@ -593,7 +649,7 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
                 gated.append(c)
         out[fam.name] = {"gated": gated, "all": lts + cuts,
                          "tried": [{"name": c.name, "source": c.source, "config": c.config} for c in lts + cuts],
-                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl,
+                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl, "bridge_refused": bridge_refused,
                          "cublaslt_libraries": [{"prefix": t.prefix, "version": t.version} for t in dev.lts],
                          "cublaslt_enumeration": enumeration or None, "cublaslt_enumeration_missing": missing}
         if not lts + cuts:
@@ -705,6 +761,20 @@ def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst
         keep += final
         free_entries(bench, [e for e in ranked if all(e is not f for f in final)])
     return keep
+
+
+def twin_entries(dev, shape, fams, so, gated: dict, timed: list[Entry], lt_ws) -> list[Entry]:
+    """Each family's fastest finalist again, on calls of its own and under the original's gate: timed beside it the same
+    way, the two are an A/A control, what one kernel's two timings differ by (`--twins`; verity bench overhead's stock γ)."""
+    out = []
+    for fam in fams:
+        first = next((e for e in timed if e.kind == "baseline" and e.key[2] == fam.name), None)
+        if first is None:
+            continue
+        cand = next(c for c in gated[fam.name]["gated"] if c.name == first.key[3])
+        calls = [B.BaselineCall(dev, cand, shape, so.ops(fam, s), lt_ws) for s in range(so.sets)]
+        out.append(Entry(("twin", *first.key[1:]), "twin", calls, gate_key=first.key, meta=dict(first.meta)))
+    return out
 
 
 # ---- the dependent chain -------------------------------------------------------------------------------------------------------
@@ -898,6 +968,11 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         st.mark("arm_gates")
         entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists,
                                  getattr(args, "screen_keep", SCREEN_KEEP))
+        if getattr(args, "twins", False):
+            twins = twin_entries(dev, shape, fams, so, gated, entries, lt_ws)
+            kept = bench.capture(twins, plan["burst"])
+            free_entries(bench, [e for e in twins if all(e is not k for k in kept)])
+            entries += kept
         entries += bench.capture(arm_ents, plan["burst"])
         free_entries(bench, [e for e in arm_ents if e not in entries])
         st.mark("tune")
@@ -914,16 +989,20 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         if bench.sass is not None:
             bench.sass.check(bench.sass.discover(), "mapped")
         st.mark("sass_gate")
+        item_ms = getattr(args, "item_ms", ITEM_MS)
         warm = bench.warmup(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/warmup"),
                             1e3 * getattr(args, "warmup_s", WARMUP_MS / 1e3),
-                            1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3))
+                            1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3), item_ms)
         row["warmup"] = {k: v for k, v in warm.items() if k != "per_call"}
-        row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], getattr(args, "item_ms", ITEM_MS))
+        row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], item_ms)
         st.mark("warmup")
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
         st.mark("timed")
+        if bench.traced:
+            bench.traced_pass(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/traced"))
+            st.mark("traced")
         row["poisoning"] = dump_transcripts(bench, dev, shape, arms, entries, args.out.parent, arm_sets)
         st.mark("transcripts")
         row["summary"] = summarize(per, bench.items)
@@ -945,7 +1024,7 @@ def chained(args, shape) -> bool:
 
 
 def panel_reps(items: list[dict], arm_key: tuple, base_key: tuple, method: str = "graph") -> dict:
-    """The panel row's two sides, rep by rep (08:50Z): per-call ms, item ms and SM clock of the arm's and the
+    """The panel row's two sides, rep by rep: per-call ms, item ms and SM clock of the arm's and the
     baseline's items, interleaved in the same reps on this die; `panel.py`'s --sm-clock-arm and --sm-clock-base; each side's
     median clock and "clock gap" (medians more than CLOCK_GAP apart)."""
     out: dict = {"reps": {}}
@@ -1084,6 +1163,16 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--item-ms", type=float, default=ITEM_MS,
                    help="every timed item (entry, method, rep) is sized to about the same device time, at least this")
     p.add_argument("--lock-mhz", type=int, help="lock this GPU's graphics clock (nvidia-smi -i UUID -lgc F,F); reset at exit")
+    p.add_argument("--bridge", action="store_true",
+                   help="also time the stock FP8 libraries served through torch (torch_baselines.py: vLLM's CUTLASS, "
+                        "DeepGEMM), imported after the arms' SASS gate; the H200's CUTLASS and DeepGEMM")
+    p.add_argument("--traced", action="store_true",
+                   help="after each shape's timed reps, a traced pass of as many burst reps between cudaProfilerStart and "
+                        "Stop, each item an NVTX range 'item <index in traced_items>', for nsys to attribute its kernels "
+                        "(verity bench overhead's busy SM-time); first, empty ranges until a start returns at once "
+                        "(traced_prime)")
+    p.add_argument("--twins", action="store_true",
+                   help="time each family's fastest finalist twice, the second as ('twin', ...): an A/A control")
     p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
     p.add_argument("--out", type=Path)
     a = p.parse_args(argv)
@@ -1190,7 +1279,7 @@ def timed_clocks(items: list[dict]) -> dict:
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1220,6 +1309,11 @@ def main(argv: list[str] | None = None) -> int:
         card = I.check_card(dev.info["name"], dev.info["capability"], dev.info["sms"], nid["driver"])
         out["identity"] = {**ident, "card": card, "nvml": nid, "cuda": dev.info}
         out["versions"] = N.versions(dev)
+        if args.traced:
+            if not dev.has_profiler:
+                raise RuntimeError("--traced needs a libpouw_harness.so with NVTX ranges and the profiler API "
+                                   "(ph_profiler_start): rebuild it")
+            out["traced_prime"] = prime_profiler(dev)
         out["preflight_fill"] = preflight_fill(dev)
         if any(chained(args, s) for s in SH.select(args.shapes)):
             if not dev.has_chain:
@@ -1232,10 +1326,10 @@ def main(argv: list[str] | None = None) -> int:
         out["clocks"] = lock or {"locked": False}
         out["clocks"]["label"] = "locked" if (lock or {}).get("locked") else args.clock_label or "unlocked"
         arms = [A.load(s) for s in args.arm]
-        sass = SG.Gate(log)
+        sass = SG.SassChecker(log)
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
-            build = a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent),
+            build = a.build({"device": dev, "arch": card["arch"], "out_dir": str(args.out.parent),
                              "transcripts_dir": str(args.out.parent / "transcripts")})
             verifier = A.check_verifier(a.name, build)
             if verifier is None:
@@ -1245,11 +1339,18 @@ def main(argv: list[str] | None = None) -> int:
                                    "verifier": verifier}
             sass.check(SG.declared(a.name, build), f"arm:{a.name}")
         sass.check(sass.discover(), "mapped")
+        bridge = None
+        if args.bridge:
+            import torch_baselines as TB
+
+            bridge = TB.Bridge.load()
+            TB.exempt(sass, sass.discover())
+            out["bridge"] = bridge.record()
         kernels = B.cutlass_kernels(dev)
         out["cutlass_kernels"] = kernels
         lt_ws = dev.alloc(B.LT_WORKSPACE)
         bench = Bench(dev, nvml, args.reps, tuple(args.methods), log)
-        bench.sass = sass
+        bench.sass, bench.bridge, bench.traced = sass, bridge, args.traced
         fams = [B.FAMILIES[f] for f in args.families]
         for i, shape in enumerate(SH.select(args.shapes)):
             log(f"shape {shape.label}")
@@ -1284,6 +1385,8 @@ def main(argv: list[str] | None = None) -> int:
             out["tuning"] = bench.tuning
             out["warmup_items"] = bench.warmups
             out["items"] = bench.items
+            if bench.traced:
+                out["traced_items"] = bench.traced_items
             out.setdefault("clocks", {})["timed"] = timed_clocks(bench.items)
         out["harness"]["finished"] = now()
         out["exit"] = code

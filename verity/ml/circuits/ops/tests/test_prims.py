@@ -1,4 +1,4 @@
-"""The IR-registered primitives of `verity.ml.circuits.ops.prims` are exactly the `verity.ml.circuits.silicon` functions, under their registered ids."""
+"""The registered primitives of `verity.ml.circuits.ops.prims` are exactly the `verity.ml.circuits.silicon` functions, under their registered ids."""
 from __future__ import annotations
 
 import random
@@ -10,7 +10,7 @@ import pytest
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word, f32_to_e4m3_sat_word
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, tc_dot
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
@@ -144,7 +144,7 @@ def test_the_triton_mmav2_step_is_two_chained_hopper_hmma_k16_steps() -> None:
     from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 
     step = P.HopperE4m3MmaV2Dot32
-    assert step.id == "HopperE4m3MmaV2Dot32_v1" and REGISTRY[step.id] is step and step.conformance.startswith("model-untested")
+    assert step.id == "HopperE4m3MmaV2Dot32_v1" and REGISTRY[step.id] is step and step.conformance.startswith("exact-model-tested")
     assert step.signature() == P.HopperE4m3QgmmaDot32.signature()
     assert sorted(MMAV2_E4M3_K_ORDER) == list(range(32)) and MMAV2_E4M3_K_ORDER[:4] == (0, 1, 4, 5)
     S0, S1 = [k for k in range(32) if k % 4 < 2], [k for k in range(32) if k % 4 >= 2]
@@ -224,7 +224,7 @@ def test_the_sm120_e5m2_step_is_the_e4m3_pipeline_with_e5m2_products_on_every_en
 
 
 def test_the_sm120_e5m2_step_reproduces_the_pro_6000_capture_on_every_encoding() -> None:
-    """Every word of run r20260930-063527-4d6b's specials and signed-zero tiles (RTX PRO 6000, one QMMA.16832.F32.E5M2.E5M2 per
+    """Every word of the tc_probe capture's specials and signed-zero tiles (RTX PRO 6000, one QMMA.16832.F32.E5M2.E5M2 per
     tile; fixtures/README.md), including the 4,824 words with a NaN or infinite operand or accumulator, which the run recorded
     but did not assert."""
     import numpy as np
@@ -271,7 +271,7 @@ def test_the_sm120_nvfp4_step_is_the_pinned_block_scaled_model() -> None:
 
 
 def test_the_sm120_nvfp4_step_is_total_as_measured_outside_ue4m3() -> None:
-    """r20260930-093614-53fd: a NaN-coded scale byte gives NaN over any accumulator; else NaN / ±inf accumulators pass through;
+    """Measured on the RTX PRO 6000: a NaN-coded scale byte gives NaN over any accumulator; else NaN / ±inf accumulators pass through;
     else bit 7 of a scale byte is ignored."""
     step = P.BlackwellNvf4OmmaDot64
     rng = random.Random(10)
@@ -336,7 +336,7 @@ def test_the_sm120_mxfp4_step_is_total() -> None:
 
 
 def test_the_sm120_mxfp4_step_reproduces_the_pro_6000_edge_capture() -> None:
-    """Every word of run r20261001-000520-2440's four record-only MXFP4 edge families (RTX PRO 6000, one
+    """Every word of the tc_probe_fp4 capture's four record-only MXFP4 edge families (RTX PRO 6000, one
     OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile; fixtures/README.md), which the run recorded but did not assert: 73,728 words, 9,216
     of them under a 0xFF scale byte, the rest overflowing or cancelling blocks and ±inf / NaN accumulators."""
     import numpy as np

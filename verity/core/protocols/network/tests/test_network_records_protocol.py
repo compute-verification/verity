@@ -1,8 +1,8 @@
-"""The audit over every published record (`NetworkCheck.Records`, `network-records serve` and `network-records verdicts`)
-against `audit.py`, through the difftest harness.
+"""The audit over every published record (`NetworkCheck.Records`, `network-records serve` and `network-records verdicts`,
+with the grid compared and without it) against `audit.py`, through the difftest harness.
 
 The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
-(`KINDS`): all raw (`grid.Record`), all committed (`commitment.commit`), all certified, or mixed, each record's kind drawn
+(`KINDS`): all raw (`grid.Record`), all committed (`commitment.commit`), all certified, or mixed, each record's kind sampled
 and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
 record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
 changed, and a committed status in the clear that disagrees with its digest either way. The reference decodes the
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import json
 import shutil
 from collections import Counter
 
@@ -32,8 +33,8 @@ from verity.core.protocols.certifier.schedule import expected_grids
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-records/v2"
-COMMITMENT_TAG = "verity-network-certifier/records/v1"
+ID = "verity/network-records/v3"
+COMMITMENT_TAG = "verity-network-certifier/records/v2"
 KINDS = ("raw", "committed", "certified", "mixed")
 
 # --- the reference --------------------------------------------------------------------------------------------------------
@@ -107,22 +108,29 @@ def reference(case, check=V2.check) -> dict:
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c[1]))
 
 
-def all_verdicts(u, c, e) -> tuple:
-    """Every link-window's verdict as `network-records verdicts` writes it, after v2's evidence refusals."""
+def all_verdicts(u, c, e, grid: bool = True) -> tuple:
+    """Every execution phase's verdict as `network-records verdicts` writes it (with `grid` False, as `verdicts-no-grid`
+    does), after v2's evidence refusals. With `grid` False the audit's `ValueError` on a raw or committed egress record
+    is a refusal."""
     out = V2.check(u, c, e)
     if out[0] == "reject" and out[1].startswith("evidence: "):
         return out
     audit = Audit()
-    vs = [("egress", v) for link, (frames, syncs) in zip(u.egress, e)
-          for v in audit.check_link(link, c[0], frames, syncs, u.sync_set, u.grid, u.key, u.session)]
+    try:
+        vs = [("egress", v) for link, (frames, syncs) in zip(u.egress, e)
+              for v in audit.check_link(link, c[0], frames, syncs, u.sync_set, u.grid, u.key, u.session, grid)]
+    except ValueError as x:
+        if grid:
+            raise
+        return "reject", str(x)
     vs += [("ingress", v) for link in u.ingress
            for v in audit.check_ingress_link(link, c[0], u.windows, u.key, u.ingress_grid, u.session)]
     return "accept", {}, [{"direction": d, "link": v.link, "verdict": v.violation or "accept", "window": v.window}
                           for d, v in vs]
 
 
-def verdicts_reference(case) -> dict:
-    out = reference(case, all_verdicts)
+def verdicts_reference(case, grid: bool = True) -> dict:
+    out = reference(case, lambda u, c, e: all_verdicts(u, c, e, grid))
     if out["verdict"] != "accept":
         raise D.Reject(out["reason"])
     return {"link_windows": out["profile"]}
@@ -177,8 +185,8 @@ def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | N
     d = draw(V2.units((m if m in V2.EXPECT else "honest",), need_egress=m in EGRESS_ONLY))
     aim = ("egress", *d.egress_target) if m in EGRESS_ONLY and d.egress_target else d.target
     lws = [(r.direction.value, r.link, r.window) for r in d.records]
-    # in a mixed unit every record of the changed link-window, either direction, has the kind the change needs: a raw or
-    # committed record of the other direction would be a duplicate of it
+    # in a mixed unit every record of the changed execution phase, either direction, has the kind the change needs: a
+    # raw or committed record of the other direction would be a duplicate of it
     published = [_as(NEEDS[m] if kind == "mixed" and m in NEEDS and lw[1:] == aim[1:] else
                      draw(st.sampled_from(KINDS[:3])) if kind == "mixed" else kind, r, d) for r, lw in zip(d.records, lws)]
     at = next((i for i, lw in enumerate(lws) if lw == aim), None) if m in RAW or m in COMMITTED else None
@@ -230,6 +238,9 @@ class VerdictsPort(D.Port):
 
 
 VERDICTS = VerdictsPort("network-records", "verdicts", verdicts_reference, record_cases(), package=V2.LEAN)
+#: `network-records verdicts`'s `verdicts-no-grid` against `Audit.check_link(grid=False)`, served by the same process.
+NO_GRID = VerdictsPort("network-records", "verdicts-no-grid", lambda case: verdicts_reference(case, grid=False),
+                       record_cases(), package=V2.LEAN)
 server = D.server_fixture(PORT)
 verdicts_server = D.server_fixture(VERDICTS)
 
@@ -249,8 +260,9 @@ def test_the_records_check_agrees_with_the_audit(server):
     SEEN.clear()
     for kind in KINDS:
         for m in EXPECT[kind]:
-            # one run per kind and change, since `sampled_from`'s derandomized draws skip some of 88 pairs in thousands;
-            # a run of one change gives one verdict, which `run` calls vacuous only after comparing every case
+            # one run per kind and change, since `sampled_from`'s derandomized samples skip some of 88 pairs in
+            # thousands; a run of one change gives one verdict, which `run` calls vacuous only after comparing every
+            # case
             with contextlib.suppress(D.Vacuous):
                 D.run(dataclasses.replace(PORT, inputs=record_cases((kind,), (m,))),
                       examples=EXAMPLES * (2 if m in ("late", "frames") else 1), server=server)
@@ -265,9 +277,62 @@ def test_the_records_check_agrees_with_the_audit(server):
 
 @pytest.mark.slow
 def test_every_verdict_is_the_audits(verdicts_server):
-    """`network-records verdicts` gives every link-window's verdict, not only the first violation, as the audit does."""
+    """`network-records verdicts` gives every execution phase's verdict, not only the first violation, as the audit
+    does."""
     stats = D.run(VERDICTS, examples=1200, seed=1, server=verdicts_server)
     assert stats.outputs > 600 and stats.rejects > 50, stats
+
+
+@pytest.mark.slow
+def test_every_verdict_without_the_grid_is_the_audits(verdicts_server):
+    """`verdicts-no-grid` gives every execution phase's verdict `Audit.check_link(grid=False)` gives, and refuses where
+    it raises (a raw or committed egress record) or v2 refuses the evidence."""
+    stats = D.run(NO_GRID, examples=1200, seed=1, server=verdicts_server)
+    print(stats)
+    assert stats.outputs > 200 and stats.rejects > 600, stats
+
+
+@pytest.mark.slow
+def test_without_the_grid_only_a_grid_mismatch_is_accepted(verdicts_server):
+    """Both entries against the audit on the same cases, every kind and change: what `verdicts-no-grid` answers,
+    `verdicts` answers too, with the same execution phases in order and the same verdicts, except that each egress
+    `mismatch` of `verdicts` is an accept (an ingress `mismatch` stays); where `verdicts` answers and `verdicts-no-grid`
+    refuses, the unit has a raw or committed egress record. Some units are accepted whole by `verdicts-no-grid` where
+    `verdicts` gives a `mismatch`: only their grid differs from the Program's."""
+    from hypothesis import given, settings
+
+    seen = Counter()
+
+    @settings(derandomize=True, database=None, deadline=None, max_examples=300)
+    @given(st.one_of(record_cases(("certified",)), record_cases(("certified",), ("late", "frames")),
+                     record_cases(("certified",), ("status", "advice-outside", "advice-unit", "duplicate")), record_cases()))
+    def both(case):
+        full, no_grid = (D.replay(port, case, verdicts_server) for port in (VERDICTS, NO_GRID))
+        if no_grid[0] == "reject":
+            if full[0] == "output":
+                u, recs = V2.params(case["params"]), records(P.unhex(case["commitment"]))[0]
+                assert any(not isinstance(r, CertifiedRecord) and r.link in u.egress for r in recs), case
+                seen["refused-uncertified"] += 1
+            return
+        assert full[0] == "output", (full, no_grid)
+        a, b = (json.loads(x[1])["link_windows"] for x in (full, no_grid))
+        assert [(v["direction"], v["link"], v["window"]) for v in a] == \
+            [(v["direction"], v["link"], v["window"]) for v in b]
+        for x, y in zip(a, b):
+            if x["direction"] == "egress" and x["verdict"] == "mismatch":
+                assert y["verdict"] == "accept", (x, y)
+                seen["mismatch-accepted"] += 1
+            else:
+                assert y == x
+                seen[x["verdict"].split(":")[0]] += 1
+        if any(x["verdict"] == "mismatch" for x in a) and all(y["verdict"] == "accept" for y in b):
+            seen["grid-only-unit"] += 1
+
+    both()
+    print(dict(seen))
+    assert min(seen[k] for k in ("refused-uncertified", "accept", "no-verdict", "signature", "advice", "status",
+                                 "duplicate")) > 0, seen
+    assert seen["mismatch-accepted"] > 20 and seen["grid-only-unit"] > 20, seen
 
 
 def test_each_kind_gives_the_audits_verdicts(server, verdicts_server):

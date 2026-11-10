@@ -17,9 +17,10 @@ launch_coordinator.py archive BC_ID
   `/opt/cursor/artifacts/handoff-HANDLE.md` (a charter's author, `charter-HANDLE.md`) and ends its turn; the script reads it
   through the API and puts it under the standard brief. No store, notes token or evidence-store credential is needed on the
   old VM. `--text-file` reads a local file instead.
-- **Ids are fixed.** An agent's id is `uuid5` of its handle and generation (2 for a successor, 1 for a new slice), so the
-  registry (`.agents/skills/using-slack/registry.json`) names the holder before launch, and a repeated launch gets the
-  existing agent back (409 `agent_id_conflict`) rather than a second one. The handle must be in the registry first.
+- **Ids are fixed.** An agent's id is `uuid5` of its handle and generation (2 for a successor, 1 for a new slice), so it
+  is known before launch (the agent's `names open` records it as the handle's holder, in its inbox route), and a repeated
+  launch gets the existing agent back (409 `agent_id_conflict`) rather than a second one. The handle must be in the
+  registry (`.agents/skills/using-slack/registry.json`) first.
 - **The brief's first hour**: a launch check (git push, gh, Linear, the Slack inbox), the handoff or charter copied into
   the notes repo under `lanes/HANDLE/`, its items filed in the handle's Linear team, the inbox opened (a successor's with
   `--succeeds`), "up" posted in the pairing thread, and each acting loop started only after the predecessor posts

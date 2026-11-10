@@ -18,7 +18,7 @@ integers a schedule holds (`requests`), so no model is loaded.
              installed Triton is the 3.7.1 whose PTX was read, and the installed SOURCES are the files read, since the launches
              call the two functions directly rather than through the attention layer.
   c128a      per ratio-128 case, `build_c128a_topk_metadata` as `_build_c128a_metadata` calls it with no decode token
-             (sparse_mla.py:222-286, 295-358): the int64 positions of the case's served requests, SPECIAL_POSITIONS and draws,
+             (sparse_mla.py:222-286, 295-358): the int64 positions of the case's served requests, SPECIAL_POSITIONS and samples,
              into a prefill buffer of the case's width filled with a sentinel.  Each row's first K words against `short_rows`
              (slot i is i when i < (position + 1) // 128, truncating, else -1) and the reference `Dsv4ShortContextTopK_v1{K,128}`
              on every row (every 16th served one under --quick); every other word of the buffers untouched, the returned rows
@@ -49,6 +49,8 @@ the selection, the PTX and the bindings.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import argparse
 import glob
 import hashlib
@@ -71,9 +73,9 @@ from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import dsv4_indices_twin as T
-from verity_vllm.program.registry import dsv4_indexer as I
-from verity_vllm.program.registry import dsv4_indices as R
+from verity.ml.definitions.numerics import dsv4_indices_twin as T
+from verity.ml.definitions.registry import dsv4_indexer as I
+from verity.ml.definitions.registry import dsv4_indices as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indices-capture/v1"
@@ -192,7 +194,7 @@ def requests(case: str, kind: str, seed: int) -> dict[str, Any]:
 
 
 def c128a_positions(case: str, served_pos: np.ndarray, seed: int) -> np.ndarray:
-    """The c128a builder's int64 positions: the served chunk's, then SPECIAL_POSITIONS, those around K * 128, and 64 draws."""
+    """The c128a builder's int64 positions: the served chunk's, then SPECIAL_POSITIONS, those around K * 128, and 64 samples."""
     c = CASES_L[case]
     s = c.topk * c.ratio
     rng = np.random.default_rng(seed + 1)

@@ -1,6 +1,6 @@
 """`Q_template_instance` v0 and `Q_template_instances` v0 (`verity.ml.circuits.partition_object.TemplatePartition`): the object, its digest and
 the evaluation -- units, their instances' gates, inputs and outputs, the derived committed set -- from descriptor bytes, and every
-refusal, against `template_instance_vectors.json`.  `python verity/ml/circuits/tests/test_template_instance.py --write` rewrites it."""
+refusal, against `template_instance_vectors.json`.  Its `--write` rewrites it; `REWRITE` names the command that runs it."""
 from __future__ import annotations
 
 import json
@@ -11,11 +11,14 @@ import pytest
 
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.ml.circuits.population import population_program
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 
 PATH = Path(__file__).parent / "template_instance_vectors.json"
+REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/template_instance_vectors.json`")
 V32 = Value(32)
 M32 = (1 << 32) - 1
 
@@ -47,13 +50,6 @@ Step = bind(_comp("TStep", 1, (), lambda S: ((("c", V32), ("x", V32)), Tuple(V32
 X3 = Array(3, Array(2, V32))
 
 
-def population(template, n: int) -> Program:
-    """`TemplateInstances{N=n}` as one-stage builds it: a batch of the template over arrays of its parameters."""
-    params, ret = template.signature()
-    return Program(bind(_comp("TemplateInstances", 0, ("N",), lambda S: (tuple((p, Array(S.N, t)) for p, t in params), Array(S.N, ret)),
-                              lambda B, S, *a: B.batch(template, *a, axes=(0,) * len(a))), N=n))
-
-
 def _mixed(B, S, xs, k, a, b):
     s = B.batch(Scale, xs, k, axes=(0, None))                        # 3 instances of Scale, k shared
     d0 = B.call(Dot, a[0], b[0])                                     # 1 instance of Dot
@@ -64,7 +60,7 @@ def _mixed(B, S, xs, k, a, b):
 
 MIXED = Program(_comp("TMix", 0, (), lambda S: ((("xs", X3), ("k", V32), ("a", X3), ("b", X3)), Tuple(X3, V32, Array(2, V32), V32)),
                       _mixed))
-POPULATION = population(Scale, 3)
+POPULATION = population_program(Scale, 3, version=0)  # the pinned vectors' version
 SCAN = Program(_comp("TScanProg", 0, (), lambda S: ((("xs", Array(3, V32)), ("c", V32)), Tuple(V32, Array(3, V32))),
                      lambda B, S, xs, c: B.scan(Step, c, xs=[xs])))
 PRIM = Program(_comp("TPrimProg", 0, (), lambda S: ((("x", Array(2, V32)),), V32), lambda B, S, x: B.call(TAdd, x[0], x[1])))
@@ -155,14 +151,14 @@ def live() -> dict:
 
 
 def test_the_descriptors_and_ids(live):
-    assert live["descriptors"] == VECTORS["descriptors"] and live["template_ids"] == VECTORS["template_ids"]
+    assert live["descriptors"] == VECTORS["descriptors"] and live["template_ids"] == VECTORS["template_ids"], REWRITE
     assert SCALE_ID == 'TScale_v1{N=2,C={"f64":"0x1.8000000000000p+0"}}' and Scale.id == "TScale_v1{N=2,C=1.5}"
     assert PO.template_id(Scale) == PO.template_id(SCALE_ID) == SCALE_ID and PO.template_id(Scale.id) == Scale.id
 
 
 @pytest.mark.parametrize("n", range(len(CASES)), ids=[c[0] for c in CASES])
 def test_the_evaluation_from_the_bytes(live, n):
-    assert live["cases"][n] == VECTORS["cases"][n]
+    assert live["cases"][n] == VECTORS["cases"][n], REWRITE
     label, name, q, want = VECTORS["cases"][n]
     assert PO.validate(want["object"]).ok and want["verify"]
     assert _evaluated(PROGRAMS[name], q) == want                                       # the built program agrees with its bytes
@@ -183,11 +179,12 @@ def test_the_mixed_program_commits_the_value_across_units():
 
 @pytest.mark.parametrize("n", range(len(REFUSED)), ids=[r[0] for r in REFUSED])
 def test_the_query_refuses(live, n):
-    assert live["refused"][n] == VECTORS["refused"][n] and VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
+    assert live["refused"][n] == VECTORS["refused"][n], REWRITE
+    assert VECTORS["refused"][n][3].startswith("('query-inapplicable',)")
 
 
 def test_a_program_that_is_not_topological_and_served(live):
-    assert live["order_refused"] == VECTORS["order_refused"] and live["served_unsupported"] == VECTORS["served_unsupported"]
+    assert live["order_refused"] == VECTORS["order_refused"] and live["served_unsupported"] == VECTORS["served_unsupported"], REWRITE
     codes, (detail,) = VECTORS["order_refused"]
     assert codes == ["query-inapplicable"] and detail["node"] == 2 and detail["why"] == "not topological"
     assert VECTORS["served_unsupported"] == ["served-unsupported"]
@@ -197,7 +194,8 @@ def test_a_program_that_is_not_topological_and_served(live):
 
 @pytest.mark.parametrize("n", range(len(MALFORMED)), ids=[m[0] for m in MALFORMED])
 def test_the_object_form(live, n):
-    assert live["malformed"][n] == VECTORS["malformed"][n] and VECTORS["malformed"][n][2] in (["query-params"], ["query-unknown"])
+    assert live["malformed"][n] == VECTORS["malformed"][n], REWRITE
+    assert VECTORS["malformed"][n][2] in (["query-params"], ["query-unknown"])
 
 
 if __name__ == "__main__" and "--write" in sys.argv:

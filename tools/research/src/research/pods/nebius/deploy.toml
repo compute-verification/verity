@@ -9,7 +9,8 @@
 # [[tree]]: every file of the directory `src` at the commit, installed under `path`. A file of it not installed leaves drift
 # clean, unless the tree has `required = true`: what runs from it needs all of it.
 # The drop-ins infra writes (`*vy*`) and every `systemctl set-property` (system.control) are managed, so one made by hand is a stray.
-# A node's `quiet`: a shell test on it; install restarts nothing there unless it succeeds.
+# A node's `quiet`: a shell test on it; install restarts nothing there unless it succeeds. Its `staged`: why the machine doesn't
+# exist yet; `drift` reads it only when named with --on, and `install` takes it as any other node.
 
 [nodes.vy-nebius-1]
 record = "/workspace/research/deploy/record.jsonl"
@@ -25,6 +26,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = [
   "/workspace/verity-guest/bin/*", "/workspace/verity-guest/*.sh", "/workspace/verity-guest/*.py",
   "/workspace/pouw/infra/bin/*", "/usr/local/bin/vy-*", "/usr/local/bin/gpu-lease*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-lockout/*",
+  "/usr/local/lib/vy-monitoring/research/*",
   "/etc/systemd/system/vy-*", "/home/research/.config/systemd/user/*.service", "/home/research/.config/systemd/user/*.timer",
   "/etc/vy/env/*", "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*",
 ]
@@ -36,37 +38,143 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*",
            "/etc/systemd/system.control/*/*"]
 
-# circuits' H200 VMs (INF-54/55/58): only the GPU-lease files are infra's to manage there
+# the auditor host for proofs' challenger service (us-north1, trusted-host): it runs the challenger as
+# `auditor` from infra's pinned tree through vy-challenger-gate and takes no `research run` (/etc/vy/auditor), and no cluster pool
+# or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift skips it
+# (`admin`) and infra's lead reads it with `research deploy drift --on vy-challenger-1` from a machine holding vy-admin's key.
+[nodes.vy-challenger-1]
+admin = true
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
+           "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*"]
+
+# the auditor host for PoUB's verifier (uk-south2, trusted-host, as vy-challenger-1): it runs
+# the verifier as `auditor` from infra's pinned tree through vy-verifier-gate and takes no `research run` (/etc/vy/auditor), and no
+# cluster pool or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift
+# skips it (`admin`), as on vy-challenger-1.
+[nodes.vy-auditor-1]
+admin = true
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
+           "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*", "/etc/vy/verifier.json"]
+
+# vy-auditor-2: the same auditor host for the demo H200 (vy-dc-h200-2, us-central1), where PoUS's timed reads need the
+# challenger in-region. A 1x RTX PRO 6000 VM, because the tenant's non-GPU vCPU quota in us-central1 is 0; its GPU is unused.
+[nodes.vy-auditor-2]
+admin = true
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
+           "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*", "/etc/vy/verifier.json"]
+
+# cpu-2 and cpu-3 (train slots): only the OOM order and the memory drop-ins are deploy's there so far; the rest
+# is set by hand until they are full deploy.toml nodes, so `managed` names just those files
+[nodes.vy-nebius-cpu-2]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
+           "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+           "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
+
+[nodes.vy-nebius-cpu-3]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
+           "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+           "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
+
+# node 3 (landing capacity): two train slots, set by hand; only its peers file is deploy's so far
+[nodes.vy-nebius-3]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/etc/vy/peers"]
+
+# n1's replacement: cpu-d3 VMs of cpu-1's or cpu-2's shape, each one train slot and research runs at nice 19 beside it
+# (vy-direct-nice); cpu-4 also holds the Lean slots, lean's cache publisher, the merge mirror and the custody tree (node 2's relay,
+# if node 2 is renewed). pods/nebius/n1_replacement.sh prints their creates, installs and n1's state moves for each path (now,
+# quota, reattach: cpu-4 alone). cpu-4 is in uk-south1, cpu-5 in eu-west2 (path now).
+[nodes.vy-nebius-cpu-4]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lean-cache/*",
+           "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*"]
+
+[nodes.vy-nebius-cpu-5]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*",
+           "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*"]
+
+[nodes.vy-nebius-cpu-6]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*",
+           "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*"]
+
+# cpu-7, cpu-9, cpu-11 and cpu-12 (the soundness, research and train pools): only the memory drop-ins are deploy's there so far
+[nodes.vy-nebius-cpu-7]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+           "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
+
+[nodes.vy-nebius-cpu-9]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+           "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
+
+[nodes.vy-nebius-cpu-11]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+           "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
+
+[nodes.vy-nebius-cpu-12]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+           "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
+
+# circuits' H200 VMs: only the GPU-lease files are infra's to manage there
 [nodes.vy-glm53-eu]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 [nodes.vy-glm53-eu2]
 record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
-
-[nodes.vy-glm53-s1]
-record = "/workspace/research/deploy/record.jsonl"
-managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host",
+  "/usr/local/bin/gpu-lease"]
 
 # ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
 [[file]]
 path = "/usr/local/sbin/vy-setup"
 src = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-nebius-stop"
 src = "tools/research/src/research/pods/nebius/vm_stop.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]  # after installing it, `systemctl --user daemon-reexec` as research (the file says why)
 path = "/etc/systemd/system/user@.service.d/vy-cpuset.conf"
 src = "tools/research/src/research/pods/nebius/user-cpuset.conf"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+# Inbound IPv4 TCP packets carrying IP options are dropped, and MPTCP is off (vm_setup.sh writes the same three files at first
+# boot). After installing them: `sudo systemctl daemon-reload && sudo systemctl enable --now vy-drop-ipv4-options.service &&
+# sudo sysctl -p /etc/sysctl.d/90-vy-mptcp-off.conf`.
+[[file]]
+path = "/etc/vy/drop-ipv4-options.nft"
+src = "tools/research/src/research/pods/nebius/drop-ipv4-options.nft"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-drop-ipv4-options.service"
+src = "tools/research/src/research/pods/nebius/vy-drop-ipv4-options.service"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+[[file]]
+path = "/etc/sysctl.d/90-vy-mptcp-off.conf"
+src = "tools/research/src/research/pods/nebius/mptcp-off.conf"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 # Memory: user 1001's slice, each login session's scope (a run's own cap), the user manager's OOM score, and ssh.service, where a
@@ -80,7 +188,8 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf"
 src = "tools/research/src/research/pods/nebius/user-slice-memory-cpu.conf"
-nodes = ["vy-nebius-cpu-1"]
+nodes = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 owner = "infra"
 
 [[file]]
@@ -92,19 +201,22 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf"
 src = "tools/research/src/research/pods/nebius/session-memory-cpu.conf"
-nodes = ["vy-nebius-cpu-1"]
+nodes = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf"
 src = "tools/research/src/research/pods/nebius/user-manager-oom.conf"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
+         "vy-nebius-cpu-5", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"
 src = "tools/research/src/research/pods/nebius/ssh-memory.conf"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
+         "vy-nebius-cpu-5", "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 owner = "infra"
 
 # ---- cpu-1: a `research run` only through a check slot (research.remote refuses one; slot_only.py stops one from an older tree);
@@ -117,40 +229,41 @@ nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
 # ---- the shared nodes: how each reaches the others, for a check's twins (`check.py --on auto`, slot.py --twin); cpu-1's
-# authorized_keys takes the vy-cluster key from n1, n2, cpu-2 and cpu-3 only (from="10.80.0.18,10.80.0.42,10.80.0.140,10.80.0.193");
-# cpu-2 and cpu-3 (train slots since 17 Oct, INF-49) get theirs by hand until they are deploy.toml nodes (INF-40)
+# authorized_keys takes the vy-cluster key from n1, n3, n2, cpu-2 and cpu-3 only (from="10.80.0.18,10.80.0.1,10.80.0.42,10.80.0.140,
+# 10.80.0.193"); cpu-2 and cpu-3 (train slots) get theirs by hand until they are deploy.toml nodes;
+# cpu-4 and cpu-5 by n1_replacement.sh's L3, taking it from every node's public egress address
 
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]  # a oneshot each minute (vy-slot-only.timer on cpu-1, vy-direct-nice.timer on node 1) reads it fresh: nothing to restart
 path = "/usr/local/lib/vy-monitoring/slot_only.py"
 src = "tools/research/src/research/pods/nebius/slot_only.py"
-nodes = ["vy-nebius-cpu-1", "vy-nebius-1"]
+nodes = ["vy-nebius-cpu-1", "vy-nebius-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
-# ---- node 1: a research run that did not come through a check slot runs at nice 19, so the train checks win the cores (top,
-# 18 Oct); after installing, `sudo systemctl enable --now vy-direct-nice.timer`
+# ---- node 1 (and cpu-4/5, its replacement): a research run that did not come through a check slot runs at nice 19, so the train
+# checks win the cores; after installing, `sudo systemctl enable --now vy-direct-nice.timer`
 
 [[file]]
 path = "/etc/vy/direct-runs-nice"
 src = "tools/research/src/research/pods/nebius/direct-runs-nice"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-direct-nice.service"
 src = "tools/research/src/research/pods/nebius/vy-direct-nice.service"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-direct-nice.timer"
 src = "tools/research/src/research/pods/nebius/vy-direct-nice.timer"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
@@ -165,48 +278,239 @@ src = "tools/research/src/research/pods/nebius/vy-slot-only.timer"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
+# ---- the auditor host: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
+# --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
+# through vy-challenger-gate (benchmarks/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
+# (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
+# `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json
+# | ssh vy-admin@HOST sudo
+# vy-challenger-pin COMMIT`, then `sudo runuser -u
+# auditor -- python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py keygen` once.
+# Its /etc/vy/peers is its own: it reaches the serving nodes over their public addresses with the auditor's tunnel key.
+
+[[file]]
+path = "/usr/local/sbin/vy-challenger-gate"
+src = "tools/research/src/research/pods/nebius/challenger/vy-challenger-gate"
+nodes = ["vy-challenger-1"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-challenger-setup"
+src = "tools/research/src/research/pods/nebius/challenger/setup.sh"
+nodes = ["vy-challenger-1"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-challenger-pin"
+src = "tools/research/src/research/pods/nebius/challenger/pin.sh"
+nodes = ["vy-challenger-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-challenger@.service"
+src = "tools/research/src/research/pods/nebius/challenger/vy-challenger@.service"
+nodes = ["vy-challenger-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-certifier@.service"
+src = "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service"
+nodes = ["vy-challenger-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/ssh/sshd_config.d/11-vy-admin.conf"
+src = "tools/research/src/research/pods/nebius/challenger/11-vy-admin.conf"
+nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/vy/auditor"
+src = "tools/research/src/research/pods/nebius/auditor"
+nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-auditor-only.service"
+src = "tools/research/src/research/pods/nebius/vy-auditor-only.service"
+nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+run = ["systemd:vy-auditor-only.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-auditor-only.timer"
+src = "tools/research/src/research/pods/nebius/vy-auditor-only.timer"
+nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
+run = ["systemd:vy-auditor-only.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/vy/peers"
+src = "tools/research/src/research/pods/nebius/peers-challenger"
+nodes = ["vy-challenger-1"]
+owner = "infra"
+
+# ---- the verifier's auditor host, vy-auditor-1, an auditor host as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
+# through vy-verifier-gate (benchmarks/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
+# (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, LANE `-` for a key that reads only; TUNNEL_KEYS: `prover|challenger ADDRESS TYPE
+# BASE64 [COMMENT]`, the audited node's tunnel key and vy-challenger-1's; setup.sh), `sudo systemctl reload ssh`, then
+# `git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research
+# tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT`. /etc/vy/verifier.json is the host's challenger
+# and each audited node's capacities; the store's credential is infra's, in /etc/vy/verifier-store.env (root's, 0600).
+
+[[file]]
+path = "/usr/local/sbin/vy-verifier-gate"
+src = "tools/research/src/research/pods/nebius/verifier/vy-verifier-gate"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-verifier-setup"
+src = "tools/research/src/research/pods/nebius/verifier/setup.sh"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-verifier-pin"
+src = "tools/research/src/research/pods/nebius/verifier/pin.sh"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-verifier-tunnel"
+src = "tools/research/src/research/pods/nebius/verifier/vy-verifier-tunnel"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-verifier@.service"
+src = "tools/research/src/research/pods/nebius/verifier/vy-verifier@.service"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-verifier-replay@.service"
+src = "tools/research/src/research/pods/nebius/verifier/vy-verifier-replay@.service"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-verifier-publish@.service"
+src = "tools/research/src/research/pods/nebius/verifier/vy-verifier-publish@.service"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/ssh/sshd_config.d/12-vy-verifier.conf"
+src = "tools/research/src/research/pods/nebius/verifier/12-vy-verifier.conf"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+[[file]]
+path = "/etc/vy/verifier.json"
+src = "tools/research/src/research/pods/nebius/verifier/verifier.json"
+nodes = ["vy-auditor-1", "vy-auditor-2"]
+owner = "infra"
+
+# ---- the shared nodes: each live run's oom_score_adj from its memory use against its research.mem reservation, so the OOM
+# killer takes a run over its reservation (or without one) before a run within it, until reservations are caps;
+# after installing, `sudo systemctl daemon-reload && sudo systemctl enable --now vy-oom-order.timer`. The timer's oneshot reads
+# the script fresh: nothing to restart
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/oom_order.py"
+src = "tools/research/src/research/pods/nebius/oom_order.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-oom-order.service"
+src = "tools/research/src/research/pods/nebius/vy-oom-order.service"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-oom-order.timer"
+src = "tools/research/src/research/pods/nebius/vy-oom-order.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+run = ["systemd:vy-oom-order.timer"]
+owner = "infra"
+
+# The Lean check cache's caps: lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
+# used, or one per `build` Lean slot where lean-slots has more (uncapped, they fill a node's /). lean_audit.py loads common.py by its repository path, so both keep that layout.
+# After installing, `sudo systemctl enable --now vy-lean-prune.timer`.
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py"
+src = "tools/verity/lean/lean_audit.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
+src = "tools/verity/check/common.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-lean-prune.service"
+src = "tools/research/src/research/pods/nebius/vy-lean-prune.service"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+run = ["systemd:vy-lean-prune.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-lean-prune.timer"
+src = "tools/research/src/research/pods/nebius/vy-lean-prune.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+run = ["systemd:vy-lean-prune.timer"]
+owner = "infra"
+
 [[file]]
 path = "/home/research/.research/lease.sh"
 src = "tools/research/src/research/pods/sh/lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 run = ["systemd:vy-lease"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-lease-loop"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 run = ["systemd:vy-lease"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/sbin/vy-deadline-check"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-lease.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-deadline.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-deadline.timer"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-clocks.service"
 by = "tools/research/src/research/pods/nebius/vm_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
@@ -336,7 +640,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/bin/gpu-lease"
 src = "tools/research/src/research/pods/sh/gpu_lease.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-glm53-eu", "vy-glm53-eu2"]
 owner = "infra"
 
 [[file]]
@@ -365,7 +669,8 @@ owner = "infra"
 path = "/usr/local/bin/vy-store-evict"
 src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
 mode = "755"
-nodes = ["vy-nebius-cpu-1"]
+nodes = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
@@ -386,15 +691,31 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_research.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.timer"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_research.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 run = ["systemd:vy-store-evict-research.timer"]
+owner = "infra"
+
+[[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (the evictors alone can leave a disk there with terabytes collectable)
+path = "/etc/systemd/system/vy-retention-gc.service"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc.timer"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
 [[file]]
@@ -460,56 +781,50 @@ nodes = ["vy-nebius-1"]
 run = ["systemd:vy-alert-sink"]
 owner = "infra"
 
-# node 1's monitors (research/monitors.py): `python3 -m research.monitors` from these files alone, each pass a new process, so
+# node 2's monitors (research/monitors.py): `python3 -m research.monitors` from these files alone, each pass a new process, so
 # an install takes effect at the next pass (test_monitors checks that these files import every node-side check)
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/__init__.py"
 src = "tools/research/src/research/__init__.py"
-nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/monitors.py"
 src = "tools/research/src/research/monitors.py"
-nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/pods/__init__.py"
 src = "tools/research/src/research/pods/__init__.py"
-nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/research/pods/nebius/resource_probe.py"
 src = "tools/research/src/research/pods/nebius/resource_probe.py"
-nodes = ["vy-nebius-1"]
-owner = "infra"
-
-[[file]]
-path = "/usr/local/lib/vy-monitoring/research/pods/nebius/n1_alerts.py"
-src = "tools/research/src/research/pods/nebius/n1_alerts.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2"]
 owner = "infra"
 
 [[file]]  # the units-expected monitor reads which units each machine runs from this copy
 path = "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"
 src = "tools/research/src/research/pods/nebius/deploy.toml"
-nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-monitors.service"
 src = "tools/research/src/research/pods/nebius/monitoring/vy-monitors.service"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-2"]
 run = ["systemd:vy-monitors.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-monitors.timer"
 src = "tools/research/src/research/pods/nebius/monitoring/vy-monitors.timer"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-2"]
 run = ["systemd:vy-monitors.timer"]
 owner = "infra"
 
@@ -517,14 +832,14 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-watchdog.service"
 src = "tools/research/src/research/pods/nebius/monitoring/vy-watchdog.service"
-nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 run = ["systemd:vy-watchdog.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-watchdog.timer"
 src = "tools/research/src/research/pods/nebius/monitoring/vy-watchdog.timer"
-nodes = ["vy-nebius-1", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 run = ["systemd:vy-watchdog.timer"]
 owner = "infra"
 
@@ -602,7 +917,8 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
@@ -637,80 +953,61 @@ owner = "infra"
 [[file]]
 path = "/usr/local/sbin/vy-lean-build-setup"
 src = "tools/research/src/research/pods/nebius/lean_build_setup.sh"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/bin/vy-lean-sandbox"
 src = "tools/research/src/research/pods/nebius/lean_sandbox.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/run-daily"
 src = "tools/verity/lean/run_daily.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4"]
 owner = "lean"
 
 [[file]]
 path = "/usr/local/lib/vy-lean-cache/cache.py"
 src = "tools/verity/lean/cache.py"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4"]
 owner = "lean"
 
 [[file]]
 path = "/etc/systemd/system/vy-lean-cache-daily.service"
 src = "tools/research/src/research/pods/nebius/vy-lean-cache-daily.service"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4"]
 owner = "lean"
 
 [[file]]
 path = "/etc/systemd/system/vy-lean-cache-daily.timer"
 src = "tools/research/src/research/pods/nebius/vy-lean-cache-daily.timer"
-nodes = ["vy-nebius-1"]
+nodes = ["vy-nebius-1", "vy-nebius-cpu-4"]
 owner = "lean"
 
 # ---- node 2: PoUW's node, Verity's guest (/workspace/pouw/infra, infra/cluster's agent)
 
-[[file]]  # in tmux pouw-infra-fill until its unit, held below, is deployed
+[[file]]  # run by its user unit pouw-infra-fill, below
 path = "/workspace/pouw/infra/bin/fill_runner.py"
 src = "tools/research/src/research/pods/nebius/fill_runner.py"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-fill"]
 owner = "compute-accounting"
 
-[[file]]  # in tmux pouw-infra-ops until its unit, held below, is deployed
+[[file]]  # run by its user unit pouw-infra-ops, below
 path = "/workspace/pouw/infra/bin/node_ops.py"
 src = "tools/research/src/research/pods/nebius/node_ops.py"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-ops"]
 owner = "compute-accounting"
 
-[[file]]  # in tmux pouw-infra-util until its unit, held below, is deployed
+[[file]]  # run by its user unit pouw-infra-util, below
 path = "/workspace/pouw/infra/bin/gpu_util_sampler.py"
 src = "tools/research/src/research/pods/nebius/gpu_util_sampler.py"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
-
-[[file]]
-path = "/workspace/pouw/infra/bin/publish_pool.py"
-src = "tools/research/src/research/pods/nebius/publish_pool.py"
-nodes = ["vy-nebius-2"]
-run = ["user-systemd:infra-pool-publish.timer"]
-owner = "infra"
-
-[[file]]
-path = "/home/research/.config/systemd/user/infra-pool-publish.service"
-src = "tools/research/src/research/pods/nebius/infra-pool-publish.service"
-nodes = ["vy-nebius-2"]
-owner = "infra"
-
-[[file]]
-path = "/home/research/.config/systemd/user/infra-pool-publish.timer"
-src = "tools/research/src/research/pods/nebius/infra-pool-publish.timer"
-nodes = ["vy-nebius-2"]
-owner = "infra"
 
 [[file]]  # node 2's runs to node 1's store and R2: the custody n2_commit.sh and n2_build.sh name to `research run`
 path = "/workspace/pouw/infra/bin/n2_custody.sh"
@@ -737,13 +1034,13 @@ owner = "infra"
 # research-r2, so never under the world-writable /workspace/jobs, where any workload could create the directory first
 path = "/workspace/custody/tools/research/src/research"
 src = "tools/research/src/research"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-4"]
 owner = "infra"
 
 [[file]]
 path = "/workspace/custody/tools/research/store.pod.toml"
 src = "tools/research/store.pod.toml"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-4"]
 owner = "infra"
 
 [[file]]
@@ -788,6 +1085,12 @@ src = "tools/research/src/research/pods/nebius/device_cores.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
+[[file]]  # `sudo systemctl enable vy-device-cores` once; no `run`: it applies at boot, and a changed script is run by hand
+path = "/etc/systemd/system/vy-device-cores.service"
+src = "tools/research/src/research/pods/nebius/vy-device-cores.service"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
 [[file]]  # after installing it, `sudo sysctl --system` (or the next boot) applies it
 path = "/etc/sysctl.d/90-vy-device-cores.conf"
 src = "tools/research/src/research/pods/nebius/device-cores-sysctl.conf"
@@ -800,9 +1103,19 @@ src = "tools/research/src/research/pods/sh/gpu_lease.sh"
 nodes = ["vy-nebius-2"]
 owner = "compute-accounting"
 
+# the live agent's code and description, at a fixed path the src evictor never touches (it evicts
+# /workspace/research/src/<commit>/)
+[[tree]]
+path = "/workspace/verity-guest/cluster-agent"
+src = "infra/cluster"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-cluster-agent"]
+required = true
+owner = "infra"
+
 [[file]]
 path = "/etc/systemd/system/vy-cluster-agent.service"
-by = "infra/cluster/vy-cluster-agent.service"
+src = "infra/cluster/vy-cluster-agent.service"
 nodes = ["vy-nebius-2"]
 run = ["systemd:vy-cluster-agent"]
 owner = "infra"
@@ -956,7 +1269,6 @@ src = "tools/research/src/research/pods/nebius/units/pouw-infra-fill.service"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-fill"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/etc/vy/env/pouw-infra-fill.env"
@@ -964,7 +1276,6 @@ src = "tools/research/src/research/pods/nebius/env/pouw-infra-fill.env"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-fill"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/home/research/.config/systemd/user/pouw-infra-ops.service"
@@ -972,7 +1283,6 @@ src = "tools/research/src/research/pods/nebius/units/pouw-infra-ops.service"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-ops"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/etc/vy/env/pouw-infra-ops.env"
@@ -980,7 +1290,6 @@ src = "tools/research/src/research/pods/nebius/env/pouw-infra-ops.env"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-ops"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/home/research/.config/systemd/user/pouw-infra-util.service"
@@ -988,7 +1297,6 @@ src = "tools/research/src/research/pods/nebius/units/pouw-infra-util.service"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 [[file]]
 path = "/etc/vy/env/pouw-infra-util.env"
@@ -996,7 +1304,6 @@ src = "tools/research/src/research/pods/nebius/env/pouw-infra-util.env"
 nodes = ["vy-nebius-2"]
 run = ["user-systemd:pouw-infra-util"]
 owner = "compute-accounting"
-hold = "compute accounting's yes pending: node 2's freeze list"
 
 # ---- both nodes: what the resource stewards ran from agent VMs (the node 1 watch, node-sweep), now node timers; after
 # installing, `sudo systemctl enable --now vy-node-sweep.timer` (and on node 1 vy-steward-watch.timer)
@@ -1057,7 +1364,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/sbin/vy-admin-setup"
 src = "tools/research/src/research/pods/nebius/lockout/admin_setup.sh"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
 [[file]]
@@ -1111,7 +1418,7 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-lockout/10-vy-admin"
 src = "tools/research/src/research/pods/nebius/lockout/sudoers/10-vy-admin"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
 owner = "infra"
 
 [[file]]
@@ -1138,25 +1445,25 @@ src = "tools/research/src/research/pods/nebius/lockout/research-view.yaml"
 nodes = ["vy-nebius-1"]
 owner = "infra"
 
-# ---- GPU VMs whose GPUs gpu-lease hands out (INF-55): a direct run sees none unless it asks with --gpus N, and a process on a GPU
+# ---- GPU VMs whose GPUs gpu-lease hands out: a direct run sees none unless it asks with --gpus N, and a process on a GPU
 # no lease gave it has that GPU's lease taken in its run's name (gpu_adopt.py); vm_setup.sh installs both on a new GPU VM
 
 [[file]]
 path = "/workspace/verity-guest/bin/gpu_adopt.py"
 src = "tools/research/src/research/pods/nebius/gpu_adopt.py"
-nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
 run = ["systemd:vy-gpu-adopt"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-gpu-adopt.service"
 src = "tools/research/src/research/pods/nebius/units/vy-gpu-adopt.service"
-nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
 run = ["systemd:vy-gpu-adopt"]
 owner = "infra"
 
 [[file]]
 path = "/etc/vy/gpu-lease-host"
 src = "tools/research/src/research/pods/nebius/gpu-lease-host"
-nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
 owner = "infra"

@@ -1,11 +1,44 @@
-import Proofs.Flock.Claims.Complete.Prover.Session
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Level3.Placed
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Session
+public import Proofs.Flock.Claims.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Flock's honest prover at the deployed plain verifier (`honestP`)
 
-The prover of `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`, against B's plain record (`FlockDeploy.V false`).
+The plain record's reference prover (`(deployPlain rel).P`), the prover of `Claims.Flock.Complete H (deployPlain rel)`
+(at its error `δc H`), against B's plain record (`FlockDeploy.V false`).
 
 * **Its program** (`PI`): oracle queries, and sends, each answered by the verifier's reply. `PV := ExceptT String PI`
   is a verdict monad the session prover (`sessionP`) runs in, with SHA-512 the oracle (`Hashes.pi`) and the two sends of
@@ -19,6 +52,8 @@ The prover of `Claims.Flock.Complete H (deployPlain rel) honestP (δc H)`, again
 The witness is the trace (`Claims.Flock.Wit.hid`, table `i`'s address `a` at `i·2^m + a`); `A·z` and `B·z` are the level-0
 matrices the verifier folds (`FlockLevel3.placedA`, `placedB`) applied block by block (`mulBlocks`), entry by entry.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Row4Circuit
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.Row4Circuit
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # A row's statistics, scales and forming as the Programs compute them (spec)
@@ -7,7 +9,7 @@ import Definitions.Pouw.PearlC.DeviceFp4
 `pc8Sem ops p noise` and `pc4Sem ops lines` are Pearl-C's and Pearl-C4's semantics (`PearlCSem`, `Fp4Sem`) at the
 Programs' own row arithmetic: `α`, `β`, the noise floor and (for `pc8`) the forming are word formulas on core's
 primitives (`RowOps`, each primitive reduced to its width as a gate computes it, `Prim.eval`), in the order
-`verity.protocols.accounting.work.pouw.circuit.pc8`'s and `pc4`'s `_stats`, `_alpha` and `_form` compute them and `PROTOCOL.md` fixes. They are
+`verity.protocols.accounting.work.pouw.circuit.pc8`'s and `pc4`'s `_stats`, `_alpha` and `_form` compute them. They are
 not read off the gate tables: `SecurityProofs.PearlC.RowCircuit` proves that the tables compute them.
 
 On a row of `K` FP32 words `x_0, …, x_{K−1}` (`pc4`: BF16 words, widened):
@@ -27,6 +29,8 @@ A `PearlCSem` reads a row as values (`wordsVal`), so these formulas run on the r
 `e4m3` of it is `F32ToE4m3Sat(D_t)` wherever the cast agrees with `e4m3Word` and `D_t` is not NaN. The noise
 (`noise`, `lines`) stays a parameter, of codes in both: `pc8`'s noise codes are the words the Program reads.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

@@ -39,12 +39,16 @@ def fs_remote(env):
 
 RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "authentication", "campaign", "relation", "mode", "zk", "overhead",
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
-               "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "abandoned", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
-               "pipeline", "kernel_outcome", "kernel_reason")
+               "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "of-record", "goal", "abandoned", "withdrawn", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
+               "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering",
+               "compile_cost")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
-                     "grant", "ready", "lean_review", "landed", "commit_map", "custody", "source-lost")
+                     "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
+                     "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
+                     "label_auth", "label_delegation")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
-                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged")
+                 "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
+                 "circuits")
 APPROACH_KEYS = ("approach", "title", "hypothesis", "approach_type", "attacks", "owner", "approach_status", "reason", "cites", "uncites")
 
 
@@ -78,7 +82,7 @@ def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert vocab.check("verified", "accepted") is None
     assert "not one of accepted, rejected, not-transferable, no-dumps" in vocab.check("verified", "yes")
     assert vocab.check("model_agrees", True) is None and vocab.check("model_agrees", False) is None
-    assert "is a string; the key's form is bool" in vocab.check("model_agrees", "true")                    # the word is not the value (hygiene 2026-09-23)
+    assert "is a string; the key's form is bool" in vocab.check("model_agrees", "true")                    # the word is not the value
     assert "is a string; the key's form is bool" in vocab.check("model_agrees", "True")                    # a Python repr: the same complaint
     assert vocab.check("model_agrees", "yes") and vocab.check("zk", 1)
     assert vocab.check("proof_class", "non-zk") and vocab.check("proof_class", "NON_ZK_PROOF") is None
@@ -169,7 +173,7 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
 
 
 def test_lane_shorthand_folds_into_one_spelling(env, capsys):
-    """The 2026-09-22/23 lane shorthand: synonyms are written under one key, the adopted concepts are keys of their own."""
+    """Lane shorthand: synonyms are written under one key, the adopted concepts are keys of their own."""
     st = LocalStore()
     for key, value, want in (("axis", "l", ("sweep", "l")), ("milestone", "1M-vu", ("arm", "1M-vu")), ("tree", "main@6babe27", ("source", "main@6babe27")),
                              ("release", "lane/x@ec45c0b", ("source", "lane/x@ec45c0b")), ("verifier_note", "Rust", ("note", "Rust")),
@@ -211,8 +215,68 @@ def test_abandoned_is_written_only_with_the_note_that_says_why(env, capsys):
     assert (lab.key, lab.value, lab.by, lab.ref) == ("abandoned", "W=31 field, not the protocol's", "flock-backend", note)
 
 
+def _auditor_run(st: LocalStore, tmp: Path, run_id: str, line: dict | None) -> None:
+    """Run `run_id`'s Attempt, its run record keeping `line` as out/auditor_line.json (no file with None)."""
+    tree = tmp / run_id
+    (tree / "out").mkdir(parents=True)
+    (tree / "out" / ("auditor_line.json" if line is not None else "credit.md")).write_text(json.dumps(line))
+    art = st.put_artifact("run-record/v1", {"run_id": run_id}, tree=tree)
+    st.put_attempt({
+        "schema": "research/attempt/v0.1", "id": run_id, "tool": {"name": "run", "version": "1"}, "derivation": "drv:" + "0" * 64,
+        "reuse_key": None, "argv": ["bash", "auditor.sh"], "params": {}, "key_params": [], "inputs": {}, "conditions": {},
+        "key_conditions": [], "source": {"commit": "a" * 40, "dirty": False}, "closure": None, "execution": {}, "cost": None,
+        "status": {"state": "done", "rc": 0}, "outputs": {"run_record": art}, "telemetry": None})
+
+
+def test_a_memory_line_of_record_is_the_leans_and_names_the_auditor_run_that_wrote_it(env, capsys):
+    """`memory-line-of-record` on a gate run's verifier run says its line of record is the auditor_line.json of the run its ref
+    names, computed by the Lean (that file's `line_by`) and conditional on what that file's `conditional_on` names (RD-21): the
+    label reads `lean conditional on NAMES`, and `research data label` reads the file from the ref run's record and refuses a value
+    that isn't the file's, a file with no conditional_on naming what statement C rests on or a line.py line, a run whose record
+    keeps no file, and a ref that isn't a run id."""
+    st = LocalStore()
+    why = ("label key 'memory-line-of-record' needs --ref naming the auditor_line.py run whose auditor_line.json is the line (its run "
+           "id, r<YYYYMMDD>-<HHMMSS>-<hex>)")
+    value = "lean conditional on NoOutsideCompute"
+    assert vocab.check("memory-line-of-record", value) is None
+    assert vocab.check("memory-line-of-record", "lean conditional on NoOutsideCompute, ProviderLockdown") is None
+    for old in ("lean", "python", "credited-pinned-bound", "lean conditional on"):
+        assert vocab.check("memory-line-of-record", old).startswith(f"memory-line-of-record={old!r} does not match")
+    assert vocab.check_ref("memory-line-of-record", RUN_FINE) is None and vocab.check_ref("memory-line-of-record", None) == why
+    for ref in ([], ["--ref", "art:" + "0" * 64], ["--ref", "note:memory-accounting/20261024T0832Z-report-line-lean-record"]):
+        assert main(["label", RUN_REAL, "memory-line-of-record", value, "--by", "memory-accounting", *ref]) == 2
+        assert capsys.readouterr().err.startswith(f"research data label: refused: {why}")
+    runs = {"r20261025-010000-0001": {"line_by": "lean", "conditional_on": {"NoOutsideCompute": "C"}},
+            "r20261025-010000-0002": {"line_by": "lean", "conditional_on": {"ProviderLockdown": "L"}},
+            "r20261025-010000-0003": {"line_by": "python", "conditional_on": {"NoOutsideCompute": "C"}},
+            "r20261025-010000-0004": {"line_by": "lean"},
+            "r20261025-010000-0005": {"line_by": "lean", "conditional_on": {"Identity": "I"}},
+            "r20261025-010000-0006": None}
+    for run_id, line in runs.items():
+        _auditor_run(st, env, run_id, line)
+    assert main(["label", RUN_REAL, "memory-line-of-record", "python", "--by", "memory-accounting", "--ref", RUN_FINE]) == 2
+    assert "does not match" in capsys.readouterr().err
+    for run_id, label, err in (
+            (RUN_FINE, value, "its ref run's record keeps no out/auditor_line.json"),
+            ("r20261025-010000-0006", value, "its ref run's record keeps no out/auditor_line.json"),
+            ("r20261025-010000-0001", "lean conditional on ProviderLockdown", "isn't its ref run's line, which is "
+             "'lean conditional on NoOutsideCompute'"),
+            ("r20261025-010000-0002", value, "isn't its ref run's line, which is 'lean conditional on ProviderLockdown'"),
+            ("r20261025-010000-0003", value, "its ref run's line is line_by 'python'"),
+            ("r20261025-010000-0004", value, "names no conditional_on with NoOutsideCompute or ProviderLockdown"),
+            ("r20261025-010000-0005", "lean conditional on Identity", "names no conditional_on with NoOutsideCompute")):
+        assert main(["label", RUN_REAL, "memory-line-of-record", label, "--by", "memory-accounting", "--ref", run_id]) == 2
+        assert err in capsys.readouterr().err, (run_id, label)
+    assert st.labels(RUN_REAL) == []
+    for run_id, label in (("r20261025-010000-0001", value), ("r20261025-010000-0002", "lean conditional on ProviderLockdown")):
+        assert main(["label", RUN_REAL, "memory-line-of-record", label, "--by", "memory-accounting", "--ref", run_id]) == 0
+    assert {(lab.key, lab.value, lab.ref) for lab in st.labels(RUN_REAL)} == {
+        ("memory-line-of-record", value, "r20261025-010000-0001"),
+        ("memory-line-of-record", "lean conditional on ProviderLockdown", "r20261025-010000-0002")}
+
+
 def test_label_writes_the_canonical_key_and_form(env, capsys):
-    """Hygiene (2026-09-23): the file holds the vocabulary's spelling and form -- a real boolean for zk / model_agrees /
+    """The file holds the vocabulary's spelling and form -- a real boolean for zk / model_agrees /
     independently_verified, an int for B, `note` for `notes` / `verify_note`, `verifier` for `checker`, `A-GKR` for candidate `A` --
     whatever the caller typed; stderr says what was rewritten.  A ref written as a label is refused unless --off-vocab."""
     st = LocalStore()

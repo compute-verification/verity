@@ -1,0 +1,76 @@
+{
+ "definitions": {
+  "Dsv4HashWeightIn_v1": {
+   "and": 2394,
+   "type": "3cdd6ea75ec986518d4a2d819ca960dc2ee05cc9ad81cee22f382fc74e4ad353b2cd903e331b32cec43a656e7dadb15cf46837b3fd246a4c63550909cd8095d2"
+  },
+  "Dsv4HashWeightMid_v1": {
+   "and": 2729,
+   "type": "7643a295baa7335f1ff1114949a379efa5947640235af3c4c6b104ec539295f79c6119b4643c64ac876eada1c930d8bab77f6741cfacf48901ff6f5a6eea9532"
+  },
+  "Dsv4HashWeightOut_v1": {
+   "and": 4394,
+   "type": "92f64d5b7bcf533a3dd09cbecca9e1e35a935b4cf371217778b9fc05836bc479574f85b1fcbea20059a2cfbe0bce8ac8713a3f7b367d2aa66e3bbd4b7a40c2ec"
+  },
+  "Dsv4HashWeight_v2": {
+   "and": 11571,
+   "type": "9a66f00ec0802c150cb87e3267fc40c25dee5971cd99998068de18a27ee723cd19a77fe7e4cb538d5c4d8694ba3715409b6cd7a093c27ab43eb6510b26d192f0"
+  },
+  "Dsv4SqrtSoftplusIn_v1": {
+   "and": 2330,
+   "type": "bb8ec8e0bb16edc8183267c717f9e87fd3b370e7b736265604fbb7334b27b8a10809f0cae75c935d6bd65b2738fafc1d29ea2055384094fbe628ca1896c4f1c2"
+  },
+  "Dsv4SqrtSoftplusMid_v1": {
+   "and": 2782,
+   "type": "b316ecfc13138aff168cb7c40861395be49162b1a02244ac3e699050eb844bfe4ffbde64f09e1fb24cb42fb1bb0ecd48d058bffd2478366eb932277320fd24b1"
+  },
+  "Dsv4SqrtSoftplusSelect_v1": {
+   "and": 32,
+   "type": "64702e7f4c5feecadee7614261e0546630268f7e4b5586f1bab199d2ee6ef3c6871d3429ef2651902b06812dc3525c0591fdc9bb6be439d5cd5ce85938dede8f"
+  },
+  "Dsv4SqrtSoftplus_v2": {
+   "and": 50376,
+   "type": "5a06c64320573acaac812098552554338df347abcb5b25369923df52b122e04d579b603242dac3f7c832e1b6af032ed33973b1088e491c150460a4ae0f876f05"
+  },
+  "Ex2ApproxIn_v1": {
+   "and": 774,
+   "type": "4418bd1035f8e001f77c4ba24e7c9f11d029e8ae6c6d52ad88c6a405dab479bc0c510f82994b6ca286301d33f0f2430542866c4bbc856505d0dbcb78cf083dd4"
+  },
+  "Ex2ApproxOut_v1": {
+   "and": 2010,
+   "type": "a85d9a764784f33c7548e1cf1314dd7ce9382ff2792f5e68b7a1aa3e3331d4600c2a33368d6f8d53e6d055f9bd656c0ce3c1fcc654988a2be9490e0d9051ceb8"
+  },
+  "Ex2Approx_v2": {
+   "and": 3857,
+   "type": "d8e934653d84026c2527af5ae255dc2ee11f8f3012cca04a326f8c2e68bad26cd32a9bca430e8df5c495cca631eb5643f47e1a19f4ea35c4be74c51baf0f9c57"
+  },
+  "MoeRouterHashNorm_v1{SCALE=2.5}": {
+   "and": 22435,
+   "type": "33b3f37d631d415d23262aed453df6da63a5a86ec7b913e60ab9c6b487162f95f4200b24269669be687339f631dcd35b23fad94d10f41cb4fc70ad7c012e3898"
+  },
+  "MoeRouterHashPick_v1{E=8}": {
+   "and": 1704,
+   "type": "892dd0d708f2d4156265230570950dbca0945b62135acd1174ca1bcc61acecf6df4bde13554f5e756b3491c933498c114e22123f38822d3e76e93307556aa491"
+  },
+  "MoeRouterSqrtSoftplusTopK_v1{E=8,SCALE=2.5}": {
+   "and": 32862,
+   "type": "af58d74b325b4d89ab50a02f42a148dd3065329cba242f07fd4f6e74d7b6c6fb5907fe814cc6a8da024075940cac636c03263dff12ff3abc882b5ea44d685779"
+  },
+  "MufuLg2Mantissa_v2": {
+   "and": 986,
+   "type": "6c56b5930e1ab34524d0f2e433b666d77544572e0abad9ad07a62cca978f925e162f81bb6995f5f6e03f446b4ae2202744e787945e5c2380c7204ba98de15e1d"
+  },
+  "SiluMulClampBf16_v2{LIMIT=10.0}": {
+   "and": 1489,
+   "type": "5ae04691d928c2d65658c2aa74041d44c6823f6581bffa7f36cdc84ab3c0d9a99f8845d7ba0b9ab284a8973acb758ee3df72b79e0d28f599912a58c761e41b48"
+  },
+  "SiluMulClampIn_v1{LIMIT=10.0}": {
+   "and": 109,
+   "type": "1d609b412890a965d89848615a2b408b4e0ce098296b76004dfbb07649ed7ce94d2a068d73808237dfb91cfe7676d9e4ae2733b7e3c3709fe559590f5666768a"
+  },
+  "SiluMulClamp_v2{I=4,LIMIT=10.0}": {
+   "and": 5956,
+   "type": "60c8afe4a668d9f4747bf2473c0eb46c053b47407e74dc2e4720e92717d5dedb988f1f02d97a6077d81663d08aff2b238f3171d7c34fd51537d59cef9ee7e7f2"
+  }
+ }
+}

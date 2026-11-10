@@ -1,4 +1,4 @@
-"""[P6, 2026-09-23] `profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
+"""`profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
 module, no role -> module table.  Every shipped config.json builds a profile or is refused with its reason."""
 from __future__ import annotations
 
@@ -14,11 +14,10 @@ from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.engine.profiles import generic as G
-from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.observe.fold.patterns.collectives import TpCollective
-from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
+from verity_vllm.observe.fold.profiles import generic as G
+from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
 
 SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
 #: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
@@ -41,13 +40,27 @@ def test_shipped_config_sha_is_the_manifest_bytes():
             assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["config_sha256"], role
 
 
+def test_a_pin_reads_its_config_of_record_and_an_unpinned_model_none(monkeypatch):
+    """`pinned_hf_config`, the one config.json a served pin's φ reads on the prover's side (`advice_compile`) and the verifier's
+    (`prove_path.phi_of_serve`): the int8 pin's is its own, with its quantization config, never the bf16 one's."""
+    int8 = dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800")
+    assert int8 == dg.HF_CONFIG_DIR / "LLAMA32_1B_INT8.config.json"
+    assert json.loads(int8.read_text())["quantization_config"]["quant_method"] == "verity_int8"
+    assert dg.pinned_hf_config("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da") == dg.HF_CONFIG_DIR / "LLAMA32_1B.config.json"
+    assert dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "0" * 40) is None
+    assert dg.pinned_hf_config("m/x", "r") is None
+    monkeypatch.setattr(dg, "_sha256", lambda p: "0" * 64)
+    with pytest.raises(ValueError, match="config_sha256"):
+        dg.pinned_hf_config("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800")
+
+
 # ------------------------------------------------------------------------------------------------------------ names, roles, the finder
 
 def test_module_name_grammar():
     assert G.module_name("B1") == "derived_B1" and G.module_name("B1", 2) == "derived_B1_tp2"
-    assert G.parse_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2") == ("QWEN3_30B_A3B", 2)
+    assert G.parse_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2") == ("QWEN3_30B_A3B", 2)
     assert G.parse_module("derived_LLAMA32_1B") == ("LLAMA32_1B", 1)
-    assert G.parse_module("dense_MISTRAL7B") == ("MISTRAL7B", 1)                  # the X-07 name recorded runs cite
+    assert G.parse_module("dense_MISTRAL7B") == ("MISTRAL7B", 1)                  # the name recorded runs cite
     assert G.parse_module("gen_llama_llama32_1b") is None and G.parse_module("vllm_d9105ea80_sm89_eager") is None
 
 
@@ -55,22 +68,22 @@ def test_finder_materialises_every_role_module_and_the_x07_name():
     for role, world in ROLES:
         if role in REFUSED:
             continue
-        mod = importlib.import_module(f"verity_vllm.engine.profiles.{G.module_name(role, world)}")
+        mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{G.module_name(role, world)}")
         assert mod.PROFILE.id == G.profile_id(role, mod.C, world)
         assert callable(mod.weight_field) and callable(mod.root_class) and callable(mod.check_header) and callable(mod.build_profile)
-    dense = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")
-    assert dense.PROFILE.id == importlib.import_module("verity_vllm.engine.profiles.derived_MISTRAL7B").PROFILE.id
+    dense = importlib.import_module("verity_vllm.observe.fold.profiles.dense_MISTRAL7B")
+    assert dense.PROFILE.id == importlib.import_module("verity_vllm.observe.fold.profiles.derived_MISTRAL7B").PROFILE.id
 
 
 def test_the_x07_name_is_for_dense_architectures_only():
     with pytest.raises(ImportError, match="derived_OLMOE"):
-        importlib.import_module("verity_vllm.engine.profiles.dense_OLMOE")
+        importlib.import_module("verity_vllm.observe.fold.profiles.dense_OLMOE")
     with pytest.raises(ImportError, match="derived_PYTHIA160M"):
-        importlib.import_module("verity_vllm.engine.profiles.dense_PYTHIA160M")
+        importlib.import_module("verity_vllm.observe.fold.profiles.dense_PYTHIA160M")
 
 
 def test_profile_module_for_case_is_derived_not_looked_up():
-    from verity_vllm.engine import profiles
+    from verity_vllm.observe.fold import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
     for role, world in ROLES:
         if role in REFUSED:
@@ -87,7 +100,7 @@ def test_profile_module_for_case_is_derived_not_looked_up():
 def test_derived_b0_is_the_protected_base_profile_behind_the_tuned_gemm():
     """The golden corpus's profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
     same C up to the identity fields and unset keys, the same pattern list after the target's tuned-GEMM specialization."""
-    derived = importlib.import_module("verity_vllm.engine.profiles.derived_B0").PROFILE
+    derived = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0").PROFILE
 
     def facts(C):
         return {k: v for k, v in C.items() if k not in ("family", "revision", "profile") and v is not None}
@@ -103,9 +116,9 @@ def test_family_facts_rules_agree_with_analytic():
     for fam, f in FF.FAMILY_FACTS.items():
         if fam in analytic.FAMILY_RULES:
             assert f["rules"] == analytic.FAMILY_RULES[fam], fam
-        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe"), fam
+        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe", "mhc-moe"), fam
         assert "ForCausalLM" in f["vllm_class"], fam
-        assert "vllm/model_executor/models/" in f["rules_provenance"] or "transformers" in f["rules_provenance"], fam
+        assert any(s in f["rules_provenance"] for s in ("vllm/model_executor/models/", "vllm/models/", "transformers")), fam
 
 
 def test_every_hand_fact_cites_where_vllm_hard_codes_it():
@@ -163,7 +176,7 @@ def test_rank_profile_is_the_world_divided_configuration(role):
 
 def test_rank_check_header_reshards_the_recorded_full_config():
     cfg = json.loads((dg.HF_CONFIG_DIR / "LLAMA32_1B.config.json").read_text())
-    mod = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B_tp2")
+    mod = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B_tp2")
     h = RunHeader("verity-capture/log/v1", "2026-09-23T00:00:00Z", "pid", {}, {"repo": mod.REPO_ID, "config": cfg, "tp": 2}, {"requests": []})
     assert mod.check_header(h) == []
     assert any("tensor_parallel_size" in m for m in mod.check_header(dataclasses.replace(h, model={**h.model, "tp": 1})))
@@ -173,7 +186,7 @@ def test_rank_check_header_reshards_the_recorded_full_config():
 
 def test_world_must_divide_the_sharded_keys():
     with pytest.raises(ImportError, match="not divisible"):
-        importlib.import_module("verity_vllm.engine.profiles.derived_B0_tp2")          # SmolLM2-135M: 9 heads
+        importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0_tp2")          # SmolLM2-135M: 9 heads
 
 
 # ------------------------------------------------------------------------------------------------------------------- refusals
@@ -207,7 +220,7 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
         DsaSparseMla,
         DsaTopK,
     )
-    from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
+    from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 
     cfg = json.loads((Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
     assert FF.facts_for(cfg)["arch"] == "dsa-moe"
@@ -238,10 +251,61 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     assert vals["ATTN_SCALE"] == 256 ** -0.5 and vals["ROPE_NEOX"] is False and prov["SHARED_I"] == "derived"
 
 
+def test_the_hyper_connected_family_resolves_its_rank_facts():
+    """DeepSeek-V4-Pro's facts resolve over a TP8 rank (the experts' width and the heads divided, the rest whole)."""
+    cfg = json.loads((dg.HF_CONFIG_DIR / "DSV4_PRO.config.json").read_text())
+    assert FF.facts_for(cfg)["arch"] == "mhc-moe" and G.structural_refusal(cfg) is None
+    vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
+    assert {k: vals[k] for k in ("Q_LORA", "HEAD_DIM", "QK_ROPE", "O_GROUPS", "O_LORA", "WINDOW", "PADDED_HEADS", "INDEX_HEADS", "NUM_EXPERTS",
+                                 "TOPK", "HASH_LAYERS", "SCORING", "SCORE_BIAS", "SHARED_I", "EXPERT_DTYPE", "HC_MULT", "HC_REPEAT")} == {
+        "Q_LORA": 1536, "HEAD_DIM": 512, "QK_ROPE": 64, "O_GROUPS": 16, "O_LORA": 1024, "WINDOW": 128, "PADDED_HEADS": 64, "INDEX_HEADS": 64,
+        "NUM_EXPERTS": 384, "TOPK": 6, "HASH_LAYERS": 3, "SCORING": "sqrtsoftplus", "SCORE_BIAS": "noaux_tc", "SHARED_I": 384,
+        "EXPERT_DTYPE": "fp4", "HC_MULT": 4, "HC_REPEAT": 20}
+    assert vals["ATTN_SCALE"] == 512 ** -0.5 and len(vals["COMPRESS_RATIOS"]) == cfg["num_hidden_layers"] + 1 and prov["SHARED_I"] == "derived"
+
+
+def test_the_hyper_connected_rank_profile_states_the_builds_weights_record():
+    """DeepSeek-V4-Pro's TP8 rank profile: `C` from the facts and the rank's config.json, a weights Record of the family's params in their
+    order at the allocated shapes (the fold's `weights` parameter), every non-Marlin parameter bound to its own field and the Marlin-served
+    experts to none (their words are no leaves of the checkpoint-layout fields), and the header check over the recorded full config."""
+    from verity_vllm.observe.fold.fold import weights_type_of
+    mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{G.module_name('DSV4_PRO', 8)}")
+    prof, C, W = mod.PROFILE, mod.C, mod.PROFILE.weights_type
+    assert {k: C[k] for k in ("H", "NL", "NH", "V", "VOCAB", "I", "SHARED_I", "FP8_BLOCK", "WORLD")} == {
+        "H": 7168, "NL": 61, "NH": 16, "V": 16160, "VOCAB": 129280, "I": 384, "SHARED_I": 384, "FP8_BLOCK": 128, "WORLD": 8}
+    names = [n for n, _ in W.fields]
+    assert names[:5] == ["model.hc_head_fn", "model.hc_head_base", "model.hc_head_scale", "model.embed_tokens.weight", "model.layers.0.hc_attn_fn"]
+    assert names[-3:] == ["model.norm.weight", "lm_head.weight", "model.layers.0.attn.rotary_emb.cos_sin_cache"]
+    assert "model.layers.0.hc_attn_fn_broadcast" in names and "model.layers.1.hc_attn_fn_broadcast" not in names
+    assert "model.layers.2.attn.indexer.wq_b.weight" in names and "model.layers.3.attn.indexer.wq_b.weight" not in names    # ratios 4 / 128
+    assert "model.layers.2.ffn.gate.tid2eid" in names and "model.layers.3.ffn.gate.e_score_correction_bias" in names      # HASH_LAYERS 3
+
+    def field(n):
+        return W.fields[W.index(n)][1]
+    assert (field("model.layers.0.attn.wo_a.weight").leaves, field("model.layers.0.attn.wo_a.weight").leaf_widths()[0]) == (2 * 1024 * 4096, 8)
+    assert field("model.layers.5.ffn.experts.routed_experts.w13_weight").leaves == 384 * 768 * 3584
+    assert prof.weight_field("model.layers.5.attn.wq_b.weight_scale_inv") == ("model.layers.5.attn.wq_b.weight_scale_inv",)
+    assert prof.weight_field("model.layers.5.ffn.experts.routed_experts.w2_weight_scale") is None
+    assert mod.root_class("model.layers.5.ffn.experts.routed_experts.w2_weight_scale") == "marlin-served"
+    assert mod.root_class("model.layers.5.attn.wq_b.weight") == "weight" and mod.root_class("model.layers.5.attn.k_scale") == "unknown"
+    assert weights_type_of(prof, C) is W and weights_type_of(BASE.PROFILE, BASE.C) == analytic.weights_type(BASE.C)
+    from verity_vllm.observe.fold.patterns import dsv4_patterns
+    names, own = [p.name for p in prof.patterns], [p.name for p in dsv4_patterns()]
+    assert own[-4:] == ["fp8.dynamic_deepgemm_linear", "gemm.cublas_linear_default", "gemm.cublas_mm_f32out", "norm.rms_norm_cuda"]
+    assert names[:len(own)] == own and names[len(own):len(own) + 4] == [
+        "tp.embedding_shard_cuda", "tp.collective", "moe.marlin_shared_experts.mxfp4", "residual_add.aten_add"]
+    assert prof.witnesses == ()
+    h = RunHeader("verity-capture/log/v1", "2026-10-18T00:00:00Z", "pid", {}, {"repo": mod.REPO_ID, "config": mod.HF_CONFIG, "tp": 8},
+                  {"requests": []})
+    assert mod.check_header(h) == []
+    bad = dataclasses.replace(h, model={**h.model, "config": {**mod.HF_CONFIG, "num_hidden_layers": 60, "n_routed_experts": 256}, "tp": 4})
+    assert mod.check_header(bad) == ["num_hidden_layers=60 != C[NL]=61", "n_routed_experts=256 != C[NUM_EXPERTS]=384", "tensor_parallel_size=4 != WORLD=8"]
+
+
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():
     """OLMoE's q/k RMSNorm spans every head (`RMSNorm(total_num_heads * head_dim)`): a TP rank all-gathers q and k first and holds the
     whole replicated weight, so the rank record's `q_norm` / `k_norm` have the full model's width while its heads are the rank's."""
-    full, rank = (importlib.import_module(f"verity_vllm.engine.profiles.{G.module_name('OLMOE', w)}") for w in (1, 2))
+    full, rank = (importlib.import_module(f"verity_vllm.observe.fold.profiles.{G.module_name('OLMOE', w)}") for w in (1, 2))
 
     def layer(C):
         wt = analytic.weights_type(C)

@@ -1,5 +1,12 @@
+module
+
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Refine.LiveCompiled
-import Proofs.Flock.Soundness.Model.HoloCompiled
+import VCVio.Prelude.Core
 
 /-!
 # a1l, step 6's pieces: every message of the holographic tables' sub-games has an inhabited type
@@ -8,6 +15,8 @@ import Proofs.Flock.Soundness.Model.HoloCompiled
 `LiveCompiled` proves the compiled ones'), the holographic lincheck's, the sparse phase's (`drawFin`, `degRounds`), the
 registered phase's at any `fin` whose games all have it, and each rep's (`holoRep`, `holoRepC`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

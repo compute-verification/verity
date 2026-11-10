@@ -1,4 +1,4 @@
-description = "PPL-COMPILE C1: Dither-2S (adopted-bd-lm) run exactly on FP4 hardware by limb splitting, three balanced base-8 E2M1 digits per operand, 9 products at weights 8^n (block scales); every int8 product (linears, lm_head, QK and PV) recomputed from the planes, gated equal, and served"
+description = "C1: Dither-2S (adopted-bd-lm) run exactly on FP4 hardware by limb splitting, three balanced base-8 E2M1 digits per operand, 9 products at weights 8^n (block scales); every int8 product (linears, lm_head, QK and PV) recomputed from the planes, gated equal, and served"
 
 [[linear]]
 step = "smooth"

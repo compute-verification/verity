@@ -1,0 +1,56 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-1gpu-pouw-h1-served"
+# H1's served ratio in one run: `llama31-8b-1gpu-pouw-h1` (H1 + fx1 on the eager int8_exact engine, token-gated against
+# `stock-int8`) with stock FP8 as vLLM serves it, `stock-fp8@compiled`, as the baseline every ratio is over.
+#
+# The reference is FP8 compiled because no compiled int8 engine exists to compare with: int8_exact runs eagerly only, on
+# its own attention backend (`runner.engine_args` refuses it compiled), and the int8 pin's `verity_int8` linears have no
+# other vLLM path. Stock FP8 at serving defaults is what an operator serves this model as on sm_120 without PoUW: the
+# same 8-bit weights' footprint, torch.compile and vLLM's CUDA graphs. It loads the int8 pin's BF16 base
+# (LLAMA31_8B, the checkpoint `benchmarks/hash/dither/pin.sh` makes the pin from), since vLLM can't load the pin as FP8.
+# It shares the preset's scheduler (T = 64 tokens a step, 64 sequences) and its 8 GiB KV pin, so its ratio isolates what
+# H1 and the eager exact-int8 engine add a step; the cost of T = 64 itself (prefill chunked into 64-token steps) is the
+# step budget, which `llama31-8b-fp8-1gpu-compiled-full`'s stock-fp8@compiled times at 4,096. Compiled FP8's tokens differ
+# from exact int8's, so it has no control and is timed on its own gated tokens.
+arms = ["stock-fp8@compiled", "stock-int8", "pouw:eps1-sm120-h1fx1"]
+sweep = "quick"
+reps = 3
+eager = true
+setup = "benchmarks/harness/setup/int8_pin.sh"
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+
+[arm_settings."pouw:eps1-sm120-h1fx1"]
+control = "stock-int8"
+
+[arm_settings."pouw:eps1-sm120-h1fx1".protocols_config.pouw]
+rows = 64
+admission = "per-round"
+
+[preset]
+id = "llama31-8b-1gpu-pouw-h1-served"
+model = "verity-int8/Llama-3.1-8B-INT8"
+revision = "723d342ac443b040931242c768df342b0f6f15a7"
+case = "LLAMA31_8B_INT8"
+precision = "int8_exact"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = false
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.40
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 64
+max_num_seqs = 64
+resident_kv_cache_memory_bytes = 8589934592
+block_kv_cache_memory_bytes = 8589934592
+
+[admission]
+max_minutes = 120

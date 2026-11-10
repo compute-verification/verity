@@ -1,5 +1,43 @@
+module
+
+public import Flock.With.VerifyE
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Claims.DeployPlainCode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Bridge.Custody
+import Proofs.Flock.Claims.DeployRounds
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The coins each recorded round issues
@@ -12,6 +50,8 @@ that order (`repNs`, `verifyRepWith_readsN`). So each rep stream of an accepted 
 `plainRepNs` (`streams_ns_plain`), its rounds in `spec.repStreams` order the session's `plainNs`
 (`rounds_ns_plain`), and custody reads each round message's coin at that count (`custody_vals_plain`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -525,7 +565,7 @@ def repNs (m kLog claims : ℕ) (sch : Schedule) : List ℕ := zcNs m ++ lcNs kL
 table's `fast100` schedule, whatever the hashes `hs` are, its stream's rounds issued `repNs` at `m`, `kLog` and
 `2 + |extras|` claims, one count per round. -/
 theorem verifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule}
-    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
     (h : verifyRepWith hs spec st sch sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim),
       sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
@@ -585,13 +625,14 @@ theorem map_n_of_forall₂ {l₁ l₂ : List Round} (h : List.Forall₂ (fun a b
 
 /-- **Each plain rep stream's rounds issued its table's coins**: when the plain verdict accepts the record at any
 hashes and `liveOf` reads it, there are two rep streams per table, and the rounds of stream `k` (table `k / 2`'s rep
-`k % 2`) issued `plainRepNs spec sts[k / 2]`, one count per round, so the statement fixes every round's coin count. -/
-theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
-    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
-    (hl : liveOf spec record = .ok lv) :
+`k % 2`) issued `plainRepNs spec sts[k / 2]`, one count per round, so the statement fixes every round's coin count.
+At any `keep` (`verifyWithMK`). -/
+theorem streams_ns_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
+    {record : String} {proofs : Array ByteArray} {lv : Live}
+    (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧
       ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = plainRepNs spec sts[k / 2]! := by
-  obtain ⟨hsz, hall⟩ := rep_plain hs hv hl
+  obtain ⟨hsz, hall⟩ := rep_plainK keep hs hv hl
   refine ⟨hsz, fun k hk => ?_⟩
   obtain ⟨sess, sch, stream, c, -, hpn, hf, hrep, hfind, hfa⟩ := hall k hk
   obtain ⟨stream', extras, hfind', hex, hns⟩ := verifyRepWith_readsN hs rfl hf hrep
@@ -602,6 +643,13 @@ theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array
     simp only [Claims.Flock.plainSched, hf, Option.getD_some]
   rw [map_n_of_forall₂ hfa, hns, hx, hpn, plainRepNs, hsch, Nat.mul_comm]
   rfl
+
+theorem streams_ns_plain (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
+    (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = plainRepNs spec sts[k / 2]! :=
+  streams_ns_plainK id hs hv hl
 
 /-- The plain session's coins, round by round in `spec.repStreams` order: each table's two reps' `plainRepNs`. -/
 def plainNs (spec : SessionSpec) (sts : Array Stmt) : List ℕ :=

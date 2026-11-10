@@ -1,5 +1,7 @@
-import NetworkCertifier.Run
-import NetworkCheck.Certificate
+module
+
+public import NetworkCertifier.Run
+public import NetworkCheck.Certificate
 
 /-!
 # One link's certifier: constant-rate, left-packed, FIFO and fail-closed
@@ -8,6 +10,8 @@ The executable form of `grid.py`'s `Certifier` and `Record` (W1–W6). A grid's 
 B, τ_b, Q), the record's status is `NetworkCertifier.Status`, and a slot holds a frame's bytes or padding (`none`), as in
 `grid.Row`.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 
@@ -56,11 +60,13 @@ namespace Certifier
 def doFault (c : Certifier) (r : Reason) : Certifier :=
   if c.fault.isNone then { c with fault := some r, queue := #[] } else c
 
-/-- `enqueue`: a frame of the wrong size is malformed, one past Q an overflow; a faulted window takes nothing. -/
-def enqueue (c : Certifier) (frame : ByteArray) : Certifier :=
+/-- `enqueue`: a frame of the wrong size is malformed, one past Q an overflow; a faulted window takes nothing. With
+`first`, the frame goes to the head of the queue, ahead of every frame queued: the ingress certifier's own salt frame. -/
+def enqueue (c : Certifier) (frame : ByteArray) (first : Bool := false) : Certifier :=
   if c.fault.isSome then c
   else if frame.size ≠ c.params.frameBytes then c.doFault .malformed
   else if c.queue.size ≥ c.params.queueCapacity then c.doFault .overflow
+  else if first then { c with queue := #[frame] ++ c.queue }
   else { c with queue := c.queue.push frame }
 
 /-- `tick`: bucket t releases min(queue, r) frames in queue order, then padding; a faulted window's row is padding. -/

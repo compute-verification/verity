@@ -6,7 +6,13 @@ slot's rows, at an input port no wire or leaf cut fills, and at a row or output 
 With hidden outputs those circuits are in scope (`scopeOkI`), with public outputs not (`scopeOk`). `proved_scope.rs`'s
 `wires_are_lean_acyclic` and `hidden_outputs_take_the_general_instance_form` run the same circuits.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.Wires
 
@@ -21,7 +27,8 @@ def net (gs : Array Group) (inWords : Nat) (outs : Array Nat) (rows : Array (Arr
   let rb := (self ++ rows.map (·.2)).push #[k]
   match Sparse.ofRows ra (2 ^ 10), Sparse.ofRows rb (2 ^ 10) with
   | .ok a, .ok b =>
-    { name := "net", useful := k + 1, constPos := k, inGroups := gs, outGroups := #[⟨inWords, 1, outs⟩], inWords, a, b,
+    { name := "net", useful := k + 1, constPos := k, inGroups := gs, outGroups := #[⟨inWords, 1, outs⟩], inWords,
+      aT := .pure a, bT := .pure b,
       unitLog := 10, lookup := if lookup then some default else none }
   | _, _ => default
 

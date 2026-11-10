@@ -3,8 +3,16 @@ The `…With` functions of `Flock.With.Hashes`, `Flock.With.Transcript` and `Flo
 (`Flock.With.Sim`): run with two oracles that `S` relates hash by hash, each function's two runs are related by `S` (or by
 its lift to the transcript and the Ligerito state).
 -/
-import Flock.With.SimWalk
-import Flock.With.Verify
+module
+
+public import Flock.With.Sim
+public import Flock.With.SimWalk
+public import Flock.With.Verify
+import Std.Data.HashMap
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
+
+@[expose] public section
 
 namespace Flock.With
 
@@ -86,7 +94,13 @@ theorem dgWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (h
 theorem decodeWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (spec : SessionSpec) (text : String) :
     S.R (Record.decodeWith hs spec text) (Record.decodeWith hs' spec text) := by
-  unfold Record.decodeWith
+  unfold Record.decodeWith Record.decodeJWith
+  sim_walk [dgWith_sim S hh]
+
+theorem decodeJWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
+    (hh : S.Hashes hs hs') (spec : SessionSpec) (j : Lean.Json) :
+    S.R (Record.decodeJWith hs spec j) (Record.decodeJWith hs' spec j) := by
+  unfold Record.decodeJWith
   sim_walk [dgWith_sim S hh]
 
 theorem bindAndZerocheckWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
@@ -142,7 +156,7 @@ theorem ligeritoWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes
     oodIntroWith_sim S hh, queryLevelWith_sim S hh]
 
 theorem verifyRepWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
-    (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+    (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     S.R (verifyRepWith hs spec st sch sess i r bytes) (verifyRepWith hs' spec st sch sess i r bytes) := by
   unfold verifyRepWith
   sim_walk [bindAndZerocheckWith_sim S hh, lincheckWith_sim S hh, ringSwitchWith_sim S hh, ligeritoWith_sim S hh]
@@ -152,5 +166,11 @@ theorem verifyWithM_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Floc
     S.R (verifyWithM hs spec tabs record proofs) (verifyWithM hs' spec tabs record proofs) := by
   unfold verifyWithM
   sim_walk [decodeWith_sim S hh, dgWith_sim S hh, verifyRepWith_sim S hh]
+
+theorem verifyJWithM_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
+    (hh : S.Hashes hs hs') (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json) (proofs : Array ByteArray) :
+    S.R (verifyJWithM hs spec tabs j proofs) (verifyJWithM hs' spec tabs j proofs) := by
+  unfold verifyJWithM
+  sim_walk [decodeJWith_sim S hh, dgWith_sim S hh, verifyRepWith_sim S hh]
 
 end Flock.With

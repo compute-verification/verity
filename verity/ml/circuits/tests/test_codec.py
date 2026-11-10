@@ -1,5 +1,5 @@
-"""Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1), and the
-reference normalisation of `concat`.
+"""Descriptor codec: nested-static dependency discovery, identity conflicts, and the reference normalisation of
+`concat`.
 
 Ported from veritor ``verity.ir/tests/test_codec.py`` (1-114, 131-224).  The tests over veritor's model registry (B1
 attention padding, KV-cache aliasing, the pinned v0 digests) stayed behind; the one `b1.Gemm` reference became a local
@@ -8,12 +8,14 @@ composite."""
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
+from verity.ml.circuits import codec
 from verity.ml.circuits.codec import IdentityConflict
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.defs import CompositeDefinition, same_definition
 
 from test_running_example import Add16, Dot, Id16, Mul16, Relu16
 
@@ -44,7 +46,7 @@ def LinearOps(B, S, x, W):
 @composite("TwoLinears", 1, ["M", "opsA", "opsB"],
            lambda S: ((("x", A2), ("W", Array(S.M, A2))), Array(2, Array(S.M, V16))))
 def TwoLinears(B, S, x, W):
-    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program (ruling §8.3)."""
+    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program."""
     a = B.call(bind(LinearOps, M=S.M, ops=S.opsA), x, W)
     b = B.call(bind(LinearOps, M=S.M, ops=S.opsB), x, W)
     return B.call(bind(Stack2, M=S.M), a, b)
@@ -129,8 +131,8 @@ def _dot_body_b(B, S, x, w):
 
 
 def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
-    """Ruling §8.1: within one program a fully qualified specialization resolves to one body; a conflicting
-    definition is an `IdentityConflict`, never first-wins."""
+    """Within one program a fully qualified specialization resolves to one body; a conflicting definition is an
+    `IdentityConflict`, never first-wins."""
     da, db = _dot_like(_dot_body_a), _dot_like(_dot_body_b)
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                               lambda B, S, x, w: __import__("verity.ml.circuits.refs", fromlist=["array_of"]).array_of(
@@ -185,6 +187,64 @@ def test_bind_refuses_a_record_its_composite_refuses_and_caches_none():
     assert program_digest(Program(partial.bind(M=4))) == program_digest(Program(bind(Plain, M=4, ops=ops)))
 
 
+def _flags(v) -> bool:
+    if isinstance(v, (list, tuple)):
+        return all(_flags(x) for x in v)
+    return all(_flags(x) for x in v.values()) if isinstance(v, dict) else type(v) is bool
+
+
+LOOKALIKES = [(True, 1), (False, 0), ((True, False), (1, 0)), ({"a": True}, {"a": 1})]
+
+
+def test_bind_keys_a_bool_static_apart_from_the_int_it_equals():
+    """`True == 1` and `hash(True) == hash(1)`: keyed on the raw value, `FLAG=1` would hit the entry `FLAG=True` made, so
+    `refuse` never saw it and its id said whichever bind came first. Alone or nested in a tuple or a record, the lookalike
+    bound after the accepted form is still refused, and where both are admitted they are two specializations and two ids."""
+    sig, body = (lambda S: ((("x", V16),), V16)), (lambda B, S, x: B.call(Id16, x))
+    Flag = CompositeDefinition("FlagOnly", 1, ("FLAG",), sig, body, register=False,
+                               refuse=lambda b: None if _flags(b["FLAG"]) else f"FLAG={b['FLAG']!r} is not a flag")
+    for accepted, lookalike in LOOKALIKES:
+        assert bind(Flag, FLAG=accepted).bindings["FLAG"] == accepted
+        with pytest.raises(ValueError, match=rf"^FlagOnly_v1 refuses this binding: FLAG={re.escape(repr(lookalike))} is not"):
+            bind(Flag, FLAG=lookalike)
+    Both = CompositeDefinition("AnyFlag", 1, ("FLAG",), sig, body, register=False)
+    for a, b in LOOKALIKES + [(1.0, 1), (1.0, True)]:
+        sa, sb = bind(Both, FLAG=a), bind(Both, FLAG=b)
+        assert sa is not sb and sb is bind(Both, FLAG=b)
+        assert sa.id != sb.id and not same_definition(sa, sb)
+        assert program_digest(Program(sa)) != program_digest(Program(sb))
+    assert (bind(Both, FLAG=True).id, bind(Both, FLAG=1).id) == ("AnyFlag_v1{FLAG=True}", "AnyFlag_v1{FLAG=1}")
+
+
+def test_decode_refuses_a_record_its_registered_composite_refuses():
+    """The decoder holds a binding record of a composite the registry holds to that composite's `refuse`, as `bind` holds a
+    built one: the token feed at FIRST=1, its id, record and body otherwise well formed, is no Program's, so no reader that
+    accepts by id meets it."""
+    from verity.ml.definitions.registry.io_shell import TokenFeed
+
+    feed = bind(TokenFeed, NP=2, FIRST=True)
+    sig = feed.signature()
+    calls = CompositeDefinition("CallsTokenFeed", 1, (), lambda S: sig, lambda B, S, slot: B.call(feed, slot), register=False)
+    text = json.dumps(encode_program(Program(calls)), separators=(",", ":"))
+    assert "TokenFeed_v1{NP=2,FIRST=true}" in text
+    assert program_digest(decode_program(json.loads(text), REGISTRY)) == program_digest(json.loads(text))
+    lookalike = json.loads(text.replace("FIRST=true", "FIRST=1").replace('"FIRST":true', '"FIRST":1'))
+
+    class Lookup:
+        """A registry as the decoder reads one, through `in` and `[]` alone (benchmarks/one_stage/replay.py's stand-ins)."""
+
+        def __contains__(self, fid: str) -> bool:
+            return fid in REGISTRY
+
+        def __getitem__(self, fid: str):
+            return REGISTRY[fid]
+
+    for registry in (REGISTRY, Lookup()):
+        with pytest.raises(ValueError, match=r"^definition 'TokenFeed_v1\{NP=2,FIRST=1\}': TokenFeed_v1 refuses this binding: "
+                                             r"NP must be at least 1 and FIRST a bool \(got NP=2, FIRST=1\)$"):
+            decode_program(lookalike, registry)
+
+
 def test_unbound_composite_as_a_static_value_is_not_encodable():
     @composite("NeedsK", 1, ["K"], lambda S: ((("x", Array(S.K, V16)),), V16))
     def NeedsK(B, S, x):
@@ -224,7 +284,7 @@ def test_a_self_compare_round_trips():
     _same_circuit(P, decode_program(desc, REGISTRY))
 
 
-# -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
+# -- zero-stride broadcasts: `[z, z, z]` compacts, `[z0, z1, z2]` does not ----------------------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
     from verity.ml.circuits.refs import Affine, Concat, Strided, concat, is_broadcast
@@ -248,3 +308,67 @@ def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_s
     assert isinstance(concat([Affine("n", 3, 0, 1), Affine("n", 3, 1, 1)]), Affine)
 
 
+# -- the definition digest: one gate list, one digest (PROTOCOL.md §4.8) --------------------------------------------
+
+A3, A4 = Array(3, V16), Array(4, V16)
+
+
+@composite("DigestSum3", 1, [], lambda S: ((("r", A3),), V16))
+def DigestSum3(B, S, r):
+    return B.call(Add16, B.call(Add16, r[0], r[1]), r[2])
+
+
+@composite("DigestSum4", 1, [], lambda S: ((("r", A4),), V16))
+def DigestSum4(B, S, r):
+    return B.call(Add16, B.call(DigestSum3, r[0:3]), r[3])
+
+
+def _rows(nested: bool):
+    """x_k = a_k + a_k; s = Sum3(x_0 ++ x_1 ++ x_2); Sum4(x_0 ++ x_1 ++ x_2 ++ s): the row built as (x_0 ++ x_1) ++ x_2 when
+    `nested`, else flat."""
+    from verity.ml.circuits.refs import coll_concat
+
+    def body(B, S, a):
+        x = [B.call(Add16, a[k], a[k]) for k in range(3)]
+        row = coll_concat(A3, [coll_concat(A2, x[:2]), x[2]] if nested else x)
+        return B.call(DigestSum4, coll_concat(A4, [row, B.call(DigestSum3, row)]))
+
+    return bind(CompositeDefinition("DigestRows", 1, (), lambda S: ((("a", A3),), V16), body, register=False))
+
+
+def test_two_builds_of_one_gate_list_digest_the_same():
+    """Two builds of one gate list, whose row is concatenated nested in one and flat in the other, write different v0 entries
+    and one definition digest; so do their v1 descriptors, which write the second row as an alias of the first, and the
+    definition decoded back from either."""
+    nested, flat = _rows(True), _rows(False)
+    entries = [codec.definition_entry(fn) for fn in (nested, flat)]
+    assert entries[0] != entries[1] and "concat" in json.dumps(entries[0]["body"]["nodes"][3]["args"][0]["refs"]["concat"])
+    digest = codec.definition_digest(entries[1])
+    for fn in (nested, flat):
+        P = Program(CompositeDefinition("CallsDigestRows", 1, (), lambda S: ((("a", A3),), V16),
+                                        lambda B, S, a, fn=fn: B.call(fn, a), register=False))
+        desc = json.loads(json.dumps(encode_program(P)))
+        e = desc["definitions"][fn.id]
+        assert e["body"]["nodes"][4]["args"][0]["refs"]["concat"][0] == {"alias": [3, 0]}
+        assert codec.definition_digest(entries[0]) == codec.definition_digest(e, desc) == digest
+        assert codec.definition_digest(codec.definition_entry(decode_program(desc, REGISTRY).defs[fn.id])) == digest
+        assert codec.canonical_entry(e, desc) == codec.canonical_entry(entries[1])
+    with pytest.raises(ValueError, match="an interned entry needs its descriptor's"):
+        codec.definition_digest(e)
+
+
+
+
+# -- the canonical JSON domain: a list of integers is checked whole ----------------------------------------------
+
+@pytest.mark.parametrize("v", [[], [1, 2, 3], (0, -(2**53 - 1), 2**53 - 1), [1, 2**53, 3, -(2**53), 5], [True, 2**53, 1],
+                               [[1, 2**53], [3, -(2**54)]], {"a": [1, 2**53], "b": [7, 2**53 + 5]}, [1, "\x7f", 2**53], [1, 1.5]])
+def test_a_list_of_integers_is_checked_whole_as_item_by_item(v):
+    """`jcs_domain_error` checks a list of integers in one pass (a census lists hundreds of millions) and names what checking
+    each item would: the last one out of range."""
+    def itemwise(v):  # a trailing null, which the domain allows, keeps a list from being checked whole
+        if isinstance(v, (list, tuple)):
+            return [itemwise(y) for y in v] + [None]
+        return {k: itemwise(y) for k, y in v.items()} if isinstance(v, dict) else v
+
+    assert codec.jcs_domain_error(v) == codec.jcs_domain_error(itemwise(v))

@@ -1,4 +1,4 @@
-"""The remote window's openings: the pooled draw, its bounds against v0's deployed point, the exact multiproof
+"""The remote window's openings: the pooled sample, its bounds against v0's deployed point, the exact multiproof
 expectation against `verity.ml.commitments.multiproof` by enumeration, and the cheapest-point searches."""
 
 from __future__ import annotations
@@ -46,16 +46,15 @@ def test_draw_refuses_a_malformed_window(counts, s):
 
 @pytest.mark.parametrize("blocks", [1000, 2**10, 2**19])
 @pytest.mark.parametrize("error_log2", [-20, -40, -42])
-def test_samples_agree_with_v0(blocks, error_log2):
-    assert o.samples_for(1 / 64, error_log2, blocks) == audit.samples_for(blocks, error_log2, Fraction(1, 64))
-    assert o.samples_for(1 / 64, error_log2) >= o.samples_for(1 / 64, error_log2, blocks)
+def test_the_window_needs_the_fewest_samples_its_error_allows(blocks, error_log2):
+    eps = Fraction(1, 64)
+    s = o.samples_for(eps, error_log2, blocks)
+    assert audit.sampling_error(blocks, s, eps) <= 2.0 ** error_log2 < audit.sampling_error(blocks, s - 1, eps)
+    assert o.samples_for(eps, error_log2) >= s
 
 
-def test_window_error_is_v0s_sampling_term():
-    n = 2**19
-    k = audit.certified_blocks(n)
-    assert o.window_error(n, 1 / 64, audit.SAMPLES) == pytest.approx(math.exp(audit.SAMPLES * math.log((k - 1) / n)))
-    assert o.window_error(n, 1 / 64, audit.SAMPLES) <= (63 / 64) ** audit.SAMPLES
+def test_the_sampling_error_is_below_the_unbounded_windows():
+    assert audit.sampling_error(2**19, audit.SAMPLES) <= (63 / 64) ** audit.SAMPLES
 
 
 def test_crude_slack_is_v0s():
@@ -115,8 +114,8 @@ def _rfc6962_siblings(count: int, ranks: set[int]) -> int:
 @pytest.mark.parametrize("leaves, universe, s", [(1, 3, 2), (2, 2, 3), (3, 5, 3), (5, 5, 3), (6, 9, 3), (8, 8, 3),
                                                   (7, 10, 3), (12, 12, 2)])
 def test_multiproof_expectation_is_exact(leaves, universe, s):
-    """Every draw of `s` from `universe` equally likely outcomes, `leaves` of them this tree's: the mean multiproof
-    over all draws is `expected_siblings`, and the audit's RFC 6962 tree never needs more."""
+    """Every sample of `s` from `universe` equally likely outcomes, `leaves` of them this tree's: the mean multiproof
+    over all samples is `expected_siblings`, and the audit's RFC 6962 tree never needs more."""
     siblings = hashes = distinct = 0
     for picks in itertools.product(range(universe), repeat=s):
         ranks = {r for r in picks if r < leaves}
@@ -154,7 +153,7 @@ def test_multiproofs_share_paths():
 
 
 def test_retention_is_exact():
-    """Every draw of 3 from the window's 10 receipts, two receipts a leaf and the last leaf short: the mean bytes read
+    """Every sample of 3 from the window's 10 receipts, two receipts a leaf and the last leaf short: the mean bytes read
     again to rebuild every opened node at each level is `retention`'s, and level 0 keeps every receipt."""
     g = o.Geometry(stores=1, blocks=5, passes=2, block_bytes=8, receipts_per_leaf=2)
     assert o.retention(g, 3, 0) == o.Retention(0, 2 * (5 * 64 + 3 * 64), 0.0)

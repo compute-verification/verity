@@ -1,7 +1,10 @@
-import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Seq
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+module
+
+public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+public import Definitions.Flock.Game
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The compiled and knowledge terms, and `δ_tree`, under strict-time collision resistance
@@ -24,6 +27,8 @@ finders that the compiled theorem, the knowledge term and `δ_tree` count, and r
 
 The budgets are the hypotheses' to state: the model plays the prover as a strategy and counts no evaluations.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.StrictCR
 
@@ -82,7 +87,13 @@ noncomputable def Finder.ev {γ : Type} (Fd : Finder γ) (f : γ → ℝ) : ℝ 
 /-- **`SHA512CRStrict` for one finder**, at the budget `q` on every outcome: `q` bounds the SHA-512 evaluations of the
 prover's runs the finder plays and of its verifications. The cost is `q` itself (`fun _ => q`), so Lean doesn't check
 that the finder stays within it: a budget below the finder's real count makes this a claim about SHA-512 that
-`cr/sha-512` doesn't make. Whoever instantiates it states an honest `q` (`ASSUMPTIONS.md`). -/
+`cr/sha-512` doesn't make. Whoever instantiates it states an honest `q` (`ASSUMPTIONS.md`).
+
+Assumption record. Claim: `cr/sha-512` (`Claims.StrictBirthday`). It assumes that this one finder, which plays the
+prover's runs and outputs what they open two ways, finds a SHA-512 collision with probability at most `q²/2^513`. That
+is the generic birthday bound for 512-bit outputs at `q` evaluations, and no SHA-512 collision is known. A hash premise:
+it is `Assumptions.SHA512CRStrict` at the constant cost `q`, so it reduces to `StrictBirthday` and asks nothing of the
+verifier. The one condition Lean doesn't check is the budget: `q` must bound the finder's real evaluations. -/
 def Finder.CR (Fd : Finder Pair) (q : ℝ) : Prop :=
   Assumptions.SHA512CRStrict H Fd.g Fd.s id (fun _ => q) q
 
@@ -188,7 +199,7 @@ theorem tree_le_strict {α P V : Type} [Fintype P] [Fintype V] [DecidableEq V] (
     ((expect₂_conflict_le H g s op hcol).trans hCR.le) (by positivity)))
 
 /-- **A rewinding at registered roots that covers an event** `bad` of the game `G` played by `S`. Runs of `g` against
-`s` (the prover after its registration, with the unit draw in place of the proof coins) open positions `P` of the roots
+`s` (the prover after its registration, with the unit sample in place of the proof coins) open positions `P` of the roots
 to values (`op`), at most `Q` per run (`opens`), and `vstar` is the plurality of the openings (`plur`). Two runs'
 conflicting openings are a collision of `H` (`binds`, Merkle binding), and `bad` is no likelier than a run opening a
 position off `vstar` (`covers`). -/
@@ -480,8 +491,8 @@ theorem ksBoundAccB_le_strict (A : Arith F K) (H : List UInt8 → D) (E : Merkle
       (Nat.cast_nonneg k)))
 
 omit [Inhabited D] in
-/-- **The knowledge term under `SHA512CRStrict`**: after each draw, the largest over the plan's tables of
-`ksStrict/(1 − N₀/(ek))`, averaged over the draw. It reads no prover: the budgets stand in for its finders. -/
+/-- **The knowledge term under `SHA512CRStrict`**: after each sample, the largest over the plan's tables of
+`ksStrict/(1 − N₀/(ek))`, averaged over the sample. It reads no prover: the budgets stand in for its finders. -/
 noncomputable def ksAvgStrict {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (L : Audit.Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (plan (L.draw ω) R).length,
@@ -490,7 +501,7 @@ noncomputable def ksAvgStrict {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → 
 end Session
 
 /-- **The knowledge term with the expected-time extractor, under `SHA512CRStrict`**: `ksAvgBE` is at most `ksAvgStrict`
-at a prover each of whose tables' finders, after each draw, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
+at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
 (`TableCR`). -/
 theorem ksAvgBE_le_strict {n : ℕ} {Reg D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.Law n} (k : ℕ) {qF qS : ℝ} (R : Reg)

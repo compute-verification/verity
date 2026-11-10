@@ -14,7 +14,6 @@ import subprocess
 import sys
 import threading
 import urllib.parse
-from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -27,7 +26,6 @@ C = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(C)
 
 READ, WRITE = ("reader", "read-secret"), ("writer", "write-secret")
-REV = "1" * 40
 PLAT = "x86_64-unknown-linux-gnu"
 
 
@@ -118,7 +116,7 @@ def handler(b: Bucket, name: str):
             items = "".join(
                 f"<Contents><Key>{escape(k)}</Key><Size>{len(b.objects[k][0])}</Size>"
                 f"<ETag>&quot;{hashlib.md5(b.objects[k][0]).hexdigest()}&quot;</ETag><LastModified>"
-                f"{datetime.datetime.fromtimestamp(b.objects[k][1], datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')}"
+                f"{datetime.datetime.fromtimestamp(b.objects[k][1], datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')}"
                 f"</LastModified></Contents>" for k in page)
             more = f"<IsTruncated>true</IsTruncated><NextContinuationToken>{escape(rest[0])}</NextContinuationToken>" if rest \
                 else "<IsTruncated>false</IsTruncated>"
@@ -220,6 +218,40 @@ def test_the_server_here_refuses_a_bad_signature(s3):
     with pytest.raises(C.urllib.error.HTTPError) as e:
         C.S3(url, "verity-lean-cache", READ[0], "wrong").get("main/x")
     assert e.value.code == 403
+
+
+def test_a_transient_answer_is_retried_and_any_other_is_raised_at_once(monkeypatch):
+    """An HTTP 500 from R2 on one request must not end a publish. A 500, 502, 503 or 504, or no connection, is retried after
+    each of `RETRY_S`, signed anew; a 403 or 404 is not."""
+    answers, waits, dates = [], [], []
+
+    def urlopen(req, timeout):
+        dates.append(req.headers["X-amz-date"])
+        a = answers.pop(0)
+        if isinstance(a, int):
+            raise C.urllib.error.HTTPError(req.full_url, a, "x", {}, None)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    ticks = iter(range(100))
+    monkeypatch.setattr(C.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(C, "_sleep", waits.append)
+    s3 = C.S3("https://r2.example", "b", "k", "s",
+              now=lambda: datetime.datetime(2026, 10, 21, 0, 0, next(ticks), tzinfo=datetime.UTC))
+    answers[:] = [500, C.urllib.error.URLError("reset"), 503, "ok"]
+    assert s3.open("GET", "main/x") == "ok" and waits == list(C.RETRY_S) and len(set(dates)) == 4
+    waits.clear()
+    answers[:] = [500, 500, 500, 500]
+    with pytest.raises(C.urllib.error.HTTPError) as e:
+        s3.open("GET", "main/x")
+    assert e.value.code == 500 and waits == list(C.RETRY_S)
+    waits.clear()
+    for code in (403, 404):
+        answers[:] = [code]
+        with pytest.raises(C.urllib.error.HTTPError) as e:
+            s3.open("GET", "main/x")
+        assert e.value.code == code and waits == []
 
 
 # ---------------------------------------------------------------- publish, then restore
@@ -428,7 +460,7 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     b, url = s3
     b.conflict = conflict
     r, rev = repo(tmp_path)
-    s = stage(tmp_path)
+    stage(tmp_path)
     same = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
     b.objects[same] = (b"module archive", b.now)
     assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "published"
@@ -439,14 +471,18 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     assert not [k for k in b.objects if k.endswith(C.RECORD)]
 
 
-def test_a_different_record_already_published_is_refused(s3, tmp_path):
+def test_a_second_build_of_a_published_commit_keeps_the_first_record(s3, tmp_path):
+    """A rerun of one commit whose build isn't byte-identical neither replaces the
+    published record nor fails the publish: the first build stays, and the run says so."""
     b, url = s3
     r, rev = repo(tmp_path)
     s = stage(tmp_path)
     C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    first = {k: v for k, v in b.objects.items() if k.endswith(C.RECORD)}
     (s / "bb.ltar").write_bytes(b"another build")
-    with pytest.raises(C.CacheError, match="already published with other contents"):
-        C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    said = []
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=said.append) == "kept"
+    assert {k: v for k, v in b.objects.items() if k.endswith(C.RECORD)} == first and "kept it" in said[0]
 
 
 def test_the_read_key_cannot_write(s3, tmp_path):
@@ -574,14 +610,16 @@ def test_prune_keeps_the_newest_commits_and_what_they_name(s3, tmp_path):
 # ---------------------------------------------------------------- integration never reads it
 
 def test_the_audit_runs_lake_with_the_cache_off():
+    """Lake finds a module in a cache by its 64-bit input hash alone, so no Lake the audit runs reads the node's artifact
+    cache: with `--artifacts`, only the build steps read a directory staged for them (`check.stage_build`)."""
     spec = importlib.util.spec_from_file_location("lean_audit_env", HERE.parent / "check.py")
     A = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(A)
     e = A.lake_env()
     assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off")
-    A.ARTIFACTS = Path("/node/lean-artifacts")                       # check's audit: the node's own, read and never written
+    A.ARTIFACTS = Path("/node/lean-artifacts")
     e = A.lake_env()
-    assert "LAKE_ARTIFACT_CACHE" not in e and (e["LAKE_CACHE_DIR"], e["LEAN_CACHE"]) == ("/node/lean-artifacts", "off")
+    assert (e["LAKE_ARTIFACT_CACHE"], e["LEAN_CACHE"]) == ("false", "off") and e.get("LAKE_CACHE_DIR") != str(A.ARTIFACTS)
 
 
 # ---------------------------------------------------------------- through Lake
@@ -598,29 +636,46 @@ def _load(name: str, path: Path):
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
-    """A kept build holds one tree's modules per package per node: check r20261012-023815-e641 rebuilt 640 of
-    `Security/Proofs`' 1,096 modules (2,404 s of a 2,922 s check) because nebius-2's kept build came from an older tree. Lake,
+    """A kept build holds one tree's modules per package per node, so a check whose node's kept build came from an older tree
+    would rebuild over half of `Security/Proofs`' modules (most of the check's time). Lake,
     reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
     LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg,
                     ignore=shutil.ignore_patterns(".lake"))
     store = tmp_path / "artifacts"
-    build = lambda: subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
-                                   env=LC.lake_env())
+    def build():
+        return subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
+                              env=LC.lake_env())
     build()
+    mods = ["Control", "Control.Assumptions", "Control.Defs", "Control.Thms"]
+
+    def staged(at: Path) -> dict:
+        """`lake build` as the audit runs it with the node's cache at ``at``, reading a cache staged for it (Lake restores
+        a module only from there); what was staged."""
+        monkeypatch.setattr(LC, "ARTIFACTS", at)
+        cache = at / LA.MK.STAGE / "test"
+        got, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
+        assert said == {"modules": len(got), "keyed": len(mods)}
+        subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                       cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
+        assert LA.MK.misrestored(got, pkg) == []
+        shutil.rmtree(cache)
+        return got
+
     arts = LA.LakeArtifacts(store)
-    assert arts.put({pkg}) > 0
+    assert arts.put({pkg: {"sandbox": True}}) == len(mods)
     lib = pkg / ".lake" / "build" / "lib" / "lean"
     was = {f: f.read_bytes() for f in lib.rglob("*.olean")}
     thms = pkg / "Control" / "Thms.lean"
     text = thms.read_text()
     thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
-    build()                                                           # without the cache: compiled
+    got = staged(store)                                               # Thms and Control have other keys: compiled
+    assert sorted(got.values()) == ["Control.Assumptions", "Control.Defs"]
     assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
+    assert not json.loads((lib / "Control" / "Thms.trace").read_text()).get("synthetic")
     thms.write_text(text)
-    monkeypatch.setattr(LC, "ARTIFACTS", store)
-    build()
+    assert sorted(staged(store).values()) == mods
     for f, b in was.items():
         assert f.read_bytes() == b
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
@@ -631,8 +686,7 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     h = hashlib.sha256(dest.read_bytes()).hexdigest()
     assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")
-    monkeypatch.setattr(LC, "ARTIFACTS", other)
-    build()
+    assert sorted(staged(other).values()) == mods
     for f, b in was.items():
         assert f.read_bytes() == b
     assert all(json.loads(t.read_text())["synthetic"] for t in lib.rglob("*.trace"))
@@ -798,7 +852,7 @@ mkdir -p "$d" && printf olean > "$d/M.olean" && chmod 600 "$d/M.olean" && printf
 
 
 def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[str, str] | None = None
-         ) -> tuple["D.Node", Path, str]:
+         ) -> tuple["D.DailyPaths", Path, str]:
     """Node 1's bare repository with main (`pkg`, ``extra``'s files, and a `setup.sh` that fetches a dependency), a sandbox
     that runs the build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
     src, _ = repo(tmp, "src")
@@ -822,7 +876,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[st
     key = tmp / "lean-cache.env"
     key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
                    f"R2_BUCKET=verity-lean-cache\n")
-    n = D.Node(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
+    n = D.DailyPaths(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
                deps=tmp / "var" / "deps", trusted=tmp, lock=tmp / "lock", sandbox=[sys.executable, str(box)],
                research=["env", f"PATH={path}"], builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key),
                python=sys.executable)

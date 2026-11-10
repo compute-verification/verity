@@ -1,8 +1,12 @@
 /-
-PROTOCOL.md §9–§11: statement binding, zerocheck, lincheck, and the claims handed to the opening.
+Statement binding, zerocheck, lincheck, and the claims handed to the opening.
 -/
-import Flock.Transcript
-import Flock.Proof
+module
+
+public import Flock.Transcript
+public import Flock.Proof
+
+@[expose] public section
 
 namespace Flock
 
@@ -10,6 +14,37 @@ open Transcript
 
 /-- One coordinate of `eqTable`: the table so far for bit 0, then for bit 1 of the new index bit. -/
 def eqStep (t : Array F128) (rj : F128) : Array F128 := t.map (· * (rj + 1)) ++ t.map (· * rj)
+
+/-- `t.map (· * r)`, from `r`'s table (`F128.mulBy_mulTable`) once `t` has four times the 512 products the table costs. -/
+def mulMap (t : Array F128) (r : F128) : Array F128 :=
+  if t.size < 2048 then t.map (· * r) else let tb := F128.mulTable r; t.map (F128.mulBy tb ·)
+
+theorem mulMap_eq (t : Array F128) (r : F128) : mulMap t r = t.map (· * r) := by
+  unfold mulMap
+  split
+  · rfl
+  · exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
+
+/-- `eqStep` with one product an entry: bit 0's half is bit 1's plus the table (`F128.mul_add_one`). -/
+def eqStepFast (t : Array F128) (rj : F128) : Array F128 :=
+  let hi := mulMap t rj
+  t.mapIdx (fun i x => hi[i]! + x) ++ hi
+
+theorem eqStepFast_eq (t : Array F128) (rj : F128) : eqStepFast t rj = eqStep t rj := by
+  have h : t.mapIdx (fun i x => (t.map (· * rj))[i]! + x) = t.map (· * (rj + 1)) := by
+    apply Array.ext
+    · simp
+    · intro i h1 _
+      rw [Array.size_mapIdx] at h1
+      rw [Array.getElem_mapIdx, Array.getElem_map, getElem!_pos (t.map (· * rj)) i (by simpa using h1),
+        Array.getElem_map, F128.mul_add_one]
+  show t.mapIdx (fun i x => (mulMap t rj)[i]! + x) ++ mulMap t rj = _
+  rw [mulMap_eq, h, eqStep]
+
+/-- Compiled code runs `eqStepFast`; the kernel and every proof see `eqStep`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `eqTable`. -/
+@[csimp] theorem eqStep_eq_eqStepFast : @eqStep = @eqStepFast :=
+  funext fun t => funext fun rj => (eqStepFast_eq t rj).symm
 
 /-- `eq(r, u)` for every `u ∈ {0,1}^|r|`, index bit `j` ↔ `r[j]` (LSB first). -/
 def eqTable (r : Array F128) : Array F128 := r.foldl eqStep #[1]
@@ -35,7 +70,7 @@ def lagrange (nodes : Array F128) (denInv : F128) (z : F128) : Array F128 :=
 /-- `L_s(ζ)` over `S = φ8({0…63})`. -/
 def skipWeights (z : F128) : Array F128 := lagrange nodesS den6Inv z
 
-/-- The weights of `Pcomb(z)` (§9.2): zero on `S`; the indicator at a node of `Λ`; else
+/-- The weights of `Pcomb(z)`: zero on `S`; the indicator at a node of `Λ`; else
 `Z_{S∪Λ}(z) · den_7⁻¹ · (z + φ8(64+i))⁻¹`. -/
 def combWeights (z : F128) : Array F128 :=
   match nodesS.findIdx? (fun n => decide (n = z)), nodesL.findIdx? (fun n => decide (n = z)) with
@@ -51,7 +86,7 @@ def dot (a b : Array F128) : F128 := Id.run do
   for i in [0:min a.size b.size] do acc := acc + a[i]! * b[i]!
   return acc
 
-/-- The seven pinned zerocheck coordinates (address bits 6–12), §9.2. -/
+/-- The seven pinned zerocheck coordinates (address bits 6–12). -/
 def pinned : Array F128 :=
   let frac := fun (y : F128) => y * (y + 1).inv
   let x := F128.monomial 1
@@ -68,7 +103,7 @@ structure ZcOut where
 
 def check (b : Bool) (why : String) : TM Unit := if b then pure () else throw why
 
-/-- §9.1 then §9.2. -/
+/-- Statement binding, then the zerocheck. -/
 def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : ZerocheckProof) : TM ZcOut := do
   label "flock-r1cs-v0"
   absorbBytes digest
@@ -104,7 +139,7 @@ def bindAndZerocheck (m : Nat) (digest : ByteArray) (cap : ByteArray) (p : Zeroc
 def halve (t : F128) (comb : Array F128) : Array F128 :=
   (Array.range (comb.size / 2)).map fun i => comb[i]! + t * (comb[i + comb.size / 2]! + comb[i]!)
 
-/-- What the lincheck needs from a statement's circuit (§16.1). -/
+/-- What the lincheck needs from a statement's circuit (`Flock.Statement`). -/
 structure CircuitFold where
   kLog : Nat
   pin : Nat
@@ -121,7 +156,7 @@ structure LcOut where
   rIn : Array F128
   deriving Inhabited
 
-/-- §10. -/
+/-- The lincheck. -/
 def lincheck (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM LcOut := do
   let kLog := c.kLog
   let rhoIn := zc.rho.extract 0 (kLog - 6)
@@ -149,7 +184,7 @@ def lincheck (c : CircuitFold) (zc : ZcOut) (p : LincheckProof) : TM LcOut := do
   let w := dot (skipWeights rPrime) p.zPartial
   return { w, rPrime, rIn := ts.reverse }
 
-/-- A claim handed to the opening (§11, §12): value, 64 skip weights, `m − 6` coordinates. -/
+/-- A claim handed to the opening (`Flock.Opening`): value, 64 skip weights, `m − 6` coordinates. -/
 structure Claim where
   value : F128
   skip : Array F128

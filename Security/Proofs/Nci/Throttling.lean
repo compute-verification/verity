@@ -1,6 +1,9 @@
-import Proofs.Nci.Chain
-import Proofs.Nci.Inequalities
-import Proofs.Nci.LoomisWhitney
+module
+
+public import Proofs.Nci.Chain
+public import Proofs.Nci.Inequalities
+public import Proofs.Nci.LoomisWhitney
+public import Proofs.Nci.Lemmas
 
 /-!
 # Updated matrix multiplications are throttled
@@ -13,8 +16,10 @@ its other positions, where it uses `Q` input entries and contributes to `Y` outp
 those output entries is split (Lemma 2), so the IUs' `Y`s add up to at most twice the partial sums that
 incompressibility charges (`sum_card_outputsOther_le`). The two read counts, weighted by `μ`, give
 `min{c₁, c₂} G ≤ α size(D)` for every `μ`, since the IUs' products add up to `G` (`sum_card_products`), and so
-`F · 2G ≤ size(D)`.
+`F · 2G ≤ size(D)`: the counts here, assembled in reads form in `Proofs.Nci.Reads` (`UpdatedMatMulReads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 
@@ -92,6 +97,34 @@ theorem card_products_le (R : Finset (Fin D.N)) :
   exact h
 
 open Classical in
+/-- **The products of an IU, by columns**: `R` computes at most `p τ` products at its full positions (Lemma 1) and, at
+the others, at most `E` for each input entry it uses there, one for each row of its multiplication, when every output
+dimension is at most `E`. -/
+theorem card_products_le_columns (R : Finset (Fin D.N)) {E : ℕ} (hE : ∀ ℓ, c.e ℓ ≤ E) :
+    (univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
+        c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ R).card ≤
+      (c.weightsUsed R).card * (univ.filter (c.Full R)).card +
+        E * ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card := by
+  rw [← card_filter_add_card_filter_not fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
+    c.Full R g.2.1, filter_filter, filter_filter]
+  refine Nat.add_le_add (full_positions c R 0 fun _ => Nat.zero_le _).1 ?_
+  rw [mul_comm, ← card_range E, ← card_product]
+  refine card_le_card_of_injOn
+    (fun g => ((⟨g.1, g.2.1, g.2.2.2⟩ : (ℓ : Fin c.L) × Fin c.N × Fin (c.d ℓ)), g.2.2.1.val))
+    (fun g hg => ?_) (fun g _ g' _ h => ?_)
+  · simp only [mem_coe, mem_filter, mem_univ, true_and] at hg
+    simp only [mem_coe, mem_product, Chain.inputsUsed, mem_filter, mem_univ, true_and, mem_range]
+    exact ⟨⟨⟨g.2.2.1, hg.1⟩, hg.2⟩, g.2.2.1.isLt.trans_le (hE _)⟩
+  · obtain ⟨ℓ, t, i, j⟩ := g
+    obtain ⟨ℓ', t', i', j'⟩ := g'
+    simp only [Prod.mk.injEq, Sigma.mk.inj_iff] at h
+    obtain ⟨⟨rfl, h⟩, hi⟩ := h
+    simp only [heq_eq_eq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+    obtain rfl := Fin.ext hi
+    rfl
+
+open Classical in
 /-- **The split entries' contributions** (the draft's proof of its theorem): every output entry an IU contributes to at a
 position that is not full for it is split (Lemma 2), so its products lie in at least two IUs, and the IUs' `Y`s add up
 to at most `2 ∑ (spread − 1)`. -/
@@ -147,101 +180,5 @@ theorem sum_card_products {n : ℕ} (P : Partition D n) :
   exact sum_congr rfl fun _ _ => by ring
 
 end Counting
-
-open Classical in
-/-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
-multiplications"). -/
-theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
-  intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS
-  have hcap : ∀ u, (novelReads D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
-    (hP u).2.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)
-  have htotal : ∑ u, (novelReads D (P.gates u) : ℝ) ≤ α * D.D.size D.D.computed := by
-    calc ∑ u, (novelReads D (P.gates u) : ℝ) ≤ ∑ u, α * (D.D.size (P.gates u) : ℝ) :=
-          sum_le_sum fun u _ => (hP u).2
-      _ = α * D.D.size D.D.computed := by
-          rw [← mul_sum]
-          congr 1
-          exact_mod_cast P.sum_card_gates
-  rcases Nat.eq_zero_or_pos c.G with hG | hG
-  · rw [hG, Nat.cast_zero, mul_zero, mul_zero]
-    exact Nat.cast_nonneg _
-  by_cases hdeg : d = 0 ∨ Γ = 0
-  · have hF : F α (α * Γ) b_w b_a d ≤ 0 := by
-      unfold F
-      refine mul_nonpos_of_nonneg_of_nonpos (by positivity) (Real.iSup_nonpos fun μ => min_le_of_left_le ?_)
-      rcases hdeg with rfl | rfl <;> simp
-    exact (mul_nonpos_of_nonpos_of_nonneg hF (by positivity)).trans (Nat.cast_nonneg _)
-  rw [not_or] at hdeg
-  have hdpos : (0 : ℝ) < d := by exact_mod_cast Nat.pos_of_ne_zero hdeg.1
-  have hK : 0 < α * Γ := mul_pos hα (by exact_mod_cast Nat.pos_of_ne_zero hdeg.2)
-  have hGr : (0 : ℝ) < c.G := by exact_mod_cast hG
-  obtain ⟨s, hsum, hs⟩ := hPS n P fun u => ⟨(hP u).1, hcap u⟩
-  have hreads := fun u => iu_reads D c Γ (α * Γ) b_w b_a d hd ha.le hA (P.gates u) (P.gates_subset_computed u)
-    (hP u).1 (hcap u)
-  have key : ∀ μ ∈ Set.Ioo (0 : ℝ) 1, min ((1 + √μ) ^ 2 * (b_w * b_a * d / (α * Γ)))
-      (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / (α * Γ)))) * c.G ≤ α * D.D.size D.D.computed := by
-    intro μ hμ
-    have hY : (∑ u, (#(outputsOther c (P.gates u)) : ℝ)) ≤ 2 * ∑ u, (s u : ℝ) := by
-      exact_mod_cast (sum_card_outputsOther_le c P).trans (Nat.mul_le_mul_left 2 hsum)
-    have hcap' : ∀ u ∈ (univ : Finset (Fin n)), b_w * (#(c.weightsUsed (P.gates u)) : ℝ) +
-        b_a * (d * (#(univ.filter (c.Full (P.gates u))) : ℝ) +
-          #((c.inputsUsed (P.gates u)).filter fun x => ¬ c.Full (P.gates u) x.2.1)) ≤ α * Γ :=
-      fun u _ => (hreads u).trans (hcap u)
-    have hg : ∀ u ∈ (univ : Finset (Fin n)),
-        (#(univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
-          c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ P.gates u) : ℝ) ≤
-        #(c.weightsUsed (P.gates u)) * #(univ.filter (c.Full (P.gates u))) +
-          √(#(c.weightsUsed (P.gates u)) * #((c.inputsUsed (P.gates u)).filter fun x => ¬ c.Full (P.gates u) x.2.1) *
-            #(outputsOther c (P.gates u))) :=
-      fun u _ => card_products_le c (P.gates u)
-    have h₁ : ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) +
-        b_a * (d * (#(univ.filter (c.Full (P.gates u))) : ℝ) +
-          #((c.inputsUsed (P.gates u)).filter fun x => ¬ c.Full (P.gates u) x.2.1))) ≤ α * D.D.size D.D.computed :=
-      (sum_le_sum fun u _ => hreads u).trans htotal
-    have h₂ : ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a / 2 * #(outputsOther c (P.gates u))) ≤
-        α * D.D.size D.D.computed :=
-      calc ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a / 2 * #(outputsOther c (P.gates u)))
-          = ∑ u, b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a / 2 * ∑ u, (#(outputsOther c (P.gates u)) : ℝ) := by
-            rw [sum_add_distrib, mul_sum]
-        _ ≤ ∑ u, b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a * ∑ u, (s u : ℝ) := by
-            have : b_a / 2 * ∑ u, (#(outputsOther c (P.gates u)) : ℝ) ≤ b_a * ∑ u, (s u : ℝ) :=
-              calc b_a / 2 * ∑ u, (#(outputsOther c (P.gates u)) : ℝ) ≤ b_a / 2 * (2 * ∑ u, (s u : ℝ)) :=
-                    mul_le_mul_of_nonneg_left hY (by positivity)
-                _ = b_a * ∑ u, (s u : ℝ) := by ring
-            linarith
-        _ = ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a * s u) := by
-            rw [sum_add_distrib, mul_sum]
-        _ ≤ ∑ u, (novelReads D (P.gates u) : ℝ) := sum_le_sum fun u _ => hs u
-        _ ≤ α * D.D.size D.D.computed := htotal
-    have h := min_mul_sum_le_reads univ hw ha hdpos hK hμ.1.le hμ.2.le (fun _ _ => Nat.cast_nonneg _)
-      (fun _ _ => Nat.cast_nonneg _) (fun _ _ => Nat.cast_nonneg _) (fun _ _ => Nat.cast_nonneg _) hcap' hg h₁ h₂
-    refine le_trans ?_ h
-    have hprod : (c.G : ℝ) = ∑ u, (#(univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
-        c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ P.gates u) : ℝ) := by
-      exact_mod_cast (sum_card_products c P).symm
-    rw [hprod]
-  have hsup : (⨆ μ : Set.Ioo (0 : ℝ) 1, min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / (α * Γ))
-      (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / (α * Γ)))) ≤ α * D.D.size D.D.computed / c.G := by
-    have : Nonempty (Set.Ioo (0 : ℝ) 1) := ⟨⟨1 / 2, by norm_num, by norm_num⟩⟩
-    refine ciSup_le fun μ => ?_
-    rw [le_div_iff₀ hGr]
-    have e₁ : (1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / (α * Γ) = (1 + √(μ : ℝ)) ^ 2 * (b_w * b_a * d / (α * Γ)) := by
-      ring
-    have e₂ : √2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / (α * Γ)) =
-        √2 * (1 + √(μ : ℝ)) * √(1 - μ) * (b_a * √(b_w / (α * Γ))) := by
-      ring
-    rw [e₁, e₂]
-    exact key μ μ.2
-  have hle : F α (α * Γ) b_w b_a d ≤ D.D.size D.D.computed / (2 * c.G) := by
-    unfold F
-    calc 1 / (2 * α) * _ ≤ 1 / (2 * α) * (α * D.D.size D.D.computed / c.G) :=
-          mul_le_mul_of_nonneg_left hsup (by positivity)
-      _ = D.D.size D.D.computed / (2 * c.G) := by
-          field_simp
-  rwa [le_div_iff₀ (by positivity)] at hle
-
-/-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"). -/
-theorem Training : Guarantees.Training :=
-  training_of_updatedMatMul UpdatedMatMul
 
 end Nci.SecurityProofs

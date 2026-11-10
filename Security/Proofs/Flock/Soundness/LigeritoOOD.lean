@@ -1,7 +1,20 @@
-import Proofs.Flock.Soundness.LigeritoLevels
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.Ligerito
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
-# Out-of-domain binding (PROTOCOL.md §13.3 step 6)
+# Out-of-domain binding (`Flock.Ligerito` step 6)
 
 After a level's folds, the prover commits the next level's split table and answers two
 out-of-domain samples: the table's multilinear extension at two uniform points of `F^μ`
@@ -11,6 +24,8 @@ out-of-domain samples: the table's multilinear extension at two uniform points o
 elements both match the answers with probability at most `pairs(L)·(μ/|F|)²`
 (`value_twoOod_collide_le`), and at most one list element survives the samples.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

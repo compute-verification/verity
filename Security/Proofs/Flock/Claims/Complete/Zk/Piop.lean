@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Prover.Piop
-import Proofs.Flock.Claims.Complete.Zk.Tape
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Piop
+public import Flock.Zk
 
 /-!
 # The masked prover's zerocheck and lincheck
@@ -8,9 +10,11 @@ Live PROTOCOL.md §1 and §4 from the prover's side: `zerocheckP` and `lincheckP
 `v + h_i`, `h_i` its pad at the layout's index (`Zk.PadLayout`), and the pads' root absorbed after the zerocheck's label
 (`LABEL_PADS`), as `Zk.replayWith` reads them. The prover computes on the true values; what it absorbs and sends is
 masked, so its coins are the verifier's. `final_c` is sent masked and absorbed only by the inner proof. Each returns
-the masked proof part and the true `ZcOut`, `LcOut`, from which the ring switch's claims are drawn (their points are
+the masked proof part and the true `ZcOut`, `LcOut`, from which the ring switch's claims are sampled (their points are
 the coins', their values unused).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

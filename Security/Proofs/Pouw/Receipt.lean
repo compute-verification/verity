@@ -1,12 +1,15 @@
-import Models.Pouw.Guarantees.Receipt
-import Proofs.Pouw.Receipt.Duo
-import Proofs.Pouw.Receipt.Window
-import Proofs.Pouw.Receipt.Li
-import Proofs.Pouw.Receipt.Fx1
-import Proofs.Pouw.Receipt.Run
-import Proofs.Pouw.Receipt.DuoReceipt
-import Proofs.Pouw.Receipt.AtState
-import Proofs.Pouw.Receipt.Xor
+module
+
+public import Definitions.Pouw.Guarantees.Receipt
+public import Proofs.Pouw.Receipt.Duo
+public import Proofs.Pouw.Receipt.Window
+public import Proofs.Pouw.Receipt.Li
+public import Proofs.Pouw.Receipt.Fx1
+public import Proofs.Pouw.Receipt.Run
+public import Proofs.Pouw.Receipt.DuoReceipt
+public import Proofs.Pouw.Receipt.AtState
+public import Proofs.Pouw.Receipt.Xor
+public import Proofs.Pouw.Lemmas.Receipt
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees
@@ -14,7 +17,7 @@ import Proofs.Pouw.Receipt.Xor
 duo's four words anywhere in a run, its checkpoints every four words and the kernel of its long runs are in
 `Receipt/Window.lean`.
 
-Each statement of `Models/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
+Each statement of `Definitions/Pouw/Guarantees/Receipt.lean`: duo's words, pairs, triples and quadruples in
 `Receipt/Duo.lean`, the state bijection and runs of any length in `Receipt/Run.lean`, the served receipt in
 `Receipt/DuoReceipt.lean`, fx1's transport of each in `Receipt/Fx1.lean`, and li's half steps and checkpoints in
 `Receipt/Li.lean`.
@@ -23,6 +26,8 @@ Runs at one start state, the counting bound past two words and the served chain'
 `Receipt/AtState.lean`. Two words' all-state XOR kernel, the warp checkpoint's cross-chain cancellation, is in
 `Receipt/Xor.lean`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Receipt
 

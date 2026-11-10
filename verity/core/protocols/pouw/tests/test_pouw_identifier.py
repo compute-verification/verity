@@ -1,4 +1,4 @@
-"""The proof's identifier v1 (`verity.core.protocols.pouw.identifier`, PROTOCOL.md "The proof's identifier (v1)"): every pinned case
+"""The proof's identifier v1 (`verity.core.protocols.pouw.identifier`): every pinned case
 recomputed from its inputs byte for byte, the vectors cover every named scheme, one field changed changes the bytes, the
 bytes are RFC 8785 (restated here and checked against it, and written out literally once), and bad input is refused by
 name."""
@@ -14,7 +14,7 @@ import identifier_vectors as V
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.protocols.pouw.schemes import SCHEMES, get
 
 PINNED = json.loads(V.OUT.read_text())
 BY_CASE = {c["case"]: c for c in PINNED["cases"]}
@@ -81,6 +81,10 @@ def test_the_vectors_cover_every_named_scheme():
     assert {c["scheme"] for c in PINNED["cases"]} == set(SCHEMES)
 
 
+def test_the_identifier_names_exactly_the_registered_schemes():
+    assert I.SCHEMES == tuple(SCHEMES)
+
+
 def test_the_64_bit_fields_are_exact_decimal_strings():
     """As JSON numbers they would be IEEE 754 doubles, and 2^53 + 1 would read back as 2^53."""
     got = [(u["index"], u["weight"]) for u in BY_CASE["pearl-c-nvfp4-v0-u64"]["workload"]["matmuls"]]
@@ -94,7 +98,7 @@ def test_the_matmuls_are_in_declaration_order():
 
 
 def variants():
-    """(what changed, scheme, epoch): the base, and the base with exactly one thing changed."""
+    """(what changed, scheme, execution phase): the base, and the base with exactly one thing changed."""
     yield "base", "pearl-c-h100-v1", build()
     for name in SCHEMES:
         if name != "pearl-c-h100-v1":
@@ -154,10 +158,15 @@ def test_a_scheme_is_named_by_its_registered_name():
         assert I.identifier_bytes(get(name), epoch) == I.identifier_bytes(name, epoch)
 
 
-@pytest.mark.parametrize("salt", [b"", b"\0" * 31, b"\0" * 33, "00" * 32, bytearray(32)])
-def test_a_salt_that_is_not_32_bytes_is_refused(salt):
-    with pytest.raises(DomainError, match="the salt is 32 bytes"):
+@pytest.mark.parametrize("salt", [b"", b"\0" * 31, b"\0" * 33, b"\0" * 63, b"\0" * 65, "00" * 32, bytearray(32)])
+def test_a_salt_that_is_not_32_or_64_bytes_is_refused(salt):
+    with pytest.raises(DomainError, match="the salt is 32 bytes, or a certified epoch's 64"):
         I.identifier_v1("pearl-c-h100-v1", build(salt=salt))
+
+
+def test_a_certified_epochs_64_byte_salt_is_named_whole():
+    salt = bytes(range(64))
+    assert I.identifier_v1("pearl-c-h100-v1", build(salt=salt))["salt"] == salt.hex()
 
 
 @pytest.mark.parametrize("scheme", ["ncp-v9", "", "NCP-V1", "pearl-c-h100-v1 ", None, object()])

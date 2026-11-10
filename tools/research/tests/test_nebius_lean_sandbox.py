@@ -438,8 +438,8 @@ PLANTED = {"a link to the key": os.symlink, "a second name of the key": os.link,
 
 @pytest.mark.parametrize("plant", PLANTED.values(), ids=PLANTED)
 def test_a_lock_that_isnt_a_plain_file_is_refused_and_left_as_it_was(host, as_root, plant, capsys):
-    """The red team's F1 on #1011: root opened lean-build-0.lock through whatever research left there and gave what it opened
-    research and 0664, so a link to /etc/verity/lean-cache.env made the cache's key research's."""
+    """Root must not open lean-build-0.lock through whatever research left there and give what it opened research and 0664: a
+    link to /etc/verity/lean-cache.env would make the cache's key research's."""
     key = _key(host.tmp)
     before = key.stat()
     lock = host.locks / "lean-build-0.lock"
@@ -707,7 +707,7 @@ def _unit(name: str) -> configparser.ConfigParser:
 def test_the_daily_service_runs_the_publisher_as_root_bounded_and_its_timer_fires_at_0615_utc():
     svc, timer = _unit("vy-lean-cache-daily.service"), _unit("vy-lean-cache-daily.timer")
     assert dict(svc["Service"]) == {"Type": "oneshot", "ExecStart": "/usr/local/lib/vy-lean-cache/run-daily",
-                                    "TimeoutStartSec": "3h", "Nice": "15", "IOSchedulingClass": "idle"}
+                                    "TimeoutStartSec": "20h", "Nice": "15", "IOSchedulingClass": "idle"}
     assert (svc["Unit"]["RequiresMountsFor"], svc["Unit"]["AssertPathIsMountPoint"]) == ("/build /workspace", "/build")
     assert dict(timer["Timer"]) == {"OnCalendar": "*-*-* 06:15:00 UTC", "AccuracySec": "1min", "Persistent": "false"}
     assert dict(timer["Install"]) == {"WantedBy": "timers.target"}

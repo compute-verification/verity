@@ -4,13 +4,18 @@ register passes only at that registration (the first entry reading the value; th
 R's tops `rec-top-stacked-L<l>` passes only where the shared rows register them. A port reading a value the shared rows
 do not register, other than R's tops, is not checked here.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.SharedRows
 
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 64) (domain : UInt8 := 7)
     (reads : Array (Option Nat) := #[some 0]) : Registered.Port :=
-  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[domain]⟩, reads }
+  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[domain]⟩, readsRel := reads }
 
 def level : VStar.Stmt := .recOpenStacked 1 16 4 53
 

@@ -1,4 +1,4 @@
-// One-side-peeled noise (RS-D2F, note:20261016T0001Z-draft-rs-d2-attention-lowrank-peel) on sm_120a. For Y = A B^T
+// One-side-peeled noise on sm_120a. For Y = A B^T
 // (A m x k, B n x k, problems stacked in rows as fgemm.cu's Args batch): A' = A + U W^T with U (m x 32, {±1..±8}, shared by
 // the batch) and W stacked identities, so A'_ik = A_ik + U_{i, k mod 32}; B' = B + F with F fresh ±1 (sha_noise.cuh's pm1,
 // B's tag); the prover commits the stride-32 prefix sums of A' B'^T and serves A B'^T = A' B'^T - U S^T, S = W^T B'^T
@@ -30,7 +30,7 @@
 
 constexpr uint32_t U_TAG = 6;
 constexpr int F_TAG = 1;   // pm1, B's side
-// B's noise word from F's pm1 word: F, or with -DLP_DITHER decision 29's dither b = (1 - F) / 2 in {0, 1} from the same coin
+// B's noise word from F's pm1 word: F, or with -DLP_DITHER the dither b = (1 - F) / 2 in {0, 1} from the same coin
 // bits (B' = B + b, the served X = floor(x / s) + b)
 #ifdef LP_DITHER
 DEV uint32_t fb_word(uint32_t w) { return (w >> 1) & 0x01010101u; }

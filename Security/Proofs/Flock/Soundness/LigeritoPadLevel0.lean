@@ -1,6 +1,22 @@
-import Proofs.Flock.Soundness.PadCode
-import Proofs.Flock.Soundness.LigeritoPhase
-import Proofs.Flock.Soundness.Model.LigeritoPad
+module
+
+public import Definitions.Flock.LigeritoPad
+public import Proofs.Flock.Soundness.LigeritoDecode
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.PadCode
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LigeritoWeights
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.NovelBasis
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # The padded level 0: lane rounds, extra lanes, and decoding
@@ -20,6 +36,8 @@ The pieces of `ligeritoPad`'s level 0 that differ from `ligerito`'s:
   column agrees with the encoding of `G` on `(1 − γ')·2^d` positions, then `G` is `padFold` of a
   family in the list. The padding correction `ybar` is then the family's folded padding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -87,7 +105,7 @@ theorem prCoin_affine_le (a c : K) (ha : a ≠ 0) :
     have hdeg : (Polynomial.C a + Polynomial.C c * Polynomial.X).natDegree ≤ 1 := by
       refine (Polynomial.natDegree_add_le _ _).trans (max_le (by simp) ?_)
       exact (Polynomial.natDegree_C_mul_le _ _).trans (by simp)
-    refine (prCoin_mono fun r h => ?_).trans ((prCoin_eval_eq_zero_le _ hP).trans ?_)
+    refine (prCoin_mono fun r h => ?_).trans ((Verity.Game.prCoin_eval_eq_zero_le _ hP).trans ?_)
     · simp only [Polynomial.eval_add, Polynomial.eval_C, Polynomial.eval_mul, Polynomial.eval_X]
       rw [mul_comm]; exact h
     · gcongr

@@ -1,10 +1,26 @@
-import Proofs.Flock.Claims.Complete.Prover.Ligerito
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.VBridge.Family.Encode
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The honest prover's session: the reps, the proof files and the record
 
-PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`verifyWithM`).
+`Flock.Tags`, `Flock.Record`, `Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Statement` from the prover's side, for the plain verifier (`verifyWithM`).
 
 * **A rep** (`repP`): zerocheck, lincheck, the ring switch on `abcClaims ++ extras`, then Ligerito on the table's
   level-0 commitment for the batched claim `T`, from the rep's own transcript (`Transcript.init #[] domain`). The proof
@@ -17,11 +33,14 @@ PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`
   `hello` (the statement's, or under a keyed coin tree its `Hello` with a zero nonce, canonical, and a `coin_tree` of a
   zero key and root), `config.require_link`, the exchange link (`Σ` as `root_F`, each `root_B`, the points, `y = 0`),
   the statement's `unit_draw`, every rep stream's rounds with their coins and retained bytes, and every digest the
-  record binds (`root_b_*`, `root_f_*`, `msg_*`, `root_*`, `link_*`, `proof_*`) through the hashes.
+  record binds (`root_b_*`, `root_f_*`, `msg_*`, `root_*`, `link_*`, `proof_*`) through the hashes, printed by the
+  total `printJ` (the bytes `Json.compress` prints).
 
-In deployment the coin server writes the record and draws the coin tree's key; here the prover writes what the server
+In deployment the challenger's live-coin part writes the record and flips the coin tree's key; here the prover writes what the server
 would, so the record is the honest server's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -61,7 +80,7 @@ def helloOf (spec : SessionSpec) : V (String × List (String × Json)) :=
   match spec.coinTree with
   | none => pure (spec.hello, [])
   | some ct => do
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Flock.JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce := zeros 64
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     let h ← canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))
@@ -109,7 +128,7 @@ def recordJson (hs : Hashes M) (spec : SessionSpec) (rootB : Array ByteArray) (p
     ("config", Json.mkObj [("require_link", Json.bool true)]), ("link_mode", Json.str "exchange"), ("link", link),
     ("unit_draw", draw), ("streams", Json.arr ss), (s!"link_{dk}", hexJ (← spec.dgWith hs lb)),
     (s!"proof_{dk}", Json.arr pf)] ++ coinTree)
-  pure j.compress
+  pure (printJ j)
 
 /-- **The honest session** on each table's trace and packed table: the level-0 commitments, the link, the rep streams;
 the record and the proof files (`spec.repStreams` order). -/

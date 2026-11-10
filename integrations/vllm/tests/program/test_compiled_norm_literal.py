@@ -1,16 +1,16 @@
-"""compiled_norm_literal: the literal Triton transcription of Inductor's RMSNorm kernels is the compiled rows' norm relation of record.
+"""compiled_norm_literal: the literal Triton transcription of Inductor's RMSNorm kernels is the compiled workloads' norm relation of record.
 
 GPU tests (skipped without CUDA + Triton): on 2048-wide rows (Llama: N a power of two, so torch's IEEE division and Triton's div.full.f32
 agree) the literal at the default executed config must equal the torch model's pinned order `r0=2048 warps=8 chunk=8 sep` bit for bit
-(both matched the real generated kernels on 12.6 M elements each in the R16 07:30Z check); on 1536-wide rows (Qwen) the literal must be
+(both match the real generated kernels on 12.6 M elements each); on 1536-wide rows (Qwen) the literal must be
 a variant of `relation()` and be labelled with the executed/assumed config.  CPU: no CUDA -> no literal variant, torch variants stand."""
 from __future__ import annotations
 
 import pytest
 import torch
 
-from verity_vllm.program.kernels import compiled_norm_literal as lit
-from verity_vllm.program.kernels.compiled_relations import relation
+from verity_vllm.program import compiled_norm_literal as lit
+from verity_vllm.program.compiled_relations import relation
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="literal Triton kernels need CUDA")
 

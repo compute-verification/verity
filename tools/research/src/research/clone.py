@@ -1,7 +1,7 @@
 """`research run --cwd clone`: the workload's own checkout of the source root.
 
 `--cwd source` runs a workload in the source root, which on a machine is the shipped tree <root>/src/<sha>/ that every run of the
-commit shares: a cancelled duplicate's EXIT trap there removed `PKG/.lake/packages` under a live Lean audit (proofs, 3 Oct 2026).
+commit shares: a cancelled duplicate's EXIT trap there can remove `PKG/.lake/packages` under a live Lean audit.
 `--cwd clone` (`clone/SUB`: SUB inside it) runs it in a `git clone --shared` of the source root instead, which borrows the
 source's objects and so costs one checkout (about a second for the repository), detached at the source root's HEAD; on a machine
 that must be the commit the run was shipped for.  The clone lives outside the run dir, so custody never reads it:
@@ -22,18 +22,53 @@ import sys
 import tempfile
 from pathlib import Path
 
-#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles and the fixture map (`.gitattributes`), set in every run clone and
-#: for every git a gate runs (research.gates): a clone's config holds it only after `merge.py --install`, and without it git
-#: merges a record line by line (the queue's own clone, a fresh VM's checkout); a tree from before the tools/verity move has it
-#: at tools/lean/merge.py.  Here, not in gates, because the suites that read clone.py (vllm's, evaluate's) don't read gates.py
+
+def _lean_driver(flag: str = "") -> str:
+    """tools/verity/lean/merge.py's driver for the mode ``flag`` names, as its `driver` writes it (a test holds the two equal):
+    origin/main's copy of tools/verity/lean when the repository has that ref, else the worktree's.  Git runs a driver from the
+    worktree of the side merged into, so an old branch merging main would otherwise merge main's records by its own older
+    rules; a path base_drivers made absolute runs as it is.  The copy is kept per origin/main commit, at
+    <git common dir>/lean-merge/<full sha>/, extracted into a temporary directory beside it and renamed into place, so a
+    killed extraction leaves nothing at the key and of two racing calls one's rename wins and both run that copy; the two
+    newest stay.  Where origin/main resolves and no copy of it extracts, the file is left to git's conflict."""
+    return ("m=tools/verity/lean/merge.py; f=$m; d=; x() { git archive -o \"$1.tar\" \"$s\" -- tools/verity/lean "
+            "':(exclude)tools/verity/lean/tests' 2>/dev/null && "
+            "tar -x -C \"$1\" -f \"$1.tar\" 2>/dev/null && [ -f \"$1/$m\" ]; r=$?; rm -f \"$1.tar\"; return $r; }; "
+            "case $m in /*) ;; *) if s=$(git rev-parse -q --verify 'origin/main^{commit}'); then f=; "
+            "if g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && mkdir -p \"$b\"; then c=$b/$s; "
+            "if [ ! -f \"$c/$m\" ] && t=$(mktemp -d \"$b/.tmp-XXXXXX\"); then x \"$t\" && python3 -c "
+            "'import os, sys; os.rename(*sys.argv[1:])' \"$t\" \"$c\" 2>/dev/null; rm -rf \"$t\"; "
+            "ls -t \"$b\" | grep -E '^[0-9a-f]{40,64}$' | tail -n +3 | while read -r o; do "
+            "mv \"$b/$o\" \"$b/.tmp-gone-$o\" 2>/dev/null && rm -rf \"$b/.tmp-gone-$o\"; done; "
+            "find \"$b\" -maxdepth 1 -name '.tmp-*' -mmin +60 -exec rm -rf {} + 2>/dev/null; fi; "
+            "[ -f \"$c/$m\" ] && f=$c/$m; fi; [ -n \"$f\" ] || { d=$(mktemp -d) && x \"$d\" && f=$d/$m; }; "
+            "[ -n \"$f\" ] || { echo \"lean merge driver: origin/main ($s) resolves, but its tools/verity/lean could not be "
+            "extracted, so this file is left to git's conflict, not merged by the worktree's older copy\" >&2; "
+            "[ -z \"$d\" ] || rm -rf \"$d\"; exit 1; }; fi;; esac; "
+            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
+
+
+#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, pyprojects, the fixture map and the vLLM lints' allowlists
+#: (`.gitattributes`), set in every run clone and for every git a gate runs (research.gates): a clone's config holds it only
+#: after `merge.py --install`, and without it git
+#: merges a record line by line (the queue's own clone, a fresh VM's checkout).  Here, not in gates, because the suites that
+#: read clone.py (vllm's, evaluate's) don't read gates.py
 RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
-                 "merge.lean-audit.driver": 'f=tools/verity/lean/merge.py; [ -f "$f" ] || f=tools/lean/merge.py; python3 "$f" %O %A %B %P',
+                 "merge.lean-audit.driver": _lean_driver(),
                  "merge.lean-imports.name": ".lean: each side's imports (tools/verity/lean/merge.py)",
-                 "merge.lean-imports.driver": "python3 tools/verity/lean/merge.py --lean %O %A %B %P",
+                 "merge.lean-imports.driver": _lean_driver("--lean "),
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
-                 "merge.lakefile-lists.driver": "python3 tools/verity/lean/merge.py --lakefile %O %A %B %P",
+                 "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
                  "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
-                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P"}
+                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
+                 "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
+                                              "(integrations/vllm/tests/lint/merge_allowlist.py)",
+                 "merge.vllm-allowlist.driver": "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P",
+                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
+                                         "(tools/verity/lean/merge.py)",
+                 "merge.lean-caps.driver": _lean_driver("--caps "),
+                 "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
+                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject ")}
 
 
 CWD_CLONE = "clone"
@@ -136,6 +171,20 @@ def _why(r: subprocess.CompletedProcess) -> str:
     return (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
 
 
+def set_drivers(repo: Path) -> list[str]:
+    """Set each `RECORD_DRIVER` key that ``repo``'s own config lacks or holds another value for, and return those keys: one
+    `git config` read when none is.  Refused on a failed read or write."""
+    r = _git(["config", "--local", "--get-regexp", r"^merge\."], repo)
+    if r.returncode not in (0, 1):
+        raise Refused(f"git could not read {repo}'s config: {_why(r)}")
+    have = dict(line.partition(" ")[::2] for line in r.stdout.splitlines())
+    changed = [k for k, v in RECORD_DRIVER.items() if have.get(k) != v]
+    for k in changed:
+        if (r := _git(["config", "--local", k, RECORD_DRIVER[k]], repo)).returncode:
+            raise Refused(f"git could not set {k} in {repo}'s config: {_why(r)}")
+    return changed
+
+
 def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: bool = False) -> str:
     """Clone `source_root` into `dest` (absent), detached at its HEAD, and return that commit.  `commit`: the commit the run is for
     (on a machine, the shipped one), which HEAD must be.  `clean`: refuse a source root with uncommitted or untracked files, which a
@@ -161,10 +210,9 @@ def make(source_root: Path, dest: Path, *, commit: str | None = None, clean: boo
         r = _git(["clone", "-q", "--shared", "--no-checkout", str(src), str(dest)])
         if r.returncode == 0:
             r = _git(["-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head], dest)
-        for k, v in RECORD_DRIVER.items():
-            r = r if r.returncode else _git(["config", k, v], dest)
         if r.returncode:
             raise Refused(f"git could not clone {src} into {dest}: {_why(r)}")
+        set_drivers(dest)
         got = _git(["rev-parse", "HEAD"], dest).stdout.strip()
         st = _git(["status", "--porcelain", "--untracked-files=all"], dest)
         if got != head or st.returncode or st.stdout.strip():

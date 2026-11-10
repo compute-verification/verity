@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.Property
-import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.ForkInnerC
+module
+
+public import Proofs.Flock.Recursive.Property
+public import Proofs.Flock.Recursive.Private
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit's property: its proof and what it rests on
@@ -25,13 +27,15 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
 * the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
-(i) is at the law of the registration's draws (`drawLaw`), nonempty by the element its space comes with. Still taken by
+(i) is at the sampling design of the registration's samples (`drawLaw`), nonempty by the element its space comes with. Still taken by
 the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
-(`honest`) and the obligations on the firewall's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
+(`honest`) and the obligations on the ZK server's code and V*'s staging (`FirewallSends`, `SessionsPublic`,
 `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`); in (i) the obligation that V*'s statements'
 files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code that every session's inputs carry the
 tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 
@@ -40,29 +44,18 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **V*'s staging reads only the inner statement's shape**: two statements of one shape (`shapeOf`: their regions'
-bytes aside) give V* as many outer statements, over one class with as many regions (`execClassAt_shape`). -/
-theorem outerStatementsAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf st') :
-    Flock.Guarantees.outerStatementsAt st = Flock.Guarantees.outerStatementsAt st' := by
-  obtain ⟨hc, hl, -⟩ := execClassAt_shape h
-  show Flock.Guarantees.outerParts (execClassAt st).cls.m (execClassAt st).cls.kLog
-      (2 + 2 * (execClassAt st).regs.length) =
-    Flock.Guarantees.outerParts (execClassAt st').cls.m (execClassAt st').cls.kLog
-      (2 + 2 * (execClassAt st').regs.length)
-  rw [hl, hc]
-
 /-- **A statement of the registration's rows reads a list's first `rt.leaves` commit strings only.** -/
 theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → Ω → H) :
     ReadsBelow rt.leaves (Flock.Guarantees.stmtAt rt stmt) :=
   fun _ _ h ω => congrArg (fun f : Fin rt.leaves → ByteArray => stmt f ω) (funext fun r => h r r.2)
 
-/-- **The recursive audit, as the verifier of record runs it.** -/
+/-- **The recursive audit, as the verifier runs it.** -/
 theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
   intro nT r T CT _ _ n Ω _ _ draw Reg Cm Reg' Reg₂ st Vs zr hCust ish bind rows hob hF dg N σ wmsg Sk cmt msg rt
-    stmt hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
+    stmt _hA3 p path₀ hreg k Rw M hk hRw hM ρ hρ hr hbr
   replace hob := vstarParsesScoped_of hob
   by_cases hT : Typed zr
   swap
@@ -96,7 +89,7 @@ theorem RecursiveAudit : Flock.Guarantees.RecursiveAudit := by
       exact hr R ω t R₂ j _ _ hx'.y₀ S' R'
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
-  rcases zk_sessions_recursive_fork_innerC hA3 (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
+  rcases zk_sessions_recursive_fork_innerC (Flock.Guarantees.custodied zr hCust hT) dg N hk hRw hM hρ hr'
     (Flock.Guarantees.transported zr hCust hT σ) (Flock.Guarantees.hiddenAt st rt stmt) wmsg Sk cmt msg (hbr hT)
     Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
       (execClassAt st).regs (execClassAt st).sch) hin (Nat.succ_pos r) (schedInner_lastFree T CT _ _ _ _)

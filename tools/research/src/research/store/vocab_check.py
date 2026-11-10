@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 from . import vocab

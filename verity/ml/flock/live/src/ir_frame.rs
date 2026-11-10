@@ -1,5 +1,5 @@
-//! `verity/flock-ir-frame/v3`: an IR template's units bound to their frame-v3 rows (lane flock-ir-lowering;
-//! `verity_flock.ir_frame` stages the instance file). One block R1CS for the CPU prover and Flock-CUDA's host-witness mode.
+//! `verity/flock-ir-frame/v3`: an IR template's units bound to their frame-v3 rows
+//! (`verity_flock.ir_frame` stages the instance file). One block R1CS for the CPU prover and Flock-CUDA's host-witness mode.
 //!
 //! A run is `nb` consecutive compressions of one BLAKE3 chunk (a chunk's block count, which the last chunk of a row may have
 //! short, is a multiple of `nb`): run `r` hashes the chunk's blocks
@@ -11,7 +11,7 @@
 //! - every leaf input bit of every unit a copy of the message bit it hashes (the plan's wiring);
 //! - every sub-circuit's constant a copy of the pinned column (compression slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps), all values the verifier's:
+//! Public regions, each opened at two verifier points sampled after the commitment (both reps), all values the verifier's:
 //! - every compression's counter, block_len and flags (bits 1024..1152: the chunk's index in its row, 64, KEYED_HASH |
 //!   CHUNK_START at the chunk's first block | CHUNK_END and, for a row of one chunk, ROOT at its last);
 //! - every run's chaining input (the x-row key for a chunk's first run, else the previous run's output value);
@@ -785,12 +785,8 @@ impl FrameStmt {
             csc_cache: OnceLock::new(),
         };
         let us = 1usize << lay.unit_log;
-        let pad = |rows: &Vec<Vec<usize>>| {
-            let mut r = rows.clone();
-            r.resize(us, Vec::new());
-            SparseBinaryMatrix { num_rows: us, num_cols: us, rows: r.into() }
-        };
-        let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(pad(&net.a))), Box::leak(Box::new(pad(&net.b))));
+        let (pa, pb) = net.padded(us);
+        let (ua, ub): (&'static SparseBinaryMatrix, &'static SparseBinaryMatrix) = (Box::leak(Box::new(pa)), Box::leak(Box::new(pb)));
         let circuit = FrameCircuit { k_log: kl, comp_slots: lay.comp_slots, unit_log: lay.unit_log, unit_pos0: lay.unit_pos0, units: lay.units,
                                      unit: SparseMatrixCircuit::new(ua, ub), da, db };
         Ok(FrameStmt { lay, net, cm, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, regions, circuit, r1cs, digest, key, single, run_at, dummy_cv,

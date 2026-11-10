@@ -1,6 +1,14 @@
-import Proofs.Flock.Soundness.ExecCircuit
-import Proofs.Flock.Soundness.ExecCheck
-import Proofs.Flock.Soundness.ExecLookup
+module
+
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Proofs.Flock.Soundness.ExecLookup
+public import Proofs.Flock.Soundness.ExecParse
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -64,6 +72,7 @@ theorem setupH_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨⟨⟩, hin, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
@@ -287,6 +296,12 @@ theorem netOK_lookup {nm : String} {tb : ByteArray} {n lo bits : ℕ} {net : Net
   have : (0 : ℕ) * WORD = 0 := Nat.zero_mul _
   omega
 
+/-- **Every net fits its slot**, and reads itself at its constant when it has a slot and fits `rd32`'s words: what
+`nets_ok` gives a flat circuit and `parseTmpl_nets_ok` a templated one. -/
+abbrev NetsFit (c : Circuit) : Prop :=
+  ∀ i, NetOK (c.nets.getD i default).2 ∧ (i < c.nets.size → 7 ≤ (c.nets.getD i default).2.unitLog ∧
+    ((c.nets.getD i default).2.unitLog ≤ 32 → ConstRow (c.nets.getD i default).2))
+
 theorem nets_ok {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (i : ℕ) :
     NetOK (c.nets.getD i default).2 ∧ (i < c.nets.size → 7 ≤ (c.nets.getD i default).2.unitLog ∧
       ((c.nets.getD i default).2.unitLog ≤ 32 → ConstRow (c.nets.getD i default).2)) := by
@@ -321,13 +336,17 @@ theorem unit_built {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : Chec
 
 /-! ## Δ's later pairs are input bits -/
 
-theorem unit_range_facts {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) :
+theorem unit_range_facts_of {c : Circuit} (hu : c.unitNet < c.nets.size) (C : CheckFacts c) :
     c.unitRange ∈ c.ranges.toList ∧ c.unitRange.kind = .net c.unitNet ∧ c.unitRange.count = c.g * c.upv := by
-  obtain ⟨hm, hk, h0⟩ := rangeOf_spec (C.one_range _ P.unitNet)
+  obtain ⟨hm, hk, h0⟩ := rangeOf_spec (C.one_range _ hu)
   refine ⟨hm, hk, ?_⟩
   show (c.rangeOf c.unitNet).count = _
   rw [h0]
   exact C.unit_range.2
+
+theorem unit_range_facts {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) :
+    c.unitRange ∈ c.ranges.toList ∧ c.unitRange.kind = .net c.unitNet ∧ c.unitRange.count = c.g * c.upv :=
+  unit_range_facts_of P.unitNet C
 
 theorem perVu_unit {c : Circuit} (C : CheckFacts c) (hur : c.unitRange ∈ c.ranges.toList)
     (hk : c.unitRange.kind = .net c.unitNet) (hcount : c.unitRange.count = c.g * c.upv) (hg : 0 < c.g) :
@@ -336,11 +355,13 @@ theorem perVu_unit {c : Circuit} (C : CheckFacts c) (hur : c.unitRange ∈ c.ran
   rw [hcount] at this
   exact (Nat.eq_of_mul_eq_mul_left hg this).symm
 
-/-- **Every pair Δ writes after its first loop is at an input bit of a net slot.** -/
-theorem deltaIn_inBit {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) {x : ℕ}
-    (hx : DeltaIn c x) : InBit c x := by
-  have hports : ∀ n, ∀ q ∈ (portCols (c.nets.getD n default).2.inGroups).toList,
-      q.1 + q.2 ≤ (c.nets.getD n default).2.inWords * WORD := fun n => (nets_ok P n).1.2.2
+/-- **Every pair Δ writes after its first loop is at an input bit of a net slot**, for a circuit whose nets' ports lie in
+their input rows and whose unit, `sha512x3` and `hm96` nets are among its nets. -/
+theorem deltaIn_inBit_of {c : Circuit}
+    (hports : ∀ n, ∀ q ∈ (portCols (c.nets.getD n default).2.inGroups).toList,
+      q.1 + q.2 ≤ (c.nets.getD n default).2.inWords * WORD)
+    (hu : c.unitNet < c.nets.size) (hs : c.shaNet < c.nets.size) (hh : c.hmNet < c.nets.size) (C : CheckFacts c)
+    {x : ℕ} (hx : DeltaIn c x) : InBit c x := by
   have hrange : ∀ n < c.nets.size, c.rangeOf n ∈ c.ranges.toList ∧ (c.rangeOf n).kind = .net n ∧
       (c.rangeOf n).count = c.g * c.perVu.getD n 0 := by
     intro n hn
@@ -362,16 +383,16 @@ theorem deltaIn_inBit {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : C
     obtain ⟨h1, h2⟩ := hall _ (getElem_mem_toList' hp) _ (getElem_mem_toList' hk)
     have hsz := C.sha_in.1
     have hidx : 2 * ((HmRow.rowSlots c.ports).2[p]!)[k]!.2 + i < 6 := by omega
-    refine hbit _ P.shaNet g hg _ (by rw [C.perVu_sha]; exact h1) _ (getElem_mem_toList' (by rw [hsz]; exact hidx)) t ?_
+    refine hbit _ hs g hg _ (by rw [C.perVu_sha]; exact h1) _ (getElem_mem_toList' (by rw [hsz]; exact hidx)) t ?_
     rw [C.sha_in.2 _ hidx, sha_width _ _ hi]
     exact ht
   · -- a bit of a row's hm96 slot
     obtain ⟨hil, hw⟩ := hm_width C.hm_in hi
-    refine hbit _ P.hmNet g hg p ?_ _ (getElem_mem_toList' hil) t (by rw [hw]; exact ht)
+    refine hbit _ hh g hg p ?_ _ (getElem_mem_toList' hil) t (by rw [hw]; exact ht)
     rw [C.perVu_hm, ← hws]
     exact lt_of_lt_of_le hp (le_nextPow2 _)
   · -- a unit's leaf bit
-    obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+    obtain ⟨hum, huk, huc⟩ := unit_range_facts_of hu C
     have hupv : 0 < c.upv := by
       rcases Nat.eq_zero_or_pos c.upv with h0 | h0
       · rw [huc, h0, Nat.mul_zero] at hk; omega
@@ -408,13 +429,18 @@ theorem deltaIn_inBit {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : C
       c.unit.inWords * WORD := hle
     omega
   · -- a unit's leaf-cut bit
-    obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+    obtain ⟨hum, huk, huc⟩ := unit_range_facts_of hu C
     obtain ⟨he1, he2⟩ := C.cuts e he
-    exact hbit _ P.unitNet g hg _ (by rw [perVu_unit C hum huk huc (by omega)]; exact he1) _
+    exact hbit _ hu g hg _ (by rw [perVu_unit C hum huk huc (by omega)]; exact he1) _
       (getElem_mem_toList' he2) t ht
   · -- a wire's destination bit
     obtain ⟨hd1, hd2, hd3⟩ := C.wires w hw
     exact hbit _ hd1 g hg _ hd2 _ (getD_mem_toList hd3) t ht
+
+/-- **Every pair Δ writes after its first loop is at an input bit of a net slot.** -/
+theorem deltaIn_inBit {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (C : CheckFacts c) {x : ℕ}
+    (hx : DeltaIn c x) : InBit c x :=
+  deltaIn_inBit_of (fun n => (nets_ok P n).1.2.2) P.unitNet P.shaNet P.hmNet C hx
 
 
 /-! ## The accepted statement's layout -/
@@ -452,7 +478,8 @@ theorem layout_of {tags : Tags} {st : Stmt} (P : ParseFacts tags st.c) (hpin : H
     unit_mem := hum
     unit_kind := huk
     unit_count := huc
-    unit_built := hU
+    unit_built := by rw [lunit_flat P.tmpl]; exact hU
+    unit_at := UnitAt.flat P.tmpl hU hUin
     unit_lookup := hUlk
     unit_in := hUin
     unit_const := built_constRow hU
@@ -482,16 +509,15 @@ template instance `g` has its `units_per_vu` unit slots' rows (the unit net's ro
 theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
     Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
-      (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
+      ((setupH_layout ht h).col regs hg) :=
   (setupH_layout ht h).placement regs hg
 
-/-- **A drawn unit's place, from the executable's accept step** (#145's `UnitPlace`, which `loweringSoundB_of_place` and
-#171's `_placed` forms take): template instance `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
+/-- **A sampled proof block's place, from the executable's accept step** (`UnitPlace`, which `loweringSoundB_of_place` and
+the `_placed` forms take): template instance `g`'s stacked unit slots in block `o` of the accepted statement, given the unit's
 instance in the audit circuit, whose inputs on one gate carry one value there (`Layout.Aliased`). -/
 noncomputable def unitPlace_of_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
-    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)

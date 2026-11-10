@@ -1,18 +1,24 @@
-import Flock.Hash
-import Flock.Bytes
-import Identity.Tagged
-import PouwCommit.Tagged
+module
+
+public import Flock.Hash
+public import Flock.Bytes
+public import Identity.Tagged
+public import PouwCommit.Tagged
+public import Identity.Domains.Pouw
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
 
-A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` under the frame's hash: `sha256` (32-byte digests) or
-`sha512` (64). A domain over positions `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
-`H("domain", binding, uint(owner + 2), identity, uint(count))`, `identity` the positions' range identity under the frame's
+A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` under the frame's hash: `sha512` (64-byte digests, the
+default) or `sha256` (32, Pearl-C's h0 format and NCP's, named where it is read). A domain over positions `0 … count-1` is
+`binding` (32 or 64 bytes), `owner ≥ -2`, and its id `H("domain", binding, uint(owner + 2), identity, uint(count))`,
+`identity` the positions' range identity under the frame's
 tagged hash. A tree pads its leaves to a power of two with `H("pad", id, uint rank)`, nodes are
 `H("node", id, uint level, uint index, l, r)`, and an empty tree's root is `H("empty", id)`. Integers are minimal big-endian,
 any size (`natBytes`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 
@@ -22,7 +28,10 @@ open Flock
 inductive Hash where
   | sha256
   | sha512
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Repr
+
+/-- SHA-512, the one hash; `sha256` is only ever named. -/
+instance instInhabitedHash : Inhabited Hash := ⟨.sha512⟩
 
 namespace Hash
 
@@ -134,5 +143,11 @@ def Domain.verify (d : Domain) (root : ByteArray) (rank : Nat) (value : ByteArra
     let (dg, cur) := acc
     (if cur % 2 == 0 then d.node lv (cur / 2) dg sib else d.node lv (cur / 2) sib dg, cur / 2)) (leaf, rank)
   return digest == root
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ("veritor/tagged-sha256/v1" : String) = Domains.TAGGED_SHA256 := rfl
+example : FRAME = Domains.FRAME_V3.toUTF8.push 0 := rfl
+example : ("veritor/indexed-domain/range/v1" : String) = Domains.INDEXED_RANGE := rfl
 
 end PouwCommit

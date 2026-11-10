@@ -1,17 +1,13 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Models.Pous.Assumptions
-import Proofs.Pous.Statements
+module
+
+public import Definitions.Pous.Model.Inc
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
 import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
 
 /-!
 # A3′, the sequential audit from a per-run Lemma A (pinned as `Pous.Guarantees.A3Prime` and `A3PrimeLam`)
@@ -29,6 +25,8 @@ per-block responder. `E` is the event `¬G ∨ ∃ h, G ∧ R_h(s_h, ·)` is rig
    (`pr_seq_le`) gives `((g − 1)/B)^k`.
 2. `Pr[E] ≤ Pr[¬G] + Σ_h Pr[G ∧ …] ≤ Pr[¬G] + |Hist|·Γ`, with `|Hist| = Σ_{j<k} B^j = (B^k − 1)/(B − 1)`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

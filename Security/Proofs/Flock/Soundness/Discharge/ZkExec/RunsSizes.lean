@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A decoded `--zk` proof's lengths
@@ -9,6 +24,8 @@ is a `u64`. The reader is stepped through as `DecodeZL.decodeProof_sizes` steps 
 `DecodeZL`'s `Post` lemmas; after the pair come level 0's hiding messages (an `Option` tag) and the inner proof, whose
 `Y` is a `vecAny` (`yields_vecAny_size`, `post_inner_y`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -43,10 +60,8 @@ theorem post_inner_y : Post Zk.innerReader (fun i => i.y.size < 2 ^ 64) := by
 theorem zk_decode_sizes : ZkDecodeSizes := by
   intro sh bytes zp h
   unfold Zk.decode at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = zp := Except.ok.inj hp
-  rw [← hp']
-  refine (?_ : Post (Zk.reader sh) (fun z => ProofSizes sh z.proof ∧ z.inner.y.size < 2 ^ 64)) p' ⟨_, _, hrun⟩
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
+  refine (?_ : Post (Zk.reader sh) (fun z => ProofSizes sh z.proof ∧ z.inner.y.size < 2 ^ 64)) zp ⟨_, _, hrun⟩
   unfold Zk.reader
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_

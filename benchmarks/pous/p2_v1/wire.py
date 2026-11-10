@@ -1,10 +1,11 @@
-"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames (spec §4, "Audit protocol and wire formats"): the builders the
+"""`p2-audit-wire/v4`, the P2 audit's byte-exact frames (`verity/core/protocols/pous/README.md`, "P2"): the builders the
 vectors are made with, and the reference verifier, `verify_audit`, which reads a setup and one audit transcript and returns
 the exact `FINAL` frame.
 
-A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py` and `verity.ml.randomness`,
-with v4's hashes: every digest is SHA-512's whole 64 bytes, so the commitment, root, epoch id, sibling, transcript hash and
-the frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Unlike the
+A port of the P2 kit's `p2_audit_verifier.py` (`p2-audit-wire/v1`) onto `reference.py`, PoUS's verification tree
+(`verity.core.protocols.pous.verifier`: `MerkleTree`, `path_length`, `verify_path`) and `verity.ml.randomness`, with
+v4's hashes: every digest is SHA-512's whole 64 bytes, so the commitment, root, epoch id, sibling, transcript hash and the
+frame hashes in a record are 64 bytes where v1's were 32; the salt, the audit id and the nonce stay 32 bytes. Unlike the
 kit's, it decodes a public setup's blocks back to the committed `W`, and checks a private setup's declared root against the
 root the verifier built from `W` itself (`private_root`), which it never trusts.
 """
@@ -14,6 +15,8 @@ import hashlib
 import json
 from collections.abc import Mapping, MutableSet, Sequence
 from dataclasses import dataclass
+
+from verity.core.protocols.pous.verifier import MerkleTree, path_length, verify_path
 
 from . import reference as R
 
@@ -40,7 +43,7 @@ RESPONSE_FIXED = D + S + 2 + 8 + 4 + 2
 SETUP_ROOT_BYTES = D + S + 8 + D + 1
 FINAL_FIXED = D + S + 1 + 1 + 2 + 8 + 8 + D + 2
 RECORD_BYTES = 2 + 8 + 8 + 1 + D + D
-"""Body lengths (spec §4's table): AUDIT_OPEN 124, CHALLENGE 138, RESPONSE 112 + n + 64·h, SETUP_ROOT 169,
+"""Body lengths: AUDIT_OPEN 124, CHALLENGE 138, RESPONSE 112 + n + 64·h, SETUP_ROOT 169,
 FINAL 182 + 147·r."""
 
 
@@ -91,39 +94,6 @@ def final_message(epoch: bytes, audit_id: bytes, code: int, delta_ns: int, rtt_n
     n = len(records).to_bytes(2, "big")
     return envelope(FINAL, epoch + audit_id + bytes((code == FAIL_SUCCESS, code)) + n + delta_ns.to_bytes(8, "big")
                     + rtt_ns.to_bytes(8, "big") + th + n + b"".join(records))
-
-
-def path_length(count: int, index: int) -> int:
-    """The exact RFC 9162 sibling count h(index, count)."""
-    if not 0 <= index < count:
-        raise WireError(FAIL_IDENTITY, "index is outside the block population")
-    length = 0
-    while count > 1:
-        split = 1 << ((count - 1).bit_length() - 1)
-        index, count = (index, split) if index < split else (index - split, count - split)
-        length += 1
-    return length
-
-
-def verify_path(root: bytes, count: int, index: int, leaf: bytes, path: Sequence[bytes]) -> bool:
-    """RFC 9162 §2.1.3.2's inclusion-proof verification, with `node` for its hash."""
-    if not 0 <= index < count:
-        return False
-    fn, sn, value = index, count - 1, leaf
-    for sibling in path:
-        if len(sibling) != D or sn == 0:
-            return False
-        if fn & 1 or fn == sn:
-            value = R.node(sibling, value)
-            if not fn & 1:
-                while not fn & 1 and fn != 0:
-                    fn >>= 1
-                    sn >>= 1
-        else:
-            value = R.node(value, sibling)
-        fn >>= 1
-        sn >>= 1
-    return sn == 0 and value == root
 
 
 # --- the verifier ----------------------------------------------------------------------------------------------------------
@@ -309,7 +279,7 @@ def _check_blocks(params: R.Params, bits: int, commitment: bytes, salt: bytes, b
     """Setup blocks against the declared root (3), then decoded: outside the payload profile (5), or to a `W` other than
     the committed one (3)."""
     bps = params.blocks_per_segment
-    if R.root([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]) != root:
+    if MerkleTree([R.leaf(salt, i // bps, i % bps, b) for i, b in enumerate(blocks)]).root != root:
         return FAIL_AUTHENTICATION
     payloads = []
     for i, block in enumerate(blocks):

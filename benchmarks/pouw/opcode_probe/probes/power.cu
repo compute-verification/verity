@@ -1,11 +1,11 @@
-// Clock and power under load (EPS1's eps_clock, note:20261017T0310Z-report-eps1-program): does a program with a lighter
+// Clock and power under load (eps_clock): does a program with a lighter
 // tensor load run at a higher SM clock than the saturated honest kernel under the board's power cap? Every kernel runs
 // one 512-thread block an SM; `--sustain NAME SECONDS` launches it back to back for SECONDS and prints a JSON line a
 // launch: every block's clock64 cycles and %globaltimer ns over the timed loop (their ratio is the SM clock the block
 // actually ran at, whatever NVML reports), the work done, and NVML's SM clock, power and clock-event reasons.
 // `power.sh` runs it under one gpu-lease, at the node's lock and then at the default clocks. The table also gates every
 // kernel's SASS through probe.py like any probe's (`--list`).
-//   p_honest    8 IMMA + the duo fold of their 32 words a lane (honest.cuh), drawn operands
+//   p_honest    8 IMMA + the duo fold of their 32 words a lane (honest.cuh), sampled operands
 //   p_half      4 IMMA + the same fold (half the MMAs)
 //   p_mma       8 IMMA, no fold (tensor only)
 //   p_mma0      8 IMMA on all-zero operands, no fold (the lightest tensor load)

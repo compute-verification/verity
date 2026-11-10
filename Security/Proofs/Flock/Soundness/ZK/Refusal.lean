@@ -1,5 +1,13 @@
-import Proofs.Flock.Soundness.ZK.Cut
-import Proofs.Flock.Soundness.ZK.Session
+module
+
+public import Definitions.Flock.ZK.Cut
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Dist
+public import Proofs.Flock.Soundness.ZK.Session
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.SHVZK
 
 /-!
 # Zero knowledge: Lemma A at every coin vector, up to and including a refusal
@@ -22,13 +30,15 @@ every coin vector, for what the prover sends before it stops (`Cut`):
   views on two tuples of witnesses carrying the public region data, cut where the session stops, are equally distributed.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.ZK
 
 open Finset
 
 -- As in `SHVZK`: the randomness and the view are products of up to fifteen factors.
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 namespace Table
 
@@ -83,7 +93,7 @@ theorem table_prefinal_translate_cut (S : T.Sent) (hS : T.Admits S) (w w' : W) (
     ![(T.Winv r (T.y1 w u r c - T.y1 w' (u + Δ) r c)).1, (T.Winv r (T.y1 w u r c - T.y1 w' (u + Δ) r c)).2] i
   let d₁ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad := fun u => (0, dR u, 0)
   let dv : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → Fin T.nE → F := fun u b r =>
-    T.vals r w u b.2.1 - T.vals r w' (u + Δ) (b.2.1 + dR u)
+    T.vals r w u b - T.vals r w' (u + Δ) (b + d₁ u)
   let d₂ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → (Fin T.nE → F) × F × F :=
     fun u b r => (dv u b r, -(T.ζ r * dv u b r T.ia), -(dv u b r T.ib))
   let d₃ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → (Fin 2 → (Fin T.nE → F) × F × F) →

@@ -11,7 +11,7 @@ store keeps whatever older writers wrote).  `research data vocab` prints the tab
 
 Four groups, by asserter:
 
-    result        the producing lane, about its own result / ledger row (`ledger_to_store`, or `research data label` by hand)
+    result        the producing lane, about its own result / ledger row (the r20 ledger import, or `research data label` by hand)
     verification  an independent verifier, never the producer (a table counts it only when `by` is not a producer)
     evidence      a probe or input-set lane, about a capture / dataset (`tc-evidence/v1`, `dataset-snapshot/v1`, `fixture/v1`)
     approach      the owning lane or its coordinator, about an `approach/v1` record (`research notes claim | approach`); `approach`
@@ -68,7 +68,11 @@ ARM = "arm"
 STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
+OF_RECORD = "of-record"
+RUN_OF_RECORD = "run_of_record"
+GOAL = "goal"
 ABANDONED = "abandoned"
+WITHDRAWN = "withdrawn"
 REPLAY_SET = "replay_set"
 REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
@@ -79,6 +83,8 @@ PIPELINE = "pipeline"
 KERNEL_OUTCOME = "kernel_outcome"
 KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 KERNEL_REASON = "kernel_reason"
+UNIT_LOWERING = "unit_lowering"
+COMPILE_COST = "compile_cost"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -94,6 +100,20 @@ COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artif
 CUSTODY = "custody"                                   # on a run id: whether `research data custody --triage` needs more of it
 CUSTODY_VALUES = ("waived", "never-ran", "needed")
 SOURCE_LOST = "source-lost"                             # on a run id: its exact source (commit + dirty bytes) is gone
+CHALLENGER_KEY = "challenger-key"                     # on a challenger-key/v1 record, by infra: whether verifiers pin its key now
+CHALLENGER_KEY_VALUES = ("current", "retired")
+CHALLENGER_LEDGER = "challenger-ledger"               # on a challenger-ledger/v1|v2 put, by infra's publisher: a head it published
+CHALLENGER_LEDGER_VALUES = ("head",)
+CHALLENGER_PINS = "challenger-pins"                   # on a challenger-pins/v1 put, by infra's publisher: a head it published
+CHALLENGER_PINS_VALUES = ("head",)
+CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v1 put, by infra's publisher: a head it published
+CHALLENGER_MODELS_VALUES = ("head",)
+MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
+MEMORY_LINE_OF_RECORD_PATTERN = r"lean conditional on [A-Z][A-Za-z]*(, [A-Z][A-Za-z]*)*"
+#: What statement C (the line's NoOutsideCompute premise) rests on in a line of record: itself, or the provider's lockdown that grounds it.
+MEMORY_LINE_GROUNDS = ("NoOutsideCompute", "ProviderLockdown")
+#: The file of the ref run's run record a `memory-line-of-record` label is held to (`check_line_of_record`).
+MEMORY_LINE_FILE = "out/auditor_line.json"
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -114,6 +134,7 @@ COMPONENT = "component"
 JOBS = "jobs"
 DTYPE = "dtype"
 STAGED = "staged"
+CIRCUITS = "circuits"
 
 # ---- approach labels: the registry (`research.approaches`), by the owning lane or its coordinator ------------------------------------
 
@@ -133,29 +154,28 @@ UNCITES = "uncites"
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
 COMMIT_MAP_VALUES = ("accepted", "retracted")
-#: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
-#: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
-#: the spelling is copied here; `benchmarks/numerical/tests/bench/test_tables.py` checks the copy against both.
+#: Mirrors `PROOF_CLASSES` in `benchmarks/numerical/python/verity_numerical/bench/contract.py` + `COMPONENT`, the frozen ledger's
+#: (a bucket measured alone is no proof class).  The store imports no bench package (the `research` rule), so the spelling is copied
+#: here; `benchmarks/numerical/tests/bench/test_bench_contract.py` checks the copy.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: Mirrors the Glossary's backend families (`README.md`, "Backend family"), which `bench/views.py` spells as `FAMILY_NAMES`; the
-#: backends' tests check the copy.  A `candidate` label written today names one of these.
+#: The proof systems (AGENTS.md's map).  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
-#: The backend families, then the values `ledger_to_store.candidate` derives from a frozen ledger lane, which recorded labels carry
-#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
-#: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+#: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
+#: tables spell it) and `shared`.  `A`, the ledger import's older spelling (`VALUE_ALIASES`), is read as `A-GKR` and no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
 APPROACH_TYPES = ("scheme", "route", "attack")
 
-# ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
+# ---- old spellings: accepted on read, never written anew ----------------------------------------------------------------
 
-#: label key written -> the key it means.  Writers (`research data label`, `ledger_to_store`) store the canonical key only; readers
-#: (`bench.tables`, `bench.store_tables`, `vocab-check`) map an old key to its canonical one with `canonical_key`.
+#: label key written -> the key it means.  Writers (`research data label`) store the canonical key only; readers (`vocab-check`)
+#: map an old key to its canonical one with `canonical_key`.
 KEY_ALIASES: dict[str, str] = {"notes": NOTE, "verify_note": NOTE, "verifier_note": NOTE, "batch": B, "checker": VERIFIER,
                                "axis": SWEEP, "milestone": ARM, "tree": SOURCE, "release": SOURCE}
 #: (key, value written) -> the value it means.
@@ -163,34 +183,60 @@ VALUE_ALIASES: dict[tuple[str, str], str] = {(CANDIDATE, "A"): "A-GKR"}
 #: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.
 #: `research data label` refuses them (without `--off-vocab`); `vocab-check` lists the ones already written.
 REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
-#: Measurements and run parameters lanes have written as labels (2026-09-22/23).  The number is already in the result (or goes in
+#: Measurements and run parameters lanes have written as labels.  The number is already in the result (or goes in
 #: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
 MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
                     "replicate", "encoder")
-#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/) or the notes
+#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (with `kb` as the lane for kb/) or the notes
 #: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
 #: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
+#: A run, as a label's ref names it: its id, r<YYYYMMDD>-<HHMMSS>-<4 hex>.
+RUN_REF_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: Keys whose label is only read with its ref: the form that ref must take, and what it names.
 REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
     ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
-    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
+    SOURCE_LOST: (NOTE_REF_RE, "the note that says how it was lost (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)"),
+    MEMORY_LINE_OF_RECORD: (RUN_REF_RE, "the auditor_line.py run whose auditor_line.json is the line (its run id, r<YYYYMMDD>-<HHMMSS>-<hex>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
 ANCHOR = "anchor"
 #: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`): a record of who reviewed it, which nothing waits on
-#: (no change waits on a per-head grant, Daniel 8 Oct).
+#: (no change waits on a per-head grant).
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
 #: The owner's word that a pull request is ready at one head (`research queue ready`), which the queue's admission of a single PR
-#: asks for; a train member needs none, since the train's own check is the gate (Daniel, Q14, 6 Oct).
+#: asks for; a train member needs none, since the train's own check is the gate.
 READY = "ready"
+#: A reviewer's verdict on a pull request at one head (`research queue review`): `land` lands it with drive's `land = "review"`
+#: once every member below it has one, `hold` keeps it and everything above it on `next`; the owner's own doesn't count
+#: (on `checked`; `main` follows only to commits whose after-landing run passed).
+REVIEWED = "reviewed"
+REVIEW_VERDICTS = ("land", "hold")
+#: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
+#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires.
+LABEL_AUTH = "label_auth"
+#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it until a time.
+LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
-#: as. No merge needs a statement reviewer (Daniel, 8 Oct); the DM of a changed record is the check.
+#: as. No merge needs a statement reviewer; the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
 #: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (`research merge`).
 LANDED = "landed"
+#: On `task:<key>`, by the executor from its run (`verity tasks run`): its verdict, or error with none (`research.executor`).
+TASK_VERDICT = "verdict"
+TASK_VERDICTS = ("pass", "fail", "error")
+#: On `commit:<sha>`, by drive in shadow mode: its after-landing run's verdicts beside the executor's (`executor.compare`).
+EXECUTOR_SHADOW = "executor_shadow"
+#: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
+#: (`tasks-graph/v1`), whose keys drive reads verdicts under.
+TASKS_GRAPH = "tasks_graph"
+#: On `commit:<sha>`, by the executor: the art: id of the graph/v2 it listed for that commit on a worker (`verity-graph/v2`),
+#: whose keys drive reads results under.
+VERITY_GRAPH = "verity_graph"
+#: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
+TASK_RESULT = "result"
 
 
 def canonical_key(name: str) -> str:
@@ -276,7 +322,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
                                    "hardware) or finite-only (non-finite operands asserted away; Daniel 2026-09-26: an explicit, named choice)", DOMAINS),
     _k(BREAKTHROUGH, GROUP_RESULT, BOOL, "the lane's own flag that the row moves the campaign"),
     _k(LANE, GROUP_RESULT, TEXT, "the lane that produced the result, when the artifact's meta does not carry it (tables read meta.lane first)"),
-    _k(QUESTION, GROUP_RESULT, TEXT, "the research question the job answers, as its lane's research owner named it (Daniel, 30 Sep: every job names one)"),
+    _k(QUESTION, GROUP_RESULT, TEXT, "the research question the job answers, as its lane's research owner named it (every job names one)"),
     _k(CITED_BY, GROUP_RESULT, TEXT, "one place that cites the run or artifact as evidence (note:<id>, <repo>#<n>, a doc path): a lane marks what it must never lose"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
     _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
@@ -285,6 +331,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
        "approach record, the <campaign>/<slug> that replaces it"),
+    _k(OF_RECORD, GROUP_RESULT, BOOL, "the lane's word that this run or artifact is the evidence of record for its `goal`; the one it "
+       "replaces gets superseded_by"),
+    _k(RUN_OF_RECORD, GROUP_RESULT, TEXT, "on a run or artifact: the table record it belongs to, by the record's name (the served "
+       "table's `Protocol.record`, such as commit); an artifact so labelled names its runs in its `runs` meta; a target's latest "
+       "label wins", pattern=r"[a-z0-9][a-z0-9-]*"),
+    _k(GOAL, GROUP_RESULT, TEXT, "the outcome or done-condition the run or artifact is evidence for, as its lane names it (O1-live, O2-proof)"),
     _k(REPLAY_SET, GROUP_RESULT, TEXT, "the replay set a run or artifact belongs to, as AREA/TIER: TIER re-verify (its preserved records "
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
        "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
@@ -293,6 +345,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
+    _k(WITHDRAWN, GROUP_RESULT, TEXT, "the artifact's blobs were deleted from the shared store (`research data withdraw`) because "
+       "they held values that must never be shared, in a few words; --ref names the issue. Its manifest stays, so a citation "
+       "still resolves and `fetch` reports the payload gone"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
        "the cell it belongs to; the cell lists every attempt with its deviation (IX1)"),
     _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),
@@ -303,6 +358,18 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
        "superseded); the latest label wins", KERNEL_OUTCOMES),
     _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
+    _k(UNIT_LOWERING, GROUP_RESULT, TEXT, "on a `benchmarks/unit_lowering` run, by its lane: the leaderboard's row, a JSON object "
+       "(--value-json) {unit tile|lane|combine, k, tile [R, C], form flat|structural, peak_gib, wall_min, ands, bytes, k_log, "
+       "guard pass|fail|n/a, approach, commit branch@sha}"),
+    _k(COMPILE_COST, GROUP_RESULT, TEXT, "on a `benchmarks/compile_cost` run, by its lane: its record, a JSON object (--value-json) "
+       "{window, layers, wall_min, peak_gib, root_nodes, digests [16-hex prefixes], workload, guard pass|fail|n/a, commit branch@sha}"),
+    _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
+       "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
+       "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
+       "its order, which must name NoOutsideCompute (statement C in full, a premise of LineHeld) or ProviderLockdown (the provider's "
+       "lockdown that grounds it); `research data label` reads the file from the ref run's record and refuses a label that isn't "
+       "its (`check_line_of_record`). Labels up to gate run 10's (lean; credited-..., off-vocab) predate the rule",
+       pattern=MEMORY_LINE_OF_RECORD_PATTERN),
     # verification
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
        "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
@@ -320,19 +387,55 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
        "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
        "the latest label wins", CUSTODY_VALUES),
+    _k(CHALLENGER_KEY, GROUP_VERIFICATION, ENUM, "on a challenger-key/v1 record, by infra: whether it names the auditor host's signing key "
+       "that verifiers pin now (current) or one no longer signing (retired); the latest label wins", CHALLENGER_KEY_VALUES),
+    _k(CHALLENGER_LEDGER, GROUP_VERIFICATION, ENUM, "on a challenger-ledger/v1|v2 artifact, by infra's publisher (publish.sh): a head of "
+       "the auditor host's ledger it published, each an extension of the one before; the label isn't authenticated, so a "
+       "verifier checks every published head under the pinned key and refuses two that don't extend one another",
+       CHALLENGER_LEDGER_VALUES),
+    _k(CHALLENGER_PINS, GROUP_VERIFICATION, ENUM, "on a challenger-pins/v1 artifact, by infra's publisher (publish.sh): a head of "
+       "the auditor host's pins log it published, each an extension of the last; pinned_session reads the newest",
+       CHALLENGER_PINS_VALUES),
+    _k(CHALLENGER_MODELS, GROUP_VERIFICATION, ENUM, "on a challenger-models/v1 artifact, by infra's publisher (publish.sh): a head "
+       "of the auditor host's model registry it published, each an extension of the last; a period-open's weights_root is "
+       "one of its entries'", CHALLENGER_MODELS_VALUES),
     _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
-    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on (Daniel, 8 Oct)",
+    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
-       "again; a train member needs none (Q14)"),
+       "again unless its own change is the same (`StoreLabels`); a train member needs none (Q14)"),
+    _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
+       "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
+       "whose own change is the same",
+       REVIEW_VERDICTS),
+    _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
+       "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
+       "`signed_verdicts` counts such a label only with one"),
+    _k(LABEL_DELEGATION, GROUP_VERIFICATION, TEXT, "on an agent's delegation target (task:<sha512>), by a handle: {schema, lane, "
+       "agent, until, token}, the handle's holder letting that agent authenticate labels as it until then (`research queue "
+       "delegate`)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
-       "needs a statement reviewer (Daniel, 8 Oct)"),
+       "needs a statement reviewer"),
     _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
        "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
+    _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor from its run of `verity tasks run`: pass (passed) "
+       "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; a fail "
+       "stands until an error after it, else the newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),
+    _k(TASKS_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the after-landing task graph "
+       "(`tasks-graph/v1`) it listed for that commit on a worker; drive reads verdicts under its tasks' keys",
+       pattern=r"art:[0-9a-f]{64}"),
+    _k(VERITY_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the graph/v2 (`verity-graph/v2`) it "
+       "listed for that commit on a worker; drive with `executor = \"on\"` reads results under its tasks' keys",
+       pattern=r"art:[0-9a-f]{64}"),
+    _k(TASK_RESULT, GROUP_VERIFICATION, TEXT, "on task:<key>, by the executor's worker that ran a graph/v2 task (`verity graph run`): "
+       "its result/v1 document, pass or fail (an error is never one); a key with any fail is failed (`research.executor.fold_results`)"),
+    _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
+       "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
+       "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -355,6 +458,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(STAGED, GROUP_EVIDENCE, TEXT, "on ckpt:<repo>@<revision>: the UTC time a host finished staging the checkpoint's weights and checking every "
        "shard's sha256, written by the step that stages them (`verity-vllm records staged`); its ref names the evidence (the staging run, "
        "or host:path of the verify record)"),
+    _k(CIRCUITS, GROUP_EVIDENCE, TEXT, "on a run: the art: id of a fixture/v1 tree holding the circuit files and lookup tables one of its "
+       "sessions proved, under sha512/<hex> (the Lean verifier's --archive layout), so the run can be verified again from the store; one "
+       "label a session (benchmarks/one_stage/a5_tp.sh)", pattern=r"art:[0-9a-f]{64}"),
     # approach
     _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),
     _k(TITLE, GROUP_APPROACH, TEXT, "an approach's title, one line"),
@@ -409,6 +515,23 @@ def check_ref(name: str, ref: str | None) -> str | None:
     if form is None or (ref is not None and form[0].match(ref)):
         return None
     return f"label key {name!r} needs --ref naming {form[1]}" + (f", not {ref!r}" if ref is not None else "")
+
+
+def check_line_of_record(value: Any, doc: Any) -> str | None:
+    """Why `value`, a `memory-line-of-record` label, isn't the line its ref run keeps (`doc`, that run's `MEMORY_LINE_FILE`, None
+    where its record has none), as one line, or None: the file's line_by is lean, its conditional_on names what statement C rests
+    on (`MEMORY_LINE_GROUNDS`), and the value names both as the file has them."""
+    if not isinstance(doc, dict):
+        return f"memory-line-of-record: its ref run's record keeps no {MEMORY_LINE_FILE} to hold the label to"
+    if doc.get("line_by") != "lean":
+        return f"memory-line-of-record: its ref run's line is line_by {doc.get('line_by')!r}, not the Lean's, so it is not of record"
+    cond = doc.get("conditional_on")
+    if not isinstance(cond, dict) or not set(cond) & set(MEMORY_LINE_GROUNDS):
+        return (f"memory-line-of-record: its ref run's {MEMORY_LINE_FILE} names no conditional_on with "
+                f"{' or '.join(MEMORY_LINE_GROUNDS)}, what statement C rests on, so it is not of record")
+    want = "lean conditional on " + ", ".join(cond)
+    return None if value == want else (f"memory-line-of-record={scalar_text(value)!r} isn't its ref run's line, which is {want!r} "
+                                       f"({MEMORY_LINE_FILE}'s line_by and conditional_on)")
 
 
 def suggest(name: str) -> list[str]:

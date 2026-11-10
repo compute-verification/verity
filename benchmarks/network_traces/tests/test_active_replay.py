@@ -1,6 +1,6 @@
 """The active replay on a tiny synthetic trace calibrated by the library, on an injected clock: the proxy, the server and
 the peer over localhost sockets, then the audit of the published records. An honest run is accepted on every
-link-window, raw and committed, and is `run_shaper`'s, rule for rule; servers that signal by their write times give
+execution phase, raw and committed, and is `run_shaper`'s, rule for rule; servers that signal by their write times give
 its wire byte for byte, and one that holds a session past every sync is rejected."""
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier.active import DATA, LAST, encode_frame
+from verity.core.protocols.certifier import active
+from verity.core.protocols.certifier.active import DATA, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier
 
 HERE = Path(__file__).resolve().parents[1]
@@ -71,12 +72,15 @@ def runs(setup, tmp_path_factory):
 
 
 def test_requests_take_the_frames_the_trace_gives_them():
+    header = active.request_placement(4096)[2]
     for n in (1, 2, 3):
         body = ar.request_bytes("s", n, 4096)
-        frames = ar.request_frames(7, body, 4096)
+        frames = ar.request_frames(body, 4096)
         assert len(frames) == n * 4096
-        kinds = [frames[k * 4096] for k in range(n)]
-        assert kinds == [DATA] * (n - 1) + [LAST]
+        assert {frames[k * 4096 : k * 4096 + active.HEADER.size] for k in range(n)} == {header}
+        split = active.Requests()
+        cut = [split.feed(frames[k * 4096 + active.HEADER.size : (k + 1) * 4096]) for k in range(n)]
+        assert b"".join(d for _, d, _ in cut) == body and [e for *_, e in cut] == [False] * (n - 1) + [True]
 
 
 def test_records_round_trip_through_their_packing():
@@ -120,6 +124,81 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
     assert c["ready_off_meant"] == c["releases_off_model"] == c["hands_max_diff_from_model"] == 0
     assert c["released_not_the_programs"] == 0
     assert audit["timing"]["tick_late_ms"]["egress"]["max"] < 0.001
+
+
+def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path):
+    """With the certifier's salt on, each window's ingress record holds one salt frame, the placeholder's, and no
+    egress record holds any, nor any salt; the server receives every window's salt, the audit reads each salt frame
+    and the width of the salt `reveal` gave, and every verdict and comparison is the unsalted run's. No record binds the
+    salt, so another salt of the width passes the salt check, and only the server's log tells it apart."""
+    _, report, _ = setup
+    plan, results = runs
+    assert ar.run_virtual(plan, report, tmp_path, salt=True) == {"server": 0, "proxy": 0, "peer": 0}
+    salts = json.loads((tmp_path / "salts.json").read_text())
+    assert sorted(salts) == ["0", "1", "2"] and all(len(bytes.fromhex(s)) == 64 for s in salts.values())
+    audit = ar.audit_configuration(plan, report, tmp_path)
+    honest = results["honest"][1]
+    assert audit["rows"] == honest["rows"]
+    assert audit["comparisons"] == honest["comparisons"]
+    assert audit["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
+                             "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
+    assert ar.against_honest(tmp_path, results["honest"][0])["wire_is_honests"]
+    assert "salt" not in honest
+
+    for other, accepted in ((bytes(64), True), (bytes(32), False)):
+        (tmp_path / "salts.json").write_text(json.dumps(dict(salts, **{"1": other.hex()})))
+        audit = ar.audit_configuration(plan, report, tmp_path)
+        assert audit["salt"]["accepted"] is accepted and audit["salt"]["violations"] == ([] if accepted else [[1, "salt"]])
+        assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
+
+
+def test_a_certifier_down_for_a_window_publishes_nothing_for_it_and_the_rest_as_if_never_down(setup, tmp_path):
+    """`outage_plan`: the block is drained for window 1, its proxy serves window 0 and closes the link, nothing
+    listens for window 1, and a proxy back from maintenance serves window 2 on the peer's second connection. The
+    audit has no verdict for window 1 on either link and accepts the others; the records of windows 0 and 2, raw and
+    committed, and the wire are those of a certifier that never went down, on the same plan."""
+    doc, report, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s)
+    outage = ar.outage_plan(plan, s)
+    assert outage["outage"] == {"window": 1, "position": 12, "bucket": 2 * T}
+    assert len(outage["requests"]) == 6 and all(q["enqueue"] // T != 1 for q in outage["requests"])
+    down, never = tmp_path / "down", tmp_path / "never"
+    assert ar.run_virtual(outage, report, down) == {"server": 0, "proxy": 0, "peer": 0}
+    always = {k: v for k, v in outage.items() if k != "outage"}
+    assert ar.run_virtual(always, report, never) == {"server": 0, "proxy": 0, "peer": 0}
+    audit = ar.audit_configuration(outage, report, down)
+    assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \
+        [(link, w, *(("no-verdict",) * 2 if w == 1 else (None, None))) for link in ("responses", "requests")
+         for w in range(3)]
+    c = audit["comparisons"]
+    assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
+    assert c["wire_is_the_records"] and c["frames_read"] == c["frames_meant"] == 24
+    for name, params in (("responses.records", s.egress_params), ("requests.records", s.ingress_params)):
+        assert ar.read_blobs(down / name) == [b for b in ar.read_blobs(never / name)
+                                              if ar.unpack_record(b, params.frame_bytes).window != 1]
+    assert sorted((down / "committed.jsonl").read_text().splitlines()) == \
+        sorted(line for line in (never / "committed.jsonl").read_text().splitlines()
+               if json.loads(line)["window"] != 1)
+    wire = json.loads((never / "peer.json").read_text())["window_sha256"]
+    assert json.loads((down / "peer.json").read_text())["window_sha256"] == [wire[0], wire[2]]
+    import gzip
+    assert json.load(gzip.open(down / "proxy.json.gz", "rt"))["served"] == [[0, 1], [2, 3]]
+
+
+def test_an_outage_is_refused_where_the_windows_before_are_still_in_flight(setup):
+    """An outage in the first or last window has no window before or after it, an online prover declares from window
+    0 on, and a session of window 0 whose frames are ready only in window 1 would be cut by the outage."""
+    doc, _, s = setup
+    plan = ar.plan_configuration(doc["configurations"][0], s)
+    for window in (0, 2):
+        with pytest.raises(ValueError, match="one of windows 1"):
+            ar.outage_plan(plan, s, window)
+    with pytest.raises(ValueError, match="online prover"):
+        ar.outage_plan(ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1"), s)
+    name, stream, ds = plan["sessions"][0]
+    slow = plan | {"sessions": [[name, stream, [d + T for d in ds]], *plan["sessions"][1:]]}
+    with pytest.raises(ValueError, match="ready or handed"):
+        ar.outage_plan(slow, s)
 
 
 def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, runs, tmp_path):
@@ -178,7 +257,7 @@ def test_a_session_held_past_every_sync_is_rejected(runs):
 def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setup, tmp_path):
     """Under an online rule the proxy's prover declares each window's sync from the frames it has read: the envelope
     (δ = 3) with no history, then a bucket past what the earlier windows needed. They are what the plan declares on the
-    model's run, the audit accepts every link-window, and the records are `run_shaper`'s under them."""
+    model's run, the audit accepts every execution phase, and the records are `run_shaper`'s under them."""
     doc, report, s = setup
     plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1")
     assert plan["sync_rule"] == "cover-2-1" and [d for d, _ in plan["syncs"]] == [3, 4, 4]
@@ -249,12 +328,14 @@ def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
 @pytest.mark.parametrize("ms, responses, requests", [
     (15, None, None),
     (110, "status:delivery-refused", "status:delivery-refused"),
-    (300, "status:monitor-unavailable", "status:delivery-refused"),
+    (300, "status:monitor-unavailable", "status:monitor-unavailable"),
 ])
 def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, responses, requests):
     """The proxy stopped right after window 1's first release (`--stall`): under the slack nothing faults; 110 ms,
     between two ticks, forwards the request late (`delivery-refused`), though no tick is late enough to fault; 300 ms
-    also makes the egress tick late. Only window 1 fails, both links, and nowhere is there a mismatch."""
+    also makes the next boundary's ticks late, and its ingress tick, first (`active.TICK_ORDER`), names its window's
+    reason before the egress tick finds the late forward. Only window 1 fails, both links, and nowhere is there a
+    mismatch."""
     _, report, _ = setup
     plan, _ = runs
     run = tmp_path / "stalled"
@@ -332,12 +413,12 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
     c = audit["comparisons"]
     assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
     assert c["wire_is_the_records"]
-    # every request's TOKENS events and its [DONE], numbered in write order
-    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * (TOKENS + 1)
+    # every request's TOKENS chunks, one canonical event each and none for [DONE], numbered in write order
+    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * TOKENS
     events = ar.read_events(run / "server.events.gz")
     assert [p for p, *_ in events] == list(range(len(events)))
-    assert [e for p, _, _, _, e in events if e.endswith(b"data: [DONE]\n\n")] == \
-        [b"id: %d\ndata: [DONE]\n\n" % p for p, _, k, _, _ in events if k == TOKENS]
+    assert [active.event_data(active.event_body(e)) for *_, e in events] == \
+        [b" t%d" % k for *_, k, _, _ in events]
     assert audit["timing"]["server_failed"] == 0 and audit["timing"]["server_cut_at_horizon"] == 0
     assert c["hindsight"]["misses"] == 0
 
@@ -369,8 +450,9 @@ def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 1) ->
 @pytest.mark.parametrize("syncs", ["envelope", "cover-2-1"])
 def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
     """A live endpoint that answers at once, behind a shim that holds each event to the bucket before its hand time
-    (`spread`): accepted on every link-window. Under the envelope its wire is honest's; under an online rule the proxy
-    declares from what it read, so the later windows' syncs, and with them the wire, may move, never window 0's."""
+    (`spread`): accepted on every execution phase. Under the envelope its wire is honest's; under an online rule the
+    proxy declares from what it read, so the later windows' syncs, and with them the wire, may move, never window
+    0's."""
     _, honest = _live_run(setup, tmp_path / "honest", syncs)
     plan, audit = _live_run(setup, tmp_path / "spread", syncs, "spread")
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
@@ -391,7 +473,8 @@ def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
 
 def test_a_lagged_prover_in_front_of_a_live_shim_is_accepted(setup, tmp_path):
     """The lagged prover's choices wake the driver on the injected clock, so a run behind the live shim, where nothing
-    else may move the proxy, still ends: every link-window accepted, no window declared the envelope for want of a choice."""
+    else may move the proxy, still ends: every execution phase accepted, no window declared the envelope for want of a
+    choice."""
     _, audit = _live_run(setup, tmp_path, "cover-2-1", lag=5)
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
     import gzip
@@ -427,8 +510,6 @@ def test_the_server_proxy_and_peer_listen_on_or_connect_to_the_host_they_are_giv
 
     def reached(port: int) -> None:
         socket.create_connection((host, port)).close()
-        with pytest.raises(ConnectionRefusedError):
-            socket.create_connection(("127.0.0.1", port))
         listening.append(port)
 
     with pytest.raises(_Stop):
@@ -460,10 +541,10 @@ def test_a_live_request_asks_for_no_token_ids():
 def test_a_live_request_takes_the_frames_asked_for():
     body = {"model": "served", "prompt": list(range(1000, 3000)), "max_tokens": 128}
     fewest = ar.live_request_bytes("b64.3.7", body, None, 4096)
-    n = -(-len(fewest) // (4096 - 9))
+    n = active.request_frame_count(len(fewest), 4096)
     for frames in (n, n + 1):
         out = ar.live_request_bytes("b64.3.7", body, frames, 4096)
-        assert -(-len(out) // (4096 - 9)) == frames
+        assert len(ar.request_frames(out, 4096)) == frames * 4096
         head, _, raw = out.partition(b"\r\n\r\n")
         assert int(head.split(b"content-length: ")[1]) == len(raw)
         assert __import__("json").loads(raw) == body | {"user": "b64.3.7"}

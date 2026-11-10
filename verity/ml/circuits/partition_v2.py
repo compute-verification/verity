@@ -3,7 +3,7 @@
 In v1 (`partition_object`) the partition is a query the verifier evaluates on a circuit it holds.  In v2 the circuit and its
 partition are the prover's: the partition is *advice*, fixed-width rows committed before any coin (hm96-sha512 hiding rows in one
 frame-v3-sha512 tree, `verity.ml.commitments.advice`), and the verifier holds only a statement naming the predicates the
-advice must satisfy.  A proof shows them (the global predicates once per registration, the local ones with each drawn unit);
+advice must satisfy.  A proof shows them (the global predicates once per registration, the local ones with each sampled proof block);
 this module is the reference both statements are checked against.
 
 **Statement** (public; `statement`, `validate`, `digest` = `SHA-512("verity/partition/v2\\0" || canon(statement))`)::
@@ -55,18 +55,18 @@ the header's count up to R_b are all 0.
 * G7 Shapes: each flat entry's classes and their shapes are its units' circuits' (`units.Activation.circuits`), within
   max_gates gates and max_in_bits input bits [shape, unit-too-large].
 
-A width, a covering or a count that a consumer's weighting relies on must hold for every unit, faulty or not; only these global
+A width, a covering or a count that a consumer's weighting relies on must hold for every unit, correct or not; only these global
 predicates give that.  Instances of a Definition are laid out identically, so a check per entry is a check of every activation.
 
-**Local predicates** (`check_unit`, with drawn unit i; `openings` lists the rows it reads):
+**Local predicates** (`check_unit`, with sampled proof block i; `openings` lists the rows it reads):
 
 * L1 Locate: the header, the Call rows a bisection reads, the directory rows and parts rows down the path, then the flat entry's
   owner rows and the unit's shape row [unit-outside, unit-locate]; a filler (n <= i < n_b) is empty.  The rows read depend on
   the Definition holding the unit, never on n;
 * L2 Statement: the circuit of the unit, cut from the program at its place, is the entry's Definition and has the shape the
   entry records [unit-definition, unit-shape];
-* L3 Bind: its inputs and outputs as root gates of the program, the positions its committed values are opened at (`Unit`);
-* L4 Correct: given the committed values (a transcript of root gate -> value), its gates applied to its inputs give its
+* L3 Bind: its inputs and outputs as root gates of the program, the positions its committed values are opened at (`ProofBlock`);
+* L4 Correct: given the committed values (a trace of root gate -> value), its gates applied to its inputs give its
   outputs [unit-incorrect].
 """
 from __future__ import annotations
@@ -79,10 +79,10 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import partition_object as PO
 from .codec import canonical_json, program_digest
-from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, _wide_operands, boundary_widths, call_scope, check_cut,
-                  evaluate_definition, separable)
+from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, boundary_widths, call_scope, check_cut,
+                  evaluate_definition, separable, wide_operands)
 from .partition import RECOMPUTE_RULES, CutVerdict
-from .units import Activation, UnitCircuit
+from .units import Activation, ProofBlockCircuit
 
 FORMAT = "verity/partition/v2"
 ROW_BYTES = 128
@@ -95,6 +95,11 @@ FLAT, PARTS = 1, 2
 OWNERS_PER_ROW, SHAPES_PER_ROW, PAIRS_PER_ROW = ROW_BYTES // 4, ROW_BYTES // 64, ROW_BYTES // 16
 GRID_BITS = 4
 WIDTH = 16
+#: the widest public size class of a proof block's bits out (the claims' `Claims.Sampling.unitClassMax`), provisional: at 16,
+#: `UNIT_CLASSES` is the literal 16-bit limit alone
+UNIT_CLASS_MAX = 262_144
+#: the public size classes, the powers of two from 16 to `UNIT_CLASS_MAX`, ascending (the claims' `sizeClasses`)
+UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length()))
 PARAM_MAX = PO.PARAM_MAX
 
 _KEYS = {"format", "family", "predicates", "units", "advice"}
@@ -116,9 +121,28 @@ def grid(x: int, bits: int = GRID_BITS) -> int:
     return -(-x >> e) << e
 
 
-def definition_digest(fn: Any) -> str:
+def id_digest(fn: Any) -> str:
     """The SHA-512 the advice names a Definition by: of its specialization id, `fn.id`."""
     return hashlib.sha512(b"verity/partition/v2/definition\0" + fn.id.encode()).hexdigest()
+
+
+def unit_class(bits: int) -> int | None:
+    """A unit's size class: the least of `UNIT_CLASSES` that holds its ``bits`` out (`cut.boundary_widths`), None past the widest."""
+    return next((w for w in UNIT_CLASSES if bits <= w), None)
+
+
+class MixedClasses(ValueError):
+    """`build`'s refusal of a partition whose units span more than one size class: the statement's one `width` bounds every
+    unit, so units of several classes need a width per class, which v2's predicates don't state.  ``spans`` maps each class
+    (None past the widest) to the first unit in it, as (Definition id, unit)."""
+
+    def __init__(self, spans: Mapping[int | None, tuple[str, int]]) -> None:
+        self.spans = dict(spans)
+        named = "; ".join(f"{'none' if w is None else w} bits: {d} unit {u}"
+                          for w, (d, u) in sorted(self.spans.items(), key=lambda s: (s[0] is None, s[0] or 0)))
+        super().__init__(f"a v2 private partition's units span {len(self.spans)} size classes ({named}): it holds one class until "
+                         f"its predicates state a width per class, so cut it so that every unit's bits out fall in one of "
+                         f"{UNIT_CLASSES[0]}..{UNIT_CLASSES[-1]}")
 
 
 # --- the advice ------------------------------------------------------------------------------------------------------------------
@@ -134,13 +158,13 @@ class Call:
 
 @dataclass(frozen=True)
 class Entry:
-    definition: str                                   # `definition_digest`
+    definition: str                                   # `id_digest`
     kind: int                                         # FLAT or PARTS
     gates: int                                        # computing gates of one activation
     units: int
     owner: tuple[int, ...] = ()                       # FLAT: a unit per computing gate (`cut.CallGraph` order)
     shape: tuple[int, ...] = ()                       # FLAT: a class per unit, classes numbered in first-use order
-    classes: tuple[str, ...] = ()                     # FLAT: `units.UnitCircuit.shape` per class
+    classes: tuple[str, ...] = ()                     # FLAT: `units.ProofBlockCircuit.shape` per class
     parts: tuple[tuple[int | None, int], ...] = ()    # PARTS: (child entry or None, members) per body node
 
 
@@ -172,7 +196,24 @@ def _members(node: Any) -> int:
 def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[Any, CallGraph], Sequence[int]] | None = None) -> Advice:
     """The advice of `program`'s partition: the cuts of the query `q` (`Q_word` v1 or v2, `Q_call` excluded, or a template query:
     each instance one unit), or of `owners(fn, graph)` (a unit per computing gate of each root Call's Definition, cut flat, one cut
-    per Definition).  Default: `Q_word{16, 32}` v1."""
+    per Definition).  Default: `Q_word{16, 32}` v1.  It refuses a partition whose units span more than one size class
+    (`unit_class`, `MixedClasses`)."""
+    advice, spans = _advice(program, q, owners)
+    if len(spans) > 1:
+        raise MixedClasses(spans)
+    return advice
+
+
+def _build_unchecked(program: Any, q: Mapping[str, Any] | None = None,
+                     owners: Callable[[Any, CallGraph], Sequence[int]] | None = None) -> Advice:
+    """`build` without its refusal of units of several size classes: advice past the builder's scope, as a prover may send it to
+    `check`.  Tests alone call it (`TEST_ONLY` in the repository's `tests/test_boundaries.py`)."""
+    return _advice(program, q, owners)[0]
+
+
+def _advice(program: Any, q: Mapping[str, Any] | None,
+            owners: Callable[[Any, CallGraph], Sequence[int]] | None) -> tuple[Advice, dict[int | None, tuple[str, int]]]:
+    """`build`'s advice, and each size class of its units with the first unit in it (`MixedClasses.spans`)."""
     if q is not None and owners is not None:
         raise ValueError("a query or an owner function, not both")
     bad = PO.order_violation(program)
@@ -191,6 +232,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
     acts: dict[str, Activation] = {}
     index: dict[str, int] = {}
     entries: list[Entry | None] = []
+    spans: dict[int | None, tuple[str, int]] = {}
 
     def graph(fn: Any) -> CallGraph:
         g = graphs.get(fn.id)
@@ -204,7 +246,10 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         if a is None:
             a = acts[fn.id] = Activation(fn)
         shape, classes = _classes(uc.shape for uc in a.circuits(owner))
-        return Entry(definition_digest(fn), FLAT, graph(fn).n, len(shape) if units is None else units, owner, shape, classes)
+        n = len(shape) if units is None else units
+        for u, bits in enumerate(boundary_widths(graph(fn), owner, n)[0]):
+            spans.setdefault(unit_class(bits), (fn.id, u))
+        return Entry(id_digest(fn), FLAT, graph(fn).n, n, owner, shape, classes)
 
     def add(fn: Any) -> int:
         if fn.id in index:
@@ -221,7 +266,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
                 entries[i] = flat(fn, cut.flat, cut.units)
             else:
                 parts = tuple((add(c.fn) if c is not None else None, m) for c, m in cut.parts)
-                entries[i] = Entry(definition_digest(fn), PARTS, cut.gates, cut.units, parts=parts)
+                entries[i] = Entry(id_digest(fn), PARTS, cut.gates, cut.units, parts=parts)
         return i
 
     calls: list[Call] = []
@@ -235,7 +280,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         m = _members(nodes[k])
         calls.append(Call(k, e, m, start))
         start += m * entries[e].units
-    return Advice(program_digest(program), tuple(calls), tuple(entries))
+    return Advice(program_digest(program), tuple(calls), tuple(entries)), spans
 
 
 # --- rows ------------------------------------------------------------------------------------------------------------------------
@@ -607,7 +652,7 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
     canon = p["canonical"]
     for j, fn in sorted(fns.items()):
         en = adv.entries[j]
-        if en.definition != definition_digest(fn):
+        if en.definition != id_digest(fn):
             fail("entry-definition", [j, fn.id])
             continue
         if canon is not None and en.units > evaluate_definition(fn, int(canon["params"]["X"]), G.memo).units:
@@ -745,7 +790,7 @@ def _recomputed(fn: Any, wiring: frozenset[str] = WIRING) -> tuple[list[tuple[in
         key = array("q", [prims.setdefault(g.prim.id, len(prims))])
         operands = 0
         all_const = True
-        for o in (_wide_operands(g, call) if wide else g.operands):
+        for o in (wide_operands(g, call) if wide else g.operands):
             if 0 <= o - lo < n:
                 if o - lo >= j:
                     raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)",
@@ -801,7 +846,7 @@ def _flat_owner(j: int, adv: Advice) -> list[int]:
 
 
 @dataclass(frozen=True)
-class Unit:
+class ProofBlock:
     """Unit `index` at its place: root Call `call` (root-body node `node`), member `member`, the (body node, member) steps down to the
     flat Definition `definition` holding it, the unit `unit` of that entry, its circuit, and the root gates its outputs and inputs
     are (L3: the positions their committed values open at).  `filler`: an index in n..n_b-1, no gates."""
@@ -815,7 +860,7 @@ class Unit:
     entry: int = -1
     unit: int = -1
     definition: str = ""
-    circuit: UnitCircuit | None = None
+    circuit: ProofBlockCircuit | None = None
     base: int = 0
     outputs: tuple[int, ...] = ()
     inputs: tuple[int, ...] = ()
@@ -885,18 +930,18 @@ def _place(program: Any, node: int, member: int, path: Sequence[tuple[int, int]]
     return fn, base
 
 
-def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: Any, acts: dict | None = None) -> Unit:
+def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: Any, acts: dict | None = None) -> ProofBlock:
     """L1-L3 for unit `i`: where it is (from the rows), its circuit cut from the program there, and its outputs' and inputs' root
     gates.  `detail` holds the L2 failures (`unit-definition`, `unit-shape`)."""
     got = locate(st, read, i)
     if got is None:
-        return Unit(i, filler=True)
+        return ProofBlock(i, filler=True)
     k, node, member, path, j, u, en = got
     fn, base = _place(program, node, member, path)
     bad: dict[str, list] = {}
-    if definition_digest(fn) != en.definition:
+    if id_digest(fn) != en.definition:
         bad["unit-definition"] = [[j, fn.id]]
-        return Unit(i, False, k, node, member, tuple(path), j, u, fn.id, None, base, detail=bad)
+        return ProofBlock(i, False, k, node, member, tuple(path), j, u, fn.id, None, base, detail=bad)
     acts = {} if acts is None else acts
     a = acts.get(fn.id)
     if a is None:
@@ -907,11 +952,11 @@ def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: A
     if uc.shape != en.classes[en.shape[u]]:
         bad["unit-shape"] = [[j, u]]
     root = _roots(program, a, base, uc)
-    return Unit(i, False, k, node, member, tuple(path), j, u, fn.id, uc, base, tuple(root[x] for x in uc.outputs),
+    return ProofBlock(i, False, k, node, member, tuple(path), j, u, fn.id, uc, base, tuple(root[x] for x in uc.outputs),
                 tuple(root[x] for x in uc.inputs), bad)
 
 
-def _roots(program: Any, a: Activation, base: int, uc: UnitCircuit) -> dict[int, int]:
+def _roots(program: Any, a: Activation, base: int, uc: ProofBlockCircuit) -> dict[int, int]:
     """Activation-local gate -> root gate, for the unit's gates and every operand they read."""
     out: dict[int, int] = {}
     circ = program.circuit
@@ -927,7 +972,7 @@ def _roots(program: Any, a: Activation, base: int, uc: UnitCircuit) -> dict[int,
 
 def check_unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: Any, values: Mapping[int, int],
                acts: dict | None = None) -> CutVerdict:
-    """L1-L4 for drawn unit `i`: located and cut (`unit`), then its gates recomputed from the committed values `values` (root gate
+    """L1-L4 for sampled proof block `i`: located and cut (`unit`), then its gates recomputed from the committed values `values` (root gate
     -> value) at its inputs and compared with them at its outputs (`unit-incorrect`: the root gates that differ)."""
     try:
         U = unit(st, read, i, program, acts)
@@ -977,6 +1022,7 @@ def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
     raise ValueError(f"no v2 predicates for {q['name']!r} v{q['version']!r}")
 
 
-__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "Call", "Entry",
-           "Advice", "Malformed", "Reader", "Unit", "grid", "definition_digest", "build", "rows", "pad", "decode", "predicates",
+__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "UNIT_CLASS_MAX",
+           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "ProofBlock", "grid", "id_digest",
+           "unit_class", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]

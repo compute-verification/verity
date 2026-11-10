@@ -4,5 +4,14 @@ lean-audit.json merge=lean-audit
 *.lean merge=lean-imports
 # a conflict only in `[[require]]` blocks or a string array (`roots`) merges as a set or list; any other stays git's (merge.py --lakefile)
 lakefile.toml merge=lakefile-lists
+# a conflict only in the ratchet caps' lines (`UNWITNESSED`, `INLINE`) merges as counters; any other stays git's (merge.py --caps)
+tests/test_lean_packages.py merge=lean-caps
+# a conflict only in `[tool.verity.tests]`'s lists (`inputs`, `untraced`, `paths`, `tests`) merges as lists; any other stays git's (merge.py --pyproject)
+pyproject.toml merge=pyproject-test-lists
 # the fixture replica map key by key; a key set two ways refuses (tools/verity/check/merge_map.py)
 fixtures/artifacts.json merge=fixture-map
+# the vLLM lints' shrink-only lists entry by entry; an entry changed two ways refuses (integrations/vllm/tests/lint/merge_allowlist.py)
+integrations/vllm/tests/lint/allowlists/*.json merge=vllm-allowlist
+integrations/vllm/tests/dead_code_keep.json merge=vllm-allowlist
+# the repository's lists (tests/lint/test_repo_*.py), entry by entry with the same driver
+tests/lint/allowlists/*.json merge=vllm-allowlist

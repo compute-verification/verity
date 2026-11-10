@@ -7,7 +7,7 @@
 #   c       one statement: N * K/128 k-step units and N scale-stage slots per VU, the stage returning the outputs
 #   b       two statements joined by a row: b-writer's units return temp and s, b-reader's units are the scale stage
 #   a       two tables with glue: c's unit and stage circuits as tables, every stage port a glue relation (no rows, no --zk)
-# c and b: one loopback session without --zk and one with it (prove.py, all n drawn); the Lean verifier of record on each --zk
+# c and b: one loopback session without --zk and one with it (prove.py, all n sampled); the Lean verifier on each --zk
 # session; for shapes in MU_SELFTEST, c's selftest (every case on a shape in MU_SELFTEST_ALL, else MU_CASES).
 # env: MU_SHAPES="1024:4:4 6144:16:2"  MU_SELFTEST="1024:4:4 6144:16:2"  MU_SELFTEST_ALL="1024:4:4"  MU_CACHE (builds)
 set -uo pipefail
@@ -39,7 +39,8 @@ if j.get('reason') == 'compiler-artifact' and j.get('executable') and j['target'
   cp "$exe" "$D.tmp/flock-live-tests" && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 
-lean_verify() {   # lean_verify D O TAG: the Lean verifier of record on D's --zk session
+lean_verify() {   # lean_verify D O TAG: the Lean verifier on D's --zk session (a shape is no Program's, so
+                  # it is refused for want of one, ProvedScope.NO_PROGRAM, once every check has passed)
   local D=$1 O=$2 tag=$3 s n=$4
   s=$(ls -d "$D"/sessions-zk/*/ 2>/dev/null | tail -1)
   [ -n "$s" ] || { log "  lean $tag: no --zk session"; return; }

@@ -20,19 +20,16 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
+├── auto.py         --on auto: a CPU node's research pool (cpu-1, cpu-5, cpu-3) or node 2's queue
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
 │                   cli_prov (provenance) + canon, ids, model, local, index, remote, remote_s3, kinds, cli (storage)
 ├── telemetry/      the recorded-attempt harness: job.json, status.json, events.jsonl, resources.jsonl, failure.json
-└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), memory guard, pod-side sh/
+└── pods/           RunPod lifecycle (runpod.py), leases (lease.py), budgets.toml and its guard (budgets.py, guard.py), pod-side sh/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
-
-The `telemetry` and `pods` packages were promoted from `veritor` `zk/campaign/` at
-commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
-edited here like the rest of the package.
 
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.
@@ -76,7 +73,8 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait [--wait-max S]] [...] -- CMD...
+                                         # --wait: 20 min at most, then exit 79 (research/waitcap.py)
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
@@ -104,6 +102,8 @@ research merge --mirror [SHA]                                           # main o
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
+research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -113,7 +113,7 @@ its image when the tree is unchanged, and the gate refuses a REF holding a commi
 `old2new SHA`, `check REF` and `build PRE POST` move clones onto it, name images, guard and build the map (`commitmap.py`).
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
-(refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
+(refreshed from a usable remote first) holds an attempt of the tool, default `check`, with `state` done, rc 0,
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
 The attempt's own record and result must agree with the target's declaration: its command (`Tool.command`, in a check slot or
 not, plus check.py's own flags only), a result kind it produces (`check/v1`, never `lean-fast/v1`), a passed verdict and no step
@@ -123,7 +123,7 @@ stores, that every gate refuses each bad attempt in `CANARY` and admits a good o
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
 (so its commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
-passes fast-forwards the target to that exact tree. On a failure it bisects the prefixes to the first ref whose merge breaks it
+passes fast-forwards the target to that exact tree. On a failure it bisects to the first ref whose merge breaks it
 and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
@@ -134,9 +134,9 @@ among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothi
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
-it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
+it). From the remote's copy of the target, not the checkout, it closes each open PR whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
-head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
+head branch unless an open one uses it. With `--push` (the lander's), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
 bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
@@ -149,15 +149,18 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
-
-`research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
-fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
+`research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
+one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
+`checked` whose after-landing run passed every step on the merge gate (`research.drive`); its alarms ring the owner of a slow step, a
+stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`). No PR waits on Daniel (16 Oct) or on a per-head grant (8 Oct). The branch holds the queue's state (each
-merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
-conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
+from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
+merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
+root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+
+The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
@@ -201,10 +204,10 @@ exit 2.
 A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally `port` (22), `user` (root) and
 `rate_usd_per_hour` (the attempts' cost rate), reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
-reaches it. The one such machine is the Nebius server `vy-nebius-1` (`src/research/pods/nebius/`): `launch.sh` brings it up (`--dry-run`
-needs no credentials), `teardown.sh` stops or deletes it, `check.py` is its bootstrap check, `prefetch.py` fills its weight
-cache from `weights.tsv`, and its lease is `sh/lease.sh` with `LEASE_MACHINE_ID` and a stop command in place of RunPod's key.
-Its runs share its GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: one flock per GPU, `CUDA_VISIBLE_DEVICES` set).
+reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `launch.sh` brings one up (`--dry-run`
+needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
+bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
+Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
@@ -254,10 +257,7 @@ launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
 `run.remote.source_transport`). A machine without git, or any failure of that
 path, prints one line and ships the archive stream as above; nothing is ever
-marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. Measured
-from a cloud VM to the control pod: first ship 30 s, a one-commit delta 1.9 s
-of push (15.6 s end to end, mostly ssh handshakes), against about 28 s for the
-stream. The shipped tree is the runner's source root, not
+marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
 used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
@@ -270,13 +270,16 @@ records it (`run.remote.pythonpath`). `research env --source TREE` prints the
 same line for a local checkout. The machine claims the run directory by run id and
 starts the runner detached; re-delivering a launch after an ssh drop finds
 the claim and reports state. The runner's argv carries the workload's command, so a
-`pkill -f` aimed at the workload matches it too: it logs SIGTERM / SIGHUP to
+`pkill -f` aimed at the workload matches it too: it logs SIGTERM/SIGHUP to
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
-(status.json `pgid`), recorded first as a manual cancel, so the run
-classifies `CANCELLED_MANUAL` (on the machine: `kill -TERM -<pgid>`). Never SIGKILL the runner: one killed during
-its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
-any launch refuses if an exclusive holder is live.
+(status.json `pgid`), its cgroup scopes (`cluster-<run>`, `gpu-lease-<pid>`) and its processes outside the group,
+recorded first as a manual cancel (`CANCELLED_MANUAL`). 20 s later the runner SIGKILLs what is left, recorded in status.json
+`scope_end`; so does a stage timeout (`telemetry.scope`); if the runner already logged the workload's exit or is gone, the
+cancel does. A run still in `disk-hold` or `cpu-hold` is withdrawn: its hold ends as a manual cancel and
+refused.json says `Withdrawn` (`withdraw.py`). Never SIGKILL the runner: one killed during
+its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses while any run is live, and
+any launch while an exclusive holder is.
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a
@@ -290,7 +293,8 @@ share one memory cgroup, and `free` describes the host (vyv-v2cpu3: 946 GB
 host, 256 GB cgroup). The machine admits the run only if the cgroup limit, minus
 what is in use (page cache excluded), minus the not-yet-used part of every live
 reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
-`ramlock = DIR` overrides it), is at least N. A reservation is live unless its
+`ramlock = DIR` overrides it), is at least N. They count against the machine's
+outermost limited cgroup (a node's user slice), not the run's. A reservation is live unless its
 pid is gone or its run is terminal. The run then writes
 `research-<run id>.json` there, and the runner removes it at exit. Otherwise the
 run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
@@ -414,19 +418,15 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- The r20 campaign's numbers live in the store. `python -m
-  verity_numerical.bench.ledger_to_store [--store ROOT] [--dry-run]` imports
-  the frozen ledger once (labels on the attempt when the run is in the store,
-  else on a `ledger-row/v1` artifact; red-team verdicts as separate assertions;
-  idempotent). `python -m verity_numerical.bench.store_tables --diff-ledger
-  [--proof-class-by 'red-team-*']` rebuilds the like-for-like table from store
-  queries alone and diffs it row by row against `decision_tables.py`.
+- The r20 campaign's numbers live in the store: the frozen ledger was imported
+  once (labels on the attempt when the run is in the store, else on a
+  `ledger-row/v1` artifact; red-team verdicts as separate assertions).
 - Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in
   the shipped source tree; a `git archive` has no `.git`, so the control side
-  sends the commit/tree it knew as `--source-identity`. The machine publishes
+  sends the commit it shipped (clean) as `--source-identity`. The machine publishes
   to its own `<root>/store`; `research data pull --from MACHINE RUN --project P`
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
@@ -462,17 +462,17 @@ expired, `low` or `normal`, and preserved or regenerable, it holds no nested rec
 read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
 count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
 for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
-unowned, unpreserved bitsets that nobody could decide to delete.
+no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of unowned,
+unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
 path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
-on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
-lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
+outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
+refused with the true owner's name.
 
 ### Slack
 
@@ -496,7 +496,8 @@ Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
 the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
-`tests/slack_routing_vectors.json` pins.
+`tests/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
+another app's bot posting under a handle's name rings no one.
 
 ### Notes and evidence over MCP
 
@@ -537,7 +538,7 @@ SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
-budgets, the daily render and scheduled runs (`notes.py`). Three flags let it run on any
+budgets and scheduled runs (`notes.py`). Three flags let it run on any
 always-on host (`steward.py`):
 
 - `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
@@ -553,8 +554,7 @@ always-on host (`steward.py`):
 - `research notes service systemd|launchd` prints the service definition
   (restart on exit and after a reboot; `watch --lease --standby`).
 
-Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[render]]` entries (the tables render, `render_lines`) and
-`[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
+Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
 `weekday` (`run_lines`):
 
 ~~~toml
@@ -606,15 +606,3 @@ research notes approaches render | check                                        
 - **The public view** is one generated file per campaign, `campaigns/<c>/APPROACHES.md` in the notes. The steward's
   `[approaches]` rule in `steward.toml` (`store`, `every_min`) refreshes and renders it. The campaign's `BRIEF.md` front matter
   `registry: titles | full` sets whether hypotheses and reasons are shown, since the notes repo is public.
-
-## Not yet built, in order
-
-1. `research status` reading the project's budget ledger with its
-   observation time (no second spend counter).
-2. Reconcile the final `lane/r17-mprof` telemetry revision against
-   `df7fbea3d` once the r17 campaign is frozen; port, do not overwrite.
-3. Milestone: one real SP1 case through `--on`, then the seven-stage
-   `campaign_h100.sh` replaced end to end: the stage sequence stays a
-   benchmark-owned script; `paired_run.py` writes `result.json`; `research`
-   supplies targeting, shipping, identity, telemetry, retrieval. No SP1
-   branch inside `research`.

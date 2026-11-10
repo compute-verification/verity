@@ -1,4 +1,6 @@
-import PousCheck.SetupProtocol
+module
+
+public import PousCheck.SetupProtocol
 
 /-!
 # The PoUS setup check's properties, stated against the Lean code
@@ -19,11 +21,14 @@ commitment and salt, and `C*` of any shape) and sees all of them, so no statemen
 `Decodes` and `leaves` are declarative: they name each block by its segment and index rather than by the check's loop,
 and read only the code's primitives (the keys, `P2.decodeValue`, `Merkle.packageLeaf`).
 
-`Deployed` is proved (`Properties.Proofs.Pous`) and a guarantee of this package (`lean-audit.json`); `AcceptsDecodes`
-and `PublishesRoot` are open. What is not a claim is stated in `Properties.Proofs.Pous`, open: the converse of
+All three are proved and guarantees of this package (`lean-audit.json`): `Deployed` in `Proofs.Properties.Pous`,
+`AcceptsDecodes` and `PublishesRoot` in `Proofs.Properties.Pous.Setup`. What is not a claim is stated in
+`Proofs.Properties.Pous`, open: the converse of
 `AcceptsDecodes` (completeness: a `C*` that decodes to the committed `W` is accepted), with its instance, and the code's
 block decoder read as the trusted model's (`DecodeIsModel`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties
 
@@ -70,7 +75,7 @@ def PublishesRoot : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public)
     (prof : Unit), SetupProtocol.protocol.check q c C = .accept pub prof → Published q c C pub
 
-/-- The registered point (`p2/PROTOCOL.md` v1.1, `p2-p16448-c21065`, profile `p2-2054B`): valid, its prime
+/-- The registered point (P2 v4, `p2-p16448-c21065`, profile `p2-2054B`): valid, its prime
 `2^16448 − 21065`, 2,056-byte blocks of 2,054 payload bytes, `2^16` blocks per segment in 8 segments, `2^19` in all. -/
 def Deployed : Prop :=
   let q := P2.Params.deployed

@@ -1,9 +1,46 @@
-import Proofs.Flock.Claims.Scope.Readable
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the verifier's setup gives the scope
@@ -13,6 +50,8 @@ table's statement `st` has the circuit the scope check parses (`ProvedScope.circ
 loads (`ProvedScope.publicOf`), `m = k_log + nbl`, `6 ≤ k_log ≤ 27` and `m ≤ 35` (`Stmt.setupH`'s and
 `Stmt.setupHidden`'s refusals), and under `--zk` `25 ≤ m` (`Zk.shapeOk`'s `queries0`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -74,6 +113,7 @@ theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨⟨⟩, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h)
@@ -87,7 +127,7 @@ theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, Composed.parse_identity]
+  simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
@@ -96,6 +136,16 @@ theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b
   split_ifs
   · rfl
   · exact parseH_identity ht _ _ _
+
+/-- An untyped `HmOut.parseCommit` reads no identity, so it agrees at every table's tags. -/
+theorem parseCommit_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
+    (t : List (String × ByteArray)) : HmOut.parseCommit (tagsAt tags count j) b t = HmOut.parseCommit tags b t := by
+  unfold tagsAt
+  split_ifs
+  · rfl
+  · have hi : ({ tags with identity := tags.tableIdentity count j } : Tags).isTmpl = tags.isTmpl := rfl
+    unfold HmOut.parseCommit
+    rw [hi, parseTmpl_identity, parseH_identity ht]
 
 theorem loadPublicH_tagsAt (tags : Tags) (count j : ℕ) (c : Circuit) (b : ByteArray) :
     HmOut.loadPublic (tagsAt tags count j) c b = HmOut.loadPublic tags c b := by
@@ -180,9 +230,9 @@ theorem table0 {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : 
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have S := Hidden.setupHidden_spec' hd
-    have L := Hidden.hidden_layout' ht' hd
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset 0 hpos)
     have hp := S.parse
-    rw [parseH_tagsAt ht] at hp
+    rw [parseCommit_tagsAt ht] at hp
     obtain ⟨pop, hpop, -⟩ := S.pub
     rw [loadPublicH_tagsAt] at hpop
     refine ⟨?_, ⟨pop, ?_⟩, S.m, L.kLog6, S.kLog, S.m35, hzk⟩

@@ -1,23 +1,28 @@
-import Proofs.Flock.Claims.Complete.Prover.Transcript
-import Flock.Zk
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Transcript
+public import Flock.Zk
 
 /-!
 # The masked prover's tape and pads
 
-What `flock-circuit --zk` draws besides the plain prover's salts and nonces (`Tape`), as tape entries: per table `i`
+What `flock-circuit --zk` samples besides the plain prover's salts and nonces (`Tape`), as tape entries: per table `i`
 and rep `r`, the pads `h` and the dot-product mask `μ` (index `k < s`, the layout's length), each one's RS padding
-(`k < K_PAD`), `τ`'s salt and the pads' commitment's leaf salts; per table, the four extra lanes' entries and each
-level-0 lane's padding coefficients (lane `l < 2^lanes + 4`, `k < t_pad`).
+(`k < K_PAD`), `τ`'s salt and the pads' commitment's leaf salts; per table, the four extra lanes' entries, each
+level-0 lane's padding coefficients (lane `l < 2^lanes + 4`, `k < t_pad`) and the mask slot's words (`mask i k`, word
+`k` of the slot in `maskWordsOf` order, `STREAM_MASK`'s index `k`).
 
 * **A rep's pads** (`padsOf`, upstream's `Pads::draw`): `h` from the tape with `h_ab = h_a·h_b` and `w = x·y` set, so
   the zerocheck's product and the triple hold at every tape.
 -/
 
+@[expose] public section
+
 namespace FlockComplete
 
 open Flock
 
-/-- **The masked prover's tape**: the plain prover's, and every value `flock-circuit --zk` draws. -/
+/-- **The masked prover's tape**: the plain prover's, and every value `flock-circuit --zk` samples. -/
 structure TapeZk extends Tape where
   h : Nat → Nat → Nat → F128
   mu : Nat → Nat → Nat → F128
@@ -27,11 +32,12 @@ structure TapeZk extends Tape where
   innerSalt : Nat → Nat → Nat → ByteArray
   extra : Nat → Nat → Nat → F128
   lanePad : Nat → Nat → Nat → F128
+  mask : Nat → Nat → F128
 
 instance instInhabitedTapeZk : Inhabited TapeZk :=
   ⟨{ toTape := default, h := fun _ _ _ => 0, mu := fun _ _ _ => 0, padH := fun _ _ _ => 0, padMu := fun _ _ _ => 0,
      tauSalt := fun _ _ => ByteArray.empty, innerSalt := fun _ _ _ => ByteArray.empty, extra := fun _ _ _ => 0,
-     lanePad := fun _ _ _ => 0 }⟩
+     lanePad := fun _ _ _ => 0, mask := fun _ _ => 0 }⟩
 
 /-- **One rep's pads** (upstream's `Pads`): `h`, `μ`, their RS padding, and `τ`'s salt. -/
 structure PadsZk where

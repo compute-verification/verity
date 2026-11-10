@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.GS.Decode
-import Proofs.Flock.Claims.GS.Flock
-import Proofs.Flock.Claims.GS.Radius
-import Proofs.Flock.Claims.GS.ZkRadius
-import Proofs.Flock.Claims.GS.RadiusFamily
-import Proofs.Flock.Claims.GS.RadiusDeploy
+module
+
+public import Proofs.Flock.Claims.GS.Decode
+public import Proofs.Flock.Claims.GS.Flock
+public import Proofs.Flock.Claims.GS.Radius
+public import Proofs.Flock.Claims.GS.ZkRadius
+public import Proofs.Flock.Claims.GS.RadiusFamily
+public import Proofs.Flock.Claims.GS.RadiusDeploy
 
 /-!
 # A counted Guruswami–Sudan decoder, and `DecoderComplexity` at Flock's level-0 code
@@ -40,5 +42,8 @@ The decoder computes on coefficient lists and tables, and counts its field opera
   is affine in the opened columns (`plainSizeRD_le`, `zkSizeRD_le`), and each counts a step on none
   (`plainCountedRD_nil_pos`, `zkCountedRD_nil_pos`). The deployed records name the counted families as their decoder
   (`FlockDeploy.deployPlain`'s and `deployZk`'s `dec`), and `FlockDeploy.efficient_plain` and `efficient_zk` are
-  `Claims.Flock.Efficient` there.
+  `Claims.Flock.Efficient` at the records the claims read, those with their columns trimmed (`deployPlainTrim`,
+  `deployZkTrim`).
 -/
+
+@[expose] public section

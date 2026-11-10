@@ -16,20 +16,20 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.predict.build import build_program
-from verity_vllm.predict.phi import Phi
+from verity_vllm.program.predict.build import Unexpressible, build_program
+from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 from verity_vllm.program.frontend import targets as T
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 
 NON_BI = DEFAULT_TARGET.with_overrides(batch_invariant=False)
 GENERIC, EPS_INPUT = "RMSNormFusedCuda_v2{N=%d,EPS=1e-05}", "RMSNormFusedCuda_v4{N=%d}"
-VECTOR8 = "RMSNormFusedCudaVector8_v1{N=%d,EPS=1e-05,BLOCK=%d}"
+VECTOR8 = "RMSNormFusedCudaVector8_v3{N=%d,EPS=1e-05,BLOCK=%d}"
 LEGACY_WIDTH8 = "RMSNormFusedCuda_v1{N=%d,EPS=1e-05}"
 BUILDS = [("b1-eager", False), ("b1-eager", True), ("b1-eager-v2", False), ("b1-eager-v3", False), ("b1-eager-v3", True)]
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -127,9 +127,11 @@ def test_the_fold_binds_by_the_record_target(registered):
 
 
 def test_the_predictor_binds_by_the_declared_target():
+    """The batch-invariant target binds the batch-invariant norm; a target without batch invariance under the row's `bi-eager` label
+    is refused, never predicted with the target's kernels under that label."""
     assert "RMSNormFusedCuda_v2" in _predict()
-    non_bi = _predict(batch_invariant=False)
-    assert {"RMSNormCudaVector8_v1", "RMSNormFusedCudaVector8_v1"} <= non_bi
+    with pytest.raises(Unexpressible, match=re.escape("a target labelled 'eager' (batch invariant False) for the 'bi-eager' row")):
+        _predict(batch_invariant=False)
 
 
 def test_the_build_the_fold_and_the_predictor_ask_one_selector(monkeypatch):

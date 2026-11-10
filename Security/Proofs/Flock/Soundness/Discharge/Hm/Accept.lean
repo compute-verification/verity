@@ -5,8 +5,30 @@ So the satisfying witness holds the `sha512x3` and `hm96` rows at every compress
 `hmSlot_of_sat`), and `port_commit_rows` gives the row's commit string at its `hm96` slot's outputs (`row_bc_of_sat`),
 given the port's words fill its chunks and the block holds Δ's copies into the slots' `cv` and `pad` inputs.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Place
-import Proofs.Flock.Soundness.ExecTemplateSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.Discharge.Hm.Port
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecTemplate
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import Proofs.Flock.Soundness.ExecSetup
+
+@[expose] public section
 
 open Flock FlockLevel3
 

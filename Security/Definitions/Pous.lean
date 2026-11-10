@@ -1,34 +1,91 @@
-import Definitions.Pous.Accounting.EraseMeets
-import Definitions.Pous.Accounting.GradedMeets
-import Definitions.Pous.Accounting.LemmaA
-import Definitions.Pous.Accounting.Params
-import Definitions.Pous.Accounting.PubMeets
-import Definitions.Pous.Accounting.Rebuild
-import Definitions.Pous.Game.Oracle
-import Definitions.Pous.Game.Prob
-import Definitions.Pous.Model.Audit
-import Definitions.Pous.Model.BandChain
-import Definitions.Pous.Model.BandGraph
-import Definitions.Pous.Model.ColumnGame
-import Definitions.Pous.Model.Continuous
-import Definitions.Pous.Model.Dense
-import Definitions.Pous.Model.Digest
-import Definitions.Pous.Model.FreeBlocks
-import Definitions.Pous.Model.Graded
-import Definitions.Pous.Model.HashChain
-import Definitions.Pous.Model.Inc
-import Definitions.Pous.Model.Invertible
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.M1
-import Definitions.Pous.Model.M1p
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.Pebbling
-import Definitions.Pous.Model.PubEncoder
-import Definitions.Pous.Model.SampledAudit
-import Definitions.Pous.Model.Scheme
-import Definitions.Pous.Model.SecureErasure
-import Definitions.Pous.Model.SegLift
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.P2.Rounds
+module
 
-/-! `Definitions.Pous`: every module of PoUS's definitions, the protocol's definitions (trusted). -/
+public import Definitions.Pous.Accounting.GradedMeets
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Accounting.PubMeets
+public import Definitions.Pous.Accounting.Rebuild
+public import Definitions.Pous.Game.Oracle
+public import Definitions.Pous.Game.Prob
+public import Definitions.Pous.Model.Audit
+public import Definitions.Pous.Model.BandChain
+public import Definitions.Pous.Model.BandGraph
+public import Definitions.Pous.Model.ColumnGame
+public import Definitions.Pous.Model.Continuous
+public import Definitions.Pous.Model.Dense
+public import Definitions.Pous.Model.FreeBlocks
+public import Definitions.Pous.Model.Graded
+public import Definitions.Pous.Model.HashChain
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Model.Invertible
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.M1
+public import Definitions.Pous.Model.M1p
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.Pebbling
+public import Definitions.Pous.Model.PubEncoder
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Model.Scheme
+public import Definitions.Pous.Model.SegLift
+public import Definitions.Pous.Model.StreamedWipe
+public import Definitions.Pous.P2.Clip
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.P2.Mutable
+public import Definitions.Pous.P2.Rounds
+
+/-!
+# PoUS's definitions (trusted)
+
+PoUS, proof of useful space, shows that a prover holds model weights in memory: it stores `C*`, an encoding of the
+committed weights `W` under a salt sampled after `W` is committed, and the memory challenger reveals indices of `C*` one
+at a time on live coins and accepts when each answer is correct and on time. A scheme's guarantee is the requirement
+`Pous.Meets` (`Accounting/Params.lean`). This module imports every module of the area's definitions, the trusted text
+its guarantees read; they import no assumption, guarantee or proof (the lock's `layers`):
+
+* `Game`: bit strings, uniform probability and the idealized computational model.
+* `Model`: encoding schemes; the timed audit game and `INC`; the models M1 and M1 on P2's domain `[0, p)`; pebbling and
+  data-carrying labels; the band and dense schemes over the overwrite chain; P3's two-layer labels and column game; the
+  sampled, graded and continuous audits; the public-encoder check; and the streamed-label wipe's game.
+* `Accounting`: the requirement at the problem statement's parameters (`Meets`), with a public encoder (`PubMeets`) and
+  with late answers (`GradedMeets`); Lemma A's bound; and the background-rebuild budget.
+* `P2`: P2's cost model in a generic ring over `Z/p`, its sequential audit's rounds, the mutable store, and what a
+  period's fixed extractor cuts and packs.
+
+## Top guarantees
+
+Each is `Pous.Guarantees.X` in `Security/Definitions/Pous/Guarantees.lean` unless another file is named, proved as
+`Pous.SecurityProofs.X` in `Security/Proofs/Pous.lean`.
+
+* `BandMultiMeetsFamily`: the band store of 1 to 2^64 segments meets the requirement at `D = 5`, `Q = 2^20`,
+  `k = 111` and `ε = 2^-128`, with no hypothesis; `BandPubMeetsFamily` is the same with an untrusted server encoding
+  `W`.
+* `BandGradedMeetsFamily`: the band store with up to `t` late answers, `(t, k)` from `(0, 111)` to `(3, 243)`;
+  `BackgroundRebuildExcluded`: under the memory challenger's cap on an audit's duration, no graded audit lasts long
+  enough to re-encode a whole segment from `W`, in the ideal-permutation model.
+* `ChainDenseMeets64`: the overwrite-chain dense scheme of 512 labels of 64 KiB meets the requirement.
+* `P3ConcreteMeets64`, `P3ConcreteMeets14GB`: P3 with a concrete `H` meets it at `D = 10` and `k = 106`, on one segment
+  and on 971 segments jointly.
+* `ContinuousAudit`, `BandFamilyContinuousTimeAverage`: the continuous audit's bound, and its time average on the band
+  store.
+* `StreamedWipe` (`Guarantees/StreamedWipe.lean`): the streamed-label wipe is a proof of secure erasure. At the
+  deployed label, `StreamedWipeMeetsReads`, `StreamedWipeMeetsServer` and `StreamedWipeMeetsDisk`
+  (`Guarantees/StreamedWipeReads.lean`, `StreamedWipeServer.lean`, `StreamedWipeDisk.lean`) bound what a server keeps
+  of its prior content.
+* `P2SlackFamilyUncond` (`Guarantees/P2.lean`): P2's abstract M1 on `[0, p)` meets the requirement for 2^8 to 2^23
+  labels with no hypothesis, at three slacks `λ` (`k = 105` at `λ = 128`); it is not the deployed P2.
+* `Pous.Period.PeriodHeld` (`Security/Properties/Pous/Period.lean`, proved as `Pous.Period.SecurityProofs.periodHeld`
+  in `Security/Proofs/Pous/Period.lean`): over one period, the deployed check accepts while the capacity account held
+  fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. It is PoUS's row of what protocol soundness rests
+  on (`Security/README.md`), under named assumptions, among them `P2RingAuditSecure`, an open conjecture.
+
+## Where to look
+
+* Named assumptions: `Security/Definitions/Pous/Assumptions.lean` and `Assumptions/P2.lean`; claims:
+  `Security/Definitions/Pous/Claims/`.
+* Properties of the code: `Security/Properties/Pous/`; proofs: `Security/Proofs/Pous.lean` and `Security/Proofs/Pous/`.
+* Locks: `Security/lean-audit.json` (the guarantees) and `Security/Properties/lean-audit.json` (the properties).
+* The Python reference: `verity/core/protocols/pous` (its README). PoUS's grader, `verity/core/protocols/pous/lean`,
+  pins this module and every module under `Security/Definitions/Pous` (`TRUSTED.sha256`).
+-/
+
+@[expose] public section

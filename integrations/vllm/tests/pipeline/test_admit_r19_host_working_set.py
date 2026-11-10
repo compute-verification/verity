@@ -1,8 +1,8 @@
-"""[R19 admit] F-r18-admit-1 -- the Commit host working set on the 188 GB L40S class: the two mechanisms, each pinned by a CPU test.
+"""The Commit host working set on the 188 GB L40S class: the two mechanisms, each pinned by a CPU test.
 
 (c) fork-COW children: `driver._parallel_replay` freezes the parent's heap (gc.freeze) before forking the evaluator pool, so a
-    child's cyclic collection never traverses (and copy-on-write duplicates) the inherited C2 heap -- the "two ForkPoolWorkers at ~72 GB"
-    of R17 #23 (= the parent's programs + oracle heap, 74.8 GB modelled), the >= 17 GiB post-fork growth that killed #60 twice.  Tests:
+    child's cyclic collection never traverses (and copy-on-write duplicates) the inherited C2 heap (the parent's programs + oracle heap,
+    74.8 GB modelled; unfrozen, each of two ForkPoolWorkers reaches ~72 GB and grows >= 17 GiB after the fork).  Tests:
     the children run with the frozen heap, the parent is unfrozen after the pool joins, the record names it, the replay record is
     byte-identical serial vs forked (semantics-free).
 (a) the RETAIN-windowed pool: `--bounded-staging --retain host --retain-exclude hidden_m1` keeps every family the C2 forms read and drops
@@ -113,6 +113,7 @@ def test_a_worker_killed_mid_task_is_reported_by_name_not_waited_out(monkeypatch
     assert gc.get_freeze_count() == 0
 
 
+@pytest.mark.slow
 def test_replay_record_is_identical_serial_vs_forked_and_names_the_frozen_fork(world):
     bmap, committed = world.bmap_and_reader()
     kw = dict(per_stratum=2, seed=11, retention="host")
@@ -168,8 +169,8 @@ class _Stating:
 
 
 def test_the_pool_is_fitted_after_the_prewarm_to_what_the_parent_then_holds(world, cgroup, monkeypatch):
-    """r20261001-183627-ffcb: 30 workers asked for under a 400 GiB memory.max, 10 GiB in use when the replay began and 301.4 GiB once the
-    prewarm had compiled the Boolean versions.  The workers sized before the prewarm (all 30 at 9.6 GiB) were OOM-killed."""
+    """30 workers asked for under a 400 GiB memory.max, 10 GiB in use when the replay begins and 301.4 GiB once the prewarm has
+    compiled the Boolean versions: workers sized before the prewarm (all 30 at 9.6 GiB) would be OOM-killed."""
     mx, cur = cgroup
     mx.write_text(f"{400 * GiB}\n")
     cur.write_text(f"{10 * GiB}\n")
@@ -187,7 +188,7 @@ def test_the_pool_is_fitted_after_the_prewarm_to_what_the_parent_then_holds(worl
 
 
 def test_a_pick_that_cannot_fit_is_refused_before_the_fork_never_replayed_serially(world, cgroup, monkeypatch):
-    """r20261001-200753-63d1's LM-head worker peaked at 182.1 GiB; after ffcb's prewarm 98.6 GiB were left, for any worker or the parent."""
+    """An LM-head worker peaks at 182.1 GiB; after the prewarm 98.6 GiB are left, for any worker or the parent."""
     mx, cur = cgroup
     mx.write_text(f"{400 * GiB}\n")
     cur.write_text(f"{10 * GiB}\n")
@@ -218,6 +219,12 @@ def test_the_workers_hold_the_largest_picks_side_by_side(cgroup, monkeypatch):
     assert SR.fit_pool(3, picked, GiB)[0] == 3
     monkeypatch.setattr(SR, "ROW_EVALUATORS", [])
     assert SR.fit_pool(300, picked, GiB)[0] == 234                      # no stated peaks: the baseline alone, idle workers included
+
+
+def test_a_tp_rank_forks_its_share_of_the_default_pool(monkeypatch):
+    """The world's ranks replay at once on one node (`rank_replay.in_process`), each forking the default pool over the world."""
+    monkeypatch.setattr(os, "cpu_count", lambda: 128)
+    assert (SR.default_workers(), SR.default_workers(8), SR.default_workers(128)) == (32, 8, 1)
 
 
 # ------------------------------------------------------------------------------------------ (a) the RETAIN-windowed pool by family
@@ -282,7 +289,7 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.check.oracle_compare import OpenedReader
-    C = NC.GPU_CHUNK_BYTES
+    from verity_vllm.commit.step_rows import ROW_BYTES as C
     # step stream: [qkv 300 B][fa2.m1 plane 4 chunks + 100 B][o_proj 200 B]
     spec = [("model.layers.0.self_attn.qkv_proj/0", 300, "bfloat16"), ("fa2.m1/L0/s0/g32x8x1/S", 4 * C + 100, "int32"), ("model.layers.0.self_attn.o_proj/0", 200, "bfloat16")]
     used = sum(nb for _name, nb, _dt in spec)
@@ -302,7 +309,7 @@ def test_the_opened_reader_answers_none_for_an_excluded_interior_and_verified_by
     n = -(-used // C) * C
     blk = com._gpu_blocks[0][0]
     ranges = [(0, lo, blk[0:lo]), (hi, n, blk[hi:n])]                         # the collector keeps whole chunk-padded windows outside the interior
-    hr = NC._HostRanges(ranges, used, excluded={"fa2_hidden_m1": hi - lo})
+    hr = NC._HostRanges(ranges, used, excluded={"fa2_hidden_m1": hi - lo}, chunk=C)
     assert hr.retained_bytes == n - (hi - lo) and hr.numel() == n
     assert hr.holds(0, 300) and hr.holds(metas[2].dev_off, metas[2].dev_off + 200) and not hr.holds(lo, lo + C) and not hr.holds(300, 300 + C)
     assert bytes(hr[0:300].numpy()) == bytes(stream[0:300].numpy())

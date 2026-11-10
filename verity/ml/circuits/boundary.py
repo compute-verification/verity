@@ -55,7 +55,7 @@ from .intervals import IntervalLimit, Intervals, contains, full, isect, norm, re
 from .layout import Scope, resolve_gate
 from .parts import Limits, Part, Unsupported, n_members
 from .refs import Affine, Refs, Strided, runs
-from .types import Array, Record, Tuple as TupleT, Type, Value
+from .types import Array, RecordType, Tuple as TupleT, Type, Value
 
 Key = tuple[str, int]  # (space, idx): "n" node output leaves, "s" scan-internal carry leaves, "p" parameter leaves
 
@@ -162,7 +162,7 @@ def _sum_widths(t: Type) -> int:
         return t.n * _sum_widths(t.elem)
     if isinstance(t, TupleT):
         return sum(_sum_widths(f) for f in t.fields)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return sum(_sum_widths(f) for _, f in t.fields)
     raise TypeError(t)
 
@@ -956,14 +956,20 @@ def out_gates(part: Part) -> frozenset[int] | Unsupported:
         return e.unsupported()
 
 
-def in_gates(part: Part) -> frozenset[int] | Unsupported:
-    """EXACT in(part): distinct gates outside the part with a wire into it (Input members read nothing)."""
+def in_gates(part: Part, skip_nodes: frozenset[int] = frozenset()) -> frozenset[int] | Unsupported:
+    """EXACT in(part): distinct gates outside the part with a wire into it (Input members read nothing), less the gates
+    of the root body's nodes in `skip_nodes`: their reads are neither charged to `Limits.max_intervals` nor resolved."""
     try:
         _check_part(part)
         scope = part.scope
-        _is_root(scope)  # a parameterised body without its parent cannot resolve its parameter wires
+        root = _is_root(scope)  # a parameterised body without its parent cannot resolve its parameter wires
         spec = scope.spec
         body = spec.body
+        if skip_nodes:
+            if not root:
+                raise ValueError(f"skip_nodes names nodes of the root body, and {spec.id} is not the root activation")
+            if bad := sorted(k for k in skip_nodes if not 0 <= k < len(body.nodes)):
+                raise ValueError(f"skip_nodes {bad} are not nodes of {spec.id}: {len(body.nodes)} nodes")
         ix = consumer_index(spec)
         if ix.incomplete:
             raise BoundaryLimit("index_incomplete", ix.incomplete)
@@ -972,6 +978,8 @@ def in_gates(part: Part) -> frozenset[int] | Unsupported:
         gates: set[int] = set()
         for j, m in part.items:
             for (sp, idx), ivs in _member_reads(spec, j, m).items():
+                if sp == "n" and idx in skip_nodes:
+                    continue
                 for lo, hi in ivs:
                     budget -= hi - lo
                     if budget < 0:
@@ -991,6 +999,8 @@ def in_gates(part: Part) -> frozenset[int] | Unsupported:
                             mm, l = divmod(leaf, c)
                             if not inside or mm not in inside:
                                 gates.add(resolve_gate(scope.child(idx, mm), node.fn.body.ret[l])[0])
+        if skip_nodes:  # every gate of a skipped node, whichever read reached it
+            gates = {g for g in gates if body.node_at(g - scope.offset) not in skip_nodes}
         return frozenset(gates)
     except BoundaryLimit as e:
         return e.unsupported()

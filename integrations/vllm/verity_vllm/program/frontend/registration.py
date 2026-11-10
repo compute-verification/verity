@@ -1,25 +1,27 @@
 """A `registered_values` derivation's registered inputs: the `values` record, whose fields are allocated as the Definitions read
 them, and the tables the rules declare (`Rule.registered_tables`).  They follow the user inputs and precede `weights`, which the
-Build's consumers read as the last parameter."""
+Build's consumers read as the last parameter.  `RunInputs` is the `run` record a rule declares (`Rule.run_inputs`): values the
+served run binds, after the user inputs and before the registered inputs, as the fold lays out its `run` parameters."""
 
 from __future__ import annotations
 
 from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.types import Record, Type, Value
+from verity.ml.circuits.types import RecordType, Type, Value
 
-from verity_vllm.program.registry.tables import table_type
+from verity.ml.definitions.registry.tables import table_type
+from verity_vllm.program.inputs import run_field
 
 
-class Registration:
+class RegisteredInputs:
     def __init__(self, values_param: int, tables: dict[str, int]) -> None:
         self.values_param, self.tables = values_param, dict(tables)
         self.fields: list[dict] = []   # {name, width, bits, offset}, in first-read order
 
     @classmethod
-    def declare(cls, params: list[tuple[str, Type]], ruleset, ep, mode: str) -> Registration:
+    def declare(cls, params: list[tuple[str, Type]], ruleset, ep, mode: str) -> RegisteredInputs:
         """Append `values` (filled by `finish`) and every declared table to `params`."""
         values_param, tables = len(params), {}
-        params.append(("values", Record()))
+        params.append(("values", RecordType()))
         for r in ruleset.rules:
             for tn in (r.registered_tables(ep, mode) if r.modes is None or mode in r.modes else ()):
                 if tn not in tables:
@@ -55,7 +57,7 @@ class Registration:
     def finish(self, params: list[tuple[str, Type]]) -> None:
         if not self.fields:
             raise ValueError("registered_values: no Definition read a program value; the `values` parameter would be empty")
-        params[self.values_param] = ("values", Record(*[(f["name"], Value(f["width"])) for f in self.fields]))
+        params[self.values_param] = ("values", RecordType(*[(f["name"], Value(f["width"])) for f in self.fields]))
 
     def layout(self) -> dict:
         """The registered inputs as the record states them (the fold's `FoldResult.supplied` layout): parameter index, name and every
@@ -64,3 +66,40 @@ class Registration:
                                  "fields": [{"name": f["name"], "width": f["width"], "bits": f"0x{f['bits']:0{f['width'] // 4}x}",
                                              "offset": f["offset"]} for f in self.fields]},
                 "run": [], **({"tables": [{"param": i, "name": n} for n, i in self.tables.items()]} if self.tables else {})}
+
+
+class RunInputs:
+    """The `run` parameter: values the Program takes rather than computes (a training survey's holes), one field per read, in
+    first-read order.  Its RecordType is finalised after the translation, as `values` is."""
+
+    def __init__(self, param: int) -> None:
+        self.param = param
+        self.fields: list[dict] = []   # {name, type, offset}, offset in leaves
+        self._names: set[str] = set()
+        self._leaves = 0
+
+    @classmethod
+    def declare(cls, params: list[tuple[str, Type]]) -> RunInputs:
+        params.append(("run", RecordType()))
+        return cls(len(params) - 1)
+
+    def value(self, name: str, t: Type, declared: str) -> Coll:
+        """Field `name`, read under declaration `declared` of `program.inputs`, refused unless it declares it (`run_field`)."""
+        run_field(name, declared)
+        if name in self._names:
+            raise ValueError(f"run value {name!r} is read twice")
+        self._names.add(name)
+        offset, self._leaves = self._leaves, self._leaves + t.leaves
+        self.fields.append({"name": name, "type": t, "offset": offset})
+        return Coll(t, Affine("p", self.param, offset, t.leaves))
+
+    def finish(self, params: list[tuple[str, Type]]) -> None:
+        if not self.fields:
+            raise ValueError("a rule declared run inputs (`Rule.run_inputs`) but read none; the `run` parameter would be empty")
+        params[self.param] = ("run", RecordType(*[(f["name"], f["type"]) for f in self.fields]))
+
+    def layout(self) -> dict:
+        """The parameter index and each field's name, type, leaf offset and leaves: what a run binds."""
+        return {"param": self.param, "name": "run",
+                "fields": [{"name": f["name"], "type": repr(f["type"]), "offset": f["offset"], "leaves": f["type"].leaves}
+                           for f in self.fields]}

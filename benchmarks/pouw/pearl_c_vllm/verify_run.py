@@ -1,21 +1,24 @@
-"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): #449's work law
-(`pearl_c_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
+"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): the work sampling design
+(`clear_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
-- **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
-  against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
-  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+- **The execution phase** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
+  against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
+  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
+- **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
+  `served_passes.py` holds a run's passes of one salt to distinct indices too.
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
-  Their root must be the one the pass published before any draw.
-- **The draws' source** is `os.urandom(32)`, the verifier's own, drawn here after the transcript is fixed: a
-  `pearl_c_work.RecordedDraw` of round 1, after the commitment's 0.
+  Their root must be the one the pass published before any sample.
+- **The samples' source** is 32 bytes of the Lean verifier's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
+  `uniform/io-getrandombytes`), the verifier's own, sampled here after the transcript is fixed: a
+  `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
   (-h3's) a node is 64 bytes and each value is followed by its salt, `audit.hm96_salt` under the manifest's
   ``hm96_salt_key`` (the prover's, retained for this replay), and the scheme reads the value less its salt.
-- **The tiles** are `pearl_c_work.audit`'s: its t work-weighted draws (`draw`) and one tile per excluded row
+- **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with every ``--cross-check``-th tile id replayed on the scalar reference too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
@@ -24,7 +27,7 @@
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
 ``--expect-reject`` (a negative control's pass) only on rejection.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PROTOCOL.md).
+protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 
@@ -44,20 +47,24 @@ from verity.core.protocols.pouw.audit import (
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
     Epoch,
-    TileOpening,
-    Transcript,
-    Verifier,
     hm96_salt,
     opened_value,
 )
+from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
+from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+from verity_vllm.protocols.pouw import pearl_c as PD
+from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import fast_tile as FT  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
+import fast_tile as FT
+import clear_work as CW
+from clear_audit import TileOpening, Transcript, Verifier
 
+settings = of(__file__)
 DRAWS = 3
 
 
@@ -102,7 +109,7 @@ def f32_row(data, k: int, i: int) -> bytes:
 
 
 class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `verity.core.protocols.pouw.audit.Prover` has it."""
+    """The prover's side of the audit from the pass's files: `open`, as `clear_audit.Prover` has it."""
 
     def __init__(self, man: dict, files: Files, refs):
         self.man, self.files, self.refs = man, files, refs
@@ -148,7 +155,7 @@ def check(pick: tuple[int, int]) -> tuple[int, bool, str | None, bool | None]:
 
 
 def _check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
-    """One tile, as `pearl_c_work.audit` checks it: the openings and digest (`Verifier.check_tile`), then the tile rule."""
+    """One tile, as `clear_work.audit` checks it: the openings and digest (`Verifier.check_tile`), then the tile rule."""
     j = _JOB
     scheme, epoch, transcript, prover, records, verifier = (j[x] for x in ("scheme", "epoch", "transcript", "prover", "records",
                                                                            "verifier"))
@@ -162,14 +169,14 @@ def _check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
     ctx = Context(epoch.salt, u, transcript.activation_roots[pos], epoch.weight_roots[u.weight])
     h = scheme.commitment_hash
     a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
-    reason = PW.check_opened(scheme, records[pos], ref.tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile))
+    reason = CW.check_opened(scheme, records[pos], ref.tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile))
     return tid, reason is None, reason
 
 
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
            cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
-    """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
-    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    """The pass's verdict, its execution phase re-started under `coins`, the execution phase's published coin commitment
+    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before the execution phase's coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
     promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
     too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
     raw = path.read_bytes()
@@ -179,13 +186,17 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
            "replay": "batch" if fast else "scalar"}
     try:
         PD.manifest_schema(man, recorded)
+        why = passes_distinct([man])
+        if why is not None:
+            out["refused"] = list(why)
+            raise ValueError(": ".join(why))
         scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
         epoch, out["salt"] = PD.manifest_epoch(man, coins, recorded)
         records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
                                  tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
         splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
-        reason = PW.check_records(epoch, splits, records)
+        reason = CW.check_records(epoch, splits, records)
         if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
             reason = "the records are not the ones whose root the pass published"
         if reason is not None:
@@ -193,15 +204,14 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         c = man["commitment"]
         transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
                                 ())
-        verifier = Verifier(PW._TileRuleView(scheme), epoch)
+        verifier = Verifier(CW._TileRuleView(scheme), epoch)
         if len(verifier.refs) != c["count"]:
             raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
-        source = os.urandom(32) if source is None else source
-        key = PW.replay_key(PW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
+        source = PV.coins(32) if source is None else source
+        key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
-        picks = PW.draw(scheme, records, key, draws)
-        picks += PW.exclusion_tiles(scheme, records)
-        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
+        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
+        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in drawn + excluded]
         if fast and (scheme.forming != "v1" or scheme.device.g is None):
             fast, out["replay"] = False, "scalar"
         _JOB.clear()
@@ -220,20 +230,20 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
                 _JOB.pop("undo")()
         differ = [t for t, _, _, same in verdicts if same is False]
         ok = all(v[1] for v in verdicts) and not differ
-        w_ref, credit = PW.work(scheme, records)
+        w_ref, credit = CW.work(scheme, records)
         bad = "; ".join(f"tile {t}: {r}" for t, good, r, _ in verdicts if not good)
         if differ:
             bad = "; ".join(filter(None, [bad, f"the batch replay's verdict is not the scalar one's on tiles {differ}"]))
             out["cross_check_failed"] = differ
         if fast:
             out["cross_checked"] = [t for t, _, _, same in verdicts if same is not None]
-        at = PW.draw_wref(scheme)
+        at = CW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
-                   drawn=draws, exclusion_tiles=len(todo) - draws,
+                   drawn=len(drawn), exclusion_tiles=len(excluded),
                    verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
-        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: pearl_c_work's tiles ({draws} drawn, "
-                       f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(drawn)} drawn, "
+                       f"{len(excluded)} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
                        f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
                        f"{'; batch replay, ' + str(len(out['cross_checked'])) + ' tiles cross-checked' if fast else ''}")
@@ -248,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("manifest", type=Path)
     p.add_argument("--draws", type=int, default=DRAWS)
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
-    p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+    p.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     p.add_argument("--fast", action="store_true", help="replay the tiles on fast_tile's batch forms (the scalar reference's verdicts)")
     p.add_argument("--cross-check", type=int, default=64, metavar="N",

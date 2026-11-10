@@ -1,15 +1,20 @@
 /-
-PROTOCOL.md §3: the verifier as one total function of its inputs, `Accept` or `Reject reason`.
-`verifyRep` is §9–§14 on one rep's replay transcript; `verify` adds the session checks S1–S18.
+The verifier as one total function of its inputs, `Accept` or `Reject reason`.
+`verifyRep` is `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` on one rep's replay transcript; `verify` adds the session checks S1–S18.
 -/
-import Flock.Statement
-import Flock.Ligerito
+module
+
+public import Flock.Statement
+public import Flock.Ligerito
+public import Flock.Opening
+
+@[expose] public section
 
 namespace Flock
 
 open Transcript
 
-/-- One table's statement as the pipeline sees it (§16's `setup` output). -/
+/-- One table's statement as the pipeline sees it (`Flock.Statement`'s `setup` output). -/
 structure Setup where
   m : Nat
   kLog : Nat
@@ -19,10 +24,10 @@ structure Setup where
   extra : Array (Array F128) → V (Array Claim)
   /-- S8: the committed public words -/
   publics : ByteArray → V Unit
-  /-- the proof's Merkle trees (§14) -/
+  /-- the proof's Merkle trees (`Flock.Merkle`) -/
   merkle : MerkleScheme
-  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as PR #83's prover writes it from `2908d078` on
-  (§16.16); its earlier unsalted openings carry none -/
+  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as the circuit prover writes it from `2908d078` on
+  (`Tags.withPlainLeaves`); its earlier unsalted openings carry none -/
   openedSalts : Bool := false
   deriving Inhabited
 
@@ -34,7 +39,7 @@ def Setup.ofCircuit (st : Stmt) : Setup :=
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩
 
 /-- §9–§14 for table `i`'s rep `r`; returns the proof's flattened cap. -/
-def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
+def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
@@ -54,9 +59,11 @@ def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session
   if cap != sess.rootB[i]! then throw s!"S16/R1: {name}: the proof's cap is not the committed root_B"
   return cap
 
-/-- The verdict: `.ok ()` is Accept. `tabs[i]` is table `i`'s statement, and `proofs[2i + r]` the file the server received
-for its rep `r`. -/
-def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) : V Unit := do
+/-- The verdict on the files the server received, each rep's proof decoded from `dec` of its file: S17 binds the
+record's `proof_sha` to the file itself, never to `dec` of it. `.ok ()` is Accept. `tabs[i]` is table `i`'s statement,
+and `proofs[2i + r]` the file the server received for its rep `r`. -/
+def verifyFiles (dec : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
+    (proofs : Array ByteArray) : V Unit := do
   if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
   let sess ← Record.decode spec record
   for (st, p) in tabs.zip sess.publics do st.publics p
@@ -72,8 +79,18 @@ def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs :
       throw s!"S17: {w}: the proof is not the one the server received"
   for i in [0:tabs.size] do
     let (st, sch) := (tabs[i]!, schs[i]!)
-    let c0 ← verifyRep spec st sch sess i 0 proofs[2 * i]!
-    let c1 ← verifyRep spec st sch sess i 1 proofs[2 * i + 1]!
+    let c0 ← verifyRep spec st sch sess i 0 (dec proofs[2 * i]!)
+    let c1 ← verifyRep spec st sch sess i 1 (dec proofs[2 * i + 1]!)
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+/-- The verdict: `.ok ()` is Accept. `tabs[i]` is table `i`'s statement, and `proofs[2i + r]` the file the server received
+for its rep `r`, decoded as it is (the deployed form, `plainBytes false`). -/
+def verify (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray) : V Unit :=
+  verifyFiles (fun b => b) spec tabs record proofs
+
+/-- Under the deployed form the files are decoded as they are: `verifyFiles (plainBytes false)` is `verify`. -/
+theorem verifyFiles_plainBytes_false (spec : SessionSpec) (tabs : Array Setup) (record : String)
+    (proofs : Array ByteArray) : verifyFiles (plainBytes false) spec tabs record proofs = verify spec tabs record proofs :=
+  rfl
 
 end Flock

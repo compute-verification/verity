@@ -38,7 +38,7 @@ SCHEMA = "verity-capture/log/v1"
 DTYPE_BYTES: dict[str, int] = {
     "bfloat16": 2, "float16": 2, "float32": 4, "float64": 8,
     "int8": 1, "uint8": 1, "int16": 2, "uint16": 2, "int32": 4, "uint32": 4, "int64": 8, "uint64": 8,
-    "bool": 1, "float8_e4m3fn": 1, "float8_e5m2": 1, "complex64": 8,
+    "bool": 1, "float8_e4m3fn": 1, "float8_e5m2": 1, "float8_e8m0fnu": 1, "complex64": 8,
 }
 
 # dtype -> Verity value width in bits (for gate identities; a bf16 element is one Value<16>)
@@ -176,7 +176,7 @@ class StepStart:
     input_ids_view: ViewDesc | None = None
     positions_view: ViewDesc | None = None
     phase_hint: str = ""                   # "prefill" | "decode" | "mixed" (diagnostic only)
-    # [r8 E-cleanup 2026-09-18, hybrid KV cache] vLLM's hybrid KV-cache manager gives layers of different attention kinds
+    # vLLM's hybrid KV-cache manager gives layers of different attention kinds
     # (Gemma-2: sliding-window even layers / global odd layers) separate KV-cache GROUPS, each with its own block tables and
     # slot mapping, that index the SAME physical tensors (log Note: kv_cache[layers.0] and kv_cache[layers.1] at one offset).
     # `block_tables`/`slot_mapping` above are group 0's; with several groups the storage identity of a layer's KV rows is

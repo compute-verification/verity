@@ -3,7 +3,11 @@ The oracle copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sh
 verifier's function it copies, so `verifyWith Sha512.hash` is `verify` for every session whose tables' Merkle schemes are the
 registry's (`MerkleScheme.Named`).
 -/
-import Flock.With.Verify
+module
+
+public import Flock.With.Verify
+
+@[expose] public section
 
 namespace Flock
 
@@ -132,7 +136,7 @@ theorem dgWith_std (spec : SessionSpec) (b : ByteArray) : spec.dgWith std b = pu
   split <;> rfl
 
 theorem decodeWith_std (spec : SessionSpec) (text : String) : Record.decodeWith std spec text = Record.decode spec text := by
-  unfold Record.decodeWith Record.decode
+  unfold Record.decodeWith Record.decodeJWith Record.decode
   simp only [monadLift_self, dgWith_std, pure_bind]
   rfl
 
@@ -182,7 +186,7 @@ theorem ligeritoWith_std (ms : MerkleScheme) (h : ms.Named) (sch : Schedule) (T 
     queryLevelWith_std ms h]
   rfl
 
-theorem verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (sess : RunRecord)
     (i r : Nat) (bytes : ByteArray) : verifyRepWith std spec st sch sess i r bytes = verifyRep spec st sch sess i r bytes := by
   unfold verifyRepWith verifyRep
   simp only [monadLift_self, bindAndZerocheckWith_std, lincheckWith_std, ringSwitchWith_std, ligeritoWith_std _ h]
@@ -199,7 +203,7 @@ end With
 theorem verify_eq_verifyWith (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
     (hN : ∀ st ∈ tabs, st.merkle.Named) : verify spec tabs record proofs = verifyWith Sha512.hash spec tabs record proofs := by
   have hN' := With.named_getElem! tabs hN
-  unfold verifyWith verifyWithM verify
+  unfold verifyWith verifyWithM verify verifyFiles
   simp only [monadLift_self, With.decodeWith_std, With.dgWith_std, pure_bind, With.verifyRepWith_std _ _ (hN' _)]
   rfl
 

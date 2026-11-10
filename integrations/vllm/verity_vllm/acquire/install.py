@@ -9,7 +9,7 @@
     apply_plan_to_committer(committer, plan)                    the `NativeHostCommitter` (and its native_collect subclass) takes its
                                                                module set and consumer-input set from the plan; the rest of the committer
                                                                (arena, hashing, roots, sources) is untouched
-    plan_selection(plan, model)                                 that module set and consumer-input set, shared with the compiled rows'
+    plan_selection(plan, model)                                 that module set and consumer-input set, shared with the compiled workloads'
                                                                record ops (`CompiledGraphSource.wrap_model`)
 
 A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) unless the caller says `refuse_incomplete=False` -- fail closed.
@@ -23,7 +23,7 @@ from typing import Any, Callable, Mapping
 
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
-from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, Site, hooks_of_doc
+from verity_vllm.acquire.plan import HOOK_KINDS, AcquisitionPlan, AcquisitionSite, hooks_of_doc
 
 Sink = Callable[[tuple[str, str, str], Any], None]
 
@@ -32,13 +32,13 @@ class IncompletePlan(RuntimeError):
     """The plan names UNSUPPORTED Values: nothing is installed."""
 
 
-def _sites_of(plan: AcquisitionPlan | Mapping[str, Any]) -> tuple[list[Site], list[Site], list[dict[str, Any]]]:
+def _sites_of(plan: AcquisitionPlan | Mapping[str, Any]) -> tuple[list[AcquisitionSite], list[AcquisitionSite], list[dict[str, Any]]]:
     """(hook sites, deferred sites, unsupported) of a plan object or its serialised document."""
     if isinstance(plan, AcquisitionPlan):
         chosen = plan.chosen_sites()
         unsupported = [{"value": v.value_id, "why": v.why} for v in plan.unsupported]
     else:
-        chosen = [Site(s["kind"], s["module"], s["slot"], s.get("lifetime", "n/a"), s.get("derived_from", "")) for s in (plan.get("sites") or [])]
+        chosen = [AcquisitionSite(s["kind"], s["module"], s["slot"], s.get("lifetime", "n/a"), s.get("derived_from", "")) for s in (plan.get("sites") or [])]
         unsupported = list(plan.get("unsupported") or [])
         assert [s.key() for s in chosen if s.kind in HOOK_KINDS] == hooks_of_doc(plan)
     return [s for s in chosen if s.kind in HOOK_KINDS], [s for s in chosen if s.kind not in HOOK_KINDS], unsupported
@@ -62,9 +62,9 @@ def _slot_of_args(args: tuple, slot: str) -> Any:
 
 @dataclass
 class Installation:
-    installed: list[Site] = field(default_factory=list)
-    deferred: list[Site] = field(default_factory=list)
-    missing: list[Site] = field(default_factory=list)        # hook sites whose module is not in the built tree (fail: the plan was made for another runtime)
+    installed: list[AcquisitionSite] = field(default_factory=list)
+    deferred: list[AcquisitionSite] = field(default_factory=list)
+    missing: list[AcquisitionSite] = field(default_factory=list)  # hook sites whose module is not in the built tree (fail: the plan was made for another runtime)
     handles: list = field(default_factory=list)
     _runner: Any = None
     _sample_patch: Any = None
@@ -82,7 +82,8 @@ class Installation:
 
 
 class OccurrenceSink:
-    """Counts runtime occurrences per site and records (shape, dtype, device) of what was seen; never reads a value."""
+    """Counts runtime occurrences per site and records (shape, dtype) of what was seen -- each tensor of a tuple, as a module's whole
+    return (slot `out`) is when it returns several; never reads a value."""
 
     def __init__(self) -> None:
         self.counts: dict[tuple[str, str, str], int] = {}
@@ -92,15 +93,16 @@ class OccurrenceSink:
 
     def __call__(self, key: tuple[str, str, str], t: Any) -> None:
         self.counts[key] = self.counts.get(key, 0) + 1
-        shape = getattr(t, "shape", None)
-        if shape is None:
+        ts = [x for x in (t if isinstance(t, (tuple, list)) else (t,)) if getattr(x, "shape", None) is not None]
+        if not ts:
             self.non_tensor[key] = self.non_tensor.get(key, 0) + 1
             return
-        sh = [int(x) for x in shape]
         lst = self.shapes.setdefault(key, [])
-        if sh not in lst and len(lst) < 64:
-            lst.append(sh)
-        self.dtypes.setdefault(key, set()).add(str(getattr(t, "dtype", "?")).replace("torch.", ""))
+        for x in ts:
+            sh = [int(n) for n in x.shape]
+            if sh not in lst and len(lst) < 64:
+                lst.append(sh)
+            self.dtypes.setdefault(key, set()).add(str(getattr(x, "dtype", "?")).replace("torch.", ""))
 
     def to_json(self) -> dict[str, Any]:
         keys = sorted(set(self.counts) | set(self.non_tensor))
@@ -178,7 +180,7 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
 
 def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tuple[list[str], list[str]]:
     """The module boundaries the plan hooks on `model`: (producer_output modules in runtime order, consumer_input modules sorted) -- the
-    ONE selection both the committer (`apply_plan_to_committer`) and the compiled rows' record ops (`CompiledGraphSource.wrap_model`)
+    ONE selection both the committer (`apply_plan_to_committer`) and the compiled workloads' record ops (`CompiledGraphSource.wrap_model`)
     take.  Refuses (`IncompletePlan`) a plan with UNSUPPORTED Values or with hook sites that are not modules of `model`."""
     hooks, _deferred, unsupported = _sites_of(plan)
     if unsupported:
@@ -194,7 +196,7 @@ def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tup
     return sorted(out_mods, key=lambda n: order[n]), sorted(in_mods)
 
 
-def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[str]:
+def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: AcquisitionSite) -> list[str]:
     if isinstance(plan, AcquisitionPlan):
         return plan.values_at(site)
     return next((list(h.get("values") or []) for h in (plan.get("hooks") or []) if (h["module"], h["kind"], h["slot"]) == site.key()), [])
@@ -202,8 +204,8 @@ def _values_at(plan: AcquisitionPlan | Mapping[str, Any], site: Site) -> list[st
 
 def apply_plan_to_committer(committer: Any, plan: AcquisitionPlan | Mapping[str, Any]) -> dict[str, Any]:
     """The committer's selection from the plan (`plan_selection`): `_modules` = the producer_output sites' modules
-    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token,
-    `promoted_input_bindings`) stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
+    (runtime order), `plan_inputs` = the consumer_input sites' modules.  The promoted-member arming (`acquire_inputs` bytes per token)
+    stays the manifest's (commit_delta sets it); the plan must name every armed consumer, else the plan is refused.
     A VERITY_SKIP ablation (`committer.skip_classes`) is applied to THIS selection (`apply_skip`, refused by name when it cannot be); the
     record names the dropped modules and the Values left unacquired.  Returns a record."""
     hooks, deferred, _unsupported = _sites_of(plan)

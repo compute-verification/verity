@@ -1,9 +1,45 @@
-import Proofs.Flock.Claims.DeployOC
-import Proofs.Flock.Claims.DeployInputs
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Flock.Level3.ArithFacts
-import Flock.With.Deployed
-import Flock.With.SetupEq
+module
+
+public import Flock.RecordText
+public import Flock.With.Deployed
+public import Flock.With.SetupEq
+public import Proofs.Flock.Claims.DeployInputs
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Flock.Level3.ArithFacts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
+import VCVio.Prelude.Core
 
 /-!
 # Flock's deployed verifier in public-coin form (`Deploy.V`)
@@ -12,7 +48,7 @@ The shipped verifier (`flock-verify verify`, plain or `--zk`) as a `Claims.Verif
 live session's, each answered by that round's live coin, and the last is decided by the shipped verdict, with every
 SHA-512 call an oracle query.
 
-* **Coins.** A live coin (`Coin`) is the `65536` GF(2^128) elements a round may draw (S12: `1 ≤ n ≤ 65536`); a round of
+* **Coins.** A live coin (`Coin`) is the `65536` GF(2^128) elements a round may sample (S12: `1 ≤ n ≤ 65536`); a round of
   `n` coins reads the first `n` (`Coin.vals`), the link's points the first `points · m_pts` (`pointsOf`). The verifier's
   answer `b_j` is the coin's bytes (`Coin.bytes`).
 * **Messages.** `a_1` is the link message (tag `0`: each table's `root_B` and public words, `linkBody`); `a_2, …` are the
@@ -22,9 +58,10 @@ SHA-512 call an oracle query.
 * **The decision** (`decision`): the statement's setup over `OC` (`setupM`, `Stmt.setupTablesWith Hashes.oc`), then at
   its session the shipped verdict over `OC` (`verifyWithM Hashes.oc`, or `Zk.verifyWithM`), every SHA-512 call of both
   an `OC.query`, the session's digests and the live coins' among them (S12's `msg_sha512`, `dgWith`); then, with no
-  hash, the live session's custody (`checks`): the last message's statement is `x`, the record's draw is the statement's,
+  hash, the live session's custody (`checks`): the last message's statement is `x`, the record's sample is the statement's,
   the record's link and rounds are the live messages and coins (`custody`); then the scope (`ProvedScope.check`) and a
-  draw-less session's refusal (`drawLaw zk none`), as `verifyCmd` orders them.
+  draw-less session's refusal (`drawLaw zk tags false none`), and last S0, the record in its canonical text (`RecordText.check`),
+  as `verifyCmd` orders them.
 * **Rounds.** `k(x) = 2 + Σ_tables 2 · repRounds`, the link, every recorded round and the last message (`rounds`), of
   the session the statement sets up at SHA-512 (`setupOf`).
 
@@ -36,6 +73,8 @@ SHA-512 oracle (`sha512`) the setup is the statement's and the verdict the deplo
 (`next_decide_sha512`, `next_decide_log_sha512`).
 -/
 
+@[expose] public section
+
 namespace FlockDeploy
 
 open Flock
@@ -43,7 +82,7 @@ open Lean (Json)
 
 /-! ## Coins -/
 
-/-- **A live coin**: the `65536` GF(2^128) elements a round may draw. -/
+/-- **A live coin**: the `65536` GF(2^128) elements a round may sample. -/
 def Coin : Type := Fin 65536 → F128
 
 instance instInhabitedCoin : Inhabited Coin := ⟨fun _ => 0⟩
@@ -113,7 +152,7 @@ structure Live where
 
 /-- The record's live session, read with no hash (`Record.decodeWith`'s fields, without its digests). -/
 def liveOf (spec : SessionSpec) (record : String) : V Live := do
-  let j ← match Json.parse record with
+  let j ← match Flock.JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"
   let l ← Record.fld j "link"
@@ -183,9 +222,10 @@ def setupCallsOf (h : ByteArray → ByteArray) (r : Readable.Read) : ℕ :=
   Stmt.setupCalls h r.tags r.I.circuitFile r.I.publicFile r.coins r.I.count r.I.tables r.draw r.I.partition r.I.program
     r.I.work r.I.stratified r.I.closure r.publicInputs
 
-/-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's draw is the
+/-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's sample is the
 statement's whatever its key order (`drawEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the
-live session's custody, the verifier's scope check, and a draw-less session's refusal. -/
+live session's custody, the verifier's scope check, a draw-less session's refusal, and last the record's canonical text
+(S0, `RecordText.check`: the record is what `printT` prints of what it parses to). -/
 def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) : V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
@@ -193,7 +233,8 @@ def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : L
     "live: the record's draw is not the statement's"
   custody spec (← liveOf spec f.record) link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw zk none
+  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags false none else pure ())
+  RecordText.check f.record
 
 /-- **The decision at a session**: the shipped verdict over `OC` on its tables, then the checks. -/
 def decisionAt (zk : Bool) (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)

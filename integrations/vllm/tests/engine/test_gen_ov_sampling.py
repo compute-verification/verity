@@ -1,5 +1,6 @@
 """[ov-sampling] the B1 (Qwen2.5-1.5B) sampling workloads and the per-request variant (mixed batch) of the SHARED-CODE
-`load_workload` / `sampling_params` change.  The adapter imports torch, so the pure functions are exec'd from source."""
+`load_workload` / `sampling_params` change.  The adapter imports torch, so the pure functions are exec'd from source.  The GPU
+probe's noise is `test_gen_ov_sampling_of_record`."""
 
 from __future__ import annotations
 
@@ -91,8 +92,8 @@ def test_sampling_params_prefers_the_request_params(monkeypatch):
     fake.SamplingParams = SP
     monkeypatch.setitem(sys.modules, "vllm", fake)
     samp = {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1}
-    fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy row
-    fn({"max_tokens": 16, "seed": 0, "n": 1}, samp)                                                     # the sampled row
+    fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy workload
+    fn({"max_tokens": 16, "seed": 0, "n": 1}, samp)                                                     # the sampled workload
     fn({"max_tokens": 16, "seed": 7, "n": 1, "temperature": 0.7, "top_p": 0.9, "top_k": 50}, samp)
     assert (calls[0]["temperature"], calls[0]["seed"]) == (0.0, 0)          # no request seed -> the workload's seed
     assert (calls[1]["temperature"], calls[1]["seed"], calls[1]["top_k"]) == (1.0, 0, 0)
@@ -112,8 +113,8 @@ def _program_output_gate(P):
 
 def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
     from verity.ml.circuits import Program, bind
-    from verity.ml.circuits.evaluate import evaluate_region
-    from verity_vllm.program.registry.sampling import GumbelArgmaxBf16
+    from verity.ml.circuits.evaluation.reference import evaluate_region
+    from verity.ml.definitions.registry.sampling import GumbelArgmaxBf16
     P = Program(bind(GumbelArgmaxBf16, V=V, SEED=seed, POS=pos))
     C = P.circuit
     gates = [g for _, _, g in P.input_coll(0).refs]
@@ -125,7 +126,7 @@ def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
 
 def _oracle(V: int, seed: int, pos: int, words: list[int]) -> int:
     import numpy as np
-    from verity_vllm.program.kernels.libdevice_sampling import gumbel_noise_exact
+    from verity_vllm.program.libdevice_sampling import gumbel_noise_exact
     logits = (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
     y = logits + gumbel_noise_exact(seed, pos, V)      # f32 add, round-to-nearest (the kernel's `logits + gumbel`)
     return int(np.argmax(y))                            # lowest index on ties, like the kernel's block-max scan
@@ -148,31 +149,6 @@ def test_gumbel_argmax_definition_is_a_function_of_the_seed_and_position():
     assert len({a, b, c}) > 1
 
 
-def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
-    """The pod probe dumped `_gumbel_sample_kernel`'s noise (tl.rand -> log1pf/logf) for seeds/positions of the B1 runs;
-    the lane's NumPy transcription and the Definition's per-lane primitive must reproduce every word."""
-    import numpy as np
-    from verity_vllm.program.kernels.libdevice_sampling import gumbel_noise_exact
-    from verity_vllm.program.registry.sampling import GumbelNoiseLane, GumbelStreamKey
-    probe = Path(__file__).resolve().parents[2] / "out/gen/lanes/ov-sampling/runs/probe"
-    cmp = probe / "compare.json"
-    if not cmp.exists():
-        pytest.skip("probe artifacts not fetched")
-    rep = json.loads(cmp.read_text())
-    assert rep["all_bit_exact"] is True, rep
-    dumps = sorted(probe.glob("*.npz"))
-    if not dumps:
-        pytest.skip("probe .npz not fetched (compare.json is the recorded verdict)")
-    d = np.load(dumps[0])
-    seed, pos = int(d["seed"]), int(d["pos"])
-    gpu = np.asarray(d["gumbel"], dtype=np.float32)
-    ours = gumbel_noise_exact(seed, pos, gpu.shape[0])
-    assert np.array_equal(gpu.view(np.uint32), ours.view(np.uint32))
-    key = GumbelStreamKey.evaluate(seed & ((1 << 64) - 1), pos & ((1 << 64) - 1))
-    for v in (0, 1, 7, gpu.shape[0] - 1):
-        assert GumbelNoiseLane.evaluate(key, v) == int(gpu.view(np.uint32)[v])
-
-
 # ---------------------------------------------------------------------------------------------------------
 # recognizer `sample.gumbel_argmax` on the synthetic gumbel decode step (SmolLM2 geometry, pinned profile + ours)
 # ---------------------------------------------------------------------------------------------------------
@@ -182,7 +158,7 @@ def _lane_ctx(events, start, sampling, seed=None, sample=None):
     import dataclasses
     from verity_vllm.observe.fold.resolver import StepContext
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.engine.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+    from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
     hdr = S.header(sampling)
     if seed is not None:
         hdr.workload["requests"][0]["seed"] = seed
@@ -296,10 +272,10 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     """div.full.f32 quotient (F32Mul(DivFullScaleA(x,T), DivFullRcp(T))) + noise, lowest-index argmax."""
     import numpy as np
     from verity.ml.circuits import Program, bind
-    from verity.ml.circuits.evaluate import evaluate_region
-    from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry.sampling import GumbelArgmaxTempBf16
-    from verity_vllm.program.kernels.libdevice_sampling import gumbel_noise_exact
+    from verity.ml.circuits.evaluation.reference import evaluate_region
+    from verity.ml.definitions.registry import prims as P
+    from verity.ml.definitions.registry.sampling import GumbelArgmaxTempBf16
+    from verity_vllm.program.libdevice_sampling import gumbel_noise_exact
     V, seed, pos = 80, 11, 5
     for T in (0.7, 1.3):
         tb = int(np.float32(T).view(np.uint32))

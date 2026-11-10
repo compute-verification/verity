@@ -1,5 +1,22 @@
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.VBridge.Family.Runs
+module
+
+public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.VBridge.Family.Runs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.VBridge.Runs.Rs
 
 /-!
 # The reps' value stubs `ProofOfVals` and `SetupOfVals`, from G's facts at holo
@@ -11,7 +28,7 @@ no frame and so hold at a holo shape:
   one rep that read no frame, and the claims the record answers, `claimsF` at the rep's values (as `run_of_frames`
   checks them). The ring switches' count, sizes and values are E's (`ringSwitch_of_residuals`, `decoded_rs_size`), and
   the claims' shapes the verifier run's points, sized without `NoEmpty` (`ofRounds_size`), which a holo rep's `h`
-  round, drawing no coins, breaks. G's proof file carries the messages at any shape (`msgs_proofOf`).
+  round, flipping no coins, breaks. G's proof file carries the messages at any shape (`msgs_proofOf`).
 * `unitSetup_of_from`, `setupOfVals_of_from`: the setup's part (`UnitSetup`) from `SetupRealizes` and `ShapeIs` at the
   run's statement and the values' setup and schedule (`SetupFrom`), with the schedule's model, the plain leaf's name
   and the extras at the link points (G's `ExtrasAre`).
@@ -20,6 +37,8 @@ no frame and so hold at a holo shape:
   rep's extras at well-formed link points (`RepExtrasAt`, as G's `rep_extras`), the comb port (`CombFolds`) and the
   class checks, which make the schedule's model the executable's (`sched_holoAt`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -33,10 +52,10 @@ open Flock Flock.RecAlgebra FlockSoundness.Refine FlockVBridge.Compiled
 open FlockVBridge.Family (CombFolds proofOf proofOf_zc le_of_fast100)
 open FlockVBridge.Runs (pair_append_get)
 
-/-- `Coins.ofRounds` hands `n` coins wherever it reads a round of `n` (RecAlgebra.lean:40–45), empty rounds or not. -/
+/-- `CoinSource.ofRounds` hands `n` coins wherever it reads a round of `n` (RecAlgebra.lean:40–45), empty rounds or not. -/
 theorem ofRounds_size {rs : Array (Array F128)} {k n : ℕ} {c : Array F128}
-    (h : (Flock.RecAlgebra.Coins.ofRounds rs).round k n = .ok c) : c.size = n := by
-  simp only [Flock.RecAlgebra.Coins.ofRounds] at h
+    (h : (Flock.RecAlgebra.CoinSource.ofRounds rs).round k n = .ok c) : c.size = n := by
+  simp only [Flock.RecAlgebra.CoinSource.ofRounds] at h
   split at h
   · split at h
     · cases h; assumption

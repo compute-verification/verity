@@ -1,5 +1,5 @@
 """The harness against its example port (`lean/DifftestExample.lean`, served by `Difftest.serve`): the right references agree
-on every drawn input, a wrong one is caught and shrunk to a minimal input, and a reject on one side only is caught."""
+on every sampled input, a wrong one is caught and shrunk to a minimal input, and a reject on one side only is caught."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def floor_div(v) -> int:
 
 
 def total_div(v) -> int:
-    a, b = _int(v, "a"), _int(v, "b")
+    _, b = _int(v, "a"), _int(v, "b")
     return 0 if b == 0 else div(v)
 
 
@@ -70,11 +70,12 @@ def test_the_example_port_agrees(server, fn, reference):
 
 def test_echo_holds_the_wire_format_to_python_s_canonical_json(server):
     """`echo` returns what `Json.parse` read, as `Flock.canon` writes it: strings with control characters and non-ASCII,
-    integers past 64 bits, nested objects with keys out of order."""
+    integers past 64 bits, nested objects with keys out of order. The canon is ASCII: every character past `~` (DEL,
+    é, U+2028) is written as a `u` escape, like a control character."""
     stats = D.run(port("echo", lambda v: v, JSON, need_rejects=False), examples=300, server=server)
     assert stats.outputs == 300
     assert D.replay(port("echo", lambda v: v), {"z": "é\n\x01\x7f\u2028", "a": [-(2**100), True, None]}, server) == (
-        "output", '{"a":[-1267650600228229401496703205376,true,null],"z":"é\\n\\u0001\x7f\u2028"}')
+        "output", '{"a":[-1267650600228229401496703205376,true,null],"z":"\\u00e9\\n\\u0001\\u007f\\u2028"}')
 
 
 def test_a_wrong_reference_is_caught_and_shrunk(server):
@@ -85,6 +86,22 @@ def test_a_wrong_reference_is_caught_and_shrunk(server):
     assert (e.value.lean, e.value.python) == (("output", "0"), ("output", "-1"))
     report = str(e.value)
     assert 'input:  {"a":1,"b":-2}' in report and "run(port, examples=300, seed=0)" in report, report
+
+
+def test_with_lean_of_record_python_is_held_to_it(server):
+    """Under `of_record="lean"` the same disagreement fails with the Lean's verdict as the one Python is held to; a side
+    that is neither Lean nor Python is refused."""
+    with pytest.raises(D.Mismatch) as e:
+        D.run(port("div", floor_div, of_record="lean"), examples=300, server=server)
+    assert e.value.input == {"a": 1, "b": -2} and e.value.of_record == "lean"
+    assert str(e.value).startswith("difftest of 'div'") and "Python differs from the Lean, the verifier of record" in str(e.value)
+    assert '  lean:   output 0  (of record)\n  python: output -1' in str(e.value)
+    assert D.Mismatch("div", {}, ("output", "0"), ("output", "-1"), "lean").args[0] == (
+        "div: Python output -1 where Lean, of record, gives output 0, on {}")
+    stats = D.run(port("div", div, of_record="lean"), examples=100, server=server)
+    assert stats.outputs and stats.rejects
+    with pytest.raises(ValueError, match="of_record is 'rust'"):
+        port("div", div, of_record="rust")
 
 
 def test_the_run_is_deterministic(server):

@@ -1,12 +1,16 @@
 """`lean/TRUSTED.sha256` is what the regeneration command in `lean/README.md` writes.  `grade.sh` refuses every submission
 unless each listed file matches its hash, and trusts a file nobody listed without hashing it; `check` never runs `grade.sh`
-(it needs `unshare --user`), so this suite, which reruns on every change under `lean/`, holds the file to the command."""
+(it needs `unshare --user`), so this suite, which reruns on every change under `lean/`, holds the file to the command.  It
+reads every file the command hashes, so it also holds its own `[tool.verity.tests] inputs` to them: a file the command
+starts to hash outside them fails here, with the lines to add, on the change that adds it."""
 
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -14,7 +18,7 @@ import pytest
 LEAN = Path(__file__).parents[1] / "lean"
 #: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
 SECURITY = "../../../../../Security/"
-COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort\) > TRUSTED\.sha256)$", re.M)
+COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort -u\) > TRUSTED\.sha256)$", re.M)
 LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 
 
@@ -25,15 +29,16 @@ def sha256(p: Path) -> str:
 def command(pkg: Path) -> tuple[str, list[str], list[str]]:
     """The README's regeneration command on one line: (the command, the files it names, the trees whose `.lean` files follow)."""
     m = COMMAND.search(re.sub(r"\\\n\s*", "", (pkg / "README.md").read_text()))
-    assert m, (f"{pkg / 'README.md'} has no command `sha256sum FILES $(find TREES -name '*.lean' | LC_ALL=C sort) > "
+    assert m, (f"{pkg / 'README.md'} has no command `sha256sum FILES $(find TREES -name '*.lean' | LC_ALL=C sort -u) > "
                f"TRUSTED.sha256`; if the command changed shape, change `COMMAND` here with it")
     return m.group(1), m.group(2).split(), m.group(3).split()
 
 
 def trusted(pkg: Path) -> list[str]:
-    """The files the command hashes, in its order: those it names, then the trees' `.lean` files as `LC_ALL=C sort` orders them."""
+    """The files the command hashes, in its order: those it names, then the trees' `.lean` files as `LC_ALL=C sort -u`
+    orders them, once each however many trees hold them."""
     _, named, trees = command(pkg)
-    found = (p.relative_to(pkg).as_posix() for t in trees for p in (pkg / t).rglob("*.lean") if p.is_file())
+    found = {p.relative_to(pkg).as_posix() for t in trees for p in (pkg / t).rglob("*.lean") if p.is_file()}
     return named + sorted(found, key=str.encode)
 
 
@@ -67,6 +72,27 @@ def test_trusted_hashes_are_current():
                           f"  cd verity/core/protocols/pous/lean && {cmd}")
 
 
+def declared_inputs() -> list[str]:
+    return tomllib.loads((LEAN.parent / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+
+
+def undeclared(pkg: Path, inputs: list[str]) -> list[str]:
+    """The files the command hashes (`trusted`) that the suite's read guard refuses its tests reading, as paths from the
+    root: those outside the suite's directory and ``inputs``.  The suite declares no `[project]`, so no dependency's
+    directory is among what the guard allows."""
+    root = pkg.parents[4]
+    allowed = [pkg.parent.relative_to(root).as_posix(), *inputs]
+    files = [Path(os.path.normpath(pkg / f)).relative_to(root).as_posix() for f in trusted(pkg)]
+    return [f for f in files if not any(f == p or f.startswith(p.rstrip("/") + "/") for p in allowed)]
+
+
+def test_every_trusted_file_is_a_suite_input():
+    missing = undeclared(LEAN, declared_inputs())
+    assert not missing, ("verity/core/protocols/pous/pyproject.toml's [tool.verity.tests] inputs leave out these files "
+                         "lean/TRUSTED.sha256's command hashes, which this suite reads, so its read guard fails it; add "
+                         "them:\n" + "\n".join(f'          "{f}",' for f in missing))
+
+
 def copy(tmp: Path) -> Path:
     """The files `stale` reads, copied from `lean/` and the trusted layer into ``tmp`` at their places under `verity/` (so
     `SECURITY` names the copy), with `TRUSTED.sha256` regenerated there: the regressions start clean even when `lean/` is
@@ -77,7 +103,10 @@ def copy(tmp: Path) -> Path:
     for rel in ["README.md", *named, *trees]:
         dest = tmp / (LEAN / rel).resolve().relative_to(base.resolve())
         dest.parent.mkdir(parents=True, exist_ok=True)
-        (shutil.copytree if (LEAN / rel).is_dir() else shutil.copy2)(LEAN / rel, dest)
+        if (LEAN / rel).is_dir():
+            shutil.copytree(LEAN / rel, dest, dirs_exist_ok=True)
+        else:
+            shutil.copy2(LEAN / rel, dest)
     (pkg / "TRUSTED.sha256").write_text(regenerated(pkg, trusted(pkg)))
     return pkg
 
@@ -94,7 +123,7 @@ def edited(pkg: Path) -> None:
 
 
 def corrupted(pkg: Path) -> None:
-    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Models/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
+    relist(pkg, lambda d: [f"{'0' * 64 if f == SECURITY + 'Definitions/Pous/Guarantees.lean' else h}  {f}" for f, h in d.items()])
 
 
 def dropped(pkg: Path) -> None:
@@ -102,7 +131,7 @@ def dropped(pkg: Path) -> None:
 
 
 def added(pkg: Path) -> None:
-    (pkg / SECURITY / "Models/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
+    (pkg / SECURITY / "Definitions/Pous/Guarantees/Added.lean").write_text("import Definitions.Pous\n")
 
 
 def extra(pkg: Path) -> None:
@@ -115,9 +144,9 @@ def reordered(pkg: Path) -> None:
 
 @pytest.mark.parametrize("mutate, problems", [
     (edited, ["Grader/Registry.lean does not match its hash in TRUSTED.sha256"]),
-    (corrupted, [f"{SECURITY}Models/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
+    (corrupted, [f"{SECURITY}Definitions/Pous/Guarantees.lean does not match its hash in TRUSTED.sha256"]),
     (dropped, ["lake-manifest.json is trusted but not listed"]),
-    (added, [f"{SECURITY}Models/Pous/Guarantees/Added.lean is trusted but not listed"]),
+    (added, [f"{SECURITY}Definitions/Pous/Guarantees/Added.lean is trusted but not listed"]),
     (extra, ["README.md is listed but the command does not hash it"]),
     (reordered, ["the files are listed in another order than the command's, or more than once"]),
 ], ids=lambda x: getattr(x, "__name__", None))
@@ -126,3 +155,13 @@ def test_a_stale_trusted_file_is_named(tmp_path, mutate, problems):
     assert stale(pkg) == []
     mutate(pkg)
     assert stale(pkg) == problems
+
+
+def test_a_trusted_file_outside_the_inputs_is_named(tmp_path):
+    """A `.lean` file the command finds under a declared tree is an input already; a named file whose input is gone is the one
+    reported."""
+    pkg, inputs = copy(tmp_path), declared_inputs()
+    added(pkg)
+    assert undeclared(pkg, inputs) == []
+    game = "Security/Definitions/Core/Game.lean"
+    assert undeclared(pkg, [i for i in inputs if game != i and not game.startswith(i.rstrip("/") + "/")]) == [game]

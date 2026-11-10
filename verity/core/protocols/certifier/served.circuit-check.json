@@ -1,0 +1,30 @@
+{
+ "definitions": {
+  "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
+   "and": 4918
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
+   "and": 3438
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=1}": {
+   "and": 3502
+  }
+ },
+ "digests": {
+  "NetworkServedCounts_v1{T=12,FOUT=3,FIN=2,R=2,RIN=2,OWN=1}": {
+   "sha512": "21e6c7d449479ca36ef63b85508b88a47f01ee86f36f864fecefea5c247ee42c8a48c8015b29f6d49b84527616daa9ce789c47f31b55235884092ccce27c1685"
+  },
+  "NetworkServedCounts_v1{T=600,FOUT=1024,FIN=1,R=6,RIN=1,OWN=0}": {
+   "sha512": "88515d489a24909b572537bcef4f8e42dc877115ae8f42d87ec4f52e2eb7c6662f5194fafa958d21a770ccbae8876bc9343115f1936b97f829f80ccf1566f676"
+  },
+  "NetworkServedCounts_v1{T=600,FOUT=1024,FIN=2,R=16,RIN=4,OWN=1}": {
+   "sha512": "aa2fbdd4c1b112c4fcb6b6bf00295621b6d4816c46912f495eae6bbaa231507f783b2bf58299097bdf6187f4e71dbb324420e71ffe2a21147d16ad91f59c6386"
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=0}": {
+   "sha512": "c1a379d7110d5057d4e9c072eac2c9bd45d38647e8357309c2ac50c9ca0f959f397e4f0fc2f126e066a91c1b85a5ebb619c0c788d478e6ed4daffafd36ccb462"
+  },
+  "NetworkServedCounts_v1{T=8,FOUT=3,FIN=1,R=2,RIN=2,OWN=1}": {
+   "sha512": "dd9595b85dbf8dbca9e098bfdd30877f94cd9dc66622176d65098bc4bbbc2aced55d9f21068544a3820695e6cb57737b929047178a5c6a0fc68d547fb51cf247"
+  }
+ }
+}

@@ -227,7 +227,7 @@ def profile(desc: dict) -> dict:
 def build(config: str, LP: int, STEPS: int) -> dict:
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     C = {"B1": b1.B1_CONFIG, "B0": b1.B0_CONFIG}[config]
     t0 = time.time()
     program = Program(bind(b1.Serve, C=C, LP=LP, STEPS=STEPS))

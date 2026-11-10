@@ -6,7 +6,6 @@ what the cgroup namespace hides is recorded as a visibility limitation, not sile
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -242,7 +241,6 @@ class Cgroup:
                                    "file_writeback": kv.get("total_writeback"), "shmem": kv.get("total_shmem"), "kernel": None,
                                    "kernel_reason": "v1 has no kernel memory total in memory.stat"} if kv else None)
             out["memory_stat_fields_present"] = sorted(kv)[:64]
-            cpuacct = self.dir.parent if False else None   # v1 cpuacct lives in another hierarchy; recorded absent
             out["cpu_stat"], out["cpu_stat_reason"] = None, "v1: cpuacct is a separate hierarchy (not sampled in v0.1)"
             out["io_stat"], out["io_stat_reason"] = None, "v1: blkio is a separate hierarchy (not sampled in v0.1)"
         if self.v1_dir is not None and self.version == 2:

@@ -5,20 +5,20 @@ The store is the harness's `C` on the device, set up under the bandwidth audit's
 in, so the granted verifier accepts `C` as this device's store (`audit.Verifier` refuses any other) and P2's audit runs over
 the same `C`.  The challenger reads the device's id itself (`gpu.challenger_device`) and keeps the store's one state in the
 run's state directory (`audit.ChallengerState`), which every tag's verifier shares across rounds.  Every window goes
-through the store's one prover, the bandwidth harness's (`gpu.Prover`, kept by `Device`): it opens the window, prepares (an
+through the store's one prover, the bandwidth harness's (`gpu.Prover`, kept by `BandwidthProver`): it opens the window, prepares (an
 untimed pass under a throwaway seed, then a read of 512 MiB of another buffer, so L2 holds clean lines and no part of the
 store), takes σ, runs the tag pass on stream 0 in the tagger's own workspaces and commits the root.  The context prefers L1
 in the L1/shared-memory split from the start (`prefer_l1`): the tag pass otherwise runs in the split torch's last kernel
 left, about 40% slower.  The verifier is in this
 process at the granted point (`certified.granted_params`: `s = 1,849`, `T = 1.2 ms`, no RTT, for it sees none), on a clock
-held at the root (`Held`), so the prover can resume its chain before the verifier draws the samples (7 to 9 ms of Python,
+held at the root (`Held`), so the prover can resume its chain before the verifier samples the samples (7 to 9 ms of Python,
 another machine's in a deployment).  A window is on time at T when it committed within `certified.window_params`' T
 (1,354 µs, the RTT at P2's cap inside the rebuild floor), and accepted when within the granted 1.2 ms with its openings.
 
 * **(d), proof-only reads.**  At the harness's hook (before its limit is calibrated, nothing else running): `E`'s raw read
   (torch's sum of it as int64), then every tag the tagger has, `PASSES` passes each from a clean L2 (the scrub first), timed
   on the device by the tagger's events (`Tagger.last_pass_ms`: its tags, and the pass to its root) and on the host from the
-  call to the root on the host; then `WINDOWS` windows and a skip control (`SKIP` of the blocks untagged over a poisoned
+  call to the root on the host; then `WINDOWS` windows and a skip control (`SKIP` of the labels untagged over a poisoned
   workspace), which must be rejected.
 * **(e), joint v0.**  The chain on plain W (the harness's honest-audit load), P2's timed audit (its responder in this
   process) and `ro-blake3/v1`'s windows at once: a thread opens one window at a time at random gaps (mean `GAP_S`) until the
@@ -66,7 +66,7 @@ CU_FUNC_CACHE_PREFER_L1 = 2
 
 
 def store_key(params: Any, salt: bytes, store: bytes) -> tuple[VerifierKey, MerkleTree]:
-    """`vk` over `E` (the store's blocks under PoUS's leaves, `pous.verifier.leaf_hash`) and the prover's tree, whose paths open
+    """`vk` over `E` (the store's labels under PoUS's leaves, `pous.verifier.leaf_hash`) and the prover's tree, whose paths open
     the store's samples."""
     nb, view = params.block_bytes, memoryview(store)
     if len(view) != params.blocks * nb:
@@ -79,7 +79,7 @@ class Held:
     """The verifier's clock (`clock`, `audit.Verifier`'s own by default): `last` is its last reading, and `hold()` takes a
     reading that its next call returns.  `Window.start` reads it last as σ leaves and `Window.commit` first as it stops, so
     holding it as the root reaches the host stops the window there, and the prover may resume its chain before the
-    commitment draws the samples."""
+    commitment samples the samples."""
 
     def __init__(self, clock: Callable[[], int] = time.perf_counter_ns) -> None:
         self.clock, self.last, self._held = clock, 0, None
@@ -151,8 +151,8 @@ class Pass(Protocol):
 
 
 class Prover(Protocol):
-    """The store's one honest bandwidth prover (`Device`): `commit(window, slot, tagged)` opens the window, prepares, takes
-    σ, tags every block (or the first `tagged`, a skip control, over a poisoned workspace) into workspace `slot` and commits
+    """The store's one honest bandwidth prover (`BandwidthProver`): `commit(window, slot, tagged)` opens the window, prepares, takes
+    σ, tags every label (or the first `tagged`, a skip control, over a poisoned workspace) into workspace `slot` and commits
     its root, returning the pass and the samples; `tag_pass` is a pass outside any window (one of (d)'s, or the kernels'
     first load), `scrub` the preparation's read, and `reserve` makes a tag's workspaces ahead."""
 
@@ -500,7 +500,7 @@ class Pause:
                 last, resumed[0], burst)
 
     def skip_control(self) -> None:
-        """One window with `SKIP` of the blocks untagged over a poisoned workspace, through the prover as the honest ones."""
+        """One window with `SKIP` of the labels untagged over a poisoned workspace, through the prover as the honest ones."""
         tagged = self.prover.blocks - round(SKIP * self.prover.blocks)
         w = self.ch.window(JOINT_TAG)
         tp, drawn = self.prover.commit(w, 0, tagged)
@@ -537,8 +537,7 @@ class Pause:
 def prefer_l1() -> int:
     """The current context's L1/shared-memory split preference set to L1 (`cuCtxSetCacheConfig`), CUDA's return code.  A
     kernel with no preference of its own keeps the split the last kernel left: after torch's kernels the tag pass ran at
-    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`,
-    run r20261012-055226-416b)."""
+    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`)."""
     import ctypes
     return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig(CU_FUNC_CACHE_PREFER_L1)
 
@@ -564,7 +563,7 @@ class GpuPass:
         return self._c.open(j, self._tree)
 
 
-class Device:
+class BandwidthProver:
     """The store's one bandwidth prover, the bandwidth harness's `gpu.Prover` over the store at `store` (`blocks` rows of
     2,056 bytes in device memory) with `tagger`'s own scrub buffer and workspaces, on stream 0, as `gpu.py windows` runs it;
     `tree` is the store's tree under `vk`.  A window's workspace is its slot's (each tag's slots made by `reserve` or on
@@ -625,7 +624,7 @@ class Device:
         return {"kernel": "torch.sum of E as int64", "bytes": self.c.numel(), "device_ms": times}
 
 
-def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) -> tuple[dict, Device, Challenger]:
+def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) -> tuple[dict, BandwidthProver, Challenger]:
     """At the harness's hook (`C` on the device, nothing running): the device as the challenger reads it, which must be the
     one the store's salt binds (the harness's `--bandwidth-salt`), `vk` over `C` under the framing's registered P2
     (`fr.params`, `fr.salt`), the store's one prover and its challenger."""
@@ -645,7 +644,7 @@ def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) 
     t0 = time.monotonic()
     vk, tree = store_key(fr.params, fr.salt, c.cpu().numpy().tobytes())
     key_s = time.monotonic() - t0
-    prover = Device(G, tagger, c.data_ptr(), int(c.shape[0]), tree, c)
+    prover = BandwidthProver(G, tagger, c.data_ptr(), int(c.shape[0]), tree, c)
     ch = Challenger.open(state_dir, vk, device, fr.model, fr.setup_source)
     return {"store": {"blocks": fr.params.blocks, "block_bytes": fr.params.block_bytes,
                       "bytes": fr.params.blocks * fr.params.block_bytes, "root": vk.root.hex(), "salt": vk.salt.hex()},

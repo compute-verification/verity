@@ -1,0 +1,18 @@
+[Unit]
+Description=the challenger's session %i, as auditor from the pinned tree (benchmarks/live_challenger/auditor.py run)
+
+[Service]
+Type=exec
+User=auditor
+Group=auditor
+UMask=0022
+WorkingDirectory=/opt/vy-challenger/current
+Environment=PYTHONDONTWRITEBYTECODE=1 HOME=/var/lib/vy-challenger PATH=/opt/vy-challenger/current/.lean-bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py run %i
+# past the gate's longest --minutes (720), so only a session the runner lost track of meets it
+RuntimeMaxSec=13h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vy-challenger /opt/vy-challenger

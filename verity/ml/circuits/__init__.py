@@ -1,9 +1,7 @@
-"""verity.ml.circuits — the Verity IR core; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
+"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites a section of veritor's IR document (``docs/verity-ir-*.md``).
 
-Promoted from ``veritor`` ``verity.ir/`` at commit ``eb865ce29``: ``types``, ``refs``, ``defs``, ``program``, ``layout``,
-``evaluate``, ``query`` byte for byte (``plan`` stayed in veritor); ``codec`` with its hard-coded registry families replaced by the
-``register_lazy_family`` hook.  The registry (``b1``, ``hopper``, ``prims``, ...), frontend, and derive tooling stayed behind;
-semantics packages register their primitives with this core.
+Semantics packages register their primitives with this core (``codec``'s ``register_lazy_family`` hook for the lazily
+materialised families).
 
 Invariant (verbatim from IR §C.5; do not paraphrase, do not regress):
 
@@ -24,18 +22,18 @@ definitions with total evaluators on encodings, composite definitions whose bodi
 over calls, `call` / `batch` / `scan` / `bind`, the canonical layout (function-body order, one interval per
 call, batch members and scan iterations in structural order, cached gate counts and offsets — gate `i` is
 located by division, never by expansion), root-scoped value references, regions, the query language
-(`/`, `/Name`, `//Name`, `//A/B`, `//A//B`, `//A ! groups(F, k)`), an explicit-expansion evaluator, and a
-JSON descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified in `PROTOCOL.md`.
+(`/`, `/Name`, `//Name`, `//A/B`, `//A//B`, `//A ! groups(F, k)`), an explicit-expansion evaluator, port types (a
+Definition's declared intervals, sinks, input kinds and word types, which every Program is held to: `ports`), and a JSON
+descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified in `PROTOCOL.md`.
 """
 
-from .types import Value, Array, Tuple, Record, Type, leaves_of  # noqa: F401
+from .types import Value, Array, Tuple, RecordType, Type, leaves_of  # noqa: F401
 from .refs import Coll, array_of, tuple_of, record_of  # noqa: F401
 from .defs import (PrimitiveDefinition, CompositeDefinition, SpecializedDefinition, IntrinsicSummary, bind, primitive, composite,  # noqa: F401
                    Registry, REGISTRY)
 from .program import Program, input_prim  # noqa: F401
-from .layout import Circuit, GateSelection, Region, FunctionCall, Gate  # noqa: F401
-from .query import query, groups, GapError, QueryError  # noqa: F401
-from .evaluate import evaluate_region, evaluate_call, ExecutionTranscript, MissingValue  # noqa: F401
+from .layout import Circuit, Region, FunctionCall, Gate  # noqa: F401
+from .query import query, QueryError  # noqa: F401
 from .codec import encode_program, decode_program, program_digest, descriptor_size, canonical_json  # noqa: F401
 from . import boolean  # noqa: F401  (registers the three gates and the constant bits)
 

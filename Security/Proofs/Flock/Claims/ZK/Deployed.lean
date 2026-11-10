@@ -1,13 +1,52 @@
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.ZK.Prefinal
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.ZK.Prefinal
+public import Proofs.Flock.Soundness.Discharge.Composed.RegWords
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Flock
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+import Proofs.Flock.Soundness.ZK.GK.Link
+import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Flock's zero knowledge at the tables `verify --zk` sets up
 
-`Flock.zk_deployZk_of_models` takes five Props of the masked prover's models, each model's tables of one type. At the
+`Flock.zkAt_deployZk_of_models` takes five Props of the masked prover's models, each model's tables of one type. At the
 tables `verify --zk` sets up, each a `CoinedSetup` with its own types as `--session-tables J` has them, the models are
 the session's own and most of what the Props ask is a theorem:
 
@@ -24,7 +63,7 @@ the session's own and most of what the Props ask is a theorem:
   of the tables' `simExe` on the dummy where the prover goes on and the dummy-witness prover's messages where it
   refuses. `SimLink` holds by construction (`Proto.withSim_shvzk`), and the prover is `G`'s.
 
-`Flock.zk_deployZk_of_tables` is `Claims.Flock.ZK` at `FlockDeploy.deployZk` and the pinned hm96 key (`ZkView.My`,
+`Flock.zk_deployZk_of_tables` is `Claims.Flock.ZKAt` at `FlockDeploy.deployZk` and the pinned hm96 key (`ZkView.My`,
 `ZkView.saltHash`), under `Claims.Hm96Hiding` and three Props of a Lean model of `flock-circuit --zk`:
 
 * `Proto.TMsgLink`: the prover's messages are the session's: before the last coin and where it refuses, the round
@@ -34,8 +73,11 @@ the session's own and most of what the Props ask is a theorem:
 * `Proto.CoinCheck`.
 
 `Flock.zk_deployZk_of_tables_gap` is the same at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`), with
-`Claims.Hm96Hiding` discharged.
+`Claims.Hm96Hiding` discharged. `Flock.zkAt_of_tables_bind` is the same at any masked record whose rounds with `Hello`
+are the protocol's, from `Binding` itself.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -43,7 +85,7 @@ open Claims
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## The tables the session sets up -/
 
@@ -64,7 +106,7 @@ theorem SetupTable.ok {C : Composed.CoinedSetup} (h : SetupTable C) :
   obtain ⟨_, P, Tz, st, hwf, hr, hS, M, hdm, hW, rfl⟩ := h
   exact ⟨(Composed.coinedOf_setup_of P Tz st hwf hS M hdm).2.2.2.2.2, Composed.coinedOf_reg P Tz st hwf hr hS hW⟩
 
-/-- **Each table of the hidden-output session's plan is a table the session sets up**, at every draw `verify --zk` sets
+/-- **Each table of the hidden-output session's plan is a table the session sets up**, at every sample `verify --zk` sets
 that table up (`zk_session_viewHJ`'s tables). -/
 theorem setupTable_planZHJ {mPts n : ℕ} {Reg : Type} (P : Composed.LigProver) (I : Exec.Inputs)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -494,23 +536,20 @@ end Proto
 
 /-! ## Flock's zero knowledge at the session's tables -/
 
-/-- **Flock's zero knowledge against a malicious verifier at `FlockDeploy.deployZk`, at the tables the session sets
-up**: `Claims.Flock.ZK` at `P_zk = G.prover` and `S_GK = (G.withSim Mc).simulatorE t (t·3^t)`, at
-`ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, for a committed-coin protocol whose coins are the deployed
-verifier's, under `Claims.Hm96Hiding` at the pinned key and three named hypotheses: `TMsgLink`, `TablesOK` and
-`CoinCheck`. -/
-theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
-    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
-    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
-    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
-    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
-    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
-    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
-    (hC : G.CoinCheck) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+/-- **Flock's zero knowledge against a malicious verifier at a masked record, at the tables the session sets up**:
+`Claims.Flock.ZKAt` at `P_zk = G.prover` and `S_GK = (G.withSim Mc).simulatorE t (t·3^t)`, at
+`ε_zk = 8·n_L·δ₁ + 8t·n_B·δ₁ + 2·3^{-t}` and `γ = 4t·3^t`, for a committed-coin protocol whose rounds with `Hello` are
+the record's, under `Claims.Hm96Hiding` at the pinned key and three named hypotheses: `TMsgLink`, `TablesOK` and
+`Binding`. -/
+theorem Flock.zkAt_of_tables_bind {Coin Col T : Type} (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T)
+    (G : Proto Flock.Wit) [Fintype G.Coin] (t : ℕ) (ht : 0 < t) (hzk : D.zk = true) (hk : ∀ x, D.V.k x + 1 = G.k x)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (Mp : ∀ x, G.Nonce → G.TPreModel x) (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x)
+    (nL nB : Msg → ℕ) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TMsgLink H (Flock.R D.parse) Mp Mc) (hOK : G.TablesOK Mp Mc) (hC : G.Binding H) :
+    Claims.Flock.ZKAt H D G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t := by
-  obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := hC
-  have hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : G.Nonce)
+  have hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : G.Nonce)
       (V : FlockSoundness.ZK.Responder Msg Out (G.K x + 1)) (E : (Fin (G.K x + 1) → Msg) → Prop),
       |Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.msg x w ν)) V r)) -
         Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))| ≤
@@ -522,11 +561,37 @@ theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
           have : ((Mp x ν).size : ℝ) ≤ nL x := by exact_mod_cast hnL x ν
           gcongr
   rw [← G.withSim_prover Mc]
-  exact Flock.zkR_gkE_hm96_deployZk H rel (G.withSim Mc) t ht hK δ₁ nL nB hA
-    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) Tr nb root parse pos idx n
-    depth dc hchk hdec
+  exact Flock.zkR_gkE_hm96_bind H D (G.withSim Mc) t ht hzk hk δ₁ nL nB hA
+    (G.withSim_shvzk H _ hT1 hδ₁ Mc nB hnB (fun x w hR ν c => (hL x w hR ν).2 c) hOK.2) hC
 
-/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): `Claims.Flock.ZK` at `δ₁` the statistical
+/-- **The same at `FlockDeploy.deployZk`**, for a committed-coin protocol whose coins are the deployed verifier's. -/
+theorem Flock.zk_deployZk_of_tables_bind (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
+    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
+    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
+    (hC : G.Binding H) :
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
+  Flock.zkAt_of_tables_bind H _ G t ht rfl (fun x => (deployZk_proto_k rel G hK x).symm) hT1 hδ₁ Mp Mc nL nB hnL hnB
+    hL hOK hC
+
+/-- **The same under `CoinCheck`** (`Proto.binding_of_coinCheck`). -/
+theorem Flock.zk_deployZk_of_tables (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
+    (t : ℕ) (ht : 0 < t) (hK : ∀ x, G.K x = (FlockDeploy.V true).k x - 1) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (Mp : ∀ x, G.Nonce → G.TPreModel x)
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Msg → ℕ)
+    (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
+    (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
+    (hC : G.CoinCheck) :
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
+  Flock.zk_deployZk_of_tables_bind H rel G t ht hK hT1 hδ₁ Mp Mc nL nB hnL hnB hL hOK (G.binding_of_coinCheck H hC)
+
+/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`): `Claims.Flock.ZKAt` at `δ₁` the statistical
 distance of `(M·y, c(y))` from `(U, c(y))` at the pinned key, under `TMsgLink`, `TablesOK` and `CoinCheck` alone. -/
 theorem Flock.zk_deployZk_of_tables_gap (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit) [Fintype G.Coin]
@@ -535,7 +600,7 @@ theorem Flock.zk_deployZk_of_tables_gap (H : Msg → Msg)
     (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink H (Flock.R (FlockDeploy.deployZk rel).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.CoinCheck) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) G.prover ((G.withSim Mc).simulatorE t (t * 3 ^ t))
       (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
         8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
         2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=

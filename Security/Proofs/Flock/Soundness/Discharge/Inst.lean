@@ -1,7 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Rows
-import Proofs.Flock.Soundness.Discharge.Inst.Place
-import Proofs.Flock.Soundness.Discharge.Inst.Prog
-import Proofs.Flock.Soundness.Discharge.Inst.Keys
-import Proofs.Flock.Soundness.Discharge.Inst.Order
-import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
-import Proofs.Flock.Soundness.Discharge.Inst.Tail
+module
+
+public import Proofs.Flock.Soundness.Discharge.Inst.Rows
+public import Proofs.Flock.Soundness.Discharge.Inst.Place
+public import Proofs.Flock.Soundness.Discharge.Inst.Prog
+public import Proofs.Flock.Soundness.Discharge.Inst.Keys
+public import Proofs.Flock.Soundness.Discharge.Inst.Order
+public import Proofs.Flock.Soundness.Discharge.Inst.KeysRow
+public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Discharge.Composed.RegWords
+
+@[expose] public section

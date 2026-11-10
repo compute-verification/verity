@@ -1,20 +1,24 @@
-import Proofs.Flock.Claims.KS.DecodeSC
-import Proofs.Flock.Claims.KS.PlainAcc
+module
+
+public import Proofs.Flock.Claims.KS.DecodeSC
+public import Proofs.Flock.Claims.KS.PlainAcc
 
 /-!
 # The deployed plain decoders at the plain table
 
 `PlainLiveAccAt` asks for decoders right at `plainTab`, table 0's model statement. `decodesTable_wrP_sc` gives them at
-`Integrate.tablesAt`, the table of the draw a session's inputs set up. At a plain statement in scope with public
-outputs whose draw is `d`, the two are one table:
+`Integrate.tablesAt`, the table of the sample a session's inputs set up. At a plain statement in scope with public
+outputs whose sample is `d`, the two are one table:
 
 * `plain_setupH`: the statement's inputs are untyped, have the tags `DecodeZL.TagsOk` asks, parse its one table's
   circuit, which returns the outputs, and set that table up at `d`, with `22 ≤ m ≤ 35`.
-* `tableAt_plainTab`: the table of a draw that sets up `st` is `plainTab` at `st`, whatever its layout.
+* `tableAt_plainTab`: the table of a sample that sets up `st` is `plainTab` at `st`, whatever its layout.
 * `plain_wordLen`: the plain codeword length is `2^logLen` at level 0 of the table's schedule.
-* `plain_hdec`: so at the draw `d` and no drawn unit, `decodesTable_wrP_sc` is the decoders' fact `PlainLiveAccAt`
+* `plain_hdec`: so at the sample `d` and no sampled proof block, `decodesTable_wrP_sc` is the decoders' fact `PlainLiveAccAt`
   asks, at `plainTab`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -23,9 +27,9 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **A plain statement in scope with public outputs sets up its one table at its draw**: its inputs are untyped and
+/-- **A plain statement in scope with public outputs sets up its one table at its sample**: its inputs are untyped and
 have the tags `DecodeZL.TagsOk` asks, they parse the table's circuit, which returns the outputs, setupH sets the
-table up at the draw `d`, the session's spec is the table's, and `22 ≤ m ≤ 35`. -/
+table up at the sample `d`, the session's spec is the table's, and `22 ≤ m ≤ 35`. -/
 theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
@@ -63,7 +67,10 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   have hc := (setupH_spec ht hst).1
   have hcirc : ins.read.circ = st'.c := by
     simp only [Readable.Read.circ, ProvedScope.circuitOf, htags, hh, Bool.false_eq_true, ↓reduceIte, hc]
-  rw [hcirc] at ho
+  have hstmt : ins.read.stmt = st'.c := by
+    rw [Readable.Read.stmt, hcirc]
+    exact FlockSoundness.unrolled_flat (FlockSoundness.parse_facts hc).tmpl
+  rw [hstmt] at ho
   have hm := parse_m hs hset (by simp)
   simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
   have hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1" := by
@@ -74,7 +81,7 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
   · simpa [hm] using hm₁
   · simpa [hm] using hm₂
 
-/-- **The table of a draw that sets up `st` is `plainTab` at `st`**: the layout is a proposition, and the schedule is
+/-- **The table of a sample that sets up `st` is `plainTab` at `st`**: the layout is a proposition, and the schedule is
 `fast100`'s at `st.m`. -/
 theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ} (dj : Finset (Fin n) → Json)
     {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I spec.mPts S₀ (dj S₀))
@@ -91,7 +98,7 @@ theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ}
   dsimp only at hy
   subst hy
   have hs := Option.some.inj (yhsch.symm.trans hsch)
-  simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
+  simp only [FlockSoundness.Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   rfl
 
@@ -115,7 +122,7 @@ theorem plain_wordLen {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tab
 
 open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
 /-- **The deployed plain decoders are right at `plainTab`**: at a plain statement in scope with public outputs whose
-draw is `d`, `decodesTable_wrP_sc` at `d` and no drawn unit, on the outcomes whose `wrP` transcript flock-verify
+sample is `d`, `decodesTable_wrP_sc` at `d` and no sampled proof block, on the outcomes whose `wrP` transcript flock-verify
 accepts, whose root is `rootB₀`'s and on which the reader looks up no column off `C`, with the verdict
 `PlainLiveAccAt` reads. -/
 theorem plain_hdec {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)

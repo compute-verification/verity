@@ -11,7 +11,8 @@ Every probe is a subprocess with a timeout or a stdlib call, and none of them ra
 
 `source.lockfiles.<name>` is one key per lockfile found at the source root (`uv.lock`, `Cargo.lock`); the nested form used by
 the attempt manifest and the reuse key is `source_identity(conds)`.  A shipped `git archive` has no `.git`: the control side
-passes what it knew (`source_hint`) and it fills only the facts git could not supply here.
+passes the identity of the commit it shipped (`source_hint`, remote.shipped_identity), which is the whole identity where git
+knows no commit here and is not read where it does.
 """
 from __future__ import annotations
 
@@ -105,14 +106,15 @@ class _Hashing:
         return b
 
 
-def _dirty_digest(root: Path, capture: Path | None = None) -> str | None:
-    """sha256 over `git diff HEAD --binary`, then each untracked, unignored file as `rel NUL bytes NUL` in path order.  With
-    `capture`, the same bytes go there as a tar in the same pass (DIRTY_PATCH, then DIRTY_UNTRACKED/<rel> per file), so the tar
-    reproduces the digest; it is left only when it holds every hashed byte (removed for None, `too-large`, or any error).
-    Capturing never changes the digest."""
+def _dirty_digest(root: Path, commit: str = "HEAD", capture: Path | None = None) -> str | None:
+    """sha256 over `git diff <commit> --binary`, then each untracked, unignored path as `rel NUL bytes NUL` in path order (a path
+    that is not a regular file, such as a nested repository's `sub/`, as `rel NUL NUL`).  With `capture`, the same bytes go there as
+    a tar in the same pass (DIRTY_PATCH, then DIRTY_UNTRACKED/<rel> per file), so the tar reproduces the digest; it is left only
+    when it holds every byte of the dirty source (removed for None, `too-large`, a path that is not a regular file, or any error).
+    Capturing never changes the digest.  EMPTY_DIGEST means nothing was hashed: the working tree is the commit's."""
     import tarfile
 
-    diff = _git(["diff", "HEAD", "--binary"], root, timeout=60, binary=True)
+    diff = _git(["diff", commit, "--binary"], root, timeout=60, binary=True)
     if diff is None:
         return None
     others = _git(["ls-files", "-z", "--others", "--exclude-standard"], root, timeout=60)
@@ -134,6 +136,8 @@ def _dirty_digest(root: Path, capture: Path | None = None) -> str | None:
         p = root / rel
         try:
             if not p.is_file():
+                h.update(rel.encode("utf-8") + b"\0\0")
+                tar = _drop(tar, capture)
                 continue
             total += p.stat().st_size
             if total > UNTRACKED_CAP_BYTES:
@@ -184,25 +188,46 @@ def _sha256_file(p: Path) -> str | None:
         return None
 
 
-def source_conditions(source_root: Path | None = None, source_hint: dict[str, Any] | None = None, *,
-                      dirty_capture: Path | None = None) -> dict[str, Any]:
-    """`source.*` from git in `source_root`.  With `dirty_capture` (a path in the run dir), a dirty source's bytes are written there
-    (`_dirty_digest`); nothing is written for a clean one."""
-    root = Path(source_root or os.getcwd())
+EMPTY_DIGEST = hashlib.sha256(b"").hexdigest()
+SOURCE_READS = 3
+
+
+def _git_source(root: Path, capture: Path | None) -> dict[str, Any] | None:
+    """One read of `source.*` against the commit HEAD named at its start; None when HEAD moved during it.  Dirty means the working
+    tree's bytes differ from that commit's: a status entry that changes no byte (an index-only change) is clean."""
     out: dict[str, Any] = {"source.commit": None, "source.tree": None, "source.dirty": None, "source.dirty_digest": None}
     commit = _git(["rev-parse", "HEAD"], root)
-    if commit:
-        out["source.commit"] = commit
-        out["source.tree"] = _git(["rev-parse", "HEAD^{tree}"], root) or None
-        porcelain = _git(["status", "--porcelain", "--untracked-files=all"], root, timeout=60)
-        if porcelain is not None:
-            out["source.dirty"] = bool(porcelain)
-            if porcelain:
-                out["source.dirty_digest"] = _dirty_digest(root, dirty_capture)
+    if not commit:
+        return out
+    out["source.commit"] = commit
+    out["source.tree"] = _git(["rev-parse", f"{commit}^{{tree}}"], root) or None
+    porcelain = _git(["status", "--porcelain", "--untracked-files=all"], root, timeout=60)
+    if porcelain is not None:
+        digest = _dirty_digest(root, commit, capture) if porcelain else None
+        if digest == EMPTY_DIGEST:
+            porcelain, digest = "", _drop(None, capture)
+        out["source.dirty"], out["source.dirty_digest"] = bool(porcelain), digest
+    if _git(["rev-parse", "HEAD"], root) != commit:
+        _drop(None, capture)
+        return None
+    return out
+
+
+def source_conditions(source_root: Path | None = None, source_hint: dict[str, Any] | None = None, *,
+                      dirty_capture: Path | None = None) -> dict[str, Any]:
+    """`source.*` from git in `source_root`, read again when a commit lands during the read (SOURCE_READS times, then unknown).  With
+    `dirty_capture` (a path in the run dir), a dirty source's bytes are written there (`_dirty_digest`); nothing is written for a
+    clean one.  Without git (a shipped `git archive`) the hint is the whole identity; with git it is not read."""
+    root = Path(source_root or os.getcwd())
+    out: dict[str, Any] = {"source.commit": None, "source.tree": None, "source.dirty": None, "source.dirty_digest": None}
+    for _ in range(SOURCE_READS):
+        if (read := _git_source(root, dirty_capture)) is not None:
+            out = read
+            break
     hint = source_hint or {}
-    for k in ("commit", "tree", "dirty", "dirty_digest"):
-        if out[f"source.{k}"] is None and hint.get(k) is not None:
-            out[f"source.{k}"] = hint[k]
+    if out["source.commit"] is None and hint.get("commit"):
+        for k in ("commit", "tree", "dirty", "dirty_digest"):
+            out[f"source.{k}"] = hint.get(k)
     for name in LOCKFILES:
         p = root / name
         if p.is_file():

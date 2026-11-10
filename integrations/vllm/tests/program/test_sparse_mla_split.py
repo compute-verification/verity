@@ -1,9 +1,11 @@
 """`registry.sparse_mla_split` (FA3's sparse MLA with the key range split and recombined), `boolean_sparse_mla_split` and the
 numpy twins `kernels.sparse_mla_split_twins`: MUFU.LG2's model reproduces the sm_120 measurement at either end of C0's range and
 leaves only the powers of two below 1 open; the split counts and boundaries are the kernel's; one split is `SparseMlaHead_v1`; the
-twins are the word Definitions word for word; a split head is softmax attention within bf16 rounding; the Boolean versions agree
-with their word views."""
+twins are the word Definitions word for word; a split head is softmax attention within bf16 rounding; the combine's lse is one
+FFMA and the splits' logsumexp within rounding; the Boolean versions agree with their word views."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import hashlib
 import re
@@ -16,12 +18,13 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.registry import sparse_mla_split as W
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import sparse_mla as M
+from verity.ml.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
 
@@ -43,7 +46,7 @@ def _lg2_word(x: int) -> int:
 
 @pytest.mark.parametrize("c0", ["C0", "C0_max"])
 def test_lg2_reproduces_the_sm120_measurement(c0: str) -> None:
-    """Every mantissa at [1, 2) and the 2^20-word sweep of run r20261004-060203-ba52, by the digests the table records, at
+    """Every mantissa at [1, 2) and the 2^20-word sweep, by the digests the table records, at
     either end of C0's measured range."""
     mant, sweep_in, sweep_out = _digests()
     h = hashlib.sha256()
@@ -70,7 +73,7 @@ def test_lg2_known_words(x: int, want: int) -> None:
 
 def test_lg2_is_log2_within_its_accuracy() -> None:
     """|lg2(x) - log2(x)| <= 2^-21.5 max(1, |log2 x|) on random positive normals: the worst over seeds 0..19 of 2^18 words each
-    (this draw) is 2^-22.1."""
+    (this sample) is 2^-22.1."""
     worst = 0.0
     for seed in range(4):
         rng = np.random.default_rng(seed)
@@ -358,6 +361,58 @@ def _combine(lse, o) -> np.ndarray:
     return np.asarray(evaluate(_combine_word(len(lse), o.shape[1]), lse.tolist(), o.reshape(-1).tolist()), dtype=U32)
 
 
+def _part(T, DR, DV, BN, scale, qn, qr, kv) -> np.ndarray:
+    part = bind(W.SparseMlaSplitPart, T=T, DR=DR, DV=DV, BN=BN, SCALE=scale, **FA3)
+    return np.asarray(evaluate(part, qn.tolist(), qr.tolist(), kv.reshape(-1).tolist()), dtype=U32)
+
+
+@pytest.mark.parametrize("T", [8, 16, 40])
+def test_the_part_twin_is_the_word(T: int) -> None:
+    """`part_rows` on a split's keys (one partial block, one whole block, a partial third) is the word part word for word."""
+    DR, DV, BN = 16, 16, 16
+    rng = np.random.default_rng(T + 100)
+    qn, qr, kv = _bf16(rng, (2, DV)), _bf16(rng, (2, DR)), _bf16(rng, (T, DV + DR), 0.5)
+    o, lse, nf = TW.part_rows(qn, qr, kv, T=T, DR_=DR, DV=DV, BN=BN, scale=0.0625)
+    assert not nf.any()
+    for r in range(2):
+        assert np.array_equal(np.append(o[r], lse[r]).astype(U32), _part(T, DR, DV, BN, 0.0625, qn[r], qr[r], kv))
+
+
+def _parts(T, NS, DR, DV, BN, scale, qn, qr, kv) -> tuple[np.ndarray, np.ndarray]:
+    """Each split's `SparseMlaSplitPart_v1` on its own keys: (lse (NSPLIT,), o_partial (NSPLIT, DV))."""
+    got = [_part(min(T, b1 * BN) - b0 * BN, DR, DV, BN, scale, qn, qr, kv[b0 * BN:min(T, b1 * BN)])
+           for b0, b1 in W.split_blocks(T, NS, BN)]
+    return np.array([g[DV] for g in got], U32), np.stack([g[:DV] for g in got])
+
+
+@pytest.mark.parametrize("T,NS", [(17, 2), (37, 3), (64, 4), (65, 3), (100, 7)])
+def test_a_split_head_is_its_parts_and_the_combine(T: int, NS: int) -> None:
+    """The units a row splits into: per split one part on its keys (one block or several, the token's last block partial or
+    full), and the combine over the parts' outputs, are the head word for word."""
+    DR, DV, BN = 16, 16, 16
+    rng = np.random.default_rng(T * 7 + NS)
+    qn, qr, kv = _bf16(rng, (DV,)), _bf16(rng, (DR,)), _bf16(rng, (T, DV + DR), 0.5)
+    lse, o = _parts(T, NS, DR, DV, BN, 0.0625, qn, qr, kv)
+    assert np.array_equal(_combine(lse, o), _run_split(T, NS, DR, DV, BN, 0.0625, qn, qr, kv))
+
+
+def test_a_head_is_its_parts_at_the_served_statics() -> None:
+    """Step 16's T = 272 in five splits of one block each, the last of 16 keys, DR = 64, DV = 512, BN = 64: the five parts
+    and the combine are the head's twin (which `test_the_twin_is_the_head_at_the_served_statics` holds to the word head)."""
+    T, NS, DR, DV, BN = 272, 5, GLM["DR"], GLM["DV"], GLM["BN"]
+    rng = np.random.default_rng(272)
+    qn, qr, kv = _bf16(rng, (DV,)), _bf16(rng, (DR,)), _bf16(rng, (T, DV + DR), 0.5)
+    lse, o = _parts(T, NS, DR, DV, BN, GLM["SCALE"], qn, qr, kv)
+    want, nf = TW.head_split_rows(qn[None], qr[None], kv, T=T, NS=NS, scale=GLM["SCALE"])
+    assert not nf.any() and len(lse) == NS
+    assert np.array_equal(TW.combine_rows(lse[None], o[None])[0].astype(U32), want[0].astype(U32))
+
+
+def test_a_part_has_keys() -> None:
+    with pytest.raises(ValueError, match="T=0 keys"):
+        bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+
+
 def test_one_split_combines_to_its_bf16() -> None:
     rng = np.random.default_rng(9)
     o = rng.standard_normal((1, 16)).astype(np.float32)
@@ -375,20 +430,89 @@ def test_an_empty_split_changes_nothing_and_none_gives_zeros() -> None:
     assert not _combine(np.full(4, W.NEG_INF, U32), o).any()
 
 
+# --- the combine's lse ----------------------------------------------------------------------------------------------------------
+
+def _combine_lse_word(NSPLIT: int, DV: int):
+    return bind(W.SparseMlaCombineLse, NSPLIT=NSPLIT, DV=DV, INV=FA3["INV"])
+
+
+def _combine_lse(lse, o) -> tuple[np.ndarray, int]:
+    lse, o = np.asarray(lse, U32), np.asarray(o, U32)
+    got = evaluate(_combine_lse_word(len(lse), o.shape[1]), lse.tolist(), o.reshape(-1).tolist())
+    return np.asarray(got[:-1], dtype=U32), int(got[-1])
+
+
+@pytest.mark.parametrize("NSPLIT", [1, 2, 3, 16, 28, 32])
+def test_the_combine_lse_twin_is_the_word(NSPLIT: int) -> None:
+    """`test_the_combine_twin_is_the_word`'s rows, with rows of no split and NaN lanes planted: the twin, whose max is FMNMX's,
+    gives the word's output and lse, and the output is `SparseMlaCombine_v1`'s."""
+    DV, rng = 8, np.random.default_rng(NSPLIT + 40)
+    word = _combine_lse_word(NSPLIT, DV)
+    lse0, o0 = _inputs(word, 96, NSPLIT + 40)
+    lse1 = _lse_rows(rng, 96, NSPLIT)
+    lse1[:8] = W.NEG_INF
+    lse1[np.arange(8, 16), rng.integers(0, NSPLIT, 8)] = np.array([0x7FC00000, 0xFFC00001] * 4, U32)
+    lse = np.concatenate([lse0, lse1])
+    o = np.concatenate([o0, (rng.standard_normal((96, NSPLIT, DV)).astype(np.float32)).view(U32)])
+    out, got = TW.combine_lse_rows(lse, o)
+    want = _flat(E.evaluate_batch(word, lse, o))[0]
+    assert np.array_equal(np.concatenate([out, got[:, None]], axis=1).astype(np.uint64), want)
+    assert np.array_equal(want[:, :DV], _flat(E.evaluate_batch(_combine_word(NSPLIT, DV), lse, o))[0])
+    assert (got[96:104] == W.NEG_INF).all() and (got[104:112] == W.QNAN).all()
+
+
+def test_the_combine_lse_is_one_ffma_where_one_rounding_shows() -> None:
+    """The SASS stores `logf(sum) + max` as one FFMA.FTZ(MUFU.LG2(sum), LN2, max): on rows where an unfused FMUL then FADD
+    rounds to another word, found through the twin, the Definition gives the FFMA's word."""
+    NSPLIT, DV = 3, 8
+    rng = np.random.default_rng(31)
+    lse = (rng.standard_normal((4096, NSPLIT)).astype(np.float32) * np.float32(8)).view(U32)
+    o = np.zeros((4096, NSPLIT, DV), U32)
+    _, fused = TW.combine_lse_rows(lse, o)
+    _, mx, tot = TW._combine(lse, o, DR.fa3_inv_sum)
+    unfused = DR.add_ftz(DR.mul_ftz(TW.mufu_lg2_words(tot), np.full(tot.shape, W.LN2, U32)), mx)
+    hits = np.flatnonzero(fused != unfused)
+    assert hits.size >= 8
+    for r in hits[:8]:
+        assert _combine_lse(lse[r], o[r])[1] == fused[r] != unfused[r]
+
+
+def test_the_combine_lse_is_the_logsumexp_within_rounding() -> None:
+    rng = np.random.default_rng(32)
+    for NSPLIT in (2, 5, 32):
+        lse = _lse_rows(rng, 64, NSPLIT)
+        lse[:, 0] = (rng.standard_normal(64).astype(np.float32) * np.float32(8)).view(U32)
+        _, got = TW.combine_lse_rows(lse, np.zeros((64, NSPLIT, 4), U32))
+        ref = np.logaddexp.reduce(lse.view(np.float32).astype(np.float64), axis=1)
+        assert np.all(np.abs(got.view(np.float32) - ref) <= 2 ** -14 * np.maximum(1.0, np.abs(ref)))
+
+
+def test_one_split_keeps_its_lse_and_no_split_gives_neg_inf() -> None:
+    """One split: the sum is 1, MUFU.LG2(1) = +0, and the lse comes back word for word.  No split (every lane -inf): the sum is
+    0, and the lse is -inf beside a zero output."""
+    o = np.random.default_rng(33).standard_normal((4, 16)).astype(np.float32).view(U32)
+    for v in (0.0, -3.5, 17.25, 1e-30):
+        w = int(np.float32(v).view(U32))
+        assert _combine_lse([w], o[:1])[1] == w
+    out, lse = _combine_lse(np.full(4, W.NEG_INF, U32), o)
+    assert lse == W.NEG_INF and not out.any()
+
+
 # --- the Boolean versions -------------------------------------------------------------------------------------------------------
 
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
 AGREEMENT = [bind(BX.SparseMlaSplitEndV2, DV=16, INV=BOOL["INV"], SCALE=0.0625),
              bind(BX.SparseMlaCombineV2, NSPLIT=3, DV=16, INV=BOOL["INV"]),
+             bind(BX.SparseMlaSplitPartV2, T=17, DR=16, DV=16, BN=16, SCALE=0.0625, **BOOL),
              bind(BX.SparseMlaHeadSplitV2, T=17, NS=2, DR=16, DV=16, BN=16, SCALE=0.0625, **BOOL)]
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", AGREEMENT, ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
-    """5 s for the end, 20 s for the combine, minutes for the head (two blocks, two ends and a combine traced): what the
-    word-level tests can't see is the Boolean pieces' agreement on special words (zeros, infinities, NaNs, subnormals) through
-    a split's end and the combine."""
+    """5 s for the end, 20 s for the combine, minutes for a part (two blocks and an end traced) and for the head (two blocks,
+    two ends and a combine): what the word-level tests can't see is the Boolean pieces' agreement on special words (zeros,
+    infinities, NaNs, subnormals) through a split's blocks, its end and the combine."""
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
     assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, 1, lifted)

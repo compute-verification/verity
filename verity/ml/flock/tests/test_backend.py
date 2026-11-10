@@ -1,12 +1,10 @@
-"""The Flock backend's pinned lowering, its support declaration and its instance statement."""
+"""The Flock backend's pinned lowering and its support declaration."""
 from __future__ import annotations
-
-import json
 
 import pytest
 from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120
 
-from verity_flock import instances, lowering
+from verity_flock import lowering
 from verity_flock.backend import FLOCK_FRAME_V3_BLAKE3 as FLOCK, GemmSub, Supported, Unavailable, Unsupported
 
 
@@ -62,66 +60,43 @@ def test_record_names_only_standard_hashes():
     assert rec["zk_class"] == "NON_ZK_PROOF"
 
 
-@pytest.mark.parametrize("relation", ["bf16-hopper", "fp8-ada"])
-def test_instance_file_and_statement(tmp_path, relation):
-    h = instances.write(tmp_path / "i.bin", relation, 4)
-    assert h["instances"]["manifest_sha256"] == instances.instances_digest(relation, 4)
-    blob = (tmp_path / "i.bin").read_bytes()
-    head = json.loads(blob.split(b"\n", 1)[0])
-    body = len(blob) - len(blob.split(b"\n", 1)[0]) - 1
-    assert body == 4 * (2 * head["row_bytes"] + 4 * head["units"] + 8)
-    assert head["roots"] == instances.statement(relation, *instances.draw(relation, 4))["roots"]
+@pytest.mark.parametrize("relation", ["bf16-ampere", "fp8-ada"])
+def test_a_spine_input_set_is_written_on_its_chain_and_refused_when_its_y_differs(tmp_path, relation):
+    """`instance_file.write_set` re-chains each row under the relation's model and holds the set's recorded y to it: the BF16 word
+    of an epilogue relation, else the FP32 accumulator, whose committed word drops its zero low bits (`instance_file.Y_WORD`)."""
+    import json
 
+    import numpy as np
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
-def test_frozen_set_digests_match_the_contract():
-    from verity_numerical.bench import contract
+    from verity_flock import instance_file
 
-    assert instances.instances_digest("bf16-hopper", 4096) == contract.BF16_HOPPER_INSTANCES_DIGEST
-    assert instances.instances_digest("fp8-ada", 4096) == contract.FP8_ADA_INSTANCES_DIGEST
-    assert instances.instances_digest("fp8-hopper", 4096) == contract.FP8_HOPPER_INSTANCES_DIGEST
-
-
-def test_register_adds_the_union_bound_and_the_verifier(tmp_path):
-    import argparse
-    from verity_flock.register import patch
-
-    doc = {"workload_fingerprint": {"N_subbatches": 4, "security": {"achieved_log2": -195.5}, "software": {"backend": {}}},
-           "measurements": [{"name": "net.rtt_ms", "value": 1.42, "unit": "ms"}], "interaction": {"rtt_method": "coin wait"},
-           "validation": {}}
-    a = argparse.Namespace(rtt_ms=0.68, rtt_method="tcp", loopback_seconds=0.00083, loopback_method="BORROWED from r1", supersedes="art:x", lane="some-lane")
-    out = patch(doc, {"run": "p", "commit": "c1", "binary_sha256": "s1", "host": "h"}, {"run": "v", "commit": "c2", "binary_sha256": "s2", "host": "h2"}, a)
-    assert out["workload_fingerprint"]["security"]["achieved_log2"] == -193.44
-    ms = {m["name"]: m["value"] for m in out["measurements"]}
-    assert ms["net.rtt_ms"] == 0.68 and ms["live.coin_wait_per_round_ms"] == 1.42 and ms["live.loopback_round_seconds"] == 0.00083
-    assert out["workload_fingerprint"]["software"]["verifier"]["binary_sha256"] == "s2"
-    assert out["interaction"]["loopback_method"].startswith("BORROWED")
-    assert out["lane"] == out["registered_by"] == "some-lane"
-
-
-def test_vllm_v1_instance_roots_are_step_roots_under_b_ligeros_domains(tmp_path):
-    from verity.ml.commitments import vllm_v1 as core
-
-    instances._ligero()
-    from ligero import vllm_tree
-
-    n = 5
-    h = instances.write(tmp_path / "inst.bin", "fp8-hopper", n, scheme="vllm-v1")
-    assert h["scheme"] == "vllm-v1" and h["leaf"] == "pos-leaf"
-    body = (tmp_path / "inst.bin").read_bytes().split(b"\n", 1)[1]
-    rb, units = h["row_bytes"], h["units"]
-    rows = {"a": [body[i * rb:(i + 1) * rb] for i in range(n)], "b": [body[(n + i) * rb:(n + i + 1) * rb] for i in range(n)]}
-    at = 2 * n * rb + 4 * n * units + 4 * n
-    ys = [int.from_bytes(body[at + 4 * i:at + 4 * i + 4], "little") for i in range(n)]
-    rows["y"] = [y.to_bytes(h["y_bytes"], "little") for y in ys]
-    ref = h["instances"]
-    ports = {t: vllm_tree.domain(t, vllm_tree.ctx_digest(dataset=ref["dataset"], tier=ref["tier"], manifest_sha256=ref["manifest_sha256"],
-                                                         lo=ref["range"][0], hi=ref["range"][1], tree=t), n, K=h["k"], word_bits=8,
-                                 y_bytes=h["y_bytes"]) for t in "aby"}
-    lens = {"a": rb, "b": rb, "y": h["y_bytes"]}
-    scheme = core.VllmV1(ports, {t: (lambda _, L=lens[t]: L) for t in "aby"})
-    for t in "aby":
-        leaves = [scheme.leaf_layout(t, i).digest(v) for i, v in enumerate(rows[t])]
-        assert scheme.root(t, leaves).hex() == h["roots"][t]
-        assert core.domain_digest(ports[t]).hex() == h["domain_digests"][t]
-        assert scheme.verify_path(t, bytes.fromhex(h["roots"][t]), n, 3, leaves[3], scheme.path(t, leaves, 3))
-        assert scheme.root(t, leaves).hex() != core.fold(leaves).hex()
+    pipe, rng = lowering.PIPES[relation], np.random.default_rng(0)
+    K, n = 2 * pipe.k, 4
+    if pipe.word_bits == 16:
+        def words():
+            return (rng.integers(0, 2, (n, K)) << 15 | rng.integers(112, 136, (n, K)) << 7 | rng.integers(0, 128, (n, K))).astype("<u2")
+        rows, y_file = ("u16", "x.u16", "w.u16"), "y.u16"
+    else:
+        def words():
+            return (rng.integers(0, 2, (n, K)) << 7 | rng.integers(0x20, 0x50, (n, K))).astype("u1")
+        rows, y_file = ("u8", "x.u8", "w.u8"), "y.u32"
+    x, w = words(), words()
+    accs = instance_file._chain_rows((relation, x, w))
+    y = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs],
+                   dtype="<u2" if pipe.epilogue else "<u4")
+    d = tmp_path / "set"
+    d.mkdir()
+    x.tofile(d / rows[1])
+    w.tofile(d / rows[2])
+    y.tofile(d / y_file)
+    ports = {"x": {"file": rows[1], "dtype": rows[0], "words": K}, "w": {"file": rows[2], "dtype": rows[0]},
+             "y": {"file": y_file, "dtype": y_file.split(".")[1]}}
+    (d / "manifest.json").write_text(json.dumps({"set": "t", "content_digest": "00" * 32, "ports": ports}))
+    h = instance_file.write_set(tmp_path / "i.bin", relation, d, 0, n)
+    assert (h["format"], h["vus"], h["k"], h["units"], h["epilogue"]) == (instance_file.FORMAT, n, K, 2, pipe.epilogue)
+    assert h["schemas"]["y"] == instance_file.word_schema(16 if pipe.epilogue else instance_file.Y_WORD[relation][0])[0]
+    y[0] ^= 1 << (0 if pipe.epilogue else 10)
+    y.tofile(d / y_file)
+    with pytest.raises(ValueError, match=f"1 recorded outputs differ from the {relation} model chain"):
+        instance_file.write_set(tmp_path / "j.bin", relation, d, 0, n)

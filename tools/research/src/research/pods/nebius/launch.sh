@@ -20,7 +20,8 @@
 #   VM                 platform gpu-rtx6000* with preset 8gpu-192vcpu-1744gb; the service account NEBIUS_VM_SA_ID (default the
 #                      launching one; `none` for no lease) is attached so the VM's lease can stop the VM itself
 # Other shapes and regions come from the environment: NEBIUS_VM_NAME, NEBIUS_REGION, NEBIUS_PROJECT_ID, NEBIUS_PLATFORM_PREFIX (cpu-d3,
-# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_FILESYSTEM_ID attaches an
+# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
+# (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
 # existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour cap of
 # the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
@@ -62,10 +63,28 @@ ssh_pubkey() {
 render_user_data() {
   VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
     VY_CLOCKS=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0) python3 - "$here" "$src/research/pods/sh" <<'PY'
-import base64, gzip, os, sys
+import base64, gzip, os, re, sys
 nebius, sh = sys.argv[1], sys.argv[2]
+LIMIT = 32768  # Nebius refuses a longer spec.cloud_init_user_data
+def shipped(path):
+    """A shell script ships without its full-line comments (the shebang and heredoc bodies stay), so the document fits LIMIT."""
+    text = open(path, "rb").read()
+    if not path.endswith(".sh"):
+        return text
+    out, until = [], None
+    for i, line in enumerate(text.decode().split("\n")):
+        if until is not None:
+            out.append(line)
+            until = None if line.strip() == until else until
+            continue
+        m = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", line.replace("<<<", ""))
+        until = m.group(1) if m else None
+        if i and re.match(r"\s*#", line):
+            continue
+        out.append(line)
+    return "\n".join(out).encode()
 def blob(path):
-    return base64.b64encode(gzip.compress(open(path, "rb").read(), mtime=0)).decode()
+    return base64.b64encode(gzip.compress(shipped(path), mtime=0)).decode()
 env = (f"VY_USER={os.environ['VY_USER']}\nVY_DATA_DEVICE_ID={os.environ['VY_DEV']}\nVY_BOOT_LEASE_S=7200\n"
        f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\nVY_DEADLINE_EPOCH={os.environ['VY_DEADLINE']}\n"
        f"VY_FS_TAG={os.environ['VY_FS']}\nVY_LOCK_CLOCKS={os.environ['VY_CLOCKS']}\n")
@@ -81,7 +100,12 @@ out = ["#cloud-config", "users:", f"  - name: {os.environ['VY_USER']}", "    sud
 for path, mode, data in files:
     out += [f"  - path: {path}", f"    permissions: '{mode}'", "    encoding: gz+b64", f"    content: {data}"]
 out += ["runcmd:", "  - [/usr/local/sbin/vy-setup]", ""]
-print("\n".join(out), end="")
+doc = "\n".join(out)
+if len(doc) > LIMIT:
+    sizes = ", ".join(f"{p} {len(d)}" for p, _, d in sorted(files, key=lambda f: -len(f[2]))[:3])
+    sys.exit(f"cloud-init is {len(doc)} characters, over Nebius's {LIMIT}: shrink an embedded file (largest: {sizes}) "
+             "or install it from the deploy instead of cloud-init")
+print(doc, end="")
 PY
 }
 
@@ -117,6 +141,7 @@ if [ "$dry" = 1 ]; then
   ud=$(render_user_data "$pub" "$(( $(date +%s) + 3600 ))")
   echo "# cloud-init ($(printf '%s' "$ud" | wc -c) bytes)"
   printf '%s\n' "$ud"
+  echo "# data disk $DATA_NAME: attached as it is if it exists, else created ($DATA_GIB GiB $DATA_TYPE)"
   echo "# instance create request (ids are placeholders)"
   vm_body project-DRYRUN "${NEBIUS_PLATFORM:-$PLATFORM_PREFIX-a}" computedisk-BOOT computedisk-DATA vpcsubnet-DRYRUN vpcsecuritygroup-DRYRUN \
     "${NEBIUS_VM_SA_ID:-serviceaccount-LAUNCHER}" "<cloud-init above>" | python3 -m json.tool
@@ -178,12 +203,12 @@ if [ -z "$BOOT_ID" ]; then
   BOOT_ID=$(nb compute disk create --parent-id "$PROJECT_ID" --name "$VM_NAME-boot" --type "$BOOT_TYPE" --size-gibibytes "$BOOT_GIB" \
     --block-size-bytes 4096 --source-image-family-image-family "$IMAGE_FAMILY" | jf metadata.id)
 fi
-DATA_ID=$(disk_id "$VM_NAME-data")
+DATA_ID=$(disk_id "$DATA_NAME")
 if [ -z "$DATA_ID" ]; then
-  DATA_ID=$(nb compute disk create --parent-id "$PROJECT_ID" --name "$VM_NAME-data" --type "$DATA_TYPE" --size-gibibytes "$DATA_GIB" \
+  DATA_ID=$(nb compute disk create --parent-id "$PROJECT_ID" --name "$DATA_NAME" --type "$DATA_TYPE" --size-gibibytes "$DATA_GIB" \
     --block-size-bytes 4096 | jf metadata.id)
 fi
-say "disks: boot $BOOT_ID ($BOOT_GIB GiB $IMAGE_FAMILY), data $DATA_ID ($DATA_GIB GiB $DATA_TYPE)"
+say "disks: boot $BOOT_ID ($BOOT_GIB GiB $IMAGE_FAMILY), data $DATA_NAME $DATA_ID ($DATA_GIB GiB $DATA_TYPE if new)"
 
 VM_ID=$(vm_id)
 if [ -z "$VM_ID" ]; then

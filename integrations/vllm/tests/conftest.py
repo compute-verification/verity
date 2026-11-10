@@ -1,44 +1,27 @@
 """Known failures on `main`, marked expected to fail so that `check` gates every other test of this suite.
 
-Each one failed on `main` a8e72c81 (with #331's dead-module fix) with torch 2.14 and 2.4.1 on CPU, before this suite joined
+Each one failed on `main` with torch 2.14 and 2.4.1 on CPU, before this suite joined
 `check`; the reason says what it found. They are not strict: the check machines' torch and numpy differ from the lock's,
 and a strict mark that passed there would fail `check`. Fix the test or the code, then delete its entry.
+
+Tests that take over about 5 s carry `@pytest.mark.slow` in their own module. The random Boolean-vs-word sweeps carry
+`boolean_sweep` and skip unless `VERITY_VLLM_BOOLEAN_SWEEPS=1`: circuit-check's `word_view` checks each Boolean Definition against
+its word Definition on every merge, and each file's special-word and edge cases stay in the default run.
 """
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
 
 import pytest
 
+#: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
+SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
+
 KNOWN_FAILURES = {
-    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[None-expect0]":
-        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
-    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[-expect1]":
-        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
-    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[default-None]":
-        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
-    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[OFF-None]":
-        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
-    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[700,10,10-expect4]":
-        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
-    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[50000, 20, 100-expect5]":
-        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
     "tests/acquire/test_compiled_source.py::test_renumber_assigns_invocations_per_call_site":
         "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
-    "tests/pipeline/test_source_identity.py::test_negative_requested_sha_mismatch_fails_by_name":
-        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_verity_tree_and_sha[integration]":
-        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_verity_tree_and_sha[repo]":
-        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_repo_root_resolution_prefers_export_json_then_git_then_markers":
-        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/program/test_twins.py::test_check_writes_the_evidence_schema":
-        "the evidence schema's `openmp` key depends on whether the C++ twins were built in this tree (environmental; owner vllm-epoch-prep)",
-    "tests/pipeline/test_row.py::test_the_commit_flags_the_row_arms_exist":
-        "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
-    "tests/check/test_compiled_autotune.py::test_unknown_kernel_is_not_shown_and_does_not_raise":
-        "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
     "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
@@ -68,15 +51,48 @@ def pytest_configure(config) -> None:
     torch.exp(torch.zeros(1))
 
 
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items) -> None:
+    sweep = pytest.mark.skip(reason="VERITY_VLLM_BOOLEAN_SWEEPS=1: a random Boolean-vs-word sweep (all of them: about 19 minutes "
+                                    "of test time)")
     for item in items:
         if reason := KNOWN_FAILURES.get(item.nodeid):
             item.add_marker(pytest.mark.xfail(reason=f"known failure on main: {reason}", strict=False))
+        if not SWEEPS and "boolean_sweep" in item.keywords:
+            item.add_marker(sweep)
 
 
 @pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
-    """The row driver's sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
-    SWEEP_DIR unset would write rows there (VLLM-21); every test gets its own instead, which a test can still override."""
+    """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
+    SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
 
+
+@pytest.fixture
+def code_versions_stood_in(monkeypatch):
+    """The code versions the library stamps on what it writes or keys it by (`score.code_version`, `experiment.code_version`,
+    `source_identity.code_identity`) fixed, for a test that writes a stamp or a key but never checks it: each runs git, which the
+    suite's read guard can't trace, and reads the whole tree."""
+    from verity_vllm.pipeline import experiment, source_identity
+    from verity_vllm.program.predict import score
+    monkeypatch.setattr(score, "code_version", lambda: "0" * 16)
+    monkeypatch.setattr(experiment, "code_version", lambda repo: {"source": "git", "commit": "0" * 40, "dirty": False})
+    monkeypatch.setattr(source_identity, "code_identity", lambda root: {"sha256": "0" * 64, "files": 1})
+
+
+@pytest.fixture
+def outside_a_checkout(monkeypatch):
+    """A tree a test builds under its tmp_path is no git checkout. With no git to find (`shutil.which`), the code identity's file
+    listing walks it as it walks any tree outside a checkout, and starts no git, which the suite's read guard can't trace."""
+    which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda cmd, *a, **k: None if cmd == "git" else which(cmd, *a, **k))
+
+
+@pytest.fixture
+def gnu_timeout() -> None:
+    """Skips where the machine has no GNU timeout, for a test that starts one. A fixture, not a check at import, so a test file
+    that doesn't ask for it starts no program the suite's read guard can't trace."""
+    t = shutil.which("timeout")
+    if t is None or b"GNU" not in subprocess.run([t, "--version"], capture_output=True).stdout:
+        pytest.skip("GNU timeout (coreutils) required -- the pods have it, macOS does not")

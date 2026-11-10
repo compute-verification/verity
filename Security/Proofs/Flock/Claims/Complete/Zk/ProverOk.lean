@@ -1,5 +1,45 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Replay.ProverOk
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.ProverOk
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.Complete.Zk.Link
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The masked prover's pieces at every good case (`ProverOkZk`)
@@ -11,6 +51,8 @@ import Proofs.Flock.Claims.Complete.Replay.ProverOk
   under `hm96-sha512/v1` (`CaseZk.hm96`), whose cap is `2^cap` digests of 64 bytes (`commitRowsP_capSize`), and the
   `--zk` schedule's level 0 caps at most its depth and at most `32` (`zkSchedule_cap0`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -79,14 +121,15 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 case's table, on the table's extra claims at the link's points. -/
 def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, ∀ st ∈ c.sts,
-    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    ∀ v, Zk.schedule (Setup.ofCircuit st).m = .ok v →
+      ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       (Setup.ofCircuit st).extra (ptsOf c.spec (coinOf (c.resp 0))) = .ok extras →
       Ret ((repPZk (asksS c.resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit st) v.1 v.2 rep dom tr tb cm₀
-        extras pads ic extra lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
+        extras pads ic extra lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds
 
 /-- **What the record needs of the masked prover's pieces** (`ProverOkZk`), at an oracle of 64-byte outputs, from its
 rep half (`RepRoundsZk`). -/
-theorem proverOkZk (h64 : Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
+theorem proverOkZk (h64 : Claims.Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
   intro c st hst
   obtain ⟨st', hst', -, hm1, hm2⟩ := c.table
   obtain ⟨st'', hst'', hms⟩ := c.hm96

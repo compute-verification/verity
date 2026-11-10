@@ -1,39 +1,43 @@
-import PouwWindow.Side
-import PouwWindow.Record
+module
+
+public import PouwWindow.Side
+public import PouwWindow.Record
 
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")
 
-A window's K′ drawn tiles are proved in S fixed-shape sessions of `cap` instances (`sessionCap?`, `sessions?`); session σ's
-instance s is tile `drawn[σ·cap + s]`, or N − 1 past the draw (`instanceTs?`). `publicInputs?` is F_σ, the verifier's own
-`--public-inputs` file of the session: a header line, then each instance's ports (`PUBLIC_PORTS`: t as a u128, the window
+An execution phase's K′ sampled tiles are proved in S fixed-shape sessions of `cap` instances (`sessionCap?`, `sessions?`); session σ's
+instance s is tile `drawn[σ·cap + s]`, or N − 1 past the sample (`instanceTs?`). `publicInputs?` is F_σ, the verifier's own
+`--public-inputs` file of the session: a header line, then each instance's ports (`PUBLIC_PORTS`: t as a u128, the execution phase
 root, its domain, side A's and side B's domains, the pass's -h3 domain), little-endian, instance-major. The registration is
 one-stage's record as JSON, read as Python reads it.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 
 open Lean (Json)
 
-def PUBLIC_INPUTS_FORMAT : String := "verity/flock-public-inputs/v1"
-/-- `M_MAX`: C-Flock's largest session, m = k_log + nbl ≤ 35. -/
+def PUBLIC_INPUTS_FORMAT : String := Domains.FLOCK_PUBLIC_INPUTS
+/-- `M_MAX`: Flock's largest session, m = k_log + nbl ≤ 35. -/
 def mMax : Nat := 35
 
 /-- `PUBLIC_PORTS`: (port, words, seed, derivation). -/
 def publicPorts : List (String × Nat × String × String) := [
-  ("t", 8, "drawn", "verity/pouw/window/t/v1"),
-  ("root", 32, "registration", "verity/pouw/window/root/v1"),
-  ("domain", 32, "registration", "verity/pouw/window/domain/v1"),
-  ("domain_a", 32, "registration", "verity/pouw/window/side-domain-a/v1"),
-  ("domain_b", 32, "registration", "verity/pouw/window/side-domain-b/v1"),
-  ("domain_h3", 32, "pass", "verity/pouw/window/domain-h3/v1")]
+  ("t", 8, "drawn", Domains.POUW_PERIOD_T),
+  ("root", 32, "registration", Domains.POUW_PERIOD_ROOT),
+  ("domain", 32, "registration", Domains.POUW_PERIOD_DOMAIN),
+  ("domain_a", 32, "registration", Domains.POUW_PERIOD_SIDE_DOMAIN_A),
+  ("domain_b", 32, "registration", Domains.POUW_PERIOD_SIDE_DOMAIN_B),
+  ("domain_h3", 32, "pass", Domains.POUW_PERIOD_DOMAIN_H3)]
 
 /-- `session_cap`: the most instances one session holds when each block of 2^`kLog` bits holds `perBlock` of them. -/
 def sessionCap? (kLog perBlock : Int) : Except String Nat :=
   if 1 ≤ kLog && kLog ≤ (mMax : Int) - 3 && 1 ≤ perBlock then .ok (perBlock.toNat * 2 ^ (mMax - kLog.toNat))
   else .error s!"a block of 2^{kLog} bits does not fit a session of m <= {mMax}"
 
-/-- `sessions`: S, the sessions of `cap` instances that hold K′ = `k` drawn tiles. -/
+/-- `sessions`: S, the sessions of `cap` instances that hold K′ = `k` sampled tiles. -/
 def sessions? (k cap : Int) : Except String Nat :=
   if 1 ≤ k && 1 ≤ cap then .ok ((k.toNat + cap.toNat - 1) / cap.toNat)
   else .error s!"K′ and the cap are positive, not {k} and {cap}"

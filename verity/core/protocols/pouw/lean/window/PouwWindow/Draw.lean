@@ -1,7 +1,9 @@
-import PouwWindow.Grid
+module
+
+public import PouwWindow.Grid
 
 /-!
-# The draw (`window.py`, "The draw"; L3)
+# The sample (`window.py`, "The sample"; L3)
 
 `kPrime` is K′: the smallest `K ≥ 1` with `(1 − p)^K ≤ δ` in rationals, `p = ε·credited/(n·w_max)`, capped at `n`; `1` when
 `p = 1`. It is exact. `missAtMost` decides `q^k ≤ δ` in integers while they are small, and otherwise from fixed-point
@@ -9,6 +11,8 @@ bounds that round down and up, at a precision that doubles until they decide; `k
 bisection, since `q^K` falls with `K` for `0 ≤ q < 1`. Python's `k_prime` starts from a binary64 estimate and steps with
 the same exact comparison; the difftest holds the two to one answer.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 
@@ -83,7 +87,23 @@ def kPrime (eps δ : Rat) (credited n w : Int) : Except String Nat :=
   else
     .error s!"k_prime needs 0 < ε <= 1, 0 < δ < 1 and 0 < credited <= n·w_max, not {eps}, {δ}, {credited}, {n}, {w}"
 
-/-- The `sampling` item: ε, δ, the grid and the law `subset:K′` they fix with the level (every tile does `tileWork`). -/
+/-- `EPS_BITS`: `epsAt` reports ε on the grid of multiples of `2^-EPS_BITS`. -/
+def EPS_BITS : Nat := 32
+
+/-- `eps_at`: `kPrime` inverted, the least `ε = j/2^EPS_BITS` (`1 ≤ j ≤ 2^EPS_BITS`) whose `K′` at `δ` and the execution phase's
+inputs is at most `k`, by bisection over `j` (`K′` is nonincreasing in `ε`); an error when `k < 1`, the inputs are
+outside `kPrime`'s domain, or not even `ε = 1` has `K′ ≤ k`. -/
+def epsAt (k : Int) (δ : Rat) (credited n w : Int) : Except String Rat := do
+  unless 1 ≤ k do throw s!"eps_at needs K >= 1, not {k}"
+  let one := 2 ^ EPS_BITS
+  discard <| kPrime 1 δ credited n w
+  let ok := fun (j : Nat) => match kPrime (mkRat j one) δ credited n w with
+    | .ok k' => decide ((k' : Int) ≤ k)
+    | .error _ => false
+  unless ok one do throw s!"K = {k} establishes no ε <= 1 at δ = {δ}"
+  pure (mkRat (leastAbove ok 0 one) one)
+
+/-- The `sampling` item: ε, δ, the grid and the sampling design `subset:K′` they fix with the level (every tile does `tileWork`). -/
 structure Sampling where
   eps : Rat
   delta : Rat

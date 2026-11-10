@@ -1,11 +1,11 @@
-"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`; DECISIONS-2 §4 C2; board M-0356 (1), M-0394).
+"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`).
 
 For a sampled VU `V` (one Call of the Program) the check is
 
     F_V( tau(in(V)) ) == tau(out(V))      bit-for-bit,
 
 where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names (the Call's `args`), and `F_V` is the
-registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.program.kernels.derived_rows`,
+registered relation of the Call's Definition evaluated by the registry's own reference (`verity.ml.definitions.numerics.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
 manifest's Value rule -- the v2 query's population the manifest of record was built from (`required.Population.members_of`) -- and the
@@ -18,14 +18,14 @@ binding map fixed at finalize
         "p" 0 k k+1 -> the declared prompt id k -> committed `input_token_ids` row k of the request's arrival step
         a TokenSelect producer -> committed `sampled_token_ids` of THAT Call's step (the previous step's designated output)
 
-Strata (recorded): (spec incl. shape, request, phase in {prefill, first-decode, mid, last}; `last` = the last EXECUTED step, F-r17b-39) x `per_stratum`, seeded -- distinct
+Strata (recorded): (spec incl. shape, request, phase in {prefill, first-decode, mid, last}; `last` = the last EXECUTED step) x `per_stratum`, seeded -- distinct
 numerical mechanisms x requests x lifetime boundaries.  Not-evaluable Calls are counted by reason (never silently skipped); see NOT_YET.
-Attention_v2/v3 Calls ARE evaluated (R17-11): the query at position T-1 over the T committed K/V Values the Program names by ref -- the
+Attention_v2/v3 Calls ARE evaluated: the query at position T-1 over the T committed K/V Values the Program names by ref -- the
 resolver reads every producer at its own step, so the request's history is committed words, never a cache.
 
 Ordered boundary linkage (the `linkage` check; exhaustive, NOT sampled): every request's committed `input_token_ids` at its arrival step == the DECLARED
 prompt (workload manifest), and at every later step == that request's committed `sampled_token_ids` of the previous step.  This is
-the prescribed-input / designated-output linkage of §4 and replaces the Match-oracle occurrence-resolution gate at B>=2 (F-cb-23).
+the prescribed-input / designated-output linkage of §4 and replaces the Match-oracle occurrence-resolution gate at B>=2.
 
 PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU replay + exhaustive boundary linkage (`linkage`))
   Purpose: from the COMMITTED bytes alone (binding map + committed reader), re-evaluate a stratified sample of Calls with the
@@ -37,36 +37,40 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
     not_executed_by_rule, ...}, uncovered_by_name, query_checks, catch_probability}; the linkage record {result, why, pairs, linked, unlinked}.
   Invariants: result True only if EVERY sampled VU replays bit-exactly AND every non-empty stratum was evaluated (None = partial,
     never PASS); the seed is never prover-choosable in advance (run root after commitment, or sha256(challenge|root)[:8]); Calls at
-    request-relative steps >= n_exec leave the pool into a NAMED class before any draw; a request linked over fewer steps than its
+    request-relative steps >= n_exec leave the pool into a NAMED class before sampling; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 
 The check runs here; its steps live beside it: `index` (the Program rows), `population` and `coverage` (what may be sampled
-and what the query population names), `sample` (the stratified draw and its seed), `opening` (committed words by
+and what the query population names), `sample` (the stratified sample and its seed), `opening` (committed words by
 identity), `evaluate` and `compare` (one VU), and `linkage` (the exhaustive boundary linkage).  A caller wires the check
 through this module: the names in `__all__` are its interface.
 """
 from __future__ import annotations
 
+import ctypes
 import multiprocessing
 import os
 import re
 import sys
 import time
 from collections import Counter
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 
 from verity.ml.randomness import Key
 
+from verity_vllm import settings
+from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
+from verity_vllm.check.replay.checks import checks_of, fold as fold_checks
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
-from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
@@ -90,7 +94,7 @@ _FORK_VUS: list[dict] = []
 
 
 class _DeviceInChild(RuntimeError):
-    """[rev-cb F-cb-44] a forked child touched the accelerator (a DEVICE-retained committed store, CUDA after fork): its 'evaluator error' is
+    """A forked child touched the accelerator (a DEVICE-retained committed store, CUDA after fork): its 'evaluator error' is
     an environment fault of the pool, not a verdict about the VU -- raised so the parent falls back to the serial path (its own CUDA context)."""
 
 
@@ -121,8 +125,8 @@ def _plain(x: Any) -> Any:
 
 def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, int, int], np.ndarray | None]) -> None:
     """Read every weight field the sample consumes into the provider's cache in the PARENT (the children must not touch the model) --
-    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd, MAN-07): [exec M-0749, measured on
-    the Qwen2.5 L40S B1 int-5 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
+    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd): [measured on
+    a Qwen2.5 L40S B1 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
     in a forked child -> AcceleratorError 'CUDA initialization error' -> every BiasAdd stratum 'not evaluated' -> partial -> FAIL closed."""
     seen: set[str] = set()
 
@@ -149,21 +153,21 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
 
 
 #: spec family -> the C++ twin libraries its evaluator dlopens (built JIT on first use)
-_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "SiluMul_v2": (), "BiasAdd_v1": (),
-                "Embedding_v1": (), "TokenSelect_v1": (), "GumbelTopPTokenSelect_v1": (),
-                # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
-                "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",),
+_FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMSNormFusedCuda_v2": ("rms",), "Gemm_v1": (), "Gemm_v2": (), "RoPE_v1": (), "SiluMul_v1": (), "SiluMul_v2": (), "BiasAdd_v1": (),
+                "Embedding_v1": (), "TokenSelect_v1": (), "TokenSelect_v3": (), "TokenSelect_v4": (), "GumbelTopPTokenSelect_v1": (),
+                # the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
+                "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",), "Attention_v18": ("fa2",),
                 "AttentionSoftcap_v2": ("fa2",),
-                # [MAN-06f v3 unit 2] the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
+                # the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
                 "MoeRouterTopK_v1": ("fa2",), "MoeRouterTopKNorm_v1": ("fa2",),
                 "MoeRouterTopKOrdered_v1": ("fa2",), "MoeRouterTopKOrderedNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeExpertGemm_v2": (),
                 "MoeExpertGemmW_v2": (), "MoeSum_v1": ()}
 
 
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
-    """[rev-cb F-cb-44 second finding; MAN-06g] Build + dlopen every twin library the sample's families need in the PARENT before the fork:
+    """Build + dlopen every twin library the sample's families need in the PARENT before the fork:
     the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
-    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.program.kernels._jit`); this makes the fast path
+    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity.ml.definitions.numerics._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}
@@ -173,27 +177,27 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
         out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
-            from verity_vllm.program.kernels import prims_twins
-            rm, _t = prims_twins._rms()
+            from verity.ml.definitions.numerics import prims_twins
+            rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
         except Exception as e:  # noqa: BLE001
             out["rms_triton_model"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     if "fa2" in need:
         try:
-            from verity_vllm.program.kernels import prims_twins
-            _fa2_model, _tables = prims_twins._fa2()
+            from verity.ml.definitions.numerics import prims_twins
+            _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
             out["fa2_mufu_tables"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     return out
 
 
-#: [R19 admit, F-r18-admit-1 fix (c)] what the last forked pool did to the parent's heap before the fork: `gc_frozen_objects` = the
+#: what the last forked pool did to the parent's heap before the fork: `gc_frozen_objects` = the
 #: objects moved to the permanent generation (never traversed by a collection in the children), `gc_collected` = what the pre-fork
 #: collection freed, `gc_freeze` = the policy (env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out for a measurement, never for a record).
 _FORK_STATS: dict[str, Any] = {}
-FORK_GC_FREEZE = os.environ.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no")
+FORK_GC_FREEZE = settings.VERITY_REPLAY_FORK_GC_FREEZE
 CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
 
 
@@ -216,10 +220,14 @@ def _cgroup_memory() -> tuple[int, int] | None:
 
 def _malloc_trim() -> bool:
     try:
-        import ctypes
         return bool(ctypes.CDLL("libc.so.6").malloc_trim(0))
     except (OSError, AttributeError):
         return False
+
+
+def default_workers(processes: int = 1) -> int:
+    """The forked pool's size when the caller names none: half the cores, shared by ``processes`` replays running at once, at most 32."""
+    return max(1, min(32, (os.cpu_count() or 2) // 2 // processes))
 
 
 def fit_pool(want: int, picked: list[dict], worker_peak: int) -> tuple[int, dict[str, Any] | None]:
@@ -260,11 +268,11 @@ def _gib(b: int) -> str:
 def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: list[dict], workers: int) -> list[tuple[dict, dict, float]]:
     """Forked pool over the picked VUs; bounded by a timeout (a child deadlocked on a lock inherited at fork must not hang the Commit).
 
-    [R19 admit, F-r18-admit-1 fix (c): the fork-COW children term] the children inherit the parent's whole C2 heap (the Programs of
+    [the fork-COW children term] the children inherit the parent's whole C2 heap (the Programs of
     every instance + the MatchOracle + the binding index: 43.5 GiB at #60 B8 Mistral, ~75 GB at #23 B64 Llama) copy-on-write.  A
     child evaluates a few VUs, but the FIRST cyclic garbage collection its own allocations trigger traverses EVERY container object
     of the inherited heap and writes each one's gc header -> every page of the parent heap is copied into that child.  That is the
-    R17 #23 datum ("two ForkPoolWorkers at ~72 GB each", F-r17-24 (b)): 72 GB is the parent's C2 heap (programs 39.5 + oracle
+    #23 datum ("two ForkPoolWorkers at ~72 GB each"): 72 GB is the parent's C2 heap (programs 39.5 + oracle
     35.4 GB modelled), not 2.9 x the largest committed tensor -- a VU reads its own rows only (`CommittedStore.words` slices), and the
     hidden-M1 stream the "largest tensor" is has no VU row at all.  `gc.freeze()` before the fork moves every live object into the
     permanent generation, which the children's collections never traverse (they collect only what they allocate after the fork), so a
@@ -286,7 +294,7 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         # the canary line (commit.log): the planner's `compare` reads it to model the record with 250 MiB workers
         print(f"[replay] fork gc.freeze={'on' if frozen else 'OFF'}: {workers} workers over {len(picked)} VUs"
               + (f", {_FORK_STATS['gc_frozen_objects']} objects frozen ({_FORK_STATS['gc_collected']} collected) before the fork" if frozen else
-                 " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write, F-r17-24 (b))"), flush=True)
+                 " (VERITY_REPLAY_FORK_GC_FREEZE=0: the children may copy the parent's C2 heap on write)"), flush=True)
         oom0 = FK.oom_kills()
         with FK.fork_pool(workers) as pool:
             pids = {p.pid for p in pool._pool}
@@ -308,16 +316,81 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
         _FORK_FN, _FORK_VUS = None, []
 
 
-ENGINE_FACTS_RULE = ("the evaluators' semantics are the engine's configuration of record (dense M-0081: on cc 9.0 the Gemm_v2 Hopper chain "
+ENGINE_FACTS_RULE = ("the evaluators' semantics are the engine's configuration of record (on cc 9.0 the Gemm_v2 Hopper chain "
                      "equals cuBLASLt only under VLLM_BATCH_INVARIANT=1, which disables split-K by CUBLAS_WORKSPACE_CONFIG=:16:8 / "
                      "CUBLASLT_WORKSPACE_SIZE=1 / allow_bf16_reduced_precision_reduction False; on cc 8.x it installs the Triton persistent "
-                     "matmul) -- MEASURED in the process the replay ran in (the Commit stage runs in the engine's process), never declared; a "
-                     "fact this process cannot see is 'unavailable: <why>' by name (a laptop re-read of a stored record has no engine)")
+                     "matmul; without batch invariance on cc 9.0 the cuBLAS GEMMs are the route pin's, which holds only where `cublas` is "
+                     "bf16_gemm_check.ROUTE_CONDITIONS) -- MEASURED in the process the replay ran in (the Commit stage runs in the engine's "
+                     "process), never declared; a fact this process cannot see is 'unavailable: <why>' by name (a laptop re-read of a stored "
+                     "record has no engine)")
+#: the workspace variables cuBLAS and cuBLASLt size their workspaces by, which move their routes
+CUBLAS_ENV = ("CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE")
+
+
+def _unavailable(e: BaseException) -> str:
+    return f"unavailable: {type(e).__name__}: {e}"[:200]
+
+
+def _mapped_library(prefix: str, maps: str) -> str:
+    """The one file named `prefix`* that `maps` (a /proc/<pid>/maps) lists: the library torch loaded, never the linker's search order,
+    which can name another CUDA install's library than the one the GEMMs run."""
+    files = {f[-1] for f in (ln.split() for ln in Path(maps).read_text().splitlines()) if len(f) >= 6}
+    got = sorted(f for f in files if f.rsplit("/", 1)[-1].startswith(prefix))
+    if len(got) != 1:
+        raise LookupError(f"{len(got)} {prefix}* mapped {got}")
+    return got[0]
+
+
+def cublas_versions(maps: str = "/proc/self/maps") -> dict[str, Any]:
+    """The cuBLAS and cuBLASLt this process maps, by their public API (`cublasGetProperty`'s major, minor and patch level, the
+    number `cublasGetVersion` returns; `cublasLtGetVersion`), without a handle or a device."""
+    out: dict[str, Any] = {}
+    try:
+        path = _mapped_library("libcublas.so", maps)
+        lib = ctypes.CDLL(path)
+        lib.cublasGetProperty.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
+        parts = [ctypes.c_int() for _ in range(3)]                                  # MAJOR_VERSION, MINOR_VERSION, PATCH_LEVEL
+        if any(lib.cublasGetProperty(i, ctypes.byref(p)) for i, p in enumerate(parts)):
+            raise RuntimeError("cublasGetProperty returned an error status")
+        out["cublas_library"], out["cublas_version"] = path, parts[0].value * 10000 + parts[1].value * 100 + parts[2].value
+    except Exception as e:                                                          # noqa: BLE001 -- named, never guessed
+        out["cublas_library"] = out["cublas_version"] = _unavailable(e)
+    try:
+        lt = ctypes.CDLL(_mapped_library("libcublasLt.so", maps))
+        lt.cublasLtGetVersion.restype = ctypes.c_size_t
+        out["cublaslt_version"] = int(lt.cublasLtGetVersion())
+    except Exception as e:                                                          # noqa: BLE001
+        out["cublaslt_version"] = _unavailable(e)
+    return out
+
+
+def _cublas_facts(env: dict[str, Any]) -> dict[str, Any]:
+    """What decides this process's cuBLAS routes beside the launch's shape, each read as the route pin's scan read it (the keys of
+    `bf16_gemm_check.ROUTE_CONDITIONS`), with the cuBLASLt version and the library's path beside them."""
+    out: dict[str, Any] = {}
+    try:
+        import torch                                                                 # type: ignore
+    except Exception as e:                                                          # noqa: BLE001
+        return {"torch": _unavailable(e)} | cublas_versions() | {"env": env}
+    m = torch.backends.cuda.matmul
+    reads = {"device": torch.cuda.get_device_name, "compute_capability": lambda: list(torch.cuda.get_device_capability()),
+             "multiprocessors": lambda: int(torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count),
+             "torch": lambda: str(torch.__version__),
+             "allow_fp16_reduced_precision_reduction": lambda: repr(m.allow_fp16_reduced_precision_reduction),
+             "allow_bf16_reduced_precision_reduction": lambda: repr(m.allow_bf16_reduced_precision_reduction),
+             "preferred_blas_library": lambda: str(torch.backends.cuda.preferred_blas_library())}
+    for k, read in reads.items():
+        try:
+            out[k] = read()
+        except Exception as e:                                                      # noqa: BLE001
+            out[k] = _unavailable(e)
+    return out | cublas_versions() | {"env": env}
 
 
 def engine_facts_of_record() -> dict[str, Any]:
-    """[revb M-0083 ASK] the batch-invariant configuration beside the evaluator strings: what the replay's pins were conditioned on."""
-    facts: dict[str, Any] = {k: os.environ.get(k) for k in ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE")}
+    """The batch-invariant configuration beside the evaluator strings: what the replay's pins were conditioned on;
+    `cublas`, what the route pin's routes were conditioned on (`_cublas_facts`)."""
+    facts: dict[str, Any] = {k: settings.raw(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
     try:
         from vllm.model_executor.determinism import batch_invariant as bi          # type: ignore
         facts["vllm_batch_invariant_mode"] = bool(bi.vllm_is_batch_invariant()) if hasattr(bi, "vllm_is_batch_invariant") else "unavailable: no vllm_is_batch_invariant()"
@@ -325,7 +398,8 @@ def engine_facts_of_record() -> dict[str, Any]:
         facts["vllm_batch_invariant_mode"] = f"unavailable: {type(e).__name__}"
     try:
         import torch                                                                 # type: ignore
-        facts["torch_allow_bf16_reduced_precision_reduction"] = bool(torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction)
+        bf16 = torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction   # (allow, allow for split-K) once set as a pair
+        facts["torch_allow_bf16_reduced_precision_reduction"] = bool(bf16[0] if isinstance(bf16, tuple) else bf16)
         try:
             facts["torch_preferred_blas_library"] = str(torch.backends.cuda.preferred_blas_library()).split(".")[-1]
         except Exception as e:                                                      # noqa: BLE001
@@ -333,12 +407,13 @@ def engine_facts_of_record() -> dict[str, Any]:
         facts["compute_capability"] = list(torch.cuda.get_device_capability()) if torch.cuda.is_available() else "unavailable: no CUDA device"
     except Exception as e:                                                          # noqa: BLE001
         facts["torch_allow_bf16_reduced_precision_reduction"] = facts["torch_preferred_blas_library"] = facts["compute_capability"] = f"unavailable: {type(e).__name__}"
+    facts["cublas"] = _cublas_facts({k: facts[k] for k in CUBLAS_ENV})
     facts["rule"] = ENGINE_FACTS_RULE
     return facts
 
 
 def _picks_by_request_step(results: list) -> dict[str, dict[str, list[int]]]:
-    # [revb n-pad-c-1, M-1581] the picks BY (request, step): the strata carry phases, not steps, so "the other request's mid VUs evaluated
+    # the picks BY (request, step): the strata carry phases, not steps, so "the other request's mid VUs evaluated
     # beside a stopped request's padding steps" was inferred from the phase arithmetic; this states it -- per request, per step: picked /
     # evaluated / mismatch (a padded record's reader splits `mid` at the other request's transition from these)
     picks_by_step: dict[str, dict[int, list[int]]] = {}
@@ -387,7 +462,7 @@ DRAWS = ("family", "uniform")
 
 def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: str = "family") -> tuple[list[dict], int]:
     """With `k` (the config run), every VU re-keyed to one stratum per `draw` (the key's fields kept) and `k` picks per stratum.
-    `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform draw without replacement from every unit.
+    `uniform`: one stratum (`all|all|all|all|all|all`), so the k units are a uniform sample without replacement from every unit.
     `family`: one stratum per family (`family|all|all|all|all|all`); with the cap at `k`, the round-robin order of `sample` then takes
     k units in all, one per family first, a small family used up before the others, the rest split evenly.  Without `k`, the VUs and
     `per_stratum` as given.  Any other `draw` is refused by name."""
@@ -400,14 +475,15 @@ def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: st
 
 def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: dict[str, int], executed_prefix: dict[str, dict] | None,
              ring_slots: int | None, *, attention_paths: list[str] | None, tp: dict[str, Any] | None, program_dirs: dict[str, str] | None,
-             manifest: dict[str, Any] | None, memo: dict | None = None) -> tuple:
+             manifest: dict[str, Any] | None, memo: dict | None = None, cached_prefixes: dict[str, dict] | None = None) -> tuple:
     """`sampled_replay`'s enumeration: every Program's index and its request's population, with the not-evaluable counts, their codes,
     the manifest addresses, the `last` anchors and the address correspondence.  ``memo`` keeps the indices and the populations across calls
-    on the same Programs objects (the slim planner fills it before the run's seed exists)."""
+    on the same Programs objects (the slim planner fills it before the run's seed exists).  ``cached_prefixes``: per warm request
+    {"cached": C, "producers": [request label per cached block]} (`program.prefix_plan`), what its `prefix` reads resolve to."""
     memo = {} if memo is None else memo
     all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
-    addresses: dict[tuple, dict] = {}                                             # [R17-3] manifest address -> class of the rows producing it
-    anchors: dict[str, dict] = {}                                                 # [F-r17b-39] per request: the step `last` is anchored to, named
+    addresses: dict[tuple, dict] = {}                                             # manifest address -> class of the rows producing it
+    anchors: dict[str, dict] = {}                                                 # per request: the step `last` is anchored to, named
     addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
     rank = ranks[0] if len(ranks) == 1 else 0
     for rid, inst in programs.items():
@@ -417,9 +493,9 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
                                                          query=manifest_query(manifest), norm_scales=norm_scales.policy_of(manifest))
         indices[id(inst)] = pi
         addr_rec["correspondence"][str(rid)] = pi.correspondence
-        # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
+        # a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
         # multi-rank map is replayed as rank 0's module outputs at v1 (named below)
-        # [revb F-r17b-39] the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
+        # the `last` phase is anchored to the request's last EXECUTED step (n_exec - 1 under the executed prefix = the
         # lag step of an EOS-stopped request), not to the cap: the EOS-stopped request has a `last` stratum too, sampled deterministically
         anchors[rid] = phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
         key = ("population", id(pi), rid, rank, int(arrivals.get(rid, 0)), ring_slots, int(anchors[rid]["last_step"]))
@@ -435,12 +511,20 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         addresses.update(got_a)
         codes.update(got_c)
         indices[rid] = pi
+    for rid, pc in (cached_prefixes or {}).items():
+        pi = indices.get(rid)
+        if pi is None or not int(pc.get("cached") or 0):
+            continue
+        if pi.kv_prefix is None or int(pi.kv_prefix["C"]) != int(pc["cached"]):
+            raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes "
+                             f"{pi.kv_prefix['C'] if pi.kv_prefix else 'no'} cached prefix")
+        pi.cached_prefix[rid] = CP.CachedPrefix(pi.kv_prefix, [str(q) for q in pc["producers"]], indices, arrivals)
     return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
 
 
 def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
-    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size, its
-    picks ([request, request-relative step, Program row, op_path] in draw order) and the VUs whose inputs did not resolve."""
+    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the sample's size, its
+    picks ([request, request-relative step, Program row, op_path] in sample order) and the VUs whose inputs did not resolve."""
     unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
     return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
             "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
@@ -478,29 +562,33 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    weights_check: dict[str, Any] | None = None, targets: list[str] | None = None, workers: int | None = None, worker_peak: int | None = None,
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
-                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None) -> dict[str, Any]:
-    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) draws the sample in place of `seed`.  `executed_prefix` [COORD R17-26]: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
+                   program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None,
+                   cached_prefixes: dict[str, dict] | None = None) -> dict[str, Any]:
+    """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) keys the sample in place of `seed`.  `cached_prefixes`: each warm
+    request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix`: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
     stratum that grades 'not evaluated'); a request with prefix faults is not classified and fails `query_checks` by name.  `programs`: request label -> Program instances doc ({"rows", "params", ...}; requests sharing a shape share it).
-    `manifest` [R17-3]: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
+    `manifest`: the row's required-value manifest (Q(P)) -- the population of record the replay's reach is reconciled against,
     identity by identity (`population.query_total` / `sampled_strata` / `uncovered_by_name` / `query_checks`); None is recorded as such.
-    `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...}; rev-cb
-    M-0411 O5) -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
+    `weights_check`: the caller's proof that the weight slices the relations consume are the COMMITTED weights ({"equal": bool, ...})
+    -- `equal` False fails the replay by name; None is recorded as 'by reference, unverified at replay'.
     `max_evaluate` caps the stratified sample but never below one VU per stratum (round-robin order; the effective cap is recorded);
-    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, drawn by `replay_draw` (`family_strata`).
+    `targets` (`<op_path>[@<step>]`) add every VU of a module to the sample (targeted negatives; not subject to the cap); `replay_k` (the config run): that many units, sampled by `replay_draw` (`family_strata`).
     Addresses: the v2 query's population; a request's Build dir (`program_dirs`: request label -> dir) supplies the correspondence the
     manifest was built with (recorded as `addresses`).
-    Result: True = every sampled VU replays bit-exactly and every non-empty stratum was evaluated; False = a mismatch (named);
-    None = nothing evaluable / a stratum could not be evaluated (partial, never PASS).  `plan`: the same draw, read only (`planned`).
+    Result: True = every sampled VU replays bit-exactly, every non-empty stratum was evaluated and every check of the Programs is 1
+    (`checks`, all of them, recorded as `checks`); False = a mismatch or a refused check (named); None = nothing evaluable / a
+    stratum or a check could not be evaluated (partial, never PASS).  `plan`: the same sample, read only (`planned`).
     `worker_peak` (bytes): the forked pool is fitted after the prewarm to the cgroup's memory (`fit_pool`, recorded as
     `evaluator.memory`), and a pick too large for it is refused (PoolDoesNotFit); None forks the workers asked for."""
     t_start = time.perf_counter()
-    store = CommittedStore.of_record(bmap, committed, manifest)                 # [rel M-0367] reads through the manifest's alias table
+    store = CommittedStore.of_record(bmap, committed, manifest)                 # reads through the manifest's alias table
     arrivals = arrivals or {}
     ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
     all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
-        programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo)
-    pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # [R17-26] classified out of the pool
+        programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo,
+        cached_prefixes=cached_prefixes)
+    pool_vus, not_exec_vus = _kept(split_not_executed(all_vus, executed_prefix), indices, all_vus)   # classified out of the pool
     picked_all, strata, tgt = sample(*family_strata(pool_vus, replay_k, per_stratum, replay_draw), seed, targets=targets, key=challenge_key)
     targeted, n_targeted, n_strat = tgt["hits"], int(tgt["added"]), int(tgt["stratified"])
     cap = max(int(replay_k or max_evaluate), len(strata))                         # never below one VU per stratum
@@ -523,14 +611,14 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # process pool shares the committed store + the weights cache copy-on-write and returns small records.  The children never touch CUDA
     # (weights are pre-read into the cache in the parent, the committed reader slices host tensors); a pool failure / timeout falls back
     # to the serial path.  Results are folded in the picked order below, so the record is independent of the schedule.
-    workers = max(1, min(32, (os.cpu_count() or 2) // 2)) if workers is None else workers
+    workers = default_workers() if workers is None else workers
     workers_requested = int(workers)
     pool_note = None
-    # [rev-cb F-cb-44] a DEVICE-retained committed store (`--retain device`) cannot be read by forked children (CUDA after fork ->
+    # a DEVICE-retained committed store (`--retain device`) cannot be read by forked children (CUDA after fork ->
     # AcceleratorError; every VU would come back 'not evaluated' and the honest row would FAIL closed): the caller names the retention and
     # the replay runs SERIAL in the parent's own CUDA context.  A child that hits the device anyway is a pool failure -> serial fallback.
     if retention == "device" and int(workers) > 1:
-        pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)"
+        pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context"
         workers = 1
     results, workers, note, prewarmed, memory = _evaluated(_one, picked, indices, weights, int(workers), worker_peak)
     pool_note = note or pool_note
@@ -559,9 +647,9 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     for k in strata:
         strata[k]["evaluated"] = int(strata_eval.get(k, 0))
         if strata_mism.get(k):
-            strata[k]["mismatch"] = int(strata_mism[k])                       # [moe F-moe-r17-06] the stratum's own count, uncapped
+            strata[k]["mismatch"] = int(strata_mism[k])                       # the stratum's own count, uncapped
     picks_by_request_step = _picks_by_request_step(results)
-    # [moe F-moe-r17-06] EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
+    # EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
     # reader of the record learns which mechanisms / requests / phases / modules disagree without re-running the replay
     mism_by = {"by_family": dict(Counter(m["spec"].split("{")[0] for m in mism)),
                "by_request": dict(Counter(str(m["request_id"]) for m in mism)),
@@ -586,7 +674,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         result, grade = None, "partial"
         why = f"{len(strata_unevaluated)} strata not evaluated: {strata_unevaluated[:3]}"
     elif not_evald:
-        # [R16 rev F-r16-13 / M-0104] picks not evaluated INSIDE strata that still had an evaluated pick used to leave the grade 'complete'
+        # picks not evaluated INSIDE strata that still had an evaluated pick used to leave the grade 'complete'
         # with sample.not_evaluated_n > 0 -- a run-time fault (missing committed input, bytes not retained, evaluator error, device) on
         # some picks then rode a PASS unnamed.  'complete' means every picked VU was evaluated: any not-evaluated pick -> partial, the first
         # fault named (fault classes first; a by-name pick inside a mixed stratum is named too and, having no fully unevaluated stratum,
@@ -597,12 +685,14 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         result, grade = None, "partial"
         why = (f"{len(not_evald)} pick(s) not evaluated inside evaluated strata ({', '.join(f'{c} x {n}' for c, n in sorted(by_cls.items()))})"
                f"{' -- run-time fault, not a gap on the record' if faults else ''}: {first.get('spec')} {first.get('op_path')} "
-               f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]} (F-r16-13)")
+               f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]}")
     else:
         result, grade, why = True, "complete", None
+    chk = checks_of({rid: indices[rid] for rid in programs}, store, weights, arrivals, executed_prefix)
+    result, grade, why = fold_checks(result, grade, why, chk)
     steps_seen = sorted({v["step"] for v in picked})
     catch = _catch_probability(strata)
-    # [R17-3 / reqval] the population of record is Q(P) (the required manifest), never the replay's own enumeration: reconcile the reach
+    # the population of record is Q(P) (the required manifest), never the replay's own enumeration: reconcile the reach
     # identity by identity and carry query_total / sampled_strata / uncovered_by_name on the record (a required identity the exact replay
     # has no VU for is NAMED with its mechanism of record -- never inside the grade, never silently "qualified")
     evaluated_keys = {(vu["request_id"], int(vu["step"]), vu["op_path"]) for vu, rec, _dt in results if rec.get("result") is not None}
@@ -612,40 +702,41 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             "population": {"vus": len(all_vus), "source": "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)",
                            "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)), "not_evaluable_by_family": dict(not_ev_fam),
                            "not_evaluable": dict(not_ev), "not_evaluable_codes": {k: codes.get(k) or RC.reason_code("other") for k in not_ev}, "strata_n": len(strata),
-                           "authority": "Q(P) -- the required manifest (R17-3); `vus` above is the replay's enumeration of the Program rows, reconciled below",
+                           "authority": "Q(P) -- the required manifest; `vus` above is the replay's enumeration of the Program rows, reconciled below",
                            "query_total": qpop["query_total"], "sampled_strata": qpop["sampled_strata"], "uncovered_by_name": qpop["uncovered_by_name"],
                            "not_executed_by_family": qpop["not_executed_by_family"], "not_executed_rule": qpop["not_executed_rule"],
                            "not_executed_by_rule": dict(qpop["not_executed_by_rule"], vus=len(not_exec_vus),
                                                         vus_by_request=dict(Counter(v["request_id"] for v in not_exec_vus)),
-                                                        strata_excluded={k: {"population": int(n), "label": "not evaluable: unexecuted (R17-1)"}
+                                                        strata_excluded={k: {"population": int(n), "label": "not evaluable: unexecuted"}
                                                                          for k, n in sorted(Counter(v["stratum"] for v in not_exec_vus).items())}),
                            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
                            "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
             "addresses": addr_rec,
             "sample": {"per_stratum": int(replay_k or per_stratum), "seed": int(seed), "seed_source": seed_source, "strata_by": replay_draw if replay_k else "unit", **({"k": int(replay_k)} if replay_k else {}),
-                       # [R16 rev M-0600 / F-r16-23] under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
+                       # under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),
                        "picked": len(picked), "evaluated": evaluated, "equal": equal,
                        "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(cap),
                        "stratified_picked": min(cap, n_strat), "targeted": targeted, "targeted_n": n_targeted,
                        "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the cap",
-                       "picks_by_request_step": picks_by_request_step,      # [revb n-pad-c-1] {request: {step: [picked, evaluated, mismatch]}}
-                       # [revb S-r17b-77 nit] the step is the REQUEST-RELATIVE step (R17-1's n_exec counts the request's own steps); the engine
+                       "picks_by_request_step": picks_by_request_step,      # {request: {step: [picked, evaluated, mismatch]}}
+                       # the step is the REQUEST-RELATIVE step (the executed prefix's n_exec counts the request's own steps); the engine
                        # step of a pick is arrival + step -- the arrival per request beside it, so a mixed-arrivals reader adds it, not guesses
                        "picks_by_request_step_key": "[picked, evaluated, mismatch] per (request, request-relative step); engine step = picks_by_request_arrival[request] + step; targeted picks included",
                        "picks_by_request_arrival": {r: int(arrivals.get(r, 0)) for r in picks_by_request_step}},
             "timing": {"wall_s": round(time.perf_counter() - t_start, 3), "workers": int(workers), "cpu_s_sum": round(sum(fam_time.values()), 3),
                        "per_family_s": {f: round(fam_time[f], 3) for f in sorted(fam_time)}, "per_family_n": {f: int(fam_n[f]) for f in sorted(fam_n)}},
-            # [rev-cb F-cb-44] how the committed store was read: the collector's retention and the evaluator that ran (forked pool / serial)
+            # how the committed store was read: the collector's retention and the evaluator that ran (forked pool / serial)
             "evaluator": {"retention": retention, "workers_requested": workers_requested, "workers": int(workers),
                           "mode": "forked pool" if int(workers) > 1 else "serial (parent process)", "note": pool_note,
-                          "prewarmed_libraries": prewarmed,               # [MAN-06g] twin .so's dlopen'ed in the parent before the fork
-                          # [R19 admit, F-r18-admit-1 (c)] gc.freeze before the fork: the children's collections never traverse the
-                          # inherited C2 heap (the 72 GB-per-child COW of R17 #23); {} when no pool was forked
+                          "prewarmed_libraries": prewarmed,               # twin .so's dlopen'ed in the parent before the fork
+                          # gc.freeze before the fork: the children's collections never traverse the
+                          # inherited C2 heap (otherwise a 72 GB-per-child COW); {} when no pool was forked
                           "fork": dict(_FORK_STATS) if int(workers) > 1 else {}, **({"memory": memory} if memory else {})},
             "strata": strata, "strata_unevaluated": strata_unevaluated, **({"value_reads_in_children": child_reads} if child_reads else {}),
-            # [rev-cb M-0740 G1] EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
+            **({"checks": chk} if chk is not None else {}),
+            # EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
             "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],
             "why_classes": {"by_name": list(WHY_CLASSES_BY_NAME), "fault": list(WHY_CLASSES_FAULT),
                             "rule": "a by-name class is a gap of this replay version (may be carried on a PASS when form (B) covers the values); "
@@ -656,36 +747,36 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                             "phases": sorted({k.split("|")[3] for k in strata}),
                             "modules": len({k.split("|")[4] for k in strata if k.count("|") >= 4}),
                             "key": "spec | request | rank | phase | module op_path | lifetime (window); attention rows: spec with T -> NB = ceil(T/BN) "
-                                   "(the block-count mechanism; the row's own spec keeps T) [R17-11]",
+                                   "(the block-count mechanism; the row's own spec keeps T)",
                             "lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "ring_slots": ring_slots,
                                          "rule": "engine step >= ring_slots -> recycled-window (storage the ring already committed under an earlier step's "
                                                  "identities); else fresh-window; unwindowed collectors: one value, stated",
                                          "sampled": dict(Counter(v["lifetime"] for v in picked))},
-                            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (F-r17b-39: `last` is anchored to n_exec - 1 "
+                            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
                                       "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
                                       "prefix are 'not-executed', split out of the pool by name)"),
-                            # [revb F-r17b-39] per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
+                            # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
                             "phase_anchor": {r: anchors[r] for r in sorted(anchors)}},
             "mismatch": [{k: m.get(k) for k in ("spec", "request_id", "step", "engine_step", "op_path", "row", "phase", "inputs", "outputs", "why")} for m in mism[:12]],
-            "mismatch_by": mism_by,                                       # [moe F-moe-r17-06] every mismatch by name, uncapped
+            "mismatch_by": mism_by,                                       # every mismatch by name, uncapped
             "not_evaluated": not_evald[:12],
-            # [R17 dense, M-0123] mechanisms of the Program's rows this replay does NOT read even when the row IS evaluated (named, counted)
+            # mechanisms of the Program's rows this replay does NOT read even when the row IS evaluated (named, counted)
             "uncovered_mechanisms": _uncovered_mechanisms(all_vus, not_ev_fam),
-            # report M-0430: not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
+            # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
             "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
                               "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
-                                                 else ("interior producer: composed into its consumer's VU (MAN-07)" if "(interior" in f
-                                                       else ("MoE plane row -> plane slice mapping failed (MAN-06f v3): see population.not_evaluable" if "(plane mapping failed)" in f
+                                                 else ("interior producer: composed into its consumer's VU" if "(interior" in f
+                                                       else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
                                                              else "no registered evaluator")))}
                              for f in sorted(not_ev_fam)],
             "weights": (wc if wc is not None else {"equal": None, "note": "by reference, unverified at replay (no weights check supplied)"}),
-            # [FLUSH-03 fact; rev M-0494 (3)] the committed up plane is not the down plane's bytes, per (request, step, layer) -- beside the replay
+            # the committed up plane is not the down plane's bytes, per (request, step, layer) -- beside the replay
             "moe_planes": {"alias_check": moe_plane_alias_check(store)},
-            # [revb M-0083] the engine configuration the evaluators were conditioned on, measured in this process (VLLM_BATCH_INVARIANT & co.)
+            # the engine configuration the evaluators were conditioned on, measured in this process (VLLM_BATCH_INVARIANT & co.)
             "engine_of_record": engine_facts_of_record(),
-            # [R16 fp8] the composed INTERIOR producers' evaluators are named too (the quant twin is load-bearing for every FP8 GEMM VU)
+            # the composed INTERIOR producers' evaluators are named too (the quant twin is load-bearing for every FP8 GEMM VU)
             "evaluators": {f: EVALUATORS[f] for f in sorted(set(fams) | {k.split(" (")[0] for k in not_ev_fam if "(interior" in k}) if f in EVALUATORS},
-            # [rev M-0100] the fitted twins name what pinned them (fixture sha256, kernels, device, date, tests) -- only for families present
+            # the fitted twins name what pinned them (fixture sha256, kernels, device, date, tests) -- only for families present
             "evaluator_provenance": {f: EVALUATOR_PROVENANCE[f] for f in sorted(set(fams) | {k.split(" (")[0] for k in not_ev_fam if "(interior" in k})
                                      if f in EVALUATOR_PROVENANCE},
             "applicability": {"families_evaluated": fams, "families_not_yet": {k: v for k, v in NOT_YET.items() if k in not_ev_fam},

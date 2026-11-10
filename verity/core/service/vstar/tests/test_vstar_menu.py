@@ -3,7 +3,7 @@ pinned menu's inner session (`VStar.Menu.sessions`, each shape's largest entry a
 the premise `FlockSampled.Menu.ofEntries_staged` takes. The proof, a bound on `VStar.parts`, is deferred.
 
 These run V* at the deployed sizes, which nothing cheaper does: the kernel cannot evaluate `statements` there, and the
-difftest compares Lean with Python on drawn small shapes, not on the pinned ones. A menu or a parts limit that leaves a
+difftest compares Lean with Python on sampled small shapes, not on the pinned ones. A menu or a parts limit that leaves a
 pinned shape unstaged fails here and nowhere else before an audit refuses it."""
 
 from __future__ import annotations

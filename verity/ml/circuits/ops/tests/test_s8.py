@@ -6,9 +6,11 @@ import random
 
 import pytest
 
+from verity.ml.circuits.census import FAMILY_COUNTS
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops.boolean import s8 as _boolean_s8  # noqa: F401  (registers S8Dot_v2's rule)
 from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.silicon.integer import S32_MAX, S32_MIN, s32_value, s32_word
 
@@ -163,6 +165,8 @@ def test_the_census_rule_counts_served_macs_and_tail_atoms_apart() -> None:
     assert S8.counts(bind(S8.S8Matmul, N=5, **S8.SMOKE_EDITED).bindings) == {"served_macs": 320, "tail_atoms": 480,
                                                                               "receipt_folds": 0}
     assert S8.LimbSplit.carries(bind(S8.LimbSplit, FORM="bytes", N=3, Y=(0, 1)).bindings) == 2
+    families = ("S8Dot_v1", "S8Matmul_v1", "S8Dot_v2", "S8Matmul_v2")
+    assert {f: FAMILY_COUNTS[f] for f in families} == dict.fromkeys(families, S8.counts)
 
 
 def test_limb_primitives_are_total_on_words() -> None:

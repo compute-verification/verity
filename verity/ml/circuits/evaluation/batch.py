@@ -8,23 +8,32 @@ A kernel is registered against a Definition id (without statics) or a `ScalarRef
     fn(*arrays, **statics) -> (out, declined) | NotImplemented
 
 ``declined`` is a boolean ``(N,)`` mask (or ``None``) of inputs outside the kernel's exact domain; `evaluate_batch`
-recomputes those with the reference, so a kernel never has to be total.  ``NotImplemented`` declines the whole call
-(statics the kernel does not cover, e.g. an unknown ``DOT`` step).  Every registered kernel must pass `self_check`: on
-seeded random inputs every input it accepts equals the reference bit for bit, and every input the reference
-rejects is one it declined.
+recomputes those with the reference, so a kernel never has to be total.  A kernel declines exactly the inputs the reference
+rejects unless it is registered ``partial`` (its ``domain`` says which others it declines).  ``NotImplemented`` declines
+the whole call (statics the kernel does not cover, e.g. an unknown ``DOT`` step).  Every registered kernel must pass
+`self_check` (`SelfCheck.ok`): on seeded random inputs every input it accepts equals the reference bit for bit, every
+input the reference rejects is one it declined, it computed at least one, and, unless it is partial, it declined
+nothing else.
+
+A Boolean Definition (`verity.ml.circuits.boolean`) is evaluated by its word Definition's kernel (`trace.word_of`), through
+the word view (`boolean.word_type`: each element's bits are one word), when it has none of its own; a kernel registered
+against ``Gemm_v2`` serves ``Gemm_v3``.  What that leaves, and what a kernel declines, is evaluated bit-sliced
+(`bits.evaluate_bits`), never gate by gate.  The word Definition is held to the Boolean one by circuit-check's word view.
 """
 from __future__ import annotations
 
+import weakref
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.boolean import is_boolean
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.types import Array, Type, Value
 
-from .bits import evaluate_bits
+from .bits import _to_bits, _to_words, evaluate_bits
 from .reference import ScalarReference, Target, evaluate, key_of, refuse_registered_tables, resolve, signature_of, statics_of
 
 __all__ = [
@@ -37,6 +46,7 @@ __all__ = [
     "self_check",
     "type_dtype",
     "type_shape",
+    "word_kernel",
 ]
 
 KernelFn = Callable[..., Any]
@@ -51,27 +61,31 @@ class Kernel:
     domain: str = ""
     version: int = 1
     sample: Sampler | None = field(default=None, repr=False)
+    partial: bool = False
 
 
 _KERNELS: dict[str, dict[str, Kernel]] = {}
 
 
 def register_kernel(target: Target | str, fn: KernelFn, *, kernel: str = "numpy", domain: str = "", version: int = 1,
-                    sample: Sampler | None = None) -> Kernel:
+                    sample: Sampler | None = None, partial: bool = False) -> Kernel:
     """Register ``fn`` as kernel ``kernel`` of ``target`` (a Definition, a `ScalarReference`, or a Definition id).
-    ``domain`` says in words which inputs it computes (the rest it declines); ``sample(rng, n, params, **statics)``
-    optionally draws the inputs `self_check` uses.  Re-registering the same function is a no-op; a different one
+    ``domain`` says in words which inputs it computes (the rest it declines); ``partial`` says it declines inputs the
+    reference accepts (else it declines exactly those the reference rejects); ``sample(rng, n, params, **statics)``
+    optionally samples the inputs `self_check` uses.  Re-registering the same function is a no-op; a different one
     under the same (target, kernel) is an error, as for Definitions."""
     key = key_of(target)
-    k = Kernel(key, kernel, fn, domain, version, sample)
+    k = Kernel(key, kernel, fn, domain, version, sample, partial)
     prev = _KERNELS.setdefault(key, {}).get(kernel)
     if prev is not None and prev.fn is not fn:
         raise ValueError(f"kernel {kernel!r} of {key} is already registered with a different function")
     _KERNELS[key][kernel] = k
+    _WORD.clear()
     return k
 
 
 def kernels(target: Target | str) -> dict[str, Kernel]:
+    """The kernels registered against ``target`` (not those a Boolean Definition takes from its word Definition)."""
     return dict(_KERNELS.get(key_of(target), {}))
 
 
@@ -80,10 +94,48 @@ def _pick(target: Target, kernel: str) -> Kernel | None:
         return None
     ks = _KERNELS.get(key_of(target), {})
     if kernel == "auto":
-        return ks.get("numpy") or next(iter(ks.values()), None)
+        return ks.get("numpy") or next(iter(ks.values()), None) or word_kernel(target)
     if kernel not in ks:
         raise KeyError(f"no kernel {kernel!r} registered for {key_of(target)} (registered: {sorted(ks)})")
     return ks[kernel]
+
+
+_WORD: "weakref.WeakKeyDictionary[SpecializedDefinition, Kernel | None]" = weakref.WeakKeyDictionary()
+
+
+def word_kernel(target: Target) -> Kernel | None:
+    """The kernel a Boolean Definition takes from its word Definition: that Definition's ``"auto"`` kernel on the word view
+    of the inputs, its output unpacked to bits (rows it declines stay declined).  None when ``target`` is not a Boolean
+    composite, names no word Definition, has an element wider than 64 bits, or its word Definition has no kernel."""
+    if not isinstance(target, SpecializedDefinition) or getattr(target.defn, "word", None) is None:
+        return None
+    if target in _WORD:
+        return _WORD[target]
+    k = None
+    if BL.is_boolean(target):
+        word = word_of(target)
+        params, ret = signature_of(target)
+        wparams, _ = signature_of(word)
+        inner = _pick(resolve(word), "auto")
+        if inner is not None and max((w for t in (*params, ret) for w in BL.elements(t)), default=1) <= 64:
+            k = Kernel(key_of(target), inner.name, _through(inner, statics_of(word), params, wparams, BL.elements(ret)),
+                       inner.domain, inner.version, partial=inner.partial)
+    _WORD[target] = k
+    return k
+
+
+def _through(inner: Kernel, statics: dict, params: Sequence[Type], wparams: Sequence[Type], ret: list[int]) -> KernelFn:
+    def fn(*arrays: np.ndarray, **_statics: Any) -> Any:
+        n = arrays[0].shape[0]
+        words = [_to_words(a.reshape(n, -1), BL.elements(t)).astype(type_dtype(wt)).reshape(n, *type_shape(wt))
+                 for a, t, wt in zip(arrays, params, wparams)]
+        res = inner.fn(*words, **statics)
+        if res is NotImplemented:
+            return res
+        vals, declined = res
+        return _to_bits(np.asarray(vals).reshape(n, -1), ret), declined
+
+    return fn
 
 
 # ---- types <-> arrays ---------------------------------------------------------------------------------------------------
@@ -158,10 +210,11 @@ def _store(out: np.ndarray, i: int, leaves: tuple[int, ...]) -> None:
 
 def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.ndarray:
     """Evaluate ``target`` on ``N`` inputs: one array per parameter with a leading batch axis, the output likewise.
-    ``kernel="auto"`` uses the ``numpy`` kernel when one is registered, ``"reference"`` forces the plain-integer
-    reference, any other name selects that kernel; with ``"auto"`` a Boolean composite without a kernel is evaluated
-    bit-sliced (`bits.evaluate_bits`).  Inputs a kernel declines are computed by the reference, whose exceptions (inputs
-    outside the function's domain) propagate.  A `RegisteredTable` input is refused by name."""
+    ``kernel="auto"`` uses the ``numpy`` kernel when one is registered (for a Boolean Definition without one, its word
+    Definition's, `word_kernel`), ``"reference"`` forces the plain-integer reference, any other name selects that kernel.
+    Inputs no kernel computes are computed by the reference, whose exceptions (inputs outside the function's domain)
+    propagate, or, for a Boolean composite, bit-sliced (`bits.evaluate_bits`).  A `RegisteredTable` input is refused
+    by name."""
     t = resolve(target)
     refuse_registered_tables(t.id, inputs, "evaluate_batch")
     params, ret = signature_of(t)
@@ -176,15 +229,17 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
     out = np.zeros((n, *type_shape(ret)), dtype=type_dtype(ret))
     todo = np.ones(n, dtype=bool)
     k = _pick(t, kernel)
-    if k is None and kernel == "auto" and n and isinstance(t, SpecializedDefinition) and is_boolean(t):
-        return evaluate_bits(t, *arrays).astype(out.dtype, copy=False)
     if k is not None and n:
         res = k.fn(*arrays, **statics_of(t))
         if res is not NotImplemented:
             vals, declined = res
             out[...] = np.asarray(vals).reshape(out.shape)
             todo = np.zeros(n, dtype=bool) if declined is None else np.asarray(declined, dtype=bool).reshape(n)
-    for i, args in _reference_rows(t, params, arrays, np.flatnonzero(todo)):
+    rows = np.flatnonzero(todo)
+    if rows.size and kernel != "reference" and isinstance(t, SpecializedDefinition) and BL.is_boolean(t):
+        out[rows] = evaluate_bits(t, *(a[rows] for a in arrays)).reshape(out[rows].shape)
+        return out
+    for i, args in _reference_rows(t, params, arrays, rows):
         _store(out, i, evaluate(t, *args))
     return out
 
@@ -220,14 +275,34 @@ class SelfCheck:
     declined: int
     outside: int
     mismatches: list[tuple[int, list, Any, Any]]
+    partial: bool = False
+
+    @property
+    def compared(self) -> int:
+        """The inputs the kernel computed, each compared with the reference."""
+        return self.n - self.declined
+
+    @property
+    def fault(self) -> str | None:
+        """Why the kernel is not checked against the reference by this run, None when it is: ``"mismatch"`` (an accepted
+        input differs, or an input the reference rejects was accepted), ``"compared-nothing"`` (it declined every input),
+        or ``"declined-in-domain"`` (a kernel that is not `partial` declined an input the reference accepts)."""
+        if self.mismatches:
+            return "mismatch"
+        if self.compared <= 0:
+            return "compared-nothing"
+        if not self.partial and self.declined != self.outside:
+            return "declined-in-domain"
+        return None
 
     @property
     def ok(self) -> bool:
-        return not self.mismatches
+        return self.fault is None
 
     def __str__(self) -> str:
-        head = (f"{self.target} [{self.kernel}]: {self.n} instances, {self.declined} declined, {self.outside} outside the "
-                f"reference's domain, {len(self.mismatches)} mismatches")
+        head = (f"{self.target} [{self.kernel}{', partial' if self.partial else ''}]: {self.n} instances, {self.declined} "
+                f"declined, {self.outside} outside the reference's domain, {len(self.mismatches)} mismatches"
+                + (f" ({self.fault})" if self.fault else ""))
         return "\n".join([head, *(f"  row {i}: kernel {kv!r} reference {rv!r} args {args!r}"[:400]
                                   for i, args, kv, rv in self.mismatches[:5])])
 
@@ -236,7 +311,8 @@ def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: in
                inputs: Sequence[Any] | None = None) -> SelfCheck:
     """Compare kernel ``kernel`` of ``target`` with the reference on ``n`` seeded inputs (the kernel's own sampler if it
     registered one, else `sample_uniform`) or on ``inputs``.  An accepted input must equal the reference bit for bit;
-    an input the reference rejects (raises on) must be declined."""
+    an input the reference rejects (raises on) must be declined; `SelfCheck.ok` also asks that some input was compared
+    and, unless the kernel is ``partial``, that it declined nothing else."""
     t = resolve(target)
     params, ret = signature_of(t)
     k = _pick(t, kernel)
@@ -259,7 +335,7 @@ def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: in
     for i, args in _reference_rows(t, params, arrays, np.arange(n)):
         try:
             ref = evaluate(t, *args)
-        except Exception as e:  # the reference's own domain check: the kernel must have declined
+        except Exception as e:  # noqa: BLE001 - the reference's own domain check: the kernel must have declined
             outside += 1
             if not declined[i]:
                 mismatches.append((i, args, vals[i].tolist(), f"reference raised {type(e).__name__}: {e}"))
@@ -269,4 +345,5 @@ def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: in
         got = (int(vals[i]),) if vals.ndim == 1 else tuple(int(v) for v in vals[i].reshape(-1))
         if got != ref:
             mismatches.append((i, args, got, ref))
-    return SelfCheck(k.key if isinstance(t, ScalarReference) else t.id, kernel, n, int(declined.sum()), outside, mismatches)
+    return SelfCheck(k.key if isinstance(t, ScalarReference) else t.id, kernel, n, int(declined.sum()), outside, mismatches,
+                     k.partial)

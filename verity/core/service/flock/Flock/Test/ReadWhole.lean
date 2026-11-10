@@ -15,7 +15,12 @@ list of w slots it adds: refused with no residual, with only `acc0`'s port held,
 name than its element needs is named, at copy 0 even with no copy, and at each copy below `upv`; a forced zero (leaf -1)
 keys none. `roundNames` names each round holding a key, `RecOpening.rsName` claim `i`'s ring switch's elements `m<i>`.
 -/
-import Flock.RecOpening
+module
+
+public import Flock.RecOpening
+meta import Flock.RecOpening
+
+@[expose] public section
 
 namespace Flock.Test.ReadWhole
 
@@ -27,7 +32,7 @@ def net (inWords : Nat) (reads : List (List Nat)) : Net :=
   let rows := Array.replicate nIn #[] ++ (reads.map List.toArray).toArray
   let w := nIn + reads.length + 1
   match Sparse.ofRows rows w, Sparse.ofRows (Array.replicate rows.size #[]) w with
-  | .ok a, .ok b => { (default : Net) with constPos := nIn + reads.length, inWords, a, b }
+  | .ok a, .ok b => { (default : Net) with constPos := nIn + reads.length, inWords, aT := .pure a, bT := .pure b }
   | _, _ => default
 
 def partly (inWords : Nat) (ns : List Nat) (reads : List (List Nat)) : Option (Nat × Nat) :=

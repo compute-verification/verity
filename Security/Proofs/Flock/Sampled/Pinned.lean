@@ -1,12 +1,16 @@
-import Proofs.Flock.Sampled.Defs
-import VStar.Menu.Pinned
+module
+
+public import Proofs.Flock.Sampled.Defs
+public import VStar.Menu.Pinned
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # F6's pinned menus as `Menu`s
 
 A pinned menu's entries (`VStar.Menu.Pinned`, generated from F6's `menu.json`) give a `Menu`: its shapes are the
 entries' (slots, nonzero bound, the most unit positions among the entries at them), a shape's inner session is `VStar.Menu.inner`'s (the largest of its entries', at their
-most claims), and its type bound `VStar.Menu.types`'s. The padded sessions of an audit of `k` draws stay a parameter:
+most claims), and its type bound `VStar.Menu.types`'s. The padded sessions of an audit of `k` samples stay a parameter:
 `menu.json` gives the session counts at its own `K` only.
 
 * `Menu.ofEntries`: the menu of a list of entries, given its padded sessions.
@@ -16,6 +20,8 @@ most claims), and its type bound `VStar.Menu.types`'s. The padded sessions of an
   not proved: the proof, a bound on `VStar.parts`, is deferred.
 * `pinned_inRange`: every pinned model's menu is in the live verifier's range, whatever its padded sessions.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 

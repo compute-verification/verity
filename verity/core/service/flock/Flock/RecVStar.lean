@@ -6,23 +6,35 @@ per part of the rep's algebra, `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over
 session, `VStar.statementsHolo`, the parts `specHolo`'s and each part's file saying `holo` in META), and for candidate 3's
 session its RecSparse (`rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` over the two reps), R's levels under names of their own
 (`rec-open-stacked/l<2^lanes>-h<d − cap>`, never the circuit table's) and the parts of R's opening
-(`rec-opening/m<m>-c<claims>-p<j>`, at META's `stacked`; `candidate3Statements`). A circuit whose unit is one
+(`rec-opening/m<m>-c<claims>-p<j>`, at META's `stacked`; `candidate3Statements`), then RecCap at each later level
+(`rec-cap/n<N>-l<l>`, `VStar.levelCapStatements`, the reps' schedule's tops: `checkTopsListed`), the inner population's
+link table's RecLink when the statement carries one (`rec-link/u<UB>-p<PB>`, `linkStatements`), and RecCap at level 0
+(`rec-cap/n<N>`, last; `checkCapListed`). A circuit whose unit is one
 of V*'s is refused unless the verifier names which of these statements the session is (`--rec-part J`) and its unit is that
 statement's, its population is that statement's instance count, the verifier's own bindings (`--rec-bindings F`) are its
-partition object's and program's, META binds exactly those, and the circuit file is byte for byte the one `vstar stage`
+partition object's and program's and name V*'s template of that statement (`checkTemplate`), META binds exactly those, and
+the circuit file is byte for byte the one `vstar stage`
 writes for that statement under the verifier's bindings (`circuitFile`).
 
 The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the inner statement, as `InnerFold.lean` sets it
 up for V*'s native side, read once, since the inner circuit can be tens of GB; `verify --rec-inner F` reads the line it
 printed.
 -/
-import Flock.HmRow
-import Flock.ProvedScope
-import Flock.RecOpening
-import Flock.Registered
-import VStar.Cli
-import VStar.Compose
-import VStar.Stage
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+public import Flock.RecOpening
+public import Flock.Registered
+public import Flock.WindowRecord
+public import VStar.Cli
+public import VStar.Compose
+public import VStar.Stage
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace RecVStar
@@ -47,12 +59,21 @@ guarantees read. -/
 instance instBEqShape : BEq RecSparse.Shape := ⟨fun a b => a.nu == b.nu && a.ell == b.ell && a.sLog == b.sLog && a.tLog == b.tLog⟩
 instance instReprShape : Repr RecSparse.Shape := ⟨fun s _ => repr (s.nu, s.ell, s.sLog, s.tLog)⟩
 
+/-- The inner population's link table as the verifier's inner shape names it: its units' bits `UB`, its rows' bits `PB`
+(`RecLinkTree.checkShape`) and its row count `rows`, `grid(L)` (`linkStatements`). -/
+structure LinkShape where
+  UB : Nat
+  PB : Nat
+  rows : Nat
+  deriving Repr, BEq, Inhabited
+
 /-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), its claims, two and one per region and
 link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), its table's regions (`Stmt.regions`), and
 whether its circuits are private (`holo`, `rec_algebra.Shape.holo`): the verifier's own `--hide`, never the prover's.
 Candidate 3's session (`rec_live.schedule_for` with `sparse`) also has its sparse phase's RecSparse shape (`sparse`, the
 bucket's, the verifier's own `--sparse`) and R's shape (`stacked`, the inner circuit's META's), which its V* list needs
-beside it (`candidate3Statements`). -/
+beside it (`candidate3Statements`). A statement carrying the inner population's link table has its shape (`links`), whose
+part V*'s list holds (`linkStatements`). -/
 structure Inner where
   m : Nat
   kLog : Nat
@@ -61,35 +82,70 @@ structure Inner where
   holo : Bool := false
   sparse : Option RecSparse.Shape := none
   stacked : Option StackedShape := none
+  links : Option LinkShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- The inner session's keyed coin tree: the session's stream (the link points), the circuit table's two reps, each rep's
+sparse phase and candidate 3's stacked table R (`rec_live.INNER_COIN_STREAMS`), 512 rounds of at most 512 coins each, as
+`Zk.coinSpec` has them. A session that opens fewer streams leaves the rest unopened. -/
+def innerCoinSpec : CoinTree.Spec :=
+  ⟨#["session", "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"], 9, 512⟩
 
-/-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program. -/
-def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false) :
-    V Inner := do
-  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
+/-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
+def innerTree : Coins := .tree innerCoinSpec
+
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the challenger's coin tree (`innerTree`), under the statement's own
+tags. -/
+def innerTags : Tags := Tags.circuitPlainLeaves
+
+/-- The fewest bits that number `n` things: `0` for at most one. -/
+def bitsFor (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
+
+/-- **The link table's shape at the inner statement** `st`, of `rows` rows: the fewest bits that number its units
+(`UB`) and the fewest that number its input rows and its output rows (`PB`, `HmOut.nIn` input rows, one output row a
+row port), the positions of the rows trees `RecLinkTree.rowsRoot` builds. -/
+def linkShapeOf (st : Stmt) (rows : Nat) : LinkShape :=
+  { UB := bitsFor st.pub.n, PB := bitsFor (max (HmOut.nIn st.c) st.c.outRowPorts.size), rows }
+
+/-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program;
+with `links`, the row count of the link table the statement carries, that table's shape (`linkShapeOf`). -/
+def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false)
+    (links : Option Nat := none) : V Inner := do
+  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB innerTree 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
-  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
+  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo,
+         links := links.map (linkShapeOf st) }
 
-def FORMAT : String := "verity/rec-inner/v1"
+/-- The recursion's statement version: V*'s statements whose verifier-registered values are under SHA-512 salts
+(`RecCoins.saltOf`). -/
+def FORMAT : String := "verity/rec-inner/v2"
 
-/-- `verity/rec-inner/v1`'s key for `Inner.holo`, written only when true; absent means false. -/
+/-- The version before `FORMAT`, whose V* statements registered those values under SHAKE256 salts: refused. -/
+def FORMAT_V1 : String := "verity/rec-inner/v1"
+
+/-- `verity/rec-inner/v2`'s key for `Inner.holo`, written only when true; absent means false. -/
 def HOLO_KEY : String := "holo"
 
-/-- `verity/rec-inner/v1`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
+/-- `verity/rec-inner/v2`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
 is under META's own key (`STACKED_SHAPE_KEY`), `{"m", "claims"}`, written only when present. -/
 def SPARSE_KEY : String := "sparse"
+
+/-- `verity/rec-inner/v2`'s key for `Inner.links`, `{"UB", "PB", "rows"}`, written only when present. -/
+def LINKS_KEY : String := "links"
 
 def Inner.toJson (i : Inner) : Json :=
   Json.mkObj ([("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog),
     ("claims", Lean.toJson i.claims), ("regions", Lean.toJson i.regions)] ++ (if i.holo then [(HOLO_KEY, .bool true)] else []) ++
     (i.sparse.map fun sh => (SPARSE_KEY, Lean.toJson [sh.nu, sh.ell, sh.sLog, sh.tLog])).toList ++
-    (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList)
+    (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList ++
+    (i.links.map fun l => (LINKS_KEY,
+      Json.mkObj [("UB", Lean.toJson l.UB), ("PB", Lean.toJson l.PB), ("rows", Lean.toJson l.rows)])).toList)
 
 def Inner.ofJson (j : Json) : Except String Inner := do
-  if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
+  let fmt := (j.getObjValAs? String "format").toOption
+  if fmt == some FORMAT_V1 then
+    throw s!"rec-inner: {FORMAT_V1} is refused: its V* statements' verifier-registered values are under SHAKE256 salts, {FORMAT}'s under SHA-512"
+  if fmt != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
   let holo ← match j.getObjVal? HOLO_KEY with
     | .error _ => pure false
     | .ok (.bool b) => pure b
@@ -104,8 +160,13 @@ def Inner.ofJson (j : Json) : Except String Inner := do
     | .ok v => match v.getObjValAs? Nat "m", v.getObjValAs? Nat "claims" with
       | .ok m, .ok claims => pure (some ({ m, claims } : StackedShape))
       | _, _ => throw s!"rec-inner: {STACKED_SHAPE_KEY} is not R's shape (m, claims)"
+  let links ← match j.getObjVal? LINKS_KEY with
+    | .error _ => pure none
+    | .ok v => match v.getObjValAs? Nat "UB", v.getObjValAs? Nat "PB", v.getObjValAs? Nat "rows" with
+      | .ok UB, .ok PB, .ok rows => pure (some ({ UB, PB, rows } : LinkShape))
+      | _, _, _ => throw s!"rec-inner: {LINKS_KEY} is not the link table's shape (UB, PB, rows)"
   pure { m := ← j.getObjValAs? Nat "m", kLog := ← j.getObjValAs? Nat "k_log", claims := ← j.getObjValAs? Nat "claims",
-         regions := ← j.getObjValAs? Nat "regions", holo, sparse, stacked }
+         regions := ← j.getObjValAs? Nat "regions", holo, sparse, stacked, links }
 
 /-- R's variables at the bucket's RecSparse shape (`rec_sparse.table_m`): its cells' `NU + P_LOG + T_LOG`, at least
 `PAD_TO` (`registered_claim`'s padded point). -/
@@ -168,10 +229,18 @@ def candidate3Statements (i : Inner) : Except String (Array VStar.Stmt) := do
       VStar.Stmt.recOpenStacked l (2 ^ lv.lanes) (lv.d - lv.cap) lv.q
     pure (#[sparse] ++ levels ++ (← openingParts r))
 
-/-- **Candidate 3's V* list holds every statement its session needs**: with the sparse phase (`i.sparse`), a RecSparse
-statement at its shape; with R (`i.stacked`), each of R's levels at `fast100(m)` and R's opening, every part of it at R's
-shape. A list missing any of them is refused by name. -/
-def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+/-- **The sparse phase is a holo session's**: RecSparse reads `h`, the table's round `hRound`, which a rep sends only
+where its circuits are private (`holoRepRounds`), so an inner shape naming a RecSparse shape (`rec-inner --sparse`) at
+public circuits is refused. -/
+def checkSparseHolo (i : Inner) : Except String Unit :=
+  match i.sparse with
+  | some sp => if i.holo then .ok () else
+      .error (s!"the inner shape names a RecSparse shape ({RecSparse.unitName sp}) at public circuits: the sparse " ++
+        "phase reads h, which only a holo inner session (rec-inner --hide) sends")
+  | none => .ok ()
+
+/-- Candidate 3's V* list against its inner shape (`checkCandidate3`'s list checks). -/
+def checkCandidate3Lists (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
   if let some sp := i.sparse then
     if !ss.any (fun | .sparse sh _ => sh == sp | _ => false) then
       throw s!"candidate 3's V* list has no RecSparse statement ({RecSparse.unitName sp}), and the inner shape names its sparse phase"
@@ -187,6 +256,200 @@ def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := 
         if m != r.m || c != r.claims then
           throw s!"candidate 3's V* list: {s.name} opens R at (m {m}, claims {c}), not at R's shape (m {r.m}, claims {r.claims}, META's {STACKED_SHAPE_KEY})"
 
+/-- **Candidate 3's V* list holds every statement its session needs**: a sparse phase (`i.sparse`) only at private
+circuits (`checkSparseHolo`), and with it a RecSparse statement at its shape; with R (`i.stacked`), each of R's levels at
+`fast100(m)` and R's opening, every part of it at R's shape. A list missing any of them is refused by name. -/
+def checkCandidate3 (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+  checkSparseHolo i
+  checkCandidate3Lists i ss
+
+/-- One round of a stream's schedule (`rec_live.rep_rounds`' tuples): its coin count, the node counts of the tops it
+commits, its copies of level 0's top, and whether it absorbs a message (one row when it absorbs any elements). -/
+abbrev SchedRound := Nat × Array Nat × Nat × Bool
+
+/-- Python's `int.bit_length`. -/
+def bitLength (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
+
+/-- `rec_live.rep_rounds`: one fast100 rep's rounds for a table of `2^m` packed elements, `2^k_log` a block, with `claims`
+claims, in `rec_algebra.run`'s order of samples: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
+def repRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
+  let sch ← fast100 m
+  let lv := sch.levels
+  let r := lv.size - 1
+  let cap := fun (l : Nat) => #[2 ^ (lv.getD l default).cap]
+  let one := fun (n : Nat) (absorbs : Bool) => ((n, #[], 0, absorbs) : SchedRound)
+  let level := fun (i split : Nat) =>
+    let q := (lv.getD i default).q
+    #[((split, cap (i + 1), 0, true) : SchedRound), one 1 true, one split false, one 1 true, one q false,
+      one (bitLength (q - 1)) false, one 1 true]
+  let mut out : Array SchedRound := #[(6, #[], 1, false), one (m - 13) false, one 1 true] ++
+    Array.replicate (m - 5) (one 1 true) ++ #[one 1 false] ++ Array.replicate (kLog - 6) (one 1 true) ++ #[one 1 true] ++
+    Array.replicate claims (one 7 true) ++ #[one claims false]
+  let mut split := sch.n - sch.k0 + 1
+  out := out ++ #[(sch.n, #[], 1, true), one 1 true] ++ Array.replicate sch.k0 (one 2 true) ++ level 0 split
+  for i in [0:r] do
+    if split < 4 then none
+    out := out ++ #[one 2 false] ++ Array.replicate 3 (one 2 true)
+    let ext := split - 4
+    if i + 1 < r then
+      split := ext + 1
+      out := out ++ level (i + 1) split
+    else
+      let q := (lv.getD r default).q
+      out := out ++ #[one q true, one (bitLength (q - 1)) false, one 1 false]
+  return out
+
+/-- The rounds of `rs` that absorb a message, in order: the `i`-th is a stream's `i`-th message round, whose `c_k` the
+inner transcript records. -/
+def commitRounds (rs : Array SchedRound) : List Nat :=
+  (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
+
+/-- `rec_live.holo_rounds`: `repRounds` with hidden unit circuits (`Inner.holo`). z_partial's round (`rec_live.zp_round`,
+`m + k_log - 7`) squeezes nothing, and a round of its own absorbs h and squeezes r′. None where that round is not
+z_partial's. -/
+def holoRepRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
+  let out ← repRounds m kLog claims
+  let k := m + kLog - 7
+  if out[k]? != some ((1, #[], 0, true) : SchedRound) then none
+  return out.extract 0 k ++ #[((0, #[], 0, true) : SchedRound), (1, #[], 0, true)] ++ out.extract (k + 1) out.size
+
+/-- **V*'s list holds every level's committed tops**: exactly one statement is RecCap at level 0, over the `2^cap₀` nodes
+of `root_B`'s level-0 cap (`cap₀` of `fast100(m)`'s level 0), and exactly one is RecCap at each later level `l`, over both
+reps' `2 · 2^cap_l` nodes of its tops, and none is at a level past the last, so every node of every level's tops is held
+at a fixed row whatever the coins sample (`RecCoins.checkCap`). A list without one, or with one at another node count, is
+refused. -/
+def checkCapListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+  let some sch := fast100 i.m | throw s!"V*'s list: the inner session's m {i.m} has no fast100 schedule"
+  let some lv := sch.levels[0]? | throw s!"V*'s list: the inner session's schedule (m {i.m}) has no level 0"
+  let caps := ss.toList.filterMap fun | .cap l n => some (l, n) | _ => none
+  match caps.filterMap fun (l, n) => if l == 0 then some n else none with
+  | [] => throw s!"V*'s list has no RecCap statement ({VStar.capName 0 (2 ^ lv.cap)}): the table's level-0 cap is held by none of its statements"
+  | [n] => if n != 2 ^ lv.cap then
+      throw s!"V*'s list: {VStar.capName 0 n} holds {n} nodes, and the table's level-0 cap has {2 ^ lv.cap} (2^cap₀, cap₀ {lv.cap})"
+  | ns => throw s!"V*'s list has {ns.length} RecCap statements, and holds the table's level-0 cap once"
+  for l in [1:sch.levels.size] do
+    let want := 2 * 2 ^ (sch.levels[l]!).cap
+    match caps.filterMap fun (l', n) => if l' == l then some n else none with
+    | [] => throw s!"V*'s list has no RecCap statement ({VStar.capName l want}): level {l}'s tops are held by none of its statements"
+    | [n] => if n != want then
+        throw s!"V*'s list: {VStar.capName l n} holds {n} nodes, and level {l}'s tops have {want} (both reps' 2^cap_{l}, cap_{l} {(sch.levels[l]!).cap})"
+    | ns => throw s!"V*'s list has {ns.length} RecCap statements at level {l}, and holds its tops once"
+  if let some (l, n) := caps.find? fun (l, _) => sch.levels.size ≤ l then
+    throw s!"V*'s list: {VStar.capName l n} holds level {l}'s tops, and the schedule (m {i.m}) has {sch.levels.size} levels"
+
+/-- The node counts of the tops a rep's schedule commits past `root_B`, in round order: rep `x`'s `g`-th top past `root_B`
+is level `g + 1`'s (`topRow`). -/
+def topSizes (rs : Array SchedRound) : List Nat := rs.toList.flatMap (·.2.1.toList)
+
+/-- **The later levels' caps hold the tops the reps' schedule commits**: the inner shape's rep schedule (`repRounds`,
+`holoRepRounds` when its circuits are private, the one `checkLinkRounds` holds the challenger's live-coin part's tops to) commits, past
+`root_B`, one top a later level of `caps` (`VStar.levelCapStatements`), in order, each of half its cap's nodes (a rep's of
+both reps'). So every round that commits tops has each of them held by its level's cap. -/
+def checkTopsListed (i : Inner) (caps : Array VStar.Stmt) : Except String Unit := do
+  let some rs := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
+    | throw s!"V*'s list: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no rep schedule"
+  let want := (topSizes rs).map (2 * ·)
+  let got := caps.toList.map (·.instances)
+  if got != want then
+    throw s!"V*'s list: the later levels' caps hold {got} nodes, and the reps' schedule commits tops of {topSizes rs} nodes a rep ({want} both reps')"
+
+/-- `m<k>`'s `k`. -/
+def mIndex (name : String) : Option Nat := if name.startsWith "m" then (name.drop 1).toString.toNat? else none
+
+/-- `rec-c<k>`'s `k`. -/
+def cIndex (value : String) : Option Nat := if value.startsWith "rec-c" then (value.drop 5).toString.toNat? else none
+
+/-- `claim<k>`'s `k`, the name exactly as `openingPortName` writes it (no `claim01`). -/
+def claimIndex (name : String) : Option Nat :=
+  if name.startsWith "claim" then ((name.drop 5).toString.toNat?).filter (name == s!"claim{·}") else none
+
+/-- RecSparse's registered claim (`rec_outer.CLAIM_VALUE`): row `r` rep `r`'s, which RecSparse's `claim` and R's opening's
+`claim<k>` read. -/
+def CLAIM_VALUE : String := "rec-claim"
+
+/-- A reads file's message-round ports, those named `m<k>`, registering a `rec-c<k>` or reading `rec-claim`: each one's
+name, value and reads. -/
+def msgPorts (ports : Array Registered.Port) : List (String × String × Array (Option Nat)) :=
+  (ports.toList.filter fun p => (mIndex p.name).isSome || (cIndex p.value).isSome || p.value == CLAIM_VALUE).map
+    fun p => (p.name, p.value, p.reads)
+
+/-- A statement's message-round ports: a part's ports `m<k>` (`VStar/Algebra.lean:385-387`), each under `rec-c<k>` read
+at rows `0` and `1`, the two reps' (`rec_residuals.write`, `rec_residuals.py:452-454`); a level has none, R's included.
+RecSparse's `h` is the table's h round, `rec-c<hRound>`, and its `claim` reads `rec-claim`, both at both reps' rows, rep
+`r`'s at instance `r` (`rec_vstage.stage_sparse`, `rec_sparse.reads`); a part of R's opening reads each `m<i>` under
+`rec-opening-c<i>` at row 0, R's one stream's (`rec_vstage.opening_messages`), and each `claim<k>` under `rec-claim` at
+row `k`, rep `k`'s claim (`rec_residuals.stage_opening`). So no claim port reads another row than its own. -/
+def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
+  | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
+  | .recOpen .. => []
+  | .recOpenStacked .. => []
+  | .cap .. => []
+  | .link .. => []
+  | .sparse _ hr => [("h", s!"rec-c{hr}", #[some 0, some 1]), ("claim", CLAIM_VALUE, #[some 0, some 1])]
+  | .opening _ _ _ _ ports _ => ports.filterMap fun (nm, _) => match mIndex nm, claimIndex nm with
+    | some k, _ => some (nm, s!"rec-opening-c{k}", #[some 0])
+    | none, some k => some (nm, CLAIM_VALUE, #[some k])
+    | none, none => none
+
+/-- Whether one of `ss` registers `rec-c<k>` as a message-round port reading both reps' rows, rep `r`'s at row `r`
+(`ownPorts`). -/
+def roundListed (ss : Array VStar.Stmt) (k : Nat) : Bool :=
+  ss.any fun s => (ownPorts s).any fun q => q.2.1 == s!"rec-c{k}" && q.2.2 == #[some 0, some 1]
+
+/-- The words of statement `s`'s message-round port `nm`, off its description: the input row V* writes for it
+(`vstarRows` at `s.unit`), an algebra part's `m<k>` its elements in whole 64-word rows (`VStar.innerUnit`'s
+`portWordsOf`), RecSparse's its `RecSparse.ports` words (`VStar.sparseUnit`). None at any other statement. -/
+def ownWords (s : VStar.Stmt) (nm : String) : Option Nat :=
+  match s with
+  | .inner _ _ p => (p.S.ports.find? (·.1 == nm)).map (VStar.portWordsOf ·.2)
+  | .sparse sh _ => ((RecSparse.ports sh).find? (·.1 == nm)).map (·.2)
+  | _ => none
+
+/-- Each of `ss`'s message-round ports under a `rec-c<k>` (`ownPorts`), as `(k, words, statement, port)`. -/
+def roundPorts (ss : Array VStar.Stmt) : List (Nat × Option Nat × String × String) :=
+  ss.toList.flatMap fun s => (ownPorts s).filterMap fun q =>
+    (cIndex q.2.1).map fun k => (k, ownWords s q.1, s.name, q.1)
+
+/-- Why `checkRoundWords` refuses port `p` of `ps`: its round's first port has other words. -/
+def roundWordsWhy (ps : List (Nat × Option Nat × String × String)) (p : Nat × Option Nat × String × String) : String :=
+  let words := fun (w : Option Nat) => (w.map toString).getD "no"
+  let (w0, s0, nm0) := ((ps.find? (·.1 == p.1)).map (·.2)).getD (none, "", "")
+  s!"V*'s list: a rep's message round {p.1} (rec-c{p.1}) is held at {s0}'s port {nm0} as {words w0} words and at " ++
+    s!"{p.2.2.1}'s port {p.2.2.2} as {words p.2.1}"
+
+/-- **The parts that hold one message round's row agree on its words**: every port of V*'s list under one `rec-c<k>`
+(`roundPorts`) has the words of the round's first such port. The deployed layout sizes the round's one row by the part
+that holds it first, and every holder reads that row, so a list whose holders of one round differ is refused. One
+comparison a port, over the list's description. -/
+def checkRoundWords (ss : Array VStar.Stmt) : Except String Unit :=
+  let ps := roundPorts ss
+  match ps.find? fun p => (ps.find? (·.1 == p.1)).any (·.2.1 != p.2.1) with
+  | some p => throw (roundWordsWhy ps p)
+  | none => pure ()
+
+/-- **V*'s list holds every message round a rep absorbs, at one width**: each `k`-th round of the inner shape's rep
+schedule that absorbs a message (`commitRounds` of `repRounds`, `holoRepRounds` when its circuits are private), whose
+`c_k` the inner transcript fixes as `rec-c<k>` (`fixedRow`), is a message-round port of one of its statements at both
+reps' rows (`roundListed`), so some part holds each rep's every absorbed message whatever the coins sample, and every
+holder of a round reads its row at the same words (`checkRoundWords`). A list without one, or with two holders of a
+round at different words, is refused. -/
+def checkRoundsListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
+  let some rs := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
+    | throw s!"V*'s list: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no rep schedule"
+  match (List.range (commitRounds rs).length).find? (!roundListed ss ·) with
+  | some k => throw s!"V*'s list: a rep's message round {k} (rec-c{k}) is a message-round port of none of its statements"
+  | none => checkRoundWords ss
+
+/-- **The link table's part**, when the inner shape names the table (`i.links`): `RecLink{UB, PB}` over its rows
+(`VStar.Stmt.link`), at a shape the link unit takes (`RecLinkTree.checkShape`) and a row count that is `grid(L)` for some
+`L ≥ 1`; none without a table. -/
+def linkStatements (i : Inner) : Except String (Array VStar.Stmt) := do
+  let some l := i.links | pure #[]
+  RecLinkTree.checkShape l.UB l.PB
+  unless 1 ≤ l.rows && RecLinks.grid l.rows == l.rows do
+    throw s!"V*'s list: the link table's {l.rows} rows are no table's grid(L)"
+  pure #[.link l.UB l.PB l.rows]
+
 /-- V*'s statements at the inner shape (`VStar.statementsOf`: `VStar.statements`, or `VStar.statementsHolo` when its
 circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
 per region of the inner statement (an extra claim per region at each of two link points), and where V*'s parts
@@ -195,7 +458,9 @@ per region of the inner statement (an extra claim per region at each of two link
 shape one of whose groups holds h's round (`hRound`) as a row port. A part's
 circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`,
 `circuitFile`). Candidate 3's statements follow the table's (`candidate3Statements`), and the list must hold every one
-its session needs (`checkCandidate3`). -/
+its session needs (`checkCandidate3`). It holds every level's committed tops (`checkCapListed`) and every message
+round a rep absorbs, each round's holders at one width (`checkRoundsListed`). The link table's part (`linkStatements`)
+comes after the later levels' caps and before the level-0 cap, which stays last. -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   let some sh0 := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
@@ -212,13 +477,19 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   if i.holo && !(gs.any fun g => g.2.1.contains (hRound i.m i.kLog)) then
     throw (s!"at the holo inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}): no group of the " ++
       s!"verifier's algebra holds h's round m{hRound i.m i.kLog} as a row port")
-  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i)
+  let caps ← VStar.levelCapStatements vsh
+  checkTopsListed i caps
+  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i) ++ caps ++ (← linkStatements i) ++
+    #[← VStar.capStatement vsh]
   checkCandidate3 i ss
+  checkCapListed i ss
+  checkRoundsListed i ss
   pure ss
 
 def isVStar (name : String) : Bool :=
   name.startsWith "rec-open/" || name.startsWith "rec-residuals/" || name.startsWith "rec-open-stacked/" ||
-    name.startsWith "rec-sparse/" || name.startsWith "rec-opening/"
+    name.startsWith "rec-sparse/" || name.startsWith "rec-opening/" || name.startsWith "rec-cap/" ||
+    name.startsWith "rec-link/"
 
 /-- When `name` is the circuit table's name (`rec-open/l<LANES>-h<H>`) of one of R's levels in `ss`, a sentence saying so: R's
 levels are named `rec-open-stacked/…`, never as the table's. -/
@@ -244,7 +515,10 @@ def unlisted (i : Inner) (name : String) (ss : Array VStar.Stmt) : String :=
   | none, some sh => match i.sparse with
     | some sp => if sh == sp then none_ else s!"{name}: a RecSparse unit, and the bucket's is {RecSparse.unitName sp} (rec-inner --sparse)"
     | none => s!"{name}: a RecSparse unit, and the verifier's inner shape names no sparse phase (rec-inner --sparse)"
-  | none, none => rLevelUnder name ss ++ none_
+  | none, none =>
+    if (VStar.linkParams name).isSome && i.links.isNone then
+      s!"{name}: the link table's part, and the verifier's inner shape names no link table ({LINKS_KEY})"
+    else rLevelUnder name ss ++ none_
 
 /-- A unit named `name` over a population of `n` instances is one of V*'s statements at the inner shape `i`: a part's name
 carries `i`'s `m`, `k_log` and claims, exactly one statement has the name, and `n` is its instance count. With `part = some
@@ -300,9 +574,13 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
     (sub.outputs.zip u.outPorts).map fun (nm, w) => (nm, (w + 63) / 64 * 64, 16 * ((w + 63) / 64 * 64))
 
 /-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
-unit's input leaves its input words in order, and V*'s row ports (`vstarRows`). `checkFile` holds the bytes to V*'s;
-this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
+unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
+them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`),
+with no template (V*'s circuits are flat). `checkFile` holds the bytes to V*'s;
+this holds what the verifier parsed from them, which no proof yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
+  if c.tmpl.isSome then
+    throw s!"{s.name}: the parsed circuit is templated, and V*'s circuits are flat"
   let u ← match s.unit with
     | .ok u => pure u
     | .error e => throw s!"{s.name}: V*'s unit: {e}"
@@ -311,8 +589,10 @@ def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if c.leavesIn.getD 0 #[] != (Array.range u.inWords).map Int.ofNat then
     throw s!"{s.name}: the parsed circuit's input leaves are not V*'s, its {u.inWords} input words in order"
   let ports := c.ports.toList.map fun p => (p.name, p.words, p.bits)
-  if ports != vstarRows s.sub u then
-    throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
+  if ports != vstarRows s.sub u || c.ports.toList.any (·.v2) then
+    throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}, each a sha512/row/v1 row"
+  if c.leavesOut.getD 0 #[] != Array.range u.outWords then
+    throw s!"{s.name}: the parsed circuit's output leaves are not V*'s, its {u.outWords} output words in order"
 
 /-- The whole S's row ports' names (`VStar.Algebra.spec`'s): round `r`'s `m<r>`, then `acc0` and `acc1`. -/
 def portNames (sh : Shape) : Array String :=
@@ -357,7 +637,7 @@ def checkPart (s : VStar.Stmt) (c : Circuit) : V Unit :=
                 else pure ()
   | _ => pure ()
 
-/-- A statement's population: the registered population's instances for a drawn session, else its own. -/
+/-- A statement's population: the registered population's instances for a sampled session, else its own. -/
 def population (st : Stmt) : Nat := (st.pub.population.map (·.1)).getD st.n
 
 /-- META's bindings (`VStar.Bindings`, `VStar/Compose.lean:52-55`, written at `Compose.lean:228-229`): the
@@ -379,11 +659,77 @@ program (`verity_flock.rec_bindings`), never from the prover's circuit file. -/
 def ownBindingsOfJson (j : Json) : Except String VStar.Bindings :=
   (VStar.Cli.bindingsOf j).mapError (s!"rec-bindings: " ++ ·)
 
+/-- A static value as core's codec writes it into a descriptor id (`codec._spec_id`: `json.dumps(_static_json(v),
+sort_keys=True, separators=(",", ":"))`): an object is `{"dict": {..}}` at every depth, keys sorted, and a list, a natural
+or a string as `VStar.pyDumps` writes it; at nesting depth at most `fuel`. -/
+def staticDumpsAt : Nat → Json → Except String String
+  | 0, _ => throw "a static value nested too deeply"
+  | k + 1, .obj kvs => do
+    let items := kvs.toArray.qsort (fun a b => a.1 < b.1)
+    let parts ← items.mapM fun (key, v) => do pure (VStar.pyStr key ++ ":" ++ (← staticDumpsAt k v))
+    pure ("{\"dict\":{" ++ ",".intercalate parts.toList ++ "}}")
+  | k + 1, .arr a => do
+    let parts ← a.mapM (staticDumpsAt k)
+    pure ("[" ++ ",".intercalate parts.toList ++ "]")
+  | _ + 1, j => VStar.pyDumpsAt 1 j
+
+/-- R's opening part's S as V*'s `RepS` (`rec_residuals.parts` at the opening-only shape): its row ports' elements are its
+`nw`, its v elements its `nv`. -/
+def openingRepS (S : RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat) : VStar.RepS :=
+  let term : RecOpen.Term → VStar.Term
+    | .w i => .w i
+    | .v i => .v i
+    | .wt i u => .wt i u
+  { gf := { nw := (ports.map (·.2)).foldl (· + ·) 0, nv, ops := S.ops.map (·.map term),
+            res := S.res.map fun r => { mul := r.mul, add := r.add.map term } },
+    ports }
+
+/-- **V*'s template of a statement**: the descriptor id core's codec names the statement's Definition by
+(`codec.descriptor_id`), the key of its `program_digests` and its partition's template. A level's (of the table or of R)
+`RecOpen_v4{LANES=…,H=…}` (`rec_open.definition`), a part's (of the algebra or of R's opening)
+`InnerRepCheck_v2{S=…}` at the part's S (`rec_residuals.definition`), RecSparse's `RecSparse_v1{NU=…,ELL=…,S_LOG=…,T_LOG=…}`
+(`rec_sparse.definition`), a cap's `RecCap_v1` (`rec_cap.definition`) and the link table's `RecLink_v1{UB=…,PB=…}`
+(`rec_link.definition`). -/
+def templateId : VStar.Stmt → Except String String
+  | .recOpen _ L H _ | .recOpenStacked _ L H _ => pure ("RecOpen_v4{LANES=" ++ toString L ++ ",H=" ++ toString H ++ "}")
+  | .inner _ _ p => do pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 p.S.toJson) ++ "}")
+  | .opening _ _ _ S ports nv => do
+    pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 (openingRepS S ports nv).toJson) ++ "}")
+  | .sparse sh _ => pure ("RecSparse_v1{NU=" ++ toString sh.nu ++ ",ELL=" ++ toString sh.ell ++ ",S_LOG=" ++
+      toString sh.sLog ++ ",T_LOG=" ++ toString sh.tLog ++ "}")
+  | .cap .. => pure "RecCap_v1"
+  | .link UB PB _ => pure ("RecLink_v1{UB=" ++ toString UB ++ ",PB=" ++ toString PB ++ "}")
+
+/-- A descriptor id as an error shows it: whole up to 160 characters, else its first 120 and its length (a part's S runs
+to tens of kB). -/
+def briefId (t : String) : String :=
+  if t.length ≤ 160 then t else s!"{String.ofList (t.toList.take 120)}… ({t.length} characters)"
+
+/-- **The verifier's bindings name V*'s Definition**: `f`'s `program_digests` names one Definition, V*'s template of the
+statement `s` (`templateId`). With `checkOwnBindings` (that one key is the template the verifier's partition object's
+query names) the partition's template is V*'s too, so a part relabelled under another Definition's name is refused,
+however consistently its partition object, program, bindings and META carry the label. The digest the key maps to is the
+auditor's (`verity_flock.rec_bindings` with V*'s Definition, `vstar_definition`), which META must carry (`checkMeta`):
+core's codec's digest of the one-Definition program, which this verifier does not encode. -/
+def checkTemplate (s : VStar.Stmt) (f : VStar.Bindings) : V Unit := do
+  let t ← match templateId s with
+    | .ok t => pure t
+    | .error e => throw s!"{s.name}: V*'s template: {e}"
+  match f.programDigests with
+  | .obj kvs =>
+    match kvs.toArray.map (·.1) with
+    | #[k] =>
+      if k != t then
+        throw s!"{s.name}: the verifier's bindings' program_digests names {briefId k}, not V*'s template of the statement {briefId t}"
+    | ks => throw s!"{s.name}: the verifier's bindings' program_digests names {ks.size} Definitions, not V*'s template {briefId t} alone"
+  | _ => throw s!"{s.name}: the verifier's bindings' program_digests is not an object"
+
 /-- The verifier's own bindings `f` are its own partition object's and program's: `f`'s partition digest is the object's
 (`HmRow.partitionDigest`), `f`'s program and the object's `program` are the program's digest (the SHA-512 of its canonical
 descriptor without `annotations`, `TemplateQuery.Desc.parse`), and `f`'s `program_digests` names one Definition, the
-template the object's query names. Its digest is not recomputed: that is core's codec's digest of the one-Definition
-program, which this verifier does not encode; the auditor's `verity_flock.rec_bindings` computes it from the same files. -/
+template the object's query names, which `checkCircuit` holds to V*'s template of the statement (`checkTemplate`). Its
+digest is not recomputed: that is core's codec's digest of the one-Definition program, which this verifier does not
+encode; the auditor's `verity_flock.rec_bindings` computes it from V*'s own Definition of the statement. -/
 def checkOwnBindings (name : String) (f : VStar.Bindings) (obj : Json) (prog : ByteArray) : V Unit := do
   let own := hexOf (← HmRow.partitionDigest obj)
   if f.partition != own then throw s!"{name}: the verifier's bindings' partition digest {f.partition}, its partition object's {own}"
@@ -410,9 +756,22 @@ def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
   let (mc, fc) := (← canon b.programDigests, ← canon f.programDigests)
   if mc != fc then throw s!"{name}: META program_digests {mc}, the verifier's bindings' {fc}"
 
+/-- Whether V*'s file of statement `s` over an inner session of holo flag `holo` carries META `holo` (`circuitFile`):
+at a part's statement over a holo session. -/
+def partHolo (s : VStar.Stmt) (holo : Bool) : Bool := holo && s matches .inner ..
+
+/-- **The parsed circuit's META `holo` is V*'s file's**: `RecResiduals.holoOf c` is `true` exactly at a part's statement
+over a holo inner session, where `circuitFile` writes META `holo` (`VStar.emitCircuitHolo`), and `false` elsewhere, where
+it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no proof
+yet reads through `JsonParse.parse`, to what V* wrote. -/
+def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
+  if (← RecResiduals.holoOf c) != partHolo s holo then
+    throw s!"{s.name}: the circuit's META holo is not V*'s file's ({partHolo s holo}) at the inner session's holo flag {holo}"
+
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
 `check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
-`f` at `i`'s holo flag, and `checkParsed` and `checkPart` on `c`. -/
+`f` at `i`'s holo flag, `checkParsed` and `checkPart` on `c`, `checkHolo` on `c` at `i`'s holo flag, and `checkTemplate`
+on `f`: its `program_digests` names V*'s template of the statement. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
@@ -420,43 +779,9 @@ def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : By
   checkFile s f circuitB i.holo
   checkParsed s c
   checkPart s c
+  checkHolo s c i.holo
+  checkTemplate s f
   pure s
-
-/-- `m<k>`'s `k`. -/
-def mIndex (name : String) : Option Nat := if name.startsWith "m" then (name.drop 1).toString.toNat? else none
-
-/-- `rec-c<k>`'s `k`. -/
-def cIndex (value : String) : Option Nat := if value.startsWith "rec-c" then (value.drop 5).toString.toNat? else none
-
-/-- `claim<k>`'s `k`, the name exactly as `openingPortName` writes it (no `claim01`). -/
-def claimIndex (name : String) : Option Nat :=
-  if name.startsWith "claim" then ((name.drop 5).toString.toNat?).filter (name == s!"claim{·}") else none
-
-/-- RecSparse's registered claim (`rec_outer.CLAIM_VALUE`): row `r` rep `r`'s, which RecSparse's `claim` and R's opening's
-`claim<k>` read. -/
-def CLAIM_VALUE : String := "rec-claim"
-
-/-- A reads file's message-round ports, those named `m<k>`, registering a `rec-c<k>` or reading `rec-claim`: each one's
-name, value and reads. -/
-def msgPorts (ports : Array Registered.Port) : List (String × String × Array (Option Nat)) :=
-  (ports.toList.filter fun p => (mIndex p.name).isSome || (cIndex p.value).isSome || p.value == CLAIM_VALUE).map
-    fun p => (p.name, p.value, p.reads)
-
-/-- A statement's message-round ports: a part's ports `m<k>` (`VStar/Algebra.lean:385-387`), each under `rec-c<k>` read
-at rows `0` and `1`, the two reps' (`rec_residuals.write`, `rec_residuals.py:452-454`); a level has none, R's included.
-RecSparse's `h` is the table's h round, `rec-c<hRound>`, and its `claim` reads `rec-claim`, both at both reps' rows, rep
-`r`'s at instance `r` (`rec_vstage.stage_sparse`, `rec_sparse.reads`); a part of R's opening reads each `m<i>` under
-`rec-opening-c<i>` at row 0, R's one stream's (`rec_vstage.opening_messages`), and each `claim<k>` under `rec-claim` at
-row `k`, rep `k`'s claim (`rec_residuals.stage_opening`). So no claim port reads another row than its own. -/
-def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
-  | .inner _ _ p => p.S.ports.filterMap fun (nm, _) => (mIndex nm).map fun k => (nm, s!"rec-c{k}", #[some 0, some 1])
-  | .recOpen .. => []
-  | .recOpenStacked .. => []
-  | .sparse _ hr => [("h", s!"rec-c{hr}", #[some 0, some 1]), ("claim", CLAIM_VALUE, #[some 0, some 1])]
-  | .opening _ _ _ _ ports _ => ports.filterMap fun (nm, _) => match mIndex nm, claimIndex nm with
-    | some k, _ => some (nm, s!"rec-opening-c{k}", #[some 0])
-    | none, some k => some (nm, CLAIM_VALUE, #[some k])
-    | none, none => none
 
 /-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
 `rec-sparse-<p>` at both reps' rows (`rec_vstage.sparse_messages`, `rec_sparse.reads`); no other statement has any. -/
@@ -490,62 +815,12 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
 statements, which share no row with another session of the family. -/
 def rowPorts : VStar.Stmt → List String
   | .inner _ _ p => p.S.ports.map (·.1)
-  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. => []
+  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. | .link .. => []
 
 /-- The first port of a circuit named as a message round's (`m<k>`) that is none of a statement's message-round ports
 (`ownPorts`). -/
 def msgUnnamed (s : VStar.Stmt) (c : Circuit) : Option String :=
   (c.ports.toList.map (·.name)).find? fun nm => (mIndex nm).isSome && !((ownPorts s).any (·.1 == nm))
-
-/-- One round of a stream's schedule (`rec_live.rep_rounds`' tuples): its coin count, the node counts of the tops it
-commits, its copies of level 0's top, and whether it absorbs a message (one row when it absorbs any elements). -/
-abbrev SchedRound := Nat × Array Nat × Nat × Bool
-
-/-- Python's `int.bit_length`. -/
-def bitLength (n : Nat) : Nat := if n == 0 then 0 else Nat.log2 n + 1
-
-/-- `rec_live.rep_rounds`: one fast100 rep's rounds for a table of `2^m` packed elements, `2^k_log` a block, with `claims`
-claims, in `rec_algebra.run`'s order of draws: the zerocheck, the lincheck, each claim's ring switch, then Ligerito. -/
-def repRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
-  let sch ← fast100 m
-  let lv := sch.levels
-  let r := lv.size - 1
-  let cap := fun (l : Nat) => #[2 ^ (lv.getD l default).cap]
-  let one := fun (n : Nat) (absorbs : Bool) => ((n, #[], 0, absorbs) : SchedRound)
-  let level := fun (i split : Nat) =>
-    let q := (lv.getD i default).q
-    #[((split, cap (i + 1), 0, true) : SchedRound), one 1 true, one split false, one 1 true, one q false,
-      one (bitLength (q - 1)) false, one 1 true]
-  let mut out : Array SchedRound := #[(6, #[], 1, false), one (m - 13) false, one 1 true] ++
-    Array.replicate (m - 5) (one 1 true) ++ #[one 1 false] ++ Array.replicate (kLog - 6) (one 1 true) ++ #[one 1 true] ++
-    Array.replicate claims (one 7 true) ++ #[one claims false]
-  let mut split := sch.n - sch.k0 + 1
-  out := out ++ #[(sch.n, #[], 1, true), one 1 true] ++ Array.replicate sch.k0 (one 2 true) ++ level 0 split
-  for i in [0:r] do
-    if split < 4 then none
-    out := out ++ #[one 2 false] ++ Array.replicate 3 (one 2 true)
-    let ext := split - 4
-    if i + 1 < r then
-      split := ext + 1
-      out := out ++ level (i + 1) split
-    else
-      let q := (lv.getD r default).q
-      out := out ++ #[one q true, one (bitLength (q - 1)) false, one 1 false]
-  return out
-
-/-- The rounds of `rs` that absorb a message, in order: the `i`-th is a stream's `i`-th message round, whose `c_k` the
-inner transcript records. -/
-def commitRounds (rs : Array SchedRound) : List Nat :=
-  (List.range rs.size).filter fun k => (rs.getD k default).2.2.2
-
-/-- `rec_live.holo_rounds`: `repRounds` with hidden unit circuits (`Inner.holo`). z_partial's round (`rec_live.zp_round`,
-`m + k_log - 7`) squeezes nothing, and a round of its own absorbs h and squeezes r′. None where that round is not
-z_partial's. -/
-def holoRepRounds (m kLog claims : Nat) : Option (Array SchedRound) := do
-  let out ← repRounds m kLog claims
-  let k := m + kLog - 7
-  if out[k]? != some ((1, #[], 0, true) : SchedRound) then none
-  return out.extract 0 k ++ #[((0, #[], 0, true) : SchedRound), (1, #[], 0, true)] ++ out.extract (k + 1) out.size
 
 /-- The message rounds a part may name: its rep's (`commitRounds (repRounds …)`, `holoRepRounds` over a holo inner
 session, whose h round is one more), Ligerito's included, whose `k`-th is `rec-c<k>`'s and V*'s port `m<k>`
@@ -589,7 +864,7 @@ def checkMsgNames (s : VStar.Stmt) (c : Circuit) (holo : Bool := false) : V Unit
 def showReads (r : Array (Option Nat)) : String := toString (r.toList.map fun x => (x.map toString).getD "null")
 
 /-- The first field in which two registered ports differ, with both values: the registration (value, root, leaf count,
-row width, domain) and, with `reads`, the read positions; none if they agree. -/
+row width, domain, leaf schema) and, with `reads`, the read positions; none if they agree. -/
 def portDiff? (a b : Registered.Port) (reads : Bool := true) : Option String :=
   let w := fun (x : Option Nat) => (x.map toString).getD "none"
   if a.value != b.value then some s!"value {a.value}, against {b.value}"
@@ -598,6 +873,7 @@ def portDiff? (a b : Registered.Port) (reads : Bool := true) : Option String :=
   else if a.words != b.words then some s!"words {w a.words}, against {w b.words}"
   else if a.wordBits != b.wordBits then some s!"word_bits {a.wordBits}, against {b.wordBits}"
   else if a.domain != b.domain then some s!"domain {hexOf a.domain}, against {hexOf b.domain}"
+  else if a.schema != b.schema then some s!"row_schema {a.schema}, against {b.schema}"
   else if reads && a.reads != b.reads then some s!"reads {showReads a.reads}, against {showReads b.reads}"
   else none
 
@@ -621,16 +897,11 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
-/-- The first name two of the verifier's registered ports share. -/
-def dupName? (registered : Array Registered.Port) : Option String :=
-  let names := registered.toList.map (·.name)
-  names.find? fun nm => names.count nm != 1
-
-/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
-port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
-once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+/-- **The verifier's reads file names each port once** (`Registered.dupName?`): `checkAcc` and `checkAccReads` read a
+name's first port (`find?`), so a second port of that name would be one neither checks. `Registered.ofJson` refuses a file
+naming a port twice by the same check; this refusal holds whatever list of ports the verifier is given. -/
 def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
-  match dupName? registered with
+  match Registered.dupName? registered.toList with
   | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
   | none => pure ()
 
@@ -640,7 +911,7 @@ ports (rec_vstage.py:357), a part of R's opening's too (`rec_residuals.stage_ope
 def accPorts : VStar.Stmt → List String
   | .inner _ _ p => (p.S.ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
   | .recOpen .. | .recOpenStacked .. => ["acc", "acc_out"]
-  | .sparse .. => []
+  | .sparse .. | .cap .. | .link .. => []
   | .opening _ _ _ _ ports _ => (ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
 
 /-- **A session's `rec-acc` reads are one registration, the verifier's** (the `site` of `Family/AccRows.lean`: value,
@@ -698,11 +969,46 @@ private def showRead : Option (Option Nat) → String
   | some none => "null"
   | none => "nothing"
 
+/-- **The rows of `rec-acc` a part reads as `acc0` and `acc1`**: each rep's running sums before its first opening and
+after its last (`rec_outer.Chain.rep_ends`, `accReads`' layout). A part of the table's algebra (`.inner`) holds both
+reps, rep `r` at instance `r`: `acc0` reads rows `0` and `n`, `acc1` rows `n` and `2 · n` (`n` openings a rep,
+`rec_vstage.py`'s `reads["acc0"], reads["acc1"]`). A part of R's opening (`.opening`) holds R's one run, after both
+reps': `acc0` reads row `2 · n`, `acc1` row `2 · n + n'` (`n'` R's openings, `rec_residuals.stage_opening`). None at a
+statement that is neither. -/
+def endReads (i : Inner) : VStar.Stmt → V (Option (Array (Option Nat) × Array (Option Nat)))
+  | .inner .. => do
+    let some sch := fast100 i.m | throw s!"the inner session's m {i.m} has no fast100 schedule"
+    let n := opensBelow sch sch.levels.size
+    pure (some (#[some 0, some n], #[some n, some (2 * n)]))
+  | .opening .. => do
+    let some sch := fast100 i.m | throw s!"the inner session's m {i.m} has no fast100 schedule"
+    let some r := i.stacked
+      | throw s!"R's opening: the inner shape names no R (rec-inner: the inner circuit's META's {STACKED_SHAPE_KEY})"
+    let some sr := fast100 r.m | throw s!"R's m {r.m} has no fast100 schedule"
+    let n := opensBelow sch sch.levels.size
+    pure (some (#[some (2 * n)], #[some (2 * n + opensBelow sr sr.levels.size)]))
+  | _ => pure none
+
+/-- The rows port `nm` reads at its runs' ends (`endReads`' pair): `acc0`'s, else `acc1`'s. -/
+def endWant (w : Array (Option Nat) × Array (Option Nat)) (nm : String) : Array (Option Nat) :=
+  if nm == "acc0" then w.1 else w.2
+
+/-- **A part's `acc0` and `acc1` read `rec-acc` at its runs' ends** (`endReads`), which neither `checkAcc` (one
+registration, reads aside) nor `checkRows` (the verifier's shared rows, which the prover stages) fixes. -/
+def checkEndReads (i : Inner) (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
+  if (accPorts s).isEmpty then return
+  let some w ← endReads i s | return
+  for nm in accPorts s do
+    let some p := registered.find? (·.name == nm)
+      | throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
+    if p.reads != endWant w nm then
+      throw s!"{s.name}: its port {nm} reads {ACC_VALUE} at {showReads p.reads}, not at its runs' ends {showReads (endWant w nm)}"
+
 /-- **A level's `acc` and `acc_out` read `rec-acc` at its openings' rows of the chain** (`accReads`; `OpenKeysS`'
 positions, which `checkAcc`'s one registration leaves open): unit `u`'s `acc` reads its opening's row, its `acc_out` the
-next. -/
+next. At a statement that is no level, its `acc0` and `acc1` read its runs' ends (`checkEndReads`). -/
 def checkAccReads (i : Inner) (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
-  let some want ← accReads i s | return
+  let some want ← accReads i s | checkEndReads i s registered
   for (nm, d) in [("acc", 0), ("acc_out", 1)] do
     let some p := registered.find? (·.name == nm)
       | throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
@@ -722,11 +1028,11 @@ def coinsOf (r : Json) : Array String := (r.getObjValAs? (Array String) "coins")
 def SPARSE : String := "sparse"
 def STACKED : String := "stacked"
 
-/-- One stream of the inner session as the coin server recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
+/-- One stream of the inner session as the challenger's live-coin part recorded it: its message rounds' `c_k` (`b ‖ c`), each with its
 round number, in round order; and its table's committed tops by Ligerito level (`rec_vstar.tops`), each node's `b ‖ c`:
 level 0 the table's `root_B` from `Commit` (the record's `link.roots`; R, which has none there, its binding round's salted
 top), then each later salted top in the order the stream's rounds absorbed them. A sparse stream belongs to no table and has
-none. `coins`: each round's coins, in round order, as the coin server drew them (check 5's coins of the sparse phases and
+none. `coins`: each round's coins, in round order, as the challenger's live-coin part drew them (check 5's coins of the sparse phases and
 of R, which the prover's record does not hold). -/
 structure InnerStream where
   name : String
@@ -744,7 +1050,8 @@ structure InnerCommits where
 
 def InnerCommits.stream? (ic : InnerCommits) (name : String) : Option InnerStream := ic.streams.find? (·.name == name)
 
-private def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
+/-- Nodes `b ‖ c` in hex, each refused unless 128 bytes. -/
+def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
   xs.mapM fun x => do
     let b ← (unhex x).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
     if b.size != 128 then throw s!"rec inner transcript: {ctx}: a b ‖ c of {b.size} bytes, not 128"
@@ -772,18 +1079,10 @@ def repCoins (s : String) (rs : Array Json) (srec : Json) : V (Array (Option (Ar
     return (Array.range n).map fun k => if k == j then none else rr[if k < j then k else k - 1]?.map coinsOf
   | js => throw s!"rec inner transcript: {s} has rounds of no coins at {js}, and only z_partial's round is split"
 
-def REGISTRATION_FORMAT : String := "verity/registration/v2"
 /-- A registered top's row: a 64-byte node as 32 u16 words, zero-padded to one SHA-512 block (`rec_live.ROW_WORDS`). -/
 def TOP_ROW_WORDS : Nat := 64
 
 def refused (what : String) : String := s!"FIREWALL-REFUSED: {what}"
-
-/-- One-stage `registration.digest` (`SampledProofs.Registration.digest`): `SHA-512(format ‖ 0 ‖ canon(record))`, the
-record's own format (v1 or v2) as the tag; hex, as META's `registration` names it. -/
-def registrationDigest (rec : Json) : V String := do
-  let tag := if (rec.getObjValAs? String "format").toOption == some REGISTRATION_FORMAT then REGISTRATION_FORMAT
-    else "verity/registration/v1"
-  return hexOf (Sha512.hash (tag.toUTF8.push 0 ++ (← canon rec).toUTF8))
 
 /-- The registered entry of R whose rows' `b ‖ c` are `bcs` (`rec_live.top_entry`, `rec_residuals.commits_entry`): one row
 of `TOP_ROW_WORDS` 16-bit words a node, its domain `Registered.domain` under the registration's `program`, and the
@@ -819,10 +1118,10 @@ def registration (reg : Option Json) (bound : Option String) : V (Option (String
     throw (refused s!"registration: META binds the circuit registration {d}, and the verifier holds none (--rec-inner-registration)")
   | some _, none => throw (refused "registration: the record is not the circuit registration META binds (META binds none)")
   | some j, some d =>
-    if (← registrationDigest j) != d then throw (refused s!"registration: the record is not the circuit registration META binds ({d})")
+    if (← WindowRecord.digestHex j) != d then throw (refused s!"registration: the record is not the circuit registration META binds ({d})")
     let none_ := refused s!"registration: {STACKED} has no root at Commit and no registered top"
     let (.ok program, .ok es) := (j.getObjValAs? String "program", j.getObjValAs? (Array Json) "registered") | throw none_
-    if (j.getObjValAs? String "format").toOption != some REGISTRATION_FORMAT then throw none_
+    if (j.getObjValAs? String "format").toOption != some WindowRecord.FORMAT_V2 then throw none_
     match es.filter fun e => (e.getObjValAs? String "value").toOption == some STACKED with
     | #[] => return some (program, none)
     | #[e] => return some (program, some e)
@@ -844,7 +1143,7 @@ def stackedRounds (sh : StackedShape) : Option (Array SchedRound) := do
   let rep ← repRounds sh.m 6 sh.claims
   return #[(7, #[2 ^ (sch.levels.getD 0 default).cap], 0, true)] ++ rep.extract (sh.m + 1) rep.size
 
-/-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s draws: ζ_c, H2's rounds, v2's (no
+/-- `rec_live.sparse_rounds`: a rep's sparse phase at `sh`, in `rec_sparse.prove`'s samples: ζ_c, H2's rounds, v2's (no
 coins), H3's, u's (ζ_p), at T > 1 vt's (ρ_t), and last the registered claim's (no coins). Each absorbs one message but
 ζ_c's. -/
 def sparsePhaseRounds (sh : RecSparse.Shape) : Array SchedRound :=
@@ -882,13 +1181,13 @@ def checkStackedShape (s : String) (sh : StackedShape) (rs : Array Json) : V Uni
 /-- **Candidate 3's session** (`rec_live.schedule_for` with `sparse`, and `stacked`): the circuit table `t`'s two reps, both
 reps' sparse phases and, if it committed R, R's stream. The transcript's streams (`streams`) and the streams its message
 rounds name are those, each declared where `schedule_for` puts it (a rep's sparse phase at the end of the rep's stream, the
-reps and R at round 0 of no parent), each with every round from 0 to its count; the sparse streams and R's are the coin
-server's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
+reps and R at round 0 of no parent), each with every round from 0 to its count; the sparse streams and R's are the challenger's
+live-coin part's alone, since the prover's record (`innerCommits`) holds only the reps; Hello's tables and the committed roots are
 `t`'s alone (the inner statement's Hello), R's root being the top its stream's binding round commits; each round's tops are
 lists of `b ‖ c`, none in a sparse stream; R's binding round's first top makes R's registered entry `regR` (the
 registration's `program` and its `stacked` entry, `topEntry`, as `rec_vstar.registered` holds it); R's rounds are those of
 the shape staging committed R at (`shape`, META's, `checkStackedShape`); and every `b ‖ c` the session holds (roots, tops,
-`c_k`) is a distinct one, since the firewall commits each under a fresh salt. -/
+`c_k`) is a distinct one, since the ZK server commits each under a fresh salt. -/
 def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List String)
     (msgs : Array (String × Nat × ByteArray)) (regR : Option (String × Json) := none)
     (shape : Option StackedShape := none) : V (Array InnerStream) := do
@@ -972,13 +1271,79 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
     seen := seen.insert h
   return out
 
-/-- **Each rep's `c_k`**: the message rounds of the coin server's record of V*'s inner session (`--rec-inner-transcript`,
-`rec/inner-transcript/v1`), those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
+/-- **The inner session finished**: the challenger's live-coin part's record ends `finish` (`rec_live.Proxy`'s `Finish`). A stopped
+session's record (`end`: `stop`, a refusal or a connection that ended without `Finish`) is no inner proof, and neither is
+one that names no end. This refuses only what the record says: the proxy that holds a session to its schedule runs on
+the prover's side, so a record ending `finish` is not thereby on the schedule, which `checkSchedule` holds it to. -/
+def checkFinished (tr : Json) : V Unit := do
+  match tr.getObjValAs? String "end" with
+  | .ok "finish" => pure ()
+  | .ok e =>
+    throw s!"rec inner transcript: the inner session ended {e}, not finish: a stopped session is no inner proof"
+  | .error _ => throw "rec inner transcript: the coin server's record names no end; only a finished session is read"
+
+/-- `rec_live.schedule_for`'s streams at the inner shape `i` over Hello's one table `t`, in its order: each stream's
+name, its parent and the parent's round it is opened at, and its rounds. The circuit table's two reps at `repRounds`
+(`holoRepRounds` when its circuits are private), with `i`'s RecSparse shape each rep's sparse phase at
+`sparsePhaseRounds`, opened at its rep's end, and with `i`'s R shape R's stream at `stackedRounds`; none where a shape
+has no schedule. -/
+def scheduleOf (i : Inner) (t : String) : Option (Array (String × String × Nat × Array SchedRound)) := do
+  let rep ← (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
+  let sp := match i.sparse with
+    | some sh => #[0, 1].map fun x => (s!"{SPARSE}/rep{x}", s!"{t}/rep{x}", rep.size, sparsePhaseRounds sh)
+    | none => #[]
+  let r : Array (String × String × Nat × Array SchedRound) ← match i.stacked with
+    | some sh => do pure #[(s!"{STACKED}/rep0", "", 0, ← stackedRounds sh)]
+    | none => pure #[]
+  return #[0, 1].map (fun x => (s!"{t}/rep{x}", "", 0, rep)) ++ sp ++ r
+
+/-- **The challenger's live-coin part's record is on the verifier's schedule** (`rec_live.on_schedule`): at the verifier's inner shape
+`i`, the record `tr` declares exactly `scheduleOf i`'s streams, each at its parent's round with its round count, and its
+rounds are the schedule's in its order, each its stream's round `k`, with the schedule's coin count (`n` and the coins
+flipped), its tops' node counts and copies of level 0's top (`schedOf`), and a `c_k` exactly where the round absorbs a
+message (one: `innerCommits`, which runs first). `rec_live.Proxy` holds a session to the same schedule round by round,
+and it runs on the prover's side: a session that bypasses it reaches the challenger's live-coin part with any rounds, and its record
+still ends `finish`. This holds that record to the schedule here, by counts alone, one comparison a round of the
+schedule. It reads the schedule right only at `k_log ≥ 6`: below it `SchedRound`'s absorb flag can't tell z_partial's
+round from a 2-element one, and `statements`, which every V* session's setup runs, refuses such a shape. -/
+def checkSchedule (i : Inner) (tr : Json) : V Unit := do
+  let at_ := "the coin server's record is off the schedule of the verifier's inner shape " ++
+    s!"(m {i.m}, k_log {i.kLog}, claims {i.claims})"
+  let tables := ((tr.getObjVal? "hello").toOption.getD Json.null).getObjValAs? (Array String) "tables"
+  let .ok #[t] := tables | throw s!"rec inner transcript: {at_}: Hello names no one table"
+  let some want := scheduleOf i t | throw s!"rec inner transcript: {at_}: the shape has no schedule"
+  let declared ← match tr.getObjVal? "streams" with
+    | .ok (.obj kvs) => pure kvs.toArray
+    | _ => throw s!"rec inner transcript: {at_}: streams is not an object"
+  let names := want.toList.map (·.1)
+  let got := declared.toList.map (·.1)
+  if !(got.all names.contains && names.all got.contains && got.length == names.length) then
+    throw s!"rec inner transcript: {at_}: it declares the streams {got}, and the schedule {names}"
+  for (s, parent, pos, rs) in want do
+    let d := ((declared.find? (·.1 == s)).map (·.2)).getD Json.null
+    if (d.getObjValAs? String "parent").toOption != some parent || (d.getObjValAs? Nat "at").toOption != some pos ||
+        (d.getObjValAs? Nat "rounds").toOption != some rs.size then
+      let place := if parent.isEmpty then "at no parent" else s!"at {parent}'s round {pos}"
+      throw s!"rec inner transcript: {at_}: {s} is not declared {place} with {rs.size} rounds"
+  let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw s!"rec inner transcript: {at_}: rounds is not a list"
+  let flat := want.flatMap fun (s, _, _, rs) => rs.mapIdx fun k w => (s, k, w)
+  if rounds.size != flat.size then
+    throw s!"rec inner transcript: {at_}: {rounds.size} rounds, and the schedule's {flat.size}"
+  for (r, (s, k, w)) in rounds.zip flat, j in [0:rounds.size] do
+    let (rs, rk, n) := ((r.getObjValAs? String "stream").toOption, (r.getObjValAs? Nat "k").toOption,
+      (r.getObjValAs? Nat "n").toOption)
+    if rs != some s || rk != some k || n != some w.1 || schedOf r != w then
+      throw (s!"rec inner transcript: {at_}: round {j} is {rs.getD "no stream"} round {rk.getD 0} (n {n.getD 0}) " ++
+        s!"{showSched (schedOf r)}, and the schedule's {s} round {k} (n {w.1}) {showSched w}")
+
+/-- **Each rep's `c_k`**: the message rounds of the challenger's live-coin part's record of V*'s inner session (`--rec-inner-transcript`,
+`rec/inner-transcript/v1`, of a session that finished: `checkFinished`),
+those holding commitments, of stream `<table>/rep<x>` for `x` 0 and 1, in round order, each
 its round number and its one `c_k` (`b ‖ c`), as `rec_vstage.message_rounds` reads them (rec_vstage.py:140-154). The inner
 session's record (`--rec-inner-session`) is the prover's, the one check 5 reads, and holds the two reps alone: each rep's
 rounds' coins must be the record's at the same round, z_partial's split aside (`repCoins`). With candidate 3's streams beside
-the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it from the coin
-server's record alone. R has no root at `Commit`, so the circuit registration binds it before any coin: the record `reg`
+the reps (a stream named `sparse/…` or `stacked/…`), every stream of the session, as `candidate3` reads it from the challenger's
+live-coin part's record alone. R has no root at `Commit`, so the circuit registration binds it before any coin: the record `reg`
 (`--rec-inner-registration`) must be the one the inner circuit's META binds (`bound`, its `registration`; `registration`), a
 session with R's stream needs the record's `stacked` entry, which its binding round's top must make (`candidate3`); and a
 session whose registration names R needs R's stream, whose opening the statement then reads (a session without it is a
@@ -988,9 +1353,10 @@ own count or its proof's header. -/
 def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (bound : Option String := none)
     (shape : Option StackedShape := none) : V InnerCommits := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
+  checkFinished tr
   let held ← registration reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok streams := rec_.getObjValAs? (Array Json) "streams" | throw "rec inner transcript: the inner session's record has no streams"
@@ -1041,9 +1407,9 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   if c3 then return { reps, streams := ← candidate3 tr rounds t names msgs regR shape, stacked := shape }
   return { reps }
 
-/-- **Each sparse phase draws its schedule's coins round for round**: under the verifier's RecSparse shape, every held
+/-- **Each sparse phase flips its schedule's coins round for round**: under the verifier's RecSparse shape, every held
 stream named `sparse/…` holds `sparsePhaseRounds`' coin count at each of its rounds, as `checkCommitRounds` holds the
-reps' streams to theirs (`sparseCoins` counts only the rounds that draw coins). -/
+reps' streams to theirs (`sparseCoins` counts only the rounds that flip coins). -/
 def checkSparseCoins (i : Inner) (cs : InnerCommits) : V Unit := do
   if let some sh := i.sparse then
     for st in cs.streams do
@@ -1059,7 +1425,7 @@ and R's (`stacked/rep0`) at `stackedRounds` of the verifier's R shape, R's held 
 this check is what puts the `j`-th `c_k` the verifier holds at the schedule's `j`-th message round. `checkStackedShape`
 holds R's transcript rounds to its schedule; this holds the `c_k` and tops the verifier keeps of them, and refuses R's
 stream under an inner shape naming no schedule of R's. It reads `sparse/rep0` and `sparse/rep1` only, so it refuses
-any other held stream named `sparse/…`. Every held stream draws its schedule's coins round for round: the reps' at
+any other held stream named `sparse/…`. Every held stream flips its schedule's coins round for round: the reps' at
 their schedule, the sparse phases' at `sparsePhaseRounds` (`checkSparseCoins`). -/
 def checkCommitRounds (i : Inner) (cs : InnerCommits) : V Unit := do
   let some rep := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
@@ -1171,9 +1537,9 @@ def sparseRow (cs : InnerCommits) (sh : RecSparse.Shape) (p : String) (x : Nat) 
   .ok (s!"{s}'s c_{i} ({p}, inner round {k})", c)
 
 /-- **`rec-claim`'s row `x`, the verifier's own**: rep `x`'s registered claim is its sparse phase's last message, the claim
-round (`rec_live.sparse_rounds`, after u's, and vt's at T > 1), whose `c_k` the coin server records; so row `x` of
+round (`rec_live.sparse_rounds`, after u's, and vt's at T > 1), whose `c_k` the challenger's live-coin part records; so row `x` of
 `rec-claim` is `sparse/rep<x>`'s claim round's `c_k` at the verifier's RecSparse shape `sh` (`rec-inner --sparse`), and a claim
-row the firewall did not commit, however consistently registered, opens no statement that reads it (RecSparse's `claim`, R's
+row the ZK server did not commit, however consistently registered, opens no statement that reads it (RecSparse's `claim`, R's
 opening's `claim<k>`). -/
 def claimRow (cs : InnerCommits) (sh : RecSparse.Shape) (x : Nat) : Except String (String × ByteArray) :=
   sparseRow cs sh "claim" x
@@ -1218,7 +1584,9 @@ registered position `x` it opens, is that value's row `x` in `innerCommits`: for
 `c_i`; for `rec-claim`, `claimRow`. `sparse` is the verifier's RecSparse shape (`rec-inner --sparse`), a rec-sparse unit's
 own. A rec-sparse unit's `claim` port and an R opening unit's `claim<k>` ports read `rec-claim` in the verifier's reads.
 `Registered.check` puts each instance's row at the position its unit reads. An R opening unit
-(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). -/
+(`rec-opening/m<m>-c<claims>-p<j>`) is R's at the shape R's stream was held to (`InnerCommits.stacked`, META's). A table
+with a port reading the reps' `c_k` (`rec-c<i>`) labels its instances `0` to `n - 1` in order
+(`Registered.unitIndices`), as a V* session's full sample of its two reps does, so instance `x` reads rep `x`'s row. -/
 def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
     (commits : Option InnerCommits) (sparse : Option RecSparse.Shape := none) : V Unit := do
   let unit := st.c.unit.name
@@ -1237,6 +1605,10 @@ def checkPubRows (st : Stmt) (registered : Option (Array Registered.Port))
   let some cs := commits
     | throw s!"rec-pub: {unit}: the verifier holds no inner transcript (--rec-inner-transcript with --rec-inner-session), so no c_k to check port {reg0.name}'s rows of {reg0.value} against"
   checkOpeningShape unit cs
+  let idx ← Registered.unitIndices st.pub
+  if regs.any (fun reg => (cIndex reg.value).isSome) && idx != Array.range st.pub.n then
+    throw (s!"rec-pub: {unit}: it reads the reps' c_k, and its instances are labelled {idx}, not the units below " ++
+      s!"{st.pub.n} in order as a V* session's full draw labels them, so an instance would read another rep's row")
   let some t := st.pub.tables | throw s!"rec-pub: {unit}: {reg0.name} is not a table of a shared-row file"
   for reg in regs do
     let some p := (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name)
@@ -1259,7 +1631,7 @@ climb to. -/
 def topLevel (value : String) : Option Nat :=
   if value.startsWith "rec-top-L" then (value.drop 9).toString.toNat? else none
 
-/-- What the coin server's record of the inner session fixes of the circuit table at every shape, dense, holo or
+/-- What the challenger's live-coin part's record of the inner session fixes of the circuit table at every shape, dense, holo or
 candidate 3's: Hello's one table (`table`), its level-0 top (`root`, `root_B` from `Commit`, the record's `link.roots`,
 one `b ‖ c` a node), each rep's later salted tops (`tops`, rep `x` at `x`: each top's round and its nodes' `b ‖ c`, in
 round order, `rec_vstar.tops` past level 0) and the link points it drew after `root_B` (`points`, one array of `m` a
@@ -1274,15 +1646,17 @@ structure InnerLink where
 private def f128sOfHex (ctx : String) (xs : Array String) : V (Array F128) :=
   xs.mapM fun h => (f128OfHex h).mapError (s!"rec inner transcript: {ctx}: " ++ ·)
 
-/-- **The circuit table's tops and the link points, as the coin server recorded them** (`--rec-inner-transcript`,
-`rec/inner-transcript/v1`): Hello's one table `t`, its `root_B` (`link.roots`, `t`'s alone), every salted top of
+/-- **The circuit table's tops and the link points, as the challenger's live-coin part recorded them** (`--rec-inner-transcript`,
+`rec/inner-transcript/v1`, of a session that finished: `checkFinished`):
+Hello's one table `t`, its `root_B` (`link.roots`, `t`'s alone), every salted top of
 `t/rep0`'s and `t/rep1`'s rounds in round order (a round's copies of a level-0 top, `level0`, are not tops of their own),
 and the link points (`link.points`, `hello.link`'s `points × m` coins). The inner session's record `record` (the
 prover's, which check 5 reads, `RecCoins.Inner.load`) must hold those very points: check 5 takes the extra claims at the
-record's points, and only the coin server's were drawn after `root_B`. -/
+record's points, and only the challenger's live-coin part's were sampled after `root_B`. -/
 def innerLink (tr : Json) (record : String) : V InnerLink := do
   if (tr.getObjValAs? String "kind").toOption != some TRANSCRIPT_FORMAT then
     throw s!"rec inner transcript: not a {TRANSCRIPT_FORMAT} record"
+  checkFinished tr
   let hello := (tr.getObjVal? "hello").toOption.getD Json.null
   let tables := (hello.getObjValAs? (Array String) "tables").toOption.getD #[]
   let some t := (if tables.size == 1 then tables[0]? else none)
@@ -1318,7 +1692,7 @@ def innerLink (tr : Json) (record : String) : V InnerLink := do
   if flat.size != np * m then throw s!"rec inner transcript: {flat.size} link coins for {np} points of {m}"
   let coins ← f128sOfHex "link.points" flat
   let points := (Array.range np).map fun i => coins.extract (i * m) (i * m + m)
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok rp := (rec_.getObjVal? "link" >>= (·.getObjValAs? (Array (Array String)) "points"))
@@ -1357,9 +1731,9 @@ def checkTopRowsAt (unit name value : String) (lk : InnerLink) (l : Nat) (positi
     | .error why =>
       throw s!"rec-tops: {unit}: port {name}'s table row {r} reads row {positions[r]!} of {value}, and {why}"
 
-/-- **`pub.bin`'s rows at its reads of the circuit table's tops are the `b ‖ c` the coin server recorded**: for each port
+/-- **`pub.bin`'s rows at its reads of the circuit table's tops are the `b ‖ c` the challenger's live-coin part recorded**: for each port
 of the verifier's reads file registering `rec-top-L<l>` (`topLevel`), every row of the port's table, at the registered
-position `x` it opens, is row `x` of `topRow lk l` (`checkTopRowsAt`). So an opening's `out` row opens a node the firewall
+position `x` it opens, is row `x` of `topRow lk l` (`checkTopRowsAt`). So an opening's `out` row opens a node the ZK server
 committed before the coins after it, never a top the prover chose after them. -/
 def checkTopRows (st : Stmt) (registered : Option (Array Registered.Port)) (link : Option InnerLink) : V Unit := do
   let unit := st.c.unit.name
@@ -1391,8 +1765,8 @@ def checkLinkRounds (i : Inner) (lk : InnerLink) : V Unit := do
     if got != want then
       throw s!"rec inner transcript: rep {x}'s tops (round, nodes) are {got}, and its schedule's {want}"
 
-/-- Table `j`'s draw among `count` tables of a session drawn by `d`, as `Stmt.setupTables` builds it: `d` at one table,
-else part `j` of `d`'s units, a subset draw of the population. -/
+/-- Table `j`'s sample among `count` tables of a session sampled by `d`, as `Stmt.setupTables` builds it: `d` at one table,
+else part `j` of `d`'s units, a subset sample of the population. -/
 def tableDraw (d : Json) (count j : Nat) : Json :=
   if count ≤ 1 then d else
     match Draw.UnitDraw.ofJson d with
@@ -1402,18 +1776,18 @@ def tableDraw (d : Json) (count j : Nat) : Json :=
           (j * (u.units.size / count) + u.units.size / count)).map Lean.toJson))]
     | .error _ => d
 
-/-- Table `j`'s statement labels its instances with the units its draw `dj` proves. -/
+/-- Table `j`'s statement labels its instances with the units its sample `dj` proves. -/
 def checkLabel (dj : Json) (pub : Public) (j : Nat) : V Unit := do
   let D ← Draw.UnitDraw.ofJson dj
   let idx ← Registered.unitIndices pub
   if idx != D.proved then
     throw s!"rec-labels: table {j} labels its instances {idx}, not the units its draw proves {D.proved}"
 
-/-- **A drawn session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
-`units.indices`, exactly the units its draw proves (`tableDraw`). A registered read's position is read at an instance's
+/-- **A sampled session of V*'s labels each instance with the unit it is**: every table's statement names, in its header's
+`units.indices`, exactly the units its sample proves (`tableDraw`). A registered read's position is read at an instance's
 label (`Registered.checkPort`), so the label must be the unit. V*'s populations are their units `0..n-1`, so an honest
-statement's labels (the population's labels of the drawn units) are those units; a population labelled from another
-start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a draw
+statement's labels (the population's labels of the sampled proof blocks) are those units; a population labelled from another
+start would not pass, and only a session with an inner shape (`--rec-inner`) is checked. A session without a sample
 passes. -/
 def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :=
   match draw with
@@ -1423,7 +1797,8 @@ def checkLabels (draw : Option Json) (count : Nat) (sts : Array Stmt) : V Unit :
 /-- **A value the verifier's shared rows register is one registration in every session** (`SharedOwnRoot`): each port of
 `--registered` reading a value some entry of `--rec-rows` reads agrees with the first such entry in every field but reads
 (`portDiff?`: value, root, leaf count, row width, domain), and a port reading R's tops `rec-top-stacked-L<l>`
-(`stackedTopLevel`) needs such an entry. -/
+(`stackedTopLevel`) or the table's tops `rec-top-L<l>` (`topLevel`: level `l`'s openings' `out` and its RecCap's `top`)
+needs such an entry, so each level's query reads open the one registration its RecCap holds every node of. -/
 def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Option (Array Registered.Port)) :
     V Unit := do
   for p in registered do
@@ -1434,6 +1809,9 @@ def checkShared (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Op
     | none =>
       if (stackedTopLevel p.value).isSome then
         throw s!"{s.name}: its port {p.name} reads R's tops {p.value}; pass the verifier's shared rows (--rec-rows F), which register it"
+      if (topLevel p.value).isSome then
+        throw (s!"{s.name}: its port {p.name} reads the table's tops {p.value}, which its level's RecCap holds; pass the " ++
+          "verifier's shared rows (--rec-rows F), which register it")
 
 /-- With an inner shape, the statement must be V*'s: `tags`, the statement the verifier set it up as (`--statement`), is
 V*'s own `Tags.circuit`, compared by name (`Tags.find?` gives each name one statement); it holds no lookup table

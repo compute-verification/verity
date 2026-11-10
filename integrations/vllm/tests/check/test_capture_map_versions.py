@@ -14,6 +14,8 @@ every `exists` Program:
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 import inspect
 import itertools
@@ -21,10 +23,10 @@ from pathlib import Path
 
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.program.boolean import boolean_version
+from verity.ml.definitions.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import catalog
+from verity.ml.definitions.registry import catalog
 
 MAP = Path(__file__).parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 CMAP = CM.load(MAP)
@@ -120,4 +122,4 @@ def test_a_stale_or_foreign_version_is_reported():
 def test_a_boolean_version_of_another_definition_is_reported():
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["moe-sum"]["definitions"] = ["MoeSum_v1", "TokenSelect_v2"]
-    assert violations(cmap) == ["moe-sum: cites the Boolean TokenSelect_v2; the Boolean versions of what its roles bind are ['MoeSum_v2']"]
+    assert violations(cmap) == ["moe-sum: cites the Boolean TokenSelect_v2; the Boolean versions of what its roles bind are ['MoeSum_v3']"]

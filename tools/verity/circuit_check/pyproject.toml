@@ -1,7 +1,7 @@
 [project]
 name = "verity-circuit-check"
 version = "0.1.0"
-description = "circuit-check: the standard property checks every Definition, subcircuit template and served row passes (correspondence with the reference evaluator on edge inputs, redundant and dead gates, the partition invariant, Boolean lowering pins)."
+description = "circuit-check: the standard property checks every Definition, subcircuit template and served workload passes (correspondence with the reference evaluator on edge inputs, redundant and dead gates, the partition invariant, Boolean lowering pins)."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "verity-flock", "verity-numerical", "numpy"]
 
@@ -24,37 +24,212 @@ verity-numerical = { workspace = true }
 testpaths = ["tests"]
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
-    "circuit_suite: one circuit-check target per test, the checks `circuit-check --all` runs; collected only under -m circuit_suite",
 ]
 
 [tool.verity.tests]
-# its passes on vy-nebius-1 took up to an hour (3,634 s, 7 Oct), past suites.py's SUITE_TIMEOUT_S
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_ambient.py",
+    "tests/test_cache.py",
+    "tests/test_cache_imports_and_moves.py",
+    "tests/test_cache_redteam.py",
+    "tests/test_circuit_check.py",
+    "tests/test_metadata_listings.py",
+    "tests/test_shard.py",
+    "tests/test_units.py",
+]
+# a pass can take up to an hour, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
-# its tests are independent (122 passed under 12 xdist workers, r20261015-040240-480b); serially the suite was the check's
-# critical path, 3,916-4,445 s on 14 Oct
+# its tests are independent; serially the suite is the check's critical path
 parallel = true
-# an xdist worker peaked at 24.1 GB (17 Oct, vy-nebius-cpu-2: 26 of them held 613 GB under `--mem-gb 480`, r20261017-062239-a835;
-# 53 at the 9 GB default held 800 GB); `--mem-gb` divides by this
-worker_gb = 24
+# one xdist worker's share, which `--mem-gb` (else the cgroup's memory.max) divides by. Each worker of a run with a slow catalog
+# test makes circuit-check's catalog before any test runs (conftest.py's `catalog`; `--quick` makes none) from what each catalog
+# binding reaches, building no body: about 2.6 GiB. Where no record of this checker's version counts, the
+# first worker builds that, a process forked per binding, while the others wait: its processes take what the workers' shares
+# leave as they wait (conftest.py's `_budget`), each counted at what `heavy.json` says it grows.
+# Built whole in each worker instead, the catalog takes a worker past 50 GB. A circuit-check a test starts
+# keeps to this share too (conftest.py's `worker_slot_gb`).
+worker_gb = 8
 # In place of its dependencies' directories (`inputs_only`; `verity`'s brings the root's dev group, the whole workspace): the
 # packages that define Definitions and templates, with their sidecars (`sidecars.discover` searches every package root, so a
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
-# test_sampled_replay.py (test_split_prims_serve.py) and the vLLM migrations the split tests run.
+# test_sampled_replay.py (test_circuit_check.py's request Program), with verity_vllm/records, which its replay modules import.
+# verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
+# the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/predict/seed_rule.py's sidecar builds the
+# served seed rule, whose domain tag and derivation are served_seed's.
+# Read only to check the catalog's records (conftest.py):
+# pouw/window.py and spot/service.py, which the records digest as import sites of the PoUW modules they hold
+# (`units._unchanged`), and which a whole build never imports, with spot/second_stage.py, which service.py imports.
+# pouw/weights.py and spot/__init__.py: h1zy reads an
+# H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py and
+# claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+          "verity/core/protocols/spot/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/private_circuits",
-          "verity/ml/randomness", "verity/ml/flock/python/verity_flock",
-          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/protocol.py",
+          "verity/ml/randomness", "verity/ml/definitions", "verity/ml/flock/python/verity_flock", "verity/ml/windows",
+          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
+          "verity/core/protocols/pouw/protocol.py",
+          # circuit/h1window.py imports both, so building the H1 units reads them.
+          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
-          "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
-          "verity/core/protocols/pous/__init__.py", "verity/core/protocols/pous/circuit.py",
-          "verity/core/protocols/pous/circuit.circuit-check.py", "verity/core/protocols/pous/circuit.circuit-check.json",
-          "verity/core/protocols/pous/answer_circuit.py", "verity/core/protocols/pous/answer_circuit.circuit-check.py",
-          "verity/core/protocols/pous/decode_circuit.py", "verity/core/protocols/pous/decode_circuit.circuit-check.py",
-          "verity/core/protocols/sampled_proofs/one_stage",
-          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
+          "verity/core/protocols/spot/challenger.py", "verity/core/claims/__init__.py",
+          "verity/core/protocols/pouw/grind.py", "verity/ml/protocols/pouw/circuit", "verity/ml/protocols/pouw/schemes",
+          "verity/core/protocols/pouw/live_reads.py", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw/__init__.py",
+          "verity/ml/protocols/pous/__init__.py", "verity/ml/protocols/certifier/__init__.py",
+          "verity/core/protocols/pous/__init__.py", "verity/ml/protocols/pous/circuit.py",
+          "verity/ml/protocols/pous/circuit.circuit-check.py", "verity/ml/protocols/pous/circuit.circuit-check.json",
+          "verity/ml/protocols/pous/answer_circuit.py", "verity/ml/protocols/pous/answer_circuit.circuit-check.py",
+          "verity/ml/protocols/pous/decode_circuit.py", "verity/ml/protocols/pous/decode_circuit.circuit-check.py",
+          "verity/ml/protocols/pous/verdict_circuit.py", "verity/ml/protocols/pous/verdict_circuit.circuit-check.py",
+          "verity/core/protocols/certifier/__init__.py", "verity/core/protocols/certifier/certificate.py",
+          "verity/core/protocols/certifier/blocks.py", "verity/core/protocols/certifier/transfer_rows.py",
+          "verity/core/protocols/certifier/arith_encode.py", "verity/core/protocols/certifier/arith_encode.circuit-check.py",
+          "verity/core/protocols/certifier/arith_encode.circuit-check.json",
+          "verity/core/protocols/certifier/charge_chain.py", "verity/core/protocols/certifier/charge_chain.circuit-check.py",
+          "verity/core/protocols/certifier/charge_chain.circuit-check.json",
+          "verity/ml/protocols/certifier/window_charge.py", "verity/ml/protocols/certifier/window_charge.circuit-check.py",
+          "verity/ml/protocols/certifier/window_charge.circuit-check.json",
+          "verity/core/protocols/certifier/grid.py", "verity/core/protocols/certifier/schedule.py",
+          "verity/core/protocols/certifier/io_tie.py", "verity/core/protocols/certifier/io_tie.circuit-check.py",
+          "verity/core/protocols/certifier/io_tie.circuit-check.json", "verity/core/protocols/certifier/active.py",
+          "verity/ml/protocols/certifier/egress.py", "verity/ml/protocols/certifier/egress.circuit-check.py",
+          "verity/ml/protocols/certifier/egress.circuit-check.json",
+          "verity/core/protocols/certifier/audit.py", "verity/core/protocols/certifier/commitment.py",
+          "verity/core/protocols/certifier/online.py", "verity/core/protocols/profile.py",
+          "verity/core/protocols/spot/challenger.py", "verity/core/protocols/spot/coins.py",
+          "verity/core/protocols/spot/remote.py",
+          "verity/core/protocols/certifier/io_request.py", "verity/core/protocols/certifier/io_request.circuit-check.py",
+          "verity/core/protocols/certifier/io_request.circuit-check.json",
+          "verity/core/protocols/certifier/warden.py", "verity/core/protocols/certifier/pacer.py",
+          "verity/core/protocols/certifier/release.py",
+          "verity/ml/protocols/certifier/io_ids.py", "verity/ml/protocols/certifier/io_ids.circuit-check.py",
+          "verity/ml/protocols/certifier/io_ids.circuit-check.json",
+          "verity/ml/protocols/certifier/ingress_scan.py", "verity/ml/protocols/certifier/ingress_scan.circuit-check.py",
+          "verity/ml/protocols/certifier/ingress_scan.circuit-check.json",
+          "verity/core/protocols/certifier/head_check.py", "verity/core/protocols/certifier/head_check.circuit-check.py",
+          "verity/core/protocols/certifier/head_check.circuit-check.json",
+          "verity/core/protocols/certifier/replay_step.py", "verity/core/protocols/certifier/replay_step.circuit-check.py",
+          "verity/core/protocols/certifier/replay_step.circuit-check.json",
+          "verity/core/protocols/certifier/served.py", "verity/core/protocols/certifier/served.circuit-check.py",
+          "verity/core/protocols/certifier/served.circuit-check.json",
+          "verity/core/protocols/certifier/advice.py", "verity/ml/protocols/certifier/advice_check.py",
+          "verity/ml/protocols/certifier/advice_check.circuit-check.py",
+          "verity/ml/protocols/certifier/advice_check.circuit-check.json",
+          "verity/core/protocols/certifier/replay_chain.py",
+          "verity/core/protocols/certifier/replay_chain.circuit-check.py",
+          "verity/core/protocols/certifier/replay_chain.circuit-check.json",
+          "verity/core/protocols/certifier/compile_slice.py",
+          "verity/core/protocols/certifier/compile_slice.circuit-check.py",
+          "verity/core/protocols/certifier/compile_slice.circuit-check.json",
+          "verity/ml/protocols/certifier/served_tie.py",
+          "verity/ml/protocols/certifier/served_tie.circuit-check.py",
+          "verity/ml/protocols/certifier/served_tie.circuit-check.json",
+          "verity/ml/protocols/certifier/served_statics.py",
+          "verity/ml/protocols/certifier/served_statics.circuit-check.py",
+          "verity/ml/protocols/certifier/served_statics.circuit-check.json",
+          "verity/core/protocols/spot/one_stage",
+          "verity/core/protocols/pouw/window.py", "verity/core/protocols/spot/service.py",
+          "verity/core/protocols/spot/second_stage.py",
+          "verity/core/protocols/spot/__init__.py", "verity/core/protocols/pouw/weights.py",
+          "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
-          "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/engine/hooks.py",
-          "integrations/vllm/verity_vllm/pipeline/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
-          "integrations/vllm/tests/check/test_sampled_replay.py", "integrations/vllm/tools/migrate/split_attention.py",
-          "integrations/vllm/tools/migrate/split_prims_serve.py", "benchmarks/numerical/python/verity_numerical"]
+          "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
+          "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
+          "integrations/vllm/verity_vllm/engine/__init__.py", "integrations/vllm/verity_vllm/engine/served_seed.py",
+          "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
+          # boundary_rows defines TemplateInlined_v1, which its sidecar binds
+          "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
+          "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
+          "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
+          "verity/core/protocols/spot/__init__.py",
+          "verity/core/protocols/certifier/cache_step.py", "verity/core/protocols/certifier/cache_step.circuit-check.py",
+          "verity/core/protocols/certifier/cache_step.circuit-check.json",
+          "verity/ml/protocols/certifier/cache_step_v2.py", "verity/ml/protocols/certifier/cache_step_v2.circuit-check.py",
+          "verity/ml/protocols/certifier/cache_step_v2.circuit-check.json",
+          "verity/ml/protocols/certifier/cache_step_v3.py", "verity/ml/protocols/certifier/cache_step_v3.circuit-check.py",
+          "verity/ml/protocols/certifier/cache_step_v3.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v2.py",
+          "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v3.py",
+          "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v4.py",
+          "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v5.py",
+          "verity/ml/protocols/certifier/compile_slice_v5.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v5.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v6.py",
+          "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.json",
+          "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
+          "verity/core/protocols/certifier/release.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_ambient.py", "tests/test_cache.py", "tests/test_structural.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_block.py",
+    "tests/test_bodies.py",
+    "tests/test_declared_tables.py",
+    "tests/test_named_targets.py",
+    "tests/test_pinned_targets.py",
+    "tests/test_ranges.py",
+    "tests/test_targets.py",
+    "tests/test_wide_outputs.py",
+]
+paths = [
+    "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py", "tests/test_catalog_fixture.py"]
+paths = ["tools/verity/circuit_check/src/circuit_check"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_attention_split.py", "tests/test_metadata_files.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_shard.py", "tests/test_split_prims_serve.py"]
+paths = [
+    "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_units.py"]
+paths = [
+    "tools/verity/circuit_check/src/circuit_check",
+    "verity/core/protocols/certifier",
+    "verity/core/protocols/pous",
+    "verity/ml/circuits",
+    "verity/ml/commitments/gates",
+    "verity/ml/flock/python/verity_flock",
+    "verity/ml/private_circuits",
+]

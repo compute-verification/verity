@@ -1,4 +1,4 @@
-//! Zero knowledge for `verity/flock-circuit` (lane flock-zk, M1): VEIL's compiler (Dalal–Hemo–Rabinovich–Rothblum, ePrint
+//! Zero knowledge for `verity/flock-circuit` (M1): VEIL's compiler (Dalal–Hemo–Rabinovich–Rothblum, ePrint
 //! 2026/683, §4.1 and Remark 4.4) applied to Flock's algebraic phase, over GF(2^128).
 //!
 //! **Exposed messages.** Every value the zerocheck and the lincheck send (round-1 skip evaluations, the multilinear rounds, the
@@ -26,6 +26,8 @@
 //! ([`SelfCheck`]), before `τ`'s commitment: the simulation covers runs whose constraint holds, and `Y` of a failing one
 //! gives away `⟨c, h⟩ + t`.
 
+use crate::circuit::BlockCircuit;
+use crate::session_verify::{comb_structured, structured_at, Lincheck};
 use flock_core::{
     lincheck::{LincheckCircuit, QuirkyPoint, SkipPoint, build_quirky_eq_table_from_weights},
     pcs::ring_switch::{build_claim_weights_from_skip, claim_check},
@@ -41,6 +43,7 @@ use flock_field::{F128, F256};
 use flock_transcript::challenger::Challenger;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
+use std::sync::OnceLock;
 
 pub const LABEL_ZC: &[u8] = b"flock-zerocheck-v0";
 pub const LABEL_PCS: &[u8] = b"flock-pcs-open-batch-v0";
@@ -230,7 +233,7 @@ pub struct Pads {
 }
 
 impl Pads {
-    /// Rep `rep`'s pads from the prover's randomness (OS bytes; never from the transcript), drawn once and kept in the rep's state.
+    /// Rep `rep`'s pads from the prover's randomness (OS bytes; never from the transcript), sampled once and kept in the rep's state.
     pub fn draw(rng: &mut crate::zk_hooks::ProverRng, lay: &Layout, rep: usize) -> Self {
         let s = lay.len();
         let base = (rep as u64) << 32;
@@ -294,7 +297,7 @@ impl Lin {
 
 /// Wraps the rep's challenger: from the zerocheck's label to the opening's, every absorbed field element gets its pad (in
 /// [`Layout::absorbed`] order); the pads' root is absorbed right after the zerocheck label, before its first coin. Every coin
-/// drawn in that phase is logged (the prover replays its own checks from them).
+/// sampled in that phase is logged (the prover replays its own checks from them).
 pub struct Masking<C: Challenger> {
     pub inner: C,
     order: Vec<usize>,
@@ -315,8 +318,8 @@ pub struct Masking<C: Challenger> {
     pub at_open: Option<Box<dyn FnMut(&[F128]) -> Result<(), String> + Send>>,
     /// the zerocheck's outer coins: `coins[K_SKIP..K_SKIP + n_outer]` ([`points_from_coins`]' `r_outer`)
     n_outer: usize,
-    /// Under the outer firewall the Lean frame decides the refusals (`Flock.Firewall.Frame`): this challenger's are kept in
-    /// `stopped` instead of stopping the proof, the firewall's cross-check of the frame's.
+    /// Under the outer ZK server the Lean frame decides the refusals (`Flock.Firewall.Frame`): this challenger's are kept in
+    /// `stopped` instead of stopping the proof, the ZK server's cross-check of the frame's.
     pub defer: bool,
     pub stopped: Option<String>,
 }
@@ -346,6 +349,11 @@ impl<C: Challenger> Masking<C> {
     pub fn finish(self) -> (C, Vec<F128>, Vec<F128>) {
         assert!(self.done && (self.done_l0 || !self.lig) && self.at == self.order.len(),
                 "masking: {} of {} values absorbed masked", self.at, self.order.len());
+        (self.inner, self.coins, self.coins_l0)
+    }
+    /// [`Masking::finish`] for a rep the ZK server failed, whose rounds from its failure on are the Lean session loop's places
+    /// sent with no device round in them: this challenger absorbed none of their values.
+    pub fn finish_failed(self) -> (C, Vec<F128>, Vec<F128>) {
         (self.inner, self.coins, self.coins_l0)
     }
     fn pad(&mut self, v: F128) -> F128 {
@@ -430,7 +438,7 @@ impl<C: Challenger> Challenger for Masking<C> {
     }
 }
 
-/// Logs every coin drawn through it (the inner phase's coins, for the simulator's input).
+/// Logs every coin flipped through it (the inner phase's coins, for the simulator's input).
 pub struct Logging<'a, C: Challenger> {
     pub inner: &'a mut C,
     pub coins: Vec<F128>,
@@ -658,15 +666,18 @@ pub struct Replayed {
 
 /// Re-run upstream's zerocheck and lincheck verifiers (`zerocheck::verify_with_grinding`, `lincheck::verify_with_grinding`,
 /// `verifier::verify_core_inner`; Fast100: grinding disabled) on the masked proof, absorbing exactly what they absorb and
-/// drawing exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
+/// sampling exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
 /// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
-/// and folds its own (a proof's field is never read).
+/// and computes its own as the plain verifier does under `lincheck` (`session_verify::Lincheck`: the structured comb after the
+/// rounds, flat where it doesn't cover the circuit, or both, rejecting when they differ; a proof's field is never read).
+/// `c0_identity` keeps `r1cs.c0_is_identity()` (a pass over its 2^k rows) once computed, for the statement's later replays.
 #[allow(clippy::too_many_arguments)]
-pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &LincheckProof, circuit: &dyn LincheckCircuit, lay: &Layout,
-                              root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch) -> Result<Replayed, String> {
+pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
+                              circuit: &BlockCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, lincheck: Lincheck,
+                              ch: &mut Ch) -> Result<Replayed, String> {
     let s = lay.len();
     let m = r1cs.m;
-    if !r1cs.c0_is_identity() || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
+    if !*c0_identity.get_or_init(|| r1cs.c0_is_identity()) || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
         return Err("zk: the statement is not a C = I, k_skip = 6 block R1CS".into());
     }
     if zc.round1_ab.len() != SKIP || zc.round1_c.len() != SKIP || zc.multilinear_rounds.len() != lay.n_mlv || !zc.grinding_nonces.is_empty()
@@ -731,16 +742,16 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
         return Err("zk: the prover's folded comb has the wrong length".into());
     }
     let own = own_comb.is_some();
-    let mut comb_vec = if own {
-        Vec::new()
-    } else {
-        let eq_inner = build_quirky_eq_table_from_weights(&x_ab.z_skip.weights(K_SKIP), &x_ab.x_inner_rest);
-        circuit.fold_alpha_batched(alpha, &eq_inner)
-    };
+    let ws = x_ab.z_skip.weights(K_SKIP);
+    let xr = &x_ab.x_inner_rest;
+    let structured = !own && lincheck != Lincheck::Flat && structured_at(circuit, &ws, xr, K_SKIP);
+    let flat = !own && (lincheck != Lincheck::Partial || !structured);
+    let mut comb_vec = if flat { circuit.fold_alpha_batched(alpha, &build_quirky_eq_table_from_weights(&ws, xr)) } else { Vec::new() };
     let mut running = a.scale(alpha).add(&b);
+    let mut beta = F128::ZERO;
     if let Some(col) = circuit.const_pin_col() {
-        let beta = ch.sample_f128();
-        if !own {
+        beta = ch.sample_f128();
+        if flat {
             comb_vec[col] += beta;
         }
         running = running.add_const(beta);
@@ -755,7 +766,7 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
         let e0 = running.add(&e1);
         let c1 = e0.add(&e1).add(&einf);
         running = einf.scale(rr * rr).add(&c1.scale(rr)).add(&e0);
-        if !own {
+        if flat {
             let half = comb_vec.len() / 2;
             for i in 0..half {
                 comb_vec[i] = comb_vec[i] + rr * (comb_vec[i + half] + comb_vec[i]);
@@ -763,6 +774,13 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
             comb_vec.truncate(half);
         }
         r_rounds.push(rr);
+    }
+    if structured {
+        let cp = comb_structured(circuit, alpha, beta, &ws, xr, &r_rounds.iter().rev().copied().collect::<Vec<_>>());
+        if flat && cp != comb_vec {
+            return Err("FC_LINCHECK=both: the structured comb differs from the flat".into());
+        }
+        comb_vec = cp;
     }
     if let Some(c) = own_comb {
         comb_vec = c.to_vec();
@@ -780,7 +798,7 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, zc: &ZerocheckProof, lc: &Linche
     Ok(Replayed { ab_point, c_point, ab_value: w, c_value: fc, cons, a_value: a, b_value: b })
 }
 
-/// The two z-claim points from the algebraic phase's coins alone (in [`replay`]'s draw order; no message is needed).
+/// The two z-claim points from the algebraic phase's coins alone (in [`replay`]'s sample order; no message is needed).
 pub fn points_from_coins(r1cs: &BlockR1cs, lay: &Layout, has_pin: bool, coins: &[F128]) -> Result<(QuirkyPoint, QuirkyPoint), String> {
     let m = r1cs.m;
     let need = K_SKIP + (m - K_SKIP - N_INNER) + 1 + lay.n_mlv + 1 + usize::from(has_pin) + lay.n_lc + 1;
@@ -973,7 +991,7 @@ fn queries<Ch: Challenger>(ch: &mut Ch, n: usize) -> Vec<usize> {
     query_positions(&ch.sample_f128_vec(Q), n)
 }
 
-/// The inner proof's opened columns for its query coins (drawn with replacement, so a position may repeat).
+/// The inner proof's opened columns for its query coins (sampled with replacement, so a position may repeat).
 pub fn query_positions(words: &[F128], n: usize) -> Vec<usize> {
     words.iter().map(|x| (x.lo as usize) & (n - 1)).collect()
 }
@@ -1131,7 +1149,7 @@ pub fn failing(cons: &[(&'static str, Lin)], h: &[F128]) -> Vec<&'static str> {
     cons.iter().filter(|(_, l)| l.eval(h) != F128::ZERO).map(|c| c.0).collect()
 }
 
-/// The simulator's inner proof, drawing the verifier's coins from `coins` in the verifier's order (`ε`, the batching coins,
+/// The simulator's inner proof, flipping the verifier's coins from `coins` in the verifier's order (`ε`, the batching coins,
 /// `β`, the queries), for the public constraints `cons` (the triple's added here). `ρ, σ, Y` are uniform, `τ` is solved, and
 /// the opened columns are uniform subject to the column check. The tree holds the simulated columns at the opened positions
 /// and all-zero columns elsewhere (hm96 hides every leaf).
@@ -1226,6 +1244,36 @@ mod tests {
         assert!(verify_inner(&pr2, &lay, F128::ZERO, vec![("t", l)], &mut Tape::new(&coins)).is_err());
     }
 
+    /// `coin_stop_vectors.json`, which `test_firewall_frame.py` holds the Lean frame's `ρ` and `β` stops to: Rust's
+    /// cross-checks of the same coins (`rho_independent`, `prove_inner`'s `β = 0`) agree case by case.
+    #[test]
+    fn rust_coin_stops_agree_with_the_lean_frames_vectors() {
+        use flock_core::pcs::ligerito::zk::rho_independent;
+        use flock_field::F256;
+        let v: serde_json::Value = serde_json::from_str(include_str!("coin_stop_vectors.json")).unwrap();
+        let word = |s: &serde_json::Value| {
+            let x = u128::from_str_radix(s.as_str().unwrap(), 16).unwrap();
+            F128::new(x as u64, (x >> 64) as u64)
+        };
+        for c in v["rho"].as_array().unwrap() {
+            let w: Vec<F128> = c["coins"].as_array().unwrap().iter().map(word).collect();
+            assert_eq!(rho_independent([F256::new(w[0], w[1]), F256::new(w[2], w[3])]), c["independent"].as_bool().unwrap(), "{}", c["case"]);
+        }
+        let lay = Layout::new(20, 16, 0, 0);
+        let p = Pads::draw(&mut ProverRng::from_seed(ProverSeed::injected([5; 32])), &lay, 0);
+        let salts = crate::zk_hooks::LeafSalts::for_seed(&ProverSeed::injected([6; 32])).expand(9, Code::new(lay.len() + K_PAD).n);
+        let ic = InnerCommit::new(&p, salts);
+        let cons = vec![("t", Lin::konst(F128::ZERO, lay.len()))];
+        // ε, then a batching coin per row, then β
+        let at = 2 + cons.len() + triple_constraints(&lay, F128::ZERO, F128::ZERO, F128::ZERO).len();
+        for c in v["beta"].as_array().unwrap() {
+            let mut coins: Vec<F128> = (1..2000u64).map(|i| F128::new(i * 7919, i)).collect();
+            coins[at - 1] = word(&c["coin"]);
+            let r = prove_inner(&ic, &p, &lay, F128::ZERO, cons.clone(), SelfCheck::Skip, &mut Tape::new(&coins));
+            assert_eq!(r.err(), c["stop"].as_bool().unwrap().then(|| "PROVER-STOPPED: degenerate coin β = 0".to_string()), "{}", c["coin"]);
+        }
+    }
+
     /// `final_c'` is a constant of two rows (`replay`'s c_eval, the ring switch's c claim), so a prover who knew `γ` before
     /// fixing it could cancel any failing row. Coins are committed in advance (M2) and only the rounds' bytes bind a message:
     /// the verifier accepts when the inner proof checks and its rounds are the ones the prover sent before each coin.
@@ -1315,7 +1363,7 @@ mod tests {
     const HONEST_INNER_PROOF_SHA512: &str =
         "a817dca1ba04991788bf6b362c6d15a80dc1fc68bba6a66cdf2bfaf0977bb45e7c8ad12b43c554e04501990345833130dfa6e9625e48d89f1bc112c13108e35f";
 
-    /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, drawn as one vector or one at a time, and at
+    /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, sampled as one vector or one at a time, and at
     /// no other coin equal to 1 (a skip coin, a later one).
     #[test]
     fn outer_coin_one_is_refused_as_it_opens() {
@@ -1374,7 +1422,7 @@ mod tests {
     /// each rep's `ybar`, the pair's masked sums `e'` and, conservatively, all of `y_1'`) is F128-linear in the witness lanes
     /// and the prover's randomness (every lane's padding, the extra lanes, `e`'s pads), so it is independent of the witness
     /// exactly when the witness's images lie in the span of the randomness's. Built from the protocol's own `lane_codeword`,
-    /// `pad_codeword`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
+    /// `pad_codeword_at`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
     mod exact {
         use flock_core::pcs::ligerito::zk::{self as z0, EXTRA_LANES, Level0Zk};
         use flock_field::{F128, F256};
@@ -1429,7 +1477,7 @@ mod tests {
             } else {
                 z0::lane_codeword(&mu[l], Some(&r[l - W]), LOG_MSG, 1)
             }).collect();
-            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: std::array::from_fn(|j| r[j].clone()), pads: mu.clone(), tamper: 0 };
+            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: r.clone().into(), pads: mu.clone(), tamper: 0 };
             let mut positions: Vec<usize> = c.q.concat();
             positions.sort();
             positions.dedup();
@@ -1441,11 +1489,11 @@ mod tests {
                 let (eq, rho) = (&c.eq[rep], c.rho[rep]);
                 let y1: Vec<F256> = (0..L).map(|i| (0..W).fold(rho[0] * r[a][i] + rho[1] * r[b][i], |acc, l| acc + eq[l] * p[l][i])).collect();
                 let ybar = z0::ybar(&zr, W, eq, rho);
-                let padcw = z0::pad_codeword(&ybar, LOG_MSG, 1);
                 let [e0, e1] = [enc(&y1.iter().map(|y| y.c0).collect::<Vec<_>>()), enc(&y1.iter().map(|y| y.c1).collect::<Vec<_>>())];
                 for &q in &c.q[rep] {
                     let row: Vec<F128> = cw.iter().map(|l| l[q]).collect();
-                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[q], &[F128::ONE], W, pair[rep], rho, &padcw), |acc, l| acc + eq[l] * row[l]);
+                    let padq = z0::pad_codeword_at(&ybar, &[q], LOG_MSG, 1);
+                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[F128::ONE], W, pair[rep], rho, &padq), |acc, l| acc + eq[l] * row[l]);
                     ok &= lhs == F256::new(e0[q], e1[q]);
                 }
                 let e = [a, b].map(|j| (0..L).fold(F256::ZERO, |acc, i| acc + c.b[rep][i] * r[j][i]));
@@ -1488,7 +1536,7 @@ mod tests {
             rank(all) - rank(rand)
         }
 
-        /// Coins and query sets a malicious verifier could choose (red-team-m1-zk's variant): with a pair per rep nothing
+        /// Coins and query sets a malicious verifier could choose: with a pair per rep nothing
         /// leaks, and the shared-pair control leaks wherever the reps' coins differ.
         #[test]
         fn adversarial_coins_and_queries_leak_nothing() {
@@ -1529,7 +1577,7 @@ mod tests {
         }
     }
 
-    /// The estimate runs until `t` successes whatever `p` (red-team-m2-zk G2: a cap of 64t runs let a tiny `p` stop it at one
+    /// The estimate runs until `t` successes whatever `p` (a cap of 64t runs let a tiny `p` stop it at one
     /// success), lands within `[p/2, 2p]`, and the rewinds it allows all fail with probability `(1 − p)^(4·runs) ≈ e^-4t`.
     #[test]
     fn the_gk_estimate_is_uncapped_and_its_rewinds_suffice() {

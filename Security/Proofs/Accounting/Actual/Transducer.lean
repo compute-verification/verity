@@ -1,16 +1,53 @@
-import Mathlib
+module
+
+public import Definitions.Accounting.Confidence
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.CompletePartialOrder
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Actual.Confidence
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A location as a transducer over what reaches it
 
-In a strategy causal from every tick (v2.4 of `note:console/20261012T0645Z-draft-actual-circuit-model`), what a location
-`X` does during `[t, t + n)` is a function of its state's content at `t` and of what crosses into it at each tick of
-`[t, t + n)` (`transducer`), read through any per-tick observation that fixes what crosses in. What crosses in at a tick
-is fixed by the signals the links deliver to `X`'s leaves then (`crossing_of_signals`). So `X` is a transducer whose state
-is its content and whose input at each tick is its links' signals: the step "`X` is the prover of the protocol's model"
-of B2 and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins. With `X`'s
-state at most `M` bits, the content padded to `M + 1` bits (`pad`, injective on such strings) serves as the state
+In a strategy causal from every tick, as the actual-circuit model defines it, what a location `X` does during
+`[t, t + n)` is a function of its state's content at `t` and of what crosses into it at each tick of `[t, t + n)`
+(`transducer`), read through any per-tick observation that fixes what crosses in. What crosses in at a tick is fixed by
+the signals the links deliver to `X`'s leaves then (`crossing_of_signals`). So `X` is a transducer whose state is its
+content and whose input at each tick is its links' signals: the step "`X` is the prover of the protocol's model" of B2
+and B3, and the split of I. `Recall` is the case where nothing that crosses in depends on the coins. With `X`'s state at
+most `M` bits, the content padded to `M + 1` bits (`pad`, injective on such strings) serves as the state
 (`transducer_bits`): the model prover with a state of `Bits (M + 1)`, as B2's responder and B3's `Ticked.Chip` take it.
 
 Counting (`acts_encard_le`): with `mem X t ≤ M` in every run and at most `2^β` observations a tick, what `X` does during
@@ -20,6 +57,8 @@ location of memory `M` carries `M + 1` bits across a tick, not `M`. With the lin
 into `X` on one of its ports, the observation is the ports' signals (`portSignals`), and what `X` does during
 `[t, t + n)` takes at most `2^{M + 1 + β_X n}` values, `β_X` the ports' capacities summed (`acts_encard_le_links`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

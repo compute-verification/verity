@@ -24,11 +24,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preset", required=True, help="a spec under benchmarks/specs, by name")
     parser.add_argument("--model-path", type=Path, default=None,
                         help="machine-local checkpoint override; every file is hashed into the result identity")
-    parser.add_argument("--arms", required=True, help="comma-separated arm ids; include every arm's control")
-    parser.add_argument("--arm-module", action="append", default=[],
-                        help="experimental pkg.mod:NAME exposing install(target); repeatable")
-    parser.add_argument("--sweep", choices=("quick", "full"), default=None)
+    parser.add_argument("--arms", default=None,
+                        help="comma-separated arm ids; include every arm's control (default: the spec's)")
+    parser.add_argument("--arm-module", action="append", default=None,
+                        help="experimental pkg.mod:NAME exposing install(target); repeatable (default: the spec's)")
+    parser.add_argument("--sweep", default=None, help="a sweep under benchmarks/specs, by name (default: the spec's)")
     parser.add_argument("--reps", type=int, default=None)
+    parser.add_argument("--warmups", type=int, default=None, help="exactly this many discarded runs of a point before an engine's first timed one")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--eager", action="store_true",
                         help="run eagerly instead of the preset's default CUDA graphs")
@@ -37,6 +39,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 def run(a: Any) -> int:
     spec = load_spec(a.preset)
     reps = spec.reps if a.reps is None else a.reps
+    warmups, max_warmups = (spec.warmups, spec.max_warmups) if a.warmups is None else (a.warmups, None)
     sweep = spec.sweep if a.sweep is None else a.sweep
     if reps < 1:
         raise ValueError("--reps must be positive")
@@ -44,7 +47,9 @@ def run(a: Any) -> int:
     if a.model_path is not None:
         preset = local_checkpoint(preset, a.model_path)
     preset, eager = served(preset, a.eager or spec.eager)
-    arms = resolve_arms(a.arms, tuple(a.arm_module))
+    modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
+    names = spec.arms if a.arms is None else tuple(x.strip() for x in a.arms.split(","))
+    arms = resolve_arms(names, modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     points = expand_sweep(sweep)
     a.out.mkdir(parents=True, exist_ok=True)
     doc = run_benchmark(
@@ -53,15 +58,19 @@ def run(a: Any) -> int:
         points,
         sweep=sweep,
         reps=reps,
+        warmups=warmups,
+        max_warmups=max_warmups,
         factory=ProcessEngineFactory(eager=eager),
         config_identity={"resolved_spec_sha256": sha256(replace(
             spec,
             arms=tuple(arm.id for arm in arms),
             sweep=sweep,
             reps=reps,
+            warmups=warmups,
+            max_warmups=max_warmups,
             eager=eager,
             preset=preset,
-            arm_modules=tuple(a.arm_module),
+            arm_modules=modules,
         ), identity=True)},
     )
     write(doc, a.out / "result.json")

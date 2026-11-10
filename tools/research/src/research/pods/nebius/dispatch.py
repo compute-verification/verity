@@ -11,8 +11,7 @@ Every invocation reads its settings (the VY_* and PACK_* below) from `$VY_DISPAT
 comments), under any the caller's environment sets: a one-off `submit`, such as n2_build.sh's and n2_commit.sh's over ssh from
 node 2, renders its Job with the loop's CPU slices and lease pools, not the defaults. The loop is one invocation per tick: each tick
 runs in a fresh process from the environment the loop started with, so an edit to dispatch.env applies at the next tick and a key
-removed from it drops out, with no restart (2 Oct: a lend of cores 128-159 to provers never reached a loop that had read the file
-once, at its start).
+removed from it drops out, with no restart (a loop that read the file once, at its start, would never see a change to it).
 
 **Templates.** Each task of `sky/jobs/<TEMPLATE>.yaml` becomes one batch/v1 Job labelled `kueue.x-k8s.io/queue-name` (Kueue admits
 it by quota and requeues it itself when it is preempted). The Job runs the task's `setup` then `run` with the task's envs, as the
@@ -21,14 +20,14 @@ Tasks of a multi-task template (config-run: build, then gpu) chain: the next tas
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
 An error while handling one finished Job (routing its next task, labelling it seen) is that Job's: it is logged as
 `item-failed`, the Job stays unseen for the next tick, and the tick goes on to the other Jobs and the ready files; the loop then
-prints `tick failed`, which the steward's failed-tick alert counts (2 Oct: three AlreadyExists stalls in 10 h each stopped every tick).
+prints `tick failed`, which the steward's failed-tick alert counts (so one stuck Job, an AlreadyExists, never stops every tick).
 An item is pinned to its template's content at its first submit: the item carries `template_sha` (the `name@sha` its submit event
 logs) and a copy is kept at `$VY_DISPATCH_ROOT/templates.by-sha/<sha>/<template>.yaml`. Every later task, resubmission and spooled
 Commit of its chain renders from that copy, never from the live `sky/jobs/`, so a template refreshed mid-chain applies only to items
 submitted after it. A Job whose pinned copy is gone is held (left unseen, printed each tick), never chained on another template.
 Every task starts under `taskset -c`: a `provers` task on $VY_PROVER_CPUS (128-175, three 16-core slices: the floor of 2 GPUs plus 1
-borrowed), every other task on $VY_DISPATCH_CPUS (96-127,176-191), so vLLM jobs never run on a prover's slice (Daniel 1 Oct 01:35Z;
-note:20261001T0137Z-handoff-from-proofs-flock-fp-vllm-jobs-on-prover-slices). 0-7 are k3s's, 8-95 the RC's three train-check slots.
+borrowed), every other task on $VY_DISPATCH_CPUS (96-127,176-191), so vLLM jobs never run on a prover's slice
+(they skew its timed CPU verifier). 0-7 are k3s's, 8-95 the RC's three train-check slots.
 
 **Ready files.** One JSON file per item, `$VY_READY/<workstream>/<id>.json` (default /workspace/jobs/ready, which the steward's
 exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the workstream's owner (write a temp name, then rename):
@@ -65,16 +64,16 @@ Inside the Job, the template's own `research run` writes the Attempt.
 **Packing (PACK_COMMITS=1; default 0).** config-run's gpu task of an eligible item (`packable`: TP1, a model of <= 4B on
 PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Pythia or 7B+) is spooled, rendered as its Job would
 be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
-off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 during node 1's storage emergency; infra 3:36 PM PDT)
+off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (1 while node 1's storage is short)
 `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml, its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its
 one GPU under MPS; one starts only when a queued entry passes the pilot's replay-bundle cap with every claimed entry counted as
-running, since a pod that can claim nothing idles 3 min and exits (66 of them ran no Commit on Oct 1). With /workspace at
+running, since a pod that can claim nothing idles 3 min and exits having run no Commit. With /workspace at
 PACK_DISK_PAUSE (80%) or fuller, nothing new is spooled, adopted or started (the Commit goes
 out as a normal Job), and the pilot claims nothing. Their `results/` come back into the
 chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
 resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
 Entries claimed by a pod that is gone count as a fault. Rollback: PACK_COMMITS=0, then let the pods finish or delete them.
-A packed Commit's replay task is judged (circuits' yes, 10:55 PM PDT Sep 30): it passes only when it exits 0 and the row's
+A packed Commit's replay task is judged: it passes only when it exits 0 and the row's
 `config_record.json`, written by that replay, is outcome PASS with replay k = evaluated = equal = 460 and nothing mismatched or
 unevaluated (`packed_replay`: `commit-replay` exits 0 on a PASS that carries a named gap, so the exit alone is not enough).
 Anything short ends the item failed and stops packing for its model (`stop_model`): an entry in `$PACK_SPOOL/stopped-models.json`
@@ -103,7 +102,7 @@ start (it was stopped twice), or a fill job gone from node 2 without a result re
 (`ev: n2-spill-back`). Rollback: remove the flag; outstanding spills still resolve.
 
 **The queue's placement (while `$VY_DISPATCH_ROOT/place.on` exists).** After `submit` creates a Job of a workstream in
-VY_PLACE_WORKSTREAMS (circuits' `vllm-epoch-run`; circuits' yes, 1 Oct 5:15 AM PDT), it asks the queue
+VY_PLACE_WORKSTREAMS (circuits' `vllm-epoch-run`), it asks the queue
 (`cluster submit` from $VY_QUEUE_SRC, default /workspace/verity-guest/cluster-src) where that Job would go, with the Job's
 requests and its research question, and appends the answer to $VY_PLACED (/workspace/verity-guest/placed.jsonl,
 `executor: kueue`). The question is the item's `question`, else its key family's kind in the queue's `kinds/circuits.toml`
@@ -155,7 +154,7 @@ def load_settings(path: Path) -> None:
 CALLER_ENV = dict(os.environ)   # before dispatch.env: what each of the loop's ticks starts from
 load_settings(ROOT / "dispatch.env")
 PINNED = ROOT / "templates.by-sha"
-IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
+IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "verity-sky-gpu:3dbe60044f88c462")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
 CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-127,176-191")
 PROVER_CPUS = os.environ.get("VY_PROVER_CPUS", "128-175")
@@ -383,7 +382,7 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
                                      "verity.dev/item-json": json.dumps(item, sort_keys=True)}},
         # the pods carry no kueue.x-k8s.io labels: Kueue manages the Job, and its plain-pod integration must not take them too.
         # podReplacementPolicy Failed: a Job Kueue preempts and resumes starts its next pod only once the old one has ended, never
-        # beside it in the same row (note:20261001T0026Z-finding-from-mps-pack-preempted-commit-runs-twice)
+        # beside it in the same row, where both would run the same Commit
         "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 6 * 3600, "podReplacementPolicy": "Failed",
                  "template": {"metadata": {"labels": {k: v for k, v in labels.items() if not k.startswith("kueue.x-k8s.io/")}},
                               "spec": pod_spec}},

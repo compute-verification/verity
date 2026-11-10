@@ -1,7 +1,7 @@
-"""A statement's identifier (PROTOCOL.md §16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be
+"""A statement's identifier (`Flock.HmRow`): the public header's `identifier`, a JSON object Flock does not read, must be
 the verifier's own `--identifier F` in RFC 8785 form, or the Lean verifier refuses the statement; a header with one and no
 `F`, and `F` with a header that names none, refuse too. The public digest binds the header, so Σ binds the identifier, and a
-session's verdict reports it. The fixture's public input ports are a form the soundness proof does not cover (§16.15), so
+session's verdict reports it. The fixture's public input ports are a form the soundness proof does not cover (`Flock.ProvedScope`), so
 `verify` refuses its sessions, for that once every check has passed.
 
 The statement is `test_lean_public_inputs.py`'s fetched fixture (RoPE x4, its recorded CPU selftest sessions), with the
@@ -22,7 +22,7 @@ VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
-#: PoUW's (H, s, U) stand-in: C-Flock reads none of it
+#: PoUW's (H, s, U) stand-in: Flock reads none of it
 IDENTIFIER = {"scheme": "test/identifier/v0", "H": "ab" * 32, "s": 7, "U": [3, 1, 2], "nested": {"b": None, "a": True}}
 
 OUTSIDE = "identifier: --identifier F is outside canonical JSON's RFC 8785 domain: "
@@ -85,7 +85,7 @@ def test_the_verifiers_own_identifier_is_accepted_in_any_json_form_and_bound_by_
 
 def test_the_verdict_reports_the_identifier(store, tmp_path):
     """The prover's honest session, over the header without an identifier and with one: both set up. Over the header it was
-    proved against, the session passes every check and `verify` refuses it for its form (public input ports, §16.15); over
+    proved against, the session passes every check and `verify` refuses it for its form (public input ports, `Flock.ProvedScope`); over
     the header with the identifier its Hello's Σ is not the statement's (S2: Σ binds the identifier, as the test above shows
     on the statement), and the verdict reports the identifier."""
     plain = _verdict(store, store / "stage" / "pub-4.bin", None, tmp_path)

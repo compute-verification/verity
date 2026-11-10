@@ -1,14 +1,48 @@
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.DeployScope
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # What the recursion's zero knowledge rests on at `deployRec`
 
-`Claims.Recursion.ZK` at `deployRec IV ivScope b` and the outer record `deployZkRec relO` is `DO.zk = true`, which
-holds (`deployZkRec` is the masked record), and the bound `ZKBound`: at each attempt budget `t ≥ 1` and wherever hm96
-leaves hide up to `δ₁` at the pinned key, `ZKmalR` at `Sim` within `εzk + γzk · Pr[Fork]` (`zk_deployRec`,
-`zk_deployRec_iff`). `ZKBound` is the hybrid over the three parts of a run, and this file proves what `deployRec`
-fixes of each:
+`Claims.Recursion.ZK` at the masked record `deployRecZ IV ivScope b tapeOf SO` (`deployRec` with its reference prover's
+tape at each statement sampled from a finite nonce and rest by `tapeOf`, and the outer simulators `SO`) and the outer
+record `deployZkRec relO` is `DO.zk = true`, which holds (`deployZkRec` is the masked record), and the bound `ZKBound`: at
+each attempt budget `t ≥ 1` and wherever hm96 leaves hide up to `δ₁` at the pinned key, `ZKmalRx` at `Sim` within
+`εzk + γzk · Pr[Fork]` (`zk_deployRec`, `zk_deployRec_iff`). `ZKBound` is the hybrid over the three parts of a run, and
+this file proves what `deployRec` fixes of each:
 
 * **The inner session**: `Sim` sends the commit strings to the zero digest under its salts (`Deploy.zeroCommit`, the
   pinned key's, `zeroCommit_sha512`). The hybrid needs the prover's inner messages to be hm96 commit strings under
@@ -23,12 +57,16 @@ fixes of each:
   8t·n_B·δ₁ + 2·3^{−t}` at `Brings.zl`, `Flock.zkR_gkE_hm96_deployZk`'s at `nL`, `nB`). The hybrid needs Flock's ZK
   at `deployZkRec` at each staged statement and the witness the inner prover's output gives (`RefParts.wit`).
 
-`ZK`'s prover is a parameter on finite tapes (`ZKmalR`), and the reference prover's tape (`Tape b`: a staging salt and
-a masked prover's tape for every index) is not finite, so `ZKBound` is stated at the prover `P` the claim is read at.
+`ZK` reads the record's own reference prover (`ZkDeploy.prover`: `refP` on the tape `tapeOf x` samples). `ZKmalRx` reads
+a finite tape at each statement, and the reference prover's tape (`Tape b`: a staging salt and a masked prover's tape
+for every index) is not finite, so the record samples it at each statement `x` from a finite nonce and rest of `x`'s,
+and `ZKBound` is stated at the tape map `tapeOf`.
 
 `ZKPriv` at `deployRec` holds outright (`zkPriv_deployRec`): the shipped verifier has no private-circuit form, so
 `parse` reads no circuit commitment (`parse_circ`) and no statement is in `RPriv`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -36,35 +74,46 @@ open Flock
 open FlockDeploy (Coin)
 open scoped NNReal
 
-variable {W N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
+variable {N Ω : Claims.Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
+  [∀ x, Nonempty (Ω x)]
 
-/-! ## The claim's bound -/
+/-! ## The masked record and the claim's bound -/
+
+/-- **The masked record at `deployRec`**: the reference prover's tape at each statement `x` sampled from the finite nonce
+and rest `N x × Ω x` by `tapeOf x`, and the outer simulators `SO`. -/
+noncomputable def deployRecZ (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
+    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) :
+    Claims.Recursion.ZkDeploy Coin :=
+  { deployRec IV ivScope b with Nonce := N, Rest := Ω, tapeOf := tapeOf, SO := SO }
 
 /-- **`ZK`'s bound at `deployRec`**: at each attempt budget `t ≥ 1`, wherever hm96 leaves hide up to `δ₁` at the
-pinned key, the prover `P` is simulated by `Sim` over the outer simulators `SO t` against every malicious verifier of
-the compiled verifier's rounds, within `εzk` plus `γzk` times `Fork`'s collision probability. -/
+pinned key, the reference prover on the tape `tapeOf x` samples at each statement `x` is simulated by `Sim` over the outer
+simulators `SO t` against every malicious verifier of the compiled verifier's rounds, within `εzk` plus `γzk` times
+`Fork`'s collision probability. -/
 def ZKBound (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
-    (I : Claims.Recursion.Inner Coin W) (P : W → Claims.Prover (N × Ω))
+    (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b)
     (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) : Prop :=
   ∀ t, 0 < t → ∀ δ₁ : ℝ≥0,
     Claims.Hm96Hiding (deployRec IV ivScope b).mask ((deployRec IV ivScope b).saltHash H) δ₁ →
-      Claims.ZKmalR H (deployRec IV ivScope b).V.k P (Claims.Recursion.R (deployRec IV ivScope b) I)
-        (Claims.Recursion.Sim (deployRec IV ivScope b) I (SO t)) (Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁)
-        (Claims.Recursion.γzk (deployRec IV ivScope b) t)
+      Claims.ZKmalRx N Ω H (deployRec IV ivScope b).V.k (deployRecZ IV ivScope b tapeOf SO).prover
+        (Claims.Recursion.R (deployRec IV ivScope b) I) (Claims.Recursion.Sim (deployRec IV ivScope b) I (SO t))
+        (Claims.Recursion.εzk (deployRec IV ivScope b) I t δ₁) (Claims.Recursion.γzk (deployRec IV ivScope b) t)
 
 /-- **The recursion's ZK at `deployRec`, from its bound**: the outer record is the masked one. -/
 theorem zk_deployRec (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
-    (b : Brings) (I : Claims.Recursion.Inner Coin W) (relO : Readable.Parsed → Readable.Relation)
-    (P : W → Claims.Prover (N × Ω)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (h : ZKBound H IV ivScope b I P SO) : Claims.Recursion.ZK H (deployRec IV ivScope b) I (deployZkRec relO) P SO :=
+    (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
+    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
+    (h : ZKBound H IV ivScope b I tapeOf SO) :
+    Claims.Recursion.ZK H (deployRecZ IV ivScope b tapeOf SO) I (deployZkRec relO) :=
   ⟨rfl, h⟩
 
 /-- **The recursion's ZK at `deployRec` is its bound.** -/
 theorem zk_deployRec_iff (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
-    (b : Brings) (I : Claims.Recursion.Inner Coin W) (relO : Readable.Parsed → Readable.Relation)
-    (P : W → Claims.Prover (N × Ω)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) :
-    Claims.Recursion.ZK H (deployRec IV ivScope b) I (deployZkRec relO) P SO ↔ ZKBound H IV ivScope b I P SO :=
-  ⟨And.right, zk_deployRec H IV ivScope b I relO P SO⟩
+    (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
+    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) :
+    Claims.Recursion.ZK H (deployRecZ IV ivScope b tapeOf SO) I (deployZkRec relO) ↔
+      ZKBound H IV ivScope b I tapeOf SO :=
+  ⟨And.right, zk_deployRec H IV ivScope b I relO tapeOf SO⟩
 
 /-! ## What `deployRec` fixes of the hybrid -/
 
@@ -101,16 +150,16 @@ theorem nums_εzk (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b
 /-! ## The private variant -/
 
 /-- **`parse` reads no circuit commitment** (`RecScope.toStmt`). -/
-theorem parse_circ {x : Claims.Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : s.circ = none := by
+theorem parse_circ {x : Claims.Msg} {s : Claims.Recursion.CompiledStatement} (h : parse x = some s) : s.circ = none := by
   simp only [parse, RecScope.parseOf, Option.map_eq_some_iff] at h
   obtain ⟨r, -, rfl⟩ := h
   rfl
 
 /-- **`ZKPriv` at `deployRec` holds**: no statement is in `RPriv`, as `parse` reads no circuit commitment. -/
 theorem zkPriv_deployRec (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool)
-    (b : Brings) (I : Claims.Recursion.Inner Coin W) (relO : Readable.Parsed → Readable.Relation)
-    (P : W → Claims.Prover (N × Ω)) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) :
-    Claims.Recursion.ZKPriv H (deployRec IV ivScope b) I (deployZkRec relO) P SO := by
+    (b : Brings) (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
+    (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim) :
+    Claims.Recursion.ZKPriv H (deployRecZ IV ivScope b tapeOf SO) I (deployZkRec relO) := by
   refine ⟨rfl, fun t _ δ₁ _ x w hR => ?_⟩
   obtain ⟨s, hs, hc, -⟩ := hR
   rw [parse_circ (x := x) hs] at hc

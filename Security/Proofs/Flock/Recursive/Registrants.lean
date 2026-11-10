@@ -1,5 +1,22 @@
-import Proofs.Flock.Soundness.Registered.ReadsX
-import Proofs.Flock.Recursive.StageRead
+module
+
+public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.Recursive.StageRead
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: two sessions' registrant records, priced by a finder of the recursive audit
@@ -23,6 +40,8 @@ the audit once and outputs the pair where the outcome's history has one.
   finding a collision as one more fork.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Registered
 
 open Game Refine Binding Audit
@@ -30,12 +49,12 @@ open scoped ENNReal
 
 section Clash
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
@@ -127,7 +146,6 @@ theorem VBridge.off {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → P
 
 /-- `outerV_le` with `Q` reading the registration the prover sends. -/
 theorem outerV_le_dep
-    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ)
@@ -141,7 +159,7 @@ theorem outerV_le_dep
     prob (fun o => AcceptsV zs o ∧ ¬ Q o.1 (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
       sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   rw [prob_outerV]
-  exact sessions_le hA3 (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR (Q s.1) (hQ s.1) (sessOf zs dg N s)
+  exact sessions_le (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR (Q s.1) (hQ s.1) (sessOf zs dg N s)
 
 theorem expAt_add {β : Type} {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
     (σ : Strategy (recGame L Reg I Cm outer))
@@ -155,7 +173,6 @@ theorem expAt_add {β : Type} {outer : Reg → L.Ω → List (Cm × I.Coin) → 
 audit's outcome. An accepted outer proof whose inner transcript the inner verifier rejects has `Bad` at its history and
 registration, or fails `Bad ∨ accepts`, which `outerV_le_dep` bounds by each session's `boundIf`. -/
 theorem zk_sessions_recursive_upto_off
-    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -211,7 +228,7 @@ theorem zk_sessions_recursive_upto_off
         by_cases hb : Bad σ.1 ω t b.1
         · exact Or.inr hb
         · exact Or.inl ⟨ha, fun h => h.elim hb hn⟩
-      · exact outerV_le_dep hA3 (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS qW qR
+      · exact outerV_le_dep (zs σ.1 ω t) dg N hk hRw hM hρ (hr σ.1 ω t) ht' qF qS qW qR
           (fun R₂ Xs => Bad σ.1 ω t R₂ ∨ I.accepts (x σ.1 ω) ((wmsg Xs).zip (t.map Prod.snd)))
           (fun R₂ τ o hout h =>
             (Classical.em (Bad σ.1 ω t R₂)).elim Or.inl fun hb => Or.inr (hbr σ.1 ω t R₂ hb τ o hout h)) s
@@ -227,7 +244,6 @@ theorem zk_sessions_recursive_upto_off
 /-- **The recursive audit is sound at the read wires, off two sessions' clash**: `zk_sessions_recursive_read` on
 `VBridgeOff RegColl`, its outer term gaining `qX²/2^513` for `regFinder` under `cr/sha-512` (`prob_regColl_le`). -/
 theorem zk_sessions_recursive_read_off
-    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -258,7 +274,7 @@ theorem zk_sessions_recursive_read_off
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto_off hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg (RegColl zs) hbr
+  refine zk_sessions_recursive_upto_off zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg (RegColl zs) hbr
     (prob_regColl_le zs dg N σ hX) same hsame
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
@@ -277,7 +293,6 @@ theorem zk_sessions_recursive_read_off
 with one more disjunct: the registrant records' finder (`regFinder`, one run of the prover's own strategy) outputs a
 SHA-512 collision. -/
 theorem zk_sessions_recursive_fork_read_off
-    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -325,7 +340,7 @@ theorem zk_sessions_recursive_fork_read_off
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_read_off hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr 0
+  refine (zk_sessions_recursive_read_off zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr 0
     (Finder.cr_of_not_finds h0 0) same hsame Sk cmt msg hcmt hdec hfull (fun _ => 0)
     (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0) hin).trans
     (add_le_add (add_le_add ?_ ?_) le_rfl)

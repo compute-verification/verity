@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # W1 doesn't truncate
 
-`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (ra-per-run's hypothesis for the
+`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (the hypothesis of the
 per-run bound). W1 (`Pouw.PearlC.W1.w1`) fails it whenever its prices are positive (`Positive`), because a correct
 unit's operand fetches are free and whether a unit is correct is decided on the final transcript under the oracle,
 which no W1 program reads.
@@ -21,6 +23,8 @@ which no W1 program reads.
 Without the refund, W1's charge is fixed by the run's path and fetches, but its language still has no free abort: an
 `ite`'s continuation is shared by both branches, and moving it into them taints it. That case is open here.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1BudgetAbort
 
@@ -194,8 +198,9 @@ theorem small_exec_code (dv : W1Device) (h : Positive dv) :
 
 /-! ## The counterexample -/
 
-/-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`. -/
-def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done⟩
+/-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`: two nodes of text, within W1's bound. -/
+def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
+  fun _ => by norm_num [W1.Code.size]⟩
 
 /-- What `copyAct` commits, on every oracle. -/
 abbrev copyTranscript (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) : Transcript :=
@@ -295,7 +300,7 @@ def toyP : Protocol Unit Bool Unit where
   ticket := fun _ _ _ _ a i j => wordQ (if i = 0 ∧ j = 0 then a 0 0 else 0)
   useful := fun _ _ _ _ _ _ _ => wordQ 0
   actOK := fun _ _ => True
-  weightOK := fun _ _ _ => True
+  fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 0
   capOK := fun H _ _ _ _ => H () = true
   Wref := fun _ _ => 0

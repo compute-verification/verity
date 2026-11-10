@@ -1,4 +1,4 @@
-"""[Daniel R17-39 (c), coord M-0762] ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
+"""ONE deliberately dumb, independent reference fixture for the alias mechanism the committed READER
 (opening.CommittedStore / oracle_compare.OpenedReader, entry_read_name) and the ORACLE side (oracle_compare's inverse alias
 table) SHARE.  "Reader and oracle sharing one alias mechanism prevents drift AND lets them share the same bug" -- so this file derives what
 every side must say BY COUNTING (layers x members x steps x requests, invocation k = layer order, ordinal = position in acquisition order),
@@ -7,16 +7,16 @@ end-to-end -- `binding.build_binding_map` (the invocation numbering), `OpenedRea
 over a REAL `MatchOracle` of a per-layer-hinted synthetic Match dir (the oracle) -- and checks each against the enumerator.  A bug the two
 sides share fails HERE, not each other.
 
-Rules it pins (the ruling's words): "different logical producer/version -> never merged solely because bits/offsets coincide":
+Rules it pins: "different logical producer/version -> never merged solely because bits/offsets coincide":
   * two invocations whose committed words are byte-identical at identical offsets stay two identities, read at two ordinals, compared
     against two oracle instances (a per-layer oracle that differs then MISMATCHES by name -- never 'equal by collapse');
   * an alias entry that points an invocation at ANOTHER module's path (a different logical producer) is never a match: the oracle has
     no rotary instance there, the invocation is NOT compared, by name;
-  * a shared invocation the table does not name is NOT compared (F-moe-r17-06/-07), never compared against layer 0's oracle.
-Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest / F-r17b-38 tests), not this
+  * a shared invocation the table does not name is NOT compared, never compared against layer 0's oracle.
+Version identity (RoPE_v1 vs RoPE_v2 at one path) is the manifest's `spec` per identity (required_manifest tests), not this
 fixture's: the binding map carries no spec.
 
-It tests the COMMON MECHANISM on one synthetic record, not every production record (R17-39 (c))."""
+It tests the COMMON MECHANISM on one synthetic record, not every production record."""
 from __future__ import annotations
 
 import gzip
@@ -34,8 +34,8 @@ from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay import opening as OP
 
 CANON = "model.layers.0.self_attn.rotary_emb"
-MEMBERS = ("0", "1")                                    # the shared RotaryEmbedding's two outputs (q, k)
-HINT = {"0": "rope.q", "1": "rope.k"}                   # the fold's per-member hint suffix (oracle_compare._ROPE_MEMBER, the record's shape)
+MEMBERS = ("query", "key")                              # the shared RotaryEmbedding's two outputs (q, k)
+HINT = {"query": "rope.q", "key": "rope.k"}             # the fold's per-member hint suffix (oracle_compare._ROPE_MEMBER, the record's shape)
 W = 8                                                   # words per request row
 U0 = "aaaaaaaa-0000-0000-0000-000000000000"
 
@@ -61,7 +61,7 @@ def expected_identities(n_layers: int, steps: list[int], requests: list[str]) ->
 
 
 def expected_ordinal(k: int, member: str) -> int:
-    """Acquisition order per step: for each layer k in forward order -> q_norm/out, then rotary member '0', then '1'."""
+    """Acquisition order per step: for each layer k in forward order -> q_norm/out, then rotary member 'query', then 'key'."""
     return 3 * k + 1 + MEMBERS.index(member)
 
 
@@ -69,7 +69,7 @@ def expected_words(step: int, k: int, member: str, r: int, *, coincide: bool = F
     """The words layer k's invocation holds for request r at `step` (distinct per (step, layer, member, request)); `coincide`: every layer
     holds LAYER 0's words (the bits/offsets-coincide negative)."""
     kk = 0 if coincide else k
-    return (np.arange(W, dtype=np.uint16) + 1000 * kk + 100 * step + 10 * r + (500 if member == "1" else 0)).astype("<u2")
+    return (np.arange(W, dtype=np.uint16) + 1000 * kk + 100 * step + 10 * r + (500 if member == "key" else 0)).astype("<u2")
 
 
 # ------------------------------------------------------------------------------------------------------------ the committed record
@@ -83,7 +83,7 @@ def make_record(n_layers: int, steps: list[int], n_requests: int, *, coincide: b
     for s in steps:
         ts: list[tuple] = []
         for k in range(n_layers):
-            for name in (f"{norm_path(k)}/out", f"{CANON}/0", f"{CANON}/1"):
+            for name in (f"{norm_path(k)}/out", *(f"{CANON}/{m}" for m in MEMBERS)):
                 member = name.rsplit("/", 1)[1]
                 if "q_norm" in name:
                     rows = np.stack([np.arange(W, dtype=np.uint16) + 5000 + 1000 * k + 100 * s + 10 * r for r in range(n_requests)]).astype("<u2")
@@ -115,7 +115,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
             sha = hashlib.sha256(data).hexdigest()
             fn = f"values/0/{sha[:16]}_{k}_{member}.bin"
             open(os.path.join(d, "capture", fn), "wb").write(data)
-            alloc = 10 + 2 * k + int(member)
+            alloc = 10 + 2 * k + MEMBERS.index(member)
             entries.append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [1, W], [W, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [1, W], "strides": [W, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
                             "sha256": sha, "file": fn, "step": 0})
@@ -163,7 +163,7 @@ def test_1_the_binding_maps_invocation_numbering_is_the_enumerators_layer_order_
     assert {e["identity"]["op_path"] for e in norms} == {norm_path(k) for k in range(N)} and {e["identity"]["invocation"] for e in norms} == {0}
     sni = OC.same_name_invocations(bmap)
     for s in STEPS:
-        assert sni[(s, f"{CANON}/0")] == N and sni[(s, f"{CANON}/1")] == N and sni[(s, f"{norm_path(1)}/out")] == 1
+        assert sni[(s, f"{CANON}/query")] == N and sni[(s, f"{CANON}/key")] == N and sni[(s, f"{norm_path(1)}/out")] == 1
 
 
 def test_2_the_reader_returns_layer_ks_own_words_for_every_step_request_layer_member_of_the_enumeration():
@@ -228,7 +228,7 @@ def test_5_negative_an_alias_to_another_modules_path_is_a_different_logical_prod
     assert res["mismatch_n"] == 0 and res["equal"] == (N - 1) * len(MEMBERS) and res["compared"] == (N - 1) * len(MEMBERS), res
     # not compared by name: the 2 mis-aliased members + the N q_norm entries (the synthetic Match has no q_norm instances at all)
     assert sum(v for k, v in res["not_compared"].items() if "no fold instance" in k) == len(MEMBERS) + N, res["not_compared"]
-    # (b) no table: invocation 0 compares, 1..N-1 are not compared by name (F-moe-r17-06/-07), never against layer 0's oracle
+    # (b) no table: invocation 0 compares, 1..N-1 are not compared by name, never against layer 0's oracle
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=None)
     assert res0["mismatch_n"] == 0 and res0["compared"] == len(MEMBERS) and res0["shared_invocations"]["not_compared"] == (N - 1) * len(MEMBERS)
     # (c) a table naming only SOME layers: exactly the unnamed ones are not compared

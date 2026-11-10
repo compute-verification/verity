@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+import pytest
+
 from . import _imports as I
 from . import _ratchet as R
 
@@ -30,6 +32,7 @@ def scan() -> tuple[R.Violation, ...]:
     return tuple(R.Violation(e.file, "import", "<module>", f"{e.src} -> {e.dst}", e.line) for _, e in sorted(hits.items()))
 
 
+@pytest.mark.slow
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
                     "A value check reads opened values (the commit directory and its openings), never acquisition or "

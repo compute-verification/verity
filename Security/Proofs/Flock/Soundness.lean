@@ -1,180 +1,207 @@
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.Model.Compiled
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.CompiledTable
-import Proofs.Flock.Soundness.Accounting.Schedule
-import Proofs.Flock.Soundness.Accounting.Bound
-import Proofs.Flock.Soundness.Accounting.Fast100
-import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Model.Basic
-import Proofs.Flock.Soundness.Model.Statement
-import Proofs.Flock.Soundness.Model.Piop
-import Proofs.Flock.Soundness.Model.Ligerito
-import Proofs.Flock.Soundness.Model.Session
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Rounds
-import Proofs.Flock.Soundness.RepSound
-import Proofs.Flock.Soundness.Soundness
-import Proofs.Flock.Soundness.Merkle
-import Proofs.Flock.Soundness.Rewinding
-import Proofs.Flock.Soundness.Compiled
-import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.Soundness.ListSize
-import Proofs.Flock.Soundness.LincheckPhase
-import Proofs.Flock.Soundness.ZerocheckPhase
-import Proofs.Flock.Soundness.LinkSound
-import Proofs.Flock.Soundness.LigeritoCoins
-import Proofs.Flock.Soundness.LigeritoQueries
-import Proofs.Flock.Soundness.JohnsonMCA
-import Proofs.Flock.Soundness.LigeritoMCA
-import Proofs.Flock.Soundness.LigeritoLevels
-import Proofs.Flock.Soundness.LigeritoOOD
-import Proofs.Flock.Soundness.LigeritoFolds
-import Proofs.Flock.Soundness.LigeritoWeights
-import Proofs.Flock.Soundness.LigeritoRes
-import Proofs.Flock.Soundness.LigeritoDecode
-import Proofs.Flock.Soundness.LigeritoPhases
-import Proofs.Flock.Soundness.LigeritoMid
-import Proofs.Flock.Soundness.LigeritoPhase
-import Proofs.Flock.Soundness.Instance
-import Proofs.Flock.Soundness.NovelBasis
-import Proofs.Flock.Soundness.PadCode
-import Proofs.Flock.Soundness.Accounting.Padded
-import Proofs.Flock.Soundness.Accounting.PaddedNumbers
-import Proofs.Flock.Soundness.Model.LigeritoPad
-import Proofs.Flock.Soundness.LigeritoPadLevel0
-import Proofs.Flock.Soundness.LigeritoPadDecode
-import Proofs.Flock.Soundness.LigeritoPadQuery
-import Proofs.Flock.Soundness.LigeritoPadSound
-import Proofs.Flock.Soundness.SoundnessPad
-import Proofs.Flock.Soundness.Game.Runs
-import Proofs.Flock.Soundness.CompiledAlign
-import Proofs.Flock.Soundness.Extract
-import Proofs.Flock.Soundness.Knowledge
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Session
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.ExtractAcc
-import Proofs.Flock.Soundness.SessionAcc
-import Proofs.Flock.Soundness.SessionBatchAcc
-import Proofs.Flock.Soundness.Game.Seq
-import Proofs.Flock.Soundness.ExtractWait
-import Proofs.Flock.Soundness.LinkFinder
-import Proofs.Flock.Soundness.Lowering
-import Proofs.Flock.Soundness.ExecRows
-import Proofs.Flock.Soundness.ExecDelta
-import Proofs.Flock.Soundness.ExecPlacement
-import Proofs.Flock.Soundness.ExecParse
-import Proofs.Flock.Soundness.ExecCircuit
-import Proofs.Flock.Soundness.ExecCheck
-import Proofs.Flock.Soundness.ExecLookup
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.ExecTyped
-import Proofs.Flock.Soundness.ExecTemplate
-import Proofs.Flock.Soundness.ExecTemplatePlace
-import Proofs.Flock.Soundness.ExecTemplateSetup
-import Proofs.Flock.Soundness.ExecFlatClass
-import Proofs.Flock.Soundness.ExecFlatCopies
-import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Rope.Lowering
-import Proofs.Flock.Soundness.Types.Dag
-import Proofs.Flock.Soundness.Types.Parts
-import Proofs.Flock.Soundness.Types.Flatten
-import Proofs.Flock.Soundness.Compose
-import Proofs.Flock.Soundness.ComposeDag
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Audit.OneStage
-import Proofs.Flock.Soundness.Audit.TwoStage
-import Proofs.Flock.Soundness.Audit.Examples
-import Proofs.Flock.Soundness.Audit.Flock
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.FlockCompiled
-import Proofs.Flock.Soundness.Audit.FlockBatched
-import Proofs.Flock.Soundness.Audit.Stratified
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.ExecDrawOS
-import Randomness
-import Proofs.Flock.Soundness.PlanDraw
-import Proofs.Flock.Soundness.KeyedDraw
-import Proofs.Flock.Soundness.Audit.RegDraw
-import Proofs.Flock.Soundness.Audit.StratifiedMiss
-import Proofs.Flock.Soundness.Audit.Work
-import Proofs.Flock.Soundness.Audit.FlockWork
-import Proofs.Flock.Soundness.Audit.Closure
-import Proofs.Flock.Soundness.Audit.Window
-import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
-import Proofs.Flock.Soundness.Audit.FlockLink
-import Proofs.Flock.Soundness.Audit.FlockLinked
-import Proofs.Flock.Soundness.Audit.FlockPublic
-import Proofs.Flock.Soundness.Audit.Harm
-import Proofs.Flock.Soundness.Audit.Influence
-import Proofs.Flock.Soundness.Audit.InfluenceWitness
-import Proofs.Flock.Soundness.Audit.Partitioning
-import Proofs.Flock.Soundness.Audit.TwoStageExfil
-import Proofs.Flock.Soundness.Refine
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.Certificate
-import Proofs.Flock.Soundness.StrictCR
-import Proofs.Flock.Soundness.Teeth
-import Proofs.Flock.Soundness.Types.Units
-import Proofs.Flock.Soundness.Types.Program
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.Types.ProgramE2E
-import Proofs.Flock.Soundness.ComposePlace
-import Proofs.Flock.Soundness.Binding
-import Proofs.Flock.Soundness.Registered
-import Proofs.Flock.Soundness.Headline
-import Proofs.Flock.Soundness.Discharge.Aliased
-import Proofs.Flock.Soundness.ZK.Masking
-import Proofs.Flock.Soundness.ZK.Adaptivity
-import Proofs.Flock.Soundness.ZK.CoinBinding
-import Proofs.Flock.Soundness.ZK.Complete
-import Proofs.Flock.Soundness.ZK.Hiding
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Soundness.ZK.Session
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
-import Proofs.Flock.Soundness.Discharge.Hm
-import Proofs.Flock.Soundness.CROnly
-import Proofs.Flock.Soundness.Discharge.Zero
-import Proofs.Flock.Soundness.Discharge.Layout
-import Proofs.Flock.Soundness.Discharge.Const
-import Proofs.Flock.Soundness.Discharge.Placed
-import Proofs.Flock.Soundness.Discharge.Inst
-import Proofs.Flock.Soundness.Discharge.Exec
-import Proofs.Flock.Soundness.Discharge.Integrate
-import Proofs.Flock.Soundness.Discharge.ZkSession
-import Proofs.Flock.Soundness.Discharge.ZkLink
-import Proofs.Flock.Soundness.Discharge.ZkBind
-import Proofs.Flock.Soundness.Discharge.DecodeZL
-import Proofs.Flock.Soundness.Discharge.ZkView
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
-import Proofs.Flock.Soundness.Discharge.DrawWords
-import Proofs.Flock.Soundness.Discharge.PlaysCoin
-import Proofs.Flock.Soundness.Discharge.ZkExec
-import Proofs.Flock.Soundness.Discharge.Tables
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.ZK.GK
-import Proofs.Flock.Soundness.Discharge.HiddenExec
-import Proofs.Flock.Soundness.Discharge.HiddenDec
-import Proofs.Flock.Soundness.Discharge.HdecCor
-import Proofs.Flock.Soundness.Discharge.Hidden
-import Proofs.Flock.Soundness.Discharge.ZkCoins
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit
-import Proofs.Flock.Soundness.Discharge.ZkHidden
-import Proofs.Flock.Soundness.Discharge.Composed
-import Proofs.Flock.Soundness.Discharge.ZkReg
-import Proofs.Flock.Soundness.Discharge.ZkEveryCoin
-import Proofs.Flock.Soundness.Discharge.FailClosed
-import Proofs.Flock.Soundness.Discharge.General
-import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+module
+
+public import Proofs.Flock.Soundness.Game
+public import Proofs.Core.Game.Poly
+public import Proofs.Flock.Soundness.Model.Compiled
+public import Proofs.Flock.Soundness.CompiledLock
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.CompiledTable
+public import Definitions.Flock.Accounting.Schedule
+public import Definitions.Flock.Accounting.Bound
+public import Proofs.Flock.Soundness.Accounting.Fast100
+public import Proofs.Flock.Soundness.Accounting.Numbers
+public import Proofs.Flock.Soundness.Assumptions
+public import Definitions.Flock.Arith
+public import Definitions.Flock.Statement
+public import Definitions.Flock.Piop
+public import Definitions.Flock.Ligerito
+public import Definitions.Flock.Session
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.Rounds
+public import Proofs.Flock.Soundness.RepSound
+public import Proofs.Flock.Soundness.Soundness
+public import Proofs.Flock.Soundness.Merkle
+public import Proofs.Flock.Soundness.Rewinding
+public import Proofs.Flock.Soundness.OpeningPhase
+public import Proofs.Flock.Soundness.ListSize
+public import Proofs.Flock.Soundness.LincheckPhase
+public import Proofs.Flock.Soundness.ZerocheckPhase
+public import Proofs.Flock.Soundness.BindSound
+public import Proofs.Flock.Soundness.LigeritoCoins
+public import Proofs.Flock.Soundness.LigeritoQueries
+public import Proofs.Flock.Soundness.JohnsonMCA
+public import Proofs.Flock.Soundness.LigeritoMCA
+public import Proofs.Flock.Soundness.LigeritoLevels
+public import Proofs.Flock.Soundness.LigeritoOOD
+public import Proofs.Flock.Soundness.LigeritoFolds
+public import Proofs.Flock.Soundness.LigeritoWeights
+public import Proofs.Flock.Soundness.LigeritoRes
+public import Proofs.Flock.Soundness.LigeritoDecode
+public import Proofs.Flock.Soundness.LigeritoPhases
+public import Proofs.Flock.Soundness.LigeritoMid
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.Instance
+public import Proofs.Flock.Soundness.NovelBasis
+public import Proofs.Flock.Soundness.PadCode
+public import Definitions.Flock.Accounting.Padded
+public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+public import Definitions.Flock.LigeritoPad
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+public import Proofs.Flock.Soundness.LigeritoPadDecode
+public import Proofs.Flock.Soundness.LigeritoPadQuery
+public import Proofs.Flock.Soundness.LigeritoPadSound
+public import Proofs.Flock.Soundness.SoundnessPad
+public import Proofs.Flock.Soundness.CompiledAlign
+public import Proofs.Flock.Soundness.Extract
+public import Proofs.Flock.Soundness.Knowledge
+public import Proofs.Flock.Soundness.Session
+public import Proofs.Flock.Soundness.SessionBatch
+public import Proofs.Flock.Soundness.ExtractAcc
+public import Proofs.Flock.Soundness.SessionAcc
+public import Proofs.Flock.Soundness.SessionBatchAcc
+public import Proofs.Flock.Soundness.Game.Tape
+public import Proofs.Flock.Soundness.ExtractWait
+public import Proofs.Flock.Soundness.LinkFinder
+public import Proofs.Flock.Soundness.LinkCarry
+public import Proofs.Flock.Soundness.Game.LockLin
+public import Proofs.Flock.Soundness.Game.LockOff
+public import Proofs.Flock.Soundness.ExtractAccLin
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Soundness.SparseRows
+public import Proofs.Flock.Soundness.ExecDelta
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.ExecParse
+public import Proofs.Flock.Soundness.ExecRowsAt
+public import Proofs.Flock.Soundness.TmplFoldRef
+public import Proofs.Flock.Soundness.TmplFoldPos
+public import Proofs.Flock.Soundness.TmplFoldLayout
+public import Proofs.Flock.Soundness.TmplSplitEq
+public import Proofs.Flock.Soundness.TmplUnit
+public import Proofs.Flock.Soundness.TmplShare
+public import Proofs.Flock.Soundness.TmplUnrollAt
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Flock.TmplOrder
+public import Flock.NetAt
+public import Proofs.Flock.Soundness.TmplValue
+public import Proofs.Flock.Soundness.TmplValueUnit
+public import Proofs.Flock.Soundness.TmplUnitNet
+public import Proofs.Flock.Soundness.TmplComputes
+public import Proofs.Flock.Soundness.TmplReads
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecLookup
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.TmplNetOK
+public import Proofs.Flock.Soundness.TmplUnitAt
+public import Proofs.Flock.Soundness.TmplLayout
+public import Proofs.Flock.Soundness.ParseStmt
+public import Proofs.Flock.Soundness.TmplSpec
+public import Proofs.Flock.Soundness.ExecTyped
+public import Proofs.Flock.Soundness.ExecTemplate
+public import Proofs.Flock.Soundness.ExecTemplatePlace
+public import Proofs.Flock.Soundness.ExecTemplateSetup
+public import Proofs.Flock.Soundness.ExecFlatClass
+public import Proofs.Flock.Soundness.ExecFlatCopies
+public import Proofs.Flock.Soundness.Types.Flat
+public import Proofs.Flock.Soundness.Types.Dag
+public import Proofs.Flock.Soundness.Types.Parts
+public import Proofs.Flock.Soundness.Types.Flatten
+public import Proofs.Flock.Soundness.Compose
+public import Proofs.Flock.Soundness.ComposeDag
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.Pooled
+public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Flock.Soundness.Audit.OneStage
+public import Proofs.Flock.Soundness.Audit.Flock
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.FlockCompiled
+public import Proofs.Flock.Soundness.Audit.FlockBatched
+public import Proofs.Flock.Soundness.Audit.Stratified
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.ExecStrataOf
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Randomness
+public import Proofs.Flock.Soundness.PlanDraw
+public import Proofs.Flock.Soundness.KeyedDraw
+public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.StratifiedMiss
+public import Proofs.Flock.Soundness.Audit.Work
+public import Proofs.Flock.Soundness.Audit.FlockWork
+public import Proofs.Flock.Soundness.Audit.Closure
+public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+public import Proofs.Flock.Soundness.Audit.FlockLink
+public import Proofs.Flock.Soundness.Audit.FlockLinked
+public import Proofs.Flock.Soundness.Audit.FlockPublic
+public import Proofs.Flock.Soundness.Audit.Harm
+public import Proofs.Flock.Soundness.Audit.Influence
+public import Proofs.Flock.Soundness.Audit.Delivered
+public import Proofs.Flock.Soundness.Audit.InfluenceWitness
+public import Proofs.Flock.Soundness.Audit.Partitioning
+public import Proofs.Flock.Soundness.Audit.HarmBound
+public import Proofs.Flock.Soundness.Audit.HarmBudget
+public import Proofs.Flock.Soundness.Audit.HarmBudgetLife
+public import Proofs.Flock.Soundness.Refine
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.GateRows
+public import Proofs.Flock.Soundness.StrictCR
+public import Proofs.Flock.Soundness.Teeth
+public import Proofs.Flock.Soundness.Types.Units
+public import Proofs.Flock.Soundness.Types.Program
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Proofs.Flock.Soundness.Types.ProgramE2E
+public import Proofs.Flock.Soundness.ComposePlace
+public import Proofs.Flock.Soundness.Binding
+public import Proofs.Flock.Soundness.Registered
+public import Proofs.Flock.Soundness.Headline
+public import Proofs.Flock.Soundness.Discharge.Aliased
+public import Proofs.Flock.Soundness.ZK.Masking
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.CoinBinding
+public import Proofs.Flock.Soundness.ZK.Complete
+public import Proofs.Flock.Soundness.ZK.Hiding
+public import Proofs.Flock.Soundness.ZK.HidingAdaptive
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ZK.Session
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+public import Proofs.Flock.Soundness.Discharge.Hm
+public import Proofs.Flock.Soundness.CROnly
+public import Proofs.Flock.Soundness.Discharge.Zero
+public import Proofs.Flock.Soundness.Discharge.Layout
+public import Proofs.Flock.Soundness.Discharge.Const
+public import Proofs.Flock.Soundness.Discharge.Placed
+public import Proofs.Flock.Soundness.Discharge.Inst
+public import Proofs.Flock.Soundness.Discharge.Exec
+public import Proofs.Flock.Soundness.Discharge.Integrate
+public import Proofs.Flock.Soundness.Discharge.ZkSession
+public import Proofs.Flock.Soundness.Discharge.ZkLink
+public import Proofs.Flock.Soundness.Discharge.ZkBind
+public import Proofs.Flock.Soundness.Discharge.DecodeZL
+public import Proofs.Flock.Soundness.Discharge.ZkView
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin
+public import Proofs.Flock.Soundness.Discharge.ZkExec
+public import Proofs.Flock.Soundness.Discharge.Tables
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.ZK.GK
+public import Proofs.Flock.Soundness.Discharge.HiddenExec
+public import Proofs.Flock.Soundness.Discharge.HiddenDec
+public import Proofs.Flock.Soundness.Discharge.HdecCor
+public import Proofs.Flock.Soundness.Discharge.Hidden
+public import Proofs.Flock.Soundness.Discharge.ZkCoins
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
+public import Proofs.Flock.Soundness.Discharge.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.Composed
+public import Proofs.Flock.Soundness.Discharge.PlainJ
+public import Proofs.Flock.Soundness.Discharge.PlainHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg
+public import Proofs.Flock.Soundness.Discharge.PlainReg
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin
+public import Proofs.Flock.Soundness.Discharge.FailClosed
+public import Proofs.Flock.Soundness.Discharge.General
+public import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+
+@[expose] public section

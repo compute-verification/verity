@@ -1,0 +1,22 @@
+{
+ "definitions": {
+  "ServedRowsTie_v2{R=2,P=7,G=1,IW=6,L=4096,T=256,IB=8,PB=8}": {
+   "and": 53838
+  },
+  "ServedRowsTie_v2{R=2,P=7,G=7,IW=6,L=4096,T=256,IB=8,PB=8}": {
+   "and": 374540
+  },
+  "ServedTieScan_v1{R=2,L=4096,T=256,IB=8,PB=8}": {
+   "and": 28082
+  },
+  "ServedTieSelect_v1{P=7,G=1,SB=46}": {
+   "and": 333
+  },
+  "ServedTieSlots_v1{R=2,L=4096,T=256}": {
+   "and": 100
+  },
+  "ServedTieStep_v1{R=2,L=4096,T=256,IB=8,PB=8}": {
+   "and": 53504
+  }
+ }
+}

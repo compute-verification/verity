@@ -10,16 +10,18 @@ METRIC_LABELS = {
     "tokens_per_s": "output tokens / second",
     "peak_gpu_memory_bytes": "peak GPU memory",
     "decode_time_per_token_s": "decode time / token",
+    "inter_token_latency_p50_s": "per-token latency p50",
+    "inter_token_latency_p99_s": "per-token latency p99",
 }
 
 
 def _ratio(metric: Mapping[str, Any]) -> str:
     r = metric.get("ratio_to_stock")
-    if not r:
+    if not r or r.get("mean") is None:
         return "—"
     mean = r["mean"]
     ci = r.get("ci95")
-    return f"{mean:.3f}×" if ci is None else f"{mean:.3f}× [{ci[0]:.3f}, {ci[1]:.3f}]"
+    return f"{mean:.3f}× (n={r['n']})" if ci is None else f"{mean:.3f}× [{ci[0]:.3f}, {ci[1]:.3f}]"
 
 
 def render(doc: Mapping[str, Any]) -> str:
@@ -37,8 +39,10 @@ def render(doc: Mapping[str, Any]) -> str:
         x[0]["point"]["id"],
         metrics.index(x[1]),
     ))
+    ungated = [a["id"] for a in doc["identity"]["arms"] if not a.get("control") and a["id"] != doc["baseline"]]
     lines = [
         f"Baseline: `{doc['baseline']}`. Ratios are arm / baseline; lower is better for time and memory.",
+        *([f"No control checks the tokens of: {', '.join(f'`{a}`' for a in ungated)}."] if ungated else []),
         "",
         "| point | metric | " + " | ".join(arms) + " |",
         "|---|---|" + "|".join("---:" for _ in arms) + "|",

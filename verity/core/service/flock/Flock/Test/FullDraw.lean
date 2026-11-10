@@ -1,11 +1,18 @@
 /-
 `RecSetup.fullDraw` on a population of four units, under F1's inner shape (m 27, k_log 24, claims 8 over 3 regions):
-the `subset` draw of all four passes, and a draw of fewer units, a stratified draw of all four and a subset draw with a
-closure are refused; with no draw, or no inner shape outside a recursive session, it passes whatever the record holds.
+the `subset` sample of all four passes, and a sample of fewer units, a stratified sample of all four and a subset sample with a
+closure are refused; with no sample, or no inner shape outside a recursive session, it passes whatever the record holds.
 A recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`) without an inner shape is refused, whatever its
-draw.
+sample. `RecSetup.innerDrawn`: an inner session's record whose `unit_draw` is absent or null, or that is not a JSON object,
+is refused, from the inner statement's files or the verifier's inner coins alike; one with a sample passes, and so does a
+session without the inner record.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.FullDraw
 
@@ -53,5 +60,22 @@ def tail : String := ": a V* session draws every unit of its population, the onl
 #guard why none (some (subset [1, 3])) == some RecSetup.noInner
 #guard why none none == some RecSetup.noInner
 #guard RecSetup.noInner.startsWith "refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without"
+
+def files (r : String) : RecCoins.Source := .files { circuit := .empty, pub := .empty, partition := Json.null, record := r }
+
+def innerWhy (src : Option RecCoins.Source) : Option String :=
+  match RecSetup.innerDrawn src with
+  | .ok () => none
+  | .error e => some e
+
+#guard innerWhy (some (files (record (subset [0, 1, 2, 3])))) == none
+#guard innerWhy (some (.coins Json.null (record (subset [1])))) == none
+#guard innerWhy (some (files (record Json.null))) == some RecSetup.noInnerDraw
+#guard innerWhy (some (.coins Json.null (record Json.null))) == some RecSetup.noInnerDraw
+#guard innerWhy (some (files (Json.mkObj [("verdict", Json.null)]).compress)) == some RecSetup.noInnerDraw
+#guard innerWhy (some (files "not json")) == some RecSetup.noInnerDraw
+#guard innerWhy (some (files "[]")) == some RecSetup.noInnerDraw
+#guard innerWhy none == none
+#guard RecSetup.noInnerDraw.startsWith "refused: the inner session's record (--rec-inner-session) holds no draw"
 
 end Flock.Test.FullDraw

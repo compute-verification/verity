@@ -5,7 +5,8 @@ from __future__ import annotations
 import torch
 
 from verity.ml.circuits.refs import Coll, runs
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, scalar_kind, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
@@ -13,7 +14,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import MEAN_PINS
 
 
-# -- the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy) [R15 dense, F-dense-05] -----------
+# -- the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy) -----------
 #
 # A model whose norm module runs `forward_native` (vLLM `GemmaRMSNorm`; `RMSNorm` off the BI branch) exports the norm as a chain of ATen
 # ops on an f32 copy of the bf16 activation:

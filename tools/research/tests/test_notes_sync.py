@@ -15,7 +15,7 @@ from research.store.remote import FsRemote
 
 DOC = "kb/doc.md"
 SECTION = "\n".join(f"filler {i}" for i in range(12))
-NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.UTC)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -59,6 +59,17 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+def test_a_sync_commits_where_signing_is_configured_but_cannot_sign(machines):
+    origin, a, _ = machines
+    _git(a, "config", "commit.gpgsign", "true")
+    _git(a, "config", "gpg.program", "false")
+    (a / "lanes" / "x").mkdir(parents=True)
+    (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["paths"]) == (0, True, 1)
+    assert _git(origin, "show", "main:lanes/x/report.md").startswith("CHECKPOINT")
+
+
 
 
 def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
@@ -79,8 +90,8 @@ def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
     ("fetch", "fatal: the remote end hung up unexpectedly"),
 ])
 def test_a_fetch_or_push_that_fails_under_load_is_retried(machines, monkeypatch, verb, stderr):
-    """Two machines' syncs under load 156 (vy-mig-check-20, 6 Oct) failed on their first attempt with an error that was not a
-    lost push race, and gave up there; a lock or transfer error clears on the next attempt."""
+    """Two machines' syncs under heavy load can fail on their first attempt with an error that is not a lost push race, and
+    must not give up there; a lock or transfer error clears on the next attempt."""
     origin, a, _ = machines
     failed = _fail_once(monkeypatch, verb, stderr)
     _insert_after(a / DOC, "<!-- a -->", "a under load")
@@ -111,8 +122,8 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
 
 
 def test_a_detached_head_commits_nothing(machines):
-    """The steward's clone, 6 Oct 16:05Z: once HEAD was detached, every pass committed onto it and none could push (nine syncs
-    unpushed by 17:20Z); a sync on a detached HEAD now leaves the work uncommitted for the branch to take."""
+    """Once HEAD is detached, a pass that commits onto it can't push, nor can any pass after it; a sync on a detached HEAD
+    leaves the work uncommitted for the branch to take."""
     _, a, _ = machines
     _git(a, "checkout", "-q", "--detach")
     _insert_after(a / DOC, "<!-- a -->", "a while detached")
@@ -123,8 +134,8 @@ def test_a_detached_head_commits_nothing(machines):
 
 
 def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
-    """The same clone, 6 Oct 16:05Z: on NFS the rebase lost `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its
-    abort did nothing and HEAD stayed detached at origin/main; the sync puts the branch back, with the local commit on it."""
+    """On NFS a rebase can lose `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its abort does nothing and
+    HEAD stays detached at origin/main; the sync puts the branch back, with the local commit on it."""
     origin, a, b = machines
     _insert_after(a / DOC, "<!-- b -->", "a first")
     assert NS.sync(a, secrets=[])["pushed"]
@@ -149,7 +160,7 @@ def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, m
 
 def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
     origin, a, b = machines
-    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.UTC)
     for i in range(3):
         _insert_after(a / DOC, "<!-- a -->", f"a says yes {i}")
         assert NS.sync(a, secrets=[])["pushed"]
@@ -315,7 +326,7 @@ def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machine
 
 
 def test_created_is_read_from_the_front_matter_with_or_without_seconds():
-    utc = dt.timezone.utc
+    utc = dt.UTC
     for value, when in (("2026-09-28T07:00Z", dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
                         ("2026-09-28T07:00:30Z", dt.datetime(2026, 9, 28, 7, 0, 30, tzinfo=utc)),
                         ('"2026-09-28 07:00"', dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
@@ -551,6 +562,66 @@ def test_token_url_names_the_github_repo_with_an_explicit_user_and_never_the_tok
     assert NS.token_url("/srv/notes.git") is None and NS.token_url("https://gitlab.com/a/b.git") is None
 
 
+BROKER_NOW = dt.datetime(2026, 11, 3, 4, 0, tzinfo=dt.UTC).timestamp()
+BROKER_EXPIRES = "2026-11-03T05:00:00Z"
+
+
+@pytest.fixture
+def broker(monkeypatch):
+    """The agents' GitHub broker on localhost: each POST's (identity, body) is recorded and answered with a fresh token that
+    expires at BROKER_EXPIRES; `status` other than 200 refuses. This agent's identity is a fixed OIDC token."""
+    import http.server
+    import json as _json
+
+    from research import slack
+    state = {"seen": [], "status": 200, "n": 0}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = _json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            state["seen"].append((self.headers["Authorization"], body))
+            state["n"] += 1
+            out = _json.dumps({"token": f"broker-token-{state['n']}", "expires_at": BROKER_EXPIRES}).encode()
+            self.send_response(state["status"])
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(NS, "GITHUB_BROKER", f"http://127.0.0.1:{srv.server_address[1]}/api/agent-github/token")
+    monkeypatch.setattr(NS, "_BROKER_REFUSED", [])
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: f"oidc-for-{aud.rsplit('/', 1)[-1]}")
+    for k in (NS.TOKEN_ENV, NS.SOURCE_ENV, NS.EXPIRES_ENV):         # notes_token sets them in os.environ: undone after
+        monkeypatch.setenv(k, "")
+        monkeypatch.delenv(k)
+    yield state
+    srv.shutdown()
+
+
+def test_a_cursor_agent_gets_the_notes_token_from_the_broker_without_the_secret(broker, monkeypatch):
+    """A cloud VM reaches the notes with the agents' GitHub App, without a personal token in its secrets."""
+    assert NS.notes_token(now=BROKER_NOW) == "broker-token-1"
+    assert broker["seen"] == [("Bearer oidc-for-token", {"scope": "notes"})]
+    assert NS.os.environ[NS.TOKEN_ENV] == "broker-token-1", "in the environment, where git's helper reads it"
+    assert NS.notes_token(now=BROKER_NOW + 60) == "broker-token-1" and len(broker["seen"]) == 1, "an hour's token is reused"
+    assert NS.notes_token(now=BROKER_NOW + 3600 - NS.REFRESH_S + 1) == "broker-token-2", "minted again before it expires"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    monkeypatch.delenv(NS.SOURCE_ENV)
+    assert NS.notes_token(now=BROKER_NOW + 7200) == TOKEN and len(broker["seen"]) == 2, "a token set by hand wins, never replaced"
+
+
+def test_a_broker_that_refuses_leaves_no_token_and_is_not_asked_again_at_once(broker):
+    broker["status"] = 403
+    assert NS.notes_token(now=BROKER_NOW) is None and NS.notes_token(now=BROKER_NOW + NS.BROKER_RETRY_S - 1) is None
+    assert len(broker["seen"]) == 1 and NS.TOKEN_ENV not in NS.os.environ
+    NS.notes_token(now=BROKER_NOW + NS.BROKER_RETRY_S)
+    assert len(broker["seen"]) == 2, "asked again once the wait is over"
+
+
 def test_the_credential_helper_answers_the_token_from_the_environment(cloud_vm, tmp_path, monkeypatch):
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     opts, _ = NS.token_url(NS.NOTES_URL)
@@ -623,6 +694,21 @@ def test_a_missing_notes_clone_is_cloned_once_the_token_is_set(cloud_vm, tmp_pat
     assert [p.name for p in root.parent.iterdir()] == ["notes"]
 
 
+def test_parallel_callers_in_one_process_clone_the_notes_once(cloud_vm, tmp_path, monkeypatch):
+    """`research run` on a fresh VM probes machines in parallel threads, each asking for the notes clone; with a clone
+    directory named by pid alone, one thread's cleanup would delete another's clone mid-way and the run couldn't start."""
+    import concurrent.futures
+
+    origin = cloud_vm[0]
+    root = tmp_path / "home" / ".research" / "notes"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        lines = list(pool.map(lambda _: NS.ensure_clone(root), range(6)))
+    assert lines.count(f"notes: cloned {NS.NOTES_URL} into {root}") == 1 and lines.count(None) == 5
+    assert _git(root, "rev-parse", "HEAD") == _git(origin, "rev-parse", "main")
+    assert [p.name for p in root.parent.iterdir()] == ["notes"]
+
+
 def test_a_failed_clone_leaves_nothing_and_says_why_without_the_token(cloud_vm, tmp_path, monkeypatch):
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "--unset-all", f"url.{cloud_vm[0]}.insteadOf")
@@ -647,3 +733,27 @@ def test_machine_resolution_clones_the_registry_on_a_fresh_vm(cloud_vm, tmp_path
     assert "vy-nebius-1" not in remote.load_machines() and not root.exists(), "unset: no clone, no registry"
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     assert remote.resolve_machine("vy-nebius-1", "vy")["host"] == "203.0.113.7" and (root / "machines.d").is_dir()
+
+
+def test_a_stale_index_lock_is_removed_only_when_no_git_works_in_the_repository(tmp_path):
+    """A git killed mid-write leaves the clone locked, and every later sync fails until the lock goes."""
+    import os
+    from research import notes_sync as NS
+    repo = tmp_path / "notes"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    lock = repo / ".git" / "index.lock"
+    lock.write_text("")
+    procs = tmp_path / "proc"
+    procs.mkdir()
+    now = 1_800_000_000.0
+    os.utime(lock, (now - 60, now - 60))
+    assert not NS.clear_stale_lock(repo, now=now, procs=procs) and lock.exists(), "a fresh lock is a live writer's"
+    os.utime(lock, (now - 3600, now - 3600))
+    (procs / "42").mkdir()
+    (procs / "42" / "comm").write_text("git\n")
+    os.symlink(repo, procs / "42" / "cwd")
+    assert not NS.clear_stale_lock(repo, now=now, procs=procs) and lock.exists(), "a git still works in the repository"
+    os.unlink(procs / "42" / "cwd")
+    os.symlink(tmp_path, procs / "42" / "cwd")
+    assert NS.clear_stale_lock(repo, now=now, procs=procs) and not lock.exists(), "old, and git runs elsewhere"
+    assert not NS.clear_stale_lock(repo, now=now, procs=procs), "no lock, nothing to do"

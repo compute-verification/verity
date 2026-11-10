@@ -1,4 +1,4 @@
-"""verity_vllm.observe.contract -- ONE value-observation contract over today's on-disk capture formats (v2 Phase 4b).
+"""verity_vllm.observe.contract -- ONE value-observation contract over today's on-disk capture formats.
 
 A *runtime occurrence* is WHERE a value was seen: engine step, invocation (the k-th time the site ran inside the step), tensor-parallel
 rank, the site (an implementation module path such as `model.layers.3.self_attn.qkv_proj`, or a native tap id such as `fa2.m1/L3`), the
@@ -14,7 +14,7 @@ the occurrence alone and `resolve.validate` compares the two, reporting a disagr
 directory itself) into a STREAM of ValueObservation -- one per instance row, in node order -- without loading the record: the header line
 is read for the request table and the operand form, and each instances.jsonl line is decoded, adapted and released.  An observation states
 only what the runtime stated (a row's stamped request / position: the meta channel); the row-count rule over the engine step's `StepStart`
-rows (`read_steps`: `BD.read_steps` over the capture log, O(steps)) is the rows channel of `resolve`, not the adapter's.  Nothing here
+rows (`read_steps`: `capture_log.read_steps` over the capture log, O(steps)) is the rows channel of `resolve`, not the adapter's.  Nothing here
 writes, and nothing changes what Match writes (v1 stays the producer of record; this is a reader beside it).
 
 Dependency-free (json / gzip / dataclasses).
@@ -148,28 +148,28 @@ def _program_json_layout(path: str, digest: str | None) -> tuple[int | None, lis
         if m and not params:
             try:
                 params = [n for n, _t in json.loads(m.group(1))]
-            except Exception:  # noqa: BLE001 -- a window cut through the list: stated as unknown
+            except (ValueError, TypeError):  # a window cut through the list: stated as unknown
                 params = []
         m = re.search(r'"tp":\s*(\{[^{}]*\})', text)
         if m and tp is None:
             try:
                 tp = json.loads(m.group(1))
-            except Exception:  # noqa: BLE001
+            except ValueError:
                 tp = None
     return n_in, params, tp, digest
 
 
 def read_steps(record_dir: str) -> tuple[dict, dict[int, dict]]:
-    """(RunHeader, {engine step: {rows, logits_rows, logits_indices}}) of the record's capture log -- `batch_decomp.read_steps`, the
+    """(RunHeader, {engine step: {rows, logits_rows, logits_indices}}) of the record's capture log -- `capture_log.read_steps`, the
     fold's own chronology (the row-count rule reads it)."""
-    from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.observe import capture_log as CL
     d = match_dir(record_dir)
     log = os.path.join(d, "capture", "log.jsonl.gz")
     if not os.path.isfile(log):
         log = os.path.join(d, "capture", "log.jsonl")
     if not os.path.isfile(log):
         raise FileNotFoundError(f"{d}: no capture/log.jsonl(.gz)")
-    return BD.read_steps(log)
+    return CL.read_steps(log)
 
 
 # ------------------------------------------------------------------------------------------------------------------ adapting one row
@@ -217,7 +217,7 @@ def site_and_slot(hint: str | None, name: str | None, spec: str | None) -> tuple
 
 def _reads(operand_refs: Any, form: str, n_input_nodes: int | None) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """(root node ids read, root parameter indices read) of a row's `operand_refs` in either stored form: runs `[space, idx, lo, hi]` or
-    [R17 mfast F2] progressions `["N"|"P", idx, lo, hi, dI, dL, dH, count]` (only the DISTINCT node / parameter ids matter to resolution)."""
+    progressions `["N"|"P", idx, lo, hi, dI, dL, dH, count]` (only the DISTINCT node / parameter ids matter to resolution)."""
     nodes: set[int] = set()
     params: set[int] = set()
     for a in operand_refs or ():

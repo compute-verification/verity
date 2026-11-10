@@ -1,5 +1,5 @@
 """The exports of `datacenter.examples`' declarations (coverage, the netns plan, Shadow's GML, the command line), and the
-declarations' values pinned against their sources: memory accounting's constants and the census."""
+declarations' tensor-core rates pinned against the census."""
 
 from __future__ import annotations
 
@@ -37,32 +37,23 @@ def ex(g):
 
 
 def test_a_path_around_a_certifier_breaks_coverage_and_no_export_takes_it(g, ex):
-    from datacenter import Link
+    from datacenter import LinkEntry
 
     dc = ex.leaf_spine(2)
-    dc.links.append(Link("b0.gpu3", "leaf0", ex.PCIE_GPU))
+    dc.links.append(LinkEntry("b0.gpu3", "leaf0", ex.PCIE_GPU))
     assert dc.validate() == ["boundary link b0.gpu3-leaf0 passes no certifier (coverage)"]
     for export in (g.check, g.netns_plan, g.shadow_gml):
         with pytest.raises(ValueError, match="passes no certifier"):
             export(dc)
 
 
-def test_the_capacities_are_memory_accountings_and_the_censuss(ex):
-    """The node states remote bandwidth's per-device constants: one GPU's, and each of the host's two sockets' halves.
-    Its tensor-core rates are the census's dense datasheet peaks, a multiply-add being two FLOP. What isn't measured yet
-    is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
+def test_the_tensor_core_rates_are_the_censuss(ex):
+    """The tensor-core rates are the census's dense datasheet peaks, a multiply-add being two FLOP. What isn't measured
+    yet is infinite, so a reading that takes it as an upper bound concludes nothing from it."""
     from datacenter import serve_time
-    from verity.core.protocols.remote_bandwidth import timing
 
     dc = ex.leaf_spine(1)
     gpu, cpu = dc.devices["b0.gpu0"], dc.devices["b0.cpu0"]
-    assert gpu.on_chip.value == timing.GPU_CHIP_BYTES * 8 and gpu.memory.value == 96 * 2**30 * 8
-    assert gpu.bandwidth.value == timing.GPU_READ_BYTES_PER_S * 8
-    assert gpu.rate["oracle"].value == timing.GPU_SHA512_PER_S
-    assert 1.597 * gpu.rate["square-1024"].value == timing.GPU_SQUARINGS_PER_S["p1024"]
-    assert 1.567 * gpu.rate["square-512"].value == timing.GPU_SQUARINGS_PER_S["p512"]
-    assert 2 * cpu.on_chip.value == timing.HOST_CHIP_BYTES * 8
-    assert 2 * cpu.bandwidth.value == timing.HOST_READ_BYTES_PER_S * 8
     census = {e["id"]: e for e in json.loads(CENSUS.read_text())}
     macs = [a for k, a in gpu.rate.items() if k.startswith("mac:")]
     assert [a.name for a in macs] == ["rtx-pro-6000-server/bf16", "rtx-pro-6000-server/e4m3", "rtx-pro-6000-server/e2m1"]
@@ -150,6 +141,35 @@ def test_switches_route_every_fabric_subnet_through_a_two_tier_fabric(g, ex):
     assert walk(plan, "na-b2-cert", plan.address("b2", "b2.cert")) == "na-b2"
 
 
+def test_a_fleets_wan_joins_its_sites_switches_and_has_its_own_jitter(g, ex):
+    """The WAN runs between the two spines, which route across it; only switches forward, and every certifier watches a
+    block and has its guard. The outside host, on the west site, reaches every block's certifier, the east ones across
+    the WAN, and no block; the WAN's netem is its latency, its own jitter and its capacity."""
+    dc = ex.two_sites().merged()
+    plan = g.netns_plan(dc, jitter=5e-4, wan_jitter=2e-3)
+    assert len(plan.namespaces) == 15
+    assert sorted(n.node for n in plan.namespaces if n.forward) == [f"{s}.{x}" for s in ("east", "west")
+                                                                   for x in ("leaf0", "leaf1", "spine0")]
+    guarded = [c[3] for c in plan.up() if "iptables" in c]
+    assert guarded == [f"na-{s}-b{i}-cert" for s in ("east", "west") for i in range(2)]
+    assert guarded == [n.name for n in plan.namespaces if n.role == "certifier"]
+    (wan,) = [i for i in plan.namespace("east.spine0").interfaces if i.peer[0] == "na-west-spine0"]
+    assert wan.netem == ("delay", "20000us", "2000us", "rate", "100000000000bit")
+    assert plan.namespace("ext0").interfaces[0].netem == ("delay", "2us", "500us", "rate", "400000000000bit")
+    ext = plan.address("ext0", "west.leaf0")
+    out = str(ipaddress.ip_interface(plan.namespace("ext0").interfaces[0].address).network)
+    assert dict(plan.namespace("east.spine0").routes)[out] == plan.address("west.spine0", "east.spine0")
+    for b in (b.name for b in dc.blocks):
+        cert = g.netns_name(f"{b}.cert")
+        assert walk(plan, "na-ext0", plan.fabric_address(f"{b}.cert")) == cert and walk(plan, cert, ext) == "na-ext0"
+        assert walk(plan, "na-ext0", plan.address(b, f"{b}.cert")) is None and walk(plan, g.netns_name(b), ext) is None
+    assert walk(plan, "na-east-b0-cert", plan.fabric_address("west.b1.cert")) == "na-west-b1-cert"
+    (_, graph), = parse_gml(g.shadow_gml(dc, jitter=5e-4, wan_jitter=2e-3))
+    edges = {e["label"]: (e["latency"], e["jitter"]) for e in (dict(v) for k, v in graph if k == "edge")}
+    assert edges["east.spine0-west.spine0"] == ("20000000 ns", "2000000 ns")
+    assert edges["ext0-west.leaf0"] == ("2000 ns", "500000 ns")
+
+
 def parse_gml(text: str) -> list:
     tokens = re.findall(r'"[^"]*"|\[|\]|[^\s\[\]]+', text)
 
@@ -194,3 +214,5 @@ def test_the_command_line_prints_each_form(g, capsys):
     assert capsys.readouterr().out.splitlines()[0] == "ip netns add na-b0"
     g.main(["--blocks", "1", "--gml"])
     assert capsys.readouterr().out.startswith("graph [\n  directed 0\n")
+    g.main(["--blocks", "1", "--fleet", "--netns"])
+    assert capsys.readouterr().out.splitlines()[:2] == ["ip netns add na-east-b0", "ip netns add na-west-b0"]

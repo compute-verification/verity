@@ -13,7 +13,7 @@ Writes OUT_DIR/<name>/ per mutant and OUT_DIR/mutants.json: name, rep, edit, and
 (`expect`: accept or reject, and the Lean verifier's reason prefix). `--retain` writes the session with every round's
 framed bytes retained (`rounds[k].msg`, hex; the challenger's retained round bytes) and two negatives: rep 0's first
 round bytes edited with its digest rebuilt (the replay's exact comparison rejects), and edited without it (S12 rejects;
-upstream accepts it, divergence D4, unless `--upstream-checks retained_bytes`: PR #83 from 4bceebef checks the bytes
+upstream accepts it, divergence D4, unless `--upstream-checks retained_bytes`: M0 from 4bceebef checks the bytes
 against the digest).
 """
 import hashlib, json, shutil, struct, sys
@@ -21,10 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transcript_check as tc  # noqa: E402
+from record_text import session_text  # noqa: E402
 
 
 def layout(b, zk=False):
-    """Byte offsets of every field element, hash and nonce of a proof (PROTOCOL.md §8.2), by field; `zk`: a `--zk` proof's
+    """Byte offsets of every field element, hash and nonce of a proof (`Flock.Proof`), by field; `zk`: a `--zk` proof's
     (live PROTOCOL.md), whose Ligerito proof ends with level 0's hiding messages and is followed by the inner proof."""
     r, off, sb = tc.R(b, tc.digest_width(b)), {}, tc.salt_bytes(b)
 
@@ -143,7 +144,7 @@ def retain(src, out, checks=()):
     def write(name, r):
         d = out / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(r))
+        (d / "session.json").write_text(session_text(r))
         for rep in (0, 1):
             shutil.copy(src / f"{table}.rep{rep}.bin", d / f"{table}.rep{rep}.bin")
 
@@ -209,8 +210,10 @@ MUTANTS = [
     ("lig-sibling-l0", 0, flip("lig.l0.sib", 3, 5), reject("merkle:")),
     ("lig-row-l1", 0, flip("lig.l1.rows", 7), reject("merkle:")),
     ("lig-row-final", 0, flip("lig.final.rows", 7), reject("merkle:")),
-    ("lig-query-nonce", 0, flip("lig.qn", 0), ACCEPT),
-    ("lig-claim-nonce", 0, flip("lig.cbn", 1), ACCEPT),
+    ("lig-query-nonce", 0, flip("lig.qn", 0), {**reject("grinding_nonce ≠ 0"), "upstream_accepted": True}),
+    ("lig-claim-nonce", 0, flip("lig.cbn", 1), {**reject("claim_batch_grinding_nonce ≠ 0"), "upstream_accepted": True}),
+    ("lig-consistency-nonce", 0, flip("lig.consn", 0),
+     {**reject("consistency_batch_grinding_nonce ≠ 0"), "upstream_accepted": True}),
     ("rep1-zc-final-a", 1, flip("zc.fa"), reject("zerocheck: SumcheckFinalFailed")),
     ("rep1-lig-yr", 1, flip("lig.yr", 1), reject("ligerito: final check failed")),
 ]
@@ -239,7 +242,7 @@ def main(src, out):
                 p["sha256"], p["bytes"] = hashlib.sha256(b).hexdigest(), len(b)
         d = out / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(rec))
+        (d / "session.json").write_text(session_text(rec))
         (d / f"{table}.rep{rep}.bin").write_bytes(b)
         shutil.copy(src / f"{table}.rep{1 - rep}.bin", d / f"{table}.rep{1 - rep}.bin")
         manifest.append({"name": name, "rep": rep, "expect": expect})

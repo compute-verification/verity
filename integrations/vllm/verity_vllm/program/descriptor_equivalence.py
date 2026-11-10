@@ -1,4 +1,4 @@
-"""Graph/reference correspondence of two encodings of one program (frontend rulings §8.5).
+"""Graph/reference correspondence of two encodings of one program.
 
 A reference-codec change moves the program digest even when the denoted circuit is unchanged, because the digest
 hashes the serialised descriptor. Digest equality is therefore the wrong test across a codec transition; this
@@ -32,9 +32,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-from verity.ml.circuits.codec import decode_program, program_digest
+from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
 from verity.ml.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Refs, Strided
 
@@ -148,10 +148,6 @@ class Mismatch(AssertionError):
     pass
 
 
-def _type_json(t) -> Any:
-    return t.to_json()
-
-
 def _compare_definition(fid: str, a, b, rep: dict) -> None:
     if isinstance(a, PrimitiveDefinition) or isinstance(b, PrimitiveDefinition):
         if not (isinstance(a, PrimitiveDefinition) and isinstance(b, PrimitiveDefinition)):
@@ -175,8 +171,8 @@ def _compare_definition(fid: str, a, b, rep: dict) -> None:
     for k, (na, nb) in enumerate(zip(ba.nodes, bb.nodes)):
         if (na.form, na.axes, na.n, na.n_xs) != (nb.form, nb.axes, nb.n, nb.n_xs):
             raise Mismatch(f"{fid} node {k}: form/axes/n differ")
-        if _fid(na.fn) != _fid(nb.fn):
-            raise Mismatch(f"{fid} node {k}: callee {_fid(na.fn)} vs {_fid(nb.fn)}")
+        if descriptor_id(na.fn) != descriptor_id(nb.fn):
+            raise Mismatch(f"{fid} node {k}: callee {descriptor_id(na.fn)} vs {descriptor_id(nb.fn)}")
         if na.out != nb.out:
             raise Mismatch(f"{fid} node {k}: output types differ")
         if len(na.args) != len(nb.args):
@@ -196,15 +192,10 @@ def _compare_definition(fid: str, a, b, rep: dict) -> None:
     rep["composites"] += 1
 
 
-def _fid(fn) -> str:
-    from verity.ml.circuits.codec import _spec_id
-    return _spec_id(fn)
-
-
 def _static_view(v: Any) -> Any:
     from verity.ml.circuits.defs import FunctionDefinition
     if isinstance(v, FunctionDefinition):
-        return ("fn", _fid(v))
+        return ("fn", descriptor_id(v))
     if isinstance(v, (list, tuple)):
         return tuple(_static_view(x) for x in v)
     if isinstance(v, dict):
@@ -216,7 +207,7 @@ def _all_definitions(root: SpecializedDefinition) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
     def visit(fn) -> None:
-        fid = _fid(fn)
+        fid = descriptor_id(fn)
         if fid in out:
             return
         out[fid] = fn
@@ -266,7 +257,7 @@ def _call_view(c: FunctionCall, depth: int, rng: random.Random, samples: int = 2
             picks = []
             for pi, (_, t) in enumerate(params):
                 picks.append((pi, sorted({rng.randrange(t.leaves) for _ in range(min(samples, t.leaves))})))
-            rng.setstate(state)  # the other side draws the same positions
+            rng.setstate(state)  # the other side samples the same positions
             d["args_sampled"] = tuple((pi, j, param_leaf(sc, pi, j)) for pi, js in picks for j in js)
             ret = sc.spec.body.ret
             d["returns"] = tuple(resolve(sc, ret[j]) for j in range(ret.count)) if ret.count <= INTERFACE_LEAF_LIMIT else None
@@ -391,7 +382,7 @@ def _load(path: str):
         desc = json.load(f)
     # IT-F5 (`independent-tests.md`): a descriptor names its primitives by id and `REGISTRY` holds only what the process
     # imported; every registry module is loaded so a Hopper / TP=2 / single-request stochastic descriptor decodes too.
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
     load()
     d = decode_program(desc, REGISTRY)
     return d, {"path": path, "schema": desc.get("schema"), "digest": program_digest(desc), "bytes": None, "seconds_decode": round(time.time() - t0, 1)}
@@ -420,7 +411,7 @@ def main(a: Options) -> int:
     elif a.build:
         from verity.ml.circuits.program import Program
         from verity.ml.circuits.defs import bind
-        from verity_vllm.program.registry import b1
+        from verity.ml.definitions.registry import b1
         from verity.ml.circuits.codec import encode_program, canonical_json
         cfg, LP, STEPS = a.build[0], int(a.build[1]), int(a.build[2])
         t0 = time.time()

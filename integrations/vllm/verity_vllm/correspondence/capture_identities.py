@@ -1,6 +1,6 @@
 """Correspondence between capture-format-v2 identities and the canonical B1 circuit.
 
-Two namespaces (IR §C.5), kept separate in every record this tool emits:
+Two namespaces, kept separate in every record this tool emits:
 
   * `value_identity`  -- the *logical* namespace: which `FunctionCall` of the canonical circuit produced the
     value(s), i.e. the gate indices of `call.returns` (or, for prescribed inputs, the `Input` gates).
@@ -13,7 +13,7 @@ Two namespaces (IR §C.5), kept separate in every record this tool emits:
     of gate outputs.
 
 Checks performed per located call: (i) shape/type consistency between the captured tensor and the call's
-return type, (ii) bit-for-bit comparison of the captured words with the IR's own gate-by-gate evaluation of
+return type, (ii) bit-for-bit comparison of the captured words with the circuit's own gate-by-gate evaluation of
 that call, where the call's *argument* values are read from other captured leaves (production values) and
 from the registered checkpoint (the values of the weight `Input` gates). A prescribed-input record states
 that the committed weight leaf words *are* the outputs of the `Input` gates (one scalar per gate) and gives
@@ -33,11 +33,11 @@ from typing import Any, Iterable
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import MissingValue, evaluate_region
+from verity.ml.circuits.evaluation import MissingValue, evaluate_region
 from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import Program
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 _ID_RE = re.compile(r"^p=(?P<p>[^/]+)/r=(?P<r>[^/]+)/t=(?P<t>\d+)/ph=(?P<ph>[^/]+)/l=(?P<l>[^/]+)/op=(?P<op>[^/]+)/port=(?P<output>\d+)$")
 
@@ -218,7 +218,7 @@ class Segments:
 
 
 class LazyTranscript(dict):
-    """`ExecutionTranscript` whose missing entries are read from value segments (weights + captured leaves).
+    """A `Trace` whose missing entries are read from value segments (weights + captured leaves).
     Values computed by `evaluate_region` are stored in the dict and take precedence."""
 
     def __init__(self, *sources: Segments) -> None:
@@ -240,7 +240,7 @@ class LazyTranscript(dict):
 # weights: the checkpoint gives the values of the weight Input gates; the weights leaf authenticates them
 # ---------------------------------------------------------------------------------------------------------
 
-_WEIGHT_FIELDS = {  # IR weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
+_WEIGHT_FIELDS = {  # circuit weights record field -> (capture canonical id, checkpoint tensors concatenated along dim 0)
     "embed": ("w=embed_tokens.weight", ["model.embed_tokens.weight"]),
     "norm": ("w=norm.weight", ["model.norm.weight"]),
     "cos_sin": ("w=layers.0.self_attn.rotary_emb.cos_sin_cache", None),
@@ -303,7 +303,7 @@ class WeightsBinding:
     records: list[dict] = field(default_factory=list)
 
 
-# The `cos_sin_cache` Input gates are a *derived* table (typed-b1.md §5.2): the committed leaf reproduces only from
+# The `cos_sin_cache` Input gates are a *derived* table: the committed leaf reproduces only from
 # vLLM's `_compute_cos_sin_cache` run on the GPU. The record says so in a fixed, machine-readable form.
 COS_SIN_LEAF = _WEIGHT_FIELDS["cos_sin"][0]
 COS_SIN_REBUILT_FROM = "vllm._compute_cos_sin_cache (CUDA cosf/sinf), GPU only"
@@ -560,7 +560,7 @@ class Recomputer:
 
 def check_call(call: FunctionCall, gates: tuple[int, ...], transcript: LazyTranscript, captured: np.ndarray,
                *, sub=None, recompute: Recomputer | None = None) -> dict:
-    """Evaluate `sub` (default: the whole call) gate by gate, reading outside operands from the transcript's
+    """Evaluate `sub` (default: the whole call) gate by gate, reading outside operands from the trace's
     sources, and compare the words at `gates` that lie inside `sub` with `captured`.  With `recompute`, an operand
     the capture never materialised is recomputed exactly from committed values (see `Recomputer`)."""
     region = call if sub is None else sub
@@ -622,13 +622,6 @@ def value_identity(call: FunctionCall, gates: tuple[int, ...]) -> dict:
 # ---------------------------------------------------------------------------------------------------------
 
 
-GEMM_NAMES = frozenset({"Gemm"})  # Gemm-shaped calls: coordinate-sampled unless listed in `full`
-
-
-def _is_gemm_like(call: FunctionCall) -> bool:
-    return call.name in GEMM_NAMES or call.name == "TokenSelect"
-
-
 @dataclass
 class Port:
     """A profile port's static configuration (coverage-wave contract, `vllm-poc/profiles/<port>/static_config.py`):
@@ -682,8 +675,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
     """Two ways a profile port supplies its static configuration: `port` (a `Port`: the `Serve` definition, its config
     record, TA1-name -> port-name table and Gemm-shaped call names; `--port <dir>` on the command line), or CH's
     seams `program_factory(LP=, STEPS=) -> Program`, `circuit_map(program) -> CircuitMap-like` and `static_config`
-    (the C dict) used by `verity_vllm.check.poc_conformance`.  Without either the registered B1/B0 configurations
-    are used."""
+    (the C dict).  Without either the registered B1/B0 configurations are used."""
     if port is None:
         C0 = dict(static_config) if static_config is not None else {"B1": b1.B1_CONFIG, "B0": b1.B0_CONFIG}[config]
         port = Port(serve=b1.Serve, config=C0, id=config)
@@ -697,7 +689,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
     if program_factory is None and port.serve is None and port.program_factory is not None:
         program_factory = port.program_factory  # a port whose Serve is specialised under a binding record (CF2)
     if circuit_map is None and port.circuit_map is not None:
-        # a port-supplied mapping: QZ's `CIRCUIT_MAP(program)` or CF2's `CIRCUIT_MAP(program, names)` (merge 2026-09-08)
+        # a port-supplied mapping: QZ's `CIRCUIT_MAP(program)` or CF2's `CIRCUIT_MAP(program, names)`
         import inspect
         _cm, _names = port.circuit_map, port.names
         try:

@@ -1,9 +1,11 @@
-"""Item 1e for a template: the Lean verifier reads a typed template statement (`verity/flock-circuit/types`, GEMM) as #273's
+"""Item 1e for a template: the Lean verifier reads a typed template statement (`verity/flock-circuit/types`, GEMM) as the
 Rust prover splits it: the instance type's root one slot per VU and each placed layout's slots its parts, with rows only
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
-cover (§16.15), so on the prover's recorded sessions the statement sets up and every case is refused: the honest ones for
-its form, once every check has passed, and every other case for the check that catches it."""
+cover (`Flock.ProvedScope`), so on the prover's recorded sessions the statement sets up and the verifier's checks agree with
+upstream's verdict on each case: the honest ones pass every check and are refused for their form, and every other case fails the
+check that catches it. That build has no zk patch, so its plain files are upstream's form, without the `zk_level0 = None`
+tag the deployed prover writes, which `verify` refuses and `agree --upstream-plain` reads (`Flock.Proof`)."""
 from __future__ import annotations
 
 import hashlib
@@ -19,8 +21,8 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit/types@210d32e1+seed-injection"
-#: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at #273, and every CPU selftest case of its
-#: flock-circuit (seed-injection build, #273 at 8505c540: the typed id's own tags), recorded
+#: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at 8505c540, and every CPU selftest case of its
+#: flock-circuit (seed-injection build at 8505c540: the typed id's own tags), recorded
 FIXTURE = "art:e9c0209d"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -54,9 +56,10 @@ def test_the_verifier_reads_a_typed_template(gemm):
     assert st["circuit_sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest() and st["regions"] == 3
 
 
+@pytest.mark.slow
 def test_typed_expand_reads_the_public_output_form(gemm):
     """`typed-expand --statement` parses a `types@210d32e1` file as `verify` does; the default, `verity/flock-circuit/types`
-    with hidden outputs (PROTOCOL.md §16.13), refuses it."""
+    with hidden outputs (`HmOut`), refuses it."""
     root, _ = gemm
     circuit = root / "stage" / "circuit.txt"
 
@@ -69,19 +72,23 @@ def test_typed_expand_reads_the_public_output_form(gemm):
     assert not expand()["ok"]
 
 
+@pytest.mark.slow
 def test_it_refuses_the_rust_provers_sessions(gemm, tmp_path):
     root, _ = gemm
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(root / "records"), str(tmp_path)], check=True,
                    capture_output=True)
     sessions = sorted(p for p in tmp_path.iterdir() if (p / "case.json").exists())
-    p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
-                        "--public", str(root / "stage" / "pub-4.bin"), "--tables", str(root / "stage" / "tables"),
-                        "--session", *map(str, sessions)], capture_output=True, text=True)
-    got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({str(s): json.loads((s / "case.json").read_text())["live"]["accepted"] for s in sessions}))
+    p = subprocess.run([str(BIN), "agree", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
+                        "--public", str(root / "stage" / "pub-4.bin"), "--tables", str(root / "stage" / "tables"),
+                        "--upstream-plain", "--upstream-verdicts", str(upstream), "--session", *map(str, sessions)],
+                       capture_output=True, text=True)
+    got = {Path(v["session"]).name: v for v in (json.loads(ln[10:]) for ln in p.stdout.splitlines() if ln.startswith("AGREEMENT "))}
     refused = f"refused: {STATEMENT}, a typed statement: a statement form the soundness proof does not cover"
-    assert not any(got[n]["accepted"] for n in want)
-    assert {n: got[n]["why"] == refused for n in want} == want, {n: got[n]["why"] for n in want}
+    assert p.returncode == 0 and all(got[n]["agree"] and "accepted" not in got[n] for n in want), p.stdout
+    assert {n: got[n]["check"] == "" and got[n]["refusal"] == refused for n in want} == want, {n: got[n]["check"] for n in want}
     assert sum(want.values()) == 3 and len(want) == 20
 
 
@@ -107,6 +114,7 @@ def _rewrite(root: Path, out: Path, edit_meta=None, extra: str = "") -> Path:
     return out
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("key", ["wires", "units_per_vu", "leaves_in", "out_net"])
 def test_a_template_stating_its_derived_wiring_is_refused(gemm, tmp_path, key):
     root, _ = gemm

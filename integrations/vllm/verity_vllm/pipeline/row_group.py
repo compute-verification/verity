@@ -26,13 +26,12 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm import protocol_options as PO
-from verity_vllm.config import row_world
+from verity_vllm import protocols as PO
+from verity_vllm.config import row_world, run_store
 from verity_vllm.pipeline import commit_group as CG
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline import research
 from verity_vllm.pipeline import row_config as RC
-from verity_vllm.pipeline.row_driver import Stop, utc
+from verity_vllm.pipeline.row_driver import RESEARCH, Stop, utc
 
 MEMBERS_SCHEMA = "verity-vllm/commit-group-members/v1"
 ROW_SCHEMA = "verity-vllm/commit-group-row/v1"
@@ -87,8 +86,8 @@ def refusal(lead: Any) -> str | None:
     return ("a grouped Commit is a config run's (--config-run 1)" if not lead.config_run else
             "a grouped Commit defers every row's replay (--replay-deferred 1 or slim)" if ck.replay_deferred not in ("1", "slim") else
             "a grouped Commit is not the hot worker's (--hot-engine 1)" if ck.hot_engine == "1" else
-            "a grouped Commit defers every replay, and --serving-rows commits in the in-process one; `verity-vllm serving-rows BUNDLE` "
-            "writes each row's from its bundle" if ck.serving_rows else
+            "a grouped Commit takes no --serving-rows: a row's own deferred Commit commits its window at the C2 site "
+            "(`c2_replay.serving_rows`), and `verity-vllm serving-rows BUNDLE` writes a stand-in from each row's bundle" if ck.serving_rows else
             f"a grouped Commit installs no protocol options ({list(lead.protocols)})" if lead.protocols else None)
 
 
@@ -100,6 +99,7 @@ def build_input(r: Any) -> str | None:
             run_id = f.read().strip()
     except OSError:
         return None
+    research = run_store(RESEARCH, "a commit group's Build input")
     child = research.abs_store_env(dict(r.env.environ))
     cli = research.research_argv(r.env.environ.get("RESEARCH_BIN"), r.env.environ.get("RESEARCH_PY") or "python3", child)
     build_in = research.attempt_output(cli, run_id, "build") if run_id else ""
@@ -126,9 +126,9 @@ def prepared(lead: Any, r: Any) -> tuple[int, list[str]] | str:
             return "a tensor-parallel row (a grouped Commit is a single-GPU row's)"
         with open(r.path(r.wl)) as f:
             if PO.at_row(None, json.load(f), world=1) is not None:
-                return "the row runs protocol options beside sampled proofs, which a grouped Commit does not install"
+                return "the row runs protocol options beside SPOT, which a grouped Commit does not install"
         stage = "Commit preparation"
-        to, cmd = r.commit_prepare()
+        to, cmd, _ = r.commit_prepare()
     except Stop as s:
         return f"its {stage} stopped (exit {s.rc}; {r.d}/stages.txt)"
     except PO.Refused as e:
@@ -227,7 +227,7 @@ def commit(lead: Any, cap: int) -> bool:
     if why is not None:
         lead.tl("stage.commit", "start")
         lead.commit_stop(CG.RC_REFUSED, f"rc={CG.RC_REFUSED} REFUSED: {why}")
-    to, cmd = lead.commit_prepare()
+    to, cmd, _ = lead.commit_prepare()
     ready: list[tuple[Any, int, list[str]]] = []
     refused: list[tuple[Any, str]] = []
     for m in members:

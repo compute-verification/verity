@@ -12,7 +12,7 @@ import pytest
 import ncp_lean as NL
 import pouw_vectors as MV
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
-from verity.core.protocols.pouw.schemes import get, ncp
+from verity.ml.protocols.pouw.schemes import get, ncp
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "ncp.json").read_text())
 
@@ -53,8 +53,7 @@ def test_route_u_is_the_shifted_unbiased_sums(kind):
 
 
 def test_production_p_is_the_research_stores():
-    """The word-granular P at k = 4096 is the one the research coordinator certified (767 of 767) and the red team
-    re-certifies: SHA-256 24e68f30… of its entries as 2-byte little-endian integers."""
+    """The word-granular P at k = 4096 is the certified one: SHA-256 24e68f30… of its entries as 2-byte little-endian integers."""
     assert PINNED["word_p_sha256"]["4096"] == "24e68f30edbe538e2842266ac6b917a8a0ccf3ee0b4f8bf2cb1d8fe5c5943854"
 
 
@@ -76,12 +75,14 @@ def test_interface_and_names():
         s = get(name)
         assert isinstance(s, PoUWScheme) and s.name == name
     cert = get("ncp-v1").certificate
-    assert cert.gamma == 1 - Fraction(199, 200) / Fraction(1608, 1600)   # gammaFromTTNCP_U_v1 at n0 = 1600: 0.995%
-    assert cert.gamma < Fraction(1, 100)
-    assert cert.conjecture == "tt-ncp-u" and cert.theorems[0] == "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1"
-    assert dict(cert.parameters) == {"beta": 128, "f": 24, "n0": 1600, "k_max": 1 << 16}    # red-team R13-4
+    assert cert.gap == 1 - Fraction(199, 200) / Fraction(1608, 1600)   # gapFromTTNCP_U_v1 at n0 = 1600: 0.995%
+    assert cert.gap < Fraction(1, 100)
+    assert cert.eps == Fraction(1608, 1600) / Fraction(199, 200) - 1 == Fraction(2, 199)   # EpsFromTTNCP_U_v1: 1.005%
+    assert cert.conjecture == "tt-ncp-u" and cert.theorems[:2] == ("Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1",
+                                                                   "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1")
+    assert dict(cert.parameters) == {"beta": 128, "f": 24, "n0": 1600, "k_max": 1 << 16}
     assert float(1 - Fraction(199, 200) / (1 + Fraction(24, 3 * 1024))) > 0.0127            # 1.27% at n = 1024: why n0 is recorded
-    assert ncp.NCP(k_min=64, n_min=64).certificate.gamma is None                              # a test instance
+    assert ncp.NCP(k_min=64, n_min=64).certificate.eps is None                                # a test instance
     with pytest.raises(KeyError):
         get("ncp-v2")
 

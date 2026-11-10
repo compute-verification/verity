@@ -1,16 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The link points' count of a `setupH` statement
 
 `setupH` sets `m_pts = PT_LOCAL + nbl`, and `nbl` is read off the number of units the statement proves and the
-circuit's `g` (`setupH_facts`, `mPtsOf`). For a drawn session that number is the draw's proved units, its drawn units
-and their closure (`drawn_n`, `setupH_mPts_drawn`). The circuit is the circuit file's parse whatever the draw, so two
-draws that prove as many units set up at the same `m_pts` (`setupH_mPts_eq`), namely `mPtsOf c.g N₀` for `N₀` proved
-units (`setupH_mPts_of_proved`). A draw's proved units include its closure, so under a law with a closure `m_pts` can
-differ between draws of the same size.
+circuit's `g` (`setupH_facts`, `mPtsOf`). For a sampled session that number is the sample's proved units, its sampled proof blocks
+and their closure (`drawn_n`, `setupH_mPts_drawn`). The circuit is the circuit file's parse whatever the sample, so two
+samples that prove as many units set up at the same `m_pts` (`setupH_mPts_eq`), namely `mPtsOf c.g N₀` for `N₀` proved
+units (`setupH_mPts_of_proved`). A sample's proved units include its closure, so under a sampling design with a closure `m_pts` can
+differ between samples of the same size.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -27,7 +37,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
 
 set_option maxHeartbeats 4000000 in
 /-- **`setupH`'s statement: its circuit, its public file and `m_pts`.** The circuit is the circuit file's parse, the
-public file of a drawn session is `HmRow.drawn`'s, and `m_pts` is `mPtsOf` of the circuit's `g` and the public file's
+public file of a sampled session is `HmRow.drawn`'s, and `m_pts` is `mPtsOf` of the circuit's `g` and the public file's
 units. -/
 theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) :
     (if tags.typed then HmRow.parseTyped tags cf tables else HmRow.parse tags cf tables) = .ok st.c ∧
@@ -95,6 +105,7 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h
@@ -106,7 +117,7 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   exact ⟨hc, fun d hd => ⟨pop, hpub d hd⟩, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **A drawn public file has the draw's proved units** (§16.1): its units are `UnitDraw.proved`, the drawn units and
+/-- **A sampled public file has the sample's proved units** (`Flock.Statement`): its units are `UnitDraw.proved`, the sampled proof blocks and
 their closure. -/
 theorem drawn_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c pop d = .ok pub) :
     ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ pub.n = ud.proved.size := by
@@ -119,7 +130,7 @@ theorem drawn_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c p
     subst h
     exact ⟨_, by assumption, rfl⟩
 
-/-- **`m_pts` at a drawn session** is `mPtsOf` of the circuit's `g` and the number of units the draw proves. -/
+/-- **`m_pts` at a sampled session** is `mPtsOf` of the circuit's `g` and the number of units the sample proves. -/
 theorem setupH_mPts_drawn {d : Json} (h : Stmt.setupH tags cf pf coins tables (some d) partition program = .ok st) :
     ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ st.mPts = mPtsOf st.c.g ud.proved.size := by
   obtain ⟨-, hd, hm⟩ := setupH_facts h
@@ -127,7 +138,7 @@ theorem setupH_mPts_drawn {d : Json} (h : Stmt.setupH tags cf pf coins tables (s
   obtain ⟨ud, hud, hn⟩ := drawn_n hpub
   exact ⟨ud, hud, by rw [hm, hn]⟩
 
-/-- **`m_pts` from the circuit and the draw's proved count**: at a draw `d` whose decoding proves `N₀` units, every
+/-- **`m_pts` from the circuit and the sample's proved count**: at a sample `d` whose decoding proves `N₀` units, every
 statement `setupH` accepts has `m_pts = mPtsOf c.g N₀`, `c` the circuit file's parse. -/
 theorem setupH_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ}
     (hc : (if tags.typed then HmRow.parseTyped tags cf tables else HmRow.parse tags cf tables) = .ok c)
@@ -138,7 +149,7 @@ theorem setupH_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ}
   rw [hc] at e
   rw [hm, ← Except.ok.inj e, hD ud hud]
 
-/-- **Two draws that prove as many units set up at the same `m_pts`**, at the same tags, circuit file and tables:
+/-- **Two samples that prove as many units set up at the same `m_pts`**, at the same tags, circuit file and tables:
 the circuit is the circuit file's parse at both. -/
 theorem setupH_mPts_eq {pf' : ByteArray} {coins' : Coins} {d d' : Json} {partition' : Option Json}
     {program' : Option ByteArray} {st' : Stmt} {ud ud' : Draw.UnitDraw}

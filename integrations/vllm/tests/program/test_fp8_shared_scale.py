@@ -2,8 +2,8 @@
 its G coordinates.  The same function and signature as `ScaledMmFp8Block_v1` -- the same circuit once the G - 1 copies of each product are
 merged, bit-equal under the reference evaluator on e4m3 / f32 edge words (NaN, +-inf, +-0, subnormals, saturation, products that
 overflow or underflow) -- and under `Q_word_v1{16,32,no-recompute}` no violation: the partition commits the N/G * K/G products.  It is the
-default binding (`TargetProfile.fp8_scale_construction`, None = shared-per-block) of the vocabulary and the frontend rule; `per-coordinate`
-binds `ScaledMmFp8Block_v1`.  The Match pattern's binding: tests/program/test_fp8_profile.py."""
+one binding (`TargetProfile.fp8_scale_construction`, None = shared-per-block, its one value) of the vocabulary and the frontend rule.
+The Match pattern's binding: tests/program/test_fp8_profile.py."""
 from __future__ import annotations
 
 import random
@@ -17,11 +17,13 @@ from verity.ml.circuits.cut import call_scope
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.layout import resolve
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.registry import fp8_vocab
-from verity_vllm.query import word as W
+from verity.ml.definitions.registry import fp8
+from verity.ml.definitions.registry import fp8_vocab
+from verity.ml.definitions import word as W
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
+#: (K, N) of `ScaledMmFp8Block_v1`'s circuit-check targets, N = 192 ending mid-block
+CHECKED = [(128, 128), (128, 192), (256, 192)]
 E4M3_FINITE = [0x00, 0x80, 0x01, 0x81, 0x07, 0x87, 0x08, 0x88, 0x38, 0xB8, 0x7E, 0xFE, 0x77, 0xF7]
 E4M3_NAN = [0x7F, 0xFF]
 F32_FINITE = [0x00000000, 0x80000000, 0x00000001, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x3F800000, 0xBF800000,
@@ -45,13 +47,13 @@ def _canon(fn, table: dict) -> tuple[int, ...]:
     return tuple(ids[resolve(call, r) - lo] for r in fn.body.ret)
 
 
-@pytest.mark.parametrize("K,N", SHAPES)
+@pytest.mark.parametrize("K,N", SHAPES + CHECKED)
 def test_the_same_circuit_with_the_products_merged(K, N):
     old, new = _pair(K, N)
     assert new.signature() == old.signature()
     table: dict = {}
     assert _canon(old, table) == _canon(new, table)
-    assert old.gates - new.gates == (128 - 1) * (N // 128) * (K // 128)      # G - 1 F32Mul per (weight block, kb)
+    assert old.gates - new.gates == (N - -(-N // 128)) * (K // 128)       # one F32Mul per (weight block, kb), not per (coordinate, kb)
 
 
 def _byte(rng, p_edge: float, p_nan: float) -> int:
@@ -118,10 +120,10 @@ def test_new_ids_carry_no_version_in_their_names():
 def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():
     assert DEFAULT_TARGET.fp8_scale_construction is None and DEFAULT_TARGET.effective_fp8_scale_construction() == "shared-per-block"
     assert "fp8_scale_construction" not in DEFAULT_TARGET.to_json()
-    per = DEFAULT_TARGET.with_overrides(fp8_scale_construction="per-coordinate")
-    assert per.to_json()["fp8_scale_construction"] == "per-coordinate" and per.digest() != DEFAULT_TARGET.digest()
-    assert TargetProfile.from_json(per.to_json()) == per and per.effective_fp8_scale_construction() == "per-coordinate"
-    for bad in ("shared", "per_coordinate", True):
+    shared = DEFAULT_TARGET.with_overrides(fp8_scale_construction="shared-per-block")
+    assert shared.to_json()["fp8_scale_construction"] == "shared-per-block"
+    assert TargetProfile.from_json(shared.to_json()) == shared and shared.effective_fp8_scale_construction() == "shared-per-block"
+    for bad in ("per-coordinate", "shared", "per_coordinate", True):
         with pytest.raises(ValueError, match="fp8_scale_construction"):
             TargetProfile(fp8_scale_construction=bad)
 
@@ -129,8 +131,8 @@ def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():
 def test_the_vocabulary_binds_the_construction_it_is_given():
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
 
-    new, old = V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE="shared-per-block"), V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE="per-coordinate")
-    assert new == bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128) and old == bind(fp8.ScaledMmFp8Block, K=256, N=384, G=128)
+    new = V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE="shared-per-block")
+    assert new == bind(fp8.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128)
     assert V.kind("scaled_mm_fp8_block", K=256, N=384, G=128) is None             # the rule always states the construction
 
 
@@ -165,7 +167,7 @@ class _Ctx:
         self.records.append((facts, emitted))
 
 
-@pytest.mark.parametrize("scale", [None, "shared-per-block", "per-coordinate"])
+@pytest.mark.parametrize("scale", [None, "shared-per-block"])
 def test_the_frontend_rule_binds_the_active_targets_construction(monkeypatch, scale):
     from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
@@ -182,8 +184,7 @@ def test_the_frontend_rule_binds_the_active_targets_construction(monkeypatch, sc
         R.CutlassScaledMmFp8BlockRule().emit(types.SimpleNamespace(args=("out", "a", "b", "a_s", "b_s")), ctx)
     finally:
         clear_observations()
-    defn = fp8.ScaledMmFp8Block if scale == "per-coordinate" else fp8.ScaledMmFp8BlockSharedScale
-    fn = bind(defn, K=K, N=N, G=128)
+    fn = bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=128)
     assert ctx.calls == [fn] * 2
     (facts, emitted), = ctx.records
     assert facts["scale"] == (scale or "shared-per-block") and emitted == f"{fn.id} x2"

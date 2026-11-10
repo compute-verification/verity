@@ -111,7 +111,7 @@ def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
     import numpy as np
 
-    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero
+    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero
 
     layout = StreamLayout(1, len(rows), 2, 128, 64)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
@@ -171,10 +171,10 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
 
 
 def _ms_stream(rows, row_max, scale_log2):
-    """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the IR's max_scaled of it."""
+    """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
     import numpy as np
 
-    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero, mul_ftz
+    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
@@ -284,6 +284,84 @@ def test_the_edge_cases_name_query_tokens_of_their_own_launch():
         for c in edge:
             toks = [t for ts in c["special"].values() for t in ts]
             assert len(set(toks)) == len(toks) and max(toks) < sum(c["seqlens_q"])
+
+
+def test_the_prefill_cases_are_fa3s_with_a_prefill_row_and_the_class_of_records_whose_prompt_tile_is_not_its_decodes():
+    names = [c["name"] for c in X.prefill_cases()]
+    assert names == [c["name"] for c in X.cases(3) if max(c["seqlens_q"]) > 1] + ["prefill_1024_gqa4"] and "decode_gqa" not in names
+    assert [c["name"] for c in X.prefill_cases(quick=True)] == ["prefill_short", "prefill_256", "edge_rows", "smallq_onewg",
+                                                                 "prefill_1024_gqa4"]
+    gqa4 = X.GQA4_PREFILL
+    assert (X.geometry(3, gqa4, 64)["kBM"], X.geometry(3, gqa4, 64)["BN"]) == (192, 128) and X.decode_tile(64, 4) == (64, 192)
+    for D in (64, 128):
+        decode = X._case("d", 32, 8, [1], [1000])
+        assert X.decode_tile(D, 4) == (X.geometry(3, decode, D)["kBM"], X.geometry(3, decode, D)["BN"])
+
+
+def test_decode_shaped_is_exact_only_when_every_prefill_row_is_evaluated_and_equal_and_is_not_part_of_ok():
+    good = {"rows": 10, "heads": 40, "mismatch": 0, "mismatch_rows": 0, "special_mismatch_rows": 0, "min_T_mismatch": None, "unevaluated": 0}
+    bad = dict(good, mismatch=3, mismatch_rows=2, special_mismatch_rows=1, min_T_mismatch=129)
+    doc = _record()
+
+    def with_decode(*odecode):
+        return X.seal({**doc, "cases": [dict(doc["cases"][0], out_vs_decode=o) for o in odecode]})
+
+    assert X.decode_shaped(with_decode(good, good)) == {**{k: 2 * v for k, v in good.items() if k != "min_T_mismatch"}, "cases": 2,
+                                                         "min_T_mismatch": None, "exact": True}
+    s = X.decode_shaped(with_decode(good, bad, dict(bad, min_T_mismatch=200)))
+    assert (s["exact"], s["mismatch"], s["mismatch_rows"], s["special_mismatch_rows"], s["min_T_mismatch"]) == (False, 6, 4, 2, 129)
+    assert X.decode_shaped(with_decode(dict(good, unevaluated=1)))["exact"] is False
+    assert X.decode_shaped(doc)["exact"] is False and X.decode_shaped(with_decode(dict(good, rows=0)))["exact"] is False
+    assert with_decode(bad)["ok"] is True and X.verify_record(with_decode(bad)) == []
+
+
+def _cpu_inputs(c, D, seed):
+    import torch
+
+    g = torch.Generator().manual_seed(seed)
+    per = -(-max(c["seqlens_k"]) // X.PAGE)
+    blocks = len(c["seqlens_q"]) * per + 2
+    q = torch.randn(sum(c["seqlens_q"]), c["H"], D, generator=g).to(torch.bfloat16)
+    k, v = (torch.randn(blocks, X.PAGE, c["Hk"], D, generator=g).to(torch.bfloat16) for _ in range(2))
+    return {"q": q, "k": k, "v": v, "block_table": torch.randperm(blocks, generator=g).to(torch.int32)[: len(c["seqlens_q"]) * per].reshape(-1, per)}
+
+
+def _launch_tile_out(c, D, t, geo):
+    """What an exact FA3 launch writes: every row `AttentionHead_v4` at the launch's tile, on the twin."""
+    import numpy as np
+    import torch
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.registry import attention_vocab
+
+    q, k, v, bt = G._words(t["q"]), G._words(t["k"]), G._words(t["v"]), t["block_table"].numpy()
+    g = c["H"] // c["Hk"]
+    kvh = np.arange(c["H"]) // g
+    out = np.zeros(q.shape, dtype=np.uint16)
+    tok = 0
+    for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
+        keys = np.arange(sk)
+        ks, vs = k[bt[seq, keys // X.PAGE], keys % X.PAGE], v[bt[seq, keys // X.PAGE], keys % X.PAGE]
+        for r in range(sq):
+            T = r + 1 + sk - sq
+            kk, vv = (np.ascontiguousarray(np.transpose(x[:T], (1, 0, 2))[kvh]) for x in (ks, vs))
+            out[tok + r] = DR.attention_head_states(q[tok + r], kk, vv, geo["BN"], dot16=DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"],
+                                                    inv=DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"],
+                                                    masked_from=attention_vocab.fa3_masked_from(T, geo["BN"], r, geo["kBM"], g))["out"]
+        tok += sq
+    return torch.from_numpy(out.view(np.int16)).view(torch.bfloat16)
+
+
+def test_out_vs_decode_reads_the_decode_tile_and_a_prefill_row_past_its_first_launch_block_differs_on_the_ir():
+    """A 140-row hd-64 prefill launches at 192 x 128 and decodes at 64 x 192: an exact launch equals `Attention_v4` at its own tile on
+    every row, and at the decode's tile on the rows of one launch key block (T <= 128), not on every row past it."""
+    c = X._case("p", 4, 2, [140], [140])
+    geo = X.geometry(3, c, 64)
+    t = _cpu_inputs(c, 64, 7)
+    out = _launch_tile_out(c, 64, t, geo)
+    launch, decode = G.out_vs_ir(c, 64, t, out, geo), G.out_vs_ir(c, 64, t, out, geo, decode=True)
+    assert (launch["rows"], launch["mismatch"], launch["unevaluated"], "tile" in launch) == (140, 0, 0, False)
+    assert decode["tile"] == [64, 192] and (decode["rows"], decode["heads"], decode["unevaluated"]) == (140, 560, 0)
+    assert 0 < decode["mismatch_rows"] <= 12 and decode["min_T_mismatch"] > 128 and decode["special_mismatch_rows"] == 0
 
 
 @pytest.mark.parametrize("fa_version,D", [(2, 64), (2, 96), (2, 128), (2, 256), (3, 64), (3, 128)])

@@ -1,7 +1,12 @@
-# /etc/vy/peers: each node's research user reaches the other nodes over the private network with the vy-cluster key. One line a
+# /etc/vy/peers: each node's research user reaches the other nodes with the vy-cluster key, over the private network (uk-south2)
+# or a public address (a node in another region has no private address there). One line a
 # machine: its name, then ssh's options and destination. slot.py --twin claims a pair on its HOME machine through this.
 vy-nebius-1 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.18
 vy-nebius-2 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.42
 vy-nebius-cpu-1 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.89
 vy-nebius-cpu-2 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.140
 vy-nebius-cpu-3 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.193
+vy-nebius-cpu-4 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@89.124.37.177
+vy-nebius-cpu-5 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@213.239.173.183
+vy-nebius-cpu-6 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@204.12.177.70
+vy-nebius-3 -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@10.80.0.1

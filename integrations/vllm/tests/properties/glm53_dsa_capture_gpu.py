@@ -7,11 +7,14 @@ heads; the indexer's 32 heads replicated), and the run that settles the RoPE con
 One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
 Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, a `ROPE`
 line, then `GLM53-DSA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
-(exit 3).  vLLM runs as GLM-5.3's eager engine does on sm_90 (`VLLM_USE_DEEP_GEMM=0` for the FP8 linears; the indexer's DeepGEMM
-kernels load regardless, `utils/deep_gemm.py` `_lazy_init`), with the Triton cache and DeepGEMM's JIT cache in the scratch directory.
-A phase that raises records its error and fails the verdict without stopping the others.
+(exit 3).  vLLM runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before
+vLLM is imported (the indexer's DeepGEMM kernels load whatever `VLLM_USE_DEEP_GEMM` says, sparse_attn_indexer.py's `has_deep_gemm`),
+with the toolchain a served engine's stages get from `pipeline.row_driver` (`CUDA_HOME` and nvcc on `PATH`, which DeepGEMM's JIT
+builds with) and the Triton cache and DeepGEMM's JIT cache in the scratch directory.  A phase that raises records its error and fails
+the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  served     vLLM's switches read back (`served`): not batch invariant, DeepGEMM on and importable; nvcc's version recorded.
   selection  `get_valid_backends` for GLM-5.3's MLA (head size 576, bf16, kv cache "auto", block 64, sparse, 8 heads) puts
              FLASH_ATTN_MLA_SPARSE first, and `is_fused_q_cutedsl_supported` refuses the bf16 query, so `_fused_q_kernel` runs.
   k          `fused_norm_rope` as `DeepseekV32Attention.forward` calls it (attention.py:338-366), twice on fresh caches, over SEQ tokens
@@ -25,10 +28,13 @@ A phase that raises records its error and fails the verdict without stopping the
              `DsaIndexerQ_v1{32,128,64}`.
   rope       k_pe_out (`_fused_norm_rope_kernel` program 1) and q_pe_out (`_fused_q_kernel` program 0) of every token and of the
              subnormal probe (below): which of the candidate contractions the words are.
-  logits     the prefill gather (`cp_gather_indexer_k_quant_cache`) against the cache slots; `fp8_fp4_mqa_logits` (ks = 0, ke = i + 1,
-             clean_logits=False, sparse_attn_indexer.py:496-507) on rows FULL_ROWS, random rows and random (row, key) pairs, and
-             `fp8_fp4_paged_mqa_logits` (one context per DECODE_LENS entry, its query the last token's, sparse_attn_indexer.py:600-613)
-             on every key: each logit against `DsaMqaLogit_v3{32,128}` (twin `logit_rows`; the reference on a sample).
+  logits     the request's prefill as vLLM serves it (`prefill_calls`): scheduler steps of PREFILL_CHUNK tokens, each gathering
+             its keys (`cp_gather_indexer_k_quant_cache`, against the cache slots) and calling `fp8_fp4_mqa_logits` (ks = 0, ke = i + 1,
+             clean_logits=False, sparse_attn_indexer.py:450-507) on each row sub-chunk vLLM's `split_indexer_prefill_chunks` makes
+             under VLLM_SPARSE_INDEXER_MAX_LOGITS_MB (one call at SEQ keys), compared on the full rows (`sizes`), random rows and
+             random (row, key) pairs; `fp8_fp4_paged_mqa_logits` at the request's max_model_len (one context per decode length, its
+             query the last token's, sparse_attn_indexer.py:600-613) on every key: each logit against `DsaMqaLogit_v3{32,128}` (twin
+             `logit_rows`; the reference on a sample).
   topk       `top_k_per_row_prefill` on the served logits (twice) and on synthetic rows from a row start of 5; `persistent_topk`,
              `cooperative_topk` where vLLM calls it (not on sm_120; 10 and 8 rows, its clusters of 4 and 8 on sm_90), both
              sparse_attn_indexer.py:617-656, and the `top_k_per_row_decode` fallback (recorded) on synthetic rows
@@ -45,7 +51,7 @@ A phase that raises records its error and fails the verdict without stopping the
   bind       the Programs bind at the served statics.
 
 The RoPE contraction.  GLM-5.3's capture map named `RoPEHeadGptJ_v1` for the k_pe and q_pe RoPE (`fused-rope-triton`) before a run
-measured it; run r20261012-222325-ce92 settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
+measured it; a run settled both on `RoPEHeadGptJ_v2`, which the map now names, and every run settles it again.
 The kernels compute `r1 = x1*cos - x2*sin`, `r2 = x2*cos + x1*sin` in f32
 from bf16 words (kernels.py:233-236, 718-731), so nvcc/ptxas may contract either product into an FMA: L_a = bf16(fma(x1, c, -RN(x2 s)))
 (`RoPEHeadGptJ_v1`'s `RopeOut_v1`), L_b = bf16(fma(-x2, s, RN(x1 c))), L_n = bf16(RN(x1 c) - RN(x2 s)); H_a = bf16(fma(x2, c, RN(x1
@@ -63,10 +69,21 @@ logit finite), the reference sampled where a twin stands in with 0 disagreements
 they write, `logits_rerun`), the checks above, and the RoPE
 probe settled (one candidate form each for the even and the odd outputs of k_pe and of q_pe, or only flushing forms).
 
+`--keys N` (a multiple of 64, at least SEQ) makes the request N tokens, as a raised max_model_len serves it (`sizes`): its cache
+blocks, the paged form's max_model_len N, the full rows (adding each power of two below N, the row before it, and N - 1) and the
+decode lengths (adding 65,536 and N).  topk and attn read the one prefill call's square and SEQ's rows, so they run only at SEQ
+keys in one call.  `--phases` runs fewer phases; the k and q launches always run, since they write the cache and the queries the
+logits read.  The record's `ok`, the property's verdict, needs every phase, so a run of fewer is never a capture of record:
+its `phases_ok`, the `GLM53-DSA PARTIAL` line and the exit status are the verdict over the phases it ran.  The served logits
+at 131,072 keys: `--keys 131072 --phases logits`.
+
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
-    $PY tests/properties/glm53_dsa_capture_gpu.py --out DIR [--scratch DIR] [--quick]
+    $PY tests/properties/glm53_dsa_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--keys N] [--phases k,q,rope,logits,topk,attn]
+        [--prefill-chunk TOKENS] [--keep-logits]
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import argparse
 import glob
@@ -83,15 +100,17 @@ import traceback
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
+from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-dsa-capture/v2"
+SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
 RECORD = "glm53_dsa_capture.json"
 #: GLM-5.3 (tests/check/fixtures/glm_moe_dsa/config.json) at TP8: the indexer's 32 heads of 128 with a 64-wide interleaved RoPE,
 #: top 2048, its cache row 128 e4m3 bytes and a 4-byte scale (kernels.py:63-87); MLA's 8 local heads, rope 64, latent 512, nope 192
@@ -102,12 +121,17 @@ Q_LORA, KV_LORA = 2048, 512
 K_EPS, RMS_EPS = 1e-6, 1e-5
 THETA, MAXPOS = 8000000, 1 << 20
 SCALE = (NOPE + DR) ** -0.5
-#: one request of SEQ tokens over SEQ // BLOCK of NB cache blocks, and EXTRA tokens at far positions (EXTRA_UNSLOTTED with slot -1)
+#: one request of SEQ tokens over SEQ // BLOCK of NB cache blocks, and EXTRA tokens at far positions (EXTRA_UNSLOTTED with slot -1);
+#: `--keys` sizes the request otherwise (`sizes`)
 SEQ, NB, EXTRA, EXTRA_UNSLOTTED = 3072, 64, 64, 8
 MAX_MODEL_LEN = 4096
 FULL_ROWS = (0, 1, 2, 5, 6, 63, 64, 65, 127, 128, 2047, 2048, 2049, 3071)
 RANDOM_ROWS, RANDOM_PAIRS = 8, 50_000
 DECODE_LENS = (1, 2, 63, 64, 65, 2048, 2049, 3000)
+LONG_DECODE = 65_536
+#: the served GLM-5.3 engines' scheduler step (max_num_batched_tokens under chunked prefill): one request's prefill reaches the
+#: indexer this many rows at a time
+PREFILL_CHUNK = 8192
 TOPK_LENS = (0, 1, 2, 2047, 2048, 2049, 4096)
 ATTN_TOKENS = (0, 1, 4, 63, 64, 65, 127, 128, 129, 1000, 2046, 2047, 2048, 3071)
 QUICK_ATTN_TOKENS = (0, 65, 2048)
@@ -131,12 +155,29 @@ def _error(e: BaseException) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment(work: Path) -> dict[str, str]:
-    """GLM-5.3's sm_90 engine env (TargetProfile `fp8_block_gemm="cutlass"`), the caches in scratch; set before vLLM is imported."""
-    env = {"VLLM_USE_DEEP_GEMM": "0", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"),
-           "DG_JIT_CACHE_DIR": str(work / "deep_gemm")}
+def environment(work: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`), a served engine's toolchain (`CUDA_HOME`, an exported one winning, and `RunEnv.cuda_bin`
+    on `PATH` after the interpreter's directory, as `pipeline.row_driver` sets them) and the caches in scratch, set before vLLM is
+    imported: (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache"), "DG_JIT_CACHE_DIR": str(work / "deep_gemm"),
+           "CUDA_HOME": os.environ.get("CUDA_HOME") or MACHINE["RunEnv.cuda_home"],
+           "PATH": f"{os.path.dirname(sys.executable)}:{MACHINE['RunEnv.cuda_bin']}:{os.environ.get('PATH', '')}"}
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+def served() -> dict[str, Any]:
+    """The switches as vLLM read them: not batch invariant, DeepGEMM on and importable (the indexer's logits), and nvcc's version."""
+    import vllm.envs as envs
+    from vllm.utils.import_utils import has_deep_gemm
+
+    rec: dict[str, Any] = {k: bool(getattr(envs, k)) for k in ("VLLM_USE_DEEP_GEMM", "VLLM_BATCH_INVARIANT")}
+    rec["has_deep_gemm"] = bool(has_deep_gemm())
+    nvcc = shutil.which("nvcc")
+    rec["nvcc"] = nvcc and subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
+    rec["ok"] = rec["VLLM_USE_DEEP_GEMM"] and not rec["VLLM_BATCH_INVARIANT"] and rec["has_deep_gemm"]
+    return rec
 
 
 def stack() -> dict[str, Any]:
@@ -235,7 +276,7 @@ def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> t
     `fmaxf(acc, +0)`, then the quad lanes' sums in ascending j (j = 0's product contracted into j = 1's add, `fma(r0, w0, r1 *
     w1)`, then FFMAs), `(s0 + s1) * ks` and `(v0 + v1) + (v2 + v3)`.  An entry whose dot steps flag a non-finite accumulator or an
     e4m3 NaN, or whose logit is NaN, is unresolved."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     n, Hh, Dd = q.shape
     relu = np.empty((n, Hh), dtype=np.uint32)
@@ -304,7 +345,7 @@ def convert_rows(topk: np.ndarray, block_table: np.ndarray, block_stride_rows: i
 def split_counts(valid, num_sm: int, num_splits: int = 0) -> list[int]:
     """Each token's FA3 split count in one sparse decode launch over the valid counts ``valid`` on ``num_sm`` SMs, the call's
     ``num_splits`` 0 (none, as `forward_mqa` passes) or the count it gives (`sparse_mla_split.launch_num_splits`)."""
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     return W.launch_num_splits(valid, num_sm, TOPK, num_splits)
 
@@ -316,7 +357,7 @@ NEG = np.uint32(0x80000000)
 def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
     """Every candidate contraction (module docstring) of the interleaved RoPE on bf16 words (arrays of one shape): name -> bf16
     words of the even (L_*) or odd (H_*) output."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     X1, X2, Cc, Ss = (DR.bf16_to_f32_words(np.asarray(v)) for v in (x1, x2, c, s))
     out = {}
@@ -444,8 +485,8 @@ def index_k_forms(b: np.ndarray, cs: np.ndarray, got: np.ndarray) -> dict[str, A
     """Which contraction of `roped = normed * cos + sign * partner * sin` (kernels.py:392) the probe's bytes are: A (the
     Definition's) = fma(x, cos, RN(+-partner sin)), B = fma(+-partner, sin, RN(x cos)), N = RN(x cos) + RN(+-partner sin), separately
     for even (L) and odd (H) elements; b (launches, D) f32 words, cs (launches, ROPE) bf16 words, got (launches, D) bytes."""
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
+    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 
     half = ROPE // 2
     x = np.asarray(b, dtype=np.uint32)[:, :ROPE]
@@ -468,33 +509,55 @@ def index_k_forms(b: np.ndarray, cs: np.ndarray, got: np.ndarray) -> dict[str, A
 
 
 # ------------------------------------------------------------------------------------------------------------------- operands
-def operands(seed: int) -> dict[str, Any]:
+class Size(NamedTuple):
+    seq: int
+    nb: int
+    max_model_len: int
+    full_rows: tuple[int, ...]
+    decode_lens: tuple[int, ...]
+
+
+def sizes(keys: int = SEQ) -> Size:
+    """The request at ``keys`` tokens, the constants above at SEQ: its blocks and the free blocks EXTRA's slots come from, the paged
+    form's max_model_len, the prefill rows compared on every key (FULL_ROWS and, past SEQ, each power of two below ``keys``, the row
+    before it, and the last row) and the decode lengths (DECODE_LENS and, past SEQ, LONG_DECODE and ``keys``)."""
+    if keys < SEQ or keys % BLOCK:
+        raise ValueError(f"keys {keys}: a multiple of {BLOCK}, at least {SEQ}")
+    pows = [1 << e for e in range(SEQ.bit_length(), keys.bit_length()) if SEQ < 1 << e < keys]
+    full = set(FULL_ROWS) | set(pows) | {p - 1 for p in pows} | {keys - 1}
+    dec = set(DECODE_LENS) | {m for m in (LONG_DECODE, keys) if SEQ < m <= keys}
+    return Size(keys, keys // BLOCK + NB - SEQ // BLOCK, max(MAX_MODEL_LEN, keys), tuple(sorted(full)), tuple(sorted(dec)))
+
+
+def operands(seed: int, size: Size | None = None) -> dict[str, Any]:
     """GLM-5.3's attention inputs at one TP8 rank, laid out as `DeepseekV32Attention.forward` makes them (attention.py:283-376):
     qkv_lora split [2048, 512, 64], wk_weights_proj's output split [128, 32], q [T, 8, 256] split [192, 64], ql_nope a transposed
     bmm output, index_q [T, 32, 128]; k_norm's f32 weight and bias, the two RMSNorm weights; the shared rotary cache."""
     import torch
     from vllm.model_executor.layers.rotary_embedding import get_rope
 
+    size = size or sizes()
+    S = size.seq
     gen = torch.Generator(device="cuda").manual_seed(seed)
-    T, dev = SEQ + EXTRA, "cuda"
+    T, dev = S + EXTRA, "cuda"
 
     def rows(*shape, lo=-3.0, hi=3.0):
         x = torch.randn(*shape, generator=gen, device=dev)
         return x * torch.exp2(torch.empty(shape[0], *([1] * (len(shape) - 1)), device=dev).uniform_(lo, hi, generator=gen))
 
     pos = torch.arange(T, device=dev, dtype=torch.int64)
-    far = torch.randint(SEQ, MAXPOS, (EXTRA,), generator=gen, device=dev)
+    far = torch.randint(S, MAXPOS, (EXTRA,), generator=gen, device=dev)
     far[-1] = MAXPOS - 1
-    pos[SEQ:] = far
-    perm = torch.randperm(NB, generator=gen, device=dev).to(torch.int32)
-    bt = perm[:SEQ // BLOCK].reshape(1, -1).contiguous()
-    tok = torch.arange(SEQ, device=dev)
+    pos[S:] = far
+    perm = torch.randperm(size.nb, generator=gen, device=dev).to(torch.int32)
+    bt = perm[:S // BLOCK].reshape(1, -1).contiguous()
+    tok = torch.arange(S, device=dev)
     slots = torch.empty(T, dtype=torch.int64, device=dev)
-    slots[:SEQ] = bt[0, tok // BLOCK].to(torch.int64) * BLOCK + tok % BLOCK
-    free = (perm[SEQ // BLOCK:].to(torch.int64)[:, None] * BLOCK + torch.arange(BLOCK, device=dev)).reshape(-1)
+    slots[:S] = bt[0, tok // BLOCK].to(torch.int64) * BLOCK + tok % BLOCK
+    free = (perm[S // BLOCK:].to(torch.int64)[:, None] * BLOCK + torch.arange(BLOCK, device=dev)).reshape(-1)
     n_extra = EXTRA - EXTRA_UNSLOTTED
-    slots[SEQ:SEQ + n_extra] = free[torch.randperm(free.numel(), generator=gen, device=dev)[:n_extra]]
-    slots[SEQ + n_extra:] = -1
+    slots[S:S + n_extra] = free[torch.randperm(free.numel(), generator=gen, device=dev)[:n_extra]]
+    slots[S + n_extra:] = -1
     qkv = rows(T, Q_LORA + KV_LORA + DR).to(torch.bfloat16)
     kwf = rows(T, D + H, lo=-2, hi=2)
     kwf[K_SPECIAL[0], :D] = 0
@@ -512,7 +575,7 @@ def operands(seed: int) -> dict[str, Any]:
     iq[t, 3] *= 2.0 ** -130
     rope = get_rope(ROPE, MAXPOS, is_neox_style=False, rope_parameters={"rope_theta": THETA, "rope_type": "default"},
                     dtype=torch.bfloat16)
-    o = {"pos": pos, "bt": bt, "slots": slots, "qkv": qkv, "kw": kw,
+    o = {"size": size, "pos": pos, "bt": bt, "slots": slots, "qkv": qkv, "kw": kw,
          "q_c": qkv[:, :Q_LORA], "kv_c": qkv[:, Q_LORA:Q_LORA + KV_LORA], "k_pe": qkv[:, Q_LORA + KV_LORA:],
          "index_k": kw[:, :D], "index_weights": kw[:, D:],
          "q_full": rows(T, NH, NOPE + DR).to(torch.bfloat16), "index_q": iq.to(torch.bfloat16).contiguous(),
@@ -559,7 +622,7 @@ def fused_q_call(o: dict[str, Any], cs):
 
 def _rms_info(x: np.ndarray, w: np.ndarray, got: np.ndarray, eps: float) -> dict[str, Any]:
     """Triton `_rms_norm` (kernels.py:25-31), no Definition here: the outputs against f64 sums of an f32 model, in bf16 ulps."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     xf = DR.as_f32(DR.bf16_to_f32_words(x)).astype(np.float64)
     r = np.float32(1.0) / np.sqrt((np.mean(xf * xf, axis=1, keepdims=True) + eps).astype(np.float32))
@@ -596,21 +659,21 @@ def phase_k(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], lis
     """The served `fused_norm_rope` launches (twice) and the index-K probe launches: records, k-slot jobs, and what later phases read."""
     import torch
 
-    T = o["pos"].numel()
-    c1, c2 = caches(NB, T), caches(NB, T)
+    T, nb = o["pos"].numel(), o["size"].nb
+    c1, c2 = caches(nb, T), caches(nb, T)
     out1 = norm_rope(o, c1, o["cs"], o["cs"])
     out2 = norm_rope(o, c2, o["cs"], o["cs"])
     torch.cuda.synchronize()
     pos, slots = o["pos"].cpu().numpy(), o["slots"].cpu().numpy()
     idx = _u8(c1["idx"])
-    mla = _u16(c1["mla"]).reshape(NB * BLOCK, KV_LORA + DR)
+    mla = _u16(c1["mla"]).reshape(nb * BLOCK, KV_LORA + DR)
     kv_out, kpe_out = _u16(out1[1]), _u16(out1[2])
     written = np.flatnonzero(slots >= 0)
     q = np.stack([slot_bytes(idx, slots[t])[0] for t in written])
     s = np.array([slot_bytes(idx, slots[t])[1] for t in written], dtype=np.uint32)
-    untouched = idx.reshape(-1)[~slot_mask(NB, slots[written])]
+    untouched = idx.reshape(-1)[~slot_mask(nb, slots[written])]
     mla_rows = mla[slots[written]]
-    unwritten = np.setdiff1d(np.arange(NB * BLOCK), slots[written])
+    unwritten = np.setdiff1d(np.arange(nb * BLOCK), slots[written])
     cs_rows = _u16(o["cs"])[pos]
     rec = {"phase": "k", "case": "served", "tokens": int(T), "slots_written": int(written.size),
            "checks": {"deterministic": bool(torch.equal(c1["idx"], c2["idx"]) and torch.equal(c1["mla"].view(torch.int16), c2["mla"].view(torch.int16))
@@ -736,7 +799,7 @@ def phase_rope(o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any]) -> d
     `RoPEHeadGptJ_v1` on a sample of them against the L_a/H_a candidate words."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import ref_prims as RP
+    from verity.ml.definitions.registry import ref_prims as RP
 
     pos = o["pos"].cpu().numpy()
     cs_rows = _u16(o["cs"])[pos]
@@ -767,75 +830,115 @@ def phase_rope(o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any]) -> d
     return out
 
 
-def phase_logits(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any], quick: bool):
-    """The prefill gather, `fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits` on the served cache and queries."""
+def prefill_calls(seq: int, chunk: int, max_logits_bytes: int, workspace: int, split=None) -> list[tuple[int, int, int]]:
+    """The `fp8_fp4_mqa_logits` calls of one request's prefill of ``seq`` tokens as vLLM serves it: scheduler steps of ``chunk``
+    tokens, each step's rows split by ``split`` (vLLM's `split_indexer_prefill_chunks`, indexer.py:180) under the logits budget;
+    (keys, first row, end row) per call, a step's keys every token up to its end."""
     import torch
+
+    if split is None:
+        from vllm.v1.attention.backends.mla.indexer import split_indexer_prefill_chunks as split
+    calls = []
+    for a, b in _chunks(seq, chunk):
+        for _, rows in split(torch.tensor([b]), torch.tensor([b - a]), workspace, max_logits_bytes):
+            calls.append((b, a + rows.start, a + rows.stop))
+    return calls
+
+
+def phase_logits(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any], quick: bool, chunk: int = PREFILL_CHUNK):
+    """The prefill gathers and `fp8_fp4_mqa_logits` calls of the request's served prefill (`prefill_calls`, each call run twice),
+    and `fp8_fp4_paged_mqa_logits`, on the served cache and queries; only the compared words leave the GPU."""
+    import torch
+    import vllm.envs as envs
     from vllm import _custom_ops as ops
     from vllm.utils.deep_gemm import fp8_fp4_mqa_logits, fp8_fp4_paged_mqa_logits, get_paged_mqa_logits_metadata
     from vllm.utils.platform_utils import num_compute_units
 
+    size = o["size"]
+    seq, lens_n, dev = size.seq, size.decode_lens, "cuda"
     cache = kst["caches"]["idx"]
     bt = o["bt"]
-    k_quant = torch.empty(SEQ, D, dtype=torch.float8_e4m3fn, device="cuda")
-    k_scale = torch.empty(SEQ, 4, dtype=torch.uint8, device="cuda")
-    ops.cp_gather_indexer_k_quant_cache(cache, k_quant, k_scale, bt, torch.tensor([0, SEQ], dtype=torch.int32, device="cuda"))
-    q = qst["index_q_fp8"][:SEQ]
-    w = qst["index_weights_out"][:SEQ]
-    ks = torch.zeros(SEQ, dtype=torch.int32, device="cuda")
-    ke = torch.arange(1, SEQ + 1, dtype=torch.int32, device="cuda")
-    logits = fp8_fp4_mqa_logits((q, None), (k_quant, k_scale.view(torch.float32).squeeze(-1)), w, ks, ke, clean_logits=False)
-    logits2 = fp8_fp4_mqa_logits((q, None), (k_quant, k_scale.view(torch.float32).squeeze(-1)), w, ks, ke, clean_logits=False)
-    B = len(DECODE_LENS)
-    lens = torch.tensor(DECODE_LENS, dtype=torch.int32, device="cuda")
+    k_quant = torch.empty(seq, D, dtype=torch.float8_e4m3fn, device=dev)
+    k_scale = torch.empty(seq, 4, dtype=torch.uint8, device=dev)
+    q = qst["index_q_fp8"][:seq]
+    w = qst["index_weights_out"][:seq]
+    rng = np.random.default_rng(7)
+    rows = sorted(set(size.full_rows) | set(rng.choice(seq, 2 if quick else RANDOM_ROWS, replace=False).tolist()))
+    r_full = np.concatenate([np.full(r + 1, r) for r in rows])
+    c_full = np.concatenate([np.arange(r + 1) for r in rows])
+    n_pairs = RANDOM_PAIRS // (10 if quick else 1)
+    r_rand = rng.integers(0, seq, n_pairs)
+    c_rand = (rng.random(n_pairs) * (r_rand + 1)).astype(np.int64)
+    rr, cc = np.concatenate([r_full, r_rand]), np.concatenate([c_full, c_rand])
+    order = np.argsort(rr, kind="stable")
+    r_sorted = rr[order]
+    keep = sorted(set(rows) | {n - 1 for n in lens_n})
+    # get_max_prefill_buffer_size: 40 keys a token of max_model_len
+    calls = prefill_calls(seq, chunk, envs.VLLM_SPARSE_INDEXER_MAX_LOGITS_MB * 1024 * 1024, 40 * size.max_model_len)
+    got, full = np.empty(rr.size, dtype=np.uint32), {}
+    same, past_window, shapes, gathered, logits = True, 0, True, 0, None
+    for n, r0, r1 in calls:
+        if n != gathered:
+            ops.cp_gather_indexer_k_quant_cache(cache, k_quant[:n], k_scale[:n], bt, torch.tensor([0, n], dtype=torch.int32, device=dev))
+            gathered = n
+        ks = torch.zeros(r1 - r0, dtype=torch.int32, device=dev)
+        ke = torch.arange(r0 + 1, r1 + 1, dtype=torch.int32, device=dev)
+        args = ((q[r0:r1], None), (k_quant[:n], k_scale[:n].view(torch.float32).squeeze(-1)), w[r0:r1], ks, ke)
+        logits = fp8_fp4_mqa_logits(*args, clean_logits=False)
+        s, p = logits_rerun(logits, fp8_fp4_mqa_logits(*args, clean_logits=False), ks, ke)
+        same, past_window = same and s, past_window + p
+        shapes = shapes and list(logits.shape) == [r1 - r0, n] and logits.dtype == torch.float32
+        i = order[slice(*np.searchsorted(r_sorted, [r0, r1]))]
+        got[i] = _u32(logits.view(torch.int32)[torch.from_numpy(rr[i] - r0).to(dev), torch.from_numpy(cc[i]).to(dev)])
+        for r in (r for r in keep if r0 <= r < r1):
+            full[r] = _u32(logits[r - r0, :r + 1])
+    B = len(lens_n)
+    lens = torch.tensor(lens_n, dtype=torch.int32, device=dev)
     q_dec = q[lens.long() - 1].reshape(B, 1, H, D)
     w_dec = w[lens.long() - 1].contiguous()
     seq_lens = lens.reshape(B, 1).contiguous()
     btd = bt.expand(B, -1).contiguous()
     sched = get_paged_mqa_logits_metadata(seq_lens, BLOCK, num_compute_units(torch.cuda.current_device()))
-    dec = fp8_fp4_paged_mqa_logits((q_dec, None), cache.unsqueeze(-2), w_dec, seq_lens, btd, sched, max_model_len=MAX_MODEL_LEN,
+    dec = fp8_fp4_paged_mqa_logits((q_dec, None), cache.unsqueeze(-2), w_dec, seq_lens, btd, sched, max_model_len=size.max_model_len,
                                    clean_logits=False)
     torch.cuda.synchronize()
-    slots = o["slots"].cpu().numpy()[:SEQ]
+    slots = o["slots"].cpu().numpy()[:seq]
     idx = _u8(cache)
     gq, gs = _u8(k_quant), _u32(k_scale.view(torch.float32)).reshape(-1)
-    gather_ok = all(np.array_equal(gq[t], slot_bytes(idx, slots[t])[0]) and gs[t] == slot_bytes(idx, slots[t])[1] for t in range(SEQ))
-    L = _u32(logits)
+    gather_ok = all(np.array_equal(gq[t], slot_bytes(idx, slots[t])[0]) and gs[t] == slot_bytes(idx, slots[t])[1] for t in range(seq))
     Ld = _u32(dec)
-    dec_eq = sum(int((Ld[b, :n] != L[n - 1, :n]).sum()) for b, n in enumerate(DECODE_LENS))
-    same, past_window = logits_rerun(logits, logits2)
-    recs = [{"phase": "logits", "case": "prefill", "shape": list(logits.shape),
-             "checks": {"gather": bool(gather_ok), "deterministic": same,
-                        "shape": list(logits.shape) == [SEQ, SEQ] and logits.dtype == torch.float32},
+    dec_eq = sum(int((Ld[b, :n] != full[n - 1][:n]).sum()) for b, n in enumerate(lens_n))
+    tiled = [c[1] for c in calls] == [0] + [c[2] for c in calls[:-1]] and calls[-1][2] == seq
+    recs = [{"phase": "logits", "case": "prefill", "shape": [seq, seq], "prefill_chunk": chunk,
+             "max_logits_mb": envs.VLLM_SPARSE_INDEXER_MAX_LOGITS_MB, "calls": [list(c) for c in calls],
+             "checks": {"gather": bool(gather_ok), "deterministic": same, "shape": shapes, "calls_tile_rows": tiled},
              "info": {"words_past_window_differing": past_window}},
-            {"phase": "logits", "case": "decode", "shape": list(dec.shape), "lens": list(DECODE_LENS),
-             "checks": {"shape": list(dec.shape) == [B, MAX_MODEL_LEN] and dec.dtype == torch.float32},
+            {"phase": "logits", "case": "decode", "shape": list(dec.shape), "lens": list(lens_n), "max_model_len": size.max_model_len,
+             "checks": {"shape": list(dec.shape) == [B, size.max_model_len] and dec.dtype == torch.float32},
              "info": {"words_differing_from_prefill": dec_eq}}]
-    rng = np.random.default_rng(7)
-    rows = sorted(set(FULL_ROWS) | set(rng.choice(SEQ, 2 if quick else RANDOM_ROWS, replace=False).tolist()))
-    r_full = np.concatenate([np.full(r + 1, r) for r in rows])
-    c_full = np.concatenate([np.arange(r + 1) for r in rows])
-    n_pairs = RANDOM_PAIRS // (10 if quick else 1)
-    r_rand = rng.integers(0, SEQ, n_pairs)
-    c_rand = (rng.random(n_pairs) * (r_rand + 1)).astype(np.int64)
-    rr, cc = np.concatenate([r_full, r_rand]), np.concatenate([c_full, c_rand])
-    r_dec = np.concatenate([np.full(n, n - 1) for n in DECODE_LENS])
-    c_dec = np.concatenate([np.arange(n) for n in DECODE_LENS])
-    g_dec = np.concatenate([Ld[b, :n] for b, n in enumerate(DECODE_LENS)])
-    paths = _save(work / "logits", q=_u8(q), w=_u32(w), k=gq, ks=gs, r=rr, c=cc, got=L[rr, cc], rd=r_dec, cd=c_dec, gotd=g_dec)
+    r_dec = np.concatenate([np.full(n, n - 1) for n in lens_n])
+    c_dec = np.concatenate([np.arange(n) for n in lens_n])
+    g_dec = np.concatenate([Ld[b, :n] for b, n in enumerate(lens_n)])
+    paths = _save(work / "logits", q=_u8(q), w=_u32(w), k=gq, ks=gs, r=rr, c=cc, got=got, rd=r_dec, cd=c_dec, gotd=g_dec)
     jobs = [{"phase": "logits", "case": "prefill", "kind": "logits", "paths": paths, "keys": ["r", "c", "got"], "range": [a, b]}
             for a, b in _chunks(rr.size, JOB_LOGITS)]
     jobs += [{"phase": "logits", "case": "decode", "kind": "logits", "paths": paths, "keys": ["rd", "cd", "gotd"], "range": [a, b]}
              for a, b in _chunks(r_dec.size, JOB_LOGITS)]
-    return recs, jobs, {"logits": logits}
+    return recs, jobs, {"logits": logits} if len(calls) == 1 else {}
 
 
-def logits_rerun(a, b) -> tuple[bool, int]:
-    """Two prefill logits runs (ks = 0, ke = r + 1, clean_logits=False): whether they agree on every word of each row's window [0, r],
-    the words the kernel writes, and how many words past the windows differ (unwritten: only clean_logits sets them, to -inf,
-    deep_gemm.py:542)."""
+def logits_rerun(a, b, ks=None, ke=None) -> tuple[bool, int]:
+    """Two runs of one prefill logits call (clean_logits=False): whether they agree on every word of each row's window [ks, ke),
+    the words the kernel writes (by default ks = 0, ke = r + 1), and how many words past the windows differ (unwritten: only
+    clean_logits sets them, to -inf, deep_gemm.py:542)."""
     import torch
 
-    window = torch.ones(a.shape, dtype=torch.bool, device=a.device).tril()
+    m, n = a.shape
+    if ks is None:
+        ks = torch.zeros(m, dtype=torch.int32, device=a.device)
+        ke = torch.arange(1, m + 1, dtype=torch.int32, device=a.device)
+    col = torch.arange(n, device=a.device)[None, :]
+    window = (col >= ks[:, None]) & (col < ke[:, None])
     diff = a.view(torch.int32) != b.view(torch.int32)
     return not bool(diff[window].any()), int(diff[~window].sum())
 
@@ -887,11 +990,11 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
-    if lst is None:
-        rec["errors"]["prefill_served"] = "no served logits (the logits phase failed)"
+    if not lst:
+        rec["errors"]["prefill_served"] = "no served logits (the logits phase failed or took more than one call)"
     else:
         logits = lst["logits"]
         ks = torch.zeros(SEQ, dtype=torch.int32, device="cuda")
@@ -1016,7 +1119,7 @@ def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache slots [r0, r1): their bytes and scale against `DsaIndexerKRow_v1{128,64,1e-06}` (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS)
@@ -1035,7 +1138,7 @@ def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [r0, r1): index_q_fp8 and index_weights_out against `DsaIndexerQ_v1{32,128,64}` (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE)
@@ -1054,7 +1157,7 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, the reference on the first two."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
@@ -1082,8 +1185,8 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     the launch splits the token's keys (the reference itself)."""
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import sparse_mla as M
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
     h, T, NS = job["head"], job["T"], job["NS"]
@@ -1153,10 +1256,10 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import boolean_rope as BR
-    from verity_vllm.program.registry import dsa
-    from verity_vllm.program.registry import sparse_mla as M
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import boolean_rope as BR
+    from verity.ml.definitions.registry import dsa
+    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),
@@ -1182,10 +1285,13 @@ def bind_check() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------- run
 def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict[str, Any]]:
-    """Every GPU phase in order; each phase's error goes to doc["errors"] (later phases that read it then fail too).  Fills
-    doc["selection"], doc["launches"], doc["rope"], doc["topk"]; returns the comparison jobs."""
+    """The GPU phases doc["phases"] names, in order, at doc["keys"] tokens; the k and q launches always run (the logits read the
+    cache and queries they write), their comparisons only when named.  Each phase's error goes to doc["errors"] (later phases
+    that read it then fail too).  Fills doc["selection"], doc["launches"], doc["rope"], doc["topk"]; returns the comparison jobs."""
     import torch
 
+    phases = doc["phases"]
+    size = sizes(doc["keys"])
     jobs: list[dict[str, Any]] = []
     st: dict[str, Any] = {}
 
@@ -1200,35 +1306,39 @@ def gpu(work: Path, outdir: Path, quick: bool, doc: dict[str, Any]) -> list[dict
     doc["selection"] = step("selection", selection) or {}
     print(f"[glm53-dsa] selection {json.dumps(doc['selection'])[:1500]}", flush=True)
     doc["stack"] = step("stack", stack) or {}
-    o = step("operands", lambda: operands(20261005))
-    for name, fn in (("k", lambda: phase_k(work, o, quick)), ("q", lambda: phase_q(work, o, quick))):
+    o = step("operands", lambda: operands(20261005, size))
+    for name, fn in (("k", lambda: phase_k(work, o, quick)), ("q", lambda: phase_q(work, o, quick or "q" not in phases))):
         r = step(name, fn)
         if r is not None:
             doc["launches"] += r[0]
-            jobs += r[1]
+            jobs += r[1] if name in phases else []
             st[name] = r[2]
             for x in r[0]:
                 print(f"[glm53-dsa] {name} {x['case']:8s} {json.dumps(x['checks'])} {json.dumps(x.get('info', {}))[:600]}", flush=True)
-    doc["rope"] = step("rope", lambda: phase_rope(o, st["k"], st["q"])) or {"ok": False}
-    r = step("logits", lambda: phase_logits(work, o, st["k"], st["q"], quick))
-    if r is not None:
-        doc["launches"] += r[0]
-        jobs += r[1]
-        st["logits"] = r[2]
-        for x in r[0]:
-            print(f"[glm53-dsa] logits {x['case']:8s} {json.dumps(x['checks'])} {json.dumps(x.get('info', {}))}", flush=True)
-    topk = step("topk", lambda: phase_topk(o, st.get("logits")))
-    if topk is not None and "prefill_rows" in topk:
-        st["topk"] = {"prefill_rows": topk.pop("prefill_rows")}
-    doc["topk"] = topk or {"ok": False}
-    brief = {k: {f: v for f, v in g.items() if f != "long"} for k, g in doc["topk"].get("cases", {}).items()}
-    print(f"[glm53-dsa] topk ok={doc['topk'].get('ok')} {json.dumps(brief)[:1500]} "
-          f"errors={list(doc['topk'].get('errors', {}))}", flush=True)
-    r = step("attn", lambda: phase_attn(work, o, st["k"], st["q"], st["topk"], quick))
-    if r is not None:
-        doc["launches"] += r[0]
-        jobs += r[1]
-        print(f"[glm53-dsa] attn {json.dumps(r[0][0]['checks'])} valid={r[0][0]['valid']}", flush=True)
+    doc["rope"] = (step("rope", lambda: phase_rope(o, st["k"], st["q"])) or {"ok": False}) if "rope" in phases else {"ok": None}
+    if "logits" in phases:
+        r = step("logits", lambda: phase_logits(work, o, st["k"], st["q"], quick, doc["prefill_chunk"]))
+        if r is not None:
+            doc["launches"] += r[0]
+            jobs += r[1]
+            st["logits"] = r[2]
+            for x in r[0]:
+                print(f"[glm53-dsa] logits {x['case']:8s} {json.dumps(x['checks'])} {json.dumps(x.get('info', {}))}", flush=True)
+    doc["topk"] = {"ok": None}
+    if "topk" in phases:
+        topk = step("topk", lambda: phase_topk(o, st.get("logits")))
+        if topk is not None and "prefill_rows" in topk:
+            st["topk"] = {"prefill_rows": topk.pop("prefill_rows")}
+        doc["topk"] = topk or {"ok": False}
+        brief = {k: {f: v for f, v in g.items() if f != "long"} for k, g in doc["topk"].get("cases", {}).items()}
+        print(f"[glm53-dsa] topk ok={doc['topk'].get('ok')} {json.dumps(brief)[:1500]} "
+              f"errors={list(doc['topk'].get('errors', {}))}", flush=True)
+    if "attn" in phases:
+        r = step("attn", lambda: phase_attn(work, o, st["k"], st["q"], st["topk"], quick))
+        if r is not None:
+            doc["launches"] += r[0]
+            jobs += r[1]
+            print(f"[glm53-dsa] attn {json.dumps(r[0][0]['checks'])} valid={r[0][0]['valid']}", flush=True)
     del st, o
     torch.cuda.empty_cache()
     return jobs
@@ -1242,15 +1352,19 @@ def _words_ok(t: dict[str, Any]) -> bool:
     return t["words"] > 0 and t["mismatch"] == 0 and t["unresolved"] == 0 and t["reference"] > 0 and t["twin_mismatch"] == 0
 
 
-PHASES = ("k", "q", "logits", "attn")
+PHASES = ("k", "q", "rope", "logits", "topk", "attn")
+#: what each phase reads from an earlier one
+NEEDS = {"topk": "logits", "attn": "topk"}
 CASES = (("k", "served"), ("k", "probe"), ("q", "served"), ("logits", "prefill"), ("logits", "decode"), ("attn", None))
 
 
 def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Each compared case's verdict (k/served, k/probe, q/served, logits/prefill, logits/decode, attn): its launch checks, its
-    words, and its errors, so a NO-GO names what failed."""
+    """Each compared case's verdict (k/served, k/probe, q/served, logits/prefill, logits/decode, attn) in the phases the run ran:
+    its launch checks, its words, and its errors, so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
     for phase, case in CASES:
+        if phase not in doc.get("phases", PHASES):
+            continue
         key = f"{phase}/{case}" if case else phase
         launches = [x for x in doc["launches"] if x["phase"] == phase and (case is None or x["case"] == case)]
         comps = [r for r in doc.get("comparisons", []) if r["phase"] == phase and (case is None or r["case"] == case)]
@@ -1263,23 +1377,28 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
-    return bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["ptx"].get("ok") is True
-                and doc["bind"].get("ok") is True and doc["rope"].get("ok") is True and doc["topk"].get("ok") is True
+    """Every check of the phases the run ran (`phases`, every phase when it names none)."""
+    phases = doc.get("phases", PHASES)
+    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and not doc["errors"] and doc["selection"].get("ok") is True
+                and doc["ptx"].get("ok") is True and doc["bind"].get("ok") is True
+                and ("rope" not in phases or doc["rope"].get("ok") is True) and ("topk" not in phases or doc["topk"].get("ok") is True)
                 and all(c["ok"] for c in cases(doc).values()) and _words_ok(doc["totals"]))
 
 
-def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool) -> dict[str, Any]:
+def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: int, workers: int, quick: bool, keys: int = SEQ,
+        phases: tuple[str, ...] = PHASES, prefill_chunk: int = PREFILL_CHUNK, keep_logits: bool = False) -> dict[str, Any]:
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = environment(work)
+    env, cleared = environment(work)
     import torch  # noqa: F401
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "environment": G._environment(),
-                           "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
-    print(f"[glm53-dsa] gate {json.dumps(doc['gate'])}", flush=True)
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "served": served(), "quick": quick,
+                           "keys": keys, "phases": list(phases), "prefill_chunk": prefill_chunk,
+                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
+    print(f"[glm53-dsa] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-DSA GATE-FAIL", flush=True)
@@ -1324,14 +1443,21 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
         print(f"[glm53-dsa] case {key:16s} {'GO' if c['ok'] else 'NO-GO':5s} launches_ok={c['launches_ok']} words={t['words']} "
               f"!={t['mismatch']} unresolved={t['unresolved']} ref={t['reference']} twin!={t['twin_mismatch']} errors={c['errors']}",
               flush=True)
-    doc = seal_record(doc, _verdict(doc))
+    doc["phases_ok"] = _verdict(doc)
+    if keep_logits and (work / "logits").is_dir():
+        shutil.copytree(work / "logits", outdir / "logits", dirs_exist_ok=True)
+        doc["kept"] = ["logits"]
+    partial = set(phases) != set(PHASES)
+    doc = seal_record(doc, doc["phases_ok"] and not partial)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
     names = {k: rope.get(k, {}).get("definition") for k in ("k_pe", "q_pe")}
     forms = {k: (rope.get(k, {}).get("L"), rope.get(k, {}).get("H")) for k in ("k_pe", "q_pe")}
     print(f"ROPE k_pe={names['k_pe']} q_pe={names['q_pe']} forms={json.dumps(forms)} settled={rope.get('ok')}", flush=True)
-    print(f"GLM53-DSA {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
-          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
+    print(f"GLM53-DSA {'PARTIAL ' if partial else ''}{'GO' if doc['phases_ok'] else 'NO-GO'} {doc['digest']} "
+          f"totals={json.dumps(doc['totals'])} served={doc['served']['ok']} "
+          f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}"
+          + (f" keys={keys} phases={','.join(phases)} (the property needs every phase: ok false)" if partial else ""), flush=True)
     return doc
 
 
@@ -1345,9 +1471,30 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=C.cpu_workers())
     ap.add_argument("--quick", action="store_true",
                     help=f"q on {QUICK_Q_TOKENS} tokens, fewer logits, attention on tokens {QUICK_ATTN_TOKENS}: a first signal in minutes")
+    ap.add_argument("--keys", type=int, default=SEQ, help=f"the request's tokens: the prefill's rows and keys, the longest decode "
+                    f"context and the paged form's max_model_len past {MAX_MODEL_LEN} (a multiple of {BLOCK}, at least {SEQ})")
+    ap.add_argument("--phases", default=",".join(PHASES), help=f"comma list of {', '.join(PHASES)} (the property's verdict needs all)")
+    ap.add_argument("--prefill-chunk", type=int, default=PREFILL_CHUNK,
+                    help="the served scheduler step: prefill tokens per step (max_num_batched_tokens)")
+    ap.add_argument("--keep-logits", action="store_true", help="copy the logits phase's operands and compared words to <out>/logits/")
     a = ap.parse_args(argv)
-    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick)
-    return 0 if doc["ok"] else 1
+    phases = tuple(p for p in PHASES if p in a.phases.split(","))
+    if unknown := sorted(set(a.phases.split(",")) - set(PHASES)):
+        ap.error(f"--phases: unknown {unknown}; phases {list(PHASES)}")
+    try:
+        sizes(a.keys)
+    except ValueError as e:
+        ap.error(f"--{e}")
+    if a.prefill_chunk < 1:
+        ap.error("--prefill-chunk: at least 1 token")
+    if missing := [f"{p} needs {NEEDS[p]}" for p in phases if p in NEEDS and NEEDS[p] not in phases]:
+        ap.error(f"--phases: {'; '.join(missing)}")
+    if {"topk", "attn"} & set(phases) and (a.keys != SEQ or a.prefill_chunk < SEQ):
+        ap.error(f"--phases: topk and attn read the prefill's one call at {SEQ} keys; with --keys {a.keys} or --prefill-chunk "
+                 f"{a.prefill_chunk}, leave them out (--phases {','.join(p for p in phases if p not in ('topk', 'attn'))})")
+    doc = run(a.out, a.scratch, a.min_driver, a.want_cc, a.want_sms, a.workers, a.quick, a.keys, phases, a.prefill_chunk,
+              a.keep_logits)
+    return 0 if doc["phases_ok"] else 1
 
 
 if __name__ == "__main__":

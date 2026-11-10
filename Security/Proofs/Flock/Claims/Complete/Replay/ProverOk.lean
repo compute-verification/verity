@@ -1,9 +1,52 @@
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Goals
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+public import Proofs.Flock.Claims.DeployK
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
 import Proofs.Flock.Claims.Complete.Replay.RepRounds
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.VBridge.Family.Lig
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The prover's pieces at every good case (`ProverOk`)
@@ -21,6 +64,8 @@ prover's pieces.
 regions pass `checkInRange` (`setupH_regions_le`, `spec_regions_le`). So the run's schemes have their widths
 (`schemeWidths`, the walk's `SchemeWidths`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -69,7 +114,7 @@ theorem opsWith_lookup {M : Type → Type} [Monad M] [MonadExceptOf String M] {h
   rw [h]
 
 /-- **Every registered scheme's digests have its width** through `Hashes.ofSha512` at an oracle of 64-byte outputs. -/
-theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : JsonRT.Out64 H) {ms : MerkleScheme}
+theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) :
     (∀ l r v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r = .ok v → v.size = ms.digestLen) ∧
     ∀ row salt v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).leaf row salt = .ok v →
@@ -112,7 +157,7 @@ theorem opsWith_widths {H : Claims.Msg → Claims.Msg} (h64 : JsonRT.Out64 H) {m
 
 /-- **Each table's Merkle scheme returns digests of its width** (`SchemeWidths`), at an oracle of 64-byte outputs. -/
 theorem schemeWidths {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (h64 : JsonRT.Out64 H) : SchemeWidths H rel := by
+    (h64 : Claims.Out64 H) : SchemeWidths H rel := by
   intro o i hi
   obtain ⟨st, hst, -, hall, -⟩ := o.toCase.schemeOk
   have htabs : o.tabs = #[Setup.ofCircuit st] := by simp [Run.tabs, tabsOf, hst]
@@ -145,7 +190,7 @@ theorem fast100_cap0 {m : ℕ} {s : Schedule} (h : fast100 m = some s) : (s.leve
 
 /-- **The level-0 commitment's cap is non-empty and under `2^64` bytes**, through a registered scheme at an oracle of
 64-byte outputs, at `fast100`'s first level. -/
-theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : JsonRT.Out64 H) {ms : MerkleScheme}
+theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) {m : ℕ} {sch : Schedule} (hsch : fast100 m = some sch) {g : Array F128}
     {salt : ℕ → ByteArray} {cm : Commit}
     (h : commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) ms (sch.levels.getD 0 default) g salt = .ok cm) :
@@ -168,7 +213,7 @@ theorem commitP_cap {H : Claims.Msg → Claims.Msg} (h64 : JsonRT.Out64 H) {ms :
 
 /-- **What the record needs of the prover's pieces holds at every good case** (`ProverOk`), at an oracle of 64-byte
 outputs. -/
-theorem proverOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : JsonRT.Out64 H) :
+theorem proverOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (h64 : Claims.Out64 H) :
     JsonRT.ProverOk H rel := by
   intro c st hst
   obtain ⟨st', hst', hspec, hm22, -⟩ := c.table

@@ -1,5 +1,46 @@
-import Proofs.Flock.Claims.Complete.Shape
-import Proofs.Flock.Claims.Complete.Zk.Skeleton
+module
+
+public import Proofs.Flock.Claims.Complete.Shape
+public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Claims.Scope.Sizes
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The masked skeleton's goals discharged
@@ -12,6 +53,8 @@ The goals of `GoalsZk` proved at every honest masked run, from the scope and `re
 * `schedulesZk_goal` (`SchedulesZk`): `Zk.schedule` has a schedule at the table's `m` (`zkSchedule_ok`).
 * `proofCountZk_goal` (`ProofCountZk`): the masked session returns one proof file per rep stream (`sessionPZk_proofs`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 
@@ -90,8 +133,9 @@ theorem schedulesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
 
 /-- **The masked session returns one proof file per rep stream.** -/
 theorem sessionPZk_proofs (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
-    (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk) :
-    Ret (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec tabs trs tape) fun r => r.2.size = spec.repStreams.size := by
+    (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) :
+    Ret (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec tabs words trs tape) fun r =>
+      r.2.size = spec.repStreams.size := by
   unfold sessionPZk
   refine Ret.bind (Ret.true _) fun _ _ => ?_
   refine Ret.bind (Ret.true _) fun _ _ => ?_
@@ -111,7 +155,7 @@ theorem proofCountZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed
     ProofCountZk H rel := by
   intro o
   have := sessionPZk_proofs (Claims.hOf H) (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
+    (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω #[] _ _ o.ran
   simp [this]
 
 end FlockComplete

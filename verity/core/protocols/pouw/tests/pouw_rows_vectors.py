@@ -1,4 +1,4 @@
-"""Pinned vectors for the tile checks' committed rows (`verity.core.protocols.pouw.circuit.leaves`), against which C-Flock's ports are
+"""Pinned vectors for the tile checks' committed rows (`verity.ml.protocols.pouw.circuit.leaves`), against which Flock's ports are
 mapped: ``uv run python
 verity/core/protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.json``.  A change to that file is a change to
 a row schema and needs a reason in the PR.
@@ -6,7 +6,7 @@ a row schema and needs a reason in the PR.
 Inputs are derived, not stored: part ``p`` of case ``c`` is the first bytes of SHAKE256("verity/pouw/rows-vectors/v1", c, p),
 read as the schema's elements (16-, 32- and 64-bit words little-endian, codes one per byte masked to their width), and the salt
 is its 192 bytes of part "salt".  A tile case's C̃ and U are TM x TN 32-bit words, hashed by `pearl_c.leaf`.  Each case's
-leaf is the row C-Flock commits from its words and salt under the schema of its row and its tree's role (x or w,
+leaf is the row Flock commits from its words and salt under the schema of its row and its tree's role (x or w,
 `leaves.ROW_SCHEMA`), which its registration domain binds and its leaf does not; a `sha512/row-seg/v1` row's case also
 gives each segment's length in bits and digest d_j."""
 
@@ -19,8 +19,8 @@ from pathlib import Path
 
 from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, row_bytes,
                                         sha512_row_seg_segment_prefix, sha512_row_seg_segments)
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.schemes import pearl_c as C
 
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
 ROLES = {"x": ROLE_X, "w": ROLE_W}
@@ -28,7 +28,7 @@ ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: one short segment and of several), the tile digests, the ok rows, the cap's rows: the salt-dead counts (row-seg, one
 #: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
 #: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row; and
-#: the row_k cut's six rows in both trees, and the audit window's side rows (fp8-pi) in both trees, in role X one short
+#: the row_k cut's six rows in both trees, and the audit execution phase's side rows (fp8-pi) in both trees, in role X one short
 #: segment and several
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (
@@ -147,7 +147,7 @@ def words(row: str, x: dict) -> list[int]:
         return L.words_pc4_carry(x["tot"])
     if row == "nvfp4-codes":
         return L.words_nvfp4_codes(x["codes"], x["scales"])
-    return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"])))
+    return L.words_tile(C.leaf(types.SimpleNamespace(c=x["c"], u=x["u"]), hashing="h0"))
 
 
 def sha(b: bytes) -> str:

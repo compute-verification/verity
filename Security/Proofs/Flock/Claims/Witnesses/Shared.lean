@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.ZK.NonVacuous
-import Proofs.Flock.Claims.ZK.Interact
+module
+
+public import Proofs.Flock.Claims.ZK.NonVacuous
+public import Proofs.Flock.Claims.ZK.Interact
 
 /-!
 # Refutation witnesses: the shared claim forms
 
 Every claim definition carries a refutation witness: a theorem `<Claim>_fails` that exhibits a concrete toy instance at
 which the claim is false, so the definition constrains something. A claim whose definition no instance can refute is
-vacuous. This file holds the toys and the witnesses of `Definitions.Claims`' shared forms; Flock's are
+vacuous. This file holds the toys and the witnesses of `Definitions.Core.Interaction`'s shared forms; Flock's are
 `Witnesses.Flock`, the sampling compiler's `Witnesses.Sampling`, the ZK-recursion compiler's `Witnesses.Recursion`.
 
 The toys: `accV` accepts after one round and `rejV` rejects; `silentP` sends the empty message and calls nothing;
@@ -15,12 +17,14 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
 
 * `KS_fails`, `KSLin_fails`, `Bits_fails`: at `accV`, `silentP` and a statement with no witness, every extractor fails
   at `κ < 1` (at `λ > 0` for `Bits`), whatever `γ`: the run is accepted surely and `B` finds nothing.
-* `Complete_fails`: at a tape that exists, `rejV` fails at `δ_c < 1` wherever the scope and the relation meet.
-  `Complete_vacuous`: at a prover with no tape, every verifier meets it at `δ_c = 0`.
+* `Complete_fails`: `rejV` fails at `δ_c < 1` wherever the scope and the relation meet. Its tapes are a nonempty
+  type, so the prover with no tape, which met its first form at every verifier and `δ_c = 0`, is refused by its type.
 * `ScopeMatches_fails`: an empty scope and a check that takes everything.
 * `ZKmalR_fails` (`ZKMal.not_zkmalR_collSim`): the colliding simulator, which met the form before `Fork`, fails it.
-  `ZKmalR_vacuous`: the honest prover is a parameter, so a prover that ignores its witness and calls nothing
-  (`ZKMal.quietP`) meets it at `ε_zk = 0` and `γ = 0`, at the simulator that runs that prover (`quietSim`).
+  `ZKmalR_vacuous`: the form's honest prover is a parameter, so a prover that ignores its witness and calls nothing
+  (`ZKMal.quietP`) meets it at `ε_zk = 0` and `γ = 0`, at the simulator that runs that prover (`quietSim`). The
+  families' `ZK` read the masked record's own reference prover and simulator, so it meets theirs only at a record
+  whose own prover ignores its witness (`Flock.ZK_of_quiet_record`).
   `SimCost_fails`: the colliding simulator's two calls exceed a bound of `1`.
 * `ExtractRunsLe_fails`, `ExtractRunsExpLe_fails`: `onceE` reruns once, above a bound of `0`.
 * `Nontrivial_fails`: a recorded run that `rejV` rejects.
@@ -31,6 +35,8 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
 
 `ERepCost` is a theorem at every record (`Claims.ERepCost` in `Proofs.Flock.Claims.ERepCost`), so it has no refutation.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness
 
@@ -198,18 +204,6 @@ theorem Complete_fails {Ω : Type} [Nonempty Ω] (P : W → Prover Ω) (R : Rel 
   rw [Pr_congr fun r => iff_false_intro (by rw [run_rejV_out]; exact Out.noConfusion), Pr_false] at h1
   linarith
 
-/-- An honest prover with no tape. -/
-def noTape {W : Type} : W → Prover Empty := fun _ => ⟨fun _ _ ω => ω.elim⟩
-
-omit [Nonempty Coin] in
-/-- **`Complete` is met at a prover with no tape**, at `δ_c = 0` and every hash, verifier, relation and scope: it
-quantifies over the tapes and asks for none. -/
-theorem Complete_vacuous (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (Scope : Msg → Prop) :
-    Complete H V noTape R Scope 0 := by
-  unfold Complete
-  intros
-  exact (‹Empty›).elim
-
 /-- **`ScopeMatches` fails** at an empty scope and a check that takes everything. -/
 theorem ScopeMatches_fails : ¬ ScopeMatches (fun _ => False) (fun _ => true) := fun h => (h []).2 rfl
 
@@ -230,7 +224,7 @@ prover's transcript against any `V*` is `quietSim`'s. -/
 theorem ZKmalR_vacuous {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (k : Msg → ℕ) (R : Rel W) : ZKmalR H k (fun _ => ZKMal.quietP N Ω []) R (quietSim k) 0 0 := by
   intro x w _ Θ Vs θ hk Ev
-  let τ := ZKMal.interact (fun as => ((Vs.next x as θ).eval H).1) (fun _ => []) (k x) []
+  let τ := Claims.interact (fun as => ((Vs.next x as θ).eval H).1) (fun _ => []) (k x) []
   have hτ : ∀ ω, (runStar H (ZKMal.quietP N Ω []) Vs x ω θ).msgs = τ := fun ω => by
     rw [ZKMal.runStar_msgs, hk]
     rfl

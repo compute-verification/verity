@@ -93,6 +93,22 @@ def test_unpreserved_lists_attempts_on_the_machine_that_the_gate_refuses(fs_stor
     assert D.report(st, "vy-tp2", mode="recorded", probe=False)["unpreserved"] == [bad], "offline from the catalog"
 
 
+def test_older_min_leaves_attempts_that_ended_under_n_minutes_ago_to_custody_and_counts_the_rest(fs_store, machines, tmp_path, capsys):
+    st = fs_store
+    local_only = st.put_artifact("run-files/v1", {"never": "pushed"}, tree=_tree(tmp_path / "t2"))
+    now = 1790000000.0                                                                # 2026-09-21T14:13:20Z
+    old = _on(st, "r20260921-130000-0001", local_only, machine="vy-tp2", start_utc="2026-09-21T13:00:00Z", end_utc="2026-09-21T13:10:00Z")
+    young = _on(st, "r20260921-135000-0002", local_only, machine="vy-tp2", start_utc="2026-09-21T13:50:00Z", end_utc="2026-09-21T14:03:20Z")
+    undated = "r20260921-130000-0003"
+    st.put_attempt(_attempt(run_id=undated, execution={"host": "c0ffee"}, cost={"provider": "runpod", "pod_id": "pod-tp2"}))
+    rep = D.report(st, "vy-tp2", probe=False, older_min=30, now=now)
+    assert rep["settling"] == [young] and sorted(rep["unpreserved"]) == [old, undated] and rep["n_attempts"] == 2
+    assert D.report(st, "vy-tp2", probe=False, older_min=5, now=now)["settling"] == []
+    assert sorted(D.report(st, "vy-tp2", probe=False)["unpreserved"]) == sorted([old, young, undated]) and "settling" not in D.report(st, "vy-tp2", probe=False)
+    assert part.main(["unpreserved", "vy-tp2", "--no-probe", "--older-min", "30", "--json"]) == 1
+    assert old in json.loads(capsys.readouterr().out)["unpreserved"]
+
+
 def test_drain_refuses_while_anything_is_unpreserved_and_logs_a_forced_override(fs_store, machines, tmp_path):
     st = fs_store
     killed: list[str] = []

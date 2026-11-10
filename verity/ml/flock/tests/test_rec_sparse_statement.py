@@ -1,5 +1,5 @@
 """`HmRow.parse` calls `RecSparse.check`: a statement's unit named `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` must be the
-net the verifier builds at that shape (PROTOCOL.md §16.10). `flock-verify statement` accepts the files `rec_sparse.stage`
+net the verifier builds at that shape (`Flock.HmRow`). `flock-verify statement` accepts the files `rec_sparse.stage`
 writes, and refuses them with one row of the unit changed and with the unit renamed out of the name's form."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_sparse as RS
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 
 
 def _statement(d: Path, circuit: Path):

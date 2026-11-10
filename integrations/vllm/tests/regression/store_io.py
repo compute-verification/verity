@@ -4,14 +4,13 @@ Every other file of this harness reaches the evidence store through these three 
 API touches this file only:
 
     fetch(artifact_id) -> Path                 materialise an artifact's payload (tree dir or file) and return its local path
-    resolve_snapshot(name) -> list[artifact_id]  the member artifact ids of the dataset-snapshot/v1 artifact named `name`
     put_fixture(path, meta) -> artifact_id      store a dir (tree payload) or a file as a `fixture/v1` artifact, return its `art:` id
     attempt(run_id) -> dict                    an attempt manifest (`r2026…` id); attempt_outputs(run_id, kinds) its outputs by kind
     fetch_attempt(run_ids, to) -> Path         the union of the attempts' row-dir account trees (vllm-build/v1, vllm-match-record/v1,
                                                vllm-verdict/v1, execution-evidence/v1) laid out like a v1 row dir
 
 Transport: the CLI (`python -m research.cli data ...`) in a subprocess -- the store package is stdlib-only, so `sys.executable` with
-`<repo>/tools/research/src` on PYTHONPATH is enough; the CLI's printed contract (`put` / `snapshot` print the art id, `fetch` prints the
+the installed `research` package's directory (or `$RESEARCH_SRC`) on PYTHONPATH is enough; the CLI's printed contract (`put` / `snapshot` print the art id, `fetch` prints the
 path, `select --ids` prints ids, `show --json` dumps the manifest document) is what is parsed here.  Credentials for a remote put come
 from the environment (`set -a; source ~/.config/verity/r2.env; set +a` on the control machine; a pod uses a minted temporary credential,
 README §7.1).  Inside a `research run --custody-r2` job on a machine with no store config of its own (a pod: no `~/.research/store.toml`,
@@ -27,6 +26,7 @@ reachable and the tests fail on its real error instead of skipping.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -49,10 +49,15 @@ class StoreUnavailable(RuntimeError):
 
 
 def _research_src() -> Path | None:
-    """`tools/research/src` of this checkout (the branch may predate the merge that brings `research.store`), else `$RESEARCH_SRC`."""
-    for cand in (os.environ.get("RESEARCH_SRC"), REPO_ROOT / "tools" / "research" / "src"):
-        if cand and (Path(cand) / "research" / "store").is_dir():
-            return Path(cand)
+    """`$RESEARCH_SRC` when it holds `research.store`, else where the installed `research` distribution's package lives (a
+    workspace sync installs it; a checkout without it, such as the public export, has none and the store tests skip)."""
+    cand = os.environ.get("RESEARCH_SRC")
+    if cand and (Path(cand) / "research" / "store").is_dir():
+        return Path(cand)
+    spec = importlib.util.find_spec("research")
+    for loc in (spec.submodule_search_locations or []) if spec else []:
+        if (Path(loc) / "store").is_dir():
+            return Path(loc).parent
     return None
 
 
@@ -85,13 +90,10 @@ def _env() -> dict[str, str]:
 
 
 def _cli(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    """`python -m research.cli data <args>`; a `research` executable on PATH is used when the package is not in this tree."""
-    if _research_src() is not None:
-        argv = [sys.executable, "-m", "research.cli", "data", *args]
-    elif shutil.which("research"):
-        argv = ["research", "data", *args]
-    else:
-        raise StoreUnavailable("neither tools/research/src/research/store (this checkout) nor a `research` executable is available")
+    """`python -m research.cli data <args>`, with the `research` package `_research_src` finds."""
+    if _research_src() is None:
+        raise StoreUnavailable("no `research` package with `research.store` here: sync the workspace or set $RESEARCH_SRC")
+    argv = [sys.executable, "-m", "research.cli", "data", *args]
     p = subprocess.run(argv, env=_env(), capture_output=True, text=True)
     if check and p.returncode != 0:
         raise StoreUnavailable(f"{' '.join(argv[-len(args) - 1:])} failed rc={p.returncode}: {p.stderr.strip()[-2000:]}")
@@ -101,6 +103,8 @@ def _cli(*args: str, check: bool = True) -> subprocess.CompletedProcess:
 #: an id no artifact has: `where` on it names the remote it looked on, or says none is configured
 _NO_ART = "art:" + "0" * 64
 NO_REMOTE = "no remote configured"
+#: `select`'s refusal on a store with no index and an empty catalog: the CLI answered, there is just nothing to select from
+NO_INDEX = "no index to select from"
 
 
 def reachable(*, need_remote: bool = True) -> bool:
@@ -109,7 +113,8 @@ def reachable(*, need_remote: bool = True) -> bool:
     if os.environ.get("VERITY_STORE_REQUIRED") == "1":
         return True
     try:
-        if _cli("select", "--kind", SNAPSHOT_KIND, "--ids", check=False).returncode != 0:
+        p = _cli("select", "--kind", SNAPSHOT_KIND, "--ids", check=False)
+        if p.returncode != 0 and NO_INDEX not in p.stderr:
             return False
         return not need_remote or NO_REMOTE not in _cli("where", _NO_ART, check=False).stderr
     except StoreUnavailable:
@@ -133,21 +138,6 @@ def show(artifact_id: str) -> dict:
     p = _cli("show", artifact_id, "--json")
     doc = json.loads(p.stdout)
     return doc.get("manifest", doc) if isinstance(doc, dict) else doc
-
-
-def resolve_snapshot(name: str) -> list[str]:
-    """The member artifact ids of the `dataset-snapshot/v1` named `name` (`refs.members`).  Several snapshots with one name (frozen from
-    different member sets) are a mistake this harness names rather than merges: the LAST id by the CLI's order is used and the others
-    reported on stderr.  Empty list when no snapshot has that name."""
-    p = _cli("select", "--kind", SNAPSHOT_KIND, "--where", f"meta.name={name}", "--ids")
-    ids = ART_RE.findall(p.stdout)
-    if not ids:
-        return []
-    if len(ids) > 1:
-        print(f"[store_io] {len(ids)} snapshots named {name!r}: using {ids[-1]} (others: {ids[:-1]})", file=sys.stderr)
-    doc = show(ids[-1])
-    members = (doc.get("refs") or {}).get("members") or []
-    return list(members) if isinstance(members, list) else [members]
 
 
 def put_fixture(path: Path, meta: dict, *, preserve: bool = False, refs: dict[str, str] | None = None) -> str:

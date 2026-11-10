@@ -7,8 +7,11 @@ the task list's build, nor an earlier target's check):
 - every file the check opened for reading and every directory it listed (an audit hook on ``open``, ``os.listdir`` and
   ``os.scandir``; not the import system reading a module's source or searching a directory for a module, which the module's
   name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
-  `inspect` or `linecache` probes a loaded module's source file, the module, by its name), and every library built in the tree
-  that it loaded (``ctypes.dlopen``: by its bytes);
+  `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
+  that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
+  `verity.ml.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  loaded it), and of every one its process, or one it was forked from, called before it ended (`_CALLED`): a process-wide memo
+  of a model's result, filled by another target's check or a binding's build, hands it the result without a call;
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
   and every module it imported, already loaded or not (``__import__`` and ``importlib.import_module``: what a module registered
   at import decides a lookup that runs none of its code); a module imported by a name computed at run time (``import_module``,
@@ -45,28 +48,44 @@ and `SUFFIX`, `_side`), so it moves with its module.  Likewise each Definition w
 `verity.ml.circuits.evaluation.batch._KERNELS` (`_RecordedKernels`), by what is registered for it now (each kernel's name, domain, version
 and which function and sampler it is, `_where`: by its module's content and its own definition, not its path), or none, and by
 each in-tree module whose import registered it, as a module it ran (so a wrapper's `_where` hides no change of what it wraps):
-the module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  A
+the module that registers a kernel is imported with the registries, and no check of a target without one runs any of it.  And
+its reads of `verity.ml.circuits.defs.REGISTRY` (`_RecordedDefs`, ``registrars``), each by what was registered once the
+registries were loaded (`_AT_LOAD`, the same on every path of a run; `_registration`): the id of every Definition it reached or
+found there and of every kernel it looked up, by whether a module whose import registered its Definition (every in-tree module
+whose code was running, and the one `targets.load_registries` was importing: `_REGISTRAR`), or one that registered its kernels,
+has a sidecar; every id it looked up and found absent (`ABSENT`), by whether anything registered it, else the on-demand
+family that makes it (`_where` of its maker); a lookup of the Boolean Definition of one word (`_WORD_ENUMERATORS`) by those of
+that word; any other enumeration of the registry (``*``) by the modules the registries import for having a sidecar, every one.
+So a new or removed sidecar reruns the targets that reached or found what its module's import registers, or looked it up absent
+(its own bindings and pins are units and pins), and those that enumerated the registry.  A binding's record (`circuit_check.units`)
+holds its absent ids and enumerations, without the sidecars (``registered``).  A
 package an enumerator listed (`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``,
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
-pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py` and ``pins/``.  Beside them the key holds the
-interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``), unless it is
+the checker's own: those, like the checker code that ran, are held by the checker's version alone.  The checker's
+own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
+comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
+peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
+`cli.heavy`) and `SHARD` (which targets a shard checks and how
+shards' records are joined).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
-entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
-moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
-``CIRCUIT_CHECK_*`` environment. Each target's check runs with a memo of its own, so
-no result an earlier target computed stands in for its reads.
+entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment; the task list's, whose build finds the sidecars
+itself, also the modules the registries import for having one (`registries`).  Each target's check runs with a memo of its
+own, so no result an earlier target computed stands in for its reads.
 
 An installed distribution is a read, not part of the key (``dists``, `_outside_tops`): each top-level module the process loaded
 from outside the tree, held by the versions of the distributions that provide it and by no file in the tree resolving its
 name, so a new workspace member or a lock entry no check imports reuses every target, and a version a check loaded reruns it.
 A module in the tree is held by its name and resolved again at lookup (``modules``), so a new ``sys.path`` entry or editable
-redirect that shadows it reruns what holds it, without ``sys.path`` in the key.
+redirect that shadows it reruns what holds it, without ``sys.path`` in the key.  A module whose ``__file__`` is no absolute path
+(a module object made by hand: `torch.ops`'s ``_ops.py``), like a code object whose file is none (``<string>``), has no file
+(`_module_file`): it is neither in the tree nor outside it, whatever the working directory (torch's are held with torch), and
+`inspect` looking for its source where that name points from the working directory reads nothing (`_bare_files`).
 
-A hit means every file, listing, probe, library, ``pins/`` pin and kernel registration this target's check read is unchanged
-(the tree as git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the tree, counts as
-absent, so a read of one is never keyed on its content), and every module, binding unit and sidecar pin it held is unchanged but
+A hit means every file, listing, probe, library, ``pins/`` pin and registration (a kernel's, a Definition's) this target's check
+read is unchanged (the tree as git has it, `visible`: a file git does not track, bytecode, a build or a fetched file inside the
+tree, counts as absent, so a read of one is never keyed on its content), and every module, binding unit and sidecar pin it held is unchanged but
 for where its modules are (`_moved`): following the import sites from its units and from each module still at its name, every
 module it held is found, its content unchanged, at the name the sites now resolve to, and a sidecar's units and pins where its
 module is found (one no site leads to: the one module of that content this process imported before any check); a module imported
@@ -75,21 +94,27 @@ module now imports through is one it held, or empty or a docstring alone; each e
 each it lists no longer is imported anyway and each new one it lists is a renamed one or empty; and each module whose source
 `inspect` looked for still resolves by its name (its content may differ: only where it is was asked), or is the one imported
 module of its content.  Not covered: a file a C extension reads with its own I/O (none here); anything outside the repository,
-which the interpreter, platform, distribution list and ``sys.path`` stand for; a file a module read while it was imported before
+which the interpreter, platform, distribution list and ``sys.path`` stand for (the compiler a C++ model's library was built with
+among it: ``$CXX``, and whether the library a build directory holds is the one its sources compile to, which `_jit.stale`
+judges by their times); a file a module read while it was imported before
 tracing began (the checker's own imports, ``verity.ml.circuits`` and ``verity.ml.circuits.evaluation`` among them: their sources are inputs, data
-they opened at import is not); what a function read or imported in its body when it did not run in the recording (a value a
-process-wide cache, ``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own
-module and its closure); an edit to a binding that does not reach the target, even if it changes which object of the same id
+they opened at import is not), and a C++ model called before then (`cli.prebuild` builds them in a process of its own); what
+a function read or imported in its body when it did not run in the recording (a value a process-wide cache,
+``functools.cache`` and the like, holds from a call another target's check made, beyond the function's own module and its
+closure and the C++ models any call ran, `_CALLED`); an edit to a binding that does not reach the target, even if it changes
+which object of the same id
 the catalog builds (the registry refuses two Definitions of one id); what a binding ran that changes, keeping its
 id, what a Definition it did not make does at check time without changing its descriptor: a value it computed (from a module
 only it imported) and left in a module's state, or closed over, where an evaluator reads it; a value a module only the
-registries import leaves in another module's state at import, other than a kernel registration or a Definition (an enumerated
-module is held by its name in the listing, not by its content); a module edited after this process imported it and before the
+registries import (one they import for a new sidecar among them) leaves in another module's state at import, other than a
+kernel registration, a Definition or an on-demand family (an enumerated module is held by its name in the listing, not by its
+content); a module edited after this process imported it and before the
 check ran (the process runs the old code, while the reads digested after the check see the new source); behaviour that depends
 on a module's name or path through another object (an object's ``__module__``, a code object's ``co_filename``,
 ``inspect.getfile``: a moved module's objects report their new name; `targets._authored` reads ``__module__`` for the task list
 only), and on the order in which modules are first imported (a moved registry module is imported by its importer rather than by
-the enumeration, and consecutive imports are taken in the order of the names they bind); and report text that names a module or
+the enumeration, one given a sidecar by the registries ahead of the rest, and consecutive imports are taken in the order of the
+names they bind); and report text that names a module or
 a path is the text of the run that stored it.  What runs of a module is what its source compiles to, not its cached bytecode,
 which Python takes when its header matches the source's mtime in whole seconds and its size: a module imported while tracing is
 compiled from its source, and one imported before from bytecode its source does not compile to makes the process uncacheable
@@ -104,11 +129,16 @@ outside the tree (another tree's copy, which no recorded read covers).
 
 The task list of ``--all`` (each target and its key) is an entry too, of the request ``task-list``: it holds what any target
 could (every binding's recording, every Definition the catalog reached with what its build read, `task_list_reads`), every in-tree
-module the process imported and every binding file whole, and counts only when each is unchanged where it was, never through a
-move; a run reuses it only when every target it lists is reused that way too, and then builds no Definition.
+module the process imported but the checker's own (its version) and every binding file whole, and counts only when each is
+unchanged where it was, never through a move; a run reuses it only when every target it lists is reused that way too, and then
+builds no Definition.
 
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
+
+A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
+the tree whose bytes, listing or kind `lookup` takes of them, and, for reads of what the registries registered, every module
+the registries import (`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -120,6 +150,7 @@ import json
 import os
 import platform
 import sys
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -128,13 +159,29 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): a remote run
+#: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
+_LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
+#: the audit event each call of a C++ model raises with the files its library is built from
+#: (`verity.ml.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+MODEL = "verity.numerics.model"
+#: the sources in the tree of every C++ model this process, or one it was forked from, called while tracing (`MODEL`): a
+#: process-wide memo of a model's result hands it to a later check or build without a call, so every recording holds them all
+_CALLED: set[str] = set()
 _UNTRACED: list[str] = []
 _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
+#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
+#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
+#: which, and a target whose process the OOM killer took is never stored
+HEAVY = _HERE / "heavy.json"
+#: which targets a ``--shard`` checks and how ``--combine`` joins the shards' records (`circuit_check.shard`): no input of any
+#: target, since no check imports it
+SHARD = _HERE / "shard.py"
 #: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
@@ -151,7 +198,7 @@ class Frame:
     looked up."""
 
     __slots__ = ("files", "dirs", "probes", "libs", "code", "lines", "defs", "pins", "enums", "named", "missing", "sources",
-                 "kernels")
+                 "kernels", "registered")
 
     def __init__(self) -> None:
         self.files: set[str] = set()
@@ -169,6 +216,8 @@ class Frame:
         self.missing: set[str] = set()
         self.sources: set[str] = set()
         self.kernels: set[str] = set()
+        #: the ids looked up in the Definition registry (`_RecordedDefs`)
+        self.registered: set[str] = set()
 
     def merge(self, o: "Frame", defs: bool = True) -> None:
         self.files |= o.files
@@ -185,10 +234,13 @@ class Frame:
         self.missing |= o.missing
         self.sources |= o.sources
         self.kernels |= o.kernels
+        self.registered |= o.registered
 
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
 _FRAMES: list[Frame] = [Frame()]
+#: bumped each time a recording opens or closes: a specialization whose body was last read at another count is noted again
+_EPOCH = [0]
 #: what was read and run while each module was first imported (after `trace`), by module name
 _MODULES: dict[str, Frame] = {}
 #: what each binding unit read and ran while it made its roots
@@ -232,8 +284,13 @@ def visible(root: Path) -> tuple[frozenset[str], frozenset[str]] | None:
             _VISIBLE[root] = None
         else:
             files = frozenset(x.decode() for x in r.stdout.split(b"\0") if x)
-            dirs = frozenset({"."} | {str(Path(f).parents[i]) for f in files for i in range(len(Path(f).parents) - 1)})
-            _VISIBLE[root] = (files, dirs)
+            dirs = {"."}
+            for f in files:
+                i = f.rfind("/")
+                while i > 0 and (d := f[:i]) not in dirs:
+                    dirs.add(d)
+                    i = f.rfind("/", 0, i)
+            _VISIBLE[root] = (files, frozenset(dirs))
     return _VISIBLE[root]
 
 
@@ -244,18 +301,55 @@ def _listing(root: Path, rel: str) -> str:
     return hashlib.sha512("\0".join(names).encode()).hexdigest()
 
 
+#: `_rel` of each absolute path asked, by root: it depends on nothing else but `_LINKS`, which `trace` sets with the root
+_RELS: dict[Path, dict[str, str | None]] = {}
+
+
 def _rel(path: Any) -> str | None:
     if isinstance(path, int) or not _ROOT:
         return None
+    if isinstance(path, str) and path.startswith("/"):
+        if (memo := _RELS.get(_ROOT[0])) is None:
+            memo = _RELS[_ROOT[0]] = {}
+        if (r := memo.get(path, memo)) is memo:
+            r = memo[path] = _rel_of(path)
+        return r
+    return _rel_of(path)
+
+
+def _rel_of(path: Any) -> str | None:
     try:
         p = Path(os.fsdecode(path))
-        p = p if p.is_absolute() else Path.cwd() / p
-        rel = os.path.relpath(os.path.normpath(p), _ROOT[0])
+        p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
+        rel = os.path.relpath(p, _ROOT[0])
+        if rel.startswith("..") and _LINKS:            # a file through a link into the tree is the tree's (`_LINKS`)
+            rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
+                        if p == k or p.startswith(k + os.sep)), rel)
     except (TypeError, ValueError):
         return None
     if rel.startswith("..") or "__pycache__" in rel.split(os.sep) or rel.split(os.sep)[0] == ".venv":
         return None
     return rel
+
+
+def _links(root: Path) -> dict[str, str]:
+    """`_LINKS`: the links in the import path's directories outside ``root`` that lead into it, each with where it leads.  Read
+    once, when tracing starts: neither its listings nor its ``lstat``s are a check's reads, and `_rel`, which every ``stat``
+    calls, resolves no path itself."""
+    out: dict[str, str] = {}
+    for e in sys.path:
+        d = os.path.abspath(e or os.getcwd())
+        if not os.path.relpath(d, root).startswith(".."):
+            continue
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for n in names:
+            p = os.path.join(d, n)
+            if os.path.islink(p) and not os.path.relpath(t := os.path.realpath(p), root).startswith(".."):
+                out[p] = t
+    return out
 
 
 _TARGETS_REL: list[str | None] = [None]
@@ -281,8 +375,8 @@ _HOOKS = ("__import__", "import_module", "exec_module")
 
 
 #: the read `importlib.metadata` makes of every `sys.path` entry, held by what it yields: each installed distribution's
-#: name and version (`_distributions`), not each directory's listing (17 Oct: since every workspace member is installed,
-#: every member's root was in every target's reads, and a file added to one made every target miss)
+#: name and version (`_distributions`), not each directory's listing (every workspace member is installed, so
+#: a listing would put every member's root in every target's reads, and a file added to one would make every target miss)
 DISTRIBUTIONS = "<distributions>"
 _METADATA: list[str] = []
 
@@ -324,7 +418,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity_vllm.program.registry.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity.ml.definitions.registry.catalog", "load"), ("verity.ml.definitions.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:
@@ -408,6 +502,10 @@ def _hook(event: str, args: tuple) -> None:
         _UNTRACED.append(f"{event} {' '.join(map(str, argv))[:240]}")
     elif event == "ctypes.dlopen" and args and args[0] and (rel := _rel(args[0])) is not None:
         _FRAMES[-1].libs.add(rel)                      # a library built in the tree: an input by its bytes (`_digests`)
+    elif event == MODEL and args:
+        called = [rel for s in args[0] if (rel := _rel(s)) is not None]
+        _FRAMES[-1].files.update(called)
+        _CALLED.update(called)
 
 
 def _probing(fn):
@@ -443,11 +541,29 @@ def unit_files(paths: Iterable[str]) -> None:
 
 
 _REGISTRIES: list[str] = []
+#: what was registered once the registries were loaded (`registries`), the same on every path of a run (a task list reused
+#: builds no binding): each Definition id's registering module, each kernel key's, the Boolean Definitions by the id of their
+#: word, the on-demand families
+_AT_LOAD: dict[str, Any] = {}
+#: the modules whose import registered each Definition id, noted until the registries are loaded (`_instrument`): every in-tree
+#: module whose code was running, and each an enumerator was importing (`_LOADING`)
+_REGISTRAR: dict[str, list[str | None]] = {}
+#: the modules an enumerator (`_enumerator`: `targets.load_registries`, which imports each module with a sidecar) is importing
+#: now, outermost first: an import of ``a.b.c`` runs package ``a.b`` before any code of ``a.b.c``
+_LOADING: list[str] = []
 
 
 def registries(modules: Iterable[str]) -> None:
-    """The modules the registries import for having a sidecar (`targets.load_registries`), in every target's key."""
+    """The modules the registries import for having a sidecar (`targets.load_registries`): the task list's key holds them all,
+    and a target only whether a module whose import registered each Definition its check reached or found has a sidecar, and
+    what the registries register of each id it looked up and found absent (`_registration`)."""
     _REGISTRIES[:] = sorted(modules)
+    _INTERNAL.append(True)
+    try:
+        _AT_LOAD.clear()
+        _AT_LOAD.update(_registrations())
+    finally:
+        _INTERNAL.pop()
 
 
 def pin_files(paths: Iterable[str], where: Any) -> None:
@@ -472,25 +588,51 @@ def internal() -> Iterator[None]:
 def recording(merge: bool = True) -> Iterator[Frame]:
     """Record what runs inside: a new frame on top, which its enclosing recording (not the process's own) also holds when it
     ends, with ``merge``.  Every code object starts afresh in it (`sys.monitoring.restart_events`), so a function an earlier
-    recording ran is seen again."""
+    recording ran is seen again.  It ends holding every model called so far (`_CALLED`): what it read from a memo may be one's
+    result."""
     fr = Frame()
     if not _ROOT:
         yield fr
         return
     _FRAMES.append(fr)
+    _EPOCH[0] += 1
     if _TOOL:
         sys.monitoring.restart_events()
     try:
         yield fr
     finally:
         _FRAMES.pop()
+        fr.files |= _CALLED
+        _EPOCH[0] += 1
         if merge and len(_FRAMES) > 1:
             _FRAMES[-1].merge(fr)
 
 
+def _module_file(m: Any) -> str | None:
+    """Module ``m``'s file: its ``__file__`` when that is an absolute path, as the import system gives every module it loads
+    from a file.  A module object made by hand may carry a bare name (`torch.ops`'s ``_ops.py``, `torch.classes`'s
+    ``_classes.py``), which names no file: resolved, it would be a file in the working directory, so that whether a check's
+    result is stored, and what it holds, would depend on where the check ran."""
+    f = getattr(m, "__file__", None)
+    return f if isinstance(f, str) and os.path.isabs(f) else None
+
+
+def _bare_files() -> set[str]:
+    """Where in the tree a loaded module's bare ``__file__`` (`_module_file`) points from the working directory: `inspect`, asked
+    for the module of a frame, looks for every loaded module's source, this one's there, which is no input of a check."""
+    return {r for m in list(sys.modules.values())
+            if isinstance(f := getattr(m, "__file__", None), str) and not os.path.isabs(f) and (r := _rel(f)) is not None}
+
+
+def _code_rel(code: Any) -> str | None:
+    """The tree's path of the file ``code`` was compiled from; None for a name that is no path (``<string>``, ``<frozen ...>``),
+    like a bare ``__file__`` (`_module_file`)."""
+    return _rel(code.co_filename) if os.path.isabs(code.co_filename) else None
+
+
 def _imported(mods: list) -> None:
     for m in mods:
-        if (f := getattr(m, "__file__", None)) and isinstance(f, str) and isinstance(m, type(sys)):
+        if (f := _module_file(m)) and isinstance(m, type(sys)):
             _FRAMES[-1].code.add(f)
 
 
@@ -526,7 +668,7 @@ def _instrument() -> None:
             path = getattr(module, "__file__", None)
             if isinstance(path, str) and _rel(path) is not None:
                 # compiled from the source the key digests, not its cached bytecode (`_stale_bytecode`)
-                exec(self.source_to_code(self.get_data(path), path), module.__dict__)
+                exec(self.source_to_code(self.get_data(path), path), module.__dict__)  # noqa: S102  (an import, as the loader runs it)
             else:
                 exec0(self, module)
         _MODULES[module.__name__] = fr
@@ -556,13 +698,19 @@ def _instrument() -> None:
 
     def import_module(name, package=None):
         f = sys._getframe(1)
+        bare = name.lstrip(".")
+        loading = not _AT_LOAD and _enumerator(f)
+        if loading:
+            _LOADING.append(_absolute(bare, {"__package__": package}, len(name) - len(bare)))
         try:
             m = by_name0(name, package)
         except ImportError:
             if not _INTERNAL:
-                bare = name.lstrip(".")
                 _FRAMES[-1].missing.add(_absolute(bare, {"__package__": package}, len(name) - len(bare)))
             raise
+        finally:
+            if loading:
+                _LOADING.pop()
         if not _INTERNAL:
             if not _enumerator(f):
                 _FRAMES[-1].named.add(m.__name__)
@@ -581,6 +729,29 @@ def _instrument() -> None:
         batch = None
     if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
         batch._KERNELS = _RecordedKernels(batch._KERNELS)
+    if not isinstance(D.REGISTRY.defs, _RecordedDefs):
+        D.REGISTRY.defs = _RecordedDefs(D.REGISTRY.defs)
+    add0 = D.Registry.add
+
+    def add(self, d):
+        _INTERNAL.append(True)                         # registering is no lookup
+        try:
+            out = add0(self, d)
+        finally:
+            _INTERNAL.pop()
+        if self is D.REGISTRY and not _AT_LOAD and (fid := getattr(d, "id", None)) not in _REGISTRAR:
+            # not only the innermost: a sidecar beside a module that imports this one, or whose package imports it, is what
+            # makes the registries register it
+            mods, f = [*_LOADING], sys._getframe(1)
+            while f is not None:
+                if f.f_code.co_name == "<module>" and _code_rel(f.f_code) is not None:
+                    mods.append(f.f_globals.get("__name__"))
+                f = f.f_back
+            if mods:
+                _REGISTRAR[fid] = mods
+        return out
+
+    D.Registry.add = add
     build0 = D._build_body
 
     def _build_body(sp):
@@ -606,11 +777,17 @@ def _instrument() -> None:
     for cls in (D.PrimitiveDefinition, D.CompositeDefinition, D.SpecializedDefinition):
         marking(cls)
     get = D.SpecializedDefinition.body.fget
+    D.SpecializedDefinition._circuit_check_read = -1
 
     def body(self):
+        # the layout's walks read a body millions of times a check: noted once under each innermost recording
+        if self._circuit_check_read == _EPOCH[0] and (b := self._body) is not None:
+            return b
         if len(_FRAMES) > 1:
             _FRAMES[-1].defs.setdefault(id(self), self)
-        return get(self)
+        b = get(self)
+        self._circuit_check_read = _EPOCH[0]
+        return b
 
     D.SpecializedDefinition.body = property(body)
     sig = D.SpecializedDefinition.signature
@@ -629,6 +806,7 @@ def trace(root: Path) -> None:
     the code that runs through `sys.monitoring`, and the Definitions' builds and reads (`_instrument`)."""
     if not _ROOT:
         _ROOT.append(Path(root).resolve())
+        _LINKS.update(_links(_ROOT[0]))
         _TARGETS_REL[0] = _rel(TARGETS)
         unit_files(())
         sys.addaudithook(_hook)
@@ -911,13 +1089,23 @@ def _parsed_bytes(data: bytes) -> tuple[str, list, bool, bool]:
     return _PARSED[h]
 
 
+_ROOTS: dict[tuple, list[str]] = {}
+#: while `declared` collects: (each path whose kind `_resolve` and `_sidecar` asked, each file `_resolve` resolved to), relative
+#: to the root
+_PROBED: list[tuple[set[str], set[str]]] = []
+
+
 def _roots(root: Path) -> list[str]:
     """The import path's entries inside the tree (``sys.path`` order, relative to ``root``), where module names resolve."""
+    k = (str(root), os.getcwd(), *sys.path)
+    if k in _ROOTS:
+        return _ROOTS[k]
     out: list[str] = []
     for e in sys.path:
         rel = os.path.relpath(os.path.realpath(e or os.getcwd()), root)
         if not rel.startswith("..") and rel.split(os.sep)[0] != ".venv" and rel not in out:
             out.append(rel)
+    _ROOTS[k] = out
     return out
 
 
@@ -943,6 +1131,10 @@ def _resolve(root: Path, name: str) -> Path | None:
     v = visible(root)
     isfile = (lambda r: r in v[0] and (root / r).is_file()) if v is not None else (lambda r: (root / r).is_file())
     isdir = (lambda r: r in v[1] and (root / r).is_dir()) if v is not None else (lambda r: (root / r).is_dir())
+    if _PROBED:
+        asked, isfile0, isdir0 = _PROBED[-1][0], isfile, isdir
+        isfile = lambda r: asked.add(r) or isfile0(r)  # noqa: E731
+        isdir = lambda r: asked.add(r) or isdir0(r)  # noqa: E731
     paths, found, top = _roots(root), None, True
     for part in name.split("."):
         if not part.isidentifier():
@@ -965,7 +1157,11 @@ def _resolve(root: Path, name: str) -> Path | None:
                 return None
             nxt = portions
         paths, top = nxt, False
-    return root / found if found is not None and (root / found).is_file() else None
+    if found is None or not (root / found).is_file():
+        return None
+    if _PROBED:
+        _PROBED[-1][1].add(found)
+    return root / found
 
 
 def _relative(pkg: str, level: int, module: str) -> str | None:
@@ -1049,8 +1245,8 @@ def _loaded(root: Path) -> dict[str, list[str]]:
     if not _LOADED:
         ix: dict[str, list[str]] = {}
         for name, m in list(sys.modules.items()):
-            f = getattr(m, "__file__", None)
-            if not (isinstance(f, str) and _rel(f) is not None):
+            f = _module_file(m)
+            if not (f and _rel(f) is not None):
                 continue
             side = _side(name)
             p = _resolve(root, name) if side is None else root / r if (r := _sidecar(root, side, ".py")) is not None else None
@@ -1072,7 +1268,7 @@ class _RecordedKernels(dict):
 
     def setdefault(self, key, default=None):
         f = sys._getframe(1)
-        while f is not None and not (f.f_code.co_name == "<module>" and _rel(f.f_code.co_filename) is not None):
+        while f is not None and not (f.f_code.co_name == "<module>" and _code_rel(f.f_code) is not None):
             f = f.f_back
         if f is not None:
             self.by.setdefault(str(key), set()).add(f.f_code.co_filename)
@@ -1130,7 +1326,7 @@ def _where(fn: Any) -> str | None:
     code = getattr(fn, "__code__", None) or getattr(getattr(fn, "__call__", None), "__code__", None)
     if code is None:
         return f"{type(fn).__module__}.{type(fn).__qualname__}"
-    rel = _rel(code.co_filename)
+    rel = _code_rel(code)
     if rel is None or not _ROOT:
         return f"{code.co_filename}:{code.co_firstlineno}"
     p, v = _ROOT[0] / rel, visible(_ROOT[0])
@@ -1140,6 +1336,8 @@ def _where(fn: Any) -> str | None:
 
 
 _TREES: dict[str, ast.Module | None] = {}
+#: `_defined_at` by the file's content digest and the line
+_DEFINED: dict[tuple[str, int], str] = {}
 
 
 def _defined_at(p: Path, line: int) -> str:
@@ -1147,6 +1345,12 @@ def _defined_at(p: Path, line: int) -> str:
     ``line`` (a decorated one at its first decorator), or the line itself when none does."""
     data = p.read_bytes()
     h = hashlib.sha512(data).hexdigest()
+    if (h, line) not in _DEFINED:
+        _DEFINED[h, line] = _defined_in(h, data, line)
+    return _DEFINED[h, line]
+
+
+def _defined_in(h: str, data: bytes, line: int) -> str:
     if h not in _TREES:
         try:
             _TREES[h] = ast.parse(data)
@@ -1170,10 +1374,161 @@ def _kernels_now(key: str) -> str | None:
         return None
     reg = batch._KERNELS
     keys = sorted(dict.keys(reg)) if key == "*" else [key]
-    got = {k: {n: [kn.domain, kn.version, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
+    got = {k: {n: [kn.domain, kn.version, kn.partial, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
            for k in keys}
     got = {k: v for k, v in got.items() if v}
     return hashlib.sha512(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
+
+
+# --- the Definitions a check looked up or reached, as the registries registered them ----------------------------------------
+
+#: the functions that enumerate the Definition registry only to find the Boolean Definition whose ``word`` is one primitive,
+#: each with its local that holds that primitive's id: held by the Boolean Definitions of that word (`WORD`), not by the
+#: whole registry
+_WORD_ENUMERATORS = {("verity_flock.ir_lower", "_boolean_build"): "key"}
+#: such an enumeration as a read: ``word:<the primitive's id>``
+WORD = "word:"
+#: a lookup that found no Definition, as a read: ``absent:<id>``
+ABSENT = "absent:"
+
+
+class _RecordedDefs(dict):
+    """`verity.ml.circuits.defs.REGISTRY`'s Definitions by id, noting in the open recording each id looked up (`ABSENT` when it
+    found none) and on any enumeration ``*``, or one of `_WORD_ENUMERATORS`' `WORD` read.  Registering (`Registry.add`) is
+    no lookup."""
+
+    def _note(self, key: Any) -> None:
+        if len(_FRAMES) > 1 and not _INTERNAL:
+            # an unhashable key raises here the TypeError the lookup itself would
+            found = dict.__contains__(self, key)
+            _FRAMES[-1].registered.add(str(key) if found else f"{ABSENT}{key}")
+
+    def _all(self) -> None:
+        if len(_FRAMES) > 1 and not _INTERNAL:
+            f = sys._getframe(2)
+            local = _WORD_ENUMERATORS.get((f.f_globals.get("__name__"), f.f_code.co_qualname))
+            word = f.f_locals.get(local) if local is not None else None
+            _FRAMES[-1].registered.add(f"{WORD}{word}" if isinstance(word, str) else "*")
+
+    def get(self, key, default=None):
+        self._note(key)
+        return dict.get(self, key, default)
+
+    def __getitem__(self, key):
+        self._note(key)
+        return dict.__getitem__(self, key)
+
+    def __contains__(self, key) -> bool:
+        self._note(key)
+        return dict.__contains__(self, key)
+
+    def __iter__(self):
+        self._all()
+        return dict.__iter__(self)
+
+    def __reversed__(self):
+        self._all()
+        return dict.__reversed__(self)
+
+    def __len__(self) -> int:
+        self._all()
+        return dict.__len__(self)
+
+    def keys(self):
+        self._all()
+        return dict.keys(self)
+
+    def values(self):
+        self._all()
+        return dict.values(self)
+
+    def items(self):
+        self._all()
+        return dict.items(self)
+
+    def copy(self):
+        self._all()
+        return dict(dict.items(self))
+
+
+def _function_module(d: Any) -> str | None:
+    """The module of the function a Definition builds or evaluates by (`sidecars.owner`'s fallback)."""
+    fields = getattr(d, "__dict__", {})
+    for a in ("build", "body", "evaluate", "fn"):
+        if callable(f := fields.get(a)) and getattr(f, "__module__", None):
+            return f.__module__
+    return None
+
+
+def _registrations() -> dict[str, Any]:
+    """`_AT_LOAD` now: each registered Definition's id with the modules whose import registered it (`_REGISTRAR`; one registered
+    before tracing began, the module of the function it builds or evaluates by), each kernel key with the modules whose import
+    registered its kernels (`_RecordedKernels.by`; one registered before, its functions' modules), the ids of the Boolean
+    Definitions of each word, and the on-demand families (`verity.ml.circuits.codec.register_lazy_family`), in order.  The
+    registries were just loaded from these modules, so a failed import raises: an empty `_AT_LOAD` would hold no registration."""
+    from verity.ml.circuits import codec
+    from verity.ml.circuits.defs import REGISTRY
+    from verity.ml.circuits.evaluation import batch
+
+    names = {}
+    for name, m in list(sys.modules.items()):
+        if (f := _module_file(m)) is not None:
+            names.setdefault(os.path.abspath(f), name)
+    defs: dict[str, list[str | None]] = {}
+    words: dict[str, list[str]] = {}
+    for fid, d in list(dict.items(REGISTRY.defs)):
+        defs[fid] = _REGISTRAR.get(fid) or [_function_module(d)]
+        # as `verity_flock.ir_lower._boolean_build` reads it
+        w = getattr(d, "word", None)
+        word = getattr(w, "id", None) if w is not None and callable(getattr(d, "build", None)) else None
+        if isinstance(word, str):
+            words.setdefault(word, []).append(fid)
+    kernels: dict[str, list[str]] = {}
+    by = getattr(batch._KERNELS, "by", {})
+    for k, ks in list(dict.items(batch._KERNELS)):
+        mods = {names[f] for f in map(os.path.abspath, by.get(str(k), ())) if f in names} \
+            or {m for kn in ks.values() if isinstance(m := getattr(kn.fn, "__module__", None), str)}
+        kernels[str(k)] = sorted(mods)
+    return {"defs": defs, "kernels": kernels, "words": words, "lazy": list(codec._LAZY_PRIMITIVE_FAMILIES)}
+
+
+def _registration(x: str, flags: bool) -> str | None:
+    """Read ``x`` of the Definition registry as the registries left it (`_AT_LOAD`): for an id a check reached or found, whether
+    a module whose import registered its Definition (`_REGISTRAR`), or one that registered its kernels, has a sidecar
+    (`_REGISTRIES`; only a target's, ``flags``); for an `ABSENT` one, whether anything registered it, else the on-demand family
+    that makes it (`_where` of its maker); for a `WORD` read, the Boolean Definitions of that word (with ``flags``, each with
+    whether a module that registered it has a sidecar); for ``*`` (the registry enumerated), the modules with a sidecar.  None
+    when there is nothing of these.
+
+    Whether an id the check found was registered by then, and by which module, does not count: a registry module moved where
+    no enumeration lists it is imported by a binding before any check instead, registering the same (as `_moved` takes a
+    listing), and what the check ran of it is held as a module.  Whether a sidecar made the registries register it does: every
+    module whose import registered it counts, so removing the sidecar of one that imports the registering module (or whose
+    package does) reruns the check, which would find it absent."""
+    if x == "*":
+        return hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest()
+    if not _AT_LOAD:
+        return None
+    defs, side = _AT_LOAD["defs"], set(_REGISTRIES)
+    if x.startswith(ABSENT):
+        fid = x[len(ABSENT):]
+        if fid in defs:
+            return "registered"
+        return next((_where(mk) for pat, mk in _AT_LOAD["lazy"] if pat.fullmatch(fid)), None)
+    if x.startswith(WORD):
+        got = sorted([i, any(m in side for m in defs.get(i, ()))] if flags else [i]
+                     for i in _AT_LOAD["words"].get(x[len(WORD):], ()))
+        return hashlib.sha512(json.dumps(got).encode()).hexdigest() if got else None
+    if not flags:
+        return None
+    got = [any(m in side for m in defs.get(x, ())), any(m in side for m in _AT_LOAD["kernels"].get(x, ()))]
+    return json.dumps(got) if any(got) else None
+
+
+def _registry_id(d: Any) -> str | None:
+    """The id a Definition is registered by and its kernels are looked up under: a specialization's, its Definition's."""
+    rid = getattr(d, "base_id", None) or getattr(d, "id", None)
+    return rid if isinstance(rid, str) else None
 
 
 # --- a binding file's units -------------------------------------------------------------------------------------------------
@@ -1194,6 +1549,8 @@ def _sidecar(root: Path, module: str, ext: str) -> str | None:
     if f.name != "__init__.py":
         return os.path.relpath(f.with_name(f"{f.stem}{SUFFIX}{ext}"), root)
     inside, beside = f.parent / f"__init__{SUFFIX}{ext}", f.parent.with_name(f"{f.parent.name}{SUFFIX}{ext}")
+    if _PROBED:
+        _PROBED[-1][0].update(os.path.relpath(p, root) for p in (inside, beside))
     return os.path.relpath(beside if beside.is_file() and not inside.is_file() else inside, root)
 
 
@@ -1316,27 +1673,73 @@ def _unit_at(spans: list, line: int) -> list[str]:
 # --- a target's reads -------------------------------------------------------------------------------------------------------
 
 _OUTSIDE: set[str] = set()
+_INTERPRETER: list[tuple[str, ...]] = []
 
 
 def _interpreter_dirs() -> tuple[str, ...]:
-    import sysconfig
+    if not _INTERPRETER:
+        import sysconfig
 
-    dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
-            *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
-    return tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)})
+        dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
+                *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
+        _INTERPRETER.append(tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)}))
+    return _INTERPRETER[0]
+
+
+#: the (name, file) of each module `_check_outside` has looked at, by what it counted as inside: a module's file stays put
+_LOOKED: dict[tuple[str, ...], set[tuple[str, str]]] = {}
+
+
+def _outside_modules() -> tuple[set[tuple[str, str]], list[tuple[str, Any]]]:
+    """The loaded modules from outside the tree and the interpreter's own directories, each (name, file) not looked at before,
+    and the set of those looked at, by what counts as inside."""
+    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
+    looked = _LOOKED.setdefault(inside, set())
+    out = []
+    for name, m in list(sys.modules.items()):
+        f = _module_file(m)
+        if f and (name, f) in looked:
+            continue
+        if not f or _rel(f) is not None or not inside or any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+            if f:
+                looked.add((name, f))
+            continue
+        out.append((name, f))
+    return looked, out
 
 
 def _check_outside() -> None:
     """A module imported from outside the tree and the interpreter's own directories (another tree's copy of a package, say) is a
     read no key can hold: the process's results after it are not stored (`untraced`)."""
-    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
-    for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if not f or _rel(f) is not None:
-            continue
-        if inside and name not in _OUTSIDE and not any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+    looked, out = _outside_modules()
+    for name, f in out:
+        if name not in _OUTSIDE:
             _OUTSIDE.add(name)
             _UNTRACED.append(f"imported {name} from {f}, outside the tree")
+        if isinstance(f, str):
+            looked.add((name, f))
+
+
+def warm() -> None:
+    """What `attributed` and `seen` work out alike in every process forked from this one, worked out here once, before the
+    forks: which loaded modules are inside the tree, their paths, each in-tree one's parse and top-level imports (`_parsed`,
+    `_top_imports`), the import path's entries in the tree and the installed distributions' packages.  Nothing it does is a
+    read, and a module outside the tree is still found, and its process's results not stored, in each process that looks."""
+    _INTERNAL.append(True)
+    try:
+        _outside_modules()
+        own = os.path.join(str(_HERE), "")
+        for name, m in list(sys.modules.items()):
+            if (f := _module_file(m)) is not None and _rel(a := _abspath(f)) is not None \
+                    and a.endswith(".py") and not a.startswith(own):
+                if os.path.isfile(a):
+                    _parsed(Path(a))
+                _top_imports(a, name)
+        _outside_tops()
+        if _ROOT:
+            _roots(_ROOT[0])
+    finally:
+        _INTERNAL.pop()
 
 
 _IMPORTS: dict[str, list[str]] = {}
@@ -1391,28 +1794,40 @@ def _evaluators(d: Any) -> list[str]:
     return [f.__code__.co_filename for a in ("evaluate", "fn", "signature", "body") if hasattr(f := fields.get(a), "__code__")]
 
 
-def attributed(fr: Frame, units: Iterable[str] = (), roots: Iterable[Any] = ()) -> dict[str, list[str]]:
+def attributed(fr: Frame, units: Iterable[str] = (), roots: Iterable[Any] = (), sidecars: bool = True) -> dict[str, list[str]]:
     """What a target's check read or resolved: its recording ``fr``; for every specialization it read or reaches from
     ``roots``, its build's recording and the recording of each binding that made it (`made_by`; without ``roots``, those of
-    all its binding ``units``); each module among them with its import closure; its ``units`` by digest; and what the process
-    read outside every recording."""
+    all its binding ``units``); each module among them with its import closure; its ``units`` by digest; what the process
+    read outside every recording; and its reads of the Definition registry (`_registration`): ``registrars``, every id it
+    reached, found or looked up absent, every kernel it looked up and its enumerations; without ``sidecars`` (a binding's
+    record), ``registered``, only the ids it looked up absent and its enumerations."""
     _INTERNAL.append(True)
     try:
-        return _attributed(fr, units, roots)
+        return _attributed(fr, units, roots, sidecars)
     finally:
         _INTERNAL.pop()
 
 
-def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
+_ABSPATHS: dict[str, str] = {}
+
+
+def _abspath(f: Any) -> str:
+    if not (isinstance(f, str) and f.startswith("/")):
+        return os.path.abspath(f)
+    if (a := _ABSPATHS.get(f)) is None:
+        a = _ABSPATHS[f] = os.path.abspath(f)
+    return a
+
+
+def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars: bool) -> dict[str, list[str]]:
     _check_outside()
     by_file = {}
     for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if f:
-            by_file.setdefault(os.path.abspath(f), name)
+        if f := _module_file(m):
+            by_file.setdefault(_abspath(f), name)
     acc = Frame()
     acc.merge(fr)
-    if not roots:                                      # a template, or a target named on the command line: its whole bindings
+    if not roots:                                      # a template, or a named target that doesn't resolve: its whole bindings
         for u in units:
             if u in _PRODUCED:
                 acc.merge(_PRODUCED[u], defs=False)
@@ -1448,6 +1863,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     done: set[str] = set()
     work = list(code)
     unit_names = set(units) | {"common"}
+    reached: set[str] = set()
 
     def expand() -> None:
         while stack:
@@ -1455,6 +1871,8 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             if id(d) in seen_defs:
                 continue
             seen_defs.add(id(d))
+            if (rid := _registry_id(d)) is not None:
+                reached.add(rid)
             for u in made_by(d):                       # what made it ran: not every Definition its binding's roots reach
                 if u in _PRODUCED and u not in seen_units:
                     seen_units.add(u)
@@ -1479,6 +1897,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         acc.missing |= f.missing
         acc.sources |= f.sources
         acc.kernels |= f.kernels
+        acc.registered |= f.registered
         work.extend(f.code)
         if defs:
             stack.extend(f.defs.values())
@@ -1487,7 +1906,9 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         expand()
         if not work:
             break
-        f = os.path.abspath(work.pop())
+        if not os.path.isabs(f := work.pop()):
+            continue                                   # a code object's `<string>` or `<frozen ...>`: no file (`_module_file`)
+        f = os.path.abspath(f)
         if f in done:
             continue
         done.add(f)
@@ -1502,8 +1923,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             take(_MODULES[name])
         parts = name.split(".")
         for imp in _top_imports(f, name) + [".".join(parts[:i]) for i in range(1, len(parts))]:
-            m = sys.modules.get(imp)
-            if (mf := getattr(m, "__file__", None)) is not None:
+            if (mf := _module_file(sys.modules.get(imp))) is not None:
                 work.append(mf)
     # a unit is named by its file (`_named_file`): `targets.py`'s bare, a sidecar's as ``<module>.circuit-check#<unit>``; each
     # file's ``common`` comes with it
@@ -1538,20 +1958,27 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
         else:
             acc.dirs.add(rel)
     present: set[str] = set()
+    bare = _bare_files()
     for rel in acc.sources:                            # a loaded module's source looked for, by the module's name
         f = os.path.abspath(os.path.join(root, rel))
         name = by_file.get(f)
+        if f.startswith(os.path.join(str(_HERE), "")):
+            continue                                   # the checker's version, and `targets.py` by its units
         if name is not None and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f):
             present.add(name)
         elif name is not None and (m := _side(name)) is not None and (r := _sidecar(root, m, ".py")) is not None \
                 and os.path.realpath(root / r) == os.path.realpath(f):
             present.add(name)                          # a sidecar's, by its module's name: it moves with its module
-        else:
+        elif rel not in bare:
             acc.probes.add(rel)
+    if sidecars:
+        registry = {"registrars": sorted(reached | acc.registered | (acc.kernels - {"*"}))}
+    else:                                              # a found id's read is only whether its module has a sidecar
+        registry = {"registered": sorted(r for r in acc.registered if r == "*" or r.startswith((ABSENT, WORD)))}
     return {"files": sorted(acc.files), "dirs": sorted(acc.dirs), "probes": sorted(acc.probes - acc.files - acc.dirs),
             "libs": sorted(acc.libs), "units": sorted(held), "pins": sorted(pins),
             "modules": sorted(mods), "named": sorted(acc.named & mods), "missing": sorted(acc.missing), "enums": sorted(enums),
-            "present": sorted(present - mods), "kernels": sorted(acc.kernels), "dists": _outside_tops()}
+            "present": sorted(present - mods), "kernels": sorted(acc.kernels), "dists": _outside_tops(), **registry}
 
 
 _PACKAGES: list[dict[str, list[str]]] = []
@@ -1572,8 +1999,8 @@ def _outside_tops() -> list[str]:
     the versions of the distributions that provide it (`_dist`). The interpreter's own modules are the key's ``python``."""
     out = set()
     for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if "." not in name and isinstance(f, str) and _rel(f) is None and _packages().get(name):
+        f = _module_file(m)
+        if "." not in name and f and _rel(f) is None and _packages().get(name):
             out.add(name)
     return sorted(out)
 
@@ -1594,18 +2021,76 @@ def _dist(root: Path, top: str) -> str | None:
         return None
 
 
+class _Prose(ast.NodeTransformer):
+    """A module's AST without its statements that are a string alone (its docstrings among them)."""
+
+    def visit_Expr(self, node: ast.Expr) -> ast.AST | None:
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            return None
+        return self.generic_visit(node)
+
+
+_CODE: dict[bytes, bytes] = {}
+
+
+def _code(p: Path) -> bytes:
+    """A file of the checker as its version holds it: a module by the digest of its AST with every string-alone statement cut
+    (`_Prose`; the AST holds no comment, formatting or line number), so an edit to its prose keeps the version; any other file
+    by its bytes.  Memoized by the bytes, since `key` reads every file again for each entry."""
+    data = p.read_bytes()
+    if p.suffix != ".py":
+        return data
+    if data not in _CODE:
+        _CODE[data] = b"ast:" + hashlib.sha512(ast.dump(_Prose().visit(ast.parse(data))).encode()).digest()
+    return _CODE[data]
+
+
+#: `version` as last computed: the places it was computed for, each directory and file it read with its stat (`_stat`), and the
+#: digest
+_VERSION: list[tuple[tuple, list[tuple[str, tuple[int, ...] | None]], str]] = []
+#: a file or directory whose stat changed within this many nanoseconds before `version` read it may change again in the same
+#: timestamp tick and keep its stat: past every filesystem's timestamp granularity (FAT's 2 s)
+RACY_NS = 2_000_000_000
+#: the clock `version` reads, on the scale of a stat's times (a test sets its own)
+_clock = time.time_ns
+
+
+def _stat(p: str | Path) -> tuple[int, ...] | None:
+    """What a write to ``p``, or an entry added to or removed from it, changes of its stat: its inode, size, and modification
+    and change times (a change time no program sets); None when it is gone."""
+    if not os.path.exists(p):
+        return None
+    st = os.stat(p)
+    return st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns
+
+
 def version() -> str:
-    """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them)."""
-    h = hashlib.sha512()
+    """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
+    ``pins/`` (each target holds its own parts of them), `HEAVY` and `SHARD` (no target's input).  Computed once a process
+    (`key` asks for it once for every target), and again only when a directory or file it read has another stat now (an
+    edit in this process, as a test makes), or had one that changed within `RACY_NS` of when it was read."""
+    where = (_HERE, TARGETS, PINS, HEAVY, SHARD)
     _INTERNAL.append(True)
     try:
-        for p in sorted(_HERE.rglob("*")):
-            if p.is_file() and "__pycache__" not in p.parts and p != TARGETS and PINS not in p.parents:
-                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+        if _VERSION and _VERSION[0][0] == where and all(_stat(p) == s for p, s in _VERSION[0][1]):
+            return _VERSION[0][2]
+        at = _clock()
+        seen: list[tuple[str, tuple[int, ...] | None]] = []
+        files: list[Path] = []
+        for d, dirs, names in os.walk(_HERE):
+            dirs[:] = [x for x in dirs if x != "__pycache__" and Path(d, x) != PINS]
+            seen.append((d, _stat(d)))
+            files += [Path(d, n) for n in names]
+        h = hashlib.sha512()
+        for p in sorted(files):
+            if p not in (TARGETS, HEAVY, SHARD):
+                seen.append((str(p), _stat(p)))
+                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
+        _VERSION[:] = [] if any(s is None or max(s[2], s[3]) >= at - RACY_NS for _p, s in seen) else \
+            [(where, seen, h.hexdigest())]
+        return h.hexdigest()
     finally:
         _INTERNAL.pop()
-    return h.hexdigest()
 
 
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
@@ -1619,24 +2104,39 @@ def key(request: dict) -> dict:
         # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
         # between pods and would keep one pod's reports from ever counting on another (`tools/verity/check/verdicts.py`)
         plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
+        # the interpreter and its release, as suites.py keys a pass, not `sys.version`: that names its build's date, which
+        # differs between two machines' builds of one release
+        python = f"{platform.python_implementation()} {platform.python_version()}"
     finally:
         _INTERNAL.pop()
-    return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
-            "platform": plat,
-            "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
-            "environment": {k: v for k, v in sorted(os.environ.items())
-                            if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
+    k = {"schema": SCHEMA, "version": version(), "request": request, "python": python, "optimize": sys.flags.optimize,
+         "platform": plat, "environment": {k: v for k, v in sorted(os.environ.items())
+                                           if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
+    target = request.get("target")
+    if isinstance(target, (list, tuple)) and list(target[:1]) == ["task-list"]:
+        # the list's build found the sidecars itself (`sidecars.discover`), reading nothing a recording holds
+        k["registries"] = hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest()
+    return k
 
 
 _OWN: dict[int, tuple[Any, str]] = {}
+#: each specialization's distinct callees and statics, once: a body calls a few Definitions from many nodes, and every target's
+#: descriptor walks all it reaches
+_NEXT: dict[int, tuple[Any, bool, tuple[Any, ...]]] = {}
 
 
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
-    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`): what the target is, whatever module or
-    path it was written in.  A body that cannot be built gives the error's type, so no stored entry matches."""
+    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`), and of every reference, by its
+    id and statics: what the target is, whatever module or path it was written in.  A by-calls root (`targets.is_by_calls`) is
+    its own entry (`by_calls.entry`), without what its body calls.  A body that cannot be built gives the error's type, so no
+    stored entry matches."""
     from verity.ml.circuits import codec as C
     from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.circuits.evaluation import ScalarReference
+
+    from . import by_calls as BC
+    from . import targets as TG
 
     def statics(v: Any) -> Iterator[Any]:
         if isinstance(v, FunctionDefinition):
@@ -1655,14 +2155,23 @@ def descriptor(fn: Any) -> str:
                 if id(f) in seen:
                     continue
                 seen.add(id(f))
+                by_calls = TG.is_by_calls(f)
                 if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
                     e = _OWN.get(id(f))
                     if e is None or e[0] is not f:
-                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest())
+                        own = BC.entry(f) if by_calls else C.definition_entry(f)
+                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
+                elif isinstance(f, ScalarReference):
+                    # one reference bound at two statics is two targets of one id (`targets.reachable` keeps the first)
+                    st = json.dumps(sorted(f.bindings.items()), default=repr)
+                    parts.append([f.id, hashlib.sha512(st.encode()).hexdigest()])
                 if isinstance(f, SpecializedDefinition):
-                    stack.extend(n.fn for n in f.body.nodes)
-                    stack.extend(statics(f.bindings))
+                    nxt = _NEXT.get(id(f))
+                    if nxt is None or nxt[0] is not f or nxt[1] != by_calls:
+                        got = {id(g): g for g in [*(() if by_calls else (n.fn for n in f.body.nodes)), *statics(f.bindings)]}
+                        nxt = _NEXT[id(f)] = (f, by_calls, tuple(got.values()))
+                    stack.extend(nxt[2])
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"
     return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()
@@ -1746,14 +2255,17 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
     present = {r: memo("c", r, lambda r=r: _local(root, r)) for r in got.get("present", [])}
     kernels = {r: memo("k", r, lambda r=r: _kernels_now(r)) for r in got.get("kernels", [])}
     dists = {r: memo("x", r, lambda r=r: _dist(root, r)) for r in got.get("dists", [])}
-    return {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins, "modules": modules,
-            "named": named, "missing": missing, "enums": enums, "present": present, "kernels": kernels,
-            "dists": dists}
+    out = {"files": files, "dirs": dirs, "probes": probes, "libs": libs, "units": units, "pins": pins, "modules": modules,
+           "named": named, "missing": missing, "enums": enums, "present": present, "kernels": kernels, "dists": dists}
+    for kind, flags in (("registered", False), ("registrars", True)):
+        out[kind] = {r: memo(kind, r, lambda r=r, flags=flags: _registration(r, flags)) for r in got.get(kind, [])}
+    return out
 
 
-#: what matches by equality alone: paths and their contents, the names imports looked up by name, kernel registrations (and
-#: ``pins/``'s pins; a sidecar's are read where its module is, `_moved`)
-_EXACT = ("files", "dirs", "probes", "libs", "named", "missing", "kernels", "dists")
+#: what matches by equality alone: paths and their contents, the names imports looked up by name, kernel and Definition
+#: registrations (`_registration` names no module, so a move keeps them) and ``pins/``'s pins (a sidecar's are read where its
+#: module is, `_moved`)
+_EXACT = ("files", "dirs", "probes", "libs", "named", "missing", "kernels", "dists", "registered", "registrars")
 
 
 def _seen(root: Path):
@@ -1935,21 +2447,8 @@ def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, 
     found only where its modules moved (`_moved`) is stored again with its reads renamed to where they are, digested now (what
     a run would record), so that a later edit of a moved module is told from a move; not with ``moved`` false, which `_moved`
     needs for the modules this process imported (`_loaded`)."""
-    d = _dir(cache, k)
-    if not d.is_dir():
-        return None
-    for p in sorted(d.glob("*.json")):
-        _INTERNAL.append(True)
-        try:
-            e = json.loads(p.read_text())
-        except (OSError, ValueError):
-            continue
-        finally:
-            _INTERNAL.pop()
-        if e.get("key") != k:
-            continue
+    for e, p, now in _entries(cache, k, root):
         rec = e["reads"]
-        now = _digests(root, {k: list(v) for k, v in rec.items()})
         if now == rec:
             return e["report"], p.stem
         if not moved:
@@ -1970,33 +2469,232 @@ def lookup(cache: Path, k: dict, root: Path, moved: bool = True) -> tuple[dict, 
     return None
 
 
+def _entries(cache: Path, k: dict, root: Path) -> Iterator[tuple[dict, Path, dict]]:
+    """Each entry stored under key ``k``, with its file and its recorded reads as they are now."""
+    d = _dir(cache, k)
+    _INTERNAL.append(True)
+    try:
+        found = sorted(d.glob("*.json")) if d.is_dir() else []
+    finally:
+        _INTERNAL.pop()
+    for p in found:
+        _INTERNAL.append(True)
+        try:
+            e = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        finally:
+            _INTERNAL.pop()
+        if e.get("key") == k:
+            yield e, p, _digests(root, {k: list(v) for k, v in e["reads"].items()})
+
+
+def recorded(cache: Path, k: dict, root: Path) -> dict[str, list[str]] | None:
+    """What the entry with key ``k`` that `lookup` finds where its modules are (no move) recorded reading, by kind; None when
+    there is none."""
+    return next(({kind: list(v) for kind, v in e["reads"].items()} for e, _p, now in _entries(cache, k, root)
+                 if now == e["reads"]), None)
+
+
 def seen(root: Path, got: dict[str, list[str]]) -> dict[str, dict[str, str | None]]:
     """The reads as the process that just ran a check sees them: digested now, not remembered from earlier in the run."""
     return _digests(root, got, fresh=True)
 
 
-def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
-    """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
-    every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
-    reads: a new binding entry, a new Definition in a registry module or a new module an enumerated package lists changes the
-    list without changing what any target read."""
-    fr = Frame()
-    for f in _PRODUCED.values():
-        fr.merge(f)
-    got = attributed(fr, (), roots)
+def seen_all(root: Path, gots: list[dict[str, list[str]]]) -> list[dict[str, dict[str, str | None]]]:
+    """`seen` of each read set in ``gots``, every read among them digested once, now: what each gives on its own while the tree
+    is unchanged (`circuit_check.units` stores hundreds of records whose reads are mostly the same modules)."""
+    if not gots:
+        return []
+    every = {k: sorted({r for g in gots for r in g.get(k, ())}) for k in {"files", "dirs", *(k for g in gots for k in g)}}
+    now = seen(root, every)
+    return [{k: {r: v[r] for r in g.get(k, ())} for k, v in now.items()} for g in gots]
+
+
+# --- reads as a task's declared inputs ----------------------------------------------------------------------------------------
+
+#: what a declared read set (`declared`) holds of a path, by kind: its bytes, its listing (each name git has in it), its kind (a
+#: file, a directory or absent)
+DECLARED = ("files", "listed", "probes")
+#: the reads that take what the registries registered (`_kernels_now`, `_registration`)
+_REGISTRY = ("kernels", "registered", "registrars")
+_DECLARED: dict[tuple[str, str, str], tuple[frozenset[str], frozenset[str], frozenset[str]]] = {}
+
+
+def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
+    """Recorded reads ``reads`` (entries', `attributed`) as a task keyed on its declared inputs declares them: each path of the
+    tree whose bytes (``files``), listing (``listed``) or kind (``probes``) a read's digest here takes (`_digests_of`), and
+    ``registry``, whether they read what the registries registered, which the modules the registries import decide
+    (`registry_inputs`).  What `lookup` takes of them, through a move too (`_moved`): a module held, its file's bytes, and each
+    path the search for it and for its import sites' modules asked about (`_resolve`), those modules by where they resolve
+    (each held by its content only where a read holds it itself); a module whose source `inspect` looked for (``present``),
+    where it resolves, and a sidecar's, whether it is where its module is now (`_sidecar`), not its bytes (torch's import asks
+    for the source of every module loaded, each binding file among them); a sidecar's unit or pin, or one imported by name, its
+    file where its module is now; an enumerated package, its listing and which of its directories are packages.  The installed
+    distributions are the environment's; a library git does not have (``untracked``) no task declares."""
+    files: set[str] = set()
+    listed: set[str] = set()
+    probes: set[str] = set()
+    for kind, rs in reads.items():
+        for r in rs:
+            if (got := _DECLARED.get((str(root), kind, r))) is None:
+                got = _DECLARED[str(root), kind, r] = _declared_read(root, kind, r)
+            files |= got[0]
+            listed |= got[1]
+            probes |= got[2]
+    # a code object's pseudo-file (``<frozen abc>``, ``<string>``) is no path of the tree
+    out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed),
+                           "probes": sorted(p for p in probes - files if p not in ("", ".") and not p.startswith("<")),
+                           "registry": any(reads.get(k) for k in _REGISTRY)}
+    if libs := reads.get("libs"):
+        out["untracked"] = sorted(libs)
+    return out
+
+
+def _declared_read(root: Path, kind: str, r: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """`declared`'s (files, listed, probes) of read ``r`` of ``kind``."""
+    files: set[str] = set()
+    listed: set[str] = set()
+    probes: set[str] = set()
+    seen = _seen(root)
+
+    def path(p: str | None) -> None:
+        if p is not None:
+            (files if seen(p) and (root / p).is_file() else probes).add(p)
+
+    def where(fn, *a):
+        """``fn(*a)``, each file it resolves to taken by where it is alone: an import site's module, or a sidecar's, is held by
+        its content only where a read holds it itself (`_moved`)."""
+        _PROBED.append((probes, probes))
+        try:
+            return fn(*a)
+        finally:
+            _PROBED.pop()
+
+    _INTERNAL.append(True)
+    _PROBED.append((probes, files))
+    try:
+        if kind == "files":
+            path(r)
+        elif kind == "dirs" and r != DISTRIBUTIONS:
+            (listed if seen(r) else probes).add(r)
+        elif kind == "probes":
+            probes.add(r)
+        elif kind in ("units", "pins"):
+            m = _side(r)
+            path(r.partition("#")[0] if m is None else where(_sidecar, root, m, ".py" if kind == "units" else ".json"))
+            where(_unit if kind == "units" else _pin, root, r, seen)
+        elif kind == "modules":
+            if (f := _resolve(root, r)) is not None:
+                where(_sites, root, r if f.name == "__init__.py" else r.rpartition(".")[0], _parsed(f)[1])
+        elif kind in ("named", "missing", "present"):
+            if (m := _side(r)) is not None:
+                p = where(_sidecar, root, m, ".py")
+                if kind != "present":
+                    path(p)
+                elif p is not None:
+                    probes.add(p)
+            elif kind == "present":
+                where(_resolve, root, r)
+            else:
+                _resolve(root, r)
+        elif kind == "enums" and (f := where(_resolve, root, r)) is not None and f.name == "__init__.py":
+            d = os.path.relpath(f.parent, root)
+            listed.add(d)
+            probes.update(os.path.join(d, n, "__init__.py") for n in os.listdir(f.parent) if n.isidentifier())
+    finally:
+        _PROBED.pop()
+        _INTERNAL.pop()
+    return frozenset(files), frozenset(listed), frozenset(probes)
+
+
+def registry_inputs(root: Path) -> dict[str, list[str]]:
+    """What the registries registered depends on (`declared`'s ``registry``), declared as `declared` declares a module: each
+    module of the tree this process has imported, as `targets.load_registries` leaves it (each module with a sidecar, the vLLM
+    registry's, the kernels' and what they import), but the checker's own (its version) and the binding files (each binding's
+    own, by its units); and the path of every sidecar, binding or pins, whose set is the modules the registries import
+    (`registries`)."""
     _INTERNAL.append(True)
     try:
-        root = _ROOT[0]
         by_file: dict[str, str] = {}
         for name, m in list(sys.modules.items()):
             if isinstance(f := getattr(m, "__file__", None), str):
                 by_file.setdefault(os.path.abspath(f), name)
-        mods = {name for f, name in by_file.items() if _rel(f) is not None and (p := _resolve(root, name)) is not None
-                and os.path.realpath(p) == os.path.realpath(f)}
+        here, units = os.path.join(str(_HERE), ""), _unit_files()
+        mods = sorted(name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(here) and f not in units
+                      and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f))
+        sidecars = {r for f in (*units, *_PIN_FILES) if f.endswith((f"{SUFFIX}.py", f"{SUFFIX}.json")) and (r := _rel(f)) is not None}
+    finally:
+        _INTERNAL.pop()
+    got = declared(root, {"modules": mods})
+    return {"files": got["files"], "listed": got["listed"], "probes": sorted((set(got["probes"]) | sidecars) - set(got["files"]))}
+
+
+def undeclared(now: dict[str, Any], was: dict[str, Any] | None) -> dict[str, Any]:
+    """What read set ``now`` (`declared`) holds beyond the declared ``was``: each kind's paths ``was`` lacks (a probe's, where
+    ``was`` holds the path as no file or listing either, whose bytes or listing hold its kind), ``registry`` when ``now`` reads
+    the registries and ``was`` doesn't, and every library git doesn't have (``untracked``)."""
+    was = was or {}
+    out: dict[str, Any] = {k: sorted(set(now.get(k, ())) - set(was.get(k, ()))) for k in DECLARED}
+    out["probes"] = sorted(set(out["probes"]) - set(was.get("files", ())) - set(was.get("listed", ())))
+    out["untracked"] = list(now.get("untracked", ()))
+    out["registry"] = bool(now.get("registry")) and not was.get("registry")
+    return {k: v for k, v in out.items() if v}
+
+
+def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
+    """What a catalog binding's build read (`circuit_check.units`): what its ``units`` read and ran while they made their roots
+    (`producing`), and `attributed` over its ``roots``: the build of every Definition they reach, the bindings that made those,
+    those modules' import closures, its own units by digest, and what the process read outside every recording."""
+    units = tuple(units)
+    fr = Frame()
+    for u in units:
+        if u in _PRODUCED:
+            fr.merge(_PRODUCED[u], defs=False)
+    return attributed(fr, units, roots, sidecars=False)
+
+
+def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
+    """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
+    every root), every in-tree module this process imported but the checker's own (its key's `version`), and every binding file
+    whole.  More than the union of the targets' reads: a new binding entry, a new Definition in a registry module or a new module
+    an enumerated package lists changes the list without changing what any target read."""
+    fr = Frame()
+    for f in _PRODUCED.values():
+        fr.merge(f)
+    got = attributed(fr, (), roots, sidecars=False)
+    _INTERNAL.append(True)
+    try:
+        mods, by_file = _tree_modules()
         units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
     finally:
         _INTERNAL.pop()
     return {**got, "modules": sorted(set(got["modules"]) | mods), "units": sorted(set(got["units"]) | units)}
+
+
+def modules_since(loaded: set[str]) -> dict[str, list[str]]:
+    """What a process forked from one that had loaded the modules ``loaded`` names adds to that one's `task_list_reads` beyond
+    the reads of the Definitions it built (`unit_reads`, `circuit_check.units`' builds apart): each in-tree module it imported
+    under a name ``loaded`` lacks.  The rest of its `task_list_reads` walks what every binding made, which the one it was
+    forked from walks too."""
+    _INTERNAL.append(True)
+    try:
+        return {"modules": sorted(_tree_modules(loaded)[0])}
+    finally:
+        _INTERNAL.pop()
+
+
+def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, str]]:
+    """Each in-tree module this process imported, by the first name it was loaded under, as the tree resolves that name, but
+    the checker's own (its key's `version`) and those ``loaded`` names; and that first name by each loaded module's file."""
+    root = _ROOT[0]
+    by_file: dict[str, str] = {}
+    for name, m in list(sys.modules.items()):
+        if (f := _module_file(m)) is not None:
+            by_file.setdefault(os.path.abspath(f), name)
+    own = os.path.join(str(_HERE), "")
+    return {name for f, name in by_file.items() if name not in loaded and _rel(f) is not None and not f.startswith(own)
+            and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}, by_file
 
 
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
@@ -2018,6 +2716,6 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "untraced", "version"]
+__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup",
+           "modules_since", "pin_files", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
+           "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]

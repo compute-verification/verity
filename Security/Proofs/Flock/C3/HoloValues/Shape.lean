@@ -1,8 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
+module
+
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.Recursive.StageKinds
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+public import Proofs.Flock.VBridge.InnerAccepts
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
-import Proofs.Flock.Soundness.Model.HoloCompiled
-import Proofs.Flock.VBridge.InnerAccepts
-import Proofs.Flock.Recursive.StageKinds
 
 /-!
 # A rep with hidden units has a spine
@@ -12,6 +15,8 @@ import Proofs.Flock.Recursive.StageKinds
 (`holoRepShape`) is `repShape` with it. `playsT_of_spine` is `InnerAccepts.playsT_of_tape` at any spine: a run on a game's messages and
 coins (`Plays`) is a run on any tape of the spine's kinds with those messages and coin steps (`PlaysT`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.HoloValues
 

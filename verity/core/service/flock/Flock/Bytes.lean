@@ -1,7 +1,13 @@
 /-
-Byte encodings and a total reader over `ByteArray` (PROTOCOL.md §1, §8.1).
+Byte encodings and a total reader over `ByteArray` (`Flock.Verify`, `Flock.Proof`).
 -/
-import Flock.Field
+module
+
+public import Flock.Field
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -45,7 +51,7 @@ def unhex (s : String) : V ByteArray := do
     | _, _ => throw "not lowercase hex"
   return b
 
-/-- Record hex of an F128: `{hi:016x}{lo:016x}` (§5.1). -/
+/-- Record hex of an F128: `{hi:016x}{lo:016x}` (`Flock.RecordText`). -/
 def f128OfHex (s : String) : V F128 := do
   let b ← unhex s
   if b.size != 16 then throw "an F128 is 32 hex digits"
@@ -97,6 +103,12 @@ def u64 : M UInt64 := do
   set { r with pos := r.pos + 8 }
   return u64OfLE r.data r.pos
 
+/-- A grinding nonce: `0`, the only one a prover sends under live coins (R4); any other is refused. -/
+def nonce0 (what : String) : M UInt64 := do
+  let n ← u64
+  if n != 0 then throw s!"{what} ≠ 0 (R4)"
+  pure n
+
 def f128 : M F128 := do
   let lo ← u64
   let hi ← u64
@@ -113,7 +125,7 @@ def bytes (n : Nat) : M ByteArray := do
   set { r with pos := r.pos + n }
   return r.data.extract r.pos (r.pos + n)
 
-/-- A `Vec<T>` whose length must be `want` (checked before any element is read, §8.1). -/
+/-- A `Vec<T>` whose length must be `want` (checked before any element is read, `Flock.Proof`). -/
 def vecExact {α} (want : Nat) (elem : M α) (what : String) : M (Array α) := do
   let n ← u64
   if n.toNat != want then throw s!"{what}: length {n}, want {want}"
@@ -131,6 +143,79 @@ def vecAny {α} (minSize : Nat) (elem : M α) (what : String) : M (Array α) := 
   for _ in [0:n.toNat] do
     out := out.push (← elem)
   return out
+
+/-- `m` read from the first byte of `bytes`, refused unless it stops after the last (`Flock.Proof`): a file is the one encoding of
+what it decodes to, so every byte the record's digest binds (S17) is one the verifier reads. -/
+def runAll {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=
+  match m.run ⟨bytes, 0⟩ with
+  | .error e => .error e
+  | .ok (a, r) =>
+    if r.pos = bytes.size then .ok a
+    else .error s!"{what}: the file has {bytes.size} bytes and its encoding ends at byte {r.pos}"
+
+theorem runAll_ok {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} (h : runAll m bytes what = .ok a) :
+    ∃ r : Reader, m.run ⟨bytes, 0⟩ = .ok (a, r) ∧ r.pos = bytes.size := by
+  unfold runAll at h
+  split at h
+  · cases h
+  · rename_i a' r hm
+    split at h
+    · cases h
+      exact ⟨r, hm, by assumption⟩
+    · cases h
+
+theorem runAll_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨bytes, 0⟩ = .ok (a, r)) (hr : r.pos = bytes.size) : runAll m bytes what = .ok a := by
+  unfold runAll
+  rw [h]
+  simp only [hr, ite_true]
+
+/-- `runAll` for `Flock.Proof`'s plain pair, which takes one byte more: `zk_level0`'s `Option` tag, `None` (0). The zk patch puts the
+field at the end of upstream's `LigeritoProof` and writes it as `None` on every plain proof, and upstream's builds don't write it,
+so a file ends after `consistency_batch_grinding_nonces` or after one 0 after it (D17). -/
+def runPlain {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=
+  match m.run ⟨bytes, 0⟩ with
+  | .error e => .error e
+  | .ok (a, r) =>
+    if r.pos = bytes.size then .ok a
+    else if bytes[r.pos]! ≠ 0 then .error s!"zk_level0: tag {bytes[r.pos]!}, want 0: a plain proof carries no hiding messages"
+    else if r.pos + 1 = bytes.size then .ok a
+    else .error s!"{what}: the file has {bytes.size} bytes and its encoding ends at byte {r.pos + 1}"
+
+theorem runPlain_ok {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} (h : runPlain m bytes what = .ok a) :
+    ∃ r : Reader, m.run ⟨bytes, 0⟩ = .ok (a, r) ∧ (r.pos = bytes.size ∨ r.pos + 1 = bytes.size) := by
+  unfold runPlain at h
+  split at h
+  · cases h
+  · rename_i a' r hm
+    split at h
+    · cases h
+      exact ⟨r, hm, .inl (by assumption)⟩
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+          exact ⟨r, hm, .inr (by assumption)⟩
+        · cases h
+
+theorem runPlain_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨bytes, 0⟩ = .ok (a, r)) (hr : r.pos = bytes.size) : runPlain m bytes what = .ok a := by
+  unfold runPlain
+  rw [h]
+  simp only [hr, ite_true]
+
+theorem runPlain_of_run_tag {α} {m : M α} {b : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨b ++ ByteArray.mk #[0], 0⟩ = .ok (a, r)) (hr : r.pos = b.size) :
+    runPlain m (b ++ ByteArray.mk #[0]) what = .ok a := by
+  have hs : (b ++ ByteArray.mk #[0]).size = b.size + 1 := by rw [ByteArray.size_append]; rfl
+  have h0 : (b ++ ByteArray.mk #[0])[b.size]! = 0 := by
+    rw [getElem!_pos (b ++ ByteArray.mk #[0]) b.size (by omega), ByteArray.getElem_append_right (by omega)]
+    simp only [Nat.sub_self]
+    rfl
+  unfold runPlain
+  rw [h]
+  simp only [hs, hr, ite_true]
+  simp [h0]
 
 end Reader
 

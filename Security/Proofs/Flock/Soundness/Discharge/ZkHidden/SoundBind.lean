@@ -1,8 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -13,15 +33,16 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
 `tablesAtZKH dj y₀`, as HiddenExec's `sitesAtH`, `layAtH`, `rsAtH` and `rsAtH_computes` are at the public path's
 `tablesAtH`:
 
-* `tableShH`: the public hidden-output table (`HiddenExec.TableH`) at the same draw: the `DrawSetupZKH`'s
+* `tableShH`: the public hidden-output table (`HiddenExec.TableH`) at the same sample: the `DrawSetupZKH`'s
   `DrawSetupH` at `zkInputs I` and its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's
   (`tableAtZKH_S`, both `stmtOf` of setupHidden's statement at the same regions).
 * `sitesShH`, `layShH`, `rsShH`, `rsShH_computes`: HiddenExec's `keyLayoutH` and `keyRowsH` at `tableShH`'s sites.
-* `placeZH`: each drawn unit's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`; `decAgreeH`: the two
+* `placeZH`: each sampled proof block's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`; `decAgreeH`: the two
   decoders read one witness alike.
 * `layZH`, `rsZH`, `rsZH_computes`: the public layout and rows moved to the `--zk` tables (`LayoutZ.ofShadow`,
   `HmRowsZX.ofShadow`).
-* `zk_flock_countC_execOS_atH`: #874's count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with those.
+* `zk_flock_countC_execOS_atH`: the compiled `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with
+  those.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -35,34 +56,34 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## A unit's place along an equality of statements -/
 
 /-- A unit's place in `T`, as one in `T' = T`. -/
-def placeCast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n} (e : T' = T)
+def placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n} (e : T' = T)
     (p : UnitPlace P T u) : UnitPlace P T' u := by
   subst e
   exact p
 
-theorem decode_placeCast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n}
+theorem decode_placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n}
     (e : T' = T) (p : UnitPlace P T u) (z : Witness T'.m) : (placeCast e p).decode z = p.decode (witOf e z) := by
   subst e
   rfl
 
-/-! ## The public hidden-output table at each `--zk` table's draw -/
+/-! ## The public hidden-output table at each `--zk` table's sample -/
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
 
 open Classical in
-/-- **The public hidden-output table at the `--zk` table's draw**: the draw's `DrawSetupZKH`'s table, or `y₀`'s
+/-- **The public hidden-output table at the `--zk` table's sample**: the sample's `DrawSetupZKH`'s table, or `y₀`'s
 refused one. -/
 noncomputable def tableShH (S : Finset (Fin n)) : TableH (zkInputs I) mPts S :=
   if h : Nonempty (DrawSetupZKH I mPts S (dj S)) then (Classical.choice h).x.table else y₀.x.refused S
 
-/-- **The `--zk` table's statement is the public table's**, at every draw: both are `stmtOf` of the same setupHidden
+/-- **The `--zk` table's statement is the public table's**, at every sample: both are `stmtOf` of the same setupHidden
 statement at the same regions. -/
 theorem tableAtZKH_S (S : Finset (Fin n)) : (tableAtZKH dj y₀ S).S = (tableShH dj y₀ S).T.S := by
   unfold tableAtZKH tableShH
   split_ifs <;> rfl
 
-/-- The public plan at the same draws. -/
+/-- The public plan at the same samples. -/
 noncomputable abbrev planShH : Finset (Fin n) → Reg → List (TabSpec mPts) := fun S _ => [(tableShH dj y₀ S).T]
 
 abbrev tabShH : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planShH (Reg := Reg) dj y₀ S R).length :=
@@ -78,24 +99,26 @@ variable (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTa
 
 /-- **The public plan's sites** (`sitesAtH`'s, at `tableShH`). -/
 noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
   o S _ u h := (tableShH dj y₀ S).o u h
 
-/-- **One circuit per session**: every site's acceptance parses the session's one circuit file to `c`. -/
+/-- **One circuit per session**: every site's statement circuit is the session's one circuit `c`. -/
 theorem sitesShH_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShH dj y₀ ht hc hscope).acc S R u h).tags ((sitesShH dj y₀ ht hc hscope).acc S R u h).cf
-        ((sitesShH dj y₀ ht hc hscope).acc S R u h).tables = .ok c :=
-  fun _ _ _ _ => (parse_untyped (zkTyped ht) hc).1
+      HmOut.unrolled ((sitesShH dj y₀ ht hc hscope).acc S R u h).st.c = c :=
+  fun S _ _ _ => (tableShH dj y₀ S).acc_unrolled (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
 
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)
 
 include hU hpub hpt in
-/-- **`BcSiteH` at every satisfiable site** of the public plan: at a draw `verify --zk` sets up by `tableH_bcSite`;
-at a refused draw no message satisfies the table (`refused_unsat`). -/
+/-- **`BcSiteH` at every satisfiable site** of the public plan: at a sample `verify --zk` sets up by `tableH_bcSite`;
+at a refused sample no message satisfies the table (`refused_unsat`). -/
 theorem sitesShH_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u), Binding.Sat (planShH dj y₀) (tabShH dj y₀) S R u M →
@@ -145,7 +168,7 @@ theorem rsShH_computes : (rsShH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).C
 
 /-! ## The `--zk` places, layout and rows -/
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table**: `keyPlaceH`'s place in the public table, along
+/-- **Each sampled proof block's place in its hidden-output `--zk` table**: `keyPlaceH`'s place in the public table, along
 `planAtZKH_S`. -/
 noncomputable def placeZH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((keyProg c hU n).partition (Layout.outsOf c hU n))
@@ -177,7 +200,7 @@ noncomputable abbrev rsZH : HmRowsZX (layZH dj y₀ ht hc hscope hU (pub := pub)
   HmRowsZX.ofShadow (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) (rsShH dj y₀ ht hc hscope hU hpub hpt)
 
 /-- **`hHm` at the hidden-output `--zk` tables' rows** (`rsShH_computes`, moved along): in a satisfying witness of a
-drawn unit's `--zk` table, each row's `b ‖ c` at the unit's site, input or output, is the commit string of the row's
+sampled proof block's `--zk` table, each row's `b ‖ c` at the unit's site, input or output, is the commit string of the row's
 bytes under the salt at its `hm96` slot. -/
 theorem rsZH_computes : (rsZH dj y₀ ht hc hscope hU hpub hpt (Reg := Reg)).Computes :=
   HmRowsZX.ofShadow_computes (planAtZKH_S dj y₀) (decAgreeH dj y₀ ht hc hscope hU) _

@@ -1,6 +1,6 @@
 """The prover's GPU backend: an encoded store across the visible GPUs, its payload tree, chained sketch-sha512 passes
 over it with the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings of what the verifier
-draws.
+samples.
 
 ~~~text
 segments   the store's N blocks as contiguous segments of whole chunks: first a shard a GPU in its HBM, as even as the
@@ -9,8 +9,9 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            leaf and node index is the store's, so the tree is `receipts.tree` over the whole store in block order
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
-           buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`), its
-           tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j);
+           buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
+           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
+           `store_salt(key, PAYLOAD_LABEL, j)`, key the verifier's (`set_payload_key`) or else the store's own;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
@@ -23,7 +24,7 @@ pass       on each GPU, its seed, signs and constants derived from the previous 
            the pass before it runs, so the passes follow one another on the devices with no host step between them.
            A pass keeps its packed signs (8 KiB), each segment's levels h0 … hc and the levels above, nothing per block,
            in rings allocated with the store and copied to host memory as its part ends, so a pass allocates nothing
-opening    a window's draws at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
+opening    a window's samples at once, segment by segment on its GPU's opening stream: each sampled leaf's subtree of 2^h0
            leaves recomputed from the segment under its pass's constants by a second copy of the library
            (`rs_subtrees`), then its receipts and its path below hc gathered from those subtrees and the segment's kept
            levels in one launch (`rs_gather64`), the blocks in another; the path above hc comes from the pass's top
@@ -31,11 +32,11 @@ opening    a window's draws at once, segment by segment on its GPU's opening str
 skip       the dropped blocks zeroed where they are stored, their true blocks kept on the host for openings
 ~~~
 
-Gates, before anything is timed (`Device.gates`), over a small store across the same GPUs and tiers (three chunks a
+Gates, before anything is timed (`GpuBackend.gates`), over a small store across the same GPUs and tiers (three chunks a
 GPU, and with a host tier one more a GPU in host memory, so its tree has padding on every GPU when there are several):
 the payload root against `audit.payload_tree` and blocks of the store against `codec.encode` (at each segment's first
 block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
-the registration's key, one honest and accepted by `audit.Session`, one with 1/16 of its blocks dropped and rejected at
+the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
 a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; then in
 calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
 against the reference's.
@@ -46,11 +47,10 @@ import bisect
 import contextlib
 import ctypes
 import gc
-import hashlib
 import queue
 import resource
+import secrets
 import shutil
-import struct
 import sys
 import tempfile
 import threading
@@ -66,17 +66,17 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 sys.path.insert(0, str(HERE.parents[1]))
 
+from benchmarks.word_codec import cuda_lib  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
 from verity.ml import randomness  # noqa: E402
 
 import sketch_receipt as skr  # noqa: E402
 import reader as rdr  # noqa: E402
-from prover import PAYLOAD_LABEL  # noqa: E402
 
 BLOCK = rcodec.BLOCK_BYTES
-SALT_DOMAIN = b"verity/store/salt/v0\0"
 PER_LEAF = rb.PER_LEAF
 PACK16_WORDS = BLOCK // 64 * 32  # session.cu's SK16_PACK
 TOP_SEGS = 32  # session.cu's: rs_top's segments, real and padding
@@ -87,13 +87,10 @@ OPEN_BATCH = 128
 """Passes whose kept levels are brought back to a GPU at once to open a window."""
 
 
-def store_salt(key: bytes, label: bytes, c: int) -> bytes:
-    return hashlib.shake_256(SALT_DOMAIN + key + label + struct.pack(">Q", c)).digest(rb.SALT_BYTES)
-
-
 def stream_head(seed: bytes) -> bytes:
     """The head of row 0's stream of a pass's signs (`skr.sign_bits`), its last byte the row: `rs_signs16`'s input."""
-    key = randomness.derive(rb._digest(seed, "a pass seed"), skr.SIGN_DOMAIN, {"tag": skr.KIND, "k": skr.ROWS, "n": BLOCK})
+    key = randomness.derive(rb._digest(seed, "a pass seed"), rb.SIGN_DOMAIN,
+                            {"tag": rb.SKETCH_SHA512, "k": skr.ROWS, "n": BLOCK})
     return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
@@ -196,36 +193,30 @@ def _faults() -> tuple:
     return r.ru_minflt, r.ru_majflt, r.ru_nvcsw, r.ru_nivcsw
 
 
+_v, _u64, _i, _b = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p
+SESSION = {   # session.cu's own functions, beside the reader's it includes (`reader.ABI`)
+    "rs_payload_leaves": [_v, _u64, _u64, _v, _v],
+    "rs_gather64": [_v, _u64, _v, _v],
+    "rs_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
+    "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
+    "rs_enable_peers": [],
+    "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
+    "rs_signs16": [_b, _i, _v, _v],
+    "rs_chain_set": [_b, _v],
+    "rs_chain_prepare": [ctypes.c_uint, _v, _v, _v, _v],
+    "rs_pack16": [_v, _v, _v],
+    "rs_sketch16_receipts": [_v, _u64, _u64, _v, _v, _i, _v],
+    "rs_map": [_v, _u64, _v, _i, _u64, _v, _v, _v],
+    "rs_mapped_receipts": [_v, _v, _u64, _v, _v, _i, _v],
+    "rs_mapped_pass": [_v, _v, _u64, _v, _v, _u64, _v, _v, _i, _i, _v, _v],
+    "rs_mapped_read": [_v, _u64, _v, _i, _v],
+}
+KV = {"kv_set_key": [_v, _i, _v], "kv_set_mask": [_v], "kv_encode": [_v, _v, _u64, _u64, _i, _i, _v]}   # kv.cu's
+
+
 class Lib:
     def __init__(self, path: str, torch) -> None:
-        self.so, self.torch = ctypes.CDLL(path), torch
-        v, u64, i, b = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p
-        self.so.rb_set.argtypes = [b, b, b, b, b, b, b, b, i, b, i, u64, v]
-        self.so.rb_leaves.argtypes = [v, u64, u64, v, v, v]
-        self.so.rb_tree.argtypes = [v, u64, u64, v, v]
-        self.so.rb_read.argtypes = [v, u64, v, i, v]
-        self.so.rb_sketch_set.argtypes = [b, v]
-        self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
-        self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
-        self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
-        self.so.rs_gather64.argtypes = [v, u64, v, v]
-        self.so.rs_pass.argtypes = [v, u64, u64, v, v, v, v, v, v, i, u64, i, u64, u64, v, v, v, v, i]
-        self.so.rs_top.argtypes = [v, v, i, v, i, i, v, i, v]
-        self.so.rs_enable_peers.argtypes = []
-        self.so.rs_subtrees.argtypes = [v, u64, v, v, u64, i, v, v, v]
-        self.so.rs_signs16.argtypes = [b, i, v, v]
-        self.so.rs_chain_set.argtypes = [b, v]
-        self.so.rs_chain_prepare.argtypes = [ctypes.c_uint, v, v, v, v]
-        self.so.rs_pack16.argtypes = [v, v, v]
-        self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
-        self.so.rs_map.argtypes = [v, u64, v, i, u64, v, v, v]
-        self.so.rs_mapped_receipts.argtypes = [v, v, u64, v, v, i, v]
-        self.so.rs_mapped_pass.argtypes = [v, v, u64, v, v, u64, v, v, i, i, v, v]
-        self.so.rs_mapped_read.argtypes = [v, u64, v, i, v]
-        self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
-        self.so.rb_chain.argtypes = [v, v]
-        self.so.rb_pads.argtypes = [u64, u64, v, v]
-        self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
+        self.so, self.torch = cuda_lib.load(path, {**rdr.ABI, **SESSION}), torch
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
@@ -253,11 +244,7 @@ class Kv:
     """kv.cu's encode at the library's width, masked or not."""
 
     def __init__(self, path: str, torch) -> None:
-        self.so, self.torch = ctypes.CDLL(path), torch
-        v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-        self.so.kv_set_key.argtypes = [v, i, v]
-        self.so.kv_set_mask.argtypes = [v]
-        self.so.kv_encode.argtypes = [v, v, q, q, i, i, v]
+        self.so, self.torch = cuda_lib.load(path, KV), torch
         self.bits, self.masked = self.so.kv_bits(), bool(self.so.kv_mask())
 
     def call(self, fn: str, *args) -> None:
@@ -409,6 +396,7 @@ class DeviceStore:
             raise ValueError("a host tier needs GPUs with streams of their own")
         total = blocks + host_blocks
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
+        self.payload_key = key
         self.gpus, self.hbm_blocks = gpus, blocks
         self.host_ctas, self.host_consumers = host_ctas, host_consumers
         chunks, hchunks = blocks // chunk, host_blocks // chunk
@@ -440,8 +428,8 @@ class DeviceStore:
                 raise ValueError("a store on several GPUs or tiers takes an int seed")
             with self.on(gpu):
                 n = self.n[s]
-                if hbm is not None and not self.on_host[s]:
-                    self.data_g.append(hbm[g])
+                if hbm is not None:
+                    self.data_g.append(hbm[g] if not self.on_host[s] else host_tier(torch, n * BLOCK, gpu.numa).zero_())
                     continue
                 if self.on_host[s]:
                     d = host_tier(torch, n * BLOCK, gpu.numa)
@@ -630,7 +618,8 @@ class DeviceStore:
             gpu = self.gpus[g]
             with self.on(gpu):
                 dev = torch.device("cuda", gpu.index)
-                self.lib.set_tree(bytes(128), BLOCK, BLOCK, dom.domain_id, SALT_DOMAIN + self.key + PAYLOAD_LABEL, N)
+                self.lib.set_tree(bytes(128), BLOCK, BLOCK, dom.domain_id, SALT_DOMAIN + self.payload_key + PAYLOAD_LABEL,
+                                  N)
                 dig = torch.empty((chunk, 8), dtype=torch.int64, device=dev)
                 up = torch.empty((chunk, 8), dtype=torch.int64, device=dev)
                 for first in range(self.base[s], self.base[s] + self.n[s], chunk):
@@ -671,7 +660,7 @@ class DeviceStore:
         dom = rb.domain(seed, self.plan)
         lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * PER_LEAF, dom.domain_id,
                      SALT_DOMAIN + self.key + seed, self.blocks)
-        lib.call("rb_sketch_set", skr.prefix(seed))
+        lib.call("rb_sketch_set", rb.sketch_prefix(seed))
 
     def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
@@ -1090,7 +1079,7 @@ class DeviceStore:
             for r, p in enumerate(positions):
                 q = offs[k] + r
                 mine.append((blk[q].tobytes(), rec[q].tobytes(), store_salt(self.key, seed, p // PER_LEAF),
-                             tuple(path[q, h].tobytes() for h in range(H)), store_salt(self.key, PAYLOAD_LABEL, p),
+                             tuple(path[q, h].tobytes() for h in range(H)), store_salt(self.payload_key, PAYLOAD_LABEL, p),
                              tuple(praw[q, h].tobytes() for h in range(hp))))
             out.append(mine)
         self.open_stats.append({"at_ns": t0, "openings": total, "subtrees": subtrees, "subtrees_ns": t1 - t0,
@@ -1101,7 +1090,7 @@ class DeviceStore:
         return self.open_window([(handle, positions)])[0]
 
 
-class Device:
+class GpuBackend:
     """The prover's backend (`prover.ProverSide`): the store across `gpus` GPUs (every visible one if None), its gates
     and calibration, its passes and openings."""
 
@@ -1142,6 +1131,11 @@ class Device:
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
+        self.payload_key = self.salt_key
+
+    def set_payload_key(self, key: bytes) -> None:
+        """Salt the payload tree with the verifier's key (`prover.ProverSide.register`), before its root is taken."""
+        self.payload_key = self.store.payload_key = key
 
     def payload_root(self, node: bytes) -> bytes:
         self.node = node
@@ -1320,8 +1314,9 @@ class Device:
         out["segments"] = {"blocks": small.blocks, "hbm_blocks": small.hbm_blocks, "segment_blocks": small.n,
                            "h0": small.h0, "hc": small.hc, "pads": small.pads}
         payloads = small.blocks_at(0, small.blocks)
+        small.payload_key = self.payload_key
         root = small.payload_tree(self.node)
-        salts = [store_salt(self.salt_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
+        salts = [store_salt(self.payload_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
         out["payload_root"] = root == audit.payload_tree(self.node, payloads, salts).commitment.root
         small.encode(key)
         encoded = small.blocks_at(0, small.blocks)
@@ -1356,16 +1351,17 @@ class Device:
 
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
         """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` draws a window,
-        checked by `audit.Session`."""
+        checked by `audit.AuditRun`."""
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows)
-        session = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: now[0],
-                                not_before_ns=0)
+        session = audit.AuditRun(params, reg, None,
+                                 coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
+                                 clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
         coin, prev, kept = session.start(), reg.digest, {}
         for t in range(2):
-            small.start_chain(coin.coin, prev if t == 0 else None)
+            small.start_chain(coins.coin(coin), prev if t == 0 else None)
             for i in range(2):
                 prev, kept[t, i] = small.run_chain(i)
                 now[0] += 1
@@ -1423,14 +1419,15 @@ def add_arguments(ap) -> None:
     ap.add_argument("--host-consumers", type=int, default=8, help="a host segment's consumer CTAs")
 
 
-def from_arguments(a, log=print) -> Device:
+def from_arguments(a, log=print) -> GpuBackend:
     import torch
 
     n = int(a.gib * 2 ** 30) // BLOCK
     blocks = n // a.chunk_blocks * a.chunk_blocks
     host = int(a.host_gib * 2 ** 30) // BLOCK // a.chunk_blocks * a.chunk_blocks
-    return Device(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gpus=a.gpus or None, gate_chunk=a.gate_chunk,
-                  gate_samples=a.gate_samples, calibration_passes=a.calibration_passes, warm_openings=a.warm_openings,
-                  chunk=a.chunk_blocks, kept_from=a.kept_from, sketch_ctas=a.sketch_ctas,
-                  payload_kept_from=a.payload_kept_from, trace_allocator=a.trace_allocator, host_blocks=host,
-                  host_ctas=a.host_ctas, host_consumers=a.host_consumers)
+    return GpuBackend(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gpus=a.gpus or None, gate_chunk=a.gate_chunk,
+                      gate_samples=a.gate_samples, calibration_passes=a.calibration_passes,
+                      warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
+                      sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
+                      trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
+                      host_consumers=a.host_consumers)

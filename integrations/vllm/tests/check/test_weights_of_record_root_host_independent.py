@@ -1,6 +1,6 @@
-"""[R16 pin, schema v2 / exec M-0178] root_of_record is a function of (weights struct, checkpoint bytes, config.json) -- not of the host.
+"""root_of_record is a function of (weights struct, checkpoint bytes, config.json) -- not of the host.
 
-exec's Llama-3.2-1B B1 records derived on cp-r1 (EPYC 9354, numpy AVX512 dispatch) and cp-a100 (EPYC 7763, no AVX512) agreed on all
+Llama-3.2-1B B1 records derived on cp-r1 (EPYC 9354, numpy AVX512 dispatch) and cp-a100 (EPYC 7763, no AVX512) agreed on all
 162 byte-digest fields and differed in ONE: the analytic rotary entry's `inv_freq_sha256` -- numpy's fp32 `np.power(base, exps)` takes
 SVML on AVX512 hosts and returns 7 of 32 exponents one ulp off the correctly rounded value (measured on both pods).  v1 keyed the
 analytic entry of the root by those bytes, so one model had two roots.  The pin VERDICT never depended on it (check_cos_sin is a
@@ -86,7 +86,7 @@ def test_the_root_moves_with_the_analytic_inputs_and_with_the_checkpoint_bytes(c
 
 
 def test_a_v1_record_is_read_as_it_is_and_the_checker_still_pins_by_field(checkpoint):
-    """The reader never re-roots an older record (COORD M-0038 (2): repairs are logged derivations, done by row_pod's reuse rule)."""
+    """The reader never re-roots an older record (repairs are logged derivations, done by row_pod's reuse rule)."""
     rec = _record(checkpoint)
     v1 = json.loads(json.dumps(rec)); v1["schema"] = WR.SCHEMA_V1; v1["root_of_record"] = "11" * 32
     for f in v1["fields"]:
@@ -104,7 +104,7 @@ def test_a_v1_record_is_read_as_it_is_and_the_checker_still_pins_by_field(checkp
 
 
 def test_reroot_and_diff_are_readers_that_name_host_only_differences_apart_from_weight_differences(checkpoint, tmp_path, capsys):
-    """[COORD ruling 25] report compares same-model rows across pods under schema v1 by the fields: `--diff A B` names one-sided fields,
+    """Report compares same-model rows across pods under schema v1 by the fields: `--diff A B` names one-sided fields,
     fields whose digest / shape / bits / analytic INPUTS differ (the weights differ), and host-only differences (inv_freq_sha256) apart;
     both records are re-rooted under the current schema without being changed.  reroot() of a v2 record == its root_of_record."""
     rec = _record(checkpoint)

@@ -1,0 +1,133 @@
+{
+ "about": "Coin stops the Lean frame decides (Flock.Firewall.Frame: rhoCoins, innerCoins) and Rust cross-checks (flock_core::pcs::ligerito::zk::rho_independent, zk_veil::prove_inner's beta): each F128 word as 32 hex digits of its 128-bit value, rho_0's c0, c1 then rho_1's.",
+ "rho": [
+  {
+   "case": "zero",
+   "coins": [
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000"
+   ],
+   "independent": false
+  },
+  {
+   "case": "rho_1 = rho_0",
+   "coins": [
+    "f3f49249dc28ff90a5aec7978306d03b",
+    "e512148239292d22e255accb1a466884",
+    "f3f49249dc28ff90a5aec7978306d03b",
+    "e512148239292d22e255accb1a466884"
+   ],
+   "independent": false
+  },
+  {
+   "case": "rho_1 = c rho_0",
+   "coins": [
+    "f3f49249dc28ff90a5aec7978306d03b",
+    "e512148239292d22e255accb1a466884",
+    "a00af10563c0f1c697bd58be8749e535",
+    "5b4feb3cf4363ce7c381192718b65b28"
+   ],
+   "independent": false
+  },
+  {
+   "case": "rho_1 = c rho_0, top bits",
+   "coins": [
+    "80000000000000000000000000000000",
+    "80000000000000000000000000000001",
+    "c0000000000000000000000000001067",
+    "40000000000000000000000000001067"
+   ],
+   "independent": false
+  },
+  {
+   "case": "both on the c0 axis",
+   "coins": [
+    "f3f49249dc28ff90a5aec7978306d03b",
+    "00000000000000000000000000000000",
+    "e512148239292d22e255accb1a466884",
+    "00000000000000000000000000000000"
+   ],
+   "independent": false
+  },
+  {
+   "case": "rho_0 = 0",
+   "coins": [
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "f3f49249dc28ff90a5aec7978306d03b",
+    "e512148239292d22e255accb1a466884"
+   ],
+   "independent": false
+  },
+  {
+   "case": "the unit pair",
+   "coins": [
+    "00000000000000000000000000000001",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000001"
+   ],
+   "independent": true
+  },
+  {
+   "case": "the swapped unit pair",
+   "coins": [
+    "00000000000000000000000000000000",
+    "00000000000000000000000000000001",
+    "00000000000000000000000000000001",
+    "00000000000000000000000000000000"
+   ],
+   "independent": true
+  },
+  {
+   "case": "random",
+   "coins": [
+    "6bad6be28e7aa6e99f19950499dd251d",
+    "d7a7a3cc8c3d5f169293de8fc88b2875",
+    "7dabe929c4a334bfc6cd75e9bb049a79",
+    "70eb9a0a96263ae6c5e818fac0433cbd"
+   ],
+   "independent": true
+  },
+  {
+   "case": "one off a dependent pair",
+   "coins": [
+    "f3f49249dc28ff90a5aec7978306d03b",
+    "e512148239292d22e255accb1a466884",
+    "a00af10563c0f1c697bd58be8749e534",
+    "5b4feb3cf4363ce7c381192718b65b28"
+   ],
+   "independent": true
+  },
+  {
+   "case": "top bits",
+   "coins": [
+    "80000000000000000000000000000000",
+    "00000000000000000000000000000001",
+    "00000000000000000000000000000001",
+    "80000000000000000000000000000000"
+   ],
+   "independent": true
+  }
+ ],
+ "beta": [
+  {
+   "coin": "00000000000000000000000000000000",
+   "stop": true
+  },
+  {
+   "coin": "00000000000000000000000000000001",
+   "stop": false
+  },
+  {
+   "coin": "80000000000000000000000000000000",
+   "stop": false
+  },
+  {
+   "coin": "14aa4e719d3c7dec00a61f933d6c51e3",
+   "stop": false
+  }
+ ]
+}

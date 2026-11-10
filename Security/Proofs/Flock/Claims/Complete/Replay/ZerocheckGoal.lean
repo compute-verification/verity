@@ -1,6 +1,42 @@
-import Proofs.Flock.Claims.Complete.Shape
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Goals
+public import Proofs.Flock.Claims.Complete.Replay.Zerocheck
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Claims.Complete.Shape
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
 
 /-!
 # The zerocheck goal
@@ -15,6 +51,8 @@ rounds.
 * `repP_zerocheck`: a rep that returns carries the prover's zerocheck and the level-0 cap, at the replies from its
   first send on.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -33,7 +71,7 @@ def _root_.FlockComplete.Run.zcCoins (o : Run H rel) (i r : ℕ) : Zc.Coins :=
 
 theorem _root_.FlockComplete.Run.tab_m (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) :
     o.tabs[i]!.m = o.sts[i]!.m ∧ 22 ≤ o.tabs[i]!.m ∧ o.tabs[i]!.m ≤ 35 := by
-  obtain ⟨st, hsts, -, h22, h35⟩ := o.table
+  obtain ⟨st, hsts, -, h22, h35, -⟩ := o.table
   unfold Run.tabs tabsOf at hi ⊢
   rw [hsts] at hi ⊢
   simp only [Array.map_singleton, List.size_toArray, List.length_singleton, Nat.lt_one_iff] at hi

@@ -28,16 +28,17 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.boolean.forms import Circuit
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
+from verity_flock.record_text import session_text
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
+LEAN = HERE.parents[3] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
-#: the fixture's sessions have no draw (D12), so `verify` refuses each once every check has passed: this verdict is a pass,
+#: the fixture's sessions have no sample (D12), so `verify` refuses each once every check has passed: this verdict is a pass,
 #: as `agree.py --lean-refuses-drawless` judges it
 PASSED = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 FLIP = 1 << 17
@@ -146,7 +147,7 @@ def _sha512_json(x) -> str:
 
 
 def test_gf128mul_lowers_to_the_rows_of_the_karatsuba_lemma():
-    """The recursion (`gf2k.mul_forms`) gives rec-lean's row list, pinned on both sides by one digest; C-Flock's lowering of
+    """The recursion (`gf2k.mul_forms`) gives rec-lean's row list, pinned on both sides by one digest; Flock's lowering of
     `Gf128Mul_v1` gives the same rows and outputs in the IR's canonical gate order, so it is pinned order-free."""
     C = Circuit()
     rows, outs = _rows_and_outputs(C, G.mul_forms(C, C.input("a", 128), C.input("b", 128)))
@@ -177,7 +178,28 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
         assert info["T"] == h(rep.dump["T"]) and info["gamma"] == [h(x) for x in rep.dump["gamma"]]
 
 
-def _ports(rep: Rep, seed: int) -> tuple[dict, A.Layout, list[int], list[int]]:
+def test_a_nonzero_nonce_is_refused(session, monkeypatch):
+    """R4 (`Flock.Proof`, D21 in `verity/ml/flock/verifier/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
+    verifier's `Reader.nonce0` does, with its reason."""
+    rep = session[1][0]
+    at, vec = {}, A._Reader.vec
+
+    def spy(r, want, elem, what):
+        at[what] = r.o + 8
+        return vec(r, want, elem, what)
+
+    monkeypatch.setattr(A._Reader, "vec", spy)
+    A.decode(rep.shape, rep.data)
+    monkeypatch.undo()
+    for what in ("grinding_nonces", "claim_batch_grinding_nonces", "consistency_batch_grinding_nonces"):
+        b = bytearray(rep.data)
+        assert b[at[what]:at[what] + 8] == bytes(8), what
+        b[at[what]] = 1
+        with pytest.raises(ValueError, match=f"^{what[:-1]} ≠ 0 \\(R4\\)$"):
+            A.decode(rep.shape, bytes(b))
+
+
+def _ports(rep: Rep, seed: int) -> tuple[dict, A.GfPorts, list[int], list[int]]:
     """The structure, its layout, and its v and w ports on the honest rep, the running sums starting at a random value."""
     S, lay = A.structure(rep.shape)
     g = random.Random(seed)
@@ -317,7 +339,7 @@ def _reason(i: int, claims: int) -> str:
 
 def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
     d.mkdir()
-    (d / "session.json").write_text(json.dumps(record))
+    (d / "session.json").write_text(session_text(record))
     for r, b in enumerate(proofs):
         (d / f"circuit.rep{r}.bin").write_bytes(b)
 
@@ -326,8 +348,8 @@ def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_lean_verifier_rejects_exactly_the_mutations_with_a_nonzero_residual(session, tmp_path):
     """Each entry of MUTATIONS as a session (the proof's bytes and the round that retained them, with their digests), judged
-    by the Lean verifier of record: exactly the sessions whose residuals are all zero (the honest one, and a changed last
-    Ligerito message) pass every check, so their verdict is the draw-less refusal (`PASSED`), and it rejects each other one at
+    by the Lean verifier: exactly the sessions whose residuals are all zero (the honest one, and a changed last
+    Ligerito message) pass every check, so their verdict is the sample-less refusal (`PASSED`), and it rejects each other one at
     the check of its first nonzero residual. It catches a
     reference that is zero where the inner verifier rejects, or that sees a check fail where the inner verifier sees none,
     which tests against the reference alone cannot; about 18 s a session, four at a time."""

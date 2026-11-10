@@ -1,7 +1,7 @@
 """The honest debit of a served pass at its scheme's cap ρ: a seeded, stratified sample of a retained pass's tiles (the
 transcript `verify_run.py` reads), each opened from the pass's files and held to `Verifier.check_tile` and the tile rule
-(`pearl_c_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
-(`pearl_c_work._debit_cap`: ρ times the credited cells' credit) recorded.  CPU only.
+(`clear_work.check_opened`) as `verify_run.check` holds it, with the replayed debit and the cap that rule compares it to
+(`clear_work._debit_cap`: ρ times the credited cells' credit) recorded.  CPU only.
 
   python benchmarks/pouw/pearl_c_vllm/served_debit.py RUN_DIR/prefill/manifest.json RUN_DIR/decode/manifest.json \\
       --tiles 128 64 [--seed S] [--jobs J] [--out DIR]
@@ -14,19 +14,19 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.chain_debit`, rev1's
   `laterZeroPromos`), whose adds the debit already holds.  Under a format with the row cap (-h3) the rule also caps each
-  credited A row (`pearl_c_work.row_cap`), and ``row_ratio_max`` is the largest row's debit over its cap (the tile rule
-  checked as far as it ran: the rows up to the first one over).
+  credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
+  its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
   columns × kept k, from the records), with the share over each cap within the stratum taken from its sample.
 
-**Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs (lean's ruling on #923):
+**Per input** (``--per-input N`` instead of ``--tiles``), the form a completeness citation needs:
 N seeded inputs of each (k, n), an input being one matmul of the pass, each measured in full up to ``--census-max`` tiles
-and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
+and otherwise by ``--draws`` work-weighted samples, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
-derived from ``--fresh-source`` (recorded OS randomness drawn after the pass, fixed in the command), so that the trials
-are independent draws of the input's rate itself (`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and
-Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (lean's ruling: `HonestCap.lean`'s
+derived from ``--fresh-source`` (recorded OS randomness taken after the pass, fixed in the command), so that the trials
+are independent samples of the input's rate itself (`HonestTileCapRate`'s oracle, salt and sample, the activations fixed) and
+Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestCap.lean`'s
 fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
 
 A tile is replayed on `fast_tile`'s batch forms (``--scalar``: the scalar reference only), every ``--cross-check``-th tile
@@ -37,20 +37,20 @@ Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label
 the measurement is of the committed pass.
 
 **On a served pass.** `window.sh` keeps each served window's verify pass outside its run directory, under
-``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on node 2 (``WORK=/workspace/pouw/mvp-e2e``, about 45 GB a run,
-so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores, with one BLAS
-thread a worker (``--jobs`` defaults to the CPUs this process may use)::
+``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on window.sh's node (``WORK=/workspace/pouw/mvp-e2e``, about 45
+GB a run, so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores,
+with one BLAS thread a worker (``--jobs`` defaults to the CPUs this process may use)::
 
-  research run --on vy-nebius-2 --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
+  research run --on MACHINE --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
       'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \\
-         PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+         PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
        P=/workspace/pouw/mvp-e2e/passes/RUN_ID
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
 
-A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of node 2's queue cores (Llama-3.1-8B's
-1,023 sampled tiles: 98 min on 44, r20261002-173355-4eef).  Add no ``taskset`` of your own: the queue pins the job's cores.
+A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of that node's queue cores (Llama-3.1-8B's
+1,023 sampled tiles: 98 min on 44).  Add no ``taskset`` of your own: the queue pins the job's cores.
 """
 from __future__ import annotations
 
@@ -74,25 +74,30 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parent / "clear"))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
 from verity.ml.commitments import Commitment  # noqa: E402
 from verity.ml.commitments import verify_opening  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
-from verity.core.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
-                               opened_value, rows_domain, weight_binding)
+from verity.core.protocols.pouw.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
+                                              weight_binding)
+from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
 from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
-from verity_vllm.protocol_options import pouw_pearl_c_device as PD  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+import clear_work as CW  # noqa: E402
+from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 CAPS = {"1/400": Fraction(1, 400), "1/600": Fraction(1, 600), "1/1000": Fraction(1, 1000)}
 SEED = 20261002
 FRESH = "verity/pouw/fp8-served-table-fresh-trials/v1"
 
 
-class _Kept(PW._TileRuleView):
+class _Kept(CW._TileRuleView):
     """`verify_run`'s view of the scheme, keeping the operands `check_tile`'s encode made so the tile rule reads the same
     ones without encoding twice."""
 
@@ -105,7 +110,7 @@ class _Kept(PW._TileRuleView):
 
 
 _SEEN: list = []
-_DEBIT_CAP = PW._debit_cap
+_DEBIT_CAP = CW._debit_cap
 
 
 def _recorded(*args, **kwargs):
@@ -115,7 +120,7 @@ def _recorded(*args, **kwargs):
 
 
 _CHAINS: list = []
-_CHAIN_DEBIT = PW.D.chain_debit
+_CHAIN_DEBIT = CW.D.chain_debit
 #: the debit's implementation `_chain_recorded` calls: the scalar reference, or `fast_tile`'s batch form
 _IMPL = {"chain_debit": _CHAIN_DEBIT}
 
@@ -162,7 +167,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
                              tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
-    reason = PW.check_records(epoch, splits, records)
+    reason = CW.check_records(epoch, splits, records)
     if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
         reason = "the records are not the ones whose root the pass published"
     if reason is not None:
@@ -219,8 +224,8 @@ _JOB: dict = {}
 
 
 def one(item) -> dict:
-    """One tile's line (`item` a tile id, or a fresh trial's (tile id, matmul, draw, salt)), on the batch forms when they are
-    installed; every `cross_check`-th tile id (a fresh trial: draw) is replayed again on the scalar reference, and any field
+    """One tile's line (`item` a tile id, or a fresh trial's (tile id, matmul, sample, salt)), on the batch forms when they are
+    installed; every `cross_check`-th tile id (a fresh trial: sample) is replayed again on the scalar reference, and any field
     that differs is recorded (``cross_check_failed``), which fails the run."""
     out = _measure(item)
     every = _JOB.get("cross_check", 0)
@@ -254,9 +259,9 @@ def _openings_ok(job: dict, opened) -> bool:
 
 
 def _measure(item) -> dict:
-    """A tile id: the tile as the audit checks it under the pass's salt.  A fresh trial (tile id, matmul, draw, salt): the
-    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileCapRate` draws one: the noise,
-    the encoding and the tile rule (admissibility is the work law's, `_TileRuleView`'s), with no digest (the prover committed
+    """A tile id: the tile as the audit checks it under the pass's salt.  A fresh trial (tile id, matmul, sample, salt): the
+    tile's committed rows (their openings held to the roots) under its own salt, as `HonestTileCapRate` samples one: the noise,
+    the encoding and the tile rule (admissibility is the work sampling design's, `_TileRuleView`'s), with no digest (the prover committed
     to none under this salt)."""
     j = _JOB
     scheme, view, epoch, transcript, verifier, records = (j[x] for x in ("scheme", "view", "epoch", "transcript", "verifier", "records"))
@@ -293,7 +298,7 @@ def _measure(item) -> dict:
         ops = kept[4] if kept is not None and kept[:4] == (ctx, tuple(a), tuple(b), ref.tile) else scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile)
     _SEEN.clear()
     _CHAINS.clear()
-    reason = PW.check_opened(scheme, rec, ref.tile, a, b, ops)
+    reason = CW.check_opened(scheme, rec, ref.tile, a, b, ops)
     rows, cols = rec.credited(ref.tile)
     out.update(ok=reason is None, reason=reason, credited_rows=len(rows), credited_cols=len(cols), macs=len(rows) * len(cols) * rec.k_kept)
     if rows and cols:
@@ -303,14 +308,15 @@ def _measure(item) -> dict:
         if chains:
             out["atoms"], out["later_zero_promotions"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
-            out["row_ratio_max"] = max(float(d / c) for (d, c), _ in _SEEN[1:])
+            widen = CW.row_cap_multiple(scheme, u.shape.k)
+            out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
     out["seconds"] = round(time.perf_counter() - t0, 1)
     return out
 
 
 def tile_numbers(scheme, debit: Fraction, cap: Fraction) -> dict:
     """The tile rule's (debit, cap) as a tile's line records them: their ratio, and the debit's share of the credited cells'
-    credit, the cap over ρ.  That credit is `pearl_c_work.tile_cap`'s `creditDevRev1` share, so the first promotion add is
+    credit, the cap over ρ.  That credit is `clear_work.tile_cap`'s `creditDevRev1` share, so the first promotion add is
     out of it once; taking it out again would overstate every share."""
     credit = cap / scheme.cap
     return {"debit": float(debit), "cap": float(cap), "ratio": float(debit / cap), "share": float(debit / credit),
@@ -372,7 +378,7 @@ def measure(path: Path, per: int, seed: int, jobs: int, out_dir: Path, opts: dic
 
 
 def line_key(t: dict):
-    """A line's key: its tile id, or a fresh trial's (matmul, draw)."""
+    """A line's key: its tile id, or a fresh trial's (matmul, sample)."""
     return t["tile"] if "draw" not in t else (t["matmul"], t["draw"])
 
 
@@ -402,7 +408,8 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
-    tile_of = lambda item: item if isinstance(item, int) else item[0]
+    def tile_of(item):
+        return item if isinstance(item, int) else item[0]
     got: dict = {}
     for item in picks:
         t = prior.get(_item_key(item))
@@ -462,7 +469,7 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
 def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: int) -> list[dict]:
     """Per-input mode: `per_linear` seeded inputs (one matmul each, one linear's GEMM in the pass) of each (k, n), each with
     its tiles' weights.  An input of at most `census_max` tiles is measured in full; a larger one by `draws` work-weighted
-    draws with replacement, as the audit draws.  A tile's weight is its area (rows × cols): within one input every tile has
+    samples with replacement, as the audit samples.  A tile's weight is its area (rows × cols): within one input every tile has
     the same k, so its share of the input's `W_ref` is its share of the cells."""
     groups: dict[tuple[int, int], list[int]] = {}
     for pos, rec in enumerate(job["records"]):
@@ -484,11 +491,11 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
 
 
 def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[int, int, int, bytes]]:
-    """An input's fresh trials, (tile id, matmul, draw, salt): `draws` work-weighted draws of its tiles with replacement,
-    each under a salt of its own, both derived from `source` (recorded OS randomness drawn after the pass, so independent
-    of its activations) under a domain naming the table and a context naming the input.  Draw d is `key.uniform(W, d)`
-    over the tiles' cumulative credited cells, as `pearl_c_work.draw` maps it: within one input every cell weighs the
-    same `W_ref`, so the draw is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
+    """An input's fresh trials, (tile id, matmul, sample, salt): `draws` work-weighted samples of its tiles with replacement,
+    each under a salt of its own, both derived from `source` (recorded OS randomness taken after the pass, so independent
+    of its activations) under a domain naming the table and a context naming the input.  Sample d is `key.uniform(W, d)`
+    over the tiles' cumulative credited cells, as `clear_work.draw` maps it: within one input every cell weighs the
+    same `W_ref`, so the sample is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
     ctx = {"manifest": job["sha256"], "matmul": row["matmul"]}
     ids = list(row["area"])
     cumulative = list(accumulate(row["area"][t] for t in ids))
@@ -522,7 +529,8 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
     L = math.log(1 / delta)
-    ok = lambda mu: mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
+    def ok(mu):
+        return mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
     lo, hi = x, total
     for _ in range(100):
         mid = (lo + hi) / 2
@@ -531,15 +539,15 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
 
 
 def input_bound(row: dict, delta: float) -> tuple[float, str]:
-    """Lean's ruling on #923: each input's rate p = E[X] (X its work-weighted failing fraction under the tiles' noise) at a
-    simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail independently (each tile's
-    noise is the oracle at points of its own).  With a = w_max/W:
+    """The completeness citation's bound: each input's rate p = E[X] (X its work-weighted failing fraction under the
+    tiles' noise) at a simultaneous upper confidence limit (δ = 0.05/m per input), assuming the input's tiles fail
+    independently (each tile's noise is the oracle at points of its own).  With a = w_max/W:
     - a census with no failure: ln(1/δ)·a (P[none fail] = Π(1 - p_g) <= exp(-p/a));
-    - n work-weighted draws with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
-      Clopper–Pearson on the draws would bound the realized X, not p;
+    - n work-weighted samples with no failure: ln(1/δ)·a / (1 - exp(-n·a)) (E[(1 - X)^n] <= E[exp(-nX)] <= exp(-p(1 - exp(-n·a))/a));
+      Clopper–Pearson on the samples would bound the realized X, not p;
     - a census with failures: Bernstein on the weighted sum;
-    - draws with failures: no bound here (1): such an input must be measured in full;
-    - fresh trials (``--fresh-draws``: each a work-weighted draw under a salt of its own, so independent Bernoulli trials of
+    - samples with failures: no bound here (1): such an input must be measured in full;
+    - fresh trials (``--fresh-draws``: each a work-weighted sample under a salt of its own, so independent Bernoulli trials of
       p itself): Clopper–Pearson, with or without failures."""
     if row["method"] == "fresh":
         return clopper_pearson_upper(row["failures"], row["drawn"], delta), "fresh-salt draws, Clopper–Pearson"
@@ -647,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="per-input mode: measure each input by N work-weighted draws, each under a fresh salt of its own "
                         "(independent trials of its rate, bounded by Clopper–Pearson) instead of its census or draws")
     p.add_argument("--fresh-source", default=None, metavar="HEX",
-                   help="the 32-byte source the fresh draws and salts derive from: recorded OS randomness drawn after the "
+                   help="the 32-byte source the fresh samples and salts derive from: recorded OS randomness taken after the "
                         "pass, fixed in the command before the run (required with --fresh-draws)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (a pass with a salt coin)")
@@ -665,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         p.error("give --tiles (pooled strata) or --per-input (each input bounded)")
     if a.tiles is not None and len(a.tiles) != len(a.manifests):
         p.error("one --tiles per manifest")
-    out_dir = a.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out"
+    out_dir = a.out or Path(settings.RESEARCH_RUN_DIR or ".") / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
     opts = {"resume": a.resume, "scalar": a.scalar, "cross_check": a.cross_check, "resumed_only": a.resumed_only,
             "coins": CoinCommitment.from_json(json.loads(a.coins.read_text())) if a.coins else None}
@@ -685,18 +693,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"fresh draws: {a.fresh_draws} an input from source {source.hex()}", flush=True)
     labels = labels_of(a.manifests)
     if a.per_input is not None:
-        PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
+        CW._debit_cap, CW.D.chain_debit = _recorded, _chain_recorded
         try:
             rows = [r for path, label in zip(a.manifests, labels)
                     for r in measure_inputs(path, a.per_input, a.census_max, a.draws, a.seed, a.jobs, out_dir, opts, label)]
         finally:
-            PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
+            CW._debit_cap, CW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
         return write_inputs(rows, a.seed, a.census_max, a.draws, out_dir, fresh)
-    PW._debit_cap, PW.D.chain_debit = _recorded, _chain_recorded
+    CW._debit_cap, CW.D.chain_debit = _recorded, _chain_recorded
     try:
         passes = [measure(path, per, a.seed, a.jobs, out_dir, opts, label) for path, per, label in zip(a.manifests, a.tiles, labels)]
     finally:
-        PW._debit_cap, PW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
+        CW._debit_cap, CW.D.chain_debit = _DEBIT_CAP, _CHAIN_DEBIT
     summary = {"tool": "pouw_pearl_c_served_debit", "seed": a.seed, "caps": {c: str(r) for c, r in CAPS.items()}, "passes": passes}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")

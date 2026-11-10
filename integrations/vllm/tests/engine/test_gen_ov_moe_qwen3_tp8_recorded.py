@@ -1,22 +1,22 @@
 """The Qwen3-MoE fold scope and the TP8 collectives' peer reads on RECORDED events: Qwen3-235B-A22B BF16 at TP8.
 
 `fixtures/qwen3_235b_a22b_tp8_moe_l47.rank{0,7}.jsonl.gz` are layer 47 of ranks 0 and 7 of the 235B Match of record (B1 i256 o32, RTX PRO
-6000, vLLM d9105ea80, batch-invariant eager; run r20261003-163309-0f1d), cut by `tests/engine/moe_scope_cut.py --logits` (each
+6000, vLLM d9105ea80, batch-invariant eager), cut by `tests/engine/moe_scope_cut.py --logits` (each
 `moe_scope_cut` Note names the source log and its sha256): the RunHeader, the layer's weight Roots and the lm_head shard's, and for the
-prefill step (256 rows) and the first decode step (1 row) the scope, the block's all-reduce right after it, and the step's
+prefill step (256 rows) and the first decode step (1 row) the scope, the layer's all-reduce right after it, and the step's
 `logits_processor` nodes (the lm_head shard's GEMM and the logits all-gather).  `fixtures/QWEN3_235B_A22B.config.json` is the
 checkpoint's config.json at the recorded revision (its sha256 is the header's `config_sha256`); the rank profile is derived from it.
   * each rank folds the scope as the TP2 cut does (`test_gen_ov_moe_qwen3_recorded.py`): the router's gate GEMM ahead of the router,
     writing its logits, the experts, the activation (the SiluMul version the profile binds) and the routed sum; after the scope the
-    block's `AllReduce_v2{WORLD=8,N=H}` over the routed sum; then the lm_head shard and the logits' `AllGather_v1{WORLD=8,N=V/8}`;
+    layer's `AllReduce_v2{WORLD=8,N=H}` over the routed sum; then the lm_head shard and the logits' `AllGather_v1{WORLD=8,N=V/8}`;
   * `fold` over the cut (the hidden state the cut does not compute read as stand-ins, everything else the fold's own) gives every
     collective one `peers` field per peer rank, in rank order at adjacent offsets; a one-row collective (the decode all-reduce, both
     logits all-gathers) reads its 7 peers as ONE run across those fields, the prefill all-reduce one run per field and row;
-  * `Prog` canonicalises each recorded read as one ("PEER", ordinal, ..) per peer in rank order around the rank's own partial, which is
+  * `RootView` canonicalises each recorded read as one ("PEER", ordinal, ..) per peer in rank order around the rank's own partial, which is
     how a rank Program reading one `peers_<k>` Input per peer reads it, and the two compare equal; without the split at field boundaries
     the one-row reads do not.
 Not covered: the Build's TP8 rank Program itself (here a Program of that form over the same fields), the collective ordinals of a whole
-step (the cut numbers only its own collectives), and the cross-rank leg.
+step (the cut numbers only its own collectives), and the cross-rank check.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ import pytest
 from tests.engine.moe_scope_cut import cut, write
 from verity.ml.circuits.refs import Affine, runs
 from verity_vllm.check.match import program_compare as PC
-from verity_vllm.engine.profiles import generic
+from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.events import Note
 from verity_vllm.observe.fold import fold as FD
 from verity_vllm.observe.fold.memory import Unresolved
@@ -52,6 +52,7 @@ SOURCE_SHA256 = {0: "bea53d712ea6577e477cfeed29ad04709e1d8327cf98cdcdcf79dd3ad42
 #: engine step -> (rows M, whether the scope aligns: the naive block assignment skips moe_align_block_size for M <= 2)
 STEPS = {0: (256, True), 1: (1, False)}
 DOT = "HopperBF16WgmmaDot16_v1"
+CHAIN = tuple(range(WORLD))
 
 
 def fixture(rank: int) -> Path:
@@ -128,7 +129,7 @@ def test_recorded_tp8_scope_resolves_the_gate_gemm_ahead_of_the_router_and_the_r
     assert group.parts.index(gemm) < group.parts.index(router)
     assert silu.operands[0].view == up.outputs[0].view and down.operands[0].view == silu.outputs[0].view
 
-    # the block's all-reduce over the rank's routed sum, issued after the scope
+    # the layer's all-reduce over the rank's routed sum, issued after the scope
     assert ar.spec.id == f"AllReduce_v2{{WORLD={WORLD},N={H}}}" and ar.rows == M and ar.pattern == "tp.collective"
     (own,) = ar.operands
     assert own.kind == "all_reduce" and own.site == MODULE and own.own == msum.outputs[0].view
@@ -143,7 +144,7 @@ def test_recorded_tp8_scope_resolves_the_gate_gemm_ahead_of_the_router_and_the_r
     assert own.kind == "all_gather" and own.site == "logits_processor" and own.own == lm.outputs[0].view
 
 
-# --- the fold's peer reads of the recorded collectives, and how `Prog` canonicalises them ------------------------------------------------
+# --- the fold's peer reads of the recorded collectives, and how `RootView` canonicalises them ------------------------------------------------
 
 class _CutFold(FD._Fold):
     """`fold` over a cut: a read the cut cannot answer (state computed by the layers outside it) gets a stand-in run; every other read,
@@ -226,9 +227,9 @@ def test_a_one_row_collective_reads_its_peers_as_one_run_across_the_fields(rank)
 OWN, PEERS0 = 0, 1
 
 
-def _prog(label: str, spec: str, own_spec: str, N: int, inputs: dict, peer_fields: dict, operand: list[tuple], compact: bool) -> PC.Prog:
-    """One collective row as `Prog` holds it: the peers Input node(s), the own partial's producer, the collective reading them."""
-    P = PC.Prog.__new__(PC.Prog)
+def _prog(label: str, spec: str, own_spec: str, N: int, inputs: dict, peer_fields: dict, operand: list[tuple], compact: bool) -> PC.RootView:
+    """One collective row as `RootView` holds it: the peers Input node(s), the own partial's producer, the collective reading them."""
+    P = PC.RootView.__new__(PC.RootView)
     P.label, P.digest = label, f"digest-{label}"
     P.inputs = inputs
     P.tok_node, P.seed_nodes, P.seed_index = -1, set(), {}
@@ -247,7 +248,7 @@ def _prog(label: str, spec: str, own_spec: str, N: int, inputs: dict, peer_field
     return P
 
 
-def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> tuple[PC.Prog, PC.Prog, list[tuple]]:
+def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> tuple[PC.RootView, PC.RootView, list[tuple]]:
     """The fold's row (ONE peers Input with the fields `peers_layout` states, `load_oracle`'s form) and a rank Program's (one Input per
     `peers_<k>` field, read in rank order around its own partial), with the canonical operand both must have."""
     c = m["collective"]
@@ -266,7 +267,7 @@ def _sides(rank: int, m: dict, rs: list[tuple], layout: dict, compact: bool) -> 
     return A, F, want
 
 
-def _canon(P: PC.Prog) -> list[tuple]:
+def _canon(P: PC.RootView) -> list[tuple]:
     got = P.canon(1)[0]
     return K.expand_mixed(got) if P.compact else got
 
@@ -289,7 +290,7 @@ def test_without_the_field_boundary_split_the_one_row_reads_differ(monkeypatch, 
     all-reduce (one run per field) compares equal either way."""
     _f, res = _folded(rank)
     (layout,) = res.peers_layout
-    monkeypatch.setattr(PC.Prog, "_split_peer", lambda self, run: [run])
+    monkeypatch.setattr(PC.RootView, "_split_peer", lambda self, run: [run])
     for m, rs in _rows(rank):
         A, F, want = _sides(rank, m, rs, layout, False)
         r = PC.compare_steps(A, F)
@@ -325,12 +326,12 @@ def _merged(rs: list[tuple]) -> list[tuple]:
 
 @functools.lru_cache(maxsize=None)
 def _folded_routed(rank: int):
-    """`_folded` with a captured route for this model's [M, 4096] all-reduces at the capture's settings (custom all-reduce off), so the
-    fold takes the Build's one call per all-reduce."""
-    from verity_vllm.program.registry import tp_allreduce as T
+    """`_folded` with a stand-in captured route for this model's [M, 4096] all-reduces at the capture's settings (batch-invariant
+    pynccl over SHM on 8 RTX PRO 6000; no world-8 chain is recorded), so the fold takes the Build's one call per all-reduce."""
+    from verity.ml.definitions.registry import tp_allreduce as T
 
-    extra = (T.Captured("custom-off", H, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, ()),
-             T.Captured("custom-off", H, "symm_mem_comm", 43, 2048, "AllReduceMultimem_v1", {"TREES": (T.GLM53_H200_TREE,) * WORLD, "FTZ": False}, ()))
+    extra = (T.Captured(T.BATCH_INVARIANT, H, "pynccl_comm", 1, 2048, "AllReduceNcclTree_v1", {"CHAIN": CHAIN}, (), world=WORLD,
+                        device=T.RTX_PRO_6000, transport="shm"),)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(T, "CAPTURED", T.CAPTURED + extra)
         f = _CutFold(profile(), False)
@@ -340,7 +341,7 @@ def _folded_routed(rank: int):
 
 @pytest.mark.parametrize("rank", RANKS)
 def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole(rank):
-    """The flat Compute (VLLM-14): the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
+    """The flat Compute: the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
     rank r's whole [M, N] partial in row order -- the per-row instances' parts, regrouped -- and whose peer part canonicalises as a rank
     Program's read of each whole `peers_<k>` Input."""
     _f, per_row = _folded(rank)
@@ -352,13 +353,12 @@ def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole
     from verity_vllm.check.match import rank_match as RMx
     assert RMx.own_producers(res) == RMx.own_producers(per_row) and len(RMx.own_producers(res)[(0, 0)]) == STEPS[0][0]
     (layout,) = res.peers_layout
-    tree = ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * WORLD)
+    chain = ",".join(map(str, CHAIN))
     for step, (M, _aligned) in STEPS.items():
         flat = [m for m in res.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
         rows = [m for m in per_row.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
         assert len(flat) == 1 and len(rows) == M and flat[0]["rows"] == 1
-        assert flat[0]["spec"] == (f"AllReduceMnnvl_v1{{WORLD={WORLD},N={H},SHOT=1}}" if M == 1 else
-                                   f"AllReduceMultimem_v1{{WORLD={WORLD},SIZE={M * H},TREES=({tree}),FTZ=False}}"), flat[0]["spec"]
+        assert flat[0]["spec"] == f"AllReduceNcclTree_v1{{WORLD={WORLD},SIZE={M * H},CHAIN=({chain})}}", flat[0]["spec"]
         (arg,) = res.body.nodes[flat[0]["node"]].args
         got = runs(arg.refs)
         cut = [_parts(runs(per_row.body.nodes[m["node"]].args[0].refs), H) for m in sorted(rows, key=lambda m: m["row"])]

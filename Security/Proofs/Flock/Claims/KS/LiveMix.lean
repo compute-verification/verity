@@ -1,23 +1,64 @@
-import Proofs.Flock.Claims.Bridge.Live
+module
+
+public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.Bridge.Live
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Soundness.Game
+import VCVio.Prelude.Core
 
 /-!
 # A mixture of live strategies bounds the runs of a verifier that reveals more
 
 `PlainLiveWrPAt`'s first clause bounds `V false`'s runs by an average over a tape `τ` of the live session's
 probability against strategies `σL u`. `V false` answers each round with a whole coin, the live session with the `n`
-coins the round draws, so a prover that plays the live session keeps the rest of each coin on its tape:
+coins the round samples, so a prover that plays the live session keeps the rest of each coin on its tape:
 
 * `mergeC`, `Pr_mergeC`: the coins whose coordinate `j` takes its first `n j` entries from `r` and the rest from `u`
   are uniform when `u` and `r` are: swapping those entries between `u` and `r` is an involution (`swapC`); `mergeAt`,
   `Pr_mergeAt`: the same with `r` indexed by another `Fin L`, `L = K`.
+* `fnC`, `Pr_fnC`: the same with the rest of coordinate `j` a uniform function `f j` on the tape read at a key of `r`,
+  such as the live coins a prover has seen by round `j`, so a fork that resamples them reads fresh entries; uniform
+  functions at fixed points are uniform (`Pr_evalAt`); `fnAt`, `Pr_fnAt`: with `r` indexed by `Fin L`.
 * `liveMix_eq`: the average over `u` of the live session's probability of `pL` against `liveStrat` at `(ω, u)` is the
   probability over the tape and the round coins of `pL` at the live outcome.
-* `Pr_le_liveMix`: an event `E` of coins whose law is that of `E ∘ Φ` on the tape and the live session's coins, and
+* `Pr_le_liveMix`: an event `E` of coins whose sampling design is that of `E ∘ Φ` on the tape and the live session's coins, and
   which implies `pL` at the live outcome of a prover `P'` at the tape `(ω, u)`, has probability at most that average;
   `liveMix_le_Pr`: where `pL` implies `E ∘ Φ` instead, the average is at most `Pr[E]`.
 * `liveStrat_fst`: `liveStrat`'s roots are the wire's roots of the prover's first message (`fst_eqRec`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Live
 
@@ -61,6 +102,50 @@ theorem Pr_mergeAt {K L M : ℕ} {X : Type} [Fintype X] [Nonempty X] (h : L = K)
   subst h
   exact Pr_mergeC n E
 
+/-- **Independent uniform functions at fixed points are uniform**: `Pr_f[G (j ↦ f j (d j))] = Pr[G]`. -/
+theorem Pr_evalAt {K : ℕ} {D Y : Type} [Fintype D] [DecidableEq D] [Fintype Y] [Nonempty Y] (d : Fin K → D)
+    (G : (Fin K → Y) → Prop) : Pr (fun f : Fin K → D → Y => G fun j => f j (d j)) = Pr G := by
+  refine (Pr_equiv ((Equiv.piCongrRight fun j => Equiv.funSplitAt (d j) Y).trans
+    (Equiv.arrowProdEquivProdArrow (Fin K) (fun _ => Y) fun j => {e // e ≠ d j} → Y)) fun q => G q.1).trans ?_
+  rw [Pr_eq_Ex, Ex_prod, Pr_eq_Ex]
+  exact congrArg Ex (funext fun a => Ex_const' (ind G a))
+
+/-- **Coordinate `j`'s first `n j` entries from `r`, the rest from `f j` at `key j r`**: `mergeC` with the rest of each
+coin a function on the tape read at a key of the coins, such as the entries of `r` a prover sees by round `j`. -/
+def fnC {K M : ℕ} {X D : Type} (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
+    (f : Fin K → D → Fin M → X) (r : Fin K → Fin M → X) : Fin K → Fin M → X :=
+  mergeC n (fun j => f j (key j r)) r
+
+/-- **Those coins are uniform**: `Pr_{f, r}[E (fnC n key f r)] = Pr[E]` at uniform functions `f`, whatever the keys:
+at each `r` the functions' values at the keys are uniform (`Pr_evalAt`), and the merged coins are (`Pr_mergeC`). -/
+theorem Pr_fnC {K M : ℕ} {X D : Type} [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] (n : Fin K → ℕ)
+    (key : Fin K → (Fin K → Fin M → X) → D) (E : (Fin K → Fin M → X) → Prop) :
+    Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) => E (fnC n key p.1 p.2)) = Pr E := by
+  calc Pr (fun p : (Fin K → D → Fin M → X) × (Fin K → Fin M → X) => E (fnC n key p.1 p.2))
+      = Pr (fun q : (Fin K → Fin M → X) × (Fin K → D → Fin M → X) => E (fnC n key q.2 q.1)) :=
+        Pr_equiv (Equiv.prodComm _ _) fun q => E (fnC n key q.2 q.1)
+    _ = Ex fun r => Pr fun f : Fin K → D → Fin M → X => E (fnC n key f r) :=
+        Pr_prod fun r f => E (fnC n key f r)
+    _ = Ex fun r => Pr fun u : Fin K → Fin M → X => E (mergeC n u r) :=
+        congrArg Ex (funext fun r => Pr_evalAt (fun j => key j r) fun u => E (mergeC n u r))
+    _ = Pr (fun q : (Fin K → Fin M → X) × (Fin K → Fin M → X) => E (mergeC n q.2 q.1)) :=
+        (Pr_prod fun r u => E (mergeC n u r)).symm
+    _ = Pr (fun p : (Fin K → Fin M → X) × (Fin K → Fin M → X) => E (mergeC n p.1 p.2)) :=
+        Pr_equiv (Equiv.prodComm _ _) fun p => E (mergeC n p.1 p.2)
+    _ = Pr E := Pr_mergeC n E
+
+/-- `fnC` with the coins `r` indexed by `Fin L`, where `L = K`. -/
+def fnAt {K L M : ℕ} {X D : Type} (h : L = K) (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D)
+    (f : Fin K → D → Fin M → X) (r : Fin L → Fin M → X) : Fin K → Fin M → X :=
+  fnC n key f fun j => r (Fin.cast h.symm j)
+
+/-- **The coins `fnAt` makes are uniform**, with the coins `r` indexed by `Fin L`. -/
+theorem Pr_fnAt {K L M : ℕ} {X D : Type} [Fintype X] [Nonempty X] [Fintype D] [DecidableEq D] (h : L = K)
+    (n : Fin K → ℕ) (key : Fin K → (Fin K → Fin M → X) → D) (E : (Fin K → Fin M → X) → Prop) :
+    Pr (fun p : (Fin K → D → Fin M → X) × (Fin L → Fin M → X) => E (fnAt h n key p.1 p.2)) = Pr E := by
+  subst h
+  exact Pr_fnC n key E
+
 open Classical in
 /-- **A mixture of live strategies is a probability over the tape and the live coins**: the average over `u` of the
 live session's probability of `pL` against `liveStrat` at `(ω, u)` is the probability over `u` and the round coins
@@ -85,7 +170,7 @@ theorem liveMix_eq {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → Byt
 
 open Classical in
 /-- **A mixture of live strategies bounds an event of another verifier's coins**: where the event `E` of coins `R` has
-the law of `E ∘ Φ` on the tape `τ` and the live session's round coins, and `E (Φ (u, r'))` gives `pL` at the live
+the sampling design of `E ∘ Φ` on the tape `τ` and the live session's round coins, and `E (Φ (u, r'))` gives `pL` at the live
 outcome of `P'` at the tape `(ω, u)` and coins `r'`, `Pr[E]` is at most the average over `u` of the live session's
 probability of `pL` against the strategy `P'`'s bytes decode to at `(ω, u)` (`liveStrat`). -/
 theorem Pr_le_liveMix {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
@@ -100,7 +185,7 @@ theorem Pr_le_liveMix {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → 
 
 open Classical in
 /-- **An event of another verifier's coins bounds a mixture of live strategies**: where the event `E` of coins `R` has
-the law of `E ∘ Φ` on the tape and the round coins, and `pL` at the live outcome of `P'` at `(ω, u)` and `r'` gives
+the sampling design of `E ∘ Φ` on the tape and the round coins, and `pL` at the live outcome of `P'` at `(ω, u)` and `r'` gives
 `E (Φ (u, r'))`, the average over `u` of the live session's probability of `pL` against `liveStrat` is at most
 `Pr[E]`. -/
 theorem liveMix_le_Pr {nMax : ℕ} (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)

@@ -1,6 +1,39 @@
-import Mathlib
-import Models.Accounting.Guarantees.BoundReceipt
+module
+
+public import Definitions.Accounting.Guarantees.BoundReceipt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.Break
 
 /-!
 # A tile's output is unpredictable below its work: from PoUW's named assumptions
@@ -8,6 +41,8 @@ import Proofs.Pouw.Prob
 A checked unit whose credit is above `T/(1 − γ₀)` puts the checked units' total credit above it, when every credit is
 nonnegative; `TT` and `TT_NCP_U` bound the probability of the second.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -29,13 +64,15 @@ theorem tileUnpredictable_of_total {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
 
 /-- **`TT` gives `TileUnpredictable` at `m·k·n`** (`Accounting.Guarantees.TileUnpredictableOfTT`). -/
 theorem TileUnpredictableOfTT : Accounting.Guarantees.TileUnpredictableOfTT :=
-  fun _ _ _ _ _ _ _ CM P D γ₀ ε hTT =>
-    tileUnpredictable_of_total CM P _ (fun _ => Nat.cast_nonneg _) D γ₀ ε hTT.2
+  fun _ _ _ _ _ _ _ CM P D γ₀ ε hH hTT =>
+    tileUnpredictable_of_total CM P _ (fun _ => Nat.cast_nonneg _) D γ₀ ε fun U hU T hT q hq A hA =>
+      le_of_eq_of_le (Pouw.Proofs.pr_and_not_breaks hH A U _ _ _).symm (hTT.2 U hU T hT q hq A hA)
 
 /-- **`TT_NCP_U` gives `TileUnpredictable` at `3·m·k·n`** (`Accounting.Guarantees.TileUnpredictableOfNCPU`). -/
 theorem TileUnpredictableOfNCPU : Accounting.Guarantees.TileUnpredictableOfNCPU :=
-  fun β _ _ _ _ _ _ _ CM P D γ₀ ε hTT =>
-    tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε hTT.2
+  fun β _ _ _ _ _ _ _ CM P D γ₀ ε hH hside hTT =>
+    tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε fun U hU T hT q hq A hA =>
+      le_of_eq_of_le (Pouw.Proofs.pr_and_not_breaks hH A U _ _ _).symm ((hTT hside).2 U hU T hT q hq A hA)
 
 /-- **More compared entries and less credit keep `TileUnpredictable`** (`Accounting.Guarantees.TileUnpredictableMono`):
 a unit whose checked values are right on `P'`'s entries is right on `P`'s. -/
@@ -47,11 +84,12 @@ theorem TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono := b
   obtain ⟨hr, c, hc, hact, hck⟩ := hx
   exact ⟨hr, c, hc, hact, fun y hy => by rw [← hY]; exact hck y (hidx _ hy)⟩
 
-/-- **`TT_OUT`'s shape gives `TileUnpredictablePearlC`** (`Accounting.Guarantees.TileUnpredictablePearlCOfTTOut`). -/
+/-- **`TT_OUT`'s shape at W1 gives `TileUnpredictablePearlC` at W1**
+(`Accounting.Guarantees.TileUnpredictablePearlCOfTTOut`). -/
 theorem TileUnpredictablePearlCOfTTOut : Accounting.Guarantees.TileUnpredictablePearlCOfTTOut := by
   classical
-  intro Q R S _ _ _ _ CM P credit D γ₀ ε hc hTT U hU T hT q hq A hA u hu
-  refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT.2 U hU T hT q hq A hA)
+  intro Q R S _ _ _ _ dv salt P credit D g₀ ε hc hTT U hU T hT q hq A hA u hu
+  refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT U hU T hT q hq A hA)
   have hcorrect : ∀ v ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2), ∃ c : Pouw.PearlC.Commit,
       Pouw.PearlC.actOf (A.transcript U x.1 x.2) v = c.act ∧ Pouw.PearlC.Correct P U x.1 x.2 v c := by
     intro v hv

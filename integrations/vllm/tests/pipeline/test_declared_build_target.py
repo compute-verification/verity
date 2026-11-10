@@ -1,11 +1,13 @@
 """A row whose device class fixes its whole Build target (`config.TARGET_NUM_SMS`, e.g. `__rtxpro6000__` = cc 12.0 / 188 SMs) Builds
 on a GPU-free host: the target is declared by the row id, the preflight asks no device of a Build-only stage, and the Build selects
-vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  Every other class Builds as before."""
+vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  Every other class Builds as before.  The
+platform reports the name of the target's GPU: the row class's, or the one a traced request Build's command passes from φ's target."""
 from __future__ import annotations
 
 import json
 import sys
 import types
+from pathlib import Path
 
 import pytest
 import torch
@@ -14,6 +16,7 @@ from verity_vllm import target_family as tf
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.engine.profiles import devices
 from verity_vllm.pipeline import build as B
+from verity_vllm.pipeline import gc_tuning
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row import fa_version
@@ -22,6 +25,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile, parse_tar
 ROW_120 = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 ROW_89 = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 ROW_90 = "llama32-1b__bf16__h100__tp1__b1__i1024__o128__mixed__greedy__bi-eager"
+ROW_H200_1 = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__eager"
 
 
 def _wl(tmp_path, target=None):
@@ -35,6 +39,8 @@ def test_an_rtxpro6000_row_declares_its_whole_target_and_other_classes_keep_the_
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compilation": "piecewise"}}}) == {"compute_capability": [12, 0], "num_sms": 188, "compilation": "piecewise"}
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compute_capability": [12, 0], "num_sms": 170}}})["num_sms"] == 170, "the workload's own target wins"
     assert tf.declared_profile(ROW_89, {}) == {} and tf.declared_profile(ROW_90, {}) == {}
+    assert tf.declared_profile(ROW_H200_1, {"engine": {"target": {"batch_invariant": False}}}) == \
+        {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}, "an H200 is 132 SMs, SXM and NVL"
     assert R.declared_target(_wl(tmp_path), row=ROW_120) == '{"compute_capability": [12, 0], "num_sms": 188}'
     assert R.declared_target(_wl(tmp_path), row=ROW_89) == "", "an l40s row's Build target stays the host GPU's"
     h100 = {"compute_capability": [9, 0], "num_sms": 132, "flash_attn_version": 2}
@@ -148,9 +154,8 @@ def vllm_without_nvml(tmp_path, monkeypatch):
         del sys.modules[name]
 
 
-def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None, device_name=None):
-    seen = {} if seen is None else seen
-
+def _stub_construction(monkeypatch, seen):
+    """A GPU-free Build whose construction records the platform vLLM resolved, its device count and the name it reports."""
     def construct(out, res, *a, **k):
         from vllm.platforms import current_platform
         seen["platform"] = type(current_platform).__name__
@@ -165,6 +170,11 @@ def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None, device_name=N
     monkeypatch.setattr(B.engine_env, "apply_target", lambda env: None)
     monkeypatch.setattr(B, "_cuda_available", lambda: False)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+
+def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None, device_name=None):
+    seen = {} if seen is None else seen
+    _stub_construction(monkeypatch, seen)
     B.run(str(tmp_path / "out"), 1, 8, "b1-eager-v3", "gloo", target=target, tp=tp, rank=rank, device_name=device_name)
     return seen["platform"]
 
@@ -225,3 +235,34 @@ def test_a_gpu_free_build_answers_the_device_name_its_row_class_reports(tmp_path
     seen: dict = {}
     _build(tmp_path, monkeypatch, target, tp=8, seen=seen, device_name=devices.device_name(str(wl)))
     assert seen["device_name"] == name
+
+
+@pytest.mark.parametrize("name, answered", [("NVIDIA H200", "NVIDIA H200"), (None, "No CUDA GPUs are available")])
+def test_a_traced_request_build_answers_the_device_name_its_target_states_on_a_gpu_free_host(tmp_path, monkeypatch, vllm_without_nvml,
+                                                                                             name, answered):
+    """A request Build `predict.steps.trace_commands` lists has no --workload to name its GPU; the command passes φ's target's
+    `device_name` (`--device-name`), so a host with no visible GPU answers vLLM's `get_device_name` (GLM-5.3's fused-MoE config
+    lookup) with it, and a target stating none traces as before."""
+    from verity_vllm.pipeline import cli
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import trace_commands
+    target = {"compute_capability": [9, 0], "num_sms": 132, **({"device_name": name} if name else {})}
+    phi = Phi(model={"repo": "zai-org/GLM-5.3", "revision": "r"}, target=target, tp={"world": 8, "rank": 3}, execution="eager")
+    [cmd] = trace_commands({"requests": [{"LP": 8, "T": 4, "policy": {"kind": "greedy"}}]}, types.SimpleNamespace(phi=phi), str(tmp_path))
+    a = cli.parse("build", cmd[2:])
+    assert a.device_name == name and a.workload is None and (a.tp, a.rank, a.dead_free) == (8, 3, True)
+    seen: dict = {}
+    _stub_construction(monkeypatch, seen)
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    assert B.main(a) != 2, json.loads(Path(a.out, "result.json").read_text())["message"]
+    assert (seen["platform"], seen["device_count"], seen["device_name"]) == ("NonNvmlCudaPlatform", 8, answered)
+
+
+def test_a_device_name_the_workload_row_s_class_contradicts_is_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(B, "_construct", lambda *a, **k: pytest.fail("constructed"))
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    wl = tmp_path / "row.json"
+    wl.write_text(json.dumps({"sweep": {"row_id": ROW_H200}}))
+    assert B.main(B.Options(out=str(tmp_path / "out"), workload=str(wl), tp=8, device_name="NVIDIA H100 80GB HBM3")) == 2
+    res = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert res["exception"] == "ValueError" and "is not the name the --workload row's class reports ('NVIDIA H200')" in res["message"]

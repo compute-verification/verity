@@ -1,4 +1,4 @@
-"""X-03 on IDENTITIES (R13): the fail-closed Commit verdict compares the committed tensor identities of every step against an expected
+"""The fail-closed Commit verdict on IDENTITIES: it compares the committed tensor identities of every step against an expected
 manifest derived from the install-time module set (+ FA2 hidden source, sampler), and the per-step multiset of module-tensor names against
 the run's own call structure.  Counts alone let 'missing one value, duplicated another' pass; identities do not.  Offline (no CUDA)."""
 from __future__ import annotations
@@ -10,8 +10,10 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.acquire.sources.call_boundary_source import CallBoundarySource  # noqa: E402
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
+from verity_vllm.commit.committer.plan_cache import PlanMetas  # noqa: E402
+from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY  # noqa: E402
 
 
 class Attention:  # class names are what `_mro_names` sees
@@ -49,6 +51,11 @@ def _layout(names: list[str]) -> list[TensorMeta]:
         off += 64
         out.append(m)
     return out
+
+
+def _plan(names: list[str]) -> PlanMetas:
+    n = len(names)
+    return PlanMetas(names, ["bfloat16"] * n, [64] * n, [64 * i for i in range(n)], [(4, 8)] * n, GPU_CHUNK_BYTES)
 
 
 def _good_step(layers: int = 2) -> list[str]:
@@ -101,6 +108,20 @@ def test_fa2_row_dropped_or_doubled_fails():
     assert r["ok"] is False and r["violations"][0]["fa2_layers_bad"] == {1: 0, 0: 2}
 
 
+def test_the_top_p_split_count_is_not_held_to_step_0s_multiplicity():
+    """Traffic that mixes greedy and top-p rows binds the split count only on the steps whose batch ran vLLM's split top-p kernels;
+    a module dropped on such a step still fails."""
+    com = _com()
+    com._layouts[0] = _layout(_good_step())
+    com._layouts[1] = _layout(_good_step() + [SPLITS_IDENTITY])
+    com._layouts[2] = _layout(_good_step())
+    r = com.identity_check()
+    assert r["ok"] is True, r["violations"]
+    com._layouts[3] = _layout([n for n in _good_step() if n != "model.layers.1.mlp.down_proj"] + [SPLITS_IDENTITY])
+    r = com.identity_check()
+    assert r["violations_n"] == 1 and r["violations"][0]["missing_modules"] == ["model.layers.1.mlp.down_proj"]
+
+
 def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
     com = _com()
     good = _good_step()
@@ -112,6 +133,22 @@ def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
     assert r["violations"][0]["sampler_ids"] == 2 and r["violations"][1]["unknown_modules"] == ["model.layers.7.mlp.gate_up_proj"]
 
 
+def test_a_sources_own_names_are_no_modules_tensors():
+    """The KV slots (`kv_slots_source`, commit --memory-map) are named by the engine's KV layer, which need not be a hooked module: the
+    source declares them (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
+    slots = [f"model.layers.{k}.self_attn.mla_attn/slot_mapping" for k in range(2)]
+    com = _com()
+    for s in range(2):
+        com._layouts[s] = _layout(_good_step() + slots)
+    assert com.identity_check()["violations"][0]["unknown_modules"] == ["model.layers.0.self_attn.mla_attn", "model.layers.1.self_attn.mla_attn"]
+
+    class _KvSlots:
+        short_name, own_names = "kv_slots", frozenset(slots)
+
+    com.sources.append(_KvSlots())
+    assert com.identity_check()["ok"] is True
+
+
 def test_shared_module_called_once_per_layer_is_structural_not_a_duplicate():
     com = _com()
     com._modules.append(("model.layers.0.self_attn.rotary_emb", LinearBase()))
@@ -120,6 +157,26 @@ def test_shared_module_called_once_per_layer_is_structural_not_a_duplicate():
         com._layouts[s] = _layout(good)
     assert com.identity_check()["ok"] is True
     assert Counter(good)["model.layers.0.self_attn.rotary_emb"] == 2
+
+
+def test_plan_layouts_repeating_names_get_the_record_their_tensor_metas_get():
+    """Steps whose plans carry one name tuple share one verdict (checked once per distinct tuple): a run of plan layouts that repeats a
+    good step, a dropped-and-doubled step, a doubled sampler and a doubled FA2 row has the record of the same steps as TensorMeta lists."""
+    good = _good_step()
+    bad = list(good)
+    bad.remove("model.layers.1.mlp.down_proj")
+    bad.insert(3, "model.layers.0.self_attn.qkv_proj")
+    fa2 = [n for n in good if n != "fa2.m1/L1/g1x64x1"] + ["fa2.m1/L0/g1x64x1"]
+    steps = [good, good, bad, good, bad, good + ["runner.sampler/sampled_token_ids"], fa2, bad, good]
+    recs = []
+    for layout in (_layout, _plan):
+        com = _com()
+        for s, names in enumerate(steps):
+            com._layouts[s] = layout(names)
+        recs.append(com.identity_check())
+    assert recs[1] == recs[0]
+    assert recs[1]["violations_n"] == 5 and [v["step"] for v in recs[1]["violations"]] == [2, 4, 5, 6, 7]
+    assert recs[1]["fa2_rule"]["steps"] == {"uniform": len(steps)}
 
 
 def test_offline_core_without_module_set_is_skipped_not_passed():
@@ -155,7 +212,7 @@ def _cb_com(steps: int = 3) -> tuple[NativeHostCommitter, _CallBoundaries]:
 
 
 def test_call_boundary_names_are_checked_against_the_steps_targets_not_step_0():
-    """Gemma-2-2B k06 (r20260930-184803-4e5e): '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
+    """Gemma-2-2B: '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
     Each step commits its own body's names; rule (4) compared them with step 0's.  They are checked against the source's targets."""
     com, cb = _cb_com()
     for s in range(3):
@@ -179,3 +236,15 @@ def test_a_dropped_doubled_or_foreign_call_boundary_tensor_still_fails():
     rec = {"extra": {"expected_tensors": 18, "committed_tensors": 18, "errors": [], "errors_n": 0, "identity_check": r}, "openings": {"n": 64, "verified": 64}}
     ok, why = commit_verdict(rec, True)
     assert not ok and "call_boundaries_bad" in why
+
+
+def test_a_plan_repeating_step_0s_names_is_held_to_its_own_call_boundaries():
+    """A step-reading source judges each step on its own: a plan layout that repeats step 0's names at step 1 commits step 0's call-boundary
+    tensors, not step 1's, and fails, though its name tuple is step 0's."""
+    com, cb = _cb_com(2)
+    com._layouts[0] = _plan(_good_step() + ["logits_processor"] + cb.at[0])
+    com._layouts[1] = _plan(_good_step() + ["logits_processor"] + cb.at[0])
+    r = com.identity_check()
+    assert r["ok"] is False and [v["step"] for v in r["violations"]] == [1]
+    assert r["violations"][0]["call_boundaries_bad"] == {"logits_processor/div/out": (1, 0), "logits_processor/div_1/out": (0, 1),
+                                                         "logits_processor/tanh/out": (1, 0), "logits_processor/tanh_1/out": (0, 1)}

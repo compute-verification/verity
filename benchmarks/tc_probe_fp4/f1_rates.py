@@ -1,6 +1,6 @@
-"""F1 (`fp4-tile-only/sm120`): every multiplier on sm_120a priced per nonzero product against dense NVFP4 (lane pouw rtx-pro GPU 4).
+"""F1 (`fp4-tile-only/sm120`): every multiplier on sm_120a priced per nonzero product against dense NVFP4.
 
-The FP4-tile model (docs/pouw/fp4-tile-model.md §1) claims that no sm_120 instruction multiplies faster than the NVFP4 m16n8k64
+The FP4-tile model claims that no sm_120 instruction multiplies faster than the NVFP4 m16n8k64
 tile per nonzero product.  This tool measures that claim over every ``mma.sync`` / ``mma.sp::ordered_metadata`` kind, shape,
 type and sparsity ptxas accepts for sm_120a, and over the CUDA-core multipliers, each in the same process as dense NVFP4:
 
@@ -19,16 +19,16 @@ table: dense NVFP4 1, FP8 2, BF16 4, TF32 8, FFMA about 17), where a sparse form
 
 Gates, before any timing (a failed gate writes no measurements): the device UUID and compute capability 12.0; the build's SASS
 gate (each timed loop holds its form's instruction count, and no kernel in the library has an FP32 ``FADD``/``FFMA``/``FMUL``
-with ``.FTZ``, the 09:34Z rule; the build passes no ``-ftz``/fast-math flag); every kernel's outputs finite and bit-identical
+with ``.FTZ``; the build passes no ``-ftz``/fast-math flag); every kernel's outputs finite and bit-identical
 across two launches; every launch one wave; and, after timing, every kernel's outputs finite at its timed length (a failure there
 publishes no measurements either).  ``--corrupt-word`` flips one gate word: the run must then fail.  A form ptxas
 emulates (s4, u4, b1 and FP16 m8n8k4 on sm_120a: one ``CALL`` per PTX instruction to a subroutine of unpacking and other MMAs)
 passes the SASS gate as ``emulated``, with its callee's MMAs recorded, and is timed as that route: its price is the emulation's.
 
 Operands are uniform random codes of each form's types (small magnitudes where the accumulator is FP16, so no chain reaches inf);
-the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, drawn per lane and per
-operand set; 1:2 for TF32), and ``sp_nvf4_meta_const`` repeats OMMA.SF.SP with one constant nibble, as the assessor's sparse FP8
-probe did.  A product narrower than an E2M1 product (``s4``, ``u4``, ``b1``) is priced per its own product and flagged: it can't
+the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, sampled per lane and per
+operand set; 1:2 for TF32), and ``sp_nvf4_meta_const`` repeats OMMA.SF.SP with one constant nibble.
+A product narrower than an E2M1 product (``s4``, ``u4``, ``b1``) is priced per its own product and flagged: it can't
 hold one E2M1 x E2M1 product (12 x 12 as integers after the x2), so it is not a like-for-like multiplier.  Labels: every rate
 and price is Measured; the per-E2M1-product prices of the narrow forms are Derived from them.
 """
@@ -53,6 +53,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f1-rates-sm120/v1"
@@ -65,7 +66,7 @@ REF = "nvf4"
 #: sparse metadata nibbles mma.sp::ordered_metadata accepts: index pairs p0 < p1 of four as (p1 << 2) | p0; TF32's 1:2 pairs
 META_24 = (0b0100, 0b1000, 0b1001, 0b1100, 0b1101, 0b1110)
 META_12 = (0b0100, 0b1110)
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / --use_fast_math (the 09:34Z rule); the build refuses them anyway
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / --use_fast_math; the build refuses them anyway
 FTZ_RE = re.compile(r"\b(FADD|FFMA|FMUL)(\.[A-Z0-9_]+)*\.FTZ\b")
 MMA_RE = re.compile(r"MMA")
 MULT_RE = re.compile(r"MMA|FMA|MUL|MAD|IDP|DP[24]A|POPC")
@@ -115,7 +116,7 @@ class Form:
 
 
 @dataclasses.dataclass(frozen=True)
-class Op:
+class SimtMultiplier:
     """One CUDA-core multiplier: ``body`` is one dependent step on chain register %0 with operands %1 (y) and %2 (z)."""
     name: str
     ptx: str
@@ -268,26 +269,28 @@ def _forms() -> list:
 FORMS_TENSOR = _forms()
 
 OPS = [
-    Op("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
+    SimtMultiplier("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
     # an immediate addend: two register sources, so no three-operand register-bank conflict (the op's best form)
-    Op("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None, "ffma_imm", "FFMA",
-       1, 1),
-    Op("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
-    Op("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
-    Op("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
-    Op("hfma2_bf16", "fma.rn.bf16x2", "fma.rn.bf16x2 %0, %0, %1, %2;", "r", "r", "r", "bfma2", "HFMA2", 1, 2),
+    SimtMultiplier("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None,
+                   "ffma_imm", "FFMA", 1, 1),
+    SimtMultiplier("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
+    SimtMultiplier("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
+    SimtMultiplier("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
+    SimtMultiplier("hfma2_bf16", "fma.rn.bf16x2", "fma.rn.bf16x2 %0, %0, %1, %2;", "r", "r", "r", "bfma2", "HFMA2", 1, 2),
     # ptxas lowers half of these to HFMA2 with a -0 addend (an exact multiply): both count
-    Op("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
-    Op("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
-    Op("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
-    Op("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD", 1, 1),
-    Op("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
-    Op("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}", "l", "r", None,
-       "int", "IMAD.WIDE", 1, 1),
-    Op("dp4a_s8", "dp4a.s32.s32", "dp4a.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.4A", 1, 4),
-    Op("dp2a_s16s8", "dp2a.lo.s32.s32", "dp2a.lo.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.2A", 1, 2),
-    Op("popc_and_b1", "and.b32 + popc.b32 + add.u32", "{\n.reg .b32 t;\nand.b32 t, %0, %1;\npopc.b32 t, t;\nadd.u32 %0, %0, t;\n}",
-       "r", "r", None, "int", "POPC", 1, 32, product="b1"),
+    SimtMultiplier("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
+    SimtMultiplier("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
+    SimtMultiplier("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
+    SimtMultiplier("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD",
+                   1, 1),
+    SimtMultiplier("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
+    SimtMultiplier("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}",
+                   "l", "r", None, "int", "IMAD.WIDE", 1, 1),
+    SimtMultiplier("dp4a_s8", "dp4a.s32.s32", "dp4a.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.4A", 1, 4),
+    SimtMultiplier("dp2a_s16s8", "dp2a.lo.s32.s32", "dp2a.lo.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.2A", 1, 2),
+    SimtMultiplier("popc_and_b1", "and.b32 + popc.b32 + add.u32",
+                   "{\n.reg .b32 t;\nand.b32 t, %0, %1;\npopc.b32 t, t;\nadd.u32 %0, %0, t;\n}", "r", "r", None, "int", "POPC", 1, 32,
+                   product="b1"),
 ]
 
 FORMS = FORMS_TENSOR + OPS
@@ -405,11 +408,11 @@ def _op_words(c: str | None) -> int:
     return 0 if c is None else (2 if c in ("d", "l") else 1)
 
 
-def op_words_per_chain(op: Op) -> int:
+def op_words_per_chain(op: SimtMultiplier) -> int:
     return _op_words(op.x) + _op_words(op.y) + _op_words(op.z)
 
 
-def simt_kernel(op: Op) -> str:
+def simt_kernel(op: SimtMultiplier) -> str:
     w = op_words_per_chain(op)
 
     def load(c, idx):
@@ -624,7 +627,7 @@ def accept_one(name: str, work: Path) -> dict:
 
 def loops_of(text: str) -> dict:
     """{kernel: opcode histogram of its innermost timed loop} (w1_price.py's reader)."""
-    import w1_price as W  # noqa: PLC0415
+    import w1_price as W
     return W.loops_of(text)
 
 
@@ -758,7 +761,7 @@ _E4M3_FINITE = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint32)
 
 
 #: FP6 / FP4 codes (exponent bits, mantissa bits) and, for the FP16-accumulate forms, how many of the smallest magnitude codes
-#: they draw (|x| <= 0.4375, 0.625, 0.5). A K=32 sum then stays within 16, at most half an FP16 ulp once |D| >= 2^15, so a
+#: they sample (|x| <= 0.4375, 0.625, 0.5). A K=32 sum then stays within 16, at most half an FP16 ulp once |D| >= 2^15, so a
 #: chain of millions of MMAs on fixed operands stalls short of inf
 _NARROW = {"e3m2": (3, 2, 8), "e2m3": (2, 3, 6), "e2m1": (2, 1, 2)}
 #: where kind::f8f6f4 / kind::mxf8f6f4 read a code in its 8-bit container (PTX ISA: E2M1 in the central 4 bits, E3M2 and E2M3
@@ -857,7 +860,7 @@ def _f64w(v) -> np.ndarray:
     return np.ascontiguousarray(v, np.float64).view(np.uint32)
 
 
-def simt_inputs(op: Op, threads: int, seed: int) -> np.ndarray:
+def simt_inputs(op: SimtMultiplier, threads: int, seed: int) -> np.ndarray:
     """u32[threads][SIMT_CH][words]: (x, y[, z]) per chain, in the op's domain: FMA chains x <- x*y + z with y in [0.5, 0.99) and z
     small (x converges, finite), multiply chains with y = +-1, integer chains uniform random words."""
     rng = np.random.default_rng([seed, 7, _seed(op.name)])
@@ -968,7 +971,7 @@ class F1Device:
 
 class FakeF1:
     """CPU stand-in for the driver's dry run: invented rates (NVFP4 at 16 MMAs per SM per 128 clocks, everything else slower per
-    product).  Its numbers are made up; ``--fake-silicon`` never runs under a research run."""
+    product).  Its numbers are made up; ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 188, 2000.0
 
@@ -977,7 +980,7 @@ class FakeF1:
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -1037,7 +1040,7 @@ def work_per_launch(form, g: dict, iters: int) -> tuple[float, float, float]:
 
 
 def clock_label(samples: list, launch_mhz: list[float], locked_mhz: float | None) -> str:
-    import w1_price as W  # noqa: PLC0415
+    import w1_price as W
     return W.clock_label(samples, launch_mhz, locked_mhz)
 
 
@@ -1218,12 +1221,12 @@ def scan_libs(args) -> int:
     (out / "libscan.json").write_text(json.dumps(doc, indent=1) + "\n")
     print("LIBSCAN", [(r["path"], r.get("functions"), r.get("complete"), len(r.get("multiply_opcodes", {}))) for r in recs], flush=True)
     ok = all(r.get("complete") for r in recs if "error" not in r)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
                "label": "Measured (the sm_120 SASS of NVIDIA's libraries; no device)",
                "method": "cuobjdump -arch sm_120 -sass of each library, every opcode counted; the multiply-family ones kept",
                "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "step": "scan-libs",
-                                        "libraries": {r["path"]: r.get("sha256") for r in recs}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                        "libraries": {r["path"]: r.get("sha256") for r in recs}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
                "validation": {"status": "passed" if ok else "failed", "checker": "every present library's SASS dumped to the end",
                               "detail": "; ".join(f"{r['path']}: {r.get('error') or r.get('functions')}" for r in recs),
                               "evidence": ["libscan.json"]},
@@ -1319,12 +1322,12 @@ def collect(args) -> int:
     meas += [{"name": f"{n}_products_per_sm_per_clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
              for n, v in rows.items()]
     clocks = sorted({f["clocks"] for f in fams.values()})
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "clocks": clocks[0] if len(clocks) == 1 else "mixed", "label": "Measured" if clocks == ["locked-2100"] else "Measured, " + ",".join(clocks),
            "method": "F1 instruction microbenchmarks from the fill queue (one family per chunk, each against dense NVFP4 in the same "
                      "process), collected; see f1_table.json",
            "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "build_so_sha256": b["so_sha256"],
-                                    "families": {k: v["sha256"] for k, v in fams.items()}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "families": {k: v["sha256"] for k, v in fams.items()}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if ok else "failed", "checker": "every family's gates (UUID, cc 12.0, SASS per loop, no FTZ FP32, "
                           "outputs finite and bit-identical, one wave) passed in its chunk, on this build", "detail": "; ".join(failures) or
                           f"{len(fams)} families, {len(rows)} rows", "evidence": ["f1_table.json"]},
@@ -1351,17 +1354,17 @@ def build_cmd(args) -> int:
         print(f"  {n:28s} {'ok ' if g['ok'] else 'BAD'} {tag:12s} {sorted(ops)}")
     for n, m in rec["refused"].items():
         print(f"  refused {n}: {(m or [''])[0][:140]}")
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "label": "Measured (ptxas acceptance and SASS of each form; no device)",
            "method": "each F1 form compiled alone for sm_120a, then the accepted forms as one library; loop opcode histograms from cuobjdump",
            "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "step": "build", "so_sha256": rec["so_sha256"],
-                                    "source_sha256": rec["source_sha256"], "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "source_sha256": rec["source_sha256"], "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if rec["ok"] else "failed", "checker": "SASS per timed loop; no FADD/FFMA/FMUL .FTZ in the library",
                           "detail": f"{len(rec['kernels'])} accepted, {len(rec['refused'])} refused", "evidence": ["build.json"]},
            "measurements": [{"name": "forms_accepted", "value": len(rec["kernels"]), "unit": "forms"},
                             {"name": "forms_refused", "value": len(rec["refused"]), "unit": "forms"}],
            "measurement_files": ["build.json"], "artifacts": []}
-    if os.environ.get("RESEARCH_RUN_ID"):
+    if SHARED.RESEARCH_RUN_ID:
         (out / "result.json").write_text(json.dumps(res, indent=1) + "\n")
     return 0 if rec["ok"] else 1
 
@@ -1397,8 +1400,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", required=True)
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", False) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_family, "scan-libs": scan_libs, "collect": collect}[args.cmd](args)
 
 

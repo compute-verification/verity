@@ -2,8 +2,12 @@
 What the rows of the verifier's builder (`Flock.HmNets`) force: a Hoare-style judgement `Sound m P` (whenever every row of
 the final state holds, the result satisfies `P`) and the primitive gadgets' rules: a fresh bit, AND, majority, commit.
 -/
-import Mathlib.Tactic
-import Flock.HmNets
+module
+
+public import Mathlib.Tactic
+public import Flock.HmNets
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -85,10 +89,6 @@ theorem sound_fresh (a b : Lin) : Sound (fresh a b) fun z r => ev z r = (ev z a 
   have := hz ⟨s.next, a, b⟩ List.mem_cons_self
   simp only [rowHolds] at this
   simpa [fresh, StateT.run] using this
-
-theorem sound_input (n : ℕ) : Sound (input n) fun _ l => l.length = n := by
-  intro s
-  exact ⟨fun r hr => hr, fun z _ => by simp [input, StateT.run]⟩
 
 theorem sound_and (a b : Lin) : Sound (Flock.HmNets.and a b) fun z r => ev z r = (ev z a && ev z b) := by
   unfold Flock.HmNets.and

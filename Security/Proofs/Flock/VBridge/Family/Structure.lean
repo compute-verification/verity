@@ -1,7 +1,24 @@
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.VBridge.Family.Files
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.VBridge.Family.Files
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.VBridge.Pinned
 
 /-!
 # The structure facts at V*'s shape
@@ -9,7 +26,7 @@ import Proofs.Flock.Soundness.Refine.Regions
 The family's shape facts, by evaluating V*'s and the verifier's Lean at `hsh` and `hstmts`:
 
 * the shape: `RecResiduals.shape?` (`RecResiduals.lean:60`) holds only at a `fast100` schedule (`Schedule.lean:47`,
-  `m ∈ [22, 35]`, `fast100_range`), whose level 0 draws queries (`fast100_q0`), so `0 < F.nOpen` (`nOpen_pos`);
+  `m ∈ [22, 35]`, `fast100_range`), whose level 0 samples queries (`fast100_q0`), so `0 < F.nOpen` (`nOpen_pos`);
 * the statements: `VStar.statements` (`Stage.lean:49-60`) is the levels' `RecOpen` statements, then one `InnerRepCheck`
   per part of `parts (spec vsh)` (`statements_eq`), so level `ℓ`'s openings are statement `ℓ` (`statements_recOpen`)
   and part `p` is a statement when V* has it (`statements_inner`): `HOpenUnits` (`hOpenUnits_of`), `HCover`
@@ -20,6 +37,8 @@ The family's shape facts, by evaluating V*'s and the verifier's Lean at `hsh` an
   its free bits (`RegionBytes`, which the verifier's `regionValue` checks, `Statement.lean:361`), and realize the
   model's there (`ofCircuit_extra`); and `RunsFrom`'s `foldKLog` and `kLog_le` from it (`kLogs_of_setup`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -45,7 +64,7 @@ theorem fast100_range {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some
     cases h
   omega
 
-/-- **Every `fast100` schedule's level 0 draws queries** (`queriesAt[0] = 218`, `Schedule.lean:44,55`), by evaluating
+/-- **Every `fast100` schedule's level 0 samples queries** (`queriesAt[0] = 218`, `Schedule.lean:44,55`), by evaluating
 `fast100` at each `m ∈ [22, 35]`. -/
 theorem fast100_q0 {m : ℕ} {s : Flock.Schedule} (h : Flock.fast100 m = some s) :
     0 < s.levels.size ∧ 0 < (s.levels[0]!).q := by
@@ -415,8 +434,8 @@ def toF128 (a : 𝔽) : F128 := a
 
 /-- **The verifier's setup of a statement realizes its model statement** (`Setup.ofCircuit`, `Verify.lean:29-32`): its
 `m` and `k_log` are the statement's, its fold realizes `stmtOf`'s (`ofCircuit_fold`), and at every pair of link points
-the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`), §5 and
-§16.2. The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
+the arrays holding them give extra claims (`extraClaims_exists`) that realize the model's (`ofCircuit_extra`; `Flock.Record`,
+`Flock.Statement`'s regions). The schedule is `fast100`'s at `m` (whose range gives `14 ≤ m`) and the scheme the statement's. -/
 theorem setupRealizes_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) {sch : Flock.Schedule}
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (hf : Flock.fast100 st.m = some sch)
     (hb : RegionBytes st) :
@@ -477,7 +496,7 @@ theorem sched_eq {s : Flock.Schedule} (hs : F.vsh.sched = .ok s) : s = F.sh.sche
   rw [sched_fast100 hs] at h
   exact Option.some.inj h
 
-/-- **Each rep opens at least one row**: level 0 of `fast100`'s schedule draws 218 queries. -/
+/-- **Each rep opens at least one row**: level 0 of `fast100`'s schedule samples 218 queries. -/
 theorem nOpen_pos : 0 < F.nOpen := by
   obtain ⟨hsz, hq⟩ := fast100_q0 (shape?_eq F.hsh).1
   unfold nOpen
@@ -489,7 +508,7 @@ theorem nOpen_pos : 0 < F.nOpen := by
 **The circuit of a level's statement names its unit as the statement**, `RecOpen.unitName LANES H`: `circuitFile`
 writes the unit of `recOpenUnit LANES H` under `Stmt.name` (`Stage.lean:44`, `Compose.lean:217,233`) and `HmRow.parse`
 reads it as the circuit's unit (`hfile`); established by the emit/parse round trip of `circuitFile`, as `HUnitName`
-for the parts (the lane that proves `hfile`). -/
+for the parts. -/
 def HOpenName : Prop :=
   ∀ (j : Fin F.stmts.size) ℓ LANES H m, F.stmts[j] = .recOpen ℓ LANES H m →
     (F.Vs j).c.unit.name = Flock.RecOpen.unitName LANES H
@@ -510,9 +529,9 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
   exact ⟨upv_pos hc (F.Vs _).hscope, unitLog_le (F.Vs _).hscope, _,
     params_of_check (parse_facts hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)⟩
 
-/-- Obligation: discharged by the verifier's check 6 (`cursor/rec-vstar-checks-741b`), whose pass is `ps.size =
+/-- Obligation: discharged by the verifier's check 6, whose pass is `ps.size =
 gs.size`.
-**The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
+**The verifier's part-count check passes** (the verifier's gap): at the inner shape `vsh` (the `m`,
 `k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,
 `VStar.parts (VStar.Algebra.spec vsh)` (`Parts.lean:54-105`), and its own, `groups (structureOf sh) (portSizes sh)`
 (`partsOf`, `RecResiduals.lean:119-139`), and refuses when they number differently. Both are the same first-fit packing,

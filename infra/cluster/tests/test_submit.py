@@ -50,9 +50,15 @@ def test_a_gpu_host_on_node_1_runs_at_a_gpu_jobs_weight_and_takes_no_gpus_from_t
                         node="vy-nebius-1", gpu_host=True)
     assert "CPUWeight=idle" not in out["wrap"] and "AllowedCPUs=96-127" in out["wrap"] and out["workload_wrap"] == []
     assert out["gpu_host"] is True
+    env = out["wrap"][:out["wrap"].index("systemd-run")]
+    assert env[-3:] == [*submit.N1_LEASE_ENV, f"GPU_LEASE={submit.GPU_LEASE_N1}"], \
+        "the workload leases from node 1's pool, as the queue's own GPU jobs do"
+    two = submit.resolve(c, _job(cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T, gpu_host=True)
+    assert f"GPU_LEASE={submit.GPU_LEASE}" in two["wrap"] and not any(w.startswith("GPU_LEASE_DIR=") for w in two["wrap"])
     plain = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, cpus=4,
                           node="vy-nebius-1")
     assert "CPUWeight=idle" in plain["wrap"] and plain["gpu_host"] is False
+    assert not any(w.startswith("GPU_LEASE=") for w in plain["wrap"])
     with pytest.raises(submit.Refused, match="takes its GPUs with gpu-lease itself"):
         submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, gpus=1, gpu_host=True)
 
@@ -78,6 +84,24 @@ def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_wo
     assert submit.GPU_LEASE not in out["wrap"], "custody runs in the CPU allocation, not under the GPU lease"
     assert out["workload_wrap"] == [submit.GPU_LEASE, "1", "--wait", "--max-min", "10", "--mem-gb", "64", "--preemptible", "--"]
     assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 600
+
+
+def test_a_guest_cpu_job_on_node_2_claims_whole_cores_of_its_share_at_nice_0():
+    """Every queued run had all of 48-95 at nice 19, 34 at once at load 1000, and nice orders nothing between their
+    scopes: the placement names the share and the CPUs to claim of it (`research cpu-hold` on the machine), and the wrapper,
+    named on the share, gets the claimed cores in its place."""
+    out = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert out["cores"] == {"cpus": "48-95", "n": 4}
+    assert "AllowedCPUs=48-95" in out["wrap"] and out["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in out["wrap"]
+    gpu = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
+    assert "cores" not in gpu, "a GPU job's runner keeps the share at nice 19"
+    home = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16), "r1", T)
+    assert home["node"] == "vy-nebius-1" and "cores" not in home
+    owner = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert "cores" not in owner
+    gate = submit.resolve(model.load(NEBIUS), _job(priority="gate", cpus=16, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    fill = submit.resolve(model.load(NEBIUS), _job(priority="fill", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert gate["cores"]["rank"] == 150 and fill["cores"]["rank"] == -490, "cpu-hold's line is by class (INF-147)"
 
 
 def test_quiet_and_pinned_gpus_reach_gpu_lease():
@@ -106,6 +130,18 @@ def test_a_pinned_node_is_the_only_one_tried():
     assert "vy-nebius-2" not in str(e.value)
 
 
+def test_once_node_1_has_stopped_verity_jobs_go_to_its_share_on_node_2():
+    """nebius-after-n1.toml, staged for node 1's retirement: what the router does once it replaces nebius.toml."""
+    c = model.load(Path(NEBIUS).with_name("nebius-after-n1.toml"))
+    assert model.validate(c) == [] and set(c.nodes) == {"vy-nebius-2"} and c.workstreams == ()
+    cpu = submit.resolve(c, _job(cpus=4, memory_gib=16), "r1", T)
+    assert cpu["node"] == "vy-nebius-2" and cpu["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in cpu["wrap"]
+    gpu = submit.resolve(c, _job(gpus=1), "r1", T)
+    assert gpu["node"] == "vy-nebius-2" and gpu["workload_wrap"][0] == submit.GPU_LEASE
+    with pytest.raises(submit.Refused, match="vy-nebius-1"):
+        submit.resolve(c, _job(node="vy-nebius-1"), "r1", T)
+
+
 def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_executor_switched_on():
     c = model.load(NEBIUS)
     assert c.nodes["vy-nebius-1"].gpu_executor == "n1-lease", "the cutover: the description switches node 1's executor on"
@@ -122,7 +158,7 @@ def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_
 
 def test_node_1_refuses_a_lease_that_isnt_preemptible_beyond_the_provers_own_quota():
     """n1_lease.py borrows past `provers`' nominal quota only for preemptible waiters, so a larger non-preemptible lease would wait
-    in gpu-lease forever (circuits' 8-GPU load-time run, 7 Oct)."""
+    in gpu-lease forever (circuits' 8-GPU load-time run)."""
     c = model.load(NEBIUS)
     own = c.workstream(submit.N1_POOL_QUEUE, "vy-nebius-1").gpus
     with pytest.raises(submit.Refused, match=f"isn't --preemptible at most provers' own quota, {own} GPUs"):
@@ -159,6 +195,23 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     out = json.loads(cap.out)
     assert cap.err == "cluster: --node is now --on\n"
     assert out["gpu_host"] is True and "CPUWeight=idle" not in out["wrap"]
+
+
+def test_the_cli_places_with_the_stop_each_node_reports_and_the_refusal_names_where_the_stop_came_from(capsys):
+    """A node renewed on the machine (its /etc/research/deadline) but not in this tree's description places with the stop
+    the caller read from the node (`--stop`); without one the description's stop stands, and the refusal says which it was."""
+    stop = model.load(NEBIUS).nodes["vy-nebius-2"].stops_at
+    base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(stop - 3600), "--project", "verity", "--submitter", "lane-x",
+            "--max-s", "600", "--mem-gb", "8", "--on", "vy-nebius-2"]
+    assert cli.main(base) == 3
+    refused = json.loads(capsys.readouterr().out)["refused"]
+    assert "admission end" in refused and "from the description's stops_at" in refused and "7200 s drain" in refused
+    assert cli.main([*base, "--stop", f"vy-nebius-2={stop + 2 * 86400}"]) == 0
+    assert json.loads(capsys.readouterr().out)["machine"] == "vy-nebius-2", "the share lasts until the node's stop, renewals included"
+    assert cli.main([*base, "--stop", f"vy-nebius-2={stop - 86400}"]) == 3, "a stop brought forward on the node holds too"
+    assert "from the node's live /etc/research/deadline" in json.loads(capsys.readouterr().out)["refused"]
+    assert cli.main([*base, "--stop", "vy-nebius-9=1"]) == 3
+    assert "unknown node 'vy-nebius-9'" in json.loads(capsys.readouterr().out)["refused"]
 
 
 KINDS = Path(__file__).parents[1] / "kinds"

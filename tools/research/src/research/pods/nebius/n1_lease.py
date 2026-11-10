@@ -31,7 +31,8 @@ whole number of the node's GPUs, the three it last answered stay (the environmen
 (`policy`), and the three in force are written to `$GPU_LEASE_DIR/n1-lease.limits` at each read with where they came from,
 `from=policy`, `last-policy` or `environment` (`cluster policy diff` reads them there).
 **Heartbeat and expiry.** Each tick reads every lease (lock holders from /proc/locks, the owner line, the pod from the holder's
-cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
+cgroup) into `n1-lease.json`; that record is the lease's heartbeat. A GPU whose memory gpu-lease last found held by a live process
+under no lease (`$GPU_LEASE_DIR/<i>.foreign`, which kept it from being granted) carries that finding as `foreign`. A lease held `$VY_LEASE_EXPIRY_GRACE_S` past its `until=` (a
 hung job gpu-lease's own timeout didn't end) has its pod deleted. A lease on a GPU outside the pool (its holder was deleted by
 hand, or Kueue reclaimed it) has its pod deleted at once: Kubernetes may already have given that GPU to someone else. A lease
 held by a host process (a `research run --queue` job, in no pod) is signalled instead, its gpu-lease scope else its owner pid:
@@ -82,7 +83,7 @@ KILL_AFTER_S = 30
 BRAIN = os.environ.get("VY_LEASE_BRAIN", "")
 BRAIN_MISSES = 2
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
-IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
+IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "verity-sky-gpu:3dbe60044f88c462")
 KUBECTL = os.environ.get("VY_KUBECTL", "sudo -n k3s kubectl").split()
 POOL_LABEL = "verity.dev/gpu-pool"
 POOL_NAME = os.environ.get("VY_POOL_NAME", "node1")
@@ -149,6 +150,16 @@ def owner_fields(line: str) -> dict[str, str]:
     if len(head) == 2:
         f["cmd"] = head[1]
     return f
+
+
+def foreign_on(i: int) -> list[dict[str, str]]:
+    """What gpu-lease last found holding GPU i's memory under no lease (`$GPU_LEASE_DIR/<i>.foreign`), its processes still alive."""
+    try:
+        lines = (DIR / f"{i}.foreign").read_text().splitlines()
+    except OSError:
+        return []
+    found = [owner_fields(line) for line in lines if line.strip()]
+    return [f for f in found if f.get("pid", "").isdigit() and Path(f"/proc/{f['pid']}").exists()]
 
 
 def write(path: Path, text: str) -> None:
@@ -448,6 +459,9 @@ class Controller:
                 g["lease"] = {"who": f.get("who"), "run": f.get("run"), "since": f.get("since"), "until": f.get("until"),
                               "pid": pid, "scope": f.get("scope"), "pod": pod["metadata"]["name"] if pod else None,
                               "owner_alive": bool(pid) and Path(f"/proc/{pid}").exists(), "seen": iso(t)}
+            foreign = foreign_on(i)
+            if foreign:
+                g["foreign"] = foreign
             gpus.append(g)
         want = waiters()
         try:

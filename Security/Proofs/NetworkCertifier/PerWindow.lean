@@ -1,5 +1,12 @@
-import Proofs.NetworkCertifier.Schedule
+module
+
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Schedule
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
 import Proofs.NetworkCertifier.Ingress
+import Proofs.NetworkCertifier.Schedule
 
 /-!
 # Per window: the windows the accounting charges
@@ -11,6 +18,8 @@ shipped schedule's `#Σ_sync · D^T` (`encard_accSeqs_le_constantRate_windows` a
 parent's hypotheses at that horizon and no other. The shipped schedule's factor is cumulative from the run's first
 window: a later window may carry more than `#Σ_sync · D^T`.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

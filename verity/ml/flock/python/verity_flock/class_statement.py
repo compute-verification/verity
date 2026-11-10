@@ -1,4 +1,4 @@
-"""A unit class of any partition (`verity.ml.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
+"""A size class of any partition (`verity.ml.circuits.units`) as a ``verity/flock-circuit`` statement (M0, :mod:`circuit`), proved by
 ``flock-circuit`` per class.
 
     python -m verity_flock.class_statement --model tiny --partition q-word --out DIR [--binary PATH] [--n 16] [--selftest]
@@ -17,7 +17,7 @@ M0's statement proves a template's identical units with every instance's input r
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
-  Definition, a Call's broadcast parameters drawn once per Call), the statement binds the partition's ``verity/partition/v1``
+  Definition, a Call's broadcast parameters sampled once per Call), the statement binds the partition's ``verity/partition/v1``
   digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
   under the tag ``verity/flock/experimental-owners``).
 
@@ -26,7 +26,8 @@ the outputs as hidden rows like the inputs (one ``out`` row per instance, its ``
 are committed values whose row a reading unit can open.  Every class is one plain
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
-record carries the class's table reads and its unit's matrix entries.  `distinct_calls` builds a served row's workload from its program graph:
+record carries the class's table reads and its unit's matrix entries. `UnitStager`'s ``reads="slots"`` instead puts a unit's
+MUFU reads in Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -39,6 +40,7 @@ import os
 import re
 import resource
 import subprocess
+import sys
 import threading
 import time
 import weakref
@@ -46,7 +48,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -56,13 +58,18 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
+from . import challengers as CH
 from . import circuit as FC
 from . import class_sweep
 from . import gf2
 from . import ir_lower as IL
 from . import partition_units as PU
+from . import read_slots as RS
+from . import read_tmpl as RT
+from . import struct_lower as SL
+from . import tmpl as TM
 
 BLOCK_WORDS = 64
 #: the selftest cases run on a read-bearing class (each re-parses its 1-3 GB circuit): the honest session, and the two witness tamperings
@@ -91,7 +98,7 @@ CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
 PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
 LEAF_SCHEME = FC.LEAF_SCHEME_PLAIN if PLAIN_LEAVES else None
 #: FLOCK_OWN_ROWS=1: an unwired class is staged with every instance's own rows (`stage`'s ``share_rows=False``), the public
-#: file the verifier covers outside a registered ZK session (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
+#: file a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
 #: once per instance rather than once
 OWN_ROWS = os.environ.get("FLOCK_OWN_ROWS") == "1"
 #: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
@@ -142,7 +149,7 @@ class ClassDefinition:
         return params, Array(self.w_out, Value(16))
 
 
-def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
+def sources(act: Activation, uc: ProofBlockCircuit, owner_of: dict[int, str]) -> list[list[int]]:
     """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per class
     (shape) of producing units whose committed outputs it reads (``owner_of``: computing gate -> its unit's shape in the flat cut),
     as serving commits a tensor once, not per element. Each group is one row, and every instance reading the same values opens
@@ -157,7 +164,7 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+def element_rows(act: Activation, uc: ProofBlockCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
@@ -197,7 +204,7 @@ def _packs(packed: bool | Sequence[bool], groups: list[list[int]]) -> list[bool]
 @dataclass
 class Wiring:
     """A class statement of a template-instance partition (`Q_template_instance(s)` v0, the class one template's instances) whose
-    units may read other units' outputs (PROTOCOL.md §16.13, Linking): the program, the query, and each staged instance's unit
+    units may read other units' outputs (`HmOut`, Linking): the program, the query, and each staged instance's unit
     (ascending). Each such read is a link port: the reader's row of exactly the writer's output row's words (`link_ports`),
     committed under the writer's output row's salt, so the two rows' ``b || c`` are equal and the verifiers compare them
     (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
@@ -247,7 +254,7 @@ def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
     return v
 
 
-def link_ports(uc: UnitCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
+def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,
     circuit inputs only or exactly one writer's whole output row in order (``n_out(v)``: writer ``v``'s output count); a partial
@@ -307,14 +314,14 @@ def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -
 def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> dict:
     """The verifier's own ``--links`` file for the live verifier (``flock-circuit serve``): every link of the statement, derived
     from its own program and query (`link_triples`), bound to the circuit and the partition it checks them for."""
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    meta = FC.meta_of(text)
     tp = PO.TemplatePartition(program, query)
     triples = link_triples(meta, cut_reads(tp, indices), indices, lambda v: len(tp.outputs(v)))
     return {"format": LINKS_FORMAT, "circuit_sha512": FC.digest(text), "partition": meta["partition"]["digest"],
             "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: list[list[int]] | None = None,
                    packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
@@ -347,7 +354,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
     return IL.Lowering(name, ClassDefinition(name, port_words, w_out), units, C, lay)
 
 
-def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
+def pack(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
          groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
     the layout `class_lowering` reads (``packed`` as there)."""
@@ -420,7 +427,10 @@ def cache_slot_circuits() -> None:
 
     def cached_expanded(lay, name):
         if any(lay is v for v in lays.values()):
-            return texts.setdefault((id(lay), name), expanded(lay, name))
+            key = (id(lay), name)
+            if key not in texts:
+                texts[key] = expanded(lay, name)
+            return texts[key]
         return expanded(lay, name)
 
     S.compression3, S.hm96_row = (lambda: c3), (lambda: hm)
@@ -435,21 +445,21 @@ SAMPLER = class_sweep.SAMPLER
 
 
 def distinct_calls(graph_path: str | None, modules: str | None = None, definitions: dict[str, int] | None = None,
-                   exclude: re.Pattern | None = None) -> tuple[Any, dict[str, int], list[dict]]:
+                   exclude: re.Pattern | None = None, *, definition: Callable[[str], Any]) -> tuple[Any, dict[str, int], list[dict]]:
     """A served row's distinct Call Definitions, from its program graph (``vllm-program-graph/v1``): (a Program with one Call of
     each, the row's Call count of each by descriptor id, a provenance row per Definition). ``modules``: a module-path prefix
-    (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its v0 encoding's SHA-256 is checked
-    against the graph's ``definitions_index`` where the graph has it (every group's spec; attention's smallest and largest T).
+    (``model.model.layers.0.``) to keep. Each Definition is bound by ``definition`` (its id to the registered Definition,
+    `partition_units.resolver`) and its definition digest
+    (`codec.definition_digest`) is checked against the graph's ``definitions_index`` where the graph has it (every group's
+    spec; attention's smallest and largest T).
     A per-Call partition (``Q_word``, an owner function) cuts this Program's Calls exactly as the row's, so its classes are the
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
-    adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
-    from circuit_check import targets as TG
-    from verity.ml.circuits.codec import descriptor_id
+    adds Definitions without a graph (bound the same way, no digest to check); ``exclude`` drops the ids it matches."""
+    from verity.ml.circuits.codec import definition_digest, descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
-    from verity_vllm.pipeline.program_graph import _encoded, definition_digest
+    from verity.ml.definitions.encoding import encode_specialization
 
-    TG.load_registries()
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}
     calls: dict[str, int] = dict(definitions or {})
@@ -460,13 +470,13 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     fns, prov = [], []
     for fid in calls:
         readable = re.sub(r'\{"f64":"([^"]+)"\}', lambda m: repr(float.fromhex(m[1])), fid)
-        fn = TG.definition(readable)
+        fn = definition(readable)
         if descriptor_id(fn) != fid:
-            raise ValueError(f"{fid}: the registry binds {descriptor_id(fn)}")
+            raise ValueError(f"{fid}: the resolver binds {descriptor_id(fn)}")
         want = index.get(fid)
-        got = definition_digest(_encoded(fn)[1][fid]) if want else None
+        got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
         if want and got != want:
-            raise ValueError(f"{fid}: v0 digest {got} is not the row's {want}")
+            raise ValueError(f"{fid}: definition digest {got} is not the row's {want}")
         fns.append(fn)
         prov.append({"definition": fid, "calls": calls[fid], "digest_checked": bool(want)})
     params = [(f"c{i}_{n}", t) for i, fn in enumerate(fns) for n, t in fn.signature()[0]]
@@ -560,7 +570,7 @@ def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]
 
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
-    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
+    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are sampled once per Call
     (group of members). Returns (inputs, outputs, rows): per input position every instance's word, and per source group
     (`sources` of the representative) every instance's row identity: the leaves it reads, and the Call they belong to when all
     are parameters the Call broadcasts, else the evaluation. Instances with one identity open one committed row."""
@@ -611,7 +621,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     itself.
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
-    template as the unit class's ``definition`` (the class names itself in ``program_digests``), and every read of another
+    template as the size class's ``definition`` (the class names itself in ``program_digests``), and every read of another
     unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's output row's words (one word per output,
     as ``out`` holds them, never packed), one table row per reading instance, committed under the writer's ``out`` salt (and,
     ``strict``, checked here to be the writer's row).
@@ -620,10 +630,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
     and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``).
 
-    ``share_rows=False`` (an unwired class): every instance opens its own row per port, equal rows included, and the public file
-    has no shared-row tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``)."""
-    if wiring is not None and not share_rows:
-        raise ValueError("a wired class's link rows are its writers' shared rows (share_rows)")
+    ``share_rows=False``: every instance opens its own row per port, equal rows included, and the public file has no shared-row
+    tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); a wired class's link
+    rows are then each reading instance's own, still under its writer's ``out`` salt."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -690,7 +699,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
     n = len(rows)
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    meta = FC.meta_of(text)
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:                     # a unit whose rows are long pays for their hashing in every instance
@@ -721,16 +730,17 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     salts = None
     if links:
         ports = FC._meta_ports(meta)
-        salts = FC.stage_salts(iset, 0, n, ports, salt_key, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports})
+        salts = FC.stage_salts(iset, 0, n, ports, salt_key,
+                               {p.name: len(tables[p.name]) if p.name in tables else n for p in ports} if share_rows else None)
         out_name = ports[-1].name
         for i, ws in enumerate(writers):
             if ws is None:
                 continue
-            for r, k in enumerate(firsts[f"p{i}"]):
+            for r, k in enumerate(firsts[f"p{i}"] if share_rows else range(n)):
                 w = ws[k]
                 if w is None:
                     continue
-                row = tables[f"p{i}"][r]
+                row = tables[f"p{i}"][r] if share_rows else per_port[f"p{i}"][k]
                 if wiring.strict and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
                     raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
                 if wiring.writer_salts:
@@ -748,7 +758,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         ({"links": links, "definition": definition} if wiring is not None else {})
 
 
-def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
     from verity.ml.commitments.rowleaf import bit_row
@@ -764,7 +774,7 @@ def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
 #: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
-#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+#: hashed once per tile rather than once per coordinate
 GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
 
 
@@ -827,7 +837,7 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     text = FC.compose(low, sub, partition=partition, program=program, leaf_scheme=LEAF_SCHEME)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "circuit.txt").write_text(text)
-    meta = json.loads(text.split("\n", 2)[1][5:])
+    meta = FC.meta_of(text)
     per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
     cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
     if n * per_instance > cap_bits:
@@ -849,14 +859,65 @@ def _leaf_bits(t) -> list[int]:
 
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
-                  public: Sequence[str] = ()) -> tuple[IL.Lowering, list[int]]:
+                  public: Sequence[str] = (), structural: bool = False, reads: str = "inline",
+                  stage_ands: int | str | None = "auto", packed: bool = False) -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
     it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
-    its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
-    `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words."""
+    its own ceil(bits / 16) u16 words, low first (`verity.ml.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
+    `circuit.compose`'s public input ports read them), or with ``packed`` its leaves concatenated as a row's are (`unit_ports`).
+    Returns the lowering and each output port's words. ``structural``:
+    the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), or a table read as the
+    verifier builds it (`read_tmpl.of`: the template `Flock.ReadNet.check` accepts, refused unless these ports are its port
+    groups, `_verifier_ports`), else `ir_lower`'s
+    (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each
+    table read laid out as rows of the unit (`ir_lower._Read`), or ``slots``, its reads of the pinned MUFU tables split out to
+    lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, its nets' ANDs capped by ``stage_ands``, by default the caps
+    whose nets take the fewest cells; the flat unit's own when it reads none)."""
+    if reads not in ("inline", "slots") or (structural and reads != "inline"):
+        raise ValueError(f"{name}: reads is inline or slots, and a structural unit's are inline")
+    ports, out_words, row_words = unit_ports(definition, name, in_rows, public, packed)
+    n_words, W = len(ports.ins), len(ports.outs)
+    units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * W, in_src=[[("leaf", p) for p in range(n_words)]],
+                     out_src=[[("ret", o) for o in range(W)]], signature=(definition.id,), gates=[], arg_gates=[], ret_gates=[])
+    sig = (tuple((r, Array(w, Value(16))) for r, w in zip([*public, *(r for r, _ps in in_rows)], row_words)),
+           Tuple(tuple(Array(w, Value(16)) for w in out_words)))
+    unit = SimpleNamespace(id=name, signature=lambda: sig)
+    if structural:
+        if (t := RT.of(definition)) is not None:
+            _verifier_ports(name, t, ports)
+        else:
+            t, _lw, _top = SL.lower(definition, name=name, ports=ports)
+        return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
+    C = unit_circuit(definition, ports, _UnitCircuit)
+    in_names, out_names = [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)]
+    if reads == "slots" and (low := RS.split(C, in_names, out_names, name, unit, units, stage_ands=stage_ands)) is not None:
+        return low, out_words
+    lay = IL.layout(C, in_names, out_names)
+    return IL.Lowering(name, unit, units, None, lay), out_words
+
+
+def _verifier_ports(name: str, t: TM.Tmpl, ports: SL.Ports) -> None:
+    """Refuses the verifier's template ``t`` of a unit on ``ports`` unless they are its port groups as it reads them: its
+    input and output ports' widths, the arguments' bits in order from input bit 0 and the returned bits in order from output
+    bit 0, which `unit_ports` lays out when each parameter is a row of its own, in signature order."""
+    lay = _TmplLayout.of(t)
+    ins = tuple(w for _c, _n, ws in lay.in_groups for w in ws)
+    outs = tuple(w for _c, _n, ws in lay.out_groups for w in ws)
+    ret = [b for b in ports.bits if b is not None]
+    if ((ins, outs) != (ports.ins, ports.outs) or [b for lf in ports.leaves for b in lf] != list(range(sum(ins)))
+            or ret != list(range(len(ret)))):
+        raise ValueError(f"{name}: the verifier's template {t.name} reads {len(ins)} input and {len(outs)} output ports, the "
+                         "arguments' and the returned bits in order: give each parameter a row of its own, in order")
+
+
+def unit_ports(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
+               public: Sequence[str] = (), packed: bool = False) -> tuple[SL.Ports, list[int], list[int]]:
+    """`unit_lowering`'s ports: the u16 input ports, each argument leaf's bits among them, and the u16 output ports' bits
+    (`struct_lower.Ports`); each output port's words; and each input port's (``public``'s, then the rows'). ``packed``: each
+    public port is its parameter's leaves concatenated, as a row's (its bits a multiple of 16), not each leaf in its own words."""
     params, ret = definition.signature()
     types = dict(params)
 
@@ -871,48 +932,118 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     want = sorted((n, r) for n, t in params for r in ([None] if not any(part(p) == (n, 0) for _r, ps in in_rows for p in ps) else range(t.n)))
     if sorted([part(p) for _r, ps in in_rows for p in ps] + [(p, None) for p in public]) != want:
         raise ValueError(f"{name}: the rows {[list(ps) for _r, ps in in_rows]} are not the parameters {list(types)} (or their rows), once each")
-    C = gf2.Circuit()
-    words, leaves = [], {}
+    n_words, leaves = 0, {}
     for p in public:
-        leaves[(p, None)] = []
+        if packed and sum(widths(p)) % 16:
+            raise ValueError(f"{name}: public port {p} is {sum(widths(p))} bits, not whole u16 words")
+        at, leaves[(p, None)] = 16 * n_words, []
         for w in widths(p):
-            at = len(words)
-            words += [C.input(f"in{at + j}", 16) for j in range(-(-w // 16))]
-            leaves[(p, None)].append([b for x in words[at:] for b in x][:w])
+            leaves[(p, None)].append(tuple(range(at, at + w)))
+            at += w if packed else 16 * -(-w // 16)
+        n_words = at // 16
     for row, ps in in_rows:
         bits = sum(sum(widths(p)) for p in ps)
         if bits % 16:
             raise ValueError(f"{name}: row {row} is {bits} bits, not whole u16 words")
-        at = len(words)
-        words += [C.input(f"in{at + j}", 16) for j in range(bits // 16)]
-        flat = [b for w in words[at:] for b in w]
+        at = 16 * n_words
+        n_words += bits // 16
         for p in ps:
             leaves[part(p)] = []
             for w in widths(p):
-                leaves[part(p)].append(flat[:w])
-                flat = flat[w:]
+                leaves[part(p)].append(tuple(range(at, at + w)))
+                at += w
     flat_in = [lf for n, _t in params for key in sorted(k for k in leaves if k[0] == n) for lf in leaves[key]]
-    outs = IL.lower(C, definition, flat_in)
-    fields = ret.fields if hasattr(ret, "fields") else (ret,)
+    fields = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else (ret,)
     out_words, out_bits, at = [], [], 0
     for f in fields:
         bits = []
-        for _w in _leaf_bits(f):
-            bits += list(outs[at])
-            at += 1
-        bits += [gf2.ZERO] * (-len(bits) % 16)
+        for w in _leaf_bits(f):
+            bits += range(at, at + w)
+            at += w
+        bits += [None] * (-len(bits) % 16)
         out_words.append(len(bits) // 16)
         out_bits += bits
     W = len(out_bits) // 16
-    for j in range(W):
-        C.output(f"out{j}", out_bits[16 * j:16 * (j + 1)])
-    units = IL.Units(target=None, in_widths=[16] * len(words), out_widths=[16] * W, in_src=[[("leaf", p) for p in range(len(words))]],
-                     out_src=[[("ret", o) for o in range(W)]], signature=(definition.id,), gates=[], arg_gates=[], ret_gates=[])
-    row_words = [sum(-(-w // 16) for w in widths(p)) for p in public] + [sum(sum(widths(p)) for p in ps) // 16 for _r, ps in in_rows]
-    sig = (tuple((r, Array(w, Value(16))) for r, w in zip([*public, *(r for r, _ps in in_rows)], row_words)),
-           Tuple(tuple(Array(w, Value(16)) for w in out_words)))
-    lay = IL.layout(C, [f"in{j}" for j in range(len(words))], [f"out{o}" for o in range(W)])
-    return IL.Lowering(name, SimpleNamespace(id=name, signature=lambda: sig), units, C, lay), out_words
+    row_words = [sum(widths(p)) // 16 if packed else sum(-(-w // 16) for w in widths(p)) for p in public] \
+        + [sum(sum(widths(p)) for p in ps) // 16 for _r, ps in in_rows]
+    return SL.Ports((16,) * n_words, tuple(flat_in), (16,) * W, tuple(out_bits)), out_words, row_words
+
+
+def unit_circuit(definition, ports: SL.Ports, cls: type[gf2.Circuit] = gf2.Circuit) -> gf2.Circuit:
+    """The flat unit on ``ports`` (`unit_ports`), never laid out: ``definition`` lowered by `ir_lower.lower` on input ports
+    ``in{j}``, its returned bits on output ports ``out{j}`` and the ports' other bits zero. ``cls``: the circuit's class
+    (`unit_lowering`'s `_UnitCircuit`)."""
+    C = cls()
+    in_bits = [b for j, w in enumerate(ports.ins) for b in C.input(f"in{j}", w)]
+    outs = [b for w in IL.lower(C, definition, [[in_bits[i] for i in lf] for lf in ports.leaves]) for b in w]
+    bits = [gf2.ZERO if i is None else outs[i] for i in ports.bits]
+    at = 0
+    for j, w in enumerate(ports.outs):
+        C.output(f"out{j}", bits[at:at + w])
+        at += w
+    return C
+
+
+class _UnitCircuit(gf2.Circuit):
+    """`unit_lowering`'s circuit: an AND keeps its operands' bits as a tuple, all `ir_lower.layout` reads of them (a frozenset of
+    a dozen bits is four times the size: a GLM-5.3 norm unit's operand sets were most of its 51 GiB)."""
+
+    def _new(self, kind, data):
+        if kind == "and":
+            a, b = data
+            data = (gf2.L(tuple(a.s), a.c), gf2.L(tuple(b.s), b.c))
+        return super()._new(kind, data)
+
+
+@dataclass
+class _TmplLayout:
+    """What `circuit.compose` and `UnitStager` read of a unit's layout, for a unit given as its template: its port groups
+    (`ir_lower.LoweredUnit`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
+    root's input and output copy rows not ANDs)."""
+
+    in_groups: list
+    out_groups: list
+    counts: dict
+
+    @classmethod
+    def of(cls, t: TM.Tmpl) -> "_TmplLayout":
+        g, at, groups = t.groups, 0, [[], []]
+        for side in range(2):
+            n = int(g[at])
+            at += 1
+            for _ in range(n):
+                col, words, nb = int(g[at]), int(g[at + 1]), int(g[at + 2])
+                groups[side].append((col, words, [int(x) for x in g[at + 3:at + 3 + nb]]))
+                at += 3 + nb
+        tot = TM.totals(t)
+        own = len(t.defs[t.root].rows)
+        return cls(groups[0], groups[1], {"ands": tot["rows"] - own, "rows": tot["rows"], "nnz_a": tot["nnz_a"],
+                                          "nnz_b": tot["nnz_b"]})
+
+
+class TmplLowering(IL.Lowering):
+    """A unit lowered by `struct_lower` (`unit_lowering`'s ``structural``): ``template`` the unit, never unrolled; ``circuit``
+    None and ``layout`` its ports (`_TmplLayout`). `evaluate` runs the template (`tmpl.evaluate`); `circuit.compose` writes
+    the templated statement of ``template`` itself, its ``unit_sha256`` the template's text and the leaf pins."""
+
+    def __init__(self, name, definition, units, circuit, layout, template: TM.Tmpl):
+        super().__init__(name, definition, units, circuit, layout)
+        self.template = template
+
+    @property
+    def domain(self) -> str:
+        return "total"
+
+    def evaluate(self, flat_inputs: np.ndarray, cuts: np.ndarray | None = None, flip: tuple[int, int] | None = None):
+        if cuts is not None or flip is not None:
+            raise NotImplementedError(f"{self.name}: a template's evaluation takes no cut words and flips no bit")
+        x = np.asarray(flat_inputs, dtype=np.uint64)
+        n = x.shape[0]
+        bits = np.unpackbits(np.ascontiguousarray(x.astype("<u2")).view(np.uint8), axis=1, bitorder="little")
+        got = TM.unslice_lanes(TM.evaluate(self.template, TM.slice_lanes(bits)), n)
+        W = got.shape[1] // 16
+        words = np.packbits(got.reshape(n, W * 16), axis=1, bitorder="little").view("<u2").astype(np.uint64)
+        return words, np.zeros((n, 0), np.uint64), (1 << n) - 1
 
 
 def _row_bits(words) -> np.ndarray:
@@ -942,17 +1073,26 @@ class UnitStager:
     row ``(schema, output ports)``, a run of consecutive output ports of exactly their words (`circuit.compose`'s
     ``seg_out_rows`` / ``v2_out_rows``). ``public_inputs`` (``{param: {"seed", "derivation"}}``): parameters that are public
     input ports, not rows (`circuit.compose`; PoUW's anchors, which the verifier recomputes from public seeds), laid out as
-    `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
-    files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
-    them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
-    that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
+    `unit_lowering`'s ``public`` (with ``packed``, its packed layout). ``circuit``: where circuit.txt is written, once, as it is composed (`circuit.compose_to`: the
+    stager never holds it, and ``text`` reads it back); else `stage` writes it beside each round's files, and ``pin`` and
+    ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads them after writing
+    circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
     Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
     (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
-    (`circuit.class_digest`) is the unbound stager's."""
+    (`circuit.class_digest`) is the unbound stager's. ``layout`` (a layout mode, ``iv/hybrid/4``): the templated statement
+    (`circuit.compose`'s ``layout``), its unit the unit's template; else the flat statement. ``structural`` (with ``layout``):
+    that template `struct_lower`'s, or a table read's the verifier's own (`read_tmpl`; `unit_lowering`'s ``structural``), the
+    flat unit never built, the outputs the template's (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit.
+    ``reads`` (``inline`` or ``slots``, flat statements only): `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
+    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
+    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
+    whose Definition alone needs more witness bits than Flock's proved range is refused before it is lowered
+    (`circuit.refuse_past_range`)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
-                 bind: dict | None = None):
+                 bind: dict | None = None, layout: str | None = None, structural: bool = False, reads: str = "inline",
+                 stage_ands: int | str | None = "auto", packed: bool = False):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
         if bind is not None and set(bind) != {"partition", "program"}:
@@ -960,7 +1100,14 @@ class UnitStager:
 
         public_inputs = dict(public_inputs or {})
         self.definition, self.name, self.in_rows, self.public_inputs = definition, name, list(in_rows), public_inputs
-        self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs))
+        self.packed = packed and bool(public_inputs)
+        if structural and layout is None:
+            raise ValueError(f"{name}: a structural unit is written as its template: name its layout")
+        if layout is not None and reads != "inline":
+            raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
+        FC.refuse_past_range(definition, name)
+        self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
+                                                 structural, reads, stage_ands, self.packed)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
             raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
@@ -969,25 +1116,33 @@ class UnitStager:
         cache_slot_circuits()
         port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
         content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
-                             + ([public_inputs] if public_inputs else [])).encode()
+                             + ([public_inputs] if public_inputs else []) + (["packed"] if self.packed else [])).encode()
         self.row_ports = [*public_inputs, *(r for r, *_ in in_rows)]
         programs = {definition.id: program_digest(Program(definition))} if bind else {name: hashlib.sha256(content).hexdigest()}
         self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
                                    program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
-        self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
-                               seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
-                               partition=bind and bind["partition"], program=bind and bind["program"])
+        kw = dict(port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
+                  seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
+                  seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
+                  partition=bind and bind["partition"], program=bind and bind["program"], layout=layout,
+                  tail=getattr(self.low, "tail", None), leaf_scheme=LEAF_SCHEME)
         self.bound = bind is not None
-        self._meta = self.text.split("\n", 2)[1][5:]
-        self.meta = json.loads(self._meta)
-        self.ports = FC._meta_ports(self.meta)
         self.circuit = circuit
-        if circuit is not None:
+        if circuit is None:
+            self._text = self._head = FC.compose(self.low, self.sub, **kw)
+        else:
             circuit.parent.mkdir(parents=True, exist_ok=True)
-            circuit.write_text(self.text)
+            got = FC.compose_to(circuit, self.low, self.sub, **kw)
+            self._text, self._head, self.pin, self.class_sha512 = None, got["head"], got["sha512"], got["class"]
+        self.meta = FC.meta_of(self._head)
+        self.ports = FC._meta_ports(self.meta)
+
+    @property
+    def text(self) -> str:
+        """The circuit's text: the stager's own, or with ``circuit`` read from the file, a fresh copy each read."""
+        return self._text if self.circuit is None else self.circuit.read_bytes().decode()
 
     @functools.cached_property
     def pin(self) -> str:
@@ -999,8 +1154,9 @@ class UnitStager:
 
     def reference_check(self, rows: dict[str, np.ndarray], outs: dict[str, np.ndarray]) -> None:
         """``outs`` (``{o{j}: (n, words)}``) are the IR reference's on every instance's ``rows``, leaf by leaf, from one call of
-        `verity.ml.circuits.evaluation.evaluate_batch` (bit-sliced for a Boolean Definition, else its registered kernel or the
-        reference), whose exceptions (rows outside the Definition's domain) propagate."""
+        `verity.ml.circuits.evaluation.evaluate_batch` (its registered kernel, or a Boolean Definition's word Definition's,
+        where one is; else bit-sliced for a Boolean Definition and the reference for the rest), whose exceptions (rows outside
+        the Definition's domain) propagate."""
         from verity.ml.circuits.evaluation import evaluate_batch
 
         params, ret = self.definition.signature()
@@ -1008,7 +1164,8 @@ class UnitStager:
         leaves = {}
         for p in self.public_inputs:
             ws = _leaf_bits(types[p])
-            leaves[(p, -1)] = _leaf_words(_row_bits(rows[p]), ws, 16 * np.cumsum([0] + [-(-w // 16) for w in ws[:-1]]))
+            step = ws[:-1] if self.packed else [16 * -(-w // 16) for w in ws[:-1]]
+            leaves[(p, -1)] = _leaf_words(_row_bits(rows[p]), ws, np.cumsum([0] + step))
         for r, _s, _b, ps in self.in_rows:
             bits, at = _row_bits(rows[r]), 0
             for q in ps:
@@ -1025,7 +1182,8 @@ class UnitStager:
             raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
 
     def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-              indices: Sequence[int] | None = None, set_name: str | None = None) -> dict:
+              indices: Sequence[int] | None = None, set_name: str | None = None, tables: dict | None = None,
+              refs: dict | None = None, registered: dict | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
         ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
@@ -1033,7 +1191,9 @@ class UnitStager:
         matrix entries. ``indices``: each instance's global unit index, which a bound stager needs and an unbound one refuses
         (its units are ``0 .. n``). ``set_name``: the round's input set (the header's ``set``), else the stager's, which its
         frame domains and salts bind; a template's units split across statements (a statement's shape caps its instances) are
-        one set per statement on the one circuit."""
+        one set per statement on the one circuit. ``tables``, ``refs`` and ``registered``: a shared-row file's, as
+        `circuit.write` takes them (every input row's table and each instance's ref into it, whose rows must be ``rows``;
+        the rows of registered values with their positions and paths), ``salts`` then one per table row."""
         if (indices is None) == self.bound:
             raise ValueError(f"{self.name}: a bound stager's round names its units' global indices, and only a bound one's")
         iset = self.iset if set_name is None else SimpleNamespace(**{**vars(self.iset), "name": set_name})
@@ -1046,25 +1206,49 @@ class UnitStager:
         at = np.cumsum([0] + self.out_words)
         outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(self.out_words))}
         self.reference_check(rows, outs)
-        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key), **(salts or {})}
+        if tables is not None:
+            for r, *_ in self.in_rows:
+                if not np.array_equal(np.asarray(tables[r], dtype=np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], dtype=np.uint16)):
+                    raise ValueError(f"{self.name}: port {r}'s table rows at the instances' refs are not their rows")
+        table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
+        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self._text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
-                 digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices])
-        counts = self.low.layout.counts
-        return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
+                 digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices],
+                 share_rows=tables is not None, tables=tables, refs=refs, registered=registered, meta=self.meta)
+        counts = getattr(self.low, "counts", None) or self.low.layout.counts
+        return {"meta": FC.meta_of(self._head), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
+
+
+def member_stager(definition, member, bind: dict | None, circuit: Path | None = None) -> UnitStager:
+    """A window member's template as its sessions prove it and an auditor's params name it: the flat statement, a
+    `UnitStager` named ``unit/<definition id>``, over each of ``member``'s input rows (its Definition's input of that name)
+    and each of its output rows, ``(row, words)`` in ``member.rows`` and ``member.outs``, at ``member.schema(row)`` and 16
+    bits a word, bound to ``bind`` (``{"partition", "program"}``). Its file, and so its SHA-512 (``pin``), is a function of
+    those alone, the one an auditor rebuilds from public data with every switch this module reads at import unset: so a
+    process with any of them set (FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_PLAIN_LEAVES, FLOCK_OWN_ROWS,
+    FLOCK_GEMM_TILE) is refused, naming each one set."""
+    switched = [v for v, on in (("FLOCK_PACK_WORDS", PACK_WORDS), ("FLOCK_CORE_ROWS", CORE_ROWS), ("FLOCK_PLAIN_LEAVES", PLAIN_LEAVES),
+                                ("FLOCK_OWN_ROWS", OWN_ROWS), ("FLOCK_GEMM_TILE", GEMM_TILE)) if on]
+    if switched:
+        raise ValueError(f"{definition.id}: {', '.join(switched)} set: a member's file is the one made with all five unset")
+    return UnitStager(definition, f"unit/{definition.id}", [(r, member.schema(r), w * 16, [r]) for r, w in member.rows],
+                      [(member.schema(r), (j,)) for j, (r, _w) in enumerate(member.outs)], circuit=circuit, bind=bind)
 
 
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
                rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-               public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None) -> dict:
+               public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None,
+               packed: bool = False) -> dict:
     """One round of a `UnitStager` (its arguments as there and in its `stage`): writes ``circuit.txt``, ``inst.bin`` and
     ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
-    return UnitStager(definition, name, in_rows, out_rows, public_inputs, bind=bind).stage(rows, out_dir, salt_key, salts, indices)
+    return UnitStager(definition, name, in_rows, out_rows, public_inputs, bind=bind, packed=packed).stage(rows, out_dir, salt_key,
+                                                                                                         salts, indices)
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
@@ -1117,9 +1301,9 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         if not f.exists():
             return {"accepted": False, "why": f"FC_VERIFIERS: no verifier serving these {warm + runs} sessions ({f} is missing)"}
         remote = json.loads(f.read_text())
-        srvs, addrs = [], remote["addrs"]
+        srvs, addrs, chs = [], remote["addrs"], []
     else:
-        srvs, addrs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
+        srvs, addrs, chs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
     try:
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
             # user and system CPU seconds, then the peak RSS in KB, last
@@ -1127,16 +1311,26 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
             pr = subprocess.Popen(timer + [binary, "prove", "--verifier", ",".join(addrs) or f"127.0.0.1:{port}", "--instances", str(inst),
                                            "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else [])
                                   + _zk(), stdout=fo, stderr=fe)
-            pr.wait()
+            # the verifier processes' peaks while they live: a challenger's server exits after its last session
+            peak = [0.0] * len(srvs)
+            while pr.poll() is None:
+                peak = [max(p, _vm_hwm(s.pid) or 0.0) for p, s in zip(peak, srvs)]
+                time.sleep(1)
         rusage = (d / "prove.maxrss").read_text().split() if timer else []
         prover_gb = int(rusage[-1]) / 2**20 if rusage else None   # the prover's own peak, KB
         prover_cpu_s = round(float(rusage[-3]) + float(rusage[-2]), 2) if len(rusage) >= 3 else None
-        hwm = [_vm_hwm(s.pid) for s in srvs]
-        verifier_gb = round(sum(hwm), 2) if srvs and None not in hwm else None    # the verifier processes' peaks, summed
+        hwm = [max(p, _vm_hwm(s.pid) or 0.0) for p, s in zip(peak, srvs)]
+        verifier_gb = round(sum(hwm), 2) if srvs and all(hwm) else None    # the verifier processes' peaks, summed
     finally:
         for s in srvs:
+            if chs:     # bounded: it closes after writing its last session's record
+                try:
+                    s.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    print(f"verifier process {s.pid} still open 120 s after the prover: killed", file=sys.stderr, flush=True)
             s.kill()
             s.wait()
+    challengers = _challengers_end(d, srvs, chs) if chs else None
     out, err = (d / "prove.out").read_text(), (d / "prove.err").read_text()
     live = [json.loads(ln[5:]) for ln in out.splitlines() if ln.startswith("LIVE")]
     if not live:
@@ -1147,8 +1341,9 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     rejected = [x.get("run") for x in live if x.get("accepted") is not True]
     broke = (f"prove exited {pr.returncode}" if pr.returncode else
              f"{len(live)} LIVE records, not warm + runs = {warm + runs}" if len(live) != warm + runs else
-             f"sessions {rejected} not accepted" if rejected else None)
-    return {"accepted": broke is None, "why": broke or v.get("why")} | \
+             f"sessions {rejected} not accepted" if rejected else
+             f"challengers {challengers}" if challengers and not all(c["ok"] for c in challengers) else None)
+    return {"accepted": broke is None, "why": broke or v.get("why")} | ({"challengers": challengers} if challengers else {}) | \
         {k: v.get(k) for k in ("prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
                                "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
@@ -1166,23 +1361,37 @@ def _zk() -> list[str]:
     return ["--zk"] if os.environ.get("FLOCK_ZK") == "1" else []
 
 
+_challenger = CH.start
+
+
+def _challengers_end(d: Path, srvs: list[subprocess.Popen], chs: list[subprocess.Popen]) -> list[dict]:
+    """Each server's challenger (``d/challenger-<i>``) once the server has closed, and its audit of that server's session
+    records, the directories named for its pid (`challengers.end`)."""
+    return [CH.end(d / f"challenger-{i}", p, CH.records(d / "sessions", f"*-{s.pid}")) for i, (s, p) in enumerate(zip(srvs, chs))]
+
+
 def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
-           bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str]]:
-    """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, and their addresses. The prover's
-    FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by FC_VERIFY_SERVERS (default 1,
-    at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
-    system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
-    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
-    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
-    Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
+           bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str], list[subprocess.Popen]]:
+    """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, their addresses, and their
+    challengers. The prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by
+    FC_VERIFY_SERVERS (default 1, at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port``
+    and the rest on ports the system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills
+    them), for ``points`` provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits.
+    FLOCK_DRAW_LAW (a sampling design object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by
+    that sampling design at its Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover
+    alike). FLOCK_CHALLENGER=1: each process takes its sessions' coin trees from its own challenger (`_challenger`, `serve
+    --tree-from`), so each is bounded; none otherwise."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
     law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
+    chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted(os.environ) else []
+    bounded = bounded or bool(chs)
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
                               "--concurrency", str(concurrency)] + law + _zk()
-                             + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
+                             + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else [])
+                             + (chs[i][1] if chs else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)
             for i, log in enumerate(logs)]
     addrs = []
@@ -1192,7 +1401,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
                 addrs.append(ln.split()[1])
                 break
             time.sleep(0.2)
-    return srvs, addrs
+    return srvs, addrs, [p for p, _ in chs]
 
 
 def _served_name(pin: str, n: int, sessions: int) -> str:
@@ -1210,7 +1419,7 @@ def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int, point
     pin = FC.digest(circ.read_text())
     import socket
     ip = os.environ.get("FC_SERVE_HOST") or socket.gethostbyname(socket.gethostname())
-    srvs, bound = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True, points=points)
+    srvs, bound, chs = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True, points=points)
     if len(bound) != len(srvs):
         for s in srvs:
             s.kill()
@@ -1223,13 +1432,14 @@ def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int, point
     tmp = f.with_name(f"{f.name}.tmp{os.getpid()}")
     tmp.write_text(json.dumps(doc))
     os.replace(tmp, f)
-    return {"file": f, "srvs": srvs, "doc": doc, "d": d, "t0": time.time()}
+    return {"file": f, "srvs": srvs, "chs": chs, "doc": doc, "d": d, "t0": time.time()}
 
 
 def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
     """Wait for every `serve_remote` entry's processes to serve their sessions (killed after ``limit_s``), withdraw the address
-    files, and return each one's record: its sessions' verdicts and verify seconds (``sessions/index.jsonl``) and the
-    processes' peak memory, summed."""
+    files, and return each one's record: its sessions' verdicts and verify seconds (``sessions/index.jsonl``), the
+    processes' peak memory, summed, and under FLOCK_CHALLENGER=1 their challengers (`_challengers_end`), every one of which
+    must pass for the entry to be accepted."""
     peak = {id(s): 0.0 for e in entries for s in e["srvs"]}
     deadline = time.time() + limit_s
     while any(s.poll() is None for e in entries for s in e["srvs"]) and time.time() < deadline:
@@ -1244,14 +1454,16 @@ def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
             s.kill()
             s.wait()
         e["file"].unlink(missing_ok=True)
+        challengers = _challengers_end(e["d"], e["srvs"], e["chs"]) if e.get("chs") else None
         idx = e["d"] / "sessions" / "index.jsonl"
         lines = [json.loads(ln) for ln in idx.read_text().splitlines() if ln.strip()] if idx.exists() else []
         vs = [x["verify_s"] for x in lines if x.get("verify_s") is not None]
         out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and len(lines) == e["doc"]["sessions"] * e["doc"].get("points", 1)
-                               and all(x.get("accepted") is True for x in lines),
+                               and all(x.get("accepted") is True for x in lines) and all(c["ok"] for c in challengers or []),
                                "timed_out": timed_out, "wall_s": round(time.time() - e["t0"], 3),
                                "verify_s_median": sorted(vs)[len(vs) // 2] if vs else None,
-                               "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)})
+                               "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)}
+                   | ({"challengers": challengers} if challengers else {}))
     return out
 
 
@@ -1554,6 +1766,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     src.add_argument("--program-graph", help="a served row's program graph: its distinct Call Definitions (distinct_calls)")
     src.add_argument("--definitions", help="a JSON file {descriptor id: Call count}: those Call Definitions, one Call of each (distinct_calls)")
     ap.add_argument("--modules", default=None, help="with --program-graph: keep groups whose module path starts with this")
+    ap.add_argument("--resolver", default=None, help="with --program-graph, --definitions or --definition, which name Definitions "
+                    "by id: MODULE:FUNC (MODULE may be a .py path), FUNC(id) the registered Definition an id names")
     ap.add_argument("--partition", default="q-word")
     ap.add_argument("--out", required=True)
     ap.add_argument("--binary", default=os.environ.get("FLOCK_CIRCUIT", "flock-circuit"))
@@ -1588,7 +1802,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
     ap.add_argument("--serve-points", type=int, default=1, help="with --serve-only: serve that many provers' --warm + --runs "
                     "sessions, one prover after another on the same verifier processes (the points of one GPU session)")
-    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
+    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, sampled by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
     ap.add_argument("--warm", type=int, default=0)
@@ -1612,19 +1826,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     calls: dict[str, int] | None = None
     if a.program_graph or a.definitions:
         defs = json.loads(Path(a.definitions).read_text()) if a.definitions else None
-        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.select else None)
+        program, calls, prov = distinct_calls(a.program_graph, a.modules, defs, SAMPLER if a.select else None,
+                                              definition=PU.resolver(a.resolver, "--program-graph or --definitions"))
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "calls.json").write_text(json.dumps({"calls": calls, "provenance": prov}, indent=1))
     elif a.program_module:
-        import importlib.util
-        mod, fn = a.program_module.rsplit(":", 1)
-        spec = importlib.util.spec_from_file_location("stress_program", mod) if mod.endswith(".py") else None
-        if spec:
-            m = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(m)
-        else:
-            m = importlib.import_module(mod)
-        program = getattr(m, fn)()
+        program = PU.attribute(a.program_module)()
     else:
         program = PU._program(a)
     units = PU.partition_units(program, a.partition)
@@ -1736,7 +1943,7 @@ def _device(gpu: bool) -> str | None:
 
 
 def write_result(results: Path, a) -> None:
-    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
+    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run as a recorded run: the settings as the fingerprint, the
     shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
     beside it as the measurement file."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")

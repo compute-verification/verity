@@ -20,15 +20,15 @@ from verity_vllm.program import model as analytic
 from verity_vllm.pipeline.report import workload_summary
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch
-from verity_vllm.engine.profiles import gen_llama_patterns as GP
-from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
+from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
+from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
 
-L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
-Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
-B7 = importlib.import_module("verity_vllm.engine.profiles.derived_B7")
-from verity_vllm.program.registry import b1
+L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
+B7 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B7")
+from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
@@ -36,9 +36,9 @@ WORKLOAD = "workloads/workload_b7_32x16_1req.json"
 STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_THETA", "MAX_POS", "BIAS", "tie_word_embeddings")
 
 #: the KEY SET of `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["ada"]` in the pinned vLLM (d9105ea80,
-#: vllm/model_executor/determinism/batch_invariant_configs.py, read on pod cp-ov-easy 2026-09-17): (N, K) -> block_k.  Since R15
-#: (GEMM-ADA-TABLE) all five rows are pinned verbatim in `verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM` (re-exported by
-#: `gen_llama_patterns`); this lane's GEMM shapes hit none of them and take the DEFAULT tiling.
+#: vllm/model_executor/determinism/batch_invariant_configs.py): (N, K) -> block_k.  All five rows are pinned verbatim in
+#: `verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM` (re-exported by `gen_llama_patterns`); these GEMM shapes hit none
+#: of them and take the DEFAULT tiling.
 ADA_TUNED_KEYS: dict[tuple[int, int], int] = {(12288, 2048): 64, (2048, 6144): 128, (4096, 2048): 64, (151936, 2048): 64, (2048, 2048): 64}
 
 
@@ -71,10 +71,11 @@ def test_config_json_copy_is_the_pinned_hub_file():
 
 
 def test_case_b7_is_the_contracts_pinned_7b_role_no_manifest_change():
-    """`verity_vllm.engine.engine_profile.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
+    """`verity_vllm.engine.profiles.cases.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
     sys.path.insert(0, str(REPO / "vllm-poc"))
     from verity_vllm.engine import engine_profile as adapter_profile
-    assert adapter_profile.CASES["B7"] == {"repo": B7.REPO_ID}
+    from verity_vllm.engine.profiles.cases import CASES
+    assert CASES["B7"] == {"repo": B7.REPO_ID}
     entry = adapter_profile.load_checkpoints(MANIFEST)[B7.REPO_ID]
     assert entry["revision"] == B7.REVISION and entry["downloaded"]
 
@@ -111,7 +112,7 @@ def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
     prof = profile_for_case("B7")
     assert prof is B7.PROFILE and prof.notes["case"] == "B7" and prof.config is B7.C and prof.id == B7.PROFILE_ID
     assert prof.id not in (BASE.PROFILE.id, Q15.PROFILE.id, L.PROFILE.id, Q.PROFILE.id)
-    # configuration-only: the base pattern list, re-parameterized, behind the target's tuned-GEMM sibling ([P6] every derived profile
+    # configuration-only: the base pattern list, re-parameterized, behind the target's tuned-GEMM sibling (every derived profile
     # registers it; no B7 shape is a tabled key, see below, so it never fires here)
     assert [p.name for p in prof.patterns] == ["gemm.matmul_kernel_persistent.tuned", *[p.name for p in BASE.PROFILE.patterns]]
     assert [type(p) for p in prof.patterns[1:]] == [type(p) for p in BASE.PROFILE.patterns]
@@ -120,7 +121,7 @@ def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == 64 == Q15.PROFILE.notes["pins"]["attention"]["kBlockN"]
     assert pins["kv_cache"] == BASE.PROFILE.notes["pins"]["kv_cache"]
-    assert prof.accepted is False          # [P6] the engine arg (gpu_memory_utilization) is the workload's / the CLI's, not a profile fact
+    assert prof.accepted is False          # the engine arg (gpu_memory_utilization) is the workload's / the CLI's, not a profile fact
 
 
 def test_weight_field_maps_the_untied_lm_head_onto_its_own_field():
@@ -147,7 +148,7 @@ def test_weight_field_maps_the_untied_lm_head_onto_its_own_field():
 
 def test_check_header_requires_the_recorded_tie_to_agree_with_C():
     assert B7.check_header(_header(B7.HF_CONFIG, B7.REPO_ID)) == []                              # the checkpoint's own config: consistent
-    # [X-07] the base check now compares the recorded tie to C (it used to reject every untied config); B7's own filter is a no-op
+    # the base check now compares the recorded tie to C (it used to reject every untied config); B7's own filter is a no-op
     assert BASE.make_check_header(B7.C)(_header(B7.HF_CONFIG, B7.REPO_ID)) == []
     tied = dict(B7.HF_CONFIG, tie_word_embeddings=True)
     out = B7.check_header(_header(tied, B7.REPO_ID))
@@ -169,12 +170,12 @@ def test_no_b7_gemm_shape_is_a_tuned_table_key():
         for (n, k) in shapes.values():
             assert GP.tuned_launch_config(full_table, M, n, k) is None
             assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, M, n, k) is None
-    # the lane's other two configurations, for the record: QWEN05 hits no key, LLAMA32_1B exactly its o_proj
+    # the other two configurations, for the record: QWEN05 hits no key, LLAMA32_1B exactly its o_proj
     assert not (set(_gemm_shapes(Q.C).values()) & set(ADA_TUNED_KEYS))
     assert set(_gemm_shapes(L.C).values()) & set(ADA_TUNED_KEYS) == {(2048, 2048)} and _gemm_shapes(L.C)["o_proj"] == (2048, 2048)
-    # [R15 moe GEMM-ADA-TABLE] the registry now pins all five ada keys verbatim (block_k per key as vLLM has it), not only (2048, 2048)
+    # the registry now pins all five ada keys verbatim (block_k per key as vLLM has it), not only (2048, 2048)
     assert set(GP.ADA_TUNED_GEMM) == set(ADA_TUNED_KEYS) and all(GP.ADA_TUNED_GEMM[nk]["BLOCK_SIZE_K"] == bk for nk, bk in ADA_TUNED_KEYS.items())
-    assert isinstance(B7.PROFILE.patterns[1], GemmLaunch) and B7.PROFILE.patterns[0].name.endswith(".tuned")   # [P6] the target's tuned sibling first, inert on B7's shapes
+    assert isinstance(B7.PROFILE.patterns[1], GemmLaunch) and B7.PROFILE.patterns[0].name.endswith(".tuned")   # the target's tuned sibling first, inert on B7's shapes
 
 
 def test_every_b7_gemm_k_is_a_multiple_of_the_pinned_block_k():
@@ -206,6 +207,7 @@ def test_workload_file():
 
 # --- the sealed driver resolves the case to the profile module; the engine arg reaches every GPU stage -----------------------
 
+@pytest.mark.slow
 def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
     out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",
@@ -221,19 +223,16 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
         c = cmds[st]
         assert c[c.index("--case") + 1] == "B7" and "--engine-arg=gpu_memory_utilization=0.95" in c, (st, c)
     assert "--verify-weights" in cmds["capture"]
-    for st in ("resolve", "compare", "fold", "root_policy", "wiring", "replay_a", "replay_chain"):
+    for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == "derived_B7", (st, c)
-    assert not any(st.startswith("replay_b_step") for st in cmds)
-    rp = cmds["root_policy"]
-    assert rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"                 # 4 shards: model-0000{1..4}-of-00004.safetensors
 
 
 # ---------------------------------------------------------------------------------------------------------
 # the serving-family reference (gen_ov_easy_family): Serve_v4, whose untied binding reads its own lm_head field
 # ---------------------------------------------------------------------------------------------------------
 
-#: the leaf kinds a `Serve_v4` body expands to under this lane's profiles (the base ids of the derived flat bodies of
+#: the leaf kinds a `Serve_v4` body expands to under these profiles (the base ids of the derived flat bodies of
 #: LLAMA32_1B / QWEN05 / B7; `match_program` expands the family down to exactly these)
 LEAF_BASES = {"Attention_v3", "Embedding_v1", "Gemm_v1", "RMSNormFusedCuda_v2", "RMSNormTriton_v1", "RoPE_v1", "SiluMul_v1",
               "TokenSelect_v1", "BiasAdd_v1"}
@@ -253,7 +252,7 @@ def _weights_intervals(C):
 def test_serve_family_is_serve_v4_for_a_tied_and_an_untied_config():
     """Every dense profile's serving-family reference is the registered `Serve_v4` (compare_structure's default: BN by the FA2 rule,
     C without BN).  An untied checkpoint (B7) has its own `lm_head` field after `cos_sin` in `b1.weights_type`; a tied one has none."""
-    from verity_vllm.engine.profiles import gen_ov_easy_family as F
+    from verity_vllm.observe.fold.profiles import gen_ov_easy_family as F
     assert B7.SERVE_FAMILY is F.serve_family
     untied, tied = F.serve_family(B7.C), F.serve_family(L.C)
     assert untied.id == b1.ServeV4.bind(C={k: v for k, v in B7.C.items() if k != "BN"}, LP=32, STEPS=15, BN=64).id
@@ -268,7 +267,7 @@ def test_an_untied_serve_v4_differs_from_the_tied_binding_only_at_the_lm_head_op
     every operand) except that its 16 lm_head Gemm leaves read the `lm_head` field where the tied one reads `embed`
     (`b1.lm_head_of`)."""
     from verity_vllm.program.frontend.rules.family import _runs, expand_leaves
-    from verity_vllm.engine.profiles import gen_ov_easy_family as F
+    from verity_vllm.observe.fold.profiles import gen_ov_easy_family as F
     LP, STEPS = 4, 2                                           # small statics: the same construction, seconds on the laptop
     C = {k: v for k, v in B7.C.items() if k != "BN"}
     untied = F.serve_family(B7.C, LP=LP, STEPS=STEPS)

@@ -1,9 +1,10 @@
-"""The pieces of the remote audit's verifier in Lean (`remote-audit-difftest`) against the Python they port, each on drawn
-inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
-and an append's coin), a plan (`receipts.Plan`: its length, digest and blocks) and its change (`Plan.changed`), a receipt
+"""The Python of PoUB's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
+sampled inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
+and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
-over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), and a
-registration's digest (`audit.Registration.digest`). `test_session.py` holds the whole verifier."""
+over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`AuditRun.close`'s), a
+registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed sampled
+from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 
 def port(fn, reference, inputs, **kw) -> D.Port:
-    return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, rejects=M.REFUSALS, **kw)
+    return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, of_record=M.OF_RECORD, rejects=M.REFUSALS, **kw)
 
 
 server = D.server_fixture(port("plan", lambda v: v, st.nothing()))
@@ -50,7 +51,7 @@ def sized(n: int, *, near: bool = True) -> st.SearchStrategy:
 
 
 def blocks() -> st.SearchStrategy:
-    """A 4096-byte block: drawn bytes, or one of every byte's extremes as int8."""
+    """A 4096-byte chunk: sampled bytes, or one of every byte's extremes as int8."""
     return st.one_of(st.binary(max_size=8).map(lambda s: expand(s, codec.BLOCK_BYTES)),
                      st.sampled_from([b"\x80", b"\x7f", b"\xff", b"\0", b"\x80\x7f"]).map(
                          lambda b: (b * codec.BLOCK_BYTES)[:codec.BLOCK_BYTES]))
@@ -61,7 +62,7 @@ CODECS = (M.P512, M.P512_K3, codec.FALLBACK, codec.DEFAULT)
 
 @functools.cache
 def encoded() -> tuple[dict, ...]:
-    """Blocks that decode: one payload a codec, under the seed's key, its bound key, and its bound key with a coin."""
+    """Chunks that decode: one payload a codec, under the seed's key, its bound key, and its bound key with a coin."""
     out = []
     for n, c in enumerate(CODECS):
         seed, j, payload = expand(b"seed %d" % n, 32), 5 + 1000 * n, M.payload(b"unit %d" % n)
@@ -150,7 +151,7 @@ def fault(draw, n: int) -> int:
 
 @st.composite
 def plan_runs(draw, extent: int) -> list:
-    """A plan of distinct blocks of a store of `extent`, in a drawn order."""
+    """A plan of distinct chunks of a store of `extent`, in a sampled order."""
     order = draw(st.permutations(sorted(draw(st.sets(st.integers(0, min(extent, 2 ** 64 - 1) - 1), min_size=1,
                                                      max_size=10)))))
     return [list(r) for r in Plan.of(order, min(extent, 2 ** 64 - 1)).runs]
@@ -184,8 +185,8 @@ def plan_changed(v) -> list:
 
 @st.composite
 def change_inputs(draw) -> dict:
-    """A plan's change: blocks it holds removed along its runs and blocks it then doesn't hold added, or one of a
-    shrinking store, drawn runs for the change, a change that removes every block, or drawn runs for the plan."""
+    """A plan's change: chunks it holds removed along its runs and chunks it then doesn't hold added, or one of a
+    shrinking store, sampled runs for the change, a change that removes every chunk, or sampled runs for the plan."""
     f = fault(draw, 4)
     blocks = draw(st.integers(1, 10))
     extent = blocks - 1 if f == 1 else blocks + draw(st.integers(0, 4))
@@ -216,8 +217,8 @@ def receipt(v) -> str:
 
 @st.composite
 def receipt_inputs(draw) -> dict:
-    """A receipt of either kind at its rows, or one of an unknown kind, rows the kind doesn't take, a seed or a block
-    of the wrong size, or a block index past u64."""
+    """A receipt of either kind at its rows, or one of an unknown kind, rows the kind doesn't take, a seed or a chunk
+    of the wrong size, or a chunk index past u64."""
     kind = draw(st.sampled_from([receipts.SKETCH_SHA512, receipts.BLOCK_SHA512]))
     v = {"kind": kind, "rows": draw(st.sampled_from([16, 64] if kind == receipts.SKETCH_SHA512 else [0])),
          "seed": expand(draw(st.binary(max_size=8)), 64).hex(), "j": draw(st.integers(0, 2 ** 64 - 1)),
@@ -251,7 +252,7 @@ def opening(v) -> bool:
 
 @st.composite
 def opening_inputs(draw) -> dict:
-    """An opening of a drawn tree over a range domain, as is or with one field changed."""
+    """An opening of a sampled tree over a range domain, as is or with one field changed."""
     binding = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([64, 64, 32])))
     owner, start, count = draw(st.sampled_from([0, -1, -2, 3])), draw(st.integers(0, 40)), draw(st.integers(1, 20))
     schema = draw(st.sampled_from([receipts.SCHEMA, "verity/remote-bandwidth/coins/v0"]))
@@ -313,7 +314,7 @@ def test_leaf_receipt(server) -> None:
 
 
 def draws(v) -> list:
-    """`Session.close`'s draw from window t's openings coin, on the passes' lengths."""
+    """`AuditRun.close`'s draw from window t's openings coin, on the passes' lengths."""
     coin, registration, t, samples = M.hex_(v, "coin"), M.hex_(v, "registration"), M.nat(v, "window"), M.nat(v, "samples")
     lengths = M._list(v, "lengths")
     if not lengths or any(not isinstance(n, int) or isinstance(n, bool) or n < 1 for n in lengths):
@@ -383,6 +384,48 @@ def registration_inputs(draw) -> dict:
 def test_registration_digest(server) -> None:
     stats = D.run(port("registration_digest", registration_digest, registration_inputs()), examples=200, server=server)
     assert stats.outputs > 80, stats
+
+
+def register(v) -> dict:
+    """`registerFn`: `audit.register` on the input's source and nonce, `bind` refused as the Lean refuses it."""
+    with M.decoding():
+        source, node, root, nonce = (M.hex_(v, k) for k in ("source", "node", "payload_root", "nonce"))
+        c, kind, layout = M.codec_of(M._get(v, "codec")), M._str(v, "receipt"), M._str(v, "layout")
+        blocks, rows = M.nat(v, "blocks"), M.nat(v, "rows")
+        if M._bool(v, "bind"):
+            raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
+        r = audit.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+    return {"codec_seed": r.codec_seed.hex(), "digest": r.digest.hex()}
+
+
+@st.composite
+def register_inputs(draw) -> dict:
+    v = draw(registration_inputs())
+    v.pop("codec_seed", None)
+    v["source"] = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([1, 21, 64]))).hex()
+    v["nonce"] = expand(draw(st.binary(max_size=8)), audit.NONCE_BYTES).hex()
+    edit = fault(draw, 3)
+    if edit == 1:
+        v["source"] = ""
+    elif edit == 2:
+        v["nonce"] = draw(st.sampled_from(["", "00" * 31, "00" * 33]))
+    elif edit == 3:
+        del v[draw(st.sampled_from(["source", "nonce"]))]
+    return v
+
+
+def test_register(server) -> None:
+    stats = D.run(port("register", register, register_inputs()), examples=200, server=server)
+    assert stats.outputs > 40, stats
+
+
+def test_a_recorded_store_s_registration_is_the_leans(server) -> None:
+    """The scenarios' store is registered by `audit.register` under `ra_cases.SOURCE` and a zero nonce."""
+    reg = M.Run().store.registration
+    v = M.registration_json(reg) | {"source": M.SOURCE.hex(), "nonce": "00" * audit.NONCE_BYTES}
+    del v["codec_seed"]
+    assert D.replay(port("register", register, st.nothing()), v, server) == (
+        "output", D.canonical({"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}))
 
 
 def test_a_recorded_registration_s_digest_is_its_session_s(server) -> None:

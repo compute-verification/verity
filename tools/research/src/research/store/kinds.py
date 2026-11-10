@@ -13,13 +13,13 @@ KINDS: dict[str, str] = {
     "bench-result/v1": "a result.json (measurements, validation, fingerprint) + refs.run_files, refs.proof?",
     "bench-point/v1": "a sweep harness's raw result for its chosen point (a result.json with kind bench-point/v1): the run's attempt keeps "
                       "it and its run files; `bench.cell register` turns it into the cell's one bench-result/v1",
-    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the canonical tables' 'native dense peak, "
+    "native-peak/v1": "one card's measured dense-GEMM throughput for one dtype (benchmarks/native_peak; the frozen tables' 'native dense peak, "
                       "measured' column): meta {device, dtype, accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, "
                       "sass, driver, cuda, clocks_mhz, power_w, sizes} + the result envelope",
     "tc-evidence/v1": "one tensor-core probe capture: meta {instruction, arch, sku, families, counts, model, model_agrees, first_mismatches, "
                       "seed, n}; payload tree = probe_results.json, capture_sample.json, tiles_*.npz",
     "dataset-snapshot/v1": "meta {name, note, query?}; refs.members = [art:...]; payload null",
-    "tables-parity/v1": "the switch's parity render (verity_numerical.bench.views --parity --record): meta {schema, rules, ok, differences, "
+    "tables-parity/v1": "the frozen tables' parity render: meta {schema, rules, ok, differences, "
                         "snapshot, tables_cells, cells: [{line, column, artifact, views_overhead, tables_overhead, printed}]}; refs.snapshot "
                         "(the tables --snapshot compared with), refs.cells; payload null",
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
@@ -27,6 +27,8 @@ KINDS: dict[str, str] = {
     "evidence/v1": "a lane's evidence behind a note, which never goes in the notes (scripts, logs, JSON, plots): payload file or tree; "
                    "meta {lane, what, run?}; the note cites the art: id",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "fleet-samples/v1": "one UTC day of the fleet's 5-minute usage samples (pods/nebius/fleet.py, samples-YYYYMMDD.jsonl), put "
+                        "once the day is over: the usage record's second copy, off the control pod; payload file",
     "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
                                "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
                                "{notes_commit, files, bytes, note}",
@@ -35,7 +37,7 @@ KINDS: dict[str, str] = {
                           "verity_numerical.bench.frozen.EVIDENCE",
     "commit-map/v1": "a history rewrite's commit map (research.commitmap): payload file of `<old> <new> <same-tree 0|1>` lines; meta {from, to, "
                      "tool, args}; applies once labelled commit_map=accepted by its approver",
-    "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_numerical.bench.input_sets; the vllm-vu-set/v1 "
+    "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_flock.input_sets; the vllm-vu-set/v1 "
                     "layout): payload tree = manifest.json + index.json + flat port arrays; meta {set, subcircuit, template, "
                     "parameters, source, n, content_digest, schema, relation, seed?, row?, model?, research_run?}",
     "run-files/v1": "the files a result.json pointed at, as one tree",
@@ -46,6 +48,10 @@ KINDS: dict[str, str] = {
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
                         "meta {targets, files, taken_utc, host}",
     "telemetry/v1": "events.jsonl or resources.jsonl of an attempt",
+    "tasks-graph/v1": "a tasks/v1 task graph of one commit (`verity tasks list --json`), listed on a worker by the executor; "
+                      "its tasks' keys are the ones their verdicts are labelled under",
+    "verity-graph/v2": "a graph/v2 of one commit (`verity graph --json`), listed on a worker by the executor; its tasks' keys (or, "
+                       "for a task that reads others, the key rule's) are the ones their results are labelled under",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
     "check-shard/v1": "one shard's result.json (tools/verity/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
                       "meta.shard {k, n, parts, all, commit, config}; no gate takes it alone, only a `check.py --combine` check of "
@@ -68,6 +74,10 @@ KINDS: dict[str, str] = {
                                     "Boolean export per census subcircuit (subcircuits/<id>.boolean.json); meta {schema, census, entries: "
                                     "[{id, display, template, params, descriptor_id, default_statics, program_digests, export, counts, "
                                     "missing?}]}; refs.circuit_check = the circuit-check-report/v1 its counts cite",
+    "verity/status/v0": "the docs site's status document (tools/research/console/status_export.py): payload file status.json, "
+                        "canonical JSON of that schema (every lock guarantee proved, resting on named assumptions or unknown, the "
+                        "locks' assumptions, the results of record); meta {commit}; refs.facts = the run record whose Lean audit "
+                        "facts it read",
     "kernel-attempt/v1": "one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py, written by verify.py): meta = the "
                          "variant id, parent, tier, harness commit and gate version, metrics and step times, gamma at both FP32 prices, "
                          "the verifier's lines, the hypothesis; refs.parent = the attempt it changes; labels kernel_outcome, kernel_reason",
@@ -83,7 +93,8 @@ KINDS: dict[str, str] = {
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
                      "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-config-record/v1": "a row of the circuit database (verity_vllm.records): payload file = config_record.json "
-                             "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank, the Match, Commit and replay "
+                             "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank (a request Program's census "
+                             "digest beside it), the Match, Commit and replay "
                              "verdicts, the evidence's art: ids); meta {row, outcome, world, tree}; refs.build = the vllm-build/v1 holding "
                              "the Programs, refs.manifest, refs.match, refs.commit, refs.conformance; label row",
     "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
@@ -99,6 +110,10 @@ KINDS: dict[str, str] = {
                            "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
+                          "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
+                          "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
+                          "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
     "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
                       "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
                       "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",
@@ -106,6 +121,44 @@ KINDS: dict[str, str] = {
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",
+    "vllm-trace-corpus/v1": "real vLLM V1 scheduler traces under varied traffic (benchmarks/network_e2e/traces): payload tree = "
+                            "README.md + summary.json + meta.json + plan.jsonl + one <trace>/ a traffic setting (steps.jsonl, "
+                            "requests.jsonl, client.jsonl, meta.json, server.log, raw/ the hook's files), and optionally "
+                            "compare/ (compare.json, COMPARE.md: output ids against other corpora of the same plan)",
+    "vllm-adversarial-schedule/v1": "batch invariance against a hostile vLLM scheduler (benchmarks/network_e2e/traces, "
+                                    "vllm_adversarial_plugin): payload tree = corpus/<model>-<variant>/, each a "
+                                    "vllm-trace-corpus/v1 tree of corpus.HOSTILE's traces (honest and hostile schedulers, the "
+                                    "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
+                                    "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
+                                    "request, the first divergence)",
+    "challenger-ledger/v1": "the auditor host's challenger ledger (benchmarks/live_challenger/auditor.py, publish.sh): payload "
+                            "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
+                            "key_sha512}",
+    "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
+                            "the opener's gate key, end entries counting each family's released coins, leaves increasing); "
+                            "payload windows.jsonl, the v1 entries first; meta as v1's; label challenger-ledger head by infra",
+    "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
+                             "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1|v2 "
+                             "whose end entry seals out/",
+    "challenger-pins/v1": "the auditor host's challenger pins log (/opt/vy-challenger/pins.jsonl, auditor.py record_pin, publish.sh): "
+                          "payload pins.jsonl, one challenger.pin_line {commit, main, pinned_utc} a pin, append-only, each put an "
+                          "extension of the last; meta {host, lines, sha512}; label challenger-pins head by infra",
+    "challenger-models/v1": "the auditor host's model registry (/var/lib/vy-challenger/models.jsonl, live_challenger/models.py, "
+                            "publish.sh): payload models.jsonl, one registration a line {model, circuit, prefix, checkpoint, "
+                            "roots, entries, weights_root, key_sha512, ...}, append-only, each put an extension of the last; "
+                            "meta {host, lines, sha512}; label challenger-models head by infra",
+    "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
+                         "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
+                         "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
+                       "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
+                       "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
+                       "period, requested_utc, end {rc, ended_utc}, replay}",
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (examples/h200/m3bundle.py build), what "
+                          "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
+                          "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
+                          "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "
+                          "commit, verdict}",
 }
 
 

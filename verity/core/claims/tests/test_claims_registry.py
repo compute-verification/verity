@@ -19,7 +19,7 @@ def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_st
     e = get("cr/turboshake128")
     assert (e.name, e.label, e.standing) == ("Collision resistance of TurboSHAKE128", "CR · TurboSHAKE128", "standard")
     assert get("uniform/python-secrets").name == "Independent uniform output of Python's secrets"
-    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's coin server"
+    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's challenger"
     e = get("euf-cma/lms-sha512-n64")
     assert (e.label, e.standing) == ("EUF-CMA · LMS over SHA-512", "standard")
     assert "lms-sha512-n32" not in INSTANCES
@@ -75,9 +75,90 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
+def test_the_min_cut_bounds_cut_conjectures_are_cited_separately() -> None:
+    hardness, exports = get("training-cut-hardness"), get("training-cut-exports")
+    assert all((e.kind, e.standing) == ("assumption", "conjectured") for e in (hardness, exports))
+    assert "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S)" in hardness.name and "κ(B → E(B)) ≥ b |E(B)|" in exports.name
+
+
+def test_the_sm120_headlines_claims_name_what_their_statements_assume() -> None:
+    """HEADLINE-R2's restatement: FOLD-OPT at π*, binding's fork form, A2's catch-all and A1 assumed at the driver's
+    report."""
+    fold = get("accounting-ts-fold-opt").name
+    assert "FoldOptFoldedAt" in fold and "only at their own certificate π*" in fold
+    proofs = get("accounting-ts-proofs-sound").name
+    assert all(s in proofs for s in ("BindingForkAt", "√δ_fork", "BindingOfFork", "ProofSoundAt", "accounting-ts-proofs-pin"))
+    assert "every proof of round w is accepted" in proofs and "both accepted" not in proofs and "ProofsPin" not in proofs
+    assert "is not stated there" in proofs
+    assert "catch-all" in get("accounting-sheet-dispatch").name and "NOROW" in get("accounting-sheet-dispatch").name
+    clock = get("accounting-sheet-clock")
+    assert "nvidia-smi" in clock.name and "data sheet's maximum" not in clock.name
+    assert clock.label == "A1 clock (assumed)"
+
+
+def test_the_sm120_headlines_claims_match_their_lean() -> None:
+    """(I1)'s vector, the writers' ω, the ½-floor reading of 0.591%, and pinning graded on its own."""
+    facet = get("accounting-ts-facet-ceilings").name
+    assert "VF3s-16" in facet and "VF3p-16" not in facet and "(0, f_max]" in facet
+    words = get("accounting-ts-words-written").name
+    assert "UNI64" in words and "32 for IMMA.8816" in words
+    scalar = get("accounting-ts-scalar-route").name
+    assert all(s in scalar for s in ("9/8", "0.591%", "7.791%", "10.24% on VF3r-16", "SheetScalarRouteHalf"))
+    pin = get("accounting-ts-proofs-pin")
+    assert (pin.kind, pin.standing) == ("assumption", "conjectured") and get("accounting-ts-proofs-sound").standing == "standard"
+    assert all(s in pin.name for s in ("ProofsPin", "PouwSegCheck_v2 lacks it", "PouwSegCheck_v3", "#2417"))
+
+
+def test_the_scalar_route_claim_names_the_h200_twin_with_its_premise() -> None:
+    """DC-90-ri's (I3) twin takes SCALAR-ROUTE at 3/5 beside sm_120's 9/8, and its citation names the premise, the
+    proved ½ floor beside it and the fold menus the credit and the cheater read."""
+    scalar = get("accounting-ts-scalar-route").name
+    assert all(s in scalar for s in ("Sm90MeasuredI3Headline", "Sm90MeasuredHeadline", "q = q_T = 3/5", "9/8",
+                                     "Both are over 1%",
+                                     "DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved ½ floor; credit against "
+                                     "the built ♭, the cheater priced at every known fold, counted ones included"))
+
+
+def test_the_honest_clock_says_which_form_is_proved() -> None:
+    clock = get("honest-clock")
+    assert (clock.kind, clock.standing, clock.label) == ("assumption", "standard", "Honest clock")
+    assert "Accounting.SecurityProofs.Actual.honestClock" in clock.name and "the Pearl-C form is not proved" in clock.name
+
+
+def test_the_session_premises_state_their_scope() -> None:
+    """No served path verifies with --registered, and the window's sampling design also needs the audit coins."""
+    live = get("accounting-ts-accepted-live")
+    assert live.standing == "standard"
+    assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
+                                        "no served path meets it"))
+    law = get("accounting-ts-window-law").name
+    assert all(s in law for s in ("five facts", "coin tree", "trusted-host", "Under full checking",
+                                  "serve --zk --operator loopback", "doesn't meet the fifth fact"))
+
+
 def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
     e = get("pouw-gamma-per-coin")
     assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
+
+
+def test_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
+    assert (get("accounting-ts-counts-fixed").kind, get("accounting-ts-counts-fixed").standing) == ("assumption", "conjectured")
+    assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")
+
+
+def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
+    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof system's assumptions, as sm_120's."""
+    for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
+        assert "the H200's and the B200's" in get(e).name, e
+    assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
+
+
+def test_the_relay_trusts_are_standard_assumptions() -> None:
+    for i in ("flock-relay-serves", "flock-worker-deterministic"):
+        e = get(i)
+        assert (e.kind, e.standing) == ("assumption", "standard"), i
+    assert "auditor's connection" in get("flock-relay-serves").name
+    assert "LiveChallenger::round" in get("flock-worker-deterministic").name
 
 
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
@@ -95,8 +176,23 @@ def test_the_registrant_premise_is_a_model_of_the_provers_covered() -> None:
 
 
 def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
-    e = get("trusted-nebius-host")
+    e = get("trusted-host")
     assert (e.kind, e.standing) == ("assumption", "standard")
-    assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
-                      "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
-                      "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+    assert e.name == ("The auditor's device runs its stated code, timing included, on a host the prover doesn't control, "
+                      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier "
+                      "state")
+
+
+def test_the_latency_ceiling_is_a_measured_device_claim() -> None:
+    e = get("latency-ceiling")
+    assert (e.kind, e.standing, e.label) == ("assumption", "measured", "Latency ceiling")
+    assert "network certifier on its egress" in e.name and "within the stated ceiling" in e.name
+
+
+def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
+    """Π's three clauses, per node, trusting the auditor's inventory, with no partition clause."""
+    e = get("accounting-declared-device")
+    assert (e.kind, e.standing, e.label) == ("assumption", "standard", "Declared device")
+    assert all(s in e.name for s in ("every GPU on the node is declared", "the declared board and vBIOS",
+                                     "no SM clock exceeds f_max, the top of that vBIOS's clock table",
+                                     "MIG and MPS need no clause", "the auditor's inventory of the node"))

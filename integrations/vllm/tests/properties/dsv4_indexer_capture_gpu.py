@@ -52,12 +52,15 @@ without stopping the others.
 GO needs every phase's words compared with 0 mismatches and 0 unresolved (a non-finite logit accumulator; these operands keep every
 logit finite), the reference with 0 disagreements wherever it ran (every instance of the score, compress, fill and inv_rope cases
 unless --quick, a sample of the logits), deterministic reruns (the prefill logits on the words they write, `logits_rerun`), and the
-checks above.
+checks above.  The score and head twins, and the word steps every twin here runs on, are `verity.ml.definitions.numerics.dsv4_indexer_twin`'s,
+the replay's row kernels for those two Definitions.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/dsv4_indexer_capture_gpu.py --out DIR [--scratch DIR] [--quick]
 """
 from __future__ import annotations
+
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import argparse
 import glob
@@ -81,7 +84,8 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity_vllm.program.registry import dsv4_indexer as I
+from verity.ml.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
+from verity.ml.definitions.registry import dsv4_indexer as I
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indexer-capture/v1"
@@ -150,7 +154,6 @@ SOURCES = {"models/deepseek_v4/compressor.py": "338b89ec959f1b40f7210cbee01a8dce
            "models/deepseek_v4/nvidia/ops/o_proj.py": "ffb28e7cc44124bb2878e596617b70ec2659c7b26a2048a06facc343fa4d24e1",
            "model_executor/layers/sparse_attn_indexer.py": "470f78842e70f62fc089b0f1429683dcf1d6d07814e2ce8045d42e2841b9dde6"}
 
-NAN = np.uint32(0x7FFFFFFF)
 NEG_INF = np.uint32(0xFF800000)
 M64 = (1 << 64) - 1
 _error = X._error
@@ -172,168 +175,7 @@ def stack() -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------- the twins
-def _f(u) -> np.ndarray:
-    return np.asarray(u, dtype=np.uint32).view(np.float32)
-
-
-def _w(f) -> np.ndarray:
-    return np.asarray(f, dtype=np.float32).view(np.uint32)
-
-
-def _is_nan(u) -> np.ndarray:
-    u = np.asarray(u, dtype=np.uint32)
-    return ((u & 0x7F800000) == 0x7F800000) & ((u & 0x7FFFFF) != 0)
-
-
-def _gpu(u) -> np.ndarray:
-    """Every NaN the GPU's 0x7FFFFFFF."""
-    u = np.asarray(u, dtype=np.uint32)
-    return np.where(_is_nan(u), NAN, u)
-
-
-class NumpyOps:
-    """`dsv4_indexer.WORD`'s steps on numpy arrays of words, so the Definitions' bodies (`compress_column`, `norm_rope`, `k_quant`,
-    `inv_rope`, `inv_rope_quant`) run vectorised over many instances: the f32 arithmetic of `F32AddV2_v1` .. `F32FmaFtzV2_v1` (numpy's
-    IEEE single rounding, `derived_rows.fma_rn`'s exact FMA, each NaN 0x7FFFFFFF), MUFU and div.full through core's registered kernels
-    (`verity.ml.circuits.ops.mufu`, exact on every encoding), the rest on the encodings."""
-
-    @staticmethod
-    def word(bits: int):
-        return np.uint32(bits)
-
-    @staticmethod
-    def neg(x):
-        return np.asarray(x, dtype=np.uint32) ^ np.uint32(0x80000000)
-
-    @staticmethod
-    def add(a, b):
-        return _gpu(_w(_f(a) + _f(b)))
-
-    @staticmethod
-    def sub(a, b):
-        return _gpu(_w(_f(a) - _f(b)))
-
-    @staticmethod
-    def mul(a, b):
-        return _gpu(_w(_f(a) * _f(b)))
-
-    @staticmethod
-    def fma(a, b, c):
-        from verity_vllm.program.kernels import derived_rows as DR
-
-        return _gpu(DR.fma_rn(a, b, c))
-
-    @staticmethod
-    def fma_ftz(a, b, c):
-        from verity_vllm.program.kernels import derived_rows as DR
-
-        return _gpu(DR.fma_ftz(a, b, c))
-
-    @staticmethod
-    def rcp(b):
-        from verity.ml.circuits.ops import mufu as MU
-
-        return MU.mufu_rcp_words(MU.div_full_divisor_words(np.atleast_1d(np.asarray(b, dtype=np.uint32))), MU.table("rcp"))
-
-    @staticmethod
-    def scale_a(a, b):
-        from verity.ml.circuits.ops import mufu as MU
-
-        return MU.div_full_scale_a_words(*np.broadcast_arrays(np.atleast_1d(np.asarray(a, np.uint32)), np.atleast_1d(np.asarray(b, np.uint32))))
-
-    @staticmethod
-    def rsqrt(x):
-        from verity.ml.circuits.ops import mufu as MU
-
-        return MU.rsqrt_approx_words(np.atleast_1d(np.asarray(x, dtype=np.uint32)), MU.table("rsq"))
-
-    @staticmethod
-    def ex2(x):
-        from verity.ml.circuits.ops import mufu as MU
-
-        return MU.mufu_ex2_words(np.atleast_1d(np.asarray(x, dtype=np.uint32)), MU.table("ex2"))
-
-    @staticmethod
-    def fabs(x):
-        return np.asarray(x, dtype=np.uint32) & np.uint32(0x7FFFFFFF)
-
-    @staticmethod
-    def _maxmin(a, b, larger: bool):
-        """`max.f32` / `min.f32`: a NaN yields the other operand (two give 0x7FFFFFFF), max(+0, -0) = +0 and min(+0, -0) = -0."""
-        a, b = np.broadcast_arrays(np.asarray(a, dtype=np.uint32), np.asarray(b, dtype=np.uint32))
-        fa, fb = _f(a), _f(b)
-        out = np.where(fa > fb if larger else fa < fb, a, b)
-        out = np.where(fa == fb, a & b if larger else a | b, out)
-        na, nb = _is_nan(a), _is_nan(b)
-        return np.where(na & nb, NAN, np.where(na, b, np.where(nb, a, out)))
-
-    def fmaxf(self, a, b):
-        return self._maxmin(a, b, True)
-
-    def fminf(self, a, b):
-        return self._maxmin(a, b, False)
-
-    @staticmethod
-    def e4m3(x):
-        from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
-
-        return np_f32_to_e4m3_sat(_f(x)).astype(np.uint32)
-
-    @staticmethod
-    def iadd(a, b):
-        return ((np.asarray(a, dtype=np.uint64) + np.asarray(b, dtype=np.uint64)) & np.uint64(0xFFFFFFFF)).astype(np.uint32)
-
-    @staticmethod
-    def iand(a, b):
-        return np.asarray(a, dtype=np.uint32) & np.asarray(b, dtype=np.uint32)
-
-    @staticmethod
-    def isub(a, b):
-        return ((np.asarray(a, dtype=np.int64) - np.asarray(b, dtype=np.int64)) & 0xFFFFFFFF).astype(np.uint32)
-
-    @staticmethod
-    def i2f(a):
-        return _w(np.asarray(a, dtype=np.uint32).view(np.int32).astype(np.float32))
-
-    @staticmethod
-    def ceil(x):
-        """`cvt.rpi.ftz.f32.f32`: a subnormal flushed to its signed zero, then rounded up (-1 < x < 0 gives -0), NaN 0x7FFFFFFF."""
-        from verity_vllm.program.kernels import derived_rows as DR
-
-        return _gpu(_w(np.ceil(_f(DR.ftz(x)))))
-
-    @staticmethod
-    def cvt(w):
-        return np.asarray(w, dtype=np.uint32) << np.uint32(16)
-
-    @staticmethod
-    def bf16(x):
-        from verity_vllm.program.kernels import derived_rows as DR
-
-        return DR.f2fp_bf16(np.atleast_1d(np.asarray(x, dtype=np.uint32)))
-
-    @staticmethod
-    def fsel(c, a, b):
-        return np.where(np.asarray(c, dtype=np.uint32) & 1, np.asarray(a, dtype=np.uint32), np.asarray(b, dtype=np.uint32))
-
-    @staticmethod
-    def gt(a, b):
-        return (_f(a) > _f(b)).astype(np.uint32)
-
-    @staticmethod
-    def ile(a, b):
-        return (np.asarray(a, dtype=np.uint32).view(np.int32) <= np.asarray(b, dtype=np.uint32).view(np.int32)).astype(np.uint32)
-
-
-OPS = NumpyOps()
-_NORM = SimpleNamespace(D=D, ROPE=ROPE, EPS=EPS)
-_KQ, _GQ, _ROT = SimpleNamespace(N=D), SimpleNamespace(N=QG), SimpleNamespace(ROPE=ROPE)
-
-
-def score_twin(score: np.ndarray, ape: np.ndarray) -> np.ndarray:
-    """`Dsv4CompressorScore_v1{W}` over rows: score and ape (n, W) f32 words -> (n, W)."""
-    with np.errstate(all="ignore"):
-        return np.asarray(I.compressor_score(OPS, None, [score], [ape])[0], dtype=np.uint32)
+_NORM, _KQ = SimpleNamespace(D=D, ROPE=ROPE, EPS=EPS), SimpleNamespace(N=D)
 
 
 def entries_twin(kv: np.ndarray, score: np.ndarray, w: np.ndarray, cs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -347,23 +189,6 @@ def entries_twin(kv: np.ndarray, score: np.ndarray, w: np.ndarray, cs: np.ndarra
     n = kv.shape[0]
     return (np.stack([np.broadcast_to(x, (n,)) for x in out[:D]], axis=1).astype(np.uint8),
             np.broadcast_to(out[D], (n,)).astype(np.uint32))
-
-
-def heads_twin(x: np.ndarray, cs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`Dsv4InvRopeQuantHead_v1{4,128,64}` over n heads: x (n, 512) bf16 words, cs (n, 64) f32 words -> (n, 512) e4m3 bytes and (n, 4)
-    f32 scales."""
-    x, cs = np.asarray(x, dtype=np.uint16), np.asarray(cs, dtype=np.uint32)
-    n = x.shape[0]
-    with np.errstate(all="ignore"):
-        words = [OPS.cvt(x[:, i]) for i in range(HD - ROPE)]
-        words += I.inv_rope(OPS, _ROT, [x[:, i] for i in range(HD - ROPE, HD)], [cs[:, j] for j in range(ROPE)])
-        q, s = [], []
-        for g in range(CHUNKS):
-            out = I.inv_rope_quant(OPS, _GQ, words[g * QG:(g + 1) * QG])
-            q += out[:QG]
-            s.append(out[QG])
-    return (np.stack([np.broadcast_to(v, (n,)) for v in q], axis=1).astype(np.uint8),
-            np.stack([np.broadcast_to(v, (n,)) for v in s], axis=1).astype(np.uint32))
 
 
 def fill_twin(pos) -> np.ndarray:
@@ -809,7 +634,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.sparse_attn_indexer import RADIX_TOPK_WORKSPACE_SIZE
     from vllm.platforms import current_platform
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     rec: dict[str, Any] = {"cases": {}, "errors": {}}
     cooperative = bool(current_platform.has_device_capability(90) and not current_platform.is_device_capability_family(120))
@@ -954,7 +779,7 @@ def compare_heads(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
     a = _load(job["paths"])
     lo, hi = job["rows"]
-    q, s = heads_twin(a["x"][lo:hi], a["cs"][lo:hi])
+    q, s = heads_twin(a["x"][lo:hi], a["cs"][lo:hi], QG, ROPE)
     want = np.concatenate([q.astype(np.int64), s.astype(np.int64)], axis=1)
     got = np.concatenate([np.asarray(a["q"][lo:hi], dtype=np.int64), np.asarray(a["s"][lo:hi], dtype=np.int64)], axis=1)
     _tally(rec, want, got, a["ids"][lo:hi], "head_id")
@@ -979,7 +804,7 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, `DsaMqaLogit_v3{64,128}` on the first two."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
@@ -1054,7 +879,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import dsa
+    from verity.ml.definitions.registry import dsa
 
     targets = {f"Dsv4CompressorScore_v1{{W={STATE_W}}}": lambda: bind(I.Dsv4CompressorScore, W=STATE_W),
                f"Dsv4CompressColumn_v1{{ROWS={ROWS}}}": lambda: bind(I.Dsv4CompressColumn, ROWS=ROWS),

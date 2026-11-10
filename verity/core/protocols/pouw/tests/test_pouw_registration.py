@@ -1,5 +1,5 @@
 """Registered weights (`registration`): one rule for Pearl-C4 and served FP8's Pearl-C, and the keyed transforms' key,
-drawn from the epoch's salt coin after the weights' root is recorded and refused for any other salt."""
+sampled from the execution phase's salt coin after the weights' root is recorded and refused for any other salt."""
 
 from __future__ import annotations
 
@@ -11,15 +11,16 @@ import epoch_coins as E
 from verity.core.protocols.pouw import registration as R
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
 from verity.ml.randomness import derive
 
 FP8, FP4 = "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0"
 VO = (R.VO_ROTATION, R.HEAD_INTERLEAVE)
 STACKS = (*R.REGISTRATION_STACKS, *R.UNROTATED_STACKS, VO, (R.GAMMA_FOLD, *VO), (R.ROTATION_8, R.GAMMA_FOLD),
-          (R.ROTATION_8, R.VO_ROTATION), ("an-unnamed-transform",))
+          (R.ROTATION_8, R.VO_ROTATION), (R.LATENT_ROTATION,), (R.LATENT_ROTATION, R.ROTATION_8),
+          (R.ROTATION_8, R.LATENT_ROTATION, *VO), ("an-unnamed-transform",))
 WORK = Workload((Matmul(0, Shape(64, 1024, 128), 0), Matmul(1, Shape(64, 1024, 256), 1)))
 ROOTS = {0: b"\x01" * 64, 1: b"\x02" * 64}
 
@@ -65,6 +66,40 @@ def test_served_fp8_folds_gamma_where_the_checkpoint_needs_it():
         s.check_registration((R.GAMMA_FOLD,), needs_gamma_fold=True)
 
 
+def test_under_the_rotation_a_linear_registers_only_where_the_rotation_reaches_it():
+    """GLM-5.3: the keyed 8-block rotation mixes only the residual stream, so
+    MLA's q_b and kv_b and the DSA indexer's wq_b, which read a latent behind its own RMSNorm, keep the checkpoint's
+    weights and are refused under a stack without the latent rotation; with it they register.  A
+    linear off every rotated stream is refused under every rotated stack.  A curated unrotated checkpoint registers every
+    linear, and the stack's own rule comes first."""
+    with_latent = [t for t in R.REGISTRATION_STACKS if R.LATENT_ROTATION in t]
+    assert with_latent == [(R.ROTATION_8, R.LATENT_ROTATION), (R.ROTATION_8, *VO, R.LATENT_ROTATION)]
+    for stack in R.REGISTRATION_STACKS:
+        for side in (R.READS_RESIDUAL, R.WRITES_RESIDUAL):
+            R.check_linear(stack, side)
+        if stack in with_latent:
+            R.check_linear(stack, R.READS_LATENT)
+        else:
+            with pytest.raises(DomainError, match="reads an MLA latent .* unregistered and uncredited"):
+                R.check_linear(stack, R.READS_LATENT)
+        with pytest.raises(DomainError, match="off every stream .* unregistered and uncredited"):
+            R.check_linear(stack, R.OFF_RESIDUAL)
+    for stack in R.UNROTATED_STACKS:
+        for side in R.RESIDUAL_SIDES:
+            R.check_linear(stack, side, curated=True)
+    with pytest.raises(DomainError, match="curated list"):
+        R.check_linear((), R.READS_RESIDUAL)
+    with pytest.raises(DomainError, match="not an adopted stack"):
+        R.check_linear((R.ROTATION_8, R.GAMMA_FOLD), R.READS_RESIDUAL)
+    for t in ((R.LATENT_ROTATION,), (R.GAMMA_FOLD, R.LATENT_ROTATION)):
+        with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+            R.check_linear(t, R.READS_LATENT, curated=True)
+    with pytest.raises(DomainError, match="not an adopted stack"):
+        R.check_linear((R.LATENT_ROTATION, R.ROTATION_8), R.READS_LATENT)
+    with pytest.raises(ValueError, match="one of"):
+        R.check_linear((R.ROTATION_8,), "latent")
+
+
 def _started(seed=E.SEED, roots=ROOTS):
     ch = E.challenger(seed)
     opening = ch.open("salt", weights_root(roots))
@@ -82,7 +117,7 @@ def test_the_rotation_key_is_the_salt_coins_and_moves_with_the_coin_and_the_weig
 
 
 def test_no_rotation_key_exists_before_the_weights_root_is_recorded():
-    """A coin opened after anything but this epoch's weights' root keys nothing: the prover can't have the key while it
+    """A coin opened after anything but this execution phase's weights' root keys nothing: the prover can't have the key while it
     still chooses the weights."""
     epoch, _ = _started()
     early = E.challenger().open("salt", weights_root({0: b"\x09" * 64, 1: b"\x02" * 64}))

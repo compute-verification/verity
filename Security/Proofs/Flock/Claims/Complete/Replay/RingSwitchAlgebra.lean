@@ -1,10 +1,49 @@
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Soundness.LinkSound
-import Proofs.Flock.Soundness.Discharge.Layout.Region
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.Complete.Replay.Satisfies
+import Proofs.Flock.Claims.Complete.Replay.Trace
+import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
+import Proofs.Flock.Soundness.Discharge.Layout.Region
+import Proofs.Flock.Soundness.Refine.Arith
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The ring switch's algebra at the deployed relation
@@ -24,6 +63,8 @@ evaluation, `claim_eval_eq` and `fOf_claimCheck`, with `s[v]` the honest `ŝ[v]`
   (`regionClaim_rel'`) at link points of `m_pts` coordinates, which `Record.decodeWith` checks (S9,
   `decodeWith_points`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Region
 
@@ -421,9 +462,9 @@ theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 2
 /-! ## The record's link points -/
 
 /-- The record's link points have `m_pts` coordinates: `Record.decodeWith` checks it (S9). -/
-theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) : ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
-  unfold Record.decodeWith at h
+  unfold Record.decodeWith Record.decodeJWith at h
   dsimp only at h
   split at h
   rotate_left
@@ -444,7 +485,7 @@ theorem _root_.FlockComplete.Run.sess_points (o : Run H rel) {st : Stmt} (hspec 
   cases h : Record.decodeWith o.hs o.spec o.record with
   | error e =>
     intro p hp
-    rw [show (val (Except.error e : Except String Session)).points = #[] from rfl] at hp
+    rw [show (val (Except.error e : Except String RunRecord)).points = #[] from rfl] at hp
     simp at hp
   | ok s =>
     have hp := decodeWith_points o.hs h

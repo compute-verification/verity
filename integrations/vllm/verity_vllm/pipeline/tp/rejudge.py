@@ -13,8 +13,9 @@ Recomputed, each against what the record says:
   xrank     the cross-rank collectives check re-run (`xrank_collectives.check_picks`) over each pair's kept dumps
             (`xrank_pair<k>_rank<r>.pt`), else re-folded (`fold_pairs`) from the per-pair records (`xrank_pair<k>.json`)
   verdict   summary.pass re-assembled from the runs, tokens, value check, fold-Match binding and query population, as `tp.commit` does
-`LIVE` names the gates that need the live values, and why.  Exit 0 when no recomputed gate is False, 1 when one is (each named), 2 when
-the record cannot be read.
+`LIVE` names the gates that need the live values, and why.  Exit 0 when every recomputed gate passes, 1 when one is False (each named),
+2 when the record cannot be read, and 3 (PENDING) when none is False but a rank's verdict is still pending (a deferred replay not yet run:
+`tp-commit-replay`), so a pending Commit reads neither as failed nor as passed.
 """
 from __future__ import annotations
 
@@ -30,8 +31,8 @@ SCHEMA = "verity-vllm/tp-rejudge/v1"
 LIVE = {
     "openings": "each rank's challenge- and population-drawn openings against its run root read the committed bytes",
     "coverage": "identity coverage is computed in the rank against its expected population; binding_map_rank<r>.json keeps pair 0's maps only",
-    "match_oracle": "committed TP partials vs the Match capture: the values, and the (step, module) pairing over the committer's per-step "
-                    "layouts, which the Commit does not save",
+    "match_oracle": "committed TP partials and MoE align witnesses vs the Match capture: the values, and the (step, module) pairing over the "
+                    "committer's per-step layouts, which the Commit does not save",
     "attribution": "the committed sampled ids against the Match record",
     "value_check": "tap clones and re-execution of every module output and TP partial (value_check.json keeps their verdicts)",
     "t6_4": "the late-read detector reads the value-check run's clones",
@@ -65,7 +66,7 @@ def record_gate(rows: list[dict], trt: list[dict], summ: dict, since: str | None
 
 
 def ranks_gate(trt: list[dict], summ: dict) -> dict:
-    per_run, ok = [], True
+    per_run, results = [], []
     for i, r in enumerate(trt):
         c = r.get("commit") or {}
         vs = {k: v.get("commit_pass") for k, v in (c.get("per_rank") or {}).items()}
@@ -73,8 +74,10 @@ def ranks_gate(trt: list[dict], summ: dict) -> dict:
         rec = [c.get("commit_pass"), (summ.get("commit_pass") or [None] * len(trt))[i]]
         per_run.append({"pair": r.get("pair"), "recomputed": got, "recorded": rec,
                         "failed": {k: (c["per_rank"][k].get("commit_fail_reason") or "")[:300] for k, v in vs.items() if v is False}})
-        ok &= got is True and rec == [got, got]
-    return {"result": ok if trt else None, "agrees": all(p["recorded"] == [p["recomputed"]] * 2 for p in per_run), "per_run": per_run}
+        results.append(got if rec == [got, got] else False)
+    result = None if not trt else False if False in results else None if None in results else True
+    return {"result": result, "pending": bool(trt) and result is None, "agrees": all(p["recorded"] == [p["recomputed"]] * 2 for p in per_run),
+            "per_run": per_run}
 
 
 def manifest_gate(trt: list[dict], summ: dict) -> dict:
@@ -103,6 +106,8 @@ def xrank_gate(cdir: Path, summ: dict, world: int) -> dict:
 
 
 def verdict_gate(ranks: dict, summ: dict) -> dict:
+    if ranks.get("pending"):
+        return {"result": None, "recorded": summ.get("pass"), "why": "a rank's verdict is pending: summary.pass is decided once its deferred replay runs"}
     vc = summ.get("value_check")
     parts = {"runs": ranks["result"] is True, "tokens": all(summ.get("tokens_equal") or []), "value_check": vc is None or vc.get("verdict") == "PASS",
              "fold_match_binding": (summ.get("fold_match_binding") or {}).get("result") is not False,
@@ -139,12 +144,13 @@ def main(a: Options) -> int:
         gates["xrank"] = xrank_gate(cdir, summ, int(summ.get("tp") or 1))
         gates["verdict"] = verdict_gate(gates["ranks"], summ)
     failed = [g for g, v in gates.items() if v["result"] is False or v.get("agrees") is False]
+    pending = not failed and bool(gates.get("ranks", {}).get("pending"))
     rep = {"schema": SCHEMA, "run": str(run), "summary": str(sp), "commit_dir": str(cdir), "commit_started": summ.get("commit_started"), "since": since,
-           "verdict": "FAIL" if failed else "PASS", "failed": failed, "gates": gates, "live_only": LIVE}
+           "verdict": "FAIL" if failed else "PENDING" if pending else "PASS", "failed": failed, "gates": gates, "live_only": LIVE}
     if a.out:
         Path(a.out).write_text(json.dumps(rep, indent=1, default=str) + "\n")
     for g, v in gates.items():
         print(f"[rejudge] {g}: {v['result']}" + ("" if v.get("agrees", True) else " (the record says otherwise)")
               + (f" -- {v['why']}" if v.get("why") and v["result"] is not True else ""), flush=True)
     print(f"[rejudge] {rep['verdict']}" + (f": {', '.join(failed)}" if failed else "") + f"; needs live values: {', '.join(LIVE)}", flush=True)
-    return 1 if failed else 0
+    return 1 if failed else 3 if pending else 0

@@ -1,41 +1,43 @@
-"""ε for a PoUW design in the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2), every term from data,
-in two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and operand
-verified, has the core ε, Corollary D3's
+"""ε for a PoUW design in the tensor–scalar model, every term from data, in two layers that are never mixed. The
+protocol with 100% checking, every word and operand verified, has the core ε, Corollary D3's
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
 
-ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
-(LEDGER, note:20261017T1723Z-draft-ledger; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
-of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
+ε_luck in it: every check is one sample, so an accepted cheater spends Theorem S's budget with every block checked
+(JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function of the proof block and its
+selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp
   instructions of class k, and a program takes at least its largest row.
-- **ε_machine** is one LP over Π (SPEC's §0.8, note:20261017T0324Z-draft-eps1-spec). A program writes every committed
+- **ε_machine** is one LP over Π. A program writes every committed
   word, folds every word and does the filler, and takes T ≥ every row. A word is written on one of four routes: `tensor`
   (on any MMA form of data/forms.toml, L/(depth·words) of that form's instructions with honest's operand delivery a
   word, folded on lanes; honest writes on its own form), `lanes` (q lane instructions a word in any mix of the
   CUDA classes, NOROW's componentwise minimum among them, folded on lanes), `baseline` (the design's `[baseline]`
   program, dp4a, folded on lanes) or `uniform` (q_u uniform instructions a word, folded there too); the cheater may
-  have a fifth, `table` (QSTAR's register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
+  have a fifth, `table` (register-indexed lookups, data/table.toml: q_T lane instructions from the lanes' pool
   and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Honest runs each filler on
   lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction)
   when every class of its mix has a uniform form there (the device's `uniform_forms`; sm_90's datapath has no FFMA).
-  The cheater minimizes
+  A design's `[fold_routes]` are its fold's other bit-exact programs (the check reads the fold's result, not its
+  program): the cheater folds on lanes by any mix of them and the design's fold, ♭ by the built ones alone (its
+  `counted` routes, which no run has built, are the cheater's only), honest by the design's fold (its kernel's). The
+  cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
-  baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
+  baseline program (whose words belong to the baseline, not to ε) and its filler where it runs it.
   ε_machine = 1 − T_cheat/T_honest, and against honest as built (the tensor route alone) beside it. The cheater's
-  operand delivery is priced 0 (`free`, SPEC's conservative default), at the noise's floor φ_del (`floor`: the
+  operand delivery is priced 0 (`free`, the conservative default), at the noise's floor φ_del (`floor`: the
   design's `[operands]`, else the profile's), or at honest's own (`honest`). The LP's duals are the certificate π*, at
   which ε_machine splits exactly into ε_cert (1 − π*·n(H)/B(H)) and ε_route. With the scalar routes closed it is
   ε_machine's floor, which no q* lowers; the threshold is the least q* at which ε_machine reaches it. q* is (I3)
-  ScalarRoute's floor: ½ is Lean's (SheetScalarRouteHalf, from A6), and 1.22, decision 89's reading, is the 1.22-slot
+  ScalarRoute's floor: ½ is Lean's (SheetScalarRouteHalf, from A6), and 1.22, the measured reading's, is the 1.22-slot
   issue floor (Theorem C, unproved in Lean).
-- **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, PROFILE's
-  reading: ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, SPEC §0.7a's Corollary D3): the same LP
+- **The credit** is honest's kernel (`H`, the master inequality), its model bound B(H)/f_max (`model`, under
+  which ε_sched and ε_clock leave ε for γ), or the floor program ♭ (`floor`, Corollary D3): the same LP
   restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's
   overhead above ♭ leave ε for γ, as the factor T_H/B_♭ · f_max/f_H (`credit_ratio`; f_max/f_H = 1/(1 − ε_clock)).
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
-  ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), each filler's blocks at their
+  ln(1/δ)/((1 − p)·S) over S spot checks, each filler's blocks at their
   own p (`budget`), and ε_luck is what that saves it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
 - **ε_sched** is honest's measured time above its model time (`[measured]` in data/honest/), when the design runs the
   profile's fold at its L (with its fillers, the measured time plus their model cost). Unmeasured, it is 0: honest is
@@ -44,15 +46,15 @@ of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fra
   Honest's time is measured when the design runs the profile's kernel; otherwise, when the profile is measured, the
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
-- **ε_skip** is SKIP's calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
+- **ε_skip** is the ε_skip calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
-- **ε_adapt** is the proof unit's (data/adapt.toml, SPEC's Theorem D): what steering instances in unproved regions gains
-  when σ is drawn after the commitment and before evaluation. A design names its unit (`unit`).
+- **ε_adapt** is the proof block's (data/adapt.toml, Theorem D): what steering instances in unproved regions gains
+  when σ is sampled after the commitment and before evaluation. A design names its unit (`unit`).
 
-A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (decision
-79's, with the names tonight's notes and data used as `aliases`), the noise on each product (`[noise]`, a leaf of
-NOISE for each of PRODUCTS), the fold, the filler, the proof unit, the coins and its perplexity arm (`ppl`, a spec in
+A design is one file in data/designs/, read on top of its `base` and of data/designs.toml (`design`): its name (with
+the names it had before as `aliases`), the noise on each product (`[noise]`, a leaf of
+NOISE for each of PRODUCTS), the fold, the filler, the proof block, the coins and its perplexity arm (`ppl`, a spec in
 benchmarks/ppl/specs/), with the ε terms' accounting beside them.
 
 - **The MMA forms** are census kinds, each priced on every row by its own line; a row a form has no line on (VF3q-16's
@@ -86,13 +88,13 @@ NOISE = {                                          # how a product is noised and
     "two-sided": "both operands dithered with fresh bits, no U, the last checked word served: nothing unchecked",
     "co32c": "CO-Dither at r = 32, the residue sums' base-128 digits committed: every limb a checked word",
     "cohalf": "CO-Dither at r = k/2 with a 7-bit served side: the strip one checked limb",
-    "peel": "P's w64 peel with U: the strip unchecked, all of it free at a one-hot P row (CHECKED-STRIP Result 3)",
+    "peel": "P's w64 peel with U: the strip unchecked, all of it free at a one-hot P row",
     "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
     "clean": "served plain, never proved",
 }
 SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
-    "vsum": "BC-KERNEL r2's linear vsum, 35 per-thread instructions an entry",
-    "vfold": "D2S-KERNEL r3's vfold, the V producers in one pass (#2300): 0.69–0.73 warp instructions an entry",
+    "vsum": "the linear vsum, 35 per-thread instructions an entry",
+    "vfold": "the vfold, the V producers in one pass: 0.69–0.73 warp instructions an entry",
 }
 OWN = ("name", "title", "summary")                 # what a design file states itself, never from its base
 
@@ -193,8 +195,8 @@ class Filler:
     """Verified proof-of-work filler: `per_word` lane instructions a committed word in the class mix `mix`, run by
     honest on `route`; a deficient block of it passes its check with probability ≤ `p`, as the theorem `luck` names
     proves. Without one p is 1, no luck credit: the cheater leaves the filler undone at no cost to Theorem S's budget,
-    even with every block checked, and the floor program ♭ leaves it out too (decision 99: a filler's credit is the
-    theorem its check meets), while honest's time, γ, still counts it. A receipt the check recomputes and compares
+    even with every block checked, and the floor program ♭ leaves it out too (a filler's credit is the theorem its
+    check meets), while honest's time, γ, still counts it. A receipt the check recomputes and compares
     with the committed one has p = 0 (`PINNED`), pfill's cells 0.854 (`PFILL`)."""
     per_word: float = 0.0
     mix: dict[str, float] | None = None
@@ -209,7 +211,7 @@ def lane_fill(x: float, mix: dict[str, float] | None = None) -> Filler:
     receipts recomputed by the check (p = 0, `PINNED`)."""
     if mix is None:
         return Filler(per_word=x, mix={"ALU": 1.0, "IMAD": 1.0}, route="lanes",
-                      source="CALC: a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
+                      source="a lane chain of LOP3 and IMAD, receipts checked like the fold's (candidate)",
                       p=0.0, luck=PINNED)
     return Filler(per_word=x, mix=dict(mix), route="lanes",
                   source=f"a lane chain in the mix {', '.join(f'{k} {v:g}' for k, v in mix.items())} (candidate)",
@@ -245,24 +247,35 @@ class Design:
     q_uniform: float | None = None   # uniform instructions a word on the uniform datapath; None: q*
     index_bits: int = 1              # bits a noise entry on the operand a table route indexes (`[table] bits`, else
                                      # the coins')
-    title: str = ""              # decision 79's name
-    aliases: tuple[str, ...] = ()    # the names tonight's notes and data used
+    title: str = ""              # its display name (Dither-1S)
+    aliases: tuple[str, ...] = ()    # the names it had before
     base: str = ""               # the design this one varies
     ppl: str = ""                # its perplexity arm, benchmarks/ppl/specs/PPL.toml; "": none on main
     noise: dict[str, str] | None = None   # each of PRODUCTS: a leaf of NOISE
     sums: str = "vsum"           # a peel's sums kernel, a key of SUMS
-    unit: str = ""               # the proof unit, a table of data/adapt.toml
+    unit: str = ""               # the proof block, a table of data/adapt.toml
     coin_bits: int = 1           # a noised entry's coin on {0, …, 2^coin_bits − 1}
     coins_source: str = ""
+    fold_routes: dict[str, dict[str, float]] = field(default_factory=dict)   # the fold's other bit-exact programs,
+                                                                             # lane instructions a word (the cheater's
+                                                                             # and, the built ones, ♭'s; not honest's)
+    fold_routes_source: str = ""
+    counted_routes: tuple[str, ...] = ()     # the fold routes no run has built: the cheater's alone, never ♭'s
 
     def fold_cost(self) -> float:
         return sum(self.fold.values())
 
+    def built_routes(self) -> dict[str, dict[str, float]]:
+        """The fold routes ♭ may fold by: every one a run has built, at its built (or measured) cost."""
+        return {n: r for n, r in self.fold_routes.items() if n not in self.counted_routes}
+
     def with_fold_cost(self, r: float) -> Design:
-        """The design with its fold scaled to r lane instructions a word, in the same mix of classes."""
+        """The design with its fold scaled to r lane instructions a word, in the same mix of classes, and each of its
+        fold routes by the same factor."""
         s = r / self.fold_cost()
         return replace(self, name=f"{self.name}@r{r:g}", fold={k: v * s for k, v in self.fold.items()},
-                       fold_name=f"{self.fold_name}×{s:.3g}")
+                       fold_name=f"{self.fold_name}×{s:.3g}",
+                       fold_routes={n: {k: v * s for k, v in f.items()} for n, f in self.fold_routes.items()})
 
     def with_fill(self, x: float, mix: dict[str, float] | None = None) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
@@ -274,7 +287,7 @@ class Design:
 
     def table(self, t: Table | None) -> Table | None:
         """The table route against this design: b-bit entries on the indexed operand cost b times the 1-bit route's
-        lane instructions and bytes a word (QSTAR's b-bit count: ≥ 1.25·b and 8·b B, SPEC §4.2a)."""
+        lane instructions and bytes a word (at least 1.25·b and 8·b B)."""
         b = self.index_bits
         return t if t is None or b == 1 else replace(t, q=t.q * b, bytes=t.bytes * b)
 
@@ -353,12 +366,21 @@ def design(name: str, data: Path = DATA) -> Design:
     if t.get("sums", "vsum") not in SUMS:
         raise SystemExit(f"{name}: sums {t['sums']!r} is not a peel sums kernel ({', '.join(SUMS)})")
     if t["unit"] not in adapts(data):
-        raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof unit of adapt.toml ({', '.join(adapts(data))})")
+        raise SystemExit(f"{name}: unit {t['unit']!r} is not a proof block of adapt.toml ({', '.join(adapts(data))})")
     coins = t["coins"]
     index_bits = t.get("table", {}).get("bits", coins["bits"])
     if index_bits < coins["bits"]:
         raise SystemExit(f"{name}: [table] bits {index_bits} is below the design's {coins['bits']}-bit coins: an entry "
                          "on the indexed operand has at least the coins' bits")
+    fr = dict(t.get("fold_routes", {}))
+    fr_source = fr.pop("source", "")
+    counted = tuple(fr.pop("counted", ()))
+    if (fr and not fr_source) or not all(isinstance(v, dict) and v for v in fr.values()):
+        raise SystemExit(f"{name}: [fold_routes] names each other bit-exact program of the fold as a table of lane "
+                         "instructions a word by class, with one `source`")
+    if set(counted) - set(fr) or len(set(counted)) != len(counted):
+        raise SystemExit(f"{name}: [fold_routes] `counted` lists the routes no run has built, each once, by their names "
+                         f"in the table ({sorted(set(counted) - set(fr))} aren't)")
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
                   fold_name=fold.pop("name"), fold=fold, filler=(filler,) if filler.per_word else (),
                   skip=_parts(t.get("skip", {})),
@@ -370,7 +392,9 @@ def design(name: str, data: Path = DATA) -> Design:
                   uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"),
                   index_bits=index_bits, title=t["title"],
                   aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
-                  sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
+                  sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"],
+                  fold_routes={k: {c: float(x) for c, x in v.items()} for k, v in fr.items()},
+                  fold_routes_source=fr_source, counted_routes=counted)
 
 
 def profiles(data: Path = DATA) -> list[str]:
@@ -401,7 +425,7 @@ def table(data: Path = DATA, q: float | None = None, l2: float | None = None, nb
 
 @dataclass(frozen=True)
 class Adapt:
-    """ε_adapt for a proof unit (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order,
+    """ε_adapt for a proof block (`data/adapt.toml`): what steering in unproved regions gains under the one-σ order,
     with the unit's selection rule."""
     name: str
     eps: float
@@ -410,7 +434,7 @@ class Adapt:
 
 
 def _adapt_file(data: Path) -> Path:
-    """A proof unit's ε_adapt doesn't depend on the device: a device directory reads data/adapt.toml."""
+    """A proof block's ε_adapt doesn't depend on the device: a device directory reads data/adapt.toml."""
     p = data / "adapt.toml"
     return p if p.is_file() else DATA / "adapt.toml"
 
@@ -418,7 +442,7 @@ def _adapt_file(data: Path) -> Path:
 def adapt(name: str, data: Path = DATA) -> Adapt:
     t = tomllib.loads(_adapt_file(data).read_text())
     if name not in t or not isinstance(t[name], dict):
-        raise SystemExit(f"no proof unit {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
+        raise SystemExit(f"no proof block {name!r} in adapt.toml: one of {', '.join(adapts(data))}")
     return Adapt(name=name, eps=t[name]["eps"], source=t[name]["source"], selection=t[name].get("selection", ""))
 
 
@@ -433,7 +457,7 @@ def designs(data: Path = DATA) -> list[str]:
 
 
 def aliases(data: Path = DATA) -> dict[str, str]:
-    """Each alias, a name tonight's notes and data used, with the design it names."""
+    """Each alias, a name the design had before, with the design it names."""
     out: dict[str, str] = {}
     for n in designs(data):
         for a in tomllib.loads((data / "designs" / f"{n}.toml").read_text()).get("aliases", ()):
@@ -477,8 +501,9 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
 
 
 def uniform_issue_charged(pi: Machine) -> bool:
-    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73)."""
-    return any(v > 0 and (r == "issue" or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on; a DS vector's
+    `DS_issue`, A2u)."""
+    return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
 
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
@@ -488,7 +513,7 @@ def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
     if uniform_issue_charged(pi):
         return pi
     c = {k: dict(v) for k, v in pi.c.items()}
-    rows = [r for r in pi.rows if r == "issue" or (r.startswith("JI") and r.endswith("_0"))]
+    rows = [r for r in pi.rows if r == "issue" or r.endswith("_issue") or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
         for r in rows:
             if k in c and r in c["ALU"]:
@@ -515,6 +540,7 @@ class Mix:
     pi: dict[str, float]              # the certificate: each row's dual weight, summing to 1
     short: dict[str, float]           # the share of words, and of each filler, left undone (Theorem S's deficit)
     forms: dict[str, float]           # the share of words on each MMA form's tensor route
+    folds: dict[str, float] = field(default_factory=dict)   # the share of words folded by each of the fold's routes
 
     def price(self, pi: Machine, n: dict[str, float]) -> float:
         """π·n: the certificate's price of n, in SMSP-cycles (n's L2 bytes are not counted: honest's aren't charged)."""
@@ -525,7 +551,7 @@ class Mix:
 def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: float | None, baseline: bool,
             fillers: tuple[tuple[Filler, float], ...] = (), cheat: bool = False,
             tensor_mma: dict[str, float] | None = None, budget: float = 0.0, table: Table | None = None,
-            forms: tuple[Form, ...] = ()) -> Mix:
+            forms: tuple[Form, ...] = (), fold_menu: bool = False) -> Mix:
     """The fastest mix over Π: min T over [T, w_tensor on forms[0], w_lanes, w_baseline, w_uniform, s_k (k in
     pi.cuda), a fold alone on lanes, a fold alone on the uniform datapath, each filler on lanes and on the uniform
     datapath, the words' shortfall, each filler's shortfall, w_table, w_tensor on each later form]. The routes write
@@ -535,7 +561,10 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     MMA (default honest's), its MMA on any of `forms` (default honest's own) at that form's instructions a word. q None
     closes the lane route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's
     baseline program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes
-    on an L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route."""
+    on an L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route. The cheater folds a
+    word on lanes by the design's fold or any of its `fold_routes`, in any mix (the words folded by each route, after
+    the rest: [z_j]), and alone on the uniform datapath at the least of their instruction counts; ♭ (`fold_menu`) folds
+    the same way by the built ones alone (`Design.built_routes`), and honest by the design's fold."""
     uni = UNI in pi.c
     if not uni:
         q_uniform = None
@@ -558,14 +587,18 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     fl = [{k: pw * v / sum(f.mix.values()) / LANES for k, v in f.mix.items()} for f, pw in fillers]
     S = list(pi.cuda)
     nf = len(fillers)
-    nv = 8 + len(S) + 3 * nf + len(forms)
+    menu = d.fold_routes if cheat else d.built_routes() if fold_menu else {}
+    fold_u = min((d.fold_cost(), *(sum(r.values()) for r in menu.values())))
+    nv0 = 8 + len(S) + 3 * nf + len(forms)
+    nv = nv0 + len(menu)
     iT, it, il, ib, iu, i_xv, i_xu = 0, 1, 2, 3, 4, 5 + len(S), 6 + len(S)
     fv = [7 + len(S) + 2 * j for j in range(nf)]
     fu = [8 + len(S) + 2 * j for j in range(nf)]
     i_dw = 7 + len(S) + 2 * nf
     df = [i_dw + 1 + j for j in range(nf)]
     i_tb = i_dw + 1 + nf
-    i_f = [it, *range(i_tb + 1, nv)]
+    i_f = [it, *range(i_tb + 1, nv0)]
+    iz = list(range(nv0, nv))
 
     def col(k: str) -> list[float]:
         a = [0.0] * nv
@@ -580,12 +613,17 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             if k == UNI:
                 a[fu[j]] = pw
         if k == UNI:
-            a[iu] = (q_uniform or 0.0) + d.fold_cost()
-            a[i_xu] = d.fold_cost()
+            a[iu] = (q_uniform or 0.0) + fold_u
+            a[i_xu] = fold_u
+        for i, r in zip(iz, menu.values()):                # a word folded by route j in place of the design's fold
+            a[i] = (r.get(k, 0.0) - d.fold.get(k, 0.0)) / LANES
         return a
 
-    cols = {k: col(k) for k in {k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
-            | {k for f in fl for k in f} | ({UNI} if uni else set())}
+    # Sorted: each facet's row sums the classes in this order, and in a set's (string-hash) order the last bits, and on a
+    # tie face the LP's vertex, would vary from one interpreter to the next.
+    cols = {k: col(k) for k in sorted({k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
+                                      | {k for f in fl for k in f} | ({UNI} if uni else set())
+                                      | {k for r in menu.values() for k in r})}
     missing = set(cols) - set(pi.c)
     if missing:
         raise SystemExit(f"{pi.vector}: no census line for {', '.join(sorted(missing))}")
@@ -613,6 +651,14 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
         a[df[j]] = 1 - f.p
     A_ub.append(a)                                        # Theorem S's budget, after the facets
     b_ub.append(budget)
+    if menu:
+        a = [0.0] * nv
+        for i in (*i_f, il, ib, i_tb, i_xv):
+            a[i] = -1.0
+        for i in iz:
+            a[i] = 1.0
+        A_ub.append(a)                                    # no more words on the fold's routes than are folded on lanes
+        b_ub.append(0.0)
     eq = [[0.0] * nv for _ in range(3 + nf)]
     for i in (*i_f, il, ib, iu, i_dw, i_tb):              # every word but the shortfall
         eq[0][i] = 1.0
@@ -656,7 +702,8 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
                                "table": x[i_tb]},
                filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(load, x[iT]), pi=lam,
                short={"words": x[i_dw], **{f"filler {j + 1}": x[df[j]] for j in range(nf)}},
-               forms={f.kind: x[i] for f, i in zip(forms, i_f) if x[i] > 1e-12})
+               forms={f.kind: x[i] for f, i in zip(forms, i_f) if x[i] > 1e-12},
+               folds={r: x[i] for r, i in zip(menu, iz) if x[i] > 1e-12})
 
 
 def budget(d: Design) -> float:
@@ -717,10 +764,12 @@ def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
 
 def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H",
           table: Table | None = None) -> Setup:
-    """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
-    the tensor route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no
-    overhead. `table` opens the cheater's table route, priced for the design's `index_bits`. The cheater writes on any
-    MMA form Π prices, honest on its own."""
+    """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (Corollary D3):
+    the tensor route at the noise's φ_del, the fold at the cheapest mix of the design's fold and its built
+    `fold_routes` on Π (the check reads the fold's result, not its program; a counted route is the cheater's alone),
+    the fillers on their own routes and the baseline program,
+    with no overhead. `table` opens the cheater's table route, priced for the design's `index_bits`. The cheater writes
+    on any MMA form Π prices, honest on its own."""
     table = d.table(table)
     h = honest(d.honest, data)
     fms = undominated(sorted((f for f in forms(data) if f.kind in pi.c), key=lambda f: f.kind != h.form), pi)
@@ -732,8 +781,9 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
         raise SystemExit("the floor program delivers operands at φ_del: --operands honest reads honest's credit only")
     tm = h.tensor("floor", d.floor) if credit == "floor" else None
     fs = tuple((f, float(f.per_word)) for f in d.filler)
-    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm)
-    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm)
+    fm = credit == "floor"
+    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm, fold_menu=fm)
+    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm, fold_menu=fm)
     return Setup(design=d, honest=h, machine=pi, operands=operands, credit=credit, fillers=fs, as_built=built,
                  baseline=base, table=table, forms=tuple(fms))
 
@@ -766,7 +816,7 @@ class Eps:
     deficit: float                   # d̄
     luck: float                      # (T_cheat − T_lucky)/T_baseline
     clock: float
-    adapt: Adapt | None = None       # the proof unit's ε_adapt; None charges none
+    adapt: Adapt | None = None       # the proof block's ε_adapt; None charges none
 
     @property
     def route(self) -> float:
@@ -781,18 +831,18 @@ class Eps:
     @property
     def credit_ratio(self) -> float:
         """Honest's time over the credited program's, the credit at f_max under the model and floor credits: the factor
-        by which ε_sched, ε_clock and honest's overhead leave ε for γ (SPEC's γ_♭)."""
+        by which ε_sched, ε_clock and honest's overhead leave ε for γ (γ_♭)."""
         r = self.T_honest / self.baseline.T
         return r if self.credit == "H" else r / (1 - self.design.clock.eps)
 
     def core(self, sched: bool = True) -> float:
         """ε with 100% checking, every word and operand verified, Corollary D3's: ε_skip, ε_mand, ε_machine, ε_luck
-        (each check one draw, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
+        (each check one sample, Theorem S at each block's own p) and the credit terms, with ε_adapt = 0."""
         s = (self.sched or 0.0) if sched else 0.0
         return 1 - (1 - self.skip - self.mand - self.machine_eps - self.luck) * (1 - s) * (1 - self.clock)
 
     def sample(self) -> float:
-        """ε_sample = ε_adapt, the sampling compiler's: the proof unit's and its selection rule's, 0 at 100% sampling.
+        """ε_sample = ε_adapt, the sampling compiler's: the proof block's and its selection rule's, 0 at 100% sampling.
         It is reported beside `core`, never inside it."""
         return self.adapt.eps if self.adapt else 0.0
 
@@ -811,7 +861,7 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
         lanes: bool | None = None, uniform: bool | None = None, q_uniform: float | None = None,
         table: Table | None = None, adapt: Adapt | None = None) -> Eps:
     """Under the model and floor credits ε_sched and ε_clock leave ε (honest's time above the credit is in γ,
-    `credit_ratio`). `table` opens the cheater's table route; `adapt` charges a proof unit's ε_adapt."""
+    `credit_ratio`). `table` opens the cheater's table route; `adapt` charges a proof block's ε_adapt."""
     s = setup(d, pi, data, operands, credit, table)
     run = replace(d, filler=tuple(replace(f, p=0.0) for f in d.filler))   # honest runs every filler, credited or not
     hs = setup(run, pi, data, "free") if credit == "floor" or any(f.p >= 1 for f in d.filler) else s

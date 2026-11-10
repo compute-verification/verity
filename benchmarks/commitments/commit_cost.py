@@ -10,11 +10,8 @@ Schemes (``--scheme``, repeatable, or ``all``):
                         tree = domain-, level- and index-bound nodes, padded to a power of two
     frame-v3-sha256-row the same tree over ``sha256/row/v1`` row leaves (the value is one row of 16-bit words)
     frame-v3-blake3-row the same tree over ``blake3-keyed/row/v2`` row leaves (plain-Python BLAKE3: slow by design)
-    vllm-v1             ``verity.ml.commitments.vllm_v1``: leaf = ``pos_leaf(value)`` (the host path), tree = node/lift,
-                        no padding, root bound by the step root
     frame-v3-sha512     frame-v3 word leaves through SHA-512 (64-byte domain id, leaves, pads, nodes and root)
     frame-v3-sha512-row the SHA-512 frame over ``sha512/row/v1`` row leaves
-    vllm-v1-sha512      vllm-v1 through SHA-512: the SHA-512 position leaf, node/lift and step root
 
 Every scheme runs through ``CommitmentScheme``: the leaf phase is ``leaf_layout(...).digest(value)`` then
 ``tree_leaf`` (what a prover's digest plus the verifier's native step cost together), the tree phase is ``root``.
@@ -36,19 +33,17 @@ import os
 import statistics
 import sys
 import time
-from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.ml.commitments import vllm_v1
 from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import ROLE_X
 from verity.ml.commitments.scheme import CommitmentScheme
 
-SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "vllm-v1", "frame-v3-sha512", "frame-v3-sha512-row", "vllm-v1-sha512")
-DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row", "vllm-v1")
+SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "frame-v3-sha512", "frame-v3-sha512-row")
+DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row")
 RESULT_SCHEMA = "research/result/v0.1"
 
 
@@ -71,8 +66,6 @@ def setup(scheme: str, n: int, nbytes: int) -> CommitmentScheme:
         if nbytes % 2 or not nbytes:
             raise ValueError("row leaves need a positive even --leaf-bytes (16-bit words)")
         return FrameV3({"v": Port(domain, RowLeaf(scheme.split("-")[2], ROLE_X, 16, nbytes // 2))})
-    if scheme in ("vllm-v1", "vllm-v1-sha512"):
-        return vllm_v1.VllmV1({"v": vllm_v1.StepDomain(digest, digest, digest, digest, n, hash=frame)}, value_nbytes={"v": lambda _i: nbytes})
     raise ValueError(f"unknown scheme {scheme!r}; known: {', '.join(SCHEMES)}")
 
 
@@ -107,11 +100,6 @@ def measurements(row: dict[str, Any]) -> list[dict[str, Any]]:
         {"name": f"{key}.leaves_per_s", "value": row["leaves"] / total if total else None, "unit": "leaf/s"},
         {"name": f"{key}.bytes_per_s", "value": row["leaves"] * row["leaf_bytes"] / total if total else None, "unit": "B/s"},
     ]
-    if "h2d_s" in row:
-        with_copy = row["commit_h2d_s"]
-        out += [{"name": f"{key}.h2d_s", "value": row["h2d_s"], "unit": "s"},
-                {"name": f"{key}.commit_h2d_s", "value": with_copy, "unit": "s"},
-                {"name": f"{key}.bytes_per_s_h2d", "value": row["leaves"] * row["leaf_bytes"] / with_copy if with_copy else None, "unit": "B/s"}]
     return out
 
 
@@ -121,8 +109,6 @@ def parse(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--leaves", type=int, default=1 << 16)
     ap.add_argument("--leaf-bytes", type=int, default=256)
     ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--impl", choices=("python", "gpu"), default="python",
-                    help="python = the plain references; gpu = the CUDA committer (commit_cost_gpu.py), roots checked against them")
     ap.add_argument("--out", default=None, help="directory for result.json (default $RESEARCH_RUN_DIR)")
     ns = ap.parse_args(argv)
     if ns.leaves <= 0 or ns.leaf_bytes < 0 or ns.reps <= 0:
@@ -134,15 +120,9 @@ def parse(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     ns = parse(sys.argv[1:] if argv is None else argv)
     started = time.perf_counter()
-    if ns.impl == "gpu":
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        import commit_cost_gpu
-        rows = [commit_cost_gpu.measure(s, ns.leaves, ns.leaf_bytes, ns.reps, setup) for s in ns.schemes]
-    else:
-        rows = [measure(s, ns.leaves, ns.leaf_bytes, ns.reps) for s in ns.schemes]
+    rows = [measure(s, ns.leaves, ns.leaf_bytes, ns.reps) for s in ns.schemes]
     for row in rows:
-        print(json.dumps({k: row[k] for k in ("scheme", "leaves", "leaf_bytes", "leaf_s", "tree_s", "commit_s", "h2d_s", "opening_verified")
-                          if k in row}))
+        print(json.dumps({k: row[k] for k in ("scheme", "leaves", "leaf_bytes", "leaf_s", "tree_s", "commit_s", "opening_verified")}))
     out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
     if out:
         d = Path(out)
@@ -155,12 +135,9 @@ def main(argv: list[str] | None = None) -> int:
             "kind": "bench-result/v1",
             "workload_fingerprint": {"workload": "commit_cost", "schemes": [r["scheme"] for r in rows], "leaves": ns.leaves,
                                      "leaf_bytes": ns.leaf_bytes, "reps": ns.reps,
-                                     "implementation": "python-reference" if ns.impl == "python" else "gpu-cuda hash_gpu.frame_v3",
-                                     **({"device": rows[0]["device"]} if ns.impl == "gpu" and rows else {}),
-                                     "python": sys.version.split()[0]},
+                                     "implementation": "python-reference", "python": sys.version.split()[0]},
             "validation": {"status": "passed" if ok else "failed",
-                           "checker": "one opening per scheme through verify_path" + (
-                               "; every rep's root equal to the plain reference root, the leaves too" if ns.impl == "gpu" else ""),
+                           "checker": "one opening per scheme through verify_path",
                            "detail": ", ".join(f"{r['scheme']}={'ok' if r['opening_verified'] else 'FAILED'}" for r in rows), "evidence": []},
             "measurements": [m for r in rows for m in measurements(r)] + [{"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"}],
             "measurement_files": ["commit_cost.json"],

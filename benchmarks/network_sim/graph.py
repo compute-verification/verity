@@ -1,14 +1,14 @@
 """The two exports a datacenter's network needs: the plan of Linux network namespaces that `mockdc.py` stands up, and
 Shadow's network graph.
 
-They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Block`s, fabric
-`Device`s and `Link`s, in bits, seconds and bits per second, every capacity a named `Assumption` with its source). The
+They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Zone`s, fabric
+`DeviceEntry`s and `LinkEntry`s, in bits, seconds and bit/s, every capacity a named `Assumption` with its source). The
 declarations themselves, the measured node and the leaf-spine datacenter of them among them, are
-`datacenter.examples`'s; the tests pin their values against `verity.core.protocols.remote_bandwidth.timing` and the
-census. Each block is one node, standing in for the whole block, each fabric device is another, and the links between
-two nodes are the network.
+`datacenter.examples`'s, the node's constants read from `verity.core.protocols.remote_bandwidth.timing`. Each block is
+one node, standing in for the whole block, each fabric device is another, and the links between two nodes are the
+network.
 
-    python graph.py --blocks 2 (--json | --netns | --gml)
+    python graph.py --blocks 2 [--fleet] (--json | --netns | --gml)
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 
-from datacenter import Datacenter, Link  # noqa: E402
-from datacenter.examples import leaf_spine  # noqa: E402
+from datacenter import Datacenter, LinkEntry  # noqa: E402
+from datacenter.examples import leaf_spine, two_sites  # noqa: E402
 
 NETNS_PREFIX = "na-"
 
@@ -39,11 +39,11 @@ def check(dc: Datacenter) -> Datacenter:
     return dc
 
 
-def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[Link, str, str]]]:
+def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[LinkEntry, str, str]]]:
     """The network the exports stand up: each node's role (`block`, or a fabric device's kind) and each link between
     two nodes, with the node at each end."""
     def node(x: str) -> str:
-        b = dc.block_of(x)
+        b = dc.zone_of(x)
         return b.name if b else x
 
     roles = {b.name: "block" for b in dc.blocks} | {d.name: d.kind for d in dc.fabric}
@@ -53,6 +53,10 @@ def network(dc: Datacenter) -> tuple[dict[str, str], list[tuple[Link, str, str]]
 
 def netns_name(node: str) -> str:
     return NETNS_PREFIX + node.replace(".", "-")
+
+
+def jitter_of(e: LinkEntry, jitter: float, wan_jitter: float | None) -> float:
+    return wan_jitter if e.kind == "wan" and wan_jitter is not None else jitter
 
 
 @dataclass(frozen=True)
@@ -145,23 +149,25 @@ def _us(seconds: float) -> str:
     return f"{round(seconds * 1e6, 3):g}us"
 
 
-def _netem(e: Link, jitter: float) -> tuple[str, ...]:
+def _netem(e: LinkEntry, jitter: float) -> tuple[str, ...]:
     out = ["delay", _us(e.delay)] + ([_us(jitter)] if jitter else [])
     if math.isfinite(float(e.capacity)):
         out += ["rate", f"{int(float(e.capacity))}bit"]
     return tuple(out)
 
 
-def netns_plan(dc: Datacenter, jitter: float = 0.0, base: str = "10.77.0.0") -> NetnsPlan:
+def netns_plan(dc: Datacenter, jitter: float = 0.0, base: str = "10.77.0.0",
+               wan_jitter: float | None = None) -> NetnsPlan:
     """The netns plan of `dc`: each link between two nodes a /30 from `base` in link order, its first end's address the
-    lower; netem on each link between two fabric devices, with its latency, `jitter` seconds of delay jitter, and its
-    capacity when finite. A switch routes every other switch-reachable subnet via the first hop of a shortest path
-    through switches; a block routes by default via its certifier, and any other fabric device via its switch. A block
-    whose link ends anywhere but at a certifier is refused."""
+    lower; netem on each link between two fabric devices, with its latency, `jitter` seconds of delay jitter
+    (`wan_jitter` on a WAN link, when given), and its capacity when finite. A switch routes every other
+    switch-reachable subnet via the first hop of a shortest path through switches; a block routes by default via its
+    certifier, and any other fabric device via its switch. A block whose link ends anywhere but at a certifier is
+    refused."""
     check(dc)
     roles, links = network(dc)
     start = ipaddress.IPv4Address(base)
-    ifaces: dict[str, list[tuple[str, str, str, str, Link, int]]] = {x: [] for x in roles}
+    ifaces: dict[str, list[tuple[str, str, str, str, LinkEntry, int]]] = {x: [] for x in roles}
     for n, (e, a, b) in enumerate(links):
         if "block" in (roles[a], roles[b]) and "certifier" not in (roles[a], roles[b]):
             raise ValueError(f"the link {e.a}-{e.b} leaves block {a if roles[a] == 'block' else b} past its certifier")
@@ -200,16 +206,16 @@ def netns_plan(dc: Datacenter, jitter: float = 0.0, base: str = "10.77.0.0") -> 
             if ups:
                 routes.append(("default", addr[ups[0]]))
         interfaces = tuple(Interface(name, address, (e.a, e.b), (netns_name(peer), pname),
-                                     _netem(e, jitter) if n in fabric else ())
+                                     _netem(e, jitter_of(e, jitter, wan_jitter)) if n in fabric else ())
                            for name, address, peer, pname, e, n in ifaces[x])
         namespaces.append(Namespace(netns_name(x), x, roles[x], roles[x] == "switch", interfaces, tuple(routes)))
     return NetnsPlan(tuple(namespaces))
 
 
-def shadow_gml(dc: Datacenter, jitter: float = 0.0) -> str:
+def shadow_gml(dc: Datacenter, jitter: float = 0.0, wan_jitter: float | None = None) -> str:
     """Shadow's network graph (GML): a node per network node, its host bandwidth its links' capacity each way (none
-    when one is infinite), and an edge per link with its latency and `jitter`. Shadow limits bandwidth per host, not per
-    edge."""
+    when one is infinite), and an edge per link with its latency and `jitter` (`wan_jitter` on a WAN link, when given).
+    Shadow limits bandwidth per host, not per edge."""
     check(dc)
     roles, links = network(dc)
     ids = {x: i for i, x in enumerate(roles)}
@@ -222,7 +228,8 @@ def shadow_gml(dc: Datacenter, jitter: float = 0.0) -> str:
         lines.append("  ]")
     for e, a, b in links:
         lines += ["  edge [", f"    source {ids[a]}", f"    target {ids[b]}", f'    label "{e.a}-{e.b}"',
-                  f'    latency "{round(e.delay * 1e9)} ns"', f'    jitter "{round(jitter * 1e9)} ns"',
+                  f'    latency "{round(e.delay * 1e9)} ns"',
+                  f'    jitter "{round(jitter_of(e, jitter, wan_jitter) * 1e9)} ns"',
                   "    packet_loss 0.0", "  ]"]
     lines.append("]")
     return "\n".join(lines) + "\n"
@@ -234,12 +241,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--leaves", type=int, default=1)
     ap.add_argument("--spines", type=int, default=0)
     ap.add_argument("--outside", type=int, default=1, help="hosts outside every block, ext0, ext1, …")
+    ap.add_argument("--fleet", action="store_true", help="datacenter.examples.two_sites' fleet, merged, with --blocks, "
+                    "--leaves and --spines a site's (its one outside host on the west site)")
     out = ap.add_mutually_exclusive_group(required=True)
     out.add_argument("--json", action="store_true", help="the declaration (datacenter.examples.leaf_spine's)")
     out.add_argument("--netns", action="store_true", help="the netns plan's commands, one per line")
     out.add_argument("--gml", action="store_true", help="Shadow's network graph")
     args = ap.parse_args(argv)
-    dc = check(leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines,
+    dc = check(two_sites(args.blocks, leaves=args.leaves, spines=args.spines).merged() if args.fleet else
+               leaf_spine(args.blocks, leaves=args.leaves, spines=args.spines,
                           outside=tuple(f"ext{c}" for c in range(args.outside))))
     if args.json:
         print(json.dumps(dataclasses.asdict(dc), indent=1))

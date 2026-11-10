@@ -1,8 +1,8 @@
 """A MoE block's Values inside its body are committed as its `moe_block_stream` planes and are no module member, under Q_word as under
 Q_module_body.  S1 kept them out of `interior` (so no `call_boundaries`) but left them required, so each became a member of the body's `out`:
 the router's, the expert Gemms', the act and down rows' Values all claimed `<experts>/out`, the block's real output (MoeSum's, or on a rank
-Program its AllReduce's) was dropped as a "second producer", and the manifest was incomplete.  On #75 (TP2 qwen3-30b-a3b) every rank-0
-partial of the dropped all-reduce outputs was left without its peer's collective output: 12,480 unbound bindings."""
+Program its AllReduce's) was dropped as a "second producer", and the manifest was incomplete: on a TP2 qwen3-30b-a3b workload every
+rank-0 partial of the dropped all-reduce outputs was left without its peer's collective output."""
 from __future__ import annotations
 
 import json

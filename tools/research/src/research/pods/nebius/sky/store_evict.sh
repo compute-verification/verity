@@ -8,17 +8,17 @@
 # With $VY_EVICT_SRC (research's unit, store_evict_src.conf: /workspace/research/src) it also deletes the `research run` source
 # trees there recoverable on the node (a ref of $VY_EVICT_ORIGIN, default <root>/git/verity.git) that nothing uses, every hour whatever the mark
 # (`--src-dir`, store/evict.py `evict_src`); the line says how many went and why the rest stayed, and a pass that could not
-# establish its conditions fails the unit (another pass holding the lock does not): a root unit on cpu-2 and cpu-3 deleted
-# nothing for hours while it reported success, until cpu-2 ran out of inodes (16 Oct, INF-40). Research's unit runs on
+# establish its conditions fails the unit (another pass holding the lock does not), so a unit that deletes nothing never reports
+# success while its node runs out of inodes. Research's unit runs on
 # every node every 30 minutes (store_evict_research.{service,timer}); vy-nebius-cpu-1 runs only that one.
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
-# The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it
-# (rec-coins, 11 Oct). Every artifact in `fixtures/artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
+# The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it.
+# Every artifact in `fixtures/artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
 # of $VY_EVICT_GIT (each tree `research run` shipped here) keeps its blobs (`--keep-registry`). When no registry can be read, or the
 # tool has no --keep-registry, no store blob (and no run file) is evicted, and the line says why.
 # With $VY_EVICT_PYCACHE (research's unit: its PYTHONPYCACHEPREFIX, /workspace/research/cache/pycache) it also removes every directory
-# there whose source directory is gone (an evicted source tree, a uv build env, a run's scratch), which nothing else prunes: 1.45M
-# dead files took node 1 to 63.5% inodes on 11 Oct. Only a definite ENOENT removes one; a source it can't stat stays.
+# there whose source directory is gone (an evicted source tree, a uv build env, a run's scratch), which nothing else prunes and
+# whose dead files would otherwise take a node's inodes by the million. Only a definite ENOENT removes one; a source it can't stat stays.
 #   VY_RESEARCH_TOOL: the research tool to run (default the newest snapshot under /workspace/research/tool).
 set -uo pipefail
 FREE=${VY_EVICT_FREE_GB:-2500}
@@ -34,6 +34,8 @@ if [ -z "$TOOL" ] || [ ! -d "$TOOL/research" ]; then
   exit 1
 fi
 args=(--target-free-gb "$FREE" --runs --runs-dir "$RUNS")
+# a node's runs are collected from its custody upload, so its window stays 30 min (the tool's default is a day, for agent VMs)
+grep -q -- '"--quiet-min"' "$TOOL/research/store/cli.py" 2> /dev/null && args+=(--quiet-min 30)
 srcnote=
 if [ -n "$SRCDIR" ] && grep -q -- '"--src-dir"' "$TOOL/research/store/cli.py" 2> /dev/null; then
   args+=(--src-dir "$SRCDIR")

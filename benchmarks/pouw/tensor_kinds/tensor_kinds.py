@@ -1,5 +1,7 @@
-"""M1 of EPS1 TENSOR: fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_89 with
-TK_ARCH=89: there each form also has an alone4 point, and JI3e, sm_120's rows, isn't loaded).
+"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_89 with
+TK_ARCH=89 or sm_100 with TK_ARCH=100: there each form also has an alone4 point, and JI3e, sm_120's rows, isn't
+loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
+SMSP-cycles a MMA and the lane warps' instructions a SMSP-cycle, each over its own time.
 
     python tensor_kinds.py OUT_DIR            # reads OUT_DIR/tensor_kinds.jsonl and OUT_DIR/sass/tensor_kinds.sass
     python tensor_kinds.py refit OUT_DIR...   # VF3n-16's JI3n rows from every program of these runs, as JSON
@@ -40,13 +42,13 @@ NOISE = 0.02
 LANE_MIN = 0.9
 LANES = ("iadd3", "ffma", "iadd3_ffma")
 MIXED_LANE = "iadd3_ffma"
-#: VF3e's joint issue rows (note:20261016T0751Z-draft-rs-vf3e) as the machine model's census holds them, fitted beside
+#: VF3e's joint issue rows as the machine model's census holds them, fitted beside
 #: IMMA s8 m16n8k32 and OMMA: SMSP-cycles a MMA and a other instruction. Every program of every form must load each at
 #: most 1 - NOISE.
 JI3E = {"JI3e_0": (8.115163161, 1.0), "JI3e_1": (4510.17215313632 / 300.08, 0.317063107),
         "JI3e_2": (4662.85212194032 / 300.08, 0.171692378)}
 #: The schedule spread `refit` covers: one program's time varied up to 6.91% between builds (M1, programs within 5% of a
-#: JI3e facet: r20261017-040022-5e4d against r20261017-041103-d35d and r20261017-041754-7630).
+#: JI3e facet, across three builds).
 SCHED = 1.07
 #: Each form's kind in the machine model (VF3n-16): one a SASS form.
 KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imma_s8_m16n8k32_sat": "IMMA16832",
@@ -193,6 +195,8 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
     groups = {r.get("group", -1) for r in done}
     if arch == 89 and done and groups != {0, 1, 2, 3}:
         fails.append(f"sm_89: groups {sorted(groups)} finished, want 0-3")
+    if arch == 100 and done and 0 not in groups:
+        fails.append(f"sm_100: groups {sorted(groups)} finished, want 0 (int8)")
     sass = parse_sass((out / "sass" / "tensor_kinds.sass").read_text())
     kl = {}
     for fn, body in sass.items():
@@ -241,15 +245,20 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
                          f"want >= {R}")
         it, w = r["iters"], MMA_WARPS[base]
         n_mma, n_other = w * it * PTX_MMAS[base], w * it * ml["other"]
+        exact = {}
         if base == "spec":
-            n_other += 2 * it * op_loops[0]["other"]
+            n_lane = 2 * it * op_loops[0]["other"]
+            n_other += n_lane
+            # each role over its own warps' cycles (runs that record them): the exact co-run point
+            if r.get("mma_cyc_med") and r.get("op_cyc_med"):
+                exact = {"mma_cycles_per_mma": r["mma_cyc_med"] / n_mma, "lane_per_smsp_cycle": n_lane / r["op_cyc_med"]}
         T = r["cyc_med"]
         if num_sms and r["distinct_sms"] != num_sms:
             fails.append(f"{key}: blocks on {r['distinct_sms']} of {num_sms} SMs")
         by_form[form].append({
             "mode": mode, "R": R, "ops_per_mma": n_other / n_mma, "cycles_per_mma": T / n_mma,
             "a_bound": (T - n_other) / n_mma, "sass_mma_per_ptx": sass_per_ptx, "mma_ops": ml["mma_ops"],
-            "slots": r["slots"], "macs": r["macs"], "mhz": r["mhz"],
+            "slots": r["slots"], "macs": r["macs"], "mhz": r["mhz"], **exact,
         })
     summary = {}
     for form, pts in by_form.items():

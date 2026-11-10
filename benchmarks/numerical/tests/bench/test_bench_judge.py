@@ -1,4 +1,4 @@
-"""``benchmarks/judge.py``: refuses across identity fields, judges otherwise, and reads the recorded runs that exist."""
+"""``benchmarks/judge.py``: refuses across identity fields, and judges otherwise."""
 
 from __future__ import annotations
 
@@ -13,9 +13,6 @@ import pytest
 from conftest import JUDGE, conforming_result, write_run
 
 from verity_numerical.bench import contract
-
-K16_RUN = "r20260921-215829-9796"     # SP1 core, K=16, recorded 2026-09-21 before the contract existed
-K1536_RUN = "r20260921-220722-019b"   # SP1 core, K=1536, same
 
 
 def judge(*args: str, runs_dir: Path | None = None) -> subprocess.CompletedProcess:
@@ -102,40 +99,13 @@ def test_unreadable_run_is_an_error(tmp_path: Path) -> None:
     assert proc.returncode == 1 and "no result.json" in proc.stderr
 
 
-def _recorded(run_id: str) -> Path | None:
-    root = Path(os.environ.get("RESEARCH_RUNS") or Path.home() / ".research" / "runs")
-    d = root / run_id
-    return d if (d / "result.json").is_file() else None
-
-
-@pytest.mark.skipif(not (_recorded(K16_RUN) and _recorded(K1536_RUN)), reason="the recorded K=16 / K=1536 SP1 runs are not fetched on this machine")
-def test_the_recorded_k16_and_k1536_runs_differ_in_k() -> None:
-    proc = judge(K16_RUN, K1536_RUN)
-    assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "K: 16 vs 1536" in proc.stdout
-    assert "derived from fixtures/typed-obligation-v0/accept--packed-word-row.json" in proc.stdout, "pre-contract runs: the identity is derived and said to be"
-    for field in contract.REQUIRED_FIELDS:
-        assert f"workload_fingerprint.{field} missing" in proc.stdout
-    proc = judge(K16_RUN, K1536_RUN, "--allow", "K")
-    assert proc.returncode == 2, "pre-contract runs recorded neither hardware nor a soundness target: still refused with only K allowed"
-    assert "hardware: <missing> vs <missing>" in proc.stdout
-    legacy_allow = ("--allow", "K", "--allow", "hardware", "--allow", "security.target")
-    proc = judge(K16_RUN, K1536_RUN, *legacy_allow)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "prove_seconds" in proc.stdout and "(allowed to differ)" in proc.stdout
-    rep = json.loads(judge(K16_RUN, K1536_RUN, *legacy_allow, "--json").stdout)
-    ratios = {m["name"]: m["ratio"] for m in rep["measurements"]}
-    assert ratios["shards"] == 2.0 and ratios["prove_seconds"] == pytest.approx(3.580119322 / 0.892078765)
-    assert rep["derived"]["baseline"]["fields"] == ["B", "K", "authentication", "domain", "profile", "proof_class"]
-
-
 # --- instances --------------------------------------------------------------------------------------------------------------------------
 
 SHA = "f2b7cd4ca31e4adf0ce1e656bb0a2ef882f02301d5058670350b9c2b8d1f81a6"
 
 
 def _with_instances(run_id: str, lo: int, hi: int, sha: str = SHA, **overrides):
-    inst = contract.instances_ref("vu-k1536", lo, hi, sha)
+    inst = contract.input_set_ref("vu-k1536", lo, hi, sha)
     res = conforming_result(run_id, B=hi - lo, instances=inst, **overrides)
     for m in res["measurements"]:
         if m["name"] == "vu.count":

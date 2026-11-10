@@ -1,7 +1,9 @@
 """GLM-5.3's dense MHA prefill (`run_prefill_new_tokens`, FA3 at qk head 256 = 192 nope + 64 rope, v head 256, 8 heads a rank on 8 x H200):
-the 128 x 80 tile in the target's rule and the twin's, the row binding `Attention_v4{..., D=256, BN=80}`, the two twins and the
+the 128 x 80 tile in the target's rule, the row binding `Attention_v4{..., D=256, BN=80}`, the two twins and the
 Definition word for word, the kernel's fully-masked leading blocks, and which launches the served split heuristic splits."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import json
 from pathlib import Path
@@ -13,10 +15,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa2_relation, fa3_model
-from verity_vllm.program.registry import attention_vocab, b1, hopper
-from verity_vllm.program.registry import fa3_check_inf as F3
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fa2_relation, fa3_model
+from verity.ml.definitions.registry import attention_vocab, b1, hopper
+from verity.ml.definitions.registry import fa3_check_inf as F3
 
 CMAP = Path(__file__).resolve().parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -33,20 +35,14 @@ def _profile(**kw) -> TargetProfile:
     return TargetProfile.from_json(dict(json.loads(CMAP.read_text())["target"]["profile"], **kw))
 
 
-def test_hdim_256_runs_the_128_by_80_tile_in_both_rules():
+def test_hdim_256_runs_the_128_by_80_tile():
     """`tile_size_fwd_sm90` at headdim > 192, bf16, not local: {128, 80}, whatever seqlen_q (no one-MMA-warpgroup branch above 128) or
-    paging.  The twin's rule is the target's at every registered head dim; 192 (DeepSeek's MLA prefill, v 128) stays refused."""
+    paging; 192 (DeepSeek's MLA prefill, v 128) stays refused."""
     for sq in (1, 16, 64, 65, 512, 4096):
         for g in (1, 4):
-            assert TG.fa3_kblock_n(D, sq, g) == fa3_model.kblock_n_for(D, sq, g) == BN
-            assert TG.fa3_tile_m(D, sq, g) == fa3_model.kblock_m_for(D, sq, g) == BM
-            for d in (64, 128):
-                assert TG.fa3_kblock_n(d, sq, g) == fa3_model.kblock_n_for(d, sq, g)
-                assert TG.fa3_tile_m(d, sq, g) == fa3_model.kblock_m_for(d, sq, g)
+            assert (TG.fa3_kblock_n(D, sq, g), TG.fa3_tile_m(D, sq, g)) == (BN, BM)
     with pytest.raises(TG.UnregisteredTarget, match="head dim 192"):
         TG.fa3_kblock_n(192, 512, 1)
-    with pytest.raises(ValueError, match="head dim 192"):
-        fa3_model.kblock_n_for(192, 512, 1)
 
 
 @pytest.mark.parametrize("row", [0, 79, 80, 127, 128, 255, 256, 299])
@@ -131,10 +127,26 @@ def test_the_twin_refuses_a_tile_hdim_256_does_not_run():
 def test_the_served_split_heuristic_at_glm53_per_rank(lengths, static, expected):
     """vLLM passes `num_splits = 0` to the MLA prefill outside batch invariance (which GLM-5.3 refuses on sm_90): `get_num_splits`'
     static bound, then the prepare kernel's per-sequence count.  Per rank (8 heads, 132 SMs) launches whose longest sequence has
-    321..1664 tokens run the Split mainloop and `FlashAttnFwdCombine` (outside the model; a sequence counted 1 is written directly);
+    321..1664 tokens run the Split mainloop and `FlashAttnFwdCombine` (`registry.fa3_split`; a sequence counted 1 is written directly);
     993 sequences or more never do."""
     assert fa3_model.split_plan(lengths, NH, KVH, D, num_sms=132) == (static, expected)
     assert fa3_model.num_splits(lengths, NH, KVH, D, num_sms=132) == expected
+
+
+@pytest.mark.parametrize("rows,keys,static,expected", [
+    ([300], [1500], 5, [5]), ([1600], [448], 5, [1]), ([600, 1000], [700, 1000], 2, [1, 2]),
+    ([257, 300, 400, 500], [1, 79, 80, 81], 1, [1, 1, 1, 1]), ([340], [1200], 5, [5]), ([257], [1791], 5, [5]),
+])
+def test_the_context_launchs_split_plan_counts_its_keys(rows, keys, static, expected):
+    """A dense prefill's context launch (`run_prefill_context_chunk`) is FA3 non-causal over each sequence's context keys: the
+    static bound's n-blocks and per-head KV bytes count the longest context, the m-blocks the longest query, and each sequence
+    splits by its own keys.  The causal plan of the same rows is unchanged, and a non-causal launch off head 256 refused."""
+    assert fa3_model.split_plan(rows, NH, KVH, D, num_sms=132, seqlens_k=keys) == (static, expected)
+    assert fa3_model.split_plan([300, 1200], NH, KVH, D, num_sms=132) == (3, [1, 2])
+    with pytest.raises(ValueError, match="a non-causal launch at head dim 128"):
+        fa3_model.split_plan(rows, NH, KVH, 128, num_sms=132, seqlens_k=keys)
+    with pytest.raises(ValueError, match="2 sequences' query rows, 1 sequences' keys"):
+        fa3_model.split_plan([1, 2], NH, KVH, D, num_sms=132, seqlens_k=[3])
 
 
 def test_the_devices_split_quotient_is_the_exact_one_at_glm53_per_rank():

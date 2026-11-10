@@ -12,7 +12,7 @@
 //! compression's: `eq_inner` over 18 bits is a tensor of 4 sub-block bits and 14 in-block bits, so the fold is the
 //! compression circuit's fold, scaled per sub-block, plus the sparse Δ.
 //!
-//! Endpoints are public-value claims, each opened at two points drawn after the commitment: the key (the first
+//! Endpoints are public-value claims, each opened at two points sampled after the commitment: the key (the first
 //! sub-block's chaining input), the counter (every sub-block's 64 counter bits) and the chunk's output chaining value
 //! (the last sub-block's `out_lo`). The verifier knows the key and counter of every chunk and checks the chaining
 //! values, which the prover sends in `Commit`, natively against the leaf digests. Messages are linked: the linked

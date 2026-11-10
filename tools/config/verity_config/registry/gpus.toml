@@ -7,8 +7,6 @@ nvidia_smi_name = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 nebius_platform = ""
 nebius_preset = ""
 runpod_type_id = "NVIDIA RTX PRO 6000"
-memory_bytes = 103079215104
-spec_bandwidth_bytes_per_second = 1597000000000
 count_per_node = 8
 
 [[gpu]]
@@ -18,6 +16,14 @@ nvidia_smi_name = "NVIDIA H200"
 nebius_platform = "gpu-h200-sxm"
 nebius_preset = ""
 runpod_type_id = "NVIDIA H200"
-memory_bytes = 151397597184
-spec_bandwidth_bytes_per_second = 4800000000000
+count_per_node = 8
+
+# vy-dc-b200's GPUs
+[[gpu]]
+id = "b200"
+census_id = ""
+nvidia_smi_name = "NVIDIA B200"
+nebius_platform = ""
+nebius_preset = ""
+runpod_type_id = ""
 count_per_node = 8

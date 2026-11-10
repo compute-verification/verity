@@ -26,12 +26,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.ml.circuits.codec import _spec_id
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
 from verity.ml.circuits.defs import bind as ir_bind
 from verity.ml.circuits.refs import Affine, Refs, concat
 from verity.ml.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
@@ -62,8 +62,8 @@ def _translate(refs: Refs, env: dict[tuple[str, int], Refs]) -> Refs:
 def node_leaf_id(node) -> str:
     """The matching id of a leaf node: the callee's descriptor id, and for `batch` nodes also the axes and the count."""
     if node.form == "batch":
-        return f"batch[{_spec_id(node.fn)}|axes={','.join('-' if a is None else str(a) for a in node.axes)}|n={node.n}]"
-    return _spec_id(node.fn)
+        return f"batch[{descriptor_id(node.fn)}|axes={','.join('-' if a is None else str(a) for a in node.axes)}|n={node.n}]"
+    return descriptor_id(node.fn)
 
 
 def expand_leaves(spec: SpecializedDefinition, leaf_bases: set[str]) -> tuple[list[_Leaf], Refs, tuple[tuple[str, Type], ...], Type]:
@@ -87,7 +87,7 @@ def expand_leaves(spec: SpecializedDefinition, leaf_bases: set[str]) -> tuple[li
                 leaves.append(_Leaf(node_leaf_id(node), targs, node.out.leaves, f"{path}/{node.name or k}"))
                 env[("n", k)] = Affine("x", j, 0, node.out.leaves)
             else:
-                raise _NoMatch(f"the family body has a {node.form} node of {_spec_id(fn)} above leaf granularity at {path}")
+                raise _NoMatch(f"the family body has a {node.form} node of {descriptor_id(fn)} above leaf granularity at {path}")
         return _translate(body.ret, env)
 
     root_args = [Affine("q", i, 0, t.leaves) for i, (_, t) in enumerate(params)]
@@ -154,7 +154,7 @@ class _IntervalMap:
 
 def _field_intervals(t: Type, prefix: str, base: int = 0) -> list[tuple[int, int, str]]:
     """Leaf-typed fields of a (nested) record type as (lo, hi, name)."""
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         out, off = [], base
         for k, ft in t.fields:
             out += _field_intervals(ft, f"{prefix}.{k}" if prefix else k, off)
@@ -166,7 +166,7 @@ def _field_intervals(t: Type, prefix: str, base: int = 0) -> list[tuple[int, int
             out += _field_intervals(ft, f"{prefix}.{i}", off)
             off += ft.leaves
         return out
-    if isinstance(t, Array) and isinstance(t.elem, (Record, TupleT)):
+    if isinstance(t, Array) and isinstance(t.elem, (RecordType, TupleT)):
         out, off = [], base
         for i in range(t.n):
             out += _field_intervals(t.elem, f"{prefix}[{i}]", off)
@@ -229,7 +229,7 @@ def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param
             raise _NoMatch(f"return type differs: family {pret_t!r} vs derived {flat.ret_type!r}")
         if len(leaves) != len(flat.nodes) and not (allow_extra and len(flat.nodes) > len(leaves)):
             rep["family_leaf_ids"] = _histogram(l.id for l in leaves)
-            rep["flat_node_ids"] = _histogram(_spec_id(n.fn) for n in flat.nodes)
+            rep["flat_node_ids"] = _histogram(descriptor_id(n.fn) for n in flat.nodes)
             raise _NoMatch(f"leaf counts differ: family {len(leaves)} vs derived {len(flat.nodes)}")
 
         flat_runs = [[_runs(a.refs) for a in n.args] for n in flat.nodes]
@@ -468,7 +468,7 @@ def _module_name(ctx, field_name: str) -> str:
 # the registered families of the vLLM eager profile
 # ---------------------------------------------------------------------------------------------------------
 
-from verity_vllm.program.registry import b1 as _b1  # noqa: E402
+from verity.ml.definitions.registry import b1 as _b1  # noqa: E402
 
 
 def _serve_binder(flat_sd, ctx):
@@ -512,16 +512,16 @@ def _serve_v3_binder(flat_sd, ctx):
     return {"C": C, "LP": LP, "D_MAX": out_t.n - 1, "GEMM": recs["GEMM"], "ATTENTION": recs["ATTENTION"], "NORM": recs["NORM"](C)}
 
 
-from verity_vllm.program.registry import serve3 as _serve3  # noqa: E402
+from verity.ml.definitions.registry import serve3 as _serve3  # noqa: E402
 
 SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serve_v3_binder,
                                    "structural: verified isomorphism to Serve_v3{C3,LP,D_MAX,GEMM,ATTENTION,NORM} (the padded circuit, serve3-spec)")
 
 
-def _layer_weights_with_table(C: dict) -> Record:
+def _layer_weights_with_table(C: dict) -> RecordType:
     lw = _b1.layer_weights_type(C)
     from verity.ml.circuits.types import Value
-    return Record(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
+    return RecordType(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
 
 
 def _decoder_layer_sig(S):
@@ -557,7 +557,7 @@ def _decoder_layer_body(B, S, h, *rest):
 #: The hand-built decoder layer at T positions (TA1's LayerPre/Attention/LayerPost) — the S2 structural oracle.
 DecoderLayerT = CompositeDefinition("DeriveOracleDecoderLayer", 1, ("C", "L0", "T", "T0"), _decoder_layer_sig, _decoder_layer_body,
                                     doc="TA1 decoder layer at T positions (prefill of one layer): LayerPre x T, Attention x T, LayerPost x T",
-                                    conformance="structural oracle (composed of exact-model-tested / model-untested TA1 composites)", register=False)
+                                    conformance="derived: a structural oracle, composed of exact-model-tested and model-untested TA1 composites", register=False)
 
 
 def _layer_binder(flat_sd, ctx):

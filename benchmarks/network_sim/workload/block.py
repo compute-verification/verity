@@ -3,10 +3,10 @@ streams. The client is the same process for `OUTSIDE`: it holds the requests and
 
 **What a block derives** (`Context`, from the run's config, so every process of one run derives the same): the Program
 (`config["workload"]`: the MLP, or verity_vllm's serving Program, `served`), the hardware (`config["hardware"]`, a
-`Hardware`'s JSON, as `Hardware.from_datacenter` reads a declaration, or `mock`), the placement (one engine step every `step_ticks`
-ticks, one bucket by default) and φ. The prover runs every block, so the private placement is shared among them. A block
-holds the values the placement puts at its leaves: the registered inputs from the weights' seed, the client the run inputs
-from the requests' seed. Every block has every constant, an operation's own bits.
+`DeviceGraph`'s JSON, as `DeviceGraph.from_datacenter` reads a declaration, or `mock`), the placement (one engine step
+every `step_ticks` ticks, one bucket by default) and φ. The prover runs every block, so the private placement is shared
+among them. A block holds the values the placement puts at its leaves: the registered inputs from the weights' seed,
+the client the run inputs from the requests' seed. Every block has every constant, an operation's own bits.
 
 **The loop.** At each tick, in order: take every message read at this tick (waiting for its frames), evaluate this tick's
 gates with the model's evaluator (verity's), then send every message whose last value this tick produced. A
@@ -15,8 +15,9 @@ After its last tick a block closes its connections, waits until every connection
 (`values.commit`).
 
 **Connections.** One per (source unit, destination unit), opened with φ's `HELLO` frame, then the frames of the messages in
-send order. `Inbox` reassembles each stream up to its `LAST` frame. Frames no message of φ takes (a covert stream, a frame
-after a stream's end) stay in the inbox and go into the record at the end.
+send order. No frame names its message (`framing`), so `Inbox` cuts each connection's frames into its messages by φ: the
+next message on the connection takes the next `framing.frame_count` frames. Frames no message of φ takes (one without the
+canonical header, a frame after the connection's last message) stay in the inbox and go into the record at the end.
 
 **Records.** A block records, on each of its certified boundary link directions, the frames that crossed it: what it sent on
 egress, in send order, and what it took on ingress, in the order it took them, then what was left over. Each frame is tagged
@@ -26,9 +27,6 @@ comes from each certifier's clock.
 
 **Transports.** `MemoryNet` runs every unit in one event loop and hands frames over directly; `serve_tcp` runs one unit as an
 asyncio TCP server and client, one process per unit (`python -m workload.block`).
-
-**Tampering** (`Tamper`), to show what the check refuses: `extra-frame` sends one more stream after the first message,
-`flip-bit` flips the first bit of the first message's payload, `fill` writes into the zero fill of the first frame.
 """
 from __future__ import annotations
 
@@ -37,29 +35,15 @@ import asyncio
 import json
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
 from functools import cached_property
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame, encode_frame
+from verity.core.protocols.certifier.active import HEADER
 
 from . import framing as F
 from . import model as M
 from . import placement as P
 from . import values as V
-from .hardware import OUTSIDE, Hardware, mock
-
-TAMPERS = ("extra-frame", "flip-bit", "fill")
-COVERT_STREAM = 0xFFFF_FFF0
-
-
-@dataclass(frozen=True)
-class Tamper:
-    unit: str
-    mode: str
-
-    def __post_init__(self) -> None:
-        if self.mode not in TAMPERS:
-            raise ValueError(f"a tamper is one of {TAMPERS}, not {self.mode!r}")
+from .hardware import OUTSIDE, DeviceGraph, mock
 
 
 class Context:
@@ -71,7 +55,7 @@ class Context:
         self.model = M.build(self.workload, config["spec"])
         self.spec = self.model.spec
         if "hardware" in config:
-            self.hw = Hardware.from_json(config["hardware"])
+            self.hw = DeviceGraph.from_json(config["hardware"])
         else:
             self.hw = mock(config["blocks"], config.get("devices", 1), bucket_ticks=config.get("bucket_ticks", 1))
         self.placement = P.place(self.model, self.hw, P.PLANS[config.get("plan", "pipeline")](self.model, self.hw),
@@ -82,8 +66,6 @@ class Context:
         self.edges = P.crossings(self.model, self.placement, self.hw)
         self.phi = F.phi(self.hw, self.edges, config["frame_bytes"])
         self.seed = config.get("seed", 0)
-        t = config.get("tamper")
-        self.tamper = Tamper(t["unit"], t["mode"]) if t else None
 
     @cached_property
     def inputs(self) -> dict[int, int]:
@@ -101,7 +83,7 @@ class Context:
 
 
 class Inbox:
-    """The frames arriving on every connection into one unit, reassembled into streams."""
+    """The frames arriving on every connection into one unit, cut into φ's messages."""
 
     def __init__(self, ctx: Context, unit: str, senders: set[str]) -> None:
         self.ctx, self.unit = ctx, unit
@@ -110,6 +92,7 @@ class Inbox:
         if not self.waiting:
             self.closed.set()
         self.hellos: dict[str, bytes] = {}
+        self.pending = {src: ctx.phi.connection(src, unit) for src in senders}
         self.partial: dict[int, list[tuple[str, bytes]]] = defaultdict(list)
         self.complete: dict[int, list[tuple[str, bytes]]] = {}
         self.ready: dict[int, asyncio.Event] = defaultdict(asyncio.Event)
@@ -119,14 +102,19 @@ class Inbox:
         return Sink(self)
 
     def add(self, src: str, frame: bytes) -> None:
-        kind, stream, _ = decode_frame(frame)
-        if kind not in (DATA, LAST) or stream == F.HELLO_STREAM or stream in self.complete:
+        """The frame is the next of the connection's current message, unless it has no canonical header or the
+        connection has no message left."""
+        B = self.ctx.phi.frame_bytes
+        pending = self.pending.get(src, [])
+        if len(frame) != B or frame[:HEADER.size] != F.head(B) or not pending:
             self.stray.append((src, frame))
             return
-        self.partial[stream].append((src, frame))
-        if kind == LAST:
-            self.complete[stream] = self.partial.pop(stream)
-            self.ready[stream].set()
+        m = pending[0]
+        self.partial[m.stream].append((src, frame))
+        if len(self.partial[m.stream]) == F.frame_count(m, B):
+            pending.pop(0)
+            self.complete[m.stream] = self.partial.pop(m.stream)
+            self.ready[m.stream].set()
 
     def eof(self, src: str | None) -> None:
         self.waiting.discard(src)
@@ -168,7 +156,7 @@ class Sink:
         self.inbox.eof(self.src)
 
 
-class Block:
+class BlockProcess:
     def __init__(self, ctx: Context, unit: str, connect) -> None:
         self.ctx, self.unit, self.connect = ctx, unit, connect
         hw, phi = ctx.hw, ctx.phi
@@ -194,7 +182,6 @@ class Block:
         self.records: dict[str, list[tuple[int, bytes]]] = defaultdict(list)
         self.writers: dict[str, object] = {}
         self.taken: set[str] = set()
-        self.tampered = False
         self.last_tick = 0
 
     def _keys(self, m: F.Message) -> list[str]:
@@ -211,24 +198,13 @@ class Block:
     async def _send(self, m: F.Message) -> None:
         B = self.ctx.phi.frame_bytes
         frames = self.ctx.phi.frames(m, self.transcript)
-        t = self.ctx.tamper
-        extra: list[bytes] = []
-        if t is not None and t.unit == self.unit and not self.tampered:
-            self.tampered = True
-            if t.mode == "flip-bit":
-                frames[0] = frames[0][:HEADER.size] + bytes([frames[0][HEADER.size] ^ 1]) + frames[0][HEADER.size + 1:]
-            elif t.mode == "fill":
-                frames[0] = frames[0][:-1] + b"\x01"
-            else:
-                extra = [encode_frame(LAST, COVERT_STREAM, b"covert", B)]
-        out = list(frames) + extra
         hello = None
         if m.dst not in self.writers:
             self.writers[m.dst] = await self.connect(self.unit, m.dst)
             hello = F.hello(self.ctx.hw, self.unit, m.dst, B)
-        self._record(m, out, hello)
+        self._record(m, frames, hello)
         w = self.writers[m.dst]
-        for f in ([hello] if hello else []) + out:
+        for f in ([hello] if hello else []) + frames:
             await w.write(f)
 
     async def _take(self, m: F.Message) -> None:
@@ -240,7 +216,7 @@ class Block:
             self.taken.add(m.src)
             hello = self.inbox.hellos[m.src]
         self._record(m, [f for _, f in got], hello)
-        payload = b"".join(decode_frame(f)[2] for src, f in got)
+        payload = b"".join(f[HEADER.size:] for _, f in got)[:m.nbytes]
         self.transcript.update(F.decode(m, payload))
 
     async def run(self) -> dict:
@@ -296,7 +272,7 @@ class MemoryNet:
 
     def __init__(self, ctx: Context) -> None:
         self.ctx = ctx
-        self.blocks = {u: Block(ctx, u, self._connect) for u in ctx.units()}
+        self.blocks = {u: BlockProcess(ctx, u, self._connect) for u in ctx.units()}
 
     async def _connect(self, src: str, dst: str) -> _MemoryWriter:
         return _MemoryWriter(self.blocks[dst].inbox.connection())
@@ -330,7 +306,7 @@ async def serve_tcp(ctx: Context, unit: str, addresses: dict[str, tuple[str, int
         _, writer = await asyncio.open_connection(host, port)
         return _TcpWriter(writer)
 
-    block = Block(ctx, unit, connect)
+    block = BlockProcess(ctx, unit, connect)
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         sink = block.inbox.connection()

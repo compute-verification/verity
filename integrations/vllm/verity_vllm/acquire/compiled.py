@@ -1,4 +1,4 @@
-"""R15 compiled — required-value manifest of an `Execution=compiled` row from P_compiled x query (DECISIONS-2 §3, §7).
+"""Required-value manifest of an `Execution=compiled` workload from P_compiled x query.
 
 P_compiled is read from the PRODUCTION process's compiler artifacts: the Inductor output code of every piecewise piece (the wrapper's
 `call()` = the ordered kernel launches with their buffer arguments and shape constants).  Identities = one row per (step, piece, launch,
@@ -19,11 +19,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest as _manifest_digest
-from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
+from verity_vllm.program.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
 
-# the consumer (binding.load_required_manifest, R15 manbind / rev-cb M-0108) admits ONE manifest schema and recomputes `manifest_digest`
+# the consumer (binding.load_required_manifest) admits ONE manifest schema and recomputes `manifest_digest`
 # over the rows with required_manifest.manifest_digest: the compiled manifest is that schema (its P_compiled-specific content lives under
 # `program`, `identity_key` and the rows' `family`/`engine_step`/`kind`/`piece` annotations, which the digest formula ignores)
 KIND = "verity/compiled-required-manifest/v1"
@@ -174,7 +175,7 @@ def parse_wrapper(path: str) -> dict[str, Any]:
             else:
                 widths.append(None)
         kernel = m.group(1)
-        # [R16 compiled, Qwen row] roles by (name prefix, pointer arity of the generated kernel's signature): the same name carries
+        # roles by (name prefix, pointer arity of the generated kernel's signature): the same name carries
         # different argument lists across models (Llama RoPE vs Qwen RoPE+bias); a launch whose arity has no entry is unmodelled (refused)
         sig = signatures.get(kernel)
         roles, wargs = roles_of(kernel, sig)
@@ -182,7 +183,7 @@ def parse_wrapper(path: str) -> dict[str, Any]:
         for i, a in enumerate(args):
             role = roles.get(i)
             if i in wargs:
-                # [rev-pm F-pm-29 / M-0687] WEIGHT ROUTING is part of the Program: which served parameter a launch consumes (the wrapper's
+                # WEIGHT ROUTING is part of the Program: which served parameter a launch consumes (the wrapper's
                 # positional input -> the split graph names it) -- two P_compiled routing the same weights to different norms must differ
                 base, view = _base_view(a)
                 edges.append({"arg": i, "role": role or f"weight{i}", "weight": True, **_src_of(base, producer, view)})
@@ -329,7 +330,7 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
                     role[key] = sname
             attention.append({"layer": attn_index[n], "submod": n, **role})
         else:
-            wiring.append({"piece": piece_index[n], "submod": n, "args": srcs, "arg_kinds": kinds,
+            wiring.append({"piece": piece_index[n], "submod": n, "args": srcs, "raw_args": args, "arg_kinds": kinds,
                            "n_ret": 1 + max([m for (q, m) in getitems.values() if q == n], default=-1)})
     return {"path": path, "pieces": len(pieces), "wiring": wiring, "attention": attention}
 
@@ -366,12 +367,11 @@ def compose_pieces(wrappers: list[dict[str, Any]], pieces: int) -> list[list[dic
 
 def schedule_of_workload(wl: dict[str, Any]) -> list[dict[str, Any]]:
     """[B>=2] the query's request schedule from the sweep workload: request `r<i>` (workload order, = commit_delta's ids) arrives at
-    `arrive_step` with its whole prompt (the eager Program's model: one prefill step, then one token per step for max_tokens-1 steps)."""
-    out = []
-    for i, r in enumerate(wl["requests"]):
-        out.append({"request_id": f"r{i}", "arrive": int(r.get("arrive_step") or 0), "prompt_tokens": len(r["prompt_token_ids"]),
-                    "max_tokens": int(r.get("max_tokens") or wl.get("max_tokens") or 1)})
-    return out
+    `arrive_step` under the engine's idle-gap rule (`engine.arrivals.realized_arrive_steps`) with its whole prompt (the eager
+    Program's model: one prefill step, then one token per step for max_tokens-1 steps)."""
+    reqs = [{"arrive_step": int(r.get("arrive_step") or 0), "max_tokens": int(r.get("max_tokens") or wl.get("max_tokens") or 1)} for r in wl["requests"]]
+    return [{"request_id": f"r{i}", "arrive": a, "prompt_tokens": len(r["prompt_token_ids"]), "max_tokens": q["max_tokens"]}
+            for i, (r, q, a) in enumerate(zip(wl["requests"], reqs, realized_arrive_steps(reqs)))]
 
 
 def tokens_at(schedule: list[dict[str, Any]], step: int) -> list[tuple[str, int]]:
@@ -389,10 +389,12 @@ def tokens_at(schedule: list[dict[str, Any]], step: int) -> list[tuple[str, int]
 def assign_wrappers(wrappers: list[dict[str, Any]], graph: dict[str, Any]) -> list[dict[str, Any]]:
     """Each compiled piece of the split graph -> the ONE Inductor wrapper whose positional signature matches it (argument count and
     tensor/int kinds = the submodule's forward() placeholders, number of returned values = the values the graph takes from it).
-    Ambiguity or no match is a refusal: the artifact set does not describe the graph."""
+    Ambiguity or no match is a refusal: the artifact set does not describe the graph.  A layer-name placeholder is an argument of
+    no kind get_args() names ("?")."""
     out = []
     for pc in graph["wiring"]:
-        cands = [w for w in wrappers if len(w["args"]) == len(pc["args"]) and w["arg_kinds"] == pc["arg_kinds"] and len(w["returns"]) == pc["n_ret"]]
+        kinds = ["?" if k == "layer" else k for k in pc["arg_kinds"]]
+        cands = [w for w in wrappers if len(w["args"]) == len(pc["args"]) and w["arg_kinds"] == kinds and len(w["returns"]) == pc["n_ret"]]
         sigs = {_sig(w["launches"]) for w in cands}
         if not cands or len(sigs) != 1:
             raise SystemExit(f"compiled_manifest: piece {pc['piece']} ({pc['submod']}, {len(pc['args'])} args, {pc['n_ret']} returns): "
@@ -475,8 +477,8 @@ def resolve_dataflow(piece_wrappers: list[dict[str, Any]], graph: dict[str, Any]
 def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, request_id: str = "r0", rank: int = 0,
           kernel_set_sha256: str | None = None, max_tokens: int | None = None, schedule: list[dict[str, Any]] | None = None,
           split_graph: str | None = None, weights_program_digest: str | None = None, weights_in_dataflow: bool = True) -> dict[str, Any]:
-    """`weights_in_dataflow` False reproduces the v1 digest (records built on <= 2b6573893: weight routing not in program_digest, rev-pm
-    F-pm-29); the default True is v2: every launch's weight argument -> the served parameter the split graph routes to it, in the digest."""
+    """`weights_in_dataflow` False reproduces the v1 digest (records built before weight routing entered program_digest); the default
+    True is v2: every launch's weight argument -> the served parameter the split graph routes to it, in the digest."""
     paths = sorted(glob.glob(os.path.join(inductor_dir, "*", "*.py")))
     wrappers = []
     unparsed = 0
@@ -523,8 +525,8 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
         raise SystemExit("compiled_manifest: --kernel-set (the run's inductor_kernels.json kernel_set_sha256) is required: the Program's "
                          "identity is the generated kernels' sources, not the wrapper bytes")
     launch_table = [[{"kernel": L["kernel"], "roles": [r for i, r in sorted(_roles(L).items())]} for L in pl] for pl in table]
-    # [R16 compiled, Qwen row] the resolved role maps (arg index -> role, weight args, the generated kernel's pointer arity) per piece kind and
-    # launch site -- OUTSIDE the digest (the launch table above keeps its R15 form: the recorded v1/v2 digests are reproduced); the replay
+    # the resolved role maps (arg index -> role, weight args, the generated kernel's pointer arity) per piece kind and
+    # launch site -- OUTSIDE the digest (the launch table above keeps its earlier form, so the recorded v1/v2 digests are reproduced); the replay
     # (compiled_kernel_check) reads them so that a kernel name shared by two argument lists is never re-roled by name
     role_maps = {kind: [{"kernel": L["kernel"], "roles": {str(i): r for i, r in sorted(_roles(L).items())}, "weight_args": L.get("wargs"),
                          "pointer_arity": L.get("pointer_arity"), "signature": L.get("signature")} for L in pl]
@@ -543,7 +545,7 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
     for step in range(steps):
         # [B>=2] one identity per (request, launch, role): the request's token rows of the step's batched buffer (request-local element
         # range [0, tokens x width); the binding map splits the committed step buffer by the engine's row order, binding.build_binding_map).
-        # `step` is REQUEST-RELATIVE (the gprog reading binding.load_required_manifest applies to every lane manifest: engine step =
+        # `step` is REQUEST-RELATIVE (the gprog reading binding.load_required_manifest applies to every per-request manifest: engine step =
         # manifest step + the request's arrival step); `engine_step` records the absolute step the row was derived for.
         for rid, toks in tokens_at(schedule, step):
             rel_step = step - arrive_of[rid]
@@ -557,7 +559,7 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
                     wargs_L = {int(i) for i in (L.get("wargs") or [])}
                     for _i, role in sorted(roles.items()):
                         if _i in wargs_L:
-                            continue        # a WEIGHT argument (registered input, MAN-09-pinned) is never a VU identity: the hook skips it too (Qwen: 'bias')
+                            continue        # a WEIGHT argument (registered input, weights-pinned) is never a VU identity: the hook skips it too (Qwen: 'bias')
                         width = widths_by_piece[piece].get((k, role))
                         numel = (toks * width) if width else None
                         identities.append({"family": FAMILY, "program_digest": pdig, "request_id": rid, "step": rel_step, "invocation": 0,
@@ -566,7 +568,7 @@ def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, re
     fam = {FAMILY: len(identities)}
     n_edges = sum(len(r["edges"]) for rows in dataflow for r in rows)
     n_launch_edges = sum(1 for rows in dataflow for r in rows for e in r["edges"] if e["src"]["kind"] == "launch")
-    # [MAN-09 / rev-cb M-0655 W2] P_compiled has no weights struct of its own: its GEMM / norm / RoPE launches take the served module
+    # P_compiled has no weights struct of its own: its GEMM / norm / RoPE launches take the served module
     # parameters as arguments (C2 replays every sampled launch with the LIVE parameter and matches the committed output bit-for-bit), and
     # those parameters are the eager Program's fields.  The row's `bi-eager` counterpart Build of record is named here as the component
     # whose weights-of-record applies; commit_delta reads components.*.program_digest as the Programs of record for the weights pin.
@@ -602,7 +604,7 @@ class BuildOptions:
                                help="engine steps (default: the workload's expected_engine_steps)")
     prefill_tokens: int | None = option("--prefill-tokens", type=int, default=None,
                                         help="single-request form (no --workload): the prompt length")
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="sweep workload json: the request schedule (B>=2: r<i> arrive_step / prompt / max_tokens)")
     request: str = option("--request", default="r0")
     kernel_set: str = option("--kernel-set",
@@ -610,17 +612,17 @@ class BuildOptions:
     split_graph: str | None = option("--split-graph", default=None,
                                      help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone): the piece wiring")
     weights_program_digest: str | None = option("--weights-program-digest", default=None,
-                                                help="the eager Program of record whose served-parameter fields the compiled kernels read (the row's bi-eager counterpart's "
-                                                     "Build digest): named as components.weights_struct for the MAN-09 weights pin")
+                                                help="the eager Program of record whose served-parameter fields the compiled kernels read (the workload's bi-eager counterpart's "
+                                                     "Build digest): named as components.weights_struct for the weights pin")
     digest_v1: bool = option("--digest-v1", default=False, action="store_true",
-                             help="reproduce the v1 program_digest (weight routing NOT in the digest; records built on <= 2b6573893)")
+                             help="reproduce the v1 program_digest (weight routing NOT in the digest)")
     out: str = option("--out")
     cmd: str = field(default="build", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class VerifyOptions:
-    """[MAN-05 for compiled rows] the manifest the treatment USED (built from the control arm's Inductor output code) vs the
+    """The manifest a compiled workload's treatment USED (built from the control arm's Inductor output code) vs the
     same derivation REBUILT from the treatment's own output code: digests of rows + Program"""
 
     manifest: str = option("--manifest", help="the manifest the treatment ran with (compiled_manifest.json, control-derived)")
@@ -640,12 +642,14 @@ def main(a: BuildOptions | VerifyOptions) -> int:
                "rebuilt_digest": rebuilt.get("manifest_digest"), "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt.get("program_digest"),
                "used_identities": len(used.get("identities") or []), "rebuilt_identities": (rebuilt.get("populations") or {}).get("identities"),
                "rebuilt_complete": rebuilt.get("complete"), "rebuilt_from": a.rebuilt,
+               "used_artifact": (used.get("artifact") or {}).get("digest"), "rebuilt_artifact": (rebuilt.get("artifact") or {}).get("digest"),
                "method": "compiled rows (P_compiled): no derive_step Program dir exists; the rebuild is compiled_manifest.build over the TREATMENT "
                          "process's own Inductor output code + split graph x the workload schedule (the manifest used was built the same way from "
                          "the CONTROL process's) -- equal program_digest = the treatment executed the control's Program (kernel set x launch "
-                         "tables x dataflow), equal manifest_digest = the same required-value population"}
+                         "tables x dataflow), equal manifest_digest = the same required-value population; a served Build's compile artifact "
+                         "(served_artifact) equal = the treatment loaded the pinned kernels and autotune winners"}
         rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"]
-                         and rebuilt.get("complete") is True)
+                         and rebuilt.get("complete") is True and rec["used_artifact"] == rec["rebuilt_artifact"])
         if not rec["ok"]:
             why = []
             if rec["used_digest"] != rows_digest:
@@ -657,6 +661,8 @@ def main(a: BuildOptions | VerifyOptions) -> int:
                 why.append(f"program_digest used {str(rec['used_program_digest'])[:16]} != derived from the treatment's output code {str(rec['rebuilt_program_digest'])[:16]}")
             if rebuilt.get("complete") is not True:
                 why.append(f"treatment-derived manifest not complete: unmodelled {rebuilt.get('unmodelled')}")
+            if rec["used_artifact"] != rec["rebuilt_artifact"]:
+                why.append(f"compile artifact used {str(rec['used_artifact'])[:16]} != the treatment's {str(rec['rebuilt_artifact'])[:16]}")
             rec["why"] = "; ".join(why)
         with open(a.out, "w") as f:
             json.dump(rec, f, indent=1)

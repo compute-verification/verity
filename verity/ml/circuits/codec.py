@@ -16,21 +16,23 @@ the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotati
 descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
-(the default since 2026-09-08) writes the same program with flat concatenations, the reference-sequence alias
-and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
+(the default) writes the same program with flat concatenations, the reference-sequence alias
+and interned callee ids / types (PROTOCOL.md §4.5–§4.7). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
-descriptors denote the same circuit (veritor's docs/vllm-poc/descriptor-codec.md).
+descriptors denote the same circuit.
 """
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import re
-from typing import Callable, Any
+from typing import Callable, Any, Iterator
 
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
-                   SpecializedDefinition, bind)
+                   SpecializedDefinition, _static_key, bind)
+from . import ports as P
 from .program import input_id, input_prim, is_input
 from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
 from .types import type_from_json
@@ -39,15 +41,6 @@ SCHEMA_V0 = "verity-ir/descriptor/v0"
 SCHEMA_V1 = "verity-ir/descriptor/v1"
 SCHEMA = SCHEMA_V1
 SCHEMAS = (SCHEMA_V0, SCHEMA_V1)
-
-# v1 differs from v0 only in how the *same* program is written down (what a descriptor denotes — gates,
-# producers, ordered reference sequences, definitions — is identical; `descriptor_equivalence` checks that):
-#   * nested `concat`s are written flat, and a node argument whose leading parts repeat the whole reference
-#     sequence of an earlier node's argument is written as `{"alias": [node, arg]}` followed by the remaining
-#     parts — a pass-through reference to the sequence already in the body instead of a re-materialised copy
-#     (the root's KV cache: position T's `kc` is position T-1's `kc` plus one row);
-#   * a node's callee id (`fn`), argument types (`args[].type`) and output type (`out`) are interned: integers
-#     into the top-level `callees` and `types` tables (first-seen order of the deterministic dependency walk).
 ALIAS_WINDOW = 8  # how many trailing parts an alias search may leave as the explicit suffix
 
 
@@ -66,7 +59,7 @@ class _Tables:
     def callee_of(self, f: FunctionDefinition) -> int:
         hit = self._seen.get(id(f))
         if hit is None or hit[0] is not f:
-            hit = self._seen[id(f)] = (f, self.callee(_spec_id(f)))
+            hit = self._seen[id(f)] = (f, self.callee(descriptor_id(f)))
         return hit[1]
 
     def type(self, t) -> int:
@@ -88,7 +81,7 @@ class _Tables:
 
 def _static_json(v: Any) -> Any:
     if isinstance(v, (PrimitiveDefinition, SpecializedDefinition)):
-        return {"fn": _spec_id(v)}
+        return {"fn": descriptor_id(v)}
     if isinstance(v, CompositeDefinition):
         return {"fn": v.id}
     if isinstance(v, (list, tuple)):
@@ -102,9 +95,10 @@ def _static_json(v: Any) -> Any:
     raise TypeError(f"unsupported static value {v!r}")
 
 
-def _spec_id(fn: FunctionDefinition) -> str:
-    """Descriptor id of a specialized definition: `Name_vN` for primitives / static-free composites, else
-    `Name_vN{k=v,...}` with the binding record in static-parameter order."""
+def descriptor_id(fn: FunctionDefinition) -> str:
+    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): `Name_vN` for primitives and static-free
+    composites, else `Name_vN{k=v,...}` with the binding record in static-parameter order.  The readable `fn.id` differs for
+    string, float, function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
     if isinstance(fn, PrimitiveDefinition):
         return fn.id
     assert isinstance(fn, SpecializedDefinition)
@@ -116,10 +110,7 @@ def _spec_id(fn: FunctionDefinition) -> str:
     return fn.base_id + "{" + ",".join(parts) + "}"
 
 
-def descriptor_id(fn: FunctionDefinition) -> str:
-    """The id a descriptor names `fn` by (its `definitions` key and `callees` entry): the readable `fn.id` differs for string, float,
-    function and dict statics (`RMSNormTriton_v1{N=2048,EPS={"f64":"0x1.4f8b588e368f1p-17"}}` against `...EPS=1e-05}`)."""
-    return _spec_id(fn)
+_spec_id = descriptor_id
 
 
 def _flat_parts(r: Refs) -> list[Refs]:
@@ -147,23 +138,9 @@ def _part_key(p: Refs) -> tuple:
     return ("e", p.items)
 
 
-def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
-    """`_flat_parts(r)` and their `_part_key`s. A `Concat` cut from a `PartLog` reuses the keys of the log's parts."""
-    if r.prefix is not None:
-        log, j = r.prefix
-        tail = r.parts[j:]
-        if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
-            memo = log.memo.setdefault("codec.part_keys", [])
-            if len(memo) < j:
-                memo.extend(_part_key(p) for p in log.parts[len(memo):j])
-            return r.parts, tuple(memo[:j]) + tuple(_part_key(p) for p in tail)
-    parts = _flat_parts(r)
-    return parts, tuple(_part_key(p) for p in parts)
-
-
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
-    (see `SCHEMA_V1`): the whole reference sequence of every encoded node argument is remembered, and a later
+    (PROTOCOL.md §4.5): the whole reference sequence of every encoded node argument is remembered, and a later
     concatenation whose first `m` parts equal one of them (`m` down to `len - ALIAS_WINDOW`, longest first) is
     written as that argument's alias plus its remaining parts. Aliases point backwards only (to an earlier node
     of the same body, or from `ret` to any node), so decoding is one forward pass: a node's later argument never
@@ -172,31 +149,64 @@ class _BodyEncoder:
     def __init__(self, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> None:
         self.schema = schema
         self.tables = tables
-        self.seqs: dict[tuple, tuple[int, int]] = {}
+        self.seqs: dict[int, tuple[int, int]] = {}   # a recorded part list's id -> the first argument (k, a) it was
+        self.trie: dict[tuple[int, tuple], int] = {}  # (a part list's id, a part's `_part_key`) -> the id of the list one longer
+        self.token = object()                         # this encoder's entry in a `PartLog`'s memo
         if schema != SCHEMA_V0 and tables is None:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
     def fn(self, f: FunctionDefinition) -> Any:
-        return _spec_id(f) if self.tables is None else self.tables.callee_of(f)
+        return descriptor_id(f) if self.tables is None else self.tables.callee_of(f)
 
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
 
+    def _longer(self, i: int, p: Refs) -> int:
+        key = (i, _part_key(p))
+        hit = self.trie.get(key)
+        if hit is None:
+            hit = self.trie[key] = len(self.trie) + 1
+        return hit
+
+    def _prefixes(self, r: Concat) -> tuple[list[Refs], list[int], int]:
+        """(`_flat_parts(r)`, ids, j): ids[m], for m <= j, is the id of the part list parts[:m], 0 the empty one's. Two part lists
+        have one id exactly when their `_part_key`s are equal. A `Concat` cut from a `PartLog` reads its log's ids, kept in the log
+        and extended to the longest cut seen, so a key sequence one row longer than the call before costs O(1)."""
+        if r.prefix is not None:
+            log, j = r.prefix
+            tail = r.parts[j:]
+            if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
+                owner, ids = log.memo.get("codec.prefix_ids", (None, None))
+                if owner is not self.token:
+                    ids = [0]
+                    log.memo["codec.prefix_ids"] = (self.token, ids)
+                for p in log.parts[len(ids) - 1:j]:
+                    ids.append(self._longer(ids[-1], p))
+                return r.parts, ids, j
+        return _flat_parts(r), [0], 0
+
     def refs(self, r: Refs, at: tuple[int, int] | None = None) -> Any:
         if self.schema == SCHEMA_V0 or not isinstance(r, Concat):
             return r.to_json()
-        parts, keys = _flat_keys(r)
-        n = len(keys)
+        parts, ids, j = self._prefixes(r)
+        n = len(parts)
+        more = [ids[j]]
+        for p in parts[j:]:
+            more.append(self._longer(more[-1], p))
+
+        def of(m: int) -> int:
+            return ids[m] if m <= j else more[m - j]
+
         out: list | None = None
         for m in range(n, max(1, n - ALIAS_WINDOW - 1), -1):  # m >= 2, suffix <= ALIAS_WINDOW parts
-            hit = self.seqs.get(keys[:m])
+            hit = self.seqs.get(of(m))
             if hit is not None and (at is None or hit[0] < at[0]):
                 out = [{"alias": list(hit)}] + [p.to_json() for p in parts[m:]]
                 break
         if out is None:
             out = [p.to_json() for p in parts]
         if at is not None and n > 1:
-            self.seqs.setdefault(keys, at)
+            self.seqs.setdefault(of(n), at)
         return out[0] if len(out) == 1 else {"concat": out}
 
 
@@ -218,8 +228,8 @@ def _encode_node(n: Node, enc: _BodyEncoder | None = None, k: int = 0) -> dict:
 
 
 def _encode_body(b: Body, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> dict:
-    """One body. The default is the v0 (verbatim, self-contained) form, which is also what `definition_digest`
-    consumers hash; `encode_program` passes the descriptor's schema and interning tables."""
+    """One body. The default is the v0 (verbatim, self-contained) form; `encode_program` passes the descriptor's schema and
+    interning tables."""
     enc = _BodyEncoder(schema, tables)
     return {
         "params": [[name, t.to_json()] for name, t in b.params],
@@ -231,23 +241,29 @@ def _encode_body(b: Body, schema: str = SCHEMA_V0, tables: _Tables | None = None
 
 def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> dict:
     if isinstance(fn, PrimitiveDefinition):
-        return {
+        d = {
             "form": "primitive",
             "id": fn.id,
             "params": [[name, t.to_json()] for name, t in fn.params],
             "ret": fn.ret.to_json(),
         }
-    assert isinstance(fn, SpecializedDefinition)
-    return {
-        "form": "composite",
-        "id": fn.base_id,
-        "bindings": {k: _static_json(fn.bindings[k]) for k in fn.defn.statics},
-        "body": _encode_body(fn.body, schema, tables),
-    }
+    else:
+        assert isinstance(fn, SpecializedDefinition)
+        d = {
+            "form": "composite",
+            "id": fn.base_id,
+            "bindings": {k: _static_json(fn.bindings[k]) for k in fn.defn.statics},
+            "body": _encode_body(fn.body, schema, tables),
+        }
+    ports = P.declared(fn)
+    if ports is not None:  # only a Definition that declares ports carries the key (PROTOCOL.md §12)
+        d["ports"] = ports
+    return d
 
 
 def definition_entry(fn: FunctionDefinition) -> dict:
-    """The self-contained (v0) descriptor entry of one definition, callees named by id: what a digest of the definition alone hashes."""
+    """The self-contained (v0) descriptor entry of one definition (PROTOCOL.md §4.7): `definition_digest(definition_entry(fn))`
+    is `fn`'s digest."""
     return _encode_definition(fn)
 
 
@@ -283,7 +299,7 @@ def _program_fn_functions(program) -> list[FunctionDefinition]:
     `Program` from its `fn`; for a `DecodedProgram` the definitions its descriptor resolved for `program_fn`."""
     pfn = getattr(program, "fn", None)
     if isinstance(pfn, SpecializedDefinition):
-        owner = _spec_id(pfn)
+        owner = descriptor_id(pfn)
         return [_as_specialized(f, owner) for k in pfn.defn.statics for f in _static_functions(pfn.bindings[k])]
     return list(getattr(program, "program_fn_functions", ()))
 
@@ -300,52 +316,17 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     if schema not in SCHEMAS:
         raise ValueError(f"unknown descriptor schema {schema!r}")
     tables = None if schema == SCHEMA_V0 else _Tables()
-    defs: dict[str, dict] = {}
-    seen: dict[str, FunctionDefinition] = {}
-    duplicates: list[tuple[str, FunctionDefinition]] = []
-    # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
-    # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
-    # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
-    # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
-    dup_objects: set[tuple[str, int]] = set()
-    visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
+    done: dict[str, dict] = {}
 
-    def visit(fn: FunctionDefinition) -> None:
-        if visited.get(id(fn)) is fn:
-            return
-        visited[id(fn)] = fn
-        fid = _spec_id(fn)
-        prev = seen.get(fid)
-        if prev is not None:
-            if prev is not fn and (fid, id(fn)) not in dup_objects:
-                dup_objects.add((fid, id(fn)))
-                duplicates.append((fid, fn))
-            return
-        seen[fid] = fn
-        if isinstance(fn, PrimitiveDefinition):
-            defs[fid] = _encode_definition(fn)
-            return
-        assert isinstance(fn, SpecializedDefinition)
-        defs[fid] = {}  # placeholder against cycles
-        for n in fn.body.nodes:
-            visit(n.fn)
-        for k in fn.defn.statics:
-            for f in _static_functions(fn.bindings[k]):
-                visit(_as_specialized(f, fid))
-        defs[fid] = _encode_definition(fn, schema, tables)
+    def encode(fid: str, fn: FunctionDefinition) -> None:
+        done[fid] = _encode_definition(fn) if isinstance(fn, PrimitiveDefinition) else _encode_definition(fn, schema, tables)
 
-    root = program.root
-    visit(root)
-    for f in _program_fn_functions(program):  # the program function is inlined into the root: its binding record
-        visit(f)  # (`program_fn`) is part of the identity, so every function it references is a definition too
-    for fid, fn in duplicates:  # a different object under an already-recorded id must denote the same definition
-        if _encode_definition(fn) != _encode_definition(seen[fid]):  # self-contained (v0) forms: no table side effects
-            raise IdentityConflict(f"E_IDENTITY: two different definitions claim the specialization {fid!r}")
+    seen = _walk(program, encode)
     desc = {
         "schema": schema,
-        "root": _spec_id(root),
-        "program_fn": getattr(program, "program_fn_id", None) or _spec_id(program.fn),
-        "definitions": defs,
+        "root": descriptor_id(program.root),
+        "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
+        "definitions": {fid: done[fid] for fid in seen},
         "annotations": dict(program.annotations),
     }
     if tables is not None:
@@ -354,7 +335,142 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     return desc
 
 
+def definitions(program) -> dict[str, FunctionDefinition]:
+    """The definitions `encode_program` records for `program`, by descriptor id: those a decoder of its descriptor
+    holds."""
+    return _walk(program, lambda fid, fn: None)
+
+
+def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str, FunctionDefinition]:
+    """`encode_program`'s dependency walk: each specialization the descriptor records, by descriptor id in first-visit order.
+    `done(fid, fn)` runs once per specialization, after every specialization it depends on: the order v1's tables intern in.
+    Raises `IdentityConflict` on two different definitions under one id, once every specialization is done."""
+    seen: dict[str, FunctionDefinition] = {}
+    duplicates: list[tuple[str, FunctionDefinition]] = []
+    # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
+    # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
+    # list held one entry per node (on a large workload, over a thousand visits an object) and the identity check below
+    # re-encoded the definitions verbatim that many times.
+    dup_objects: set[tuple[str, int]] = set()
+    visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
+
+    def visit(fn: FunctionDefinition) -> None:
+        if visited.get(id(fn)) is fn:
+            return
+        visited[id(fn)] = fn
+        fid = descriptor_id(fn)
+        prev = seen.get(fid)
+        if prev is not None:
+            if prev is not fn and (fid, id(fn)) not in dup_objects:
+                dup_objects.add((fid, id(fn)))
+                duplicates.append((fid, fn))
+            return
+        seen[fid] = fn
+        if isinstance(fn, SpecializedDefinition):
+            for n in fn.body.nodes:
+                visit(n.fn)
+            for k in fn.defn.statics:
+                for f in _static_functions(fn.bindings[k]):
+                    visit(_as_specialized(f, fid))
+        else:
+            assert isinstance(fn, PrimitiveDefinition)
+        done(fid, fn)
+
+    visit(program.root)
+    for f in _program_fn_functions(program):  # the program function is inlined into the root: its binding record
+        visit(f)  # (`program_fn`) is part of the identity, so every function it references is a definition too
+    for fid, fn in duplicates:  # a different object under an already-recorded id must denote the same definition
+        if _encode_definition(fn) != _encode_definition(seen[fid]):  # self-contained (v0) forms: no table side effects
+            raise IdentityConflict(f"E_IDENTITY: two different definitions claim the specialization {fid!r}")
+    return seen
+
+
+def _intern_body(b: Body, tables: _Tables) -> None:
+    """What encoding `b` adds to v1's tables, in the order `_encode_node` adds it: each node's callee, its arguments' types, its output's."""
+    for n in b.nodes:
+        tables.callee_of(n.fn)
+        for a in n.args:
+            tables.type(a.type)
+        tables.type(n.out)
+
+
+_NODE_BATCH = 4096  # nodes serialized per `canonical_json` call
+
+
+def _composite_chunks(fn: SpecializedDefinition, head: dict, schema: str, tables: _Tables | None) -> Iterator[bytes]:
+    """`canonical_json(_encode_definition(fn, schema, tables))`, a batch of body nodes at a time. ``head`` is the entry without its
+    body (`_entry_head`). The keys are written in sorted order: bindings, body (nodes, params, ret, ret_type), form, id, ports."""
+    enc, b = _BodyEncoder(schema, tables), fn.body
+    yield b'{"bindings":' + canonical_json(head["bindings"]) + b',"body":{"nodes":['
+    for lo in range(0, len(b.nodes), _NODE_BATCH):
+        part = canonical_json([_encode_node(n, enc, k) for k, n in enumerate(b.nodes[lo:lo + _NODE_BATCH], lo)])
+        yield (b"," if lo else b"") + part[1:-1]
+    yield (b'],"params":' + canonical_json([[name, t.to_json()] for name, t in b.params]) + b',"ret":' + canonical_json(enc.refs(b.ret))
+           + b',"ret_type":' + canonical_json(b.ret_type.to_json()) + b'},"form":' + canonical_json(head["form"]) + b',"id":'
+           + canonical_json(head["id"]))
+    if "ports" in head:
+        yield b',"ports":' + canonical_json(head["ports"])
+    yield b"}"
+
+
+def _entry_head(fn: SpecializedDefinition) -> dict:
+    """`_encode_definition(fn)` but for its body's nodes and ``ret``: the parts `_check_domain` reads (`_free_form`), in its key order."""
+    d = {"form": "composite", "id": fn.base_id, "bindings": {k: _static_json(fn.bindings[k]) for k in fn.defn.statics},
+         "body": {"params": [[name, t.to_json()] for name, t in fn.body.params], "ret_type": fn.body.ret_type.to_json()}}
+    ports = P.declared(fn)
+    if ports is not None:
+        d["ports"] = ports
+    return d
+
+
+def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
+    """The bytes `program_digest` hashes, `canonical_json` of `encode_program(program, schema)` without ``annotations``, in pieces,
+    without the descriptor's dict: one walk of the specializations (`_walk`), interning v1's tables in `encode_program`'s order,
+    then each definition in key order, its body a batch of nodes at a time. Raises what `encode_program` raises, `_check_domain`'s
+    ValueError once the last piece is out."""
+    if schema not in SCHEMAS:
+        raise ValueError(f"unknown descriptor schema {schema!r}")
+    tables = None if schema == SCHEMA_V0 else _Tables()
+    heads: dict[str, dict] = {}
+
+    def intern(fid: str, fn: FunctionDefinition) -> None:
+        if isinstance(fn, PrimitiveDefinition):
+            heads[fid] = _encode_definition(fn)
+            return
+        heads[fid] = _entry_head(fn)
+        if tables is not None:
+            _intern_body(fn.body, tables)
+
+    seen = _walk(program, intern)
+    skeleton = {"schema": schema, "root": descriptor_id(program.root),
+                "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
+                "definitions": {fid: heads[fid] for fid in seen}}
+    if tables is not None:
+        skeleton.update(tables.to_json())
+        interned = (len(tables.callees), len(tables.type_json))
+        yield b'{"callees":' + canonical_json(skeleton["callees"]) + b',"definitions":{'
+    else:
+        yield b'{"definitions":{'
+    for i, fid in enumerate(sorted(seen)):
+        yield (b"," if i else b"") + canonical_json(fid) + b":"
+        fn = seen[fid]
+        if isinstance(fn, PrimitiveDefinition):
+            yield canonical_json(heads[fid])
+        else:
+            yield from _composite_chunks(fn, heads[fid], schema, tables)
+    yield (b'},"program_fn":' + canonical_json(skeleton["program_fn"]) + b',"root":' + canonical_json(skeleton["root"])
+           + b',"schema":' + canonical_json(schema))
+    if tables is not None:
+        if (len(tables.callees), len(tables.type_json)) != interned:
+            raise AssertionError("descriptor_chunks: encoding a body interned an entry the tables were written without")
+        yield b',"types":' + canonical_json(skeleton["types"])
+    yield b"}"
+    _check_domain(skeleton)
+
+
 def canonical_json(obj: Any) -> bytes:
+    """Canonical JSON, the bytes Lean's `Flock.canon` writes: compact, keys sorted, every character outside printable ASCII
+    a lowercase `\\uXXXX` escape (a surrogate pair above U+FFFF), so no byte is at or above 0x7f."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
@@ -364,28 +480,43 @@ MAX_SAFE_INT = 2**53 - 1
 def jcs_domain_error(v: Any, where: str = "$") -> str | None:
     """Where `v` leaves the domain on which `canonical_json` is RFC 8785 (JCS), or None: JSON values whose strings are ASCII
     without DEL (U+0000..U+007E) and whose numbers are integers of magnitude at most 2^53 - 1."""
-    stack = [(v, where)]
+    # A path is (parent, step), an int step an index, and is spelled out only for the error: spelling each item's path as it is
+    # pushed copied the whole path once per item, and a window's root id (its binding record) is ~100 KB over 1.5M ports.
+    stack: list[tuple[Any, Any]] = [(v, (None, where))]
     while stack:
         x, at = stack.pop()
         if isinstance(x, str):
             if not x.isascii() or "\x7f" in x:
-                return f"{at}: string {x[:40]!r} is not ASCII without DEL"
+                return f"{_path(at)}: string {x[:40]!r} is not ASCII without DEL"
         elif isinstance(x, bool) or x is None:
             continue
         elif isinstance(x, int):
             if abs(x) > MAX_SAFE_INT:
-                return f"{at}: integer {x} exceeds 2^53 - 1 in magnitude"
+                return f"{_path(at)}: integer {x} exceeds 2^53 - 1 in magnitude"
         elif isinstance(x, (list, tuple)):
-            stack.extend((y, f"{at}[{i}]") for i, y in enumerate(x))
+            if set(map(type, x)) <= {int}:  # checked whole, as popping its items one by one would: the last one out of range first
+                if x and max(max(x), -min(x)) > MAX_SAFE_INT:
+                    i = max(i for i, y in enumerate(x) if abs(y) > MAX_SAFE_INT)
+                    return f"{_path(at)}[{i}]: integer {x[i]} exceeds 2^53 - 1 in magnitude"
+                continue
+            stack.extend((y, (at, i)) for i, y in enumerate(x))
         elif isinstance(x, dict):
             for k, y in x.items():
                 if not isinstance(k, str):
-                    return f"{at}: key {k!r} is not a string"
-                stack.append((k, f"{at}.<key>"))
-                stack.append((y, f"{at}.{k}"))
+                    return f"{_path(at)}: key {k!r} is not a string"
+                stack.append((k, (at, ".<key>")))
+                stack.append((y, (at, "." + k)))
         else:
-            return f"{at}: a {type(x).__name__} is not a JSON integer, string, boolean, null, array or object"
+            return f"{_path(at)}: a {type(x).__name__} is not a JSON integer, string, boolean, null, array or object"
     return None
+
+
+def _path(at: tuple[Any, Any]) -> str:
+    steps = []
+    while at is not None:
+        at, step = at
+        steps.append(f"[{step}]" if isinstance(step, int) else step)
+    return "".join(reversed(steps))
 
 
 def _free_form(desc: dict) -> Any:
@@ -404,14 +535,72 @@ def _check_domain(desc: dict) -> None:
 
 
 def program_digest(program_or_desc) -> str:
-    desc = program_or_desc if isinstance(program_or_desc, dict) else encode_program(program_or_desc)
-    d = {k: v for k, v in desc.items() if k != "annotations"}
-    return hashlib.sha512(canonical_json(d)).hexdigest()
+    """SHA-512 of the descriptor's canonical JSON without ``annotations``; a program's is streamed (`descriptor_chunks`)."""
+    if isinstance(program_or_desc, dict):
+        return hashlib.sha512(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"})).hexdigest()
+    # The cyclic collector stays off while streaming: encoding frees its pieces by reference counting, and the collector's
+    # passes over a big program's live bodies cost more than the encoding itself.
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        h = hashlib.sha512()
+        for chunk in descriptor_chunks(program_or_desc):
+            h.update(chunk)
+        return h.hexdigest()
+    finally:
+        if on:
+            gc.enable()
 
 
 def descriptor_size(program_or_desc) -> int:
-    desc = program_or_desc if isinstance(program_or_desc, dict) else encode_program(program_or_desc)
-    return len(canonical_json({k: v for k, v in desc.items() if k != "annotations"}))
+    if isinstance(program_or_desc, dict):
+        return len(canonical_json({k: v for k, v in program_or_desc.items() if k != "annotations"}))
+    return sum(map(len, descriptor_chunks(program_or_desc)))
+
+
+def canonical_entry(entry: dict, desc: dict | None = None) -> dict:
+    """The entry `definition_digest` hashes (PROTOCOL.md §4.8): `entry`, a definition of either schema (of `desc`, whose
+    `callees` and `types` a v1 entry indexes), with each node's callee id and types inline, every alias replaced by the parts it
+    stands for and every concatenation flat, written as its one part when it has one.  One definition has one canonical entry,
+    whichever schema, alias choice or nesting of concatenations wrote it."""
+    if entry.get("form") != "composite":
+        return dict(entry)
+    tables = desc if desc is not None and "callees" in desc else None
+    body, seen = entry["body"], []
+
+    def parts(j: Any, k: int) -> list:
+        if "alias" in j:
+            n, a = j["alias"]
+            if not (_nat(n) and _nat(a) and n < k and a < len(seen[n])):
+                raise ValueError(f"{entry.get('id')}: alias {j['alias']} names no argument of a node before node {k}")
+            return seen[n][a]
+        if "concat" in j:
+            return [p for x in j["concat"] for p in parts(x, k)]
+        return [j]
+
+    def flat(ps: list) -> Any:
+        return ps[0] if len(ps) == 1 else {"concat": ps}
+
+    def inline(x: Any, table: str) -> Any:
+        if tables is not None:
+            return _at(tables[table], x, table)
+        if _int(x):
+            raise ValueError(f"{entry.get('id')}: an interned entry needs its descriptor's `{table}`")
+        return x
+
+    nodes = []
+    for k, nd in enumerate(body["nodes"]):
+        row = [parts(a["refs"], k) for a in nd["args"]]
+        seen.append(row)
+        args = [dict(a, type=inline(a["type"], "types"), refs=flat(ps)) for a, ps in zip(nd["args"], row)]
+        nodes.append(dict(nd, fn=inline(nd["fn"], "callees"), args=args, out=inline(nd["out"], "types")))
+    return dict(entry, body=dict(body, nodes=nodes, ret=flat(parts(body["ret"], len(seen)))))
+
+
+def definition_digest(entry: dict, desc: dict | None = None) -> str:
+    """Hex SHA-512 of the canonical JSON of `canonical_entry(entry, desc)`: a definition's digest, the same in any program and
+    from either schema's bytes (`definition_entry(fn)` is `fn`'s entry outside a descriptor)."""
+    return hashlib.sha512(canonical_json(canonical_entry(entry, desc))).hexdigest()
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -421,8 +610,8 @@ def descriptor_size(program_or_desc) -> int:
 
 # Primitive families that are materialised on demand (one definition per width / constant / vocab) when a descriptor is
 # decoded in a process that has not built the program: (pattern over the primitive id, maker from the match).  A semantics
-# package registers its families with `register_lazy_family` (the IR never imports a semantics package).  An id matching
-# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes the IR's own `Input<w>` or `RegisteredInput<w>`, ahead of
+# package registers its families with `register_lazy_family` (`verity.ml.circuits` never imports a semantics package).  An id matching
+# `program.INPUT_ID` or `program.REGISTERED_ID` always denotes `program`'s own `Input<w>` or `RegisteredInput<w>`, ahead of
 # any registry entry.  A pattern matches the whole id, and the member it makes must carry that id: a family has one spelling
 # per member.
 _LAZY_PRIMITIVE_FAMILIES: list[tuple[re.Pattern[str], Callable[[re.Match[str]], PrimitiveDefinition]]] = []
@@ -532,6 +721,8 @@ class DecodedProgram:
         from .layout import Circuit
         self.circuit = Circuit(root)
         self.annotations = dict(desc.get("annotations", {}))
+        theta = self.annotations.get("theta", ())
+        root.theta = tuple(theta) if isinstance(theta, list) else theta  # type: ignore[attr-defined]  # `ports.facts` checks it
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
 
@@ -661,13 +852,27 @@ def _build_node(B: Builder, fid: str, k: int, nd: dict, fn: FunctionDefinition, 
         raise ValueError(f"definition {fid!r} node {k}: declares out {out!r}, computes {B.nodes[k].out!r}")
 
 
-def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
+    """A binding record's static value, `_static_json` inverted; ``fn`` resolves each function reference's id."""
+    if isinstance(v, dict) and "fn" in v:
+        return fn(v["fn"])
+    if isinstance(v, dict) and "f64" in v:
+        return float.fromhex(v["f64"])
+    if isinstance(v, dict) and "dict" in v:
+        return {k: _record_value(x, fn) for k, x in v["dict"].items()}
+    if isinstance(v, list):
+        return tuple(_record_value(x, fn) for x in v)
+    return v
+
+
+def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
+    """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
     if schema not in SCHEMAS:
         raise ValueError(f"unexpected descriptor schema {schema!r}")
     _check_domain(desc)
     ddefs = desc["definitions"]
-    built: dict[str, Any] = {}
+    built = {} if built is None else built
     if schema == SCHEMA_V0:
         callee_id, arg_type = (lambda f: f), _type
     else:
@@ -684,6 +889,8 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
             p = _lookup_primitive(registry, d["id"])
             if [[n, t.to_json()] for n, t in p.params] != d["params"] or p.ret.to_json() != d["ret"]:
                 raise ValueError(f"primitive {fid} signature differs from the registry")
+            if d.get("ports") != P.declared(p):
+                raise ValueError(f"primitive {fid} ports differ from the registry")
             built[fid] = p
             return p
         name, _, ver = d["id"].rpartition("_v")
@@ -696,19 +903,8 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         cdef = CompositeDefinition(f"{name}", int(ver), statics, lambda S: ((), None), lambda *_: None, register=False)
         sp = SpecializedDefinition(cdef, {}, ())
         built[fid] = sp
-        def static_of(v):
-            if isinstance(v, dict) and "fn" in v:
-                return get(v["fn"])
-            if isinstance(v, dict) and "f64" in v:
-                return float.fromhex(v["f64"])
-            if isinstance(v, dict) and "dict" in v:
-                return {k2: static_of(v2) for k2, v2 in v["dict"].items()}
-            if isinstance(v, list):
-                return tuple(static_of(x) for x in v)
-            return v
-
-        bindings = {k: static_of(v) for k, v in d["bindings"].items()}
-        sp.bindings.update(bindings)
+        sp.bindings.update({k: _record_value(v, get) for k, v in d["bindings"].items()})
+        ours(fid)
         b = d["body"]
         params = tuple((n, _type(t)) for n, t in b["params"])
         ret_type = _type(b["ret_type"])
@@ -733,13 +929,52 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
                 raise ValueError(f"definition {fid!r} node {k}: {e}") from e
             _build_node(B, fid, k, nd, fn, args, arg_type(nd["out"]))
         try:
-            sp.set_body(B.finish(Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))))
+            ret = Coll(ret_type, _decode_refs(b["ret"], nodes, schema, leaves))
         except (TypeError, ValueError) as e:
             raise ValueError(f"definition {fid!r} ret: {e}") from e
+        try:
+            sp.set_body(B.finish(ret))
+        except TypeError as e:
+            raise ValueError(f"definition {fid!r}: {e}") from e
+        sp.set_port_types(P.PortTypes.from_json(fid, d["ports"], params, ret_type, outs if fid == desc["root"] else None)
+                          if "ports" in d else None)
         return sp
 
+    admitted: dict[str, Any] = {}
+
+    def ours(fid: str):
+        """``fid`` as `bind` would admit it: where the registry holds its composite, that composite specialized at the file's
+        binding record (function references the registry's own where it holds them too), once the composite has every static
+        the record names and its `refuse` has no reason against the record; otherwise the decoded definition. Uncached, so a
+        file's record never enters the registry's binding cache."""
+        if fid in admitted:
+            return admitted[fid]
+        d = ddefs[fid]
+        reg = registry[d["id"]] if d["form"] == "composite" and d["id"] in registry else None
+        if not isinstance(reg, CompositeDefinition):
+            admitted[fid] = get(fid)
+            return admitted[fid]
+        record = {k: _record_value(v, ours) for k, v in d["bindings"].items()}
+        if unknown := [k for k in record if k not in reg.statics]:
+            raise ValueError(f"definition {fid!r}: {reg.id} has no static parameter {unknown[0]!r}")
+        try:
+            why = reg.refuse(record) if reg.refuse is not None else None
+        except (TypeError, ValueError, KeyError, IndexError, AttributeError) as e:
+            why = f"{type(e).__name__} judging the record: {e}"
+        if why:
+            raise ValueError(f"definition {fid!r}: {reg.id} refuses this binding: {why}")
+        admitted[fid] = SpecializedDefinition(reg, record, tuple((k, _static_key(record[k])) for k in reg.statics if k in record))
+        return admitted[fid]
+
+    return get
+
+
+def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+    built: dict[str, Any] = {}
+    get = definition_decoder(desc, registry, built)
     root = get(desc["root"])
     if not isinstance(root, SpecializedDefinition) or root.body.params:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
-    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in ddefs)
+    pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
+    P.check(root)
     return DecodedProgram(root, built, desc, pfn_fns)

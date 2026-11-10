@@ -7,6 +7,7 @@ import copy
 import json
 
 import pytest
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import norm_scales as NS
@@ -129,7 +130,7 @@ def test_an_aten_chain_norm_commits_its_rsqrt_output():
     assert not any(x["family"] == "call_boundaries" and x.get("spec") == "RsqrtF32_v1" for x in w_on.manifest["identities"])
     assert any(x["family"] == "call_boundaries" and x.get("spec") == "RsqrtF32_v1" for x in w_off.manifest["identities"])
     q = on.manifest["query"]
-    assert q["norm_scales"]["words_by_family"] == {"RsqrtF32_v1": 3} and q["residuals_applied"]["encoding:norm scale"] == 3
+    assert q["norm_scales"]["words_by_family"] == {"RsqrtF32_v1": 3}
     assert NS.manifest_modules(on.manifest) == {"model.layers.0.input_layernorm": "RsqrtF32_v1"}
 
 
@@ -157,7 +158,8 @@ def test_the_family_is_in_every_vocabulary():
     assert NS.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[NS.FAMILY] == "norm_tap" and NS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     entry = {"identity": {"op_path": "model.norm", "output_member": NS.MEMBER}, "name": f"model.norm/{NS.MEMBER}"}
     assert OC._family_of(entry) == "hidden_stream", "the Match record holds no value for a norm's scale: form (B) never compares it"
-    assert fmt.committed_identity(f"model.norm/{NS.MEMBER}") == ("model.norm", NS.MEMBER)
+    row = {"family": NS.FAMILY, "op_path": "model.norm", "output_member": NS.MEMBER, "step": 0}
+    assert Binder([row]).bind(0, [f"model.norm/{NS.MEMBER}"]) == [("model.norm", NS.MEMBER, 0, "label")]
 
 
 def test_the_plan_takes_the_scale_at_the_norm_module():
@@ -179,7 +181,7 @@ def test_the_plan_takes_the_scale_at_the_norm_module():
 
 
 def test_word_check_sees_the_tapped_scale_as_committed():
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 64, "EPS": 1e-05}, "definition": "RMSNormTriton_v1{N=64,EPS=1e-05}", "calls": 3,
          "where": "model.layers.0.input_layernorm"}
@@ -193,6 +195,7 @@ def test_word_check_sees_the_tapped_scale_as_committed():
 
 def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch):
     from verity_vllm.pipeline import manifest as M
+    from verity_vllm.pipeline import manifest_verify as MV
     from verity_vllm.query.manifest import verify as V
 
     P = kernel_program()
@@ -201,5 +204,5 @@ def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch
     assert V.verify(on, on)["ok"] and not V.verify(on, off)["ok"] and not V.verify(off, on)["ok"]
     seen = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and on)
-    V.rebuild(program="p", norm_scales=True)
+    MV.rebuild(program="p", norm_scales=True)
     assert seen["kw"]["norm_scales"] is True

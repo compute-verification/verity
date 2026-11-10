@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.ForkLast
+module
+
+public import Proofs.Flock.Recursive.ForkLast
+public import Proofs.Flock.Recursive.ForkInner
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # Recursion: gap 2 at the committed rounds
@@ -15,6 +32,8 @@ leaf decodes. The conclusion is `zk_sessions_recursive_fork_inner`'s.
 * `zk_sessions_recursive_fork_innerC`: it for an inner verifier and a pick that ignore the last coin (`Inner.LastFree`,
   `PickLastFree`), the inner term from `innerAtLeavesL_of_forkOn`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -94,7 +113,6 @@ strings before the last round and messages equal there, reading the decoded tran
 message, with the inner term `InnerAtLeavesL` a hypothesis wherever the recursive prover has no inner fork, in place of
 the inner protocol's soundness. -/
 theorem zk_sessions_recursive_fork_innerL
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -129,7 +147,7 @@ theorem zk_sessions_recursive_fork_innerL
       simp only [ne_eq, Option.map_eq_none_iff, List.getElem?_eq_none_iff, Nat.not_le]; omega)
     exact ⟨m, zip_eq_relabelL (ref ω) m t l hm fun k hk =>
       option_eq_of_rel (R := fun a b => k + 1 < I.r → a = b) (fun _ _ hab => hab (by omega)) (h k (by omega))⟩
-  rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun i _ a b => i + 1 < I.r → a = b)
+  rcases zk_sessions_recursive_fork_on zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun i _ a b => i + 1 < I.r → a = b)
       (fun ref ω t u => ∃ m, u = relabelL (ref ω) m t) hrd (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt msg
       hbr.2.1 hbr.2.2.1 hbr.2.2.2 (fun ref => InnerAtLeavesL.toZ (hleaf hf ref))
       with h | h | h | h
@@ -152,7 +170,6 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : La
 round fork, a session fork, an inner fork of `σ`'s own runs, or the same bound: `zk_sessions_recursive_fork_innerL`
 with the inner term from `innerAtLeavesL_of_forkOn`. -/
 theorem zk_sessions_recursive_fork_innerC
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -175,7 +192,7 @@ theorem zk_sessions_recursive_fork_innerC
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin :=
-  zk_sessions_recursive_fork_innerL hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H pick hr0 fun hf ref =>
+  zk_sessions_recursive_fork_innerL zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H pick hr0 fun hf ref =>
     innerAtLeavesL_of_forkOn σ (fun R ω t o => AcceptsV (zs R ω t) o) x
       (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω))
       (fun w => wmsg w.1) H pick hin hlast hpick hf ref

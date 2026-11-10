@@ -2,7 +2,12 @@
 `RecVStar.fixedRow` on an inner session of two reps of two message rounds each and R's stream (one message round, a level-0
 top of two nodes and a level-1 top of one): what row `x` of each value the inner transcript fixes is.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.InnerStreams
 
@@ -31,7 +36,7 @@ def gone : Option (Option (List UInt8)) := some none
 -- a session of one table's reps holds no stream of R's
 #guard row { reps := ic.reps } "rec-opening-c0" 0 == gone
 #guard row ic "rec-acc" 0 == none && row ic "rec-top-L1" 0 == none && row ic "rec-sparse-h" 0 == none
--- the circuit table's tops are held apart from `fixedRow`, to the coin server's `root_B` and salted tops at every shape
+-- the circuit table's tops are held apart from `fixedRow`, to the challenger's live-coin part's `root_B` and salted tops at every shape
 -- (`topLevel`, `topRow`, `checkTopRows`; `Flock.Test.InnerLink`)
 #guard topLevel "rec-top-L1" == some 1 && topLevel "rec-top-stacked-L1" == none
 -- rec-claim is the sparse phase's: without the verifier's RecSparse shape it is fixed by no row
@@ -126,7 +131,7 @@ def err (x : Except String Unit) : Option String := match x with | .error e => s
 -- row k; a reads file with a claim port at another row is refused
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := ByteArray.empty, leaves := 2, words := none, wordBits := 16, domain := ByteArray.empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def sparseMsgsOwn (rd : List Nat) : Array Registered.Port :=
   ((sparseMsgs (.sparse sp18 38)).map fun q => port q.1 q.2.1 rd).toArray
 def sparseOwn (claim : List Nat) : Array Registered.Port :=
@@ -151,15 +156,21 @@ def openSt : VStar.Stmt := .opening 23 2 0 gfs0 [("m3", 128), ("acc0", 128), ("c
 #guard err (checkOwn openSt (openOwn [0])) == some
   "rec-opening/m23-c2-p0: the registered reads' port claim1 under rec-claim reading [0] is not the statement's: the statement's is claim1 under rec-claim reading [1]"
 
-#guard err (checkCandidate3 c3 full.toArray) == none
-#guard err (checkCandidate3 c3 (full.drop 1).toArray) ==
+def c3h : Inner := { c3 with holo := true }
+
+#guard err (checkCandidate3 c3h full.toArray) == none
+#guard err (checkCandidate3 c3h (full.drop 1).toArray) ==
   some "candidate 3's V* list has no RecSparse statement (rec-sparse/n18-e13-s6-t0), and the inner shape names its sparse phase"
-#guard err (checkCandidate3 c3 (full.filter (·.name != "rec-open-stacked/l16-h3")).toArray) ==
+#guard err (checkCandidate3 c3h (full.filter (·.name != "rec-open-stacked/l16-h3")).toArray) ==
   some "candidate 3's V* list has no level 1 of R's openings (rec-open-stacked/…), and the inner shape names R (m 23, claims 2)"
-#guard err (checkCandidate3 c3 full.dropLast.toArray) ==
+#guard err (checkCandidate3 c3h full.dropLast.toArray) ==
   some "candidate 3's V* list has no part of R's opening (rec-opening/m23-c2-p0), and the inner shape names R (m 23, claims 2)"
-#guard err (checkCandidate3 c3 (full.dropLast ++ [op 24]).toArray) ==
+#guard err (checkCandidate3 c3h (full.dropLast ++ [op 24]).toArray) ==
   some "candidate 3's V* list: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at R's shape (m 23, claims 2, META's stacked)"
+-- a sparse phase at public circuits is refused, whatever the list: RecSparse reads h, which only a holo session sends
+#guard err (checkCandidate3 c3 full.toArray) == some
+  "the inner shape names a RecSparse shape (rec-sparse/n18-e13-s6-t0) at public circuits: the sparse phase reads h, which only a holo inner session (rec-inner --hide) sends"
+#guard err (checkSparseHolo c3h) == none && err (checkSparseHolo { c3 with sparse := none }) == none
 -- a session without candidate 3's phases needs none of them
 #guard err (checkCandidate3 { c3 with sparse := none, stacked := none } #[]) == none
 
@@ -245,7 +256,7 @@ def msgAt (s : String) (j : Nat) (got want : String) (n m : Nat) : Option String
   msgAt "sparse/rep1" 0 "round 2" "round 1" 33 33
 #guard why (checkCovers c3 (withS #[sparseAt 0 spRounds.dropLast, sparseAt 1, stackedAt])) ==
   msgAt "sparse/rep0" 32 "no round" "round 33" 32 33
--- each sparse stream draws its phase's coins round for round (the coin server's record of r20261012-081440-2d61 holds
+-- each sparse stream flips its phase's coins round for round (the challenger's record of the recorded session holds
 -- 6, six 1s, 0, a 1 per H3 round, P_LOG's 5 and the claim's 0): a round short, a coin over, and none are refused
 def spCoins : Array (Array Flock.F128) := repCoins (sparsePhaseRounds sp18)
 def spDraws (cs : Array (Array Flock.F128)) : Option String :=
@@ -299,7 +310,7 @@ def roundsOff (s : String) (n : Nat) : Option String :=
   Flock.RecSetup.boundKey (none, some r23) != Flock.RecSetup.boundKey (some "a", some r23) &&
   Flock.RecSetup.boundKey (some "a", none) != Flock.RecSetup.boundKey (some "a", some r23)
 
-/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at 2d61's shape: k_log 22, so 16 inner
+/-! Check 5's sparse refusals on the inner statement (`RecCoins.checkInnerRange`), at `rec-c3-inner`'s shape: k_log 22, so 16 inner
 point coordinates, and its unit range of 64 slots of 2^13 rows at 256 (`rec_vstage stage`'s RANGE). -/
 
 def unitRng (slotLog := 13) (pos0 := 256) (count := 64) : Range := { kind := .net 0, slotLog, pos0, count, role := .none }
@@ -354,6 +365,21 @@ def commitsAt (i : Inner) (r : Option String) : Option String :=
 #guard checksAt c3 (some (c3cs (some r23))) == why (checkCovers c3 (c3cs (some r23)))
 #guard err (Flock.RecSetup.checkInner (some c3) none (.ok (none, some r23))) == some NO_FILES
 #guard err (Flock.RecSetup.checkInner (some { c3 with sparse := none }) none (.ok (none, none))) == none
+-- the verdict's last refusal: `RecursiveKS` covers the dense inner form only, so a holo or sparse inner shape is refused
+-- (`RecSetup.denseOnly`), and a dense one or none passes
+def DENSE_ONLY : String := "RecursiveKS covers the dense form only (no holo, no sparse phase), and the verifier " ++
+  "refuses every form its proof doesn't cover"
+#guard err (Flock.RecSetup.denseOnly (some c3)) == some ("refused: the verifier's inner shape (--rec-inner) is sparse " ++
+  "(\"sparse\", candidate 3's RecSparse phase): " ++ DENSE_ONLY)
+#guard err (Flock.RecSetup.denseOnly (some c3h)) == some ("refused: the verifier's inner shape (--rec-inner) is holo " ++
+  "(\"holo\": true): " ++ DENSE_ONLY)
+#guard err (Flock.RecSetup.denseOnly (some { c3 with holo := true, sparse := none, stacked := none })) ==
+  err (Flock.RecSetup.denseOnly (some c3h))
+#guard err (Flock.RecSetup.denseOnly (some { c3 with sparse := none, stacked := none })) == none
+#guard err (Flock.RecSetup.denseOnly none) == none
+-- and a recursive session (a --rec-* flag) without --zk (`RecSetup.zkOnly`): its model reads the masked verifier only
+#guard err (Flock.RecSetup.zkOnly false true) == some Flock.RecSetup.notZk
+#guard [(true, true), (true, false), (false, false)].all fun (z, r) => err (Flock.RecSetup.zkOnly z r) == none
 #guard commitsAt c3 none == some NO_REG
 #guard [commitsAt { c3 with sparse := none } none, commitsAt c3 (some "{}")].all
   (· == some "rec inner transcript: not a rec/inner-transcript/v1 record")

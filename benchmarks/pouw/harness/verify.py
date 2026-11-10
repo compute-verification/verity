@@ -1,4 +1,4 @@
-"""The verify step (panel rule (b), 08:35Z): after the lease, in the same research run, run each arm's reference
+"""The verify step (panel rule (b)): after the lease, in the same research run, run each arm's reference
 verifier on the transcripts its timed code emitted, and write beside each panel row of the run's result JSON the verifier's
 commit, its accept line verbatim, and the transcript as ``<run id>:<path> sha256:<hex>``; then print each accepted row's
 `panel.py append` arguments.
@@ -11,10 +11,10 @@ per-run command's exit code is recorded, and a nonzero one fails this step witho
 line accepted. Every command's output is kept under ``verify/`` in the run's directory.
 
 Every reference verifier an arm names today is a replay that opens the run's rows and words and recomputes the scheme in
-the clear, so an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).
+the clear, so an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).
 The records and `panel.py append`'s arguments keep the name ``verifier``.
 
-  python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE]
+  python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE] [--every-row]
       [--tier 2a|2b] [--hypothesis TEXT] [--parent ART|VARIANT] [--outcome O --reason TEXT] [--by LANE]
       [--publish [--push] [--store ROOT]] [--no-ledger]
 
@@ -55,7 +55,9 @@ from pathlib import Path
 
 import arm as A
 import ledger as L
+from verity_config.settings import of
 
+settings = of(__file__)
 VERSION = "verify/v1"
 EXIT_OK, EXIT_REJECTED, EXIT_USAGE = 0, 1, 2
 ACCEPT = re.compile(r"^\s*ACCEPT\b")
@@ -69,7 +71,7 @@ class UsageError(ValueError):
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def sha256_file(path: Path) -> str:
@@ -80,10 +82,17 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def panel_rows(result: dict) -> list[tuple[str, str, dict]]:
-    """(arm, shape label, panel block) of every arm row the run reported a panel block for."""
-    return [(name, s["label"], r["panel"]) for s in result.get("shapes", [])
-            for name, r in (s.get("arms") or {}).items() if "panel" in r]
+def panel_rows(result: dict, every: bool = False) -> list[tuple[str, str, dict]]:
+    """(arm, shape label, panel block) of every arm row the run reported a panel block for; with `every`, of every arm row,
+    one without a panel block verified into a ``verified`` block of its own (`verity bench overhead`'s rows)."""
+    out = []
+    for s in result.get("shapes", []):
+        for name, r in (s.get("arms") or {}).items():
+            if "panel" in r:
+                out.append((name, s["label"], r["panel"]))
+            elif every:
+                out.append((name, s["label"], r.setdefault("verified", {})))
+    return out
 
 
 class Runner:
@@ -183,11 +192,12 @@ def harness_control(result: dict, name: str, label: str, v: dict | None) -> dict
     return v | {"control": "negative/" + v["transcript"][len("transcripts/"):]} if dumped else v
 
 
-def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log) -> dict:
-    """Runs every arm's verifier and writes each panel row's verdict into it; returns the step's record."""
+def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log, every: bool = False) -> dict:
+    """Runs every arm's verifier and writes each panel row's verdict into it (`every`: each arm row's); returns the step's
+    record."""
     runner = Runner(run_dir, log)
     rows = []
-    for name, label, p in panel_rows(result):
+    for name, label, p in panel_rows(result, every):
         arm = (result.get("arms") or {}).get(name) or {}
         v = harness_control(result, name, label, arm.get("verifier"))
         for k in ("verifier_commit", "verifier_accept", "transcript", "negative_control", "panel_args", "verification"):
@@ -275,19 +285,21 @@ def ledger(result: dict, a: argparse.Namespace, log) -> dict:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("result", type=Path, help="the run's result JSON (bench.py --out)")
-    p.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID"))
-    p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA"))
+    p.add_argument("--run-id", default=settings.RESEARCH_RUN_ID)
+    p.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA)
     p.add_argument("--out", type=Path, help="write the result here instead of rewriting RESULT_JSON")
+    p.add_argument("--every-row", action="store_true",
+                   help="verify every arm row, not only the panel's (verity bench overhead: a scheme at every shape)")
     g = p.add_argument_group("the attempt records (ledger.py)")
-    g.add_argument("--tier", choices=L.TIERS, default=os.environ.get("POUW_TIER", "2a"),
+    g.add_argument("--tier", choices=L.TIERS, default=settings.POUW_TIER,
                    help="2a: a one-GPU screen (the default); 2b: a timed whole-node window, the panel's measurements")
     g.add_argument("--hypothesis", help="the attempt's one line: what it changes and what it should buy")
     g.add_argument("--parent", help="the attempt it changes: its record's art: id, or its variant id")
     g.add_argument("--outcome", choices=L.OUTCOMES, help="the lane's verdict, when it has one already (default: screened)")
     g.add_argument("--reason", help="the outcome's one-line reason (required unless screened)")
-    g.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"),
+    g.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE,
                    help="the lane (default: $GPU_LEASE_WHO)")
-    g.add_argument("--publish", action="store_true", default=os.environ.get("POUW_LEDGER_PUBLISH") == "1",
+    g.add_argument("--publish", action="store_true", default=settings.POUW_LEDGER_PUBLISH,
                    help="put the records into the evidence store (default when POUW_LEDGER_PUBLISH=1)")
     g.add_argument("--push", action="store_true", help="with --publish: push them onto the store's remote")
     g.add_argument("--store", help="the store's root (default: $RESEARCH_STORE or ~/.research/store)")
@@ -308,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         L.one_line(a.reason, "--reason")
         result = json.loads(a.result.read_text())
         started = now()
-        rec = verify(result, a.result.resolve().parent, a.run_id, a.commit, log)
+        rec = verify(result, a.result.resolve().parent, a.run_id, a.commit, log, a.every_row)
     except (UsageError, A.ArmError, L.LedgerError, OSError, ValueError, KeyError, TypeError) as ex:
         log(f"verify: {type(ex).__name__}: {ex}")
         return EXIT_USAGE
@@ -320,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     tmp.write_text(json.dumps(result, indent=1, default=str))
     os.replace(tmp, out)
     for r in rec["rows"]:
-        row = next(pb for n, lb, pb in panel_rows(result) if n == r["arm"] and lb == r["shape"])
+        row = next(pb for n, lb, pb in panel_rows(result, a.every_row) if n == r["arm"] and lb == r["shape"])
         if r["accepted"] and "panel_args" in row:
             print(f"{r['arm']} {r['shape']}: python panel.py append --line LINE --version VERSION --change CHANGE "
                   f"--description DESCRIPTION {shlex.join(row['panel_args'])}")

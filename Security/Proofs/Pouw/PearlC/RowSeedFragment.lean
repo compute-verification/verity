@@ -1,10 +1,11 @@
-import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
-import Models.Pouw.Guarantees.PearlC
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 
 /-!
 # The fragment argument: the counting theorem (staging, nothing pinned)
 
-`internal/pouw/rtx-pro/a-commit-latency.md`, "The fragment argument, made rigorous" (bc-3006c44a, 10:35Z). A skip
+The fragment argument. A skip
 program omits `mma.sync m16n8k32` instructions, each a slot `(b, J, t)` (16-row block `b`, 8-column group `J`, atom
 `t`), and routes at most 5 of a slot's 128 words to generic cores. Its words stay correct only if each word's omitted
 atoms form a skip set (`SkipSetU`).
@@ -15,9 +16,11 @@ atoms form a skip set (`SkipSetU`).
 * **The saving** `fragSkip_saving_le`: at 4,096 units a slot, at most `(4096/11)·Σ_i fragCount i`, about `372` units
   per unit of `fragCount`.
 
-The draw side is in `RowSeedSkip.lean`: `ttOutRowSeed_skipClass` bounds a skip-class program's saving under the named
+The sample side is in `RowSeedSkip.lean`: `ttOutRowSeed_skipClass` bounds a skip-class program's saving under the named
 assumption `Assumptions.FragDraw` at `Λ = 100`, (C4) and (C6), through the union bound `qtree_union_bound`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

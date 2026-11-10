@@ -124,6 +124,65 @@ def test_a_batch_of_composites_runs_in_chunks_of_members_within_the_row_budget(m
     assert set(widths) == {1}  # one member of one word of instances at a time
 
 
+#: (x, y) -> W full adders, member i on (x0 & y0, x[i], y[i]): a batch of a composite over a shared argument
+SHARED_CARRY = CompositeDefinition(
+    "BitsTestSharedCarry", 1, (), lambda S: ((("x", Array(W, BIT)), ("y", Array(W, BIT))), Array(W, Tuple(BIT, BIT))),
+    lambda B, S, x, y: B.batch(FULL_ADDER, B.call(BL.AND, ops(x[0], y[0])), x, y, axes=(None, 0, 0)), register=False)
+
+
+def test_a_batch_holds_a_shared_argument_once(monkeypatch) -> None:
+    """A batch's member rows hold each argument it shares once, not once a member, and read as the copies would."""
+    c = BS.compile(SHARED_CARRY)
+    (members,) = [s[2] for s in c.steps if s[0] == "call"]
+    assert isinstance(members, BS.Members) and members.shape == (W, 3) and len(members) == W
+    assert [p.ndim for p in members.parts] == [1, 2, 2]
+    rows = np.asarray(members.tolist())
+    assert np.array_equal(members[2:5], rows[2:5]) and np.array_equal(members[-1], rows[-1])
+    assert np.array_equal(np.stack(list(members)), rows) and len(set(rows[:, 0])) == 1
+    inputs = [_bits(np.random.default_rng(5), 200, t) for _, t in bind(SHARED_CARRY).signature()[0]]
+    ref = E.evaluate_batch(bind(SHARED_CARRY), *inputs, kernel="reference")
+    assert np.array_equal(BS.evaluate_bits(SHARED_CARRY, *inputs), ref)
+    monkeypatch.setattr(BS, "_ROW_BUDGET", 1)
+    assert np.array_equal(BS.evaluate_bits(SHARED_CARRY, *inputs), ref)
+
+
+#: (c, v) -> c ^ parity(v): a member of a batch over an inner axis beside a shared bit
+PARITY3_XOR = CompositeDefinition("BitsTestParity3Xor", 1, (), lambda S: ((("c", BIT), ("v", Array(3, BIT))), BIT),
+                                  lambda B, S, c, v: B.call(BL.XOR, ops(c, B.call(PARITY3, v))), register=False)
+SHARED_OUT = 2 * W + 3 * (W + 1) + 3 * 2 * W + W
+
+
+def _shared(B, S, x, y, m):
+    """Each form of batch that shares an argument: full adders over a shared carry, ripple-carry adders (a scan) over a shared
+    word, a batch of `SHARED_CARRY`, whose members batch over a shared carry of their own, and parities over m's inner axis
+    beside a shared bit."""
+    c = B.call(BL.AND, ops(x[0], y[0]))
+    fas = B.batch(FULL_ADDER, c, x, y, axes=(None, 0, 0))
+    adds = B.batch(ADDER, x, m, axes=(None, 0))
+    nested = B.batch(SHARED_CARRY, x, m, axes=(None, 0))
+    cols = B.batch(PARITY3_XOR, B.call(BL.XOR, ops(x[1], y[2])), m, axes=(None, 1))
+    return _cat(Array(SHARED_OUT, BIT), fas, adds, nested, cols)
+
+
+SHARED = CompositeDefinition(
+    "BitsTestShared", 1, (),
+    lambda S: ((("x", Array(W, BIT)), ("y", Array(W, BIT)), ("m", Array(3, Array(W, BIT)))), Array(SHARED_OUT, BIT)),
+    _shared, register=False)
+
+
+@pytest.mark.parametrize("row_budget", [None, 1, 5])
+def test_a_batch_over_a_shared_argument_computes_what_the_reference_does(monkeypatch, row_budget) -> None:
+    """Every form of batch that shares an argument gives the plain-integer reference's outputs, evaluated whole and in runs of
+    one or a few members (``_ROW_BUDGET``), which slice `Members` where a shared argument is held once."""
+    spec = bind(SHARED)
+    inputs = [_bits(np.random.default_rng(11), 200, t) for _, t in spec.signature()[0]]
+    ref = E.evaluate_batch(spec, *inputs, kernel="reference")
+    if row_budget is not None:
+        monkeypatch.setattr(BS, "_ROW_BUDGET", row_budget)
+    got = BS.evaluate_bits(SHARED, *inputs)
+    assert got.shape == ref.shape and np.array_equal(got, ref)
+
+
 def test_the_word_view_adds() -> None:
     rng = np.random.default_rng(1)
     x = rng.integers(0, 1 << W, size=1000, dtype=np.uint16)
@@ -132,6 +191,62 @@ def test_the_word_view_adds() -> None:
     assert out.shape == (1000,) and np.array_equal(out, x + y)
     with pytest.raises(ValueError):
         BS.evaluate_words(ADDER, x | (1 << W), y)
+
+
+def test_a_boolean_definition_takes_its_word_definitions_kernel(monkeypatch) -> None:
+    """ADDER's twin names x + y as its word Definition, whose kernel declines odd x: evaluate_batch packs each element's bits
+    into a word, runs that kernel, unpacks its output, and evaluates the declined rows bit-sliced, never gate by gate."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.evaluation.batch import _KERNELS, _WORD
+
+    add = PrimitiveDefinition("BitsTestAddWord", 1, (("x", Value(W)), ("y", Value(W))), Value(W + 1), lambda x, y: x + y,
+                              register=False)
+    twin = CompositeDefinition("BitsTestWordAdder", 1, (),
+                               lambda S: ((("x", Array(W, BIT)), ("y", Array(W, BIT))), Array(W + 1, BIT)), _adder, register=False)
+    twin.word = add
+    spec = bind(twin)
+    rng = np.random.default_rng(4)
+    x, y = (_bits(rng, 200, Array(W, BIT)) for _ in range(2))
+    want = BS.evaluate_bits(spec, x, y)
+    batches, bit_rows = [], []
+
+    def kernel(a, b):
+        batches.append(len(a))
+        return a.astype(np.uint16) + b, a % 2 == 1
+
+    def bits(t, *arrays):
+        bit_rows.append(arrays[0].shape[0])
+        return BS.evaluate_bits(t, *arrays)
+
+    E.register_kernel(add, kernel)
+    try:
+        k = E.word_kernel(spec)
+        assert (k.key, k.name) == ("BitsTestWordAdder_v1", "numpy") and E.kernels(spec) == {}
+        monkeypatch.setattr(E.batch, "evaluate", lambda *a, **kw: pytest.fail("the reference ran"))
+        monkeypatch.setattr(E.batch, "evaluate_bits", bits)
+        assert np.array_equal(E.evaluate_batch(spec, x, y), want)
+        assert batches == [200] and bit_rows == [int(x[:, 0].sum())]
+    finally:
+        del _KERNELS[add.id]
+        _WORD.clear()
+
+
+def test_gemm_v3_runs_on_gemm_v2s_kernel(monkeypatch) -> None:
+    """The BF16 GEMM on bits takes the word GEMM's numpy kernel; the s8 accumulator's word Definition has no kernel, so it
+    stays bit-sliced."""
+    from verity.ml.circuits.ops.boolean import gemm as BG
+
+    gemm = bind(BG.Gemm, K=32, N=4, **BG.GEMM_AMPERE)
+    assert E.word_kernel(gemm).name == "numpy"
+    assert E.word_kernel(bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)) is None
+    rng = np.random.default_rng(5)
+    bf16 = lambda n: (np.float32(rng.uniform(-1, 1, n)).view(np.uint32) >> 16).astype(np.uint16)  # noqa: E731
+    x, w = bf16((3, 32)), bf16((3, 4, 32))
+    want = BS.evaluate_words(gemm, x, w)
+    unpack = lambda a: ((a[..., None] >> np.arange(16, dtype=np.uint16)) & 1).astype(np.uint8)  # noqa: E731
+    monkeypatch.setattr(E.batch, "evaluate_bits", lambda *a: pytest.fail("evaluated bit-sliced"))
+    got = E.evaluate_batch(gemm, unpack(x), unpack(w))
+    assert np.array_equal(BS._to_words(got.reshape(3, -1), [16] * 4), want)
 
 
 def test_evaluate_batch_routes_a_boolean_composite(monkeypatch) -> None:

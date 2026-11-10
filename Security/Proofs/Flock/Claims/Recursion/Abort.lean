@@ -1,4 +1,40 @@
-import Proofs.Flock.Claims.Recursion.OuterKS
+module
+
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.Recursion.OuterKS
+public import Proofs.Flock.Claims.Recursion.Wald
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The inner protocol's KS against provers that may abort
@@ -11,13 +47,15 @@ on the inner protocol's KS against such provers, `Inner.KSAbort`, which the clai
 
 * **The abort model** (`abortRun`): after the inner rounds, a prover may abort its run, reading its tape, every coin of
   the run and fresh coins of its own for that run (`A`), which the inner verifier doesn't read. An aborted run sends
-  nothing and is rejected (`abortTrace`). Its messages are the prover's, so they read only the history.
-* **The claim** (`Inner.KSAbort`): `Inner.KS`'s inequality at every such prover. `E^rep` reruns at draws of the run's
-  coins with fresh abort coins, the judged draw first, and sees each run as it aborts (`Inner.PrBadAbort`), so an
+  nothing and is rejected (`abortTranscript`). Its messages are the prover's, so they read only the history.
+* **The claim** (`Inner.KSAbort`): `Inner.KS`'s inequality at every such prover. `E^rep` reruns at samples of the run's
+  coins with fresh abort coins, the judged sample first, and sees each run as it aborts (`Inner.PrBadAbort`), so an
   aborted rerun is one it doesn't see accepted. `B` sees the two runs as they abort, each with its own abort coins
   (`BAbort`, `PrBAbort`).
 * With no aborts (`A = Unit`, nothing refused) it is `Inner.KS` (`KSAbort_KS`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -29,9 +67,9 @@ theorem erep_eq {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemb
     (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
     erep m k K opens assemble check d₀ ρ = erepProg m k K opens assemble check d₀ ρ := rfl
 
-/-- **`E^rep` over relabeled draws**: `E^rep` at the draws `μ d₀` and `μ ∘ ρ` against `run₂` is `E^rep` at `d₀` and `ρ`
+/-- **`E^rep` over relabeled samples**: `E^rep` at the samples `μ d₀` and `μ ∘ ρ` against `run₂` is `E^rep` at `d₀` and `ρ`
 against `run₂ ∘ μ`. -/
-theorem erepProg_eval_comp {D₁ D₂ W Op : Type} (H : Msg → Msg) (run₂ : D₂ → Trace) (μ : D₁ → D₂) (m k K : ℕ)
+theorem erepProg_eval_comp {D₁ D₂ W Op : Type} (H : Msg → Msg) (run₂ : D₂ → Transcript) (μ : D₁ → D₂) (m k K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (d₀ : D₁) (ρ : Fin m → Fin K → D₁) :
     ((erepProg m k K opens assemble check (μ d₀) (fun i j => μ (ρ i j))).eval H run₂).1 =
       ((erepProg m k K opens assemble check d₀ ρ).eval H (fun d => run₂ (μ d))).1 := by
@@ -80,7 +118,7 @@ theorem PrBAbort_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Co
   · rfl
 
 /-- **With no aborts, `Inner.KSAbort` is `Inner.KS`**: at fresh coins `Unit` and a prover that never aborts, its runs
-are the prover's, `E^rep`'s draws are the run's coins, and `B` is `B`. -/
+are the prover's, `E^rep`'s samples are the run's coins, and `B` is `B`. -/
 theorem KSAbort_KS {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     (I : Inner Coin W) (h : I.KSAbort H) : I.KS H := by
   intro x Ω _ _ P

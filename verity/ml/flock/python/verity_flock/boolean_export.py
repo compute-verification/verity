@@ -1,7 +1,7 @@
 """Boolean-circuit export of a served row's leaf templates (the website visualizer's dataset; a derived format, not a
 statement).
 
-Each leaf template of a row's program graph is lowered by :mod:`verity_flock.ir_lower` (its C-Flock template module where
+Each leaf template of a row's program graph is lowered by :mod:`verity_flock.ir_lower` (its Flock template module where
 one exists; ``GemmCoordinate`` as tensor-core k-steps, ``ir_lower.tc_units``, total semantics: ``fp.tc_dot16``). The unit
 circuits are built with the named ``fp`` / ``gf2`` / ``unit`` functions traced, so each unit is a tree of named subcircuits
 (bf16->f32, multiply, align, add, normalize, round, lookup, ...) down to its gates. Gates outside the units (the template's
@@ -225,7 +225,7 @@ def _evaluate_type(types: dict, d: str, C: Circuit, T: int = 64, seed: int = 0) 
     return got == [x for bits in want.values() for x in bits]
 
 
-class Registry:
+class CircuitTypeTable:
     """Every circuit type (`circuit_types`) the export builds, by its digest: each distinct sub-circuit once, shared across
     templates and rows, with its names and counts as metadata."""
 
@@ -237,9 +237,9 @@ class Registry:
         #: per root: the flat circuit's ANDs and its types' (their difference: the sharing a type boundary stops)
         self.shared: list[tuple[str, int, int]] = []
 
-    def type_of(self, build, name: str, kind: str, label: str | None = None) -> str:
+    def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
-        circuit. Returns the root's digest."""
+        circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
         from verity.ml.circuits import library
 
         _patch()
@@ -247,7 +247,7 @@ class Registry:
         for d, t in types.items():
             if d not in self.types:
                 CT.validate(t, lambda x: types.get(x) or self.types[x])
-        C = build()
+        C = build() if circuit is None else circuit
         if not _evaluate_type(types, root, C):
             raise AssertionError(f"the types of {name} disagree with its circuit")
         self.evaluated += 1
@@ -300,7 +300,7 @@ class Registry:
         self.nodes[d] = rec
 
 
-def write_modules(reg: Registry, path: Path) -> int:
+def write_modules(reg: CircuitTypeTable, path: Path) -> int:
     """``modules.json.gz``: ``{schema, format, types: {digest: content}}`` (``circuit_types``' content, its digest the key),
     streamed; returns its bytes."""
     with open(path, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=6, mtime=0) as gz, \
@@ -312,7 +312,7 @@ def write_modules(reg: Registry, path: Path) -> int:
     return path.stat().st_size
 
 
-# --- the definition walker (templates without a C-Flock unit lowering, attention per T, GEMM coordinates) ---------------
+# --- the definition walker (templates without a Flock unit lowering, attention per T, GEMM coordinates) ---------------
 
 def _split_params(s: str) -> dict:
     out, depth, cur, key = {}, 0, "", None
@@ -395,7 +395,7 @@ def prims() -> dict:
         from verity.ml.circuits.defs import PrimitiveDefinition
 
         mods = ["verity.ml.circuits.ops.prims"]
-        import verity_vllm.program.registry as R
+        import verity.ml.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
         for m in mods:
@@ -413,7 +413,7 @@ def _width_prim(pid: str):
     """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
     import re
 
-    from verity_vllm.program.registry import sampling
+    from verity.ml.definitions.registry import sampling
 
     for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
         m = re.fullmatch(pat, pid)
@@ -456,10 +456,10 @@ COUNTER = object()
 
 class Walker:
     """Definitions as trees: children are sub-definitions (``call`` x1, ``batch`` / ``scan`` x n) and primitive leaves; a
-    tensor-core step is the proof unit; another primitive is its ir_lower piece (lowered once per operand signature, constant
+    tensor-core step is the proof block; another primitive is its ir_lower piece (lowered once per operand signature, constant
     operands a Const node gives propagated) or not yet lowered."""
 
-    def __init__(self, reg: Registry, store: DefStore, cache: dict):
+    def __init__(self, reg: CircuitTypeTable, store: DefStore, cache: dict):
         self.reg, self.store, self.cache = reg, store, cache
         self.defs: dict[str, dict] = {}
         self.openings: set[str] = set()
@@ -759,7 +759,7 @@ class Walker:
             rec["commitment_openings"] = opened
 
 
-# --- commitment marks: the no-recompute partition (verity_vllm.query.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
+# --- commitment marks: the no-recompute partition (verity.ml.definitions.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
 
 X_BITS, W_BITS = 16, 32
 #: constant-operand variants of one primitive lowered per record; further gates use the generic piece (an unrolled scan gives every
@@ -777,7 +777,7 @@ class Commitments:
     ``[activation, body node, kind (MARK_KINDS), values]``: every value the cut commits, counted at the Definition body node that
     computes it; ``structure``, the gates in no unit (constants, wiring); ``violations``. Activations are indices into the record's
     ``scopes`` (descriptor ids, as the program graphs' Definitions). A separable Definition (a Gemm's coordinates,
-    attention's heads) is its members' cuts: its record lists ``separable`` and its unit classes point at the member record holding
+    attention's heads) is its members' cuts: its record lists ``separable`` and its size classes point at the member record holding
     them (``graph``), as in ``word.unit_rule``."""
 
     def __init__(self, walker: "Walker"):
@@ -786,12 +786,12 @@ class Commitments:
         self.openings = walker.openings
 
     def of(self, fn) -> str:
-        from verity.ml.circuits.codec import _spec_id
+        from verity.ml.circuits.codec import descriptor_id
         from verity.ml.circuits.cut import separable
         from verity.ml.circuits.defs import PrimitiveDefinition
-        from verity_vllm.query import word as WQ
+        import verity.ml.definitions.word as WQ
 
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         if fid in self.records:
             return fid
         if isinstance(fn, PrimitiveDefinition):
@@ -867,7 +867,7 @@ class Commitments:
         from collections import Counter
 
         import numpy as np
-        from verity.ml.circuits.codec import _spec_id
+        from verity.ml.circuits.codec import descriptor_id
         from verity.ml.circuits.layout import WIDE_FAN_IN
 
         G = WQ.Graph(fn)
@@ -907,7 +907,7 @@ class Commitments:
             g = c.gate(lo + int(G.keep[i]))
             s = g.scope
             if id(s.spec) not in sid:
-                sid[id(s.spec)] = scopes.setdefault(_spec_id(s.spec), len(scopes))
+                sid[id(s.spec)] = scopes.setdefault(descriptor_id(s.spec), len(scopes))
             return sid[id(s.spec)], int(s.spec.body.node_at(g.index - s.offset)), g
 
         kind_ix = np.array([("output", "committed", "dead").index(k) for k in kinds], np.int64)
@@ -1006,7 +1006,7 @@ def _empty(fid, gates) -> dict:
 def _leaf_lookup(params):
     """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
     parameter has over 10^8)."""
-    from verity.ml.circuits.types import Array, Record, Tuple
+    from verity.ml.circuits.types import Array, RecordType, Tuple
 
     starts, names, types, o = [], [], [], 0
     for name, t in params:
@@ -1021,9 +1021,9 @@ def _leaf_lookup(params):
         while True:
             if isinstance(t, Array):
                 t, k = t.elem, k % t.elem.leaves
-            elif isinstance(t, (Tuple, Record)):
+            elif isinstance(t, (Tuple, RecordType)):
                 for f in t.fields:
-                    f = f[1] if isinstance(t, Record) else f
+                    f = f[1] if isinstance(t, RecordType) else f
                     if k < f.leaves:
                         t = f
                         break
@@ -1059,7 +1059,7 @@ def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> di
 
 # --- templates and rows -------------------------------------------------------------------------------------------------
 
-#: program-graph template -> spine template (C-Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
+#: program-graph template -> spine template (Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
 SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
 NOT_LOWERED: dict[str, str] = {}
@@ -1110,7 +1110,7 @@ def _constants(call) -> dict[int, int]:
     return cval
 
 
-def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
+def _tail(reg: CircuitTypeTable, units, target, cache: dict) -> list[dict]:
     """The template's gates outside its units: each (primitive, constant operands) once with its count, lowered with its
     ``ir_lower`` piece where one exists, else marked not yet lowered."""
     _prog, call = IL.standalone(target)
@@ -1165,7 +1165,7 @@ def _io_bits(target) -> tuple[int, int]:
     return sum(leaf.values()), sum(by[r].prim.ret.w if r in by else leaf[r] for r in call.returns)
 
 
-def _unit(reg: Registry, units, name: str, cache: dict) -> str:
+def _unit(reg: CircuitTypeTable, units, name: str, cache: dict) -> str:
     key = ("unit", units.signature if units.builder is None else "tc")
     if key not in cache:
         cache[key] = reg.type_of(units.circuit, name, "c-flock-unit")
@@ -1186,9 +1186,9 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
     return store.find("AttentionHead_v3", D=str(tp["D"]), BN=str(tp["BN"]))
 
 
-def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
+def template(reg: CircuitTypeTable, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
              spec: str | None = None, member: str | None = None) -> dict:
-    """A leaf template's record: its proof units under the committed cut and its tail (C-Flock's unit lowerings), or its
+    """A leaf template's record: its proof blocks under the committed cut and its tail (Flock's unit lowerings), or its
     Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
     instance of the group is (a GEMM's output coordinate) when the Call is a batch of them; the record then counts one."""
     cache = {} if cache is None else cache
@@ -1222,7 +1222,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
                else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
         return _walked(base, walker, ids.get(None), f"GemmCoordinate{json.dumps(tp, sort_keys=True)}")
     if tname in SPINE_UNITS:
-        from verity_numerical.bench import templates as TM
+        from verity_flock import subcircuit_templates as TM
 
         sub = TM.subcircuit(SPINE_UNITS[tname], **_params(tname, tp))
         return _spine(reg, sub, base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}",
@@ -1230,17 +1230,17 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     return _walked(base, walker, spec, spec or tname)
 
 
-def _spine(reg: Registry, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
-    """A spine template's record: its C-Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
+def _spine(reg: CircuitTypeTable, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
+    """A spine template's record: its Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
     single unit), its Definition walked."""
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     mod = lowerings.registry("C-Flock").module(sub.template.id)
     if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
         rec = _walked(base, walker, spec, walked_name)
         rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
                        f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
-                       f"primitive with its piece, none in a proof unit")
+                       f"primitive with its piece, none in a proof block")
         return rec
     low = mod.lowering(sub)
     uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
@@ -1286,7 +1286,7 @@ def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
                 in_bits=d.get("in_bits"), out_bits=d.get("out_bits"))
 
 
-def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> dict:
+def _totals(reg: CircuitTypeTable, children: list[dict], defs: dict | None = None) -> dict:
     t = {"and": 0, "xor": 0, "not": 0, "flat_and": 0, "not_yet_lowered": 0}
     for c in children:
         if "def" in c:
@@ -1303,7 +1303,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
     return t
 
 
-def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
+def export_row(pg_path: Path, out: Path, reg: CircuitTypeTable, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
                checks: dict | None = None) -> dict:
     p = json.loads(Path(pg_path).read_text())
     walker.store.add_inline(p.get("definitions") or {})
@@ -1364,9 +1364,9 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity_vllm.pipeline.program_graph import _encoded
+        from verity.ml.definitions.encoding import encode_specialization
 
-        top, defs = _encoded(fn)
+        top, defs = encode_specialization(fn)
         self.ix.update(defs)
         return top
 
@@ -1380,12 +1380,12 @@ def statics_key(statics: dict) -> str:
 
 
 def subcircuit(sub, statics=({},)) -> dict:
-    """One bound subcircuit's Boolean export (``verity_numerical.bench.templates.Subcircuit``), self-contained: a template record
+    """One bound subcircuit's Boolean export (``verity_flock.subcircuit_templates.Subcircuit``), self-contained: a template record
     per instance statics (``variants``, keyed by :func:`statics_key`; attention one per key count T), as a row's templates are
-    recorded (a spine template its C-Flock unit and tail, any other its Definition walked), with every definition, subcircuit
+    recorded (a spine template its Flock unit and tail, any other its Definition walked), with every definition, subcircuit
     node and circuit type (``circuit_types`` content, keyed by digest) they reach. Raises where the subcircuit has no core
     Definition (a silicon reference)."""
-    reg, cache, store = Registry(), {}, _Encoded()
+    reg, cache, store = CircuitTypeTable(), {}, _Encoded()
     walker = Walker(reg, store, cache)
     variants = {}
     for st in statics:
@@ -1425,7 +1425,7 @@ CROSSCHECK_AGREE, CROSSCHECK_FAIL = 0.02, 4.0
 
 def crosscheck(doc: dict, tpl: dict, records: dict) -> dict:
     """Per template of a row: the nodes' ANDs (instances x the template's, per T) against the sum of their Calls' units under the
-    no-recompute cut (each unit class's ANDs x its count x the Calls), attention at the T values that have a record."""
+    no-recompute cut (each size class's ANDs x its count x the Calls), attention at the T values that have a record."""
     out: dict = {}
     for n in doc["nodes"]:
         t = tpl[n["template"]]
@@ -1455,8 +1455,8 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity_vllm.pipeline.program_graph import _word_values
-    from verity_vllm.query.word import specialization
+    from verity.ml.definitions.encoding import word_values
+    from verity.ml.definitions.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):
         return {}
@@ -1471,7 +1471,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
             (a,) = g["varying"]
             vals = sorted(int(v) for v in g["varying_calls"])
             bn = g["statics"].get("BN") if a == "T" else None
-            pts = _word_values(vals, int(bn) if isinstance(bn, int) else None)
+            pts = word_values(vals, int(bn) if isinstance(bn, int) else None)
             ids = {v: cm.of(specialization(g["definition"], dict(g["statics"], **{a: v}))) for v in pts}
             if "per_call" in q and checks is not None:
                 for end, v in (("min", vals[0]), ("max", vals[-1])):
@@ -1532,7 +1532,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
     return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
             "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
                            "activations exact from edges' ports; which parameter reads each of `inputs` is not in this program graph "
-                           "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
+                           "(param_inputs), so input roles are not assigned to parameters"}
 
 
 def _library_digest() -> str:
@@ -1562,7 +1562,7 @@ def main(argv=None) -> int:
     GATHERS = a.gathers
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    reg = Registry(out)
+    reg = CircuitTypeTable(out)
     ntpl = out / "templates.json"
     tpl_cache, cache = {}, {}
     walker = Walker(reg, DefStore(Path(a.program_graph[0]).parent), cache)
@@ -1585,9 +1585,9 @@ def main(argv=None) -> int:
                                 "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "nodes": reg.nodes}, separators=(",", ":")))
     module_bytes = write_modules(reg, out / "modules.json.gz")
-    from verity_vllm.query.word import query_id
+    from verity.ml.definitions.word import query_id
     (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
-                                                      "code": f"verity_vllm.query.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
+                                                      "code": f"verity.ml.definitions.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
                                                       "records": cm.records}, separators=(",", ":")))
     nyl: dict[str, dict] = {}
     for t in tpl_cache.values():

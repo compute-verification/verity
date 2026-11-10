@@ -1,10 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Refine.Arith
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
-import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
-import Proofs.Flock.Soundness.Refine.Arith
-import Proofs.Flock.Soundness.Refine.Salted
-import Mathlib.Algebra.CharP.Two
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # The inner proof's check holds on its openings (`ZkInnerAccepts`)
@@ -19,6 +36,8 @@ the four rounds it read (`zk_inner_peel`), is a check that holds on the proof's 
 * Each query: `codeAt` is `enc` at the point `j + 1` (`fOf_codeAt`), and the pair's path climbs to the pads' root
   under `encPair`'s `hm96` leaf (`leaf_pair`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -409,7 +428,8 @@ theorem zk_inner_accepts : ZkInnerAccepts := by
       [c₀, c₁, c₂, c₃]
       (ZkLink.innerCheckC hs512.H hs512.Ep hs512.Lp hs512.Lτ T.dom T.pos rows T.tr (toDig pr.root)
         (toDig pr.tauCommit) (fOf c₀[0]!) (fOf pr.rho, fOf pr.sigma) (fun i : Fin (7 + 3) => fOf c₁[i.val]!)
-        (fOf c₂[0]!) (vecOf (T.np + T.nP) pr.y) (fun i : Fin T.q => fOf c₃[i.val]!)) := by
+        (fOf c₂[0]!) (vecOf (T.np + T.nP) pr.y) (fun i : Fin T.q => fOf c₃[i.val]!),
+        ZkLink.qposOf T.pos (fun i : Fin T.q => fOf c₃[i.val]!)) := by
     unfold ZkLink.innerGameC
     refine Plays.bind' (ms₂ := [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩,
         ⟨Fin (T.np + T.nP) → 𝔽, vecOf (T.np + T.nP) pr.y⟩]) (cs₂ := [c₁, c₂, c₃]) (Plays.drawOne c₀ hs₀) ?_ rfl rfl

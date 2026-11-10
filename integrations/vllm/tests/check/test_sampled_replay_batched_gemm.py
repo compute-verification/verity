@@ -5,6 +5,8 @@ stores as "P" progressions (B*N runs of K leaves at stride N); the replay gather
 them, and names a gather that spans fields."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import re
 
 import numpy as np
@@ -17,10 +19,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity_vllm.program import compact as CP
-from verity_vllm.program.kernels import batched_gemm_rows, rows
-from verity_vllm.program.kernels.batched_gemm_rows import batched_gemm
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
+from verity.ml.definitions.numerics import batched_gemm_rows, rows
+from verity.ml.definitions.numerics.batched_gemm_rows import batched_gemm
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 
@@ -31,7 +33,7 @@ def _words(rng, *shape, scale=1.0) -> np.ndarray:
 
 def test_the_family_is_registered_with_its_evaluator():
     assert "BatchedGemm_v1" in rows.EVALUATORS and "BatchedGemm_v1" in rows.ROWS
-    assert rows.EVALUATORS["BatchedGemm_v1"].startswith("verity_vllm.program.kernels.batched_gemm_rows.batched_gemm")
+    assert rows.EVALUATORS["BatchedGemm_v1"].startswith("verity.ml.definitions.numerics.batched_gemm_rows.batched_gemm")
 
 
 @pytest.mark.parametrize("B,K,N", [(2, 32, 3), (3, 48, 5)])
@@ -60,11 +62,10 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     both configurations at every (K, N) and M the capture script runs, among them the TP8 Commit's prefill (256) and decode (1) M; and
     the Definition's conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
 
     p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
     assert p is batched_gemm_rows.PROVENANCE
-    assert re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", p["run"])
     assert all(re.fullmatch(r"[0-9a-f]{64}", p[k]) for k in ("record", "record_served_default"))
     assert all(re.fullmatch(r"art:[0-9a-f]{64}", a) for a in p["art"].values())
     assert p["variants"] == {"split_k_off": "GO", "served_default": "GO"}
@@ -72,8 +73,8 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     assert all(c["mismatch"] == 0 and c["words"] == c["B"] * c["N"] * sum(c["M"]) for c in p["cases"].values())
     assert {1, 256} <= set(X.LINEAR_M)
     for d in (CB.BatchedGemmWord, CB.BatchedGemm):
-        assert status_of(d.conformance) == "exact-model-tested"
-        assert p["run"] in d.conformance and p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
+        assert conformance_label(d.conformance) == "exact-model-tested"
+        assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
 def test_an_unregistered_dot_a_non_finite_lane_and_another_shape_decline_by_name():

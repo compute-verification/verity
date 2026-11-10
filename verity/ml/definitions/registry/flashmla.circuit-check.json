@@ -1,0 +1,16 @@
+{
+ "pieces": {
+  "E8m0ToBf16_v1": {
+   "and": 10,
+   "type": "d365e75928800563674ec73177be51a4fb8024cef4185ee57783adc0db7f4bb3abe96eb9ef67e2f479866c5e12bfae2ce5163dd6b1d85362d72838a41748e5f6"
+  },
+  "F32Geu_v1": {
+   "and": 104,
+   "type": "278cfc45a8c915a365a7a4eaca833a426901516958ce4caaa047111fa08922d02458638e067afa97adcada1af710318600f20f2d0537c6d6820a5847ed0d16b0"
+  },
+  "U32Ge_v1": {
+   "and": 32,
+   "type": "daef198adfaca2824b1aa74f3ab3cf24b1e45b335eed5037a144f4fc304b8c39bcf8c652c16acef311638e85d6f970e19c388a658b471d529c1ebcf556b55165"
+  }
+ }
+}

@@ -1,5 +1,5 @@
 """The config run (docs/vllm-config-sweep-plan.md §2-§4): the row mode (`--config-run 1`), the config record, the derived-Program cache,
-the family-stratified k-unit replay sample and the sweep driver's packing.  CPU only: row dirs, workloads and processes are stand-ins."""
+the family-stratified k-unit replay sample.  CPU only: row dirs, workloads and processes are stand-ins."""
 from __future__ import annotations
 
 import json
@@ -10,11 +10,11 @@ import pytest
 from tests.pipeline.test_row import _row
 from verity_vllm.check.replay.driver import family_strata
 from verity_vllm.check.replay.sample import sample
+from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R_
-from verity_vllm.pipeline import sweep as SW
 from verity_vllm.pipeline.row_driver import Stop
 
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
@@ -344,6 +344,10 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
 
 # ---------------------------------------------------------------------------------------------------------------- the config record
 
+#: The served switches of a Commit whose every rank read back what its row declares (`engine.served.record`).
+SERVED = {"schema": SV.SCHEMA, "ok": True, "problems": []}
+
+
 def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, word_ok: bool = True) -> Path:
     d = tmp_path / ROW
     (d / "commit").mkdir(parents=True)
@@ -360,6 +364,7 @@ def _row_dir(tmp_path: Path, *, mismatch: int = 0, commit_pass: bool = True, wor
            "commit": {"commit_pass": commit_pass, "commit_fail_reason": None if commit_pass else "C2 mismatch", "run_root": "rr",
                       "openings": {"n": 64, "verified": 64}, "expected_tensors": 9, "committed_tensors": 9, "sampled_replay": sr}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    (d / "commit" / "summary.json").write_text(json.dumps({"versions": {"served": SERVED}}))
     return d
 
 
@@ -381,10 +386,40 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
         assert rec["replay"]["differed"][0]["family"] == "Gemm_v1" and rec["replay"]["by_family"] == {"Gemm_v1": 2}
 
 
+@pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
+def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
+    """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
+    decides nothing (its decision document is the row dir's verdict.json): a row chain is never refused as "match FAIL" or
+    "commit FAIL" over a passing Match and Commit."""
+    d = _row_dir(tmp_path)
+    (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": gm, "failed_checks": []}))
+    (d / "verdict.json").write_text(json.dumps({"schema": "vllm-verdict/v1", "outcome": outcome, "manifest_digest": "mm"}))
+    rec = CR.record(d, ROW, summary={"versions": {"served": SERVED}})
+    assert (rec["outcome"], rec["why"]) == ("PASS" if why is None else "FAIL", why)
+    assert rec["commit"]["manifest"] == {"manifest_digest": "mm"} and rec["commit"]["run_root"] == "rr"
+
+
 def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
     d = _row_dir(tmp_path)
     (d / "commit" / "runs.jsonl").unlink()
     assert CR.record(d, ROW)["why"] == "commit not run"
+
+
+def test_a_commit_that_read_no_switches_back_is_not_pass(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "summary.json").unlink()
+    rec = CR.record(d, ROW)
+    assert (rec["outcome"], rec["why"], rec["served"]) == ("FAIL", "served switches not run", None)
+
+
+def test_a_commit_its_switches_failed_closed_says_so_first(tmp_path):
+    d = _row_dir(tmp_path)
+    (d / "commit" / "runs.jsonl").unlink()
+    bad = {**SERVED, "ok": False, "problems": ["rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"]}
+    (d / "commit" / "summary.json").write_text(json.dumps({"schema": SV.SCHEMA, "pass": False, "served": bad}))
+    rec = CR.record(d, ROW)
+    assert rec["why"] == "served switches FAIL: rank 0: VLLM_BATCH_INVARIANT=True where row file declares False"
+    assert rec["served"] == bad
 
 
 ROW_TP2 = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
@@ -410,11 +445,12 @@ def _tp_row_dir(tmp_path: Path, *, mismatch_r1: int = 0, ranks: int = 2) -> Path
     fail = mismatch_r1 > 0
     per = {str(r): {"run_root": f"root{r}", "commit_pass": not (fail and r == 1), "commit_fail_reason": "sampled replay mismatch" if fail and r == 1 else None,
                     "openings": {"n": 64, "verified": 64}, "extra": {"expected_tensors": 9, "committed_tensors": 9},
-                    "binding": {"coverage": {"ok": True}}, "sampled_replay": _tp_sr(r, 230, mismatch_r1 if r == 1 else 0)} for r in range(ranks)}
+                    "binding": {"coverage": {"ok": True, "expected_n": 9, "bound_n": 9, "missing_n": 0}}, "sampled_replay": _tp_sr(r, 230, mismatch_r1 if r == 1 else 0)} for r in range(ranks)}
     run = {"arm": "instrumented", "wall_s": 20.0, "engine_steps": 32,
            "commit": {"tp_run_root": "tproot", "world": 2, "per_rank": per, "openings": {"n": 128, "verified": 128}, "tensors": 18,
                       "commit_pass": not fail, "commit_fail_reason": "rank 1: sampled replay mismatch" if fail else "PASS"}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    (d / "commit" / "summary.json").write_text(json.dumps({"served": SERVED}))
     return d
 
 
@@ -422,7 +458,8 @@ def test_a_clean_tp2_config_run_s_record_is_per_rank_and_in_total(tmp_path):
     rec = CR.write(_tp_row_dir(tmp_path), ROW_TP2, tree="abc")
     assert rec["outcome"] == "PASS" and rec["why"] is None and rec["config"]["tp"] == 2
     b = rec["build"]
-    assert b["per_rank"]["1"] == {"ok": True, "programs": {"build_request_LP256_T31": "q1", "build_step": "s1"}, "workload_digest": "w1"}
+    assert b["per_rank"]["1"] == {"ok": True, "programs": {"build_request_LP256_T31": "q1", "build_step": "s1"}, "census_digests": {},
+                                  "workload_digest": "w1"}
     assert (b["manifest_digest"], b["program_digest_per_rank"]) == ("mm", {"0": "w0", "1": "w1"})
     c = rec["commit"]
     assert (c["run_root"], c["reason"], c["openings"]) == ("tproot", None, {"n": 128, "verified": 128})
@@ -612,64 +649,3 @@ def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_i
     assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
     with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
         family_strata(vus, 4, draw="stratified")
-
-
-# ---------------------------------------------------------------------------------------------------------------- the sweep driver
-
-def test_estimates_follow_the_plan_s_classes():
-    assert SW.estimate(ROW) == SW.Need(gpus=1, ram_gb=150, cpus=16, minutes=60)
-    assert SW.estimate("llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager").ram_gb == 500
-    assert SW.estimate("qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager").ram_gb == 500
-    assert SW.estimate("olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager").gpus == 2, "the TP world's GPUs"
-
-
-def _cfg(row: str, ram: int, cpus: int = 16, minutes: int = 60, gpus: int = 1) -> SW.Config:
-    return SW.Config(row=row, need=SW.Need(gpus=gpus, ram_gb=ram, cpus=cpus, minutes=minutes))
-
-
-def test_the_plan_starts_the_large_builds_first_and_packs_the_small_ones_around_them():
-    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
-    cfgs = [_cfg("s1", 150), _cfg("s2", 150), _cfg("big1", 500, 32, 150), _cfg("big2", 500, 32, 150), _cfg("s3", 150), _cfg("huge", 2000)]
-    p = SW.plan(cfgs, host)
-    assert p["refused"] == [{"row": "huge", "why": "needs 2000 GB of RAM, the host has 1000"}]
-    by = {c["row"]: c for c in p["configs"]}
-    assert by["big1"]["start_min"] == 0 and by["big2"]["start_min"] == 0, "the large Builds start first"
-    assert all(by[s]["start_min"] == 150 for s in ("s1", "s2", "s3")), "RAM, not GPUs, holds the small ones until a Build ends"
-    assert p["makespan_min"] == 210
-
-
-def test_the_driver_frees_each_share_as_its_run_ends_and_records_it(tmp_path):
-    host = SW.Host(gpus=[0, 1], ram_gb=400, cpus=list(range(32)))
-    cfgs = [_cfg("a", 300, 16), _cfg("b", 100, 16), _cfg("c", 100, 16)]
-    started, order = [], iter(["a", "b", "c"])
-    clock = iter(float(t) for t in range(100))
-
-    def start(c, gpus, cpus):
-        started.append((c.row, gpus, (cpus[0], cpus[-1])))
-        (tmp_path / "rows" / c.row).mkdir(parents=True, exist_ok=True)
-        (tmp_path / "rows" / c.row / "config_record.json").write_text(json.dumps({"outcome": "PASS" if c.row != "c" else "FAIL", "why": None}))
-        return c.row
-
-    doc = SW.run(cfgs, host, tmp_path, start=start, wait=lambda: (next(order), 0), now=lambda: next(clock))
-    assert started == [("a", [0], (0, 15)), ("b", [1], (16, 31)), ("c", [0], (0, 15))]
-    assert [(d["row"], d["outcome"]) for d in doc["done"]] == [("a", "PASS"), ("b", "PASS"), ("c", "FAIL")]
-    assert json.loads((tmp_path / "sweep.json").read_text())["done"] == doc["done"] and doc["pending"] == [] and doc["running"] == []
-
-
-def test_a_tp2_cell_takes_two_gpus_of_one_host_and_its_ram_share(tmp_path):
-    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
-    tp2 = SW.Config(row=ROW_TP2, need=SW.estimate(ROW_TP2))
-    assert tp2.need == SW.Need(gpus=2, ram_gb=150, cpus=16, minutes=60)
-    p = SW.plan([tp2, _cfg("a", 150), _cfg("b", 150), _cfg("c", 150)], host)
-    by = {c["row"]: c for c in p["configs"]}
-    assert [by[r]["start_min"] for r in ("a", "b", "c")] == [0, 0, 0] and by[ROW_TP2]["start_min"] == 60, "it waits for two free GPUs"
-    assert len(by[ROW_TP2]["gpus"]) == 2 and SW.plan([tp2], host)["configs"][0]["gpus"] == [0, 1]
-    e = SW.child_env({}, tp2, [0, 1], list(range(16)), tmp_path, None)
-    assert (e["CUDA_VISIBLE_DEVICES"], e["BUILD_RAM_BUDGET_GB"]) == ("0,1", "150")
-
-
-def test_each_run_gets_its_share_as_the_build_budget_and_the_host_s_caches(tmp_path):
-    e = SW.child_env({"PATH": "/bin"}, _cfg("a", 300, 16), [1], list(range(16, 32)), tmp_path, "/cache/rules")
-    assert (e["CUDA_VISIBLE_DEVICES"], e["OMP_NUM_THREADS"], e["BUILD_RAM_BUDGET_GB"], e["VERITY_UNIT_RULE_CACHE"]) == ("1", "16", "300", "/cache/rules")
-    assert e["SWEEP_DIR"] == str(tmp_path / "rows") and e["PATH"] == "/bin"
-    assert "VERITY_UNIT_RULE_CACHE" not in SW.child_env({}, _cfg("a", 300), [0], [0], tmp_path, None)

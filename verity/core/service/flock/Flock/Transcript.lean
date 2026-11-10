@@ -1,9 +1,13 @@
 /-
-PROTOCOL.md §6: the replay transcript. The only source of coins is the session record; every coin is returned only after
+The replay transcript. The only source of coins is the session record; every coin is returned only after
 the framed bytes that precede it hash to the recorded digest (R2).
 -/
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Flock.Bytes
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Flock
 
@@ -54,7 +58,7 @@ def absorbK (v : F256) : TM Unit := absorbSlice #[v.c0, v.c1]
 def absorbBytes (b : ByteArray) : TM Unit :=
   modify fun t => { t with pending := t.pending ++ header 5 0 b.size ++ padded b }
 
-/-- A proof-of-work nonce: a message, never checked (R4). -/
+/-- A proof-of-work nonce, absorbed as a message; the decoders refuse any but `0` (R4, `Reader.nonce0`). -/
 def pow (nonce : UInt64) : TM Unit := absorbBytes (le64 nonce)
 
 /-- The framed bytes a squeeze of `n` coins of `kind` answers: everything absorbed since the last coin, then its header. -/
@@ -70,7 +74,7 @@ instance instDecidableAnswers (r : Round) (c : ByteArray) : Decidable (r.answers
   unfold Round.answers
   split <;> infer_instance
 
-/-- §6.2: a squeeze of `n = 0` coins only frames its header; otherwise round `k` must exist, issue `n` coins and answer
+/-- A squeeze of `n = 0` coins only frames its header; otherwise round `k` must exist, issue `n` coins and answer
 the framed bytes, and the squeeze returns its coins, clears `pending` and moves to round `k + 1` (R2). -/
 def squeeze (kind : UInt8) (n : Nat) : TM (Array F128) := fun t =>
   let c := framed t kind n

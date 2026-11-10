@@ -51,7 +51,7 @@ def _small():
 
 
 class PyResponder:
-    """The native responder's wire format over a CPU tensor's blocks, read at answer time."""
+    """The native responder's wire format over a CPU tensor's labels, read at answer time."""
 
     def __init__(self, c) -> None:
         self.blocks = c.reshape(-1, c.shape[-1])
@@ -101,7 +101,7 @@ def _backend(params, flip_last: bool = False):
     from verity.core.protocols.pous.labels import salt_value, tag
 
     harness = _harness()
-    from band_gpu.memory_challenger import scheme_of
+    from verity.core.devices.memory_challenger.timed_audit import scheme_of
 
     at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
@@ -262,7 +262,7 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     from verity.core.protocols.pous import band, schemes
 
     harness = _harness()
-    from band_gpu.memory_challenger import params_of, scheme_of
+    from verity.core.devices.memory_challenger.timed_audit import params_of, scheme_of
 
     small = harness.with_in_degree(_small(), 6)
     sch = scheme_of("band-chain/d6/v1", small)
@@ -391,10 +391,10 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
 
 
 def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
-    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real draws fail now
+    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real samples fail now
     and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
     _harness()
-    from band_gpu import memory_challenger as mc
+    from verity.core.devices.memory_challenger import timed_audit as mc
 
     files = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json")]
     with pytest.raises(SystemExit) as refused:
@@ -407,7 +407,7 @@ def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path)
 
 
 def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
-    """The band's recompute adversary decodes the dropped block's key and XORs `W`'s block in within the one timed call, so
+    """The band's recompute adversary decodes the dropped label's key and XORs `W`'s label in within the one timed call, so
     its reported device time covers the whole answer and nothing is computed on the host after it."""
     harness = _harness()
     width, bps = 4, 8
@@ -442,7 +442,7 @@ def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
     assert rc(13) == (bytes(k ^ w for k, w in zip([1, 2, 3, 4], w_host[13 * width:14 * width])), 2_500)
     assert state["calls"] == [True]
     xors = [timed for name, timed in state["ops"] if "xor" in name]
-    assert xors and all(xors), state["ops"]                               # the XOR with W's block is a device op, timed
+    assert xors and all(xors), state["ops"]                               # the XOR with W's label is a device op, timed
     untimed = harness._recomputer(harness.Backend("cpu", None, None, None, None, None, lambda fn: 0.0, recompute=recompute), c,
                                   None, [5, 13], w_host, bps, width)
     with pytest.raises(IndexError):                                       # a timer that skips the call leaves no answer
@@ -684,7 +684,7 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
 def test_pod_sh_python_path_loads_the_lean_verdict_without_site_packages():
     """The pod's venv holds numpy, torch and gmpy2 alone, and pod.sh's PYTHONPATH the rest: with that path and no
     site-packages at all, the memory challenger's Lean verdict (`verdict.py`, through `verity_difftest`, Hypothesis
-    unimportable) and `live.py` load.  r20261009-034919-c88c's five arms signed their sessions and then lost them to
+    unimportable) and `live.py` load.  A run's five arms once signed their sessions and then lost them to
     `No module named 'verity_difftest'`."""
     line = next(s for s in (BENCH / "pod.sh").read_text().splitlines() if s.startswith("export PYTHONPATH="))
     path = line.split("=", 1)[1].replace("$REPO", str(ROOT))
@@ -706,11 +706,11 @@ def test_pod_sh_runs_the_placement_gate_first_and_stops_on_its_refusal(tmp_path)
     node = tmp_path / "n2.json"
     node.write_text(json.dumps({"boot_id": "another-machine"}))
     rc, _, out = _pod_sh(tmp_path, "gate", "GPU-only", "GATE_ROLE=memory-challenger", "GATE_CORES=124-127",
-                         f"GATE_PEERS=worker:vy-nebius-2={node}", "GATE_ABSENT=firewall challenger")
+                         f"GATE_PEERS=worker:gpu-node={node}", "GATE_ABSENT=firewall challenger")
     assert rc.returncode == 4 and "the placement gate refused this run as memory-challenger" in rc.stdout, rc.stdout[-2000:]
     v = json.loads((out / "placement-gate.json").read_text())
     assert v["role"] == "memory-challenger" and v["passed"] is False and v["absent"] == ["challenger", "firewall"]
-    assert any(p.startswith("vy-nebius-2 (worker): its boot_id ") and p.endswith(" is not the node's another-machine")
+    assert any(p.startswith("gpu-node (worker): its boot_id ") and p.endswith(" is not the node's another-machine")
                for p in v["problems"]), v["problems"]
     assert v["cores"]["declared"] == "124-127" and not (tmp_path / "gate" / "py-args").exists()
     rc, _, out = _pod_sh(tmp_path, "ungated", "GPU-only")

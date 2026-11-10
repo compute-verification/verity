@@ -1,5 +1,28 @@
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.VBridge.Family.Registered
+import Flock.Desc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The rows `own` names are registered reads, at candidate 3's family
@@ -19,6 +42,8 @@ at every unit. At the checked family (`C3Family.checked`) the sessions' records 
 * `rowsCovered_checked`: `RowsCovered` at the checked family from `RegistrantCovers zr`; `keepOwn` and `ZkOuter.refuse`
   only narrow `own` to `freshOwn`, which names no port of the circuit (`fresh_not_named`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -122,8 +147,8 @@ namespace FlockSoundness.Discharge.ZkReg
 open Flock FlockLevel3 Refine ZkLink ZkExec ZkBind ZkHidden HiddenExec HiddenDec DecodeZL Composed
 open FlockSoundness.Discharge.Exec (Inputs recordDraw)
 
-/-- **An accepted transcript reads every port of `own` at every drawn unit** (`opens_of_acceptsZKR`'s position, which
-`checkPort`'s `badInstance` requires): where the record's draw draws `u` into its table and that table's drawn statement
+/-- **An accepted transcript reads every port of `own` at every sampled proof block** (`opens_of_acceptsZKR`'s position, which
+`checkPort`'s `badInstance` requires): where the record's sample samples `u` into its table and that table's sampled statement
 labels its instances `idx`, each port of `own` gives a position for `u`'s label. -/
 theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
@@ -138,7 +163,7 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   have hjs : (partOf I d u).val < sts.size := by rw [hsz]; exact (partOf I d u).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf I d u).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
@@ -161,8 +186,8 @@ theorem reads_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   obtain ⟨-, hreads, -⟩ := hall _ (by rw [hn]; exact hi)
   exact ⟨_, hreads⟩
 
-/-- **An accepted transcript sets up the table each unit is drawn into**: at the record's draw `d`, the table `u` is
-drawn into (`partOf`) has a draw, a drawn statement over `pub` at it, and that statement's labels, which the registered
+/-- **An accepted transcript sets up the table each unit is sampled into**: at the record's sample `d`, the table `u` is
+sampled into (`partOf`) has a sample, a sampled statement over `pub` at it, and that statement's labels, which the registered
 check reads. -/
 theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {pub : Public}
@@ -176,7 +201,7 @@ theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   have hjs : (partOf I d u).val < sts.size := by rw [hsz]; exact (partOf I d u).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf I d u).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub
@@ -191,6 +216,25 @@ theorem drawn_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   rw [hcst] at hck
   obtain ⟨-, idx, -, hidx, -⟩ := check_tables hck
   exact ⟨D, _, idx, hD, hdp, hidx⟩
+
+/-- **An accepted session's circuit names each port once**: its statements are over `c`, and `checkRegistered` with the
+verifier's own reads refuses a circuit naming a port twice (`dupName_of_checkRegistered`). -/
+theorem names_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hTags : TagsOkZHJ I)
+    {own : Array Registered.Port} {tr : Exec.Transcript} (hacc : AcceptsZKR I own tr) {d : Lean.Json}
+    (hd : recordDraw tr.record = some d) :
+    ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q' := by
+  obtain ⟨spec, sts, hs, hreg, -, -⟩ := hacc
+  obtain ⟨hsz, hstJ⟩ := setupOf_tableJH hTags.1 hd hs
+  have hjs : (partOf I d 0).val < sts.size := by rw [hsz]; exact (partOf I d 0).isLt
+  have hcst : sts[(partOf I d 0).val].c = c := by
+    have h1 := (Hidden.setupHidden_spec' (hstJ _ hjs)).parseF
+      ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
+    rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
+    exact (Except.ok.inj h1).symm
+  have hdn := dupName_of_checkRegistered (array_forM_ok hreg _ hjs)
+  rw [hcst] at hdn
+  exact names_once_of_dupName hdn
 
 end FlockSoundness.Discharge.ZkReg
 
@@ -229,7 +273,7 @@ theorem portOf_spec {own : Array Flock.Registered.Port} {nm : String} (h : ∃ p
   have hb := List.find?_some ha
   simpa using hb
 
-/-- `c` names each port once (G's `PortNamesUnique`, a fact of V*'s circuits). -/
+/-- `c` names each port once (G's `PortNamesUnique`; at an accepted session, `names_of_acceptsZKR`). -/
 def NamesOnce (c : Flock.Circuit) : Prop :=
   ∀ q q' : Fin c.ports.size, c.ports[q].name = c.ports[q'].name → q = q'
 
@@ -251,7 +295,7 @@ variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
 
 /-- **The registrant holds the rows `own` names**: at each typing of the session, a record of registered reads holding
 every row of a port `own` names, at every unit, under the first port of its name, at the position that port gives the
-unit's label where it gives one. The label is the one the drawn statement of any draw that draws the unit gives it
+unit's label where it gives one. The label is the one the sampled statement of any sample that samples the unit gives it
 (its `units.indices` at the unit's instance, `Registered.unitIndices`), the label `Registered.check` reads the position
 at; the verifier derives it (`Registered.derived`), and `loadPublic` does not make it the unit's own index. The honest
 registrant's: it committed every row it registered. -/
@@ -271,9 +315,9 @@ def RegistrantOpens (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) : Prop :=
               (portOf x.own c.ports[q].name).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →
                 rdH.readAt (.inl (u, q)) = pos
 
-/-- **An accepted session draws each unit of its draw into a drawn statement**: at every accepted outcome, the record
-names the law's draw file (the record's custody, `RecordsLiveZKJ`), its table `u` is drawn into has a drawn statement
-labelling its instances (`drawn_of_acceptsZKR`), and that table's draw proves `u` (the coin server's draw, `hDraw`). -/
+/-- **An accepted session samples each unit of its sample into a sampled statement**: at every accepted outcome, the record
+names the sampling design's sample file (the record's custody, `RecordsLiveZKJ`), its table `u` is sampled into has a sampled statement
+labelling its instances (`drawn_of_acceptsZKR`), and that table's sample proves `u` (the challenger's live-coin part's sample, `hDraw`). -/
 theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr)
     (ht : x.I.tags.typed = false) (hc : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I)) (ω : Lv.Ω) (R' : Reg')
@@ -290,10 +334,11 @@ theorem labelsSelf (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hRec : RecordsL
   exact ⟨_, D, dp, idx, hd, hD, hdp, hidx, ((x.hDraw ω) (partOf x.I _ u.val)).1 D hD u (mem_partS hu)⟩
 
 /-- **The registrant's record is the verifier's own at every accepted outcome** (`hown`): restricted to the rows `own`
-names, each drawn row is a row of a unit its record's draw draws (`labelsSelf`, from the record's custody), its port
-is `own`'s first of its name and the circuit's port `q` by name (`NamesOnce`), and its position is the one that port
-gives the unit's label in that draw's statement, which acceptance requires (`reads_of_acceptsZKR`). -/
-theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hN : NamesOnce c)
+names, each sampled row is a row of a unit its record's sample samples (`labelsSelf`, from the record's custody), its port
+is `own`'s first of its name and the circuit's port `q` by name (an accepted circuit names each port once,
+`names_of_acceptsZKR`), and its position is the one that port gives the unit's label in that sample's statement, which
+acceptance requires (`reads_of_acceptsZKR`). -/
+theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv)
     (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) (ht : x.I.tags.typed = false) {S₀ : Finset (Fin nv)}
     {d₀ : Lean.Json}
     (y₀ : ZkHidden.DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
@@ -317,6 +362,8 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hN : NamesO
   obtain ⟨-, hport, hat⟩ := hH u q hn
   obtain ⟨hmem, hname⟩ := portOf_spec hn
   obtain ⟨d, D, dp, idx, hd, hD, hdp, hidx, hmD⟩ := labelsSelf x hRec ht hc hpub ω R' o hacc u hu
+  have hN : NamesOnce c :=
+    FlockSoundness.Discharge.ZkReg.names_of_acceptsZKR x.I ht hc x.hTags (tr := x.wr (Lv.draw ω) R' o) hacc hd
   obtain ⟨pos, hpos⟩ := FlockSoundness.Discharge.ZkReg.reads_of_acceptsZKR x.I ht hc hpub x.hTags
     (tr := x.wr (Lv.draw ω) R' o) hacc hmem hd hD hdp hidx hmD
   refine ⟨u, q, d, D, dp, idx, rfl, ?_, ?_, hd, hD, hdp, hidx, hmD, ?_⟩
@@ -325,14 +372,14 @@ theorem ownReads_cover (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hN : NamesO
   · rw [hport, hpos, hat d D dp idx hD hdp hidx hmD pos hpos]
 
 /-- **The session with the honest registrant's record**: `x` with, at each typing, the registrant's record
-(`RegistrantOpens`) restricted to the rows `own` names. Its inputs, own list, draw files and writer are `x`'s, so its
+(`RegistrantOpens`) restricted to the rows `own` names. Its inputs, own list, sample files and writer are `x`'s, so its
 game, its custody and its typings are too. -/
 noncomputable def coveredSession (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (hO : RegistrantOpens x)
-    (hN : NamesOnce c) (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) : ZkOuterR mPts nv J Reg' c hU hscope Lv :=
+    (hRec : RecordsLiveZKJ x.I x.dj (fun _ _ => J) x.wr) : ZkOuterR mPts nv J Reg' c hU hscope Lv :=
   { x with
     rd := fun ht S₀ d₀ y₀ hc hpub => (hO ht S₀ d₀ y₀ hc hpub).choose.restrict (NamedRow x.own c)
     hown := fun ht S₀ d₀ y₀ hc hpub ω R' o hacc =>
-      ownReads_cover x hN hRec ht y₀ hc hpub (hO ht S₀ d₀ y₀ hc hpub).choose (hO ht S₀ d₀ y₀ hc hpub).choose_spec ω
+      ownReads_cover x hRec ht y₀ hc hpub (hO ht S₀ d₀ y₀ hc hpub).choose (hO ht S₀ d₀ y₀ hc hpub).choose_spec ω
         R' o hacc }
 
 end Honest
@@ -340,25 +387,22 @@ end Honest
 /-- **V*'s sessions with the honest registrants' records** (`coveredSession` at each). -/
 noncomputable def coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
-    (hN : ∀ j, NamesOnce (Vs j).c) (hCust : Flock.Premises.RecordCustody zr) :
-    A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg' :=
-  fun R ω t R₂ j => coveredSession (zr R ω t R₂ j) (hO R ω t R₂ j) (hN j) (hCust R ω t R₂ j).1
+    (hCust : Flock.Premises.RecordCustody zr) : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg' :=
+  fun R ω t R₂ j => coveredSession (zr R ω t R₂ j) (hO R ω t R₂ j) (hCust R ω t R₂ j).1
 
 theorem registrantCovers_coveredR {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
-    (hN : ∀ j, NamesOnce (Vs j).c) (hCust : Flock.Premises.RecordCustody zr) :
-    Flock.Premises.RegistrantCovers (coveredR zr hO hN hCust) :=
+    (hCust : Flock.Premises.RecordCustody zr) : Flock.Premises.RegistrantCovers (coveredR zr hO hCust) :=
   fun R ω t R₂ j ht S₀ d₀ y₀ hc hpub u q hn =>
     And.intro ((hO R ω t R₂ j ht S₀ d₀ y₀ hc hpub).choose_spec u q hn).1 ⟨u, q, rfl, hn⟩
 
 /-- **`RegistrantCovers` is not vacuous**: wherever V*'s sessions as the prover supplies them meet the guarantee's other
 hypotheses on them (the records' custody, the tags, the rate bound) and type, and their registrants hold the rows their
-reads files name at the verifier's labels (`RegistrantOpens`) and their circuits name each port once (`NamesOnce`),
-the same sessions with the registrants' records (`coveredR`) meet all of them and `RegistrantCovers`, with the same
+reads files name at the verifier's labels (`RegistrantOpens`), the same sessions with the registrants' records (`coveredR`) meet all of them and `RegistrantCovers`, with the same
 inputs, own lists and writers, and so the same game: the guarantee at them reads the same prover. -/
 theorem registrantCovers_attained {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     (zr : A → B → C → D → (j : Fin S) → (Vs j).OuterR Reg') (hO : ∀ R ω t R₂ j, RegistrantOpens (zr R ω t R₂ j))
-    (hN : ∀ j, NamesOnce (Vs j).c) (hCust : Flock.Premises.RecordCustody zr) (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {k : ℕ} {ρ : ℝ}
+    (hCust : Flock.Premises.RecordCustody zr) (hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I) {k : ℕ} {ρ : ℝ}
     (hr : ∀ R ω t R₂ j S₀ (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀)
       S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     (hT : Typed zr) (dg : ByteArray → ByteArray) (N : ℕ) :
@@ -371,7 +415,7 @@ theorem registrantCovers_attained {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D
       Typed zr' ∧ (∀ R ω t, outerVR (zr' R ω t) dg N = outerVR (zr R ω t) dg N) ∧
       ∀ R ω t R₂ j, (zr' R ω t R₂ j).I = (zr R ω t R₂ j).I ∧ (zr' R ω t R₂ j).own = (zr R ω t R₂ j).own ∧
         (zr' R ω t R₂ j).wr = (zr R ω t R₂ j).wr :=
-  ⟨coveredR zr hO hN hCust, registrantCovers_coveredR zr hO hN hCust, hCust, hF, hr, hT, fun _ _ _ => rfl,
+  ⟨coveredR zr hO hCust, registrantCovers_coveredR zr hO hCust, hCust, hF, hr, hT, fun _ _ _ => rfl,
     fun _ _ _ _ _ => ⟨rfl, rfl, rfl⟩⟩
 
 end FlockC3.Compose

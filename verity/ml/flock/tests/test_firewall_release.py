@@ -1,9 +1,10 @@
-"""The firewall's release side (`verity_flock.firewall`, live PROTOCOL.md §10.5), one rule a test. A recursive session's V*
+"""The ZK server's release side (`verity_flock.firewall`, live PROTOCOL.md §10.5), one rule a test. A recursive session's V*
 statements go in their order, each once, and it ends at its first stop, inner or outer: its stop is its one failure, and
-the firewall serves nothing more of it, so a later V* statement's outer session is refused before anything reaches the
-challenger, and so is a statement asked out of its order (the one it skipped, never opened, is the stop). Outer proofs go
-one at a time across streams: a second requester waits for the first's release or failure, and the record shows the order.
-The worker and the challenger here are the test's, on socket pairs; the clock is never read."""
+the ZK server serves nothing more of it, so a later V* statement's outer session is refused before anything reaches the
+challenger, and so is a statement asked out of its order (the one it skipped, never opened, is the stop). This relay takes
+outer proofs one at a time across streams, stricter than AGENTS.md's independent sessions: a second requester waits for
+the first's release or failure, and the record shows the order. The worker and the challenger here are the test's, on
+socket pairs; the clock is never read."""
 from __future__ import annotations
 
 import json
@@ -258,7 +259,7 @@ def test_an_outer_stop_ends_the_recursive_session_and_the_next_statement_is_refu
 
 @pytest.mark.parametrize("how", ["refused", "cut", "fault"])
 def test_a_firewall_stop_reaches_the_challenger_as_a_cut_without_finish(tmp_path, how):
-    """The challenger sees the same thing however the firewall stopped a session: the messages before the stop, then the
+    """The challenger sees the same thing however the ZK server stopped a session: the messages before the stop, then the
     connection cut, never ``Finish`` (so no bit of how it ended)."""
     fw, sid = _opened(tmp_path)
     log: list = []
@@ -311,17 +312,26 @@ def _vector_op(fw: FW.Firewall, op: list):
     if k == "slot":
         with fw.slot(op[1], op[2]):
             return None
+    if k == "register":
+        return fw.register(lambda n: n.to_bytes(8, "big") + bytes.fromhex(op[1]))[0]
+    if k == "registrations":
+        try:
+            return fw.admit_reads(op[1], op[2], op[3])
+        except FW.Refused as e:
+            return why(e)
     return getattr(fw, k)(*op[1:])
 
 
-def test_the_record_is_the_rust_firewalls_byte_for_byte(tmp_path):
+def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
-    recursive session released whole, statements that can't be one's), the budget, the schedule, and strings Python
-    escapes. ``flock_live::release``'s ``the_shared_vectors_hold`` runs the same file, so the two firewalls read and write
-    one record."""
+    recursive session released whole, statements that can't be one's), the budget, the schedule, strings Python
+    escapes, and rule 5 (registrations admitted in order, one reread admitting nothing, one skipped counted as a failure
+    and read later, one not on the record, commitments none of the server's, and a skip that brings the stream to its
+    budget). ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
+    read and write one record."""
     v = json.loads(VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes", "registrations"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]
@@ -330,7 +340,7 @@ def test_the_record_is_the_rust_firewalls_byte_for_byte(tmp_path):
 
 def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp_path):
     """At its ``budget``-th failure a stream refuses every outer session and every open; the budget is the same at every
-    open. A scheduled recursive session is the Rust firewall's: this module's relay refuses it, rather than release its
+    open. A scheduled recursive session is the Lean ZK server's: this module's relay refuses it, rather than release its
     proofs before their time."""
     fw = FW.Firewall(tmp_path / "fw")
     log: list = []
@@ -353,7 +363,7 @@ def test_a_stream_stops_at_its_budget_and_the_python_relay_keeps_no_schedule(tmp
     s = fw.open("other", ["L0"], release={"start_ms": 0, "windows_ms": [1000]})
     fw.finish(s)
     out, _ = _outer(fw, s, "L0", HONEST, Challenger(log, "s"))
-    assert out["why"].endswith("its release schedule needs the Rust firewall (flock-circuit prove --firewall-state)")
+    assert out["why"].endswith("its release schedule needs the Lean firewall (core-firewall session: flock-circuit prove --firewall-state)")
     assert not any(name in ("b", "s") for name, _ in log)
 
 
@@ -379,7 +389,7 @@ def _serve(tmp_path, sessions, fw, **kw):
 def test_an_inner_stop_ends_the_recursive_session(tmp_path):
     """`rec_live.serve` opens a recursive session for each session it serves: a refused inner session (here Link's y of the
     wrong length) is that recursive session's stop, and no V* statement of it is then served; a finished one lets them be.
-    The ``firewall.json`` beside each inner session's record names its recursive session and nothing else: the firewall's
+    The ``firewall.json`` beside each inner session's record names its recursive session and nothing else: the ZK server's
     state stays with the developer."""
     fw = FW.Firewall(tmp_path / "fw")
     t, got = _serve(tmp_path, 2, fw)
@@ -431,7 +441,7 @@ def test_serve_opens_each_recursive_session_with_the_streams_budget_and_its_publ
 
 
 def test_a_recursive_session_the_firewall_cannot_open_is_closed_unserved(tmp_path):
-    """A recursive session the firewall refuses to open as given (here a release schedule with one window for two
+    """A recursive session the ZK server refuses to open as given (here a release schedule with one window for two
     statements) is the developer's fault: `serve` closes the connection before anything is served and raises, rather than
     leave the prover waiting on a connection nobody answers, and nothing is opened."""
     fw = FW.Firewall(tmp_path / "fw")

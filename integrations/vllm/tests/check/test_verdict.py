@@ -4,12 +4,14 @@ What is pinned here: (1) the schema round-trips (dumps -> load -> the same docum
 (2) the old -> new MAPPING is complete with no loss -- every compat field a check names is documented in OLD_TO_NEW and every
 documented old fact lands on a check that exists, every group has rules and a claim; (3) DECISION EQUIVALENCE with v1 -- over a PASS
 record and one-fault mutations of it, `run_outcome(run_checks(...)) == PASS` iff `commit_verdict(...)[0]`; (4) a MISSING INPUT is
-INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`, F-r19-int-19) grade
+INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`) grade
 `execution_extent` INSUFFICIENT_EVIDENCE while the overall verdict is still not PASS (v1 fails the same record by name); (5) X-03's
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
-(6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; a pre-P5
-row's `commit_summary.json` still supplies `rc` / execution when present -- the writer is retired, P5); (7) the by-name tables today's checks
-lean on are marked `structural_leak: <table>` on the verdict, never silently."""
+(6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; an older
+row's `commit_summary.json` still supplies `rc` / execution when present -- the writer is retired); (7) the by-name tables today's checks
+lean on are marked `structural_leak: <table>` on the verdict, never silently; (8) a TP1 row whose Program binds a Definition only the cuBLAS
+route pin binds is refused by name unless its replay's `engine_of_record.cublas` is the pin's scan's conditions (the TP ranks' gate,
+`check.cublas_route_pin`, stamped at rank 0), a deferred replay decided on the Commit engine's facts."""
 from __future__ import annotations
 
 import copy
@@ -19,11 +21,14 @@ import pytest
 
 from verity_vllm.check.codes import VerificationCode as VC
 
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
 from verity_vllm.check import verdict as V
 from verity_vllm.pipeline import cli
 from verity_vllm.check.commit_rules import REJECT
+from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -34,27 +39,35 @@ CLASSES = {"input_token_ids": {"how": "bound-as-leaf", "tensors": 4}, "instance_
            "fa2_hidden_m1_stream": {"how": "bound-as-leaf", "tensors": 64}}
 
 
+def _checks(faults: list | None = None, **kw) -> dict:
+    """`population.query_checks` as the replay's coverage writes it over a reconciled Q(P), with `kw` over it."""
+    rule = {"applied": True, "faults": faults or [], **{k: {"n": 0, "first": []} for k in ("evaluated_past_stop", "manifest_cut_before_classification")}}
+    return {"ok": True, **{k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "rows_disagree")},
+            "ranks": {"replay": [0], "manifest": [0], "equal": True}, "accounted": True, "unstated_families": [], "executed_prefix_rule": rule} | kw
+
+
 def _sr(**kw) -> dict:
     return {"result": True, "grade": "complete", "why": None, "strata_unevaluated": [],
             "sample": {"per_stratum": 2, "seed": SEED_ROOT, "seed_source": ROOT_FORM, "picked": 407, "evaluated": 407, "equal": 407, "mismatch_n": 0, "not_evaluated_n": 0},
             "population": {"vus": 57678, "not_evaluable": {}, "not_evaluable_by_family": {},
-                           "query_total": {"identities": 57678}, "query_checks": {"ok": True, "executed_prefix_rule": {"applied": True, "faults": []}}}, **kw}
+                           "query_total": {"identities": 57678}, "query_checks": _checks()}, **kw}
 
 
 def _epr(ok: bool = True) -> dict:
-    return {"ok": ok, "lag": 1, "eos_of_record": [2], "served_known": True, "any_eos_stop": False,
+    return {"ok": ok, "lag": 1, "eos_of_record": [2], "served_known": True, "any_eos_stop": False, "problems": [] if ok else ["r0: served 9 tokens over the declared cap 8"],
             "requests": {"r0": {"served_output_len": 8, "executed_prefix_len": 8, "cap": 8, "cap_exhausted": True, "eos_stop": False}}}
 
 
 def _link(ok: bool = True, required: bool = False, problems: list | None = None) -> dict:
-    d = {"ok": ok, "required": required, "lag_attested": ok, "problems": problems or [], "global_match": {"verdict": "PASS", "g6_status": "PASS", "requests_linked": ["r0"]}}
+    d = {"ok": ok, "required": required, "lag_attested": ok, "problems": problems or [],
+         "global_match": {"path": "/x/global_match.json", "sha256": "9a" * 32, "verdict": "PASS", "g6_status": "PASS", "requests_linked": ["r0"]}}
     if ok:
-        d["tokens_json"] = {"path": "/x/match/capture/tokens.json", "sha256": "ef" * 32}
+        d["tokens_json"] = {"path": "/x/match/capture/tokens.json", "sha256": "ef" * 32, "served_by_request": {"r0": 8}, "tokens_equal": {"r0": True}}
     return d
 
 
 def _base() -> dict:
-    # the record's shape: executed_prefix.py's outputs live under binding.coverage (commit_delta [R17-27]) and the facts of record under
+    # the record's shape: executed_prefix.py's outputs live under binding.coverage (commit_delta) and the facts of record under
     # sampled_replay.executed_prefix_of_record.facts_of_record (sampled_replay executed_prefix=)
     sr = _sr()
     sr["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 8, "cap": 8, "linked": True, "account_missing": []}}}
@@ -64,7 +77,7 @@ def _base() -> dict:
                                          "manifest": {"modules": 10, "attention_layers": 2, "fa2_hidden_per_layer": 1, "sampler_ids": 1, "moe_layers": 0, "tp_sites": 0}}},
             "openings": {"n": 64, "verified": 64}, "run_root": RUN_ROOT, "classes": CLASSES,
             "binding": {"program_digest": "ab" * 32, "context": {"ok": True},
-                        "coverage": {"ok": True, "checked": 572, "missing_n": 0, "manifest_digest": "cd" * 32,
+                        "coverage": {"ok": True, "expected_n": 572, "bound_n": 572, "missing_n": 0, "ambiguous_n": 0,
                                      "executed_prefix_of_record": _epr(), "match_account_link": _link(),
                                      "rows_past_the_stop": {"ok": True, "entries_n": 0, "requests": {}, "steps_past_by_request": {}, "padding_entries_n": 0, "padded_record": False, "error": None}},
                         "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
@@ -72,6 +85,24 @@ def _base() -> dict:
             "sampled_replay": sr,
             "boundary_linkage": {"result": True, "pairs": 32, "linked": 32, "unlinked_n": 0},
             "weights_pin": {"result": True, "compared": 163, "mismatched": [], "missing": [], "program_digest": "ab" * 32}}
+
+
+#: the route pin's Definitions a GLM-5.3 TP1 eager Program binds: the MoE router past the cuteDSL tier, a split-K linear
+ROUTED = {"CublasSplitKGemmF32Out_v1": 6, "CublasSplitKGemm_v1": 4}
+#: what `engine_facts_of_record` measures in a process under the pin's scan's conditions
+PIN_FACTS = {**BC.ROUTE_CONDITIONS, "cublaslt_version": 120901, "cublas_library": "/venv/nvidia/cublas/lib/libcublas.so.12"}
+
+
+def _routed(engine: dict | None, *, stamped: bool = True) -> dict:
+    """A TP1 eager row (rank 0) whose Program binds `ROUTED`, its replay's `engine_of_record` `engine` (None: not recorded), stamped as
+    `pipeline.commit` stamps it before its verdict."""
+    c = _base()
+    c["sampled_replay"]["population"]["by_family"] = {"RMSNorm_v1": 8, **ROUTED}
+    if engine is not None:
+        c["sampled_replay"]["engine_of_record"] = engine
+    if stamped:
+        route_pin_stamp(c)
+    return c
 
 
 def _decl(classes: dict) -> dict:
@@ -96,7 +127,7 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
                 summary={"rc": 0, "pass": True}, manifest_verify={"ok": True}, row="unit")
     assert v.schema == "vllm-verdict/v1" and v.outcome == V.PASS and v.program_digest == "ab" * 32 and v.manifest_digest == "cd" * 32 and v.query_id == "Q_module_v1"
     p = v.write(tmp_path / "verdict.json")
-    back = V.Verdict.load(p)
+    back = V.CommitChecks.load(p)
     assert back.to_dict() == v.to_dict()
     assert json.loads(p.read_text())["schema"] == "vllm-verdict/v1"
     assert set(V.GROUPS) == {"runtime_match", "local_replay", "boundary_linkage", "checkpoint_binding", "execution_extent", "required_value_coverage", "program_source_identity"}
@@ -107,9 +138,9 @@ def test_schema_round_trip_and_closed_vocabularies(tmp_path):
     with pytest.raises(ValueError):
         CheckResult.from_dict({"name": "runtime_match/x", "claim": "c", "outcome": "MAYBE"})
     with pytest.raises(ValueError):
-        V.Verdict(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
+        V.CommitChecks(checks=[CheckResult(name="weights_pin/x", code=VC.ACCEPTED)], outcome=V.PASS)          # the OLD name is not a group
     with pytest.raises(ValueError):
-        V.Verdict.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
+        V.CommitChecks.from_dict({"schema": "something-else/v9", "checks": [], "outcome": V.PASS})
 
 
 def test_worst_orders_fail_over_insufficient_over_not_run():
@@ -135,7 +166,7 @@ def test_the_code_is_the_outcome():
 def test_mapping_old_to_new_is_complete_with_no_loss():
     _, _, checks = _both(_base())
     names = {c.name for c in checks}
-    documented_old = {tok.strip() for m in V.OLD_TO_NEW for tok in m["old"].split(" / ")}
+    documented_old = {tok.strip() for m in OLD_TO_NEW for tok in m["old"].split(" / ")}
     emitted_compat = {f for c in checks for f in c.compat}
 
     def documented(f: str) -> bool:
@@ -145,8 +176,8 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # every compat field a check names is a documented old fact ...
     missing_doc = sorted(f for f in emitted_compat if not documented(f))
     assert not missing_doc, f"compat fields not in OLD_TO_NEW: {missing_doc}"
-    # ... and every documented old fact lands on a check / group / Verdict field that exists
-    targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in V.OLD_TO_NEW}
+    # ... and every documented old fact lands on a check / group / CommitChecks field that exists
+    targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in OLD_TO_NEW}
     unknown = []
     for t in targets:
         if "/" in t:
@@ -157,7 +188,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
             continue
         elif t.startswith(("verdict.", "compat.")):
             fld = t.split(".")[1] if t.startswith("verdict.") else "compat"
-            if fld not in V.Verdict.__dataclass_fields__:
+            if fld not in V.CommitChecks.__dataclass_fields__:
                 unknown.append(t)
         else:
             unknown.append(t)
@@ -166,11 +197,11 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # each old check name of the prompt has its new name
     for old, new in (("linkage", "boundary_linkage"), ("weights_pin", "checkpoint_binding"), ("executed_prefix", "execution_extent"),
                      ("coverage", "required_value_coverage"), ("identity", "program_source_identity")):
-        assert any(old in m["old"] and new in m["new"] for m in V.OLD_TO_NEW), (old, new)
+        assert any(old in m["old"] and new in m["new"] for m in OLD_TO_NEW), (old, new)
     # every group has at least one rule check and a one-sentence claim
     for g, spec in V.GROUPS.items():
         assert spec["claim"].endswith(".") and any(c.name.startswith(g + "/") for c in checks), g
-    assert "| `commit_pass` |" in V.mapping_markdown()
+    assert "| `commit_pass` |" in mapping_markdown()
 
 
 # ---------------------------------------------------------------------------------------------------------------- (3) equivalence
@@ -180,10 +211,11 @@ def _mutations():
     yield "tokens differ", b(), False
     c = b(); c["extra"]["committed_tensors"] = 571; yield "reference integrity", c, True
     c = b(); c["extra"]["errors_n"] = 2; yield "collector errors", c, True
+    c = b(); c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"; yield "collector failure", c, True
     c = b(); c["openings"] = {"n": 60, "verified": 60}; yield "openings < min", c, True
     c = b(); c["openings"] = {"n": 64, "verified": 63}; yield "an opening failed", c, True
     c = b(); c["binding"]["context"] = {"ok": False, "why": "root differs"}; yield "binding context", c, True
-    c = b(); c["binding"]["coverage"] = {"ok": False, "missing_n": 3, "expected_n": 572, "missing": [{"step": 1, "op_path": "layers.0.mlp", "output_member": "y", "invocation": 0, "request_id": "r0", "rank": 0}]}
+    c = b(); c["binding"]["coverage"] = {"ok": False, "missing_n": 3, "expected_n": 572, "bound_n": 569, "missing": [{"step": 1, "op_path": "layers.0.mlp", "output_member": "y", "invocation": 0, "request_id": "r0", "rank": 0}]}
     yield "identity coverage", c, True
     c = b(); c["extra"]["coverage"] = {"ok": False, "checked": 500, "missing_n": 72, "missing_by_family": {"fa2_hidden_m1_stream": 72}, "families_missing_entirely": ["fa2_hidden_m1_stream"],
                                        "missing": [{"step": 0, "op_path": "layers.0.attn", "output_member": "m1", "request_id": "r0"}], "manifest_digest": "cd" * 32}
@@ -195,13 +227,14 @@ def _mutations():
     c = b(); c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}; yield "boundary linkage", c, True
     c = b(); c["sampled_replay"]["result"] = False; c["sampled_replay"]["why"] = "a VU differs"; yield "replay mismatch", c, True
     c = b(); c["sampled_replay"]["sample"]["seed"] = 12345; c["oracle_compare"] = {"result": True, "complete": False}; yield "prover-chosen seed, no form (B)", c, True
-    c = b(); c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "vus_outside_query": {"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]}}
+    c = b(); c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
     yield "population scope", c, True
     c = b(); del c["weights_pin"]; yield "weights unpinned", c, True
     c = b(); c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}; yield "required class undeclared", c, True
     c = b(); c["classes"] = dict(CLASSES, weights={"how": "registered-input", "tensors": 0}); yield "declared leaf class bound 0", c, True
     c = b(); c["openings_after_release"] = {"n": 64, "verified": 60, "source": "host"}; yield "openings after release", c, True
     c = b(); c["oracle_compare"] = {"result": False, "mismatch_n": 3}; yield "oracle mismatch", c, True
+    yield "cuBLAS route pin", _routed(None), True
 
 
 @pytest.mark.parametrize("label,commit,tokens_equal", list(_mutations()), ids=[m[0] for m in _mutations()])
@@ -224,6 +257,58 @@ def test_pass_record_passes_in_both_and_names_its_scope():
     assert by["required_value_coverage/identity_coverage"].inputs["manifest_digest"] == "cd" * 32
 
 
+# ---------------------------------------------------------------------------------------------------------------- (8) cuBLAS route pin
+
+def test_a_tp1_eager_row_that_binds_a_route_pinned_gemm_is_refused_by_name_without_its_cublas_facts():
+    (ok, why), out, checks = _both(_routed(None))
+    assert ok is False and why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x6, CublasSplitKGemm_v1 x4 bound at the "
+                                          f"routes of {BC.CUBLAS_ROUTES['run_record']}, served otherwise: no cuBLAS facts recorded"), why
+    rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
+    assert out != V.PASS and rule.outcome == V.FAIL and rule.reason == why and rule.code == VC.EXPECTATION_MISMATCH
+    assert rule.differences == [{"name": "served_off_route_pin", "departures": [why.split("served otherwise: ")[1]]}]
+
+
+def test_the_same_row_passes_with_the_pins_facts_of_record():
+    (ok, why), out, checks = _both(_routed({"cublas": PIN_FACTS}))
+    rule = {c.name: c for c in checks}["local_replay/cublas_route_pin"]
+    assert ok is True and out == V.PASS, why
+    assert rule.outcome == V.PASS and rule.scope == {"families": ROUTED, "pin": BC.CUBLAS_ROUTES["run_record"]}
+
+
+def test_the_same_row_served_under_the_split_k_off_switch_is_refused_naming_each_departure():
+    switched = {**PIN_FACTS, "preferred_blas_library": "_BlasBackend.Cublaslt", "env": {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}}
+    (ok, why), out, _ = _both(_routed({"cublas": switched}))
+    assert ok is False and out != V.PASS
+    assert why.split("served otherwise: ")[1].split("; ") == ["preferred_blas_library '_BlasBackend.Cublaslt' (pin: '_BlasBackend.Cublas')",
+                                                              "CUBLAS_WORKSPACE_CONFIG ':16:8' (pin: None)", "CUBLASLT_WORKSPACE_SIZE '1' (pin: None)"]
+
+
+def test_a_row_that_binds_no_route_pinned_gemm_is_not_gated():
+    c = _base()
+    assert route_pin_stamp(c) is None and c["cublas_route_pin"] is None
+    (ok, why), _, checks = _both(c)
+    assert ok is True and {c.name: c for c in checks}["local_replay/cublas_route_pin"].outcome == V.NOT_RUN, why
+
+
+@pytest.mark.parametrize("commit_engine,ok", [({"cublas": PIN_FACTS}, True), ({"VLLM_BATCH_INVARIANT": "0"}, False)], ids=["pin-facts", "unrecorded"])
+def test_a_deferred_tp1_replay_is_decided_on_the_commit_engines_facts(tmp_path, commit_engine, ok):
+    """`pipeline.cpu_replay` replays a deferred TP1 run on a CPU node, whose own facts (no CUDA) are no serving process's: `decide`
+    stamps the route pin on the Commit engine's, which `engine_of_record` puts on the replay first."""
+    from verity_vllm.pipeline import cpu_replay
+
+    row = {"tokens_equal_ref": True, "commit": _routed({"cublas": {"device": "unavailable: no CUDA device"}}, stamped=False)}
+    row["commit"]["value_correspondence"]["components"] = {}
+    art = tmp_path / "sampled_replay_p0.json"
+    art.write_text(json.dumps({"sampled_replay": copy.deepcopy(row["commit"]["sampled_replay"])}))
+    ctx = {"engine_of_record": commit_engine, "min_openings": 64, "declaration": _decl(CLASSES), "required_classes": None}
+    cpu_replay.engine_of_record(row, ctx, art)
+    cpu_replay.decide(row, ctx, {"equal": True}, {"manifest_sha256": "ef" * 32}, set(), {}, {})
+    c = row["commit"]
+    assert c["commit_pass"] is ok and c["cublas_route_pin"]["ok"] is ok, c["commit_fail_reason"]
+    assert ok or c["commit_fail_reason"].startswith("cuBLAS route pin (rank 0): ")
+    assert json.loads(art.read_text())["sampled_replay"]["engine_of_record"] == commit_engine
+
+
 # ---------------------------------------------------------------------------------------------------------------- (4) missing input
 
 def test_account_missing_is_insufficient_evidence_not_fail():
@@ -232,7 +317,7 @@ def test_account_missing_is_insufficient_evidence_not_fail():
              "and re-run the Commit; not a verdict on the Program)")
     c["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=True, problems=["tokens.json: not beside the Commit"])
     c["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 6, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
-    c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "executed_prefix_rule": {"applied": True, "faults": [{"request_id": "r0", "faults": [fault]}]}}
+    c["sampled_replay"]["population"]["query_checks"] = _checks([{"request_id": "r0", "faults": [fault]}], ok=False)
     (ok, why), out, checks = _both(c)
     assert ok is False and "executed-prefix rule faults" in why            # v1: a named FAIL through the replay's population scope
     by = {c_.name: c_ for c_ in checks}
@@ -303,7 +388,7 @@ def test_a_full_row_that_committed_no_sampled_ids_rests_on_its_match_link_alone(
     link = next(x for x in checks if x.name == "execution_extent/match_account_link")
     assert link.outcome == V.PASS and "account" not in link.scope and "commit_tokens_sha256" not in link.inputs
     bad = copy.deepcopy(c)
-    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (R17-27 (a))"
+    why_m = "r0: the Commit served 5 tokens (last 2) but the Match record's tokens.json served 6 (last 7): not one serving transcript (executed-prefix condition (a))"
     bad["binding"]["coverage"] |= {"match_account_link": _link(ok=False, required=True, problems=[why_m]) | {"match_dir": "/x/match", "tokens_json": cov["match_account_link"]["tokens_json"]},
                                    "ok": False, "error": "executed prefix not linked to the Match account: " + why_m}
     bad["sampled_replay"]["executed_prefix_of_record"]["facts_of_record"]["r0"]["linked"] = False
@@ -368,7 +453,7 @@ def _row_dir(tmp_path, commit: dict, *, commit_pass: bool, rc: int, manifest_ver
 def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     d, ex = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     assert ex["committer"] == "native_collect_v2b" and ex["engine_settings"]["openings"] == 64 and ex["engine_settings"]["required_manifest"] is True
-    assert not (d / "commit_summary.json").exists()                     # P5: nothing writes the pre-P5 summary
+    assert not (d / "commit_summary.json").exists()                     # nothing writes the old summary
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.outcome == V.PASS and v.compat["commit_pass"] is True and v.compat["stage_ok"] == "PASS" and not v.notes
     assert v.inputs["commit/verdict.json"] and v.inputs["commit/runs.jsonl"] and "global_match.json" in v.inputs
@@ -377,7 +462,7 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
     out = cli.main(["verdict", "from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
-    assert out == 0 and V.Verdict.load(d / "verdict.json").outcome == V.PASS
+    assert out == 0 and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS
 
 
 def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(tmp_path):
@@ -431,7 +516,7 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     assert v.correspondence_digest == step and v.correspondence_digest_source == "build_summary.json:step"
     assert v.correspondence_digests == {"build_request_LP9_T1": shape, "request": req, "step": step}
     assert v.inputs["build_summary.json"] and v.correspondence_digest != v.inputs["global_match.json"]
-    assert V.Verdict.from_dict(json.loads(v.dumps())).correspondence_digest == step
+    assert V.CommitChecks.from_dict(json.loads(v.dumps())).correspondence_digest == step
     # a build_summary.json of a v1-frontend Build (no correspondence_digest per wrapper): absent, null
     (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": None}, "request": {"ok": True, "program_digest": "p2" * 32}}))
     v = V.from_record(d, rc=0, stage_ok="PASS")
@@ -444,13 +529,19 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"request": req, "step": step}
     assert V.correspondence_of_build(None) == (None, "absent", {})
-    assert V.correspondence_of_build({"request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+    assert V.correspondence_of_build({"step": {"ok": True}, "request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+    # a summary its record refuses: a note, and the wrappers' own result.json
+    (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": "zz" * 32, "digest": "x"},
+                                                      "request": {"ok": True}}))
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step"
+    assert any("build_summary.json not read" in n and "'step.digest'" in n for n in v.notes)
 
 
 # ---------------------------------------------------------------------------------------------------------------- (9) property citations
 
 def test_from_record_cites_property_records_by_digest(tmp_path):
-    """P5's registry test: every property the verdict cites is in REGISTRY, by a digest that recomputes from the cited file.  A record
+    """The registry test: every property the verdict cites is in REGISTRY, by a digest that recomputes from the cited file.  A record
     that does not hold, was edited, or does not parse is a note, never a changed decision; a row without records has no `properties` key."""
     d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     bare = V.from_record(d, rc=0, stage_ok="PASS")
@@ -467,7 +558,7 @@ def test_from_record_cites_property_records_by_digest(tmp_path):
         assert c["name"] in REGISTRY and c["schema"] == REGISTRY[c["name"]].schema
         assert digest_of(json.loads((d / c["source"]).read_text())) == c["digest"]
     assert v.notes == ["property census (properties/census.json): does not hold"]
-    assert V.Verdict.from_dict(json.loads(v.dumps())).properties == v.properties
+    assert V.CommitChecks.from_dict(json.loads(v.dumps())).properties == v.properties
     doc = json.loads((d / "properties" / "noninterference.json").read_text())
     (d / "properties" / "noninterference.json").write_text(json.dumps({**doc, "world": 2}))
     (d / "properties" / "junk.json").write_text("{not json")

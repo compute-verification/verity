@@ -8,8 +8,8 @@ One GPU process writes `<out>/deepgemm_capture.json`, the property record `deepg
 prints one line per case and then `DEEPGEMM GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
 nothing else runs when it fails (exit 3).  vLLM runs with DeepGEMM on (`VLLM_USE_DEEP_GEMM=1`, `VLLM_USE_DEEP_GEMM_E8M0=1`,
 `VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=1`: the defaults on Hopper) and not batch invariant, so M < 32 takes FlashInfer's branch;
-`--batch-invariant` sends every M to DeepGEMM's (flashinfer.py:309-310).  GLM-5.3's engine pins `VLLM_USE_DEEP_GEMM=0`
-(TargetProfile `fp8_block_gemm="cutlass"`, glm53_block_fp8_capture_gpu.py); its shapes run here as a DeepGEMM-served GLM-5.3 would.
+`--batch-invariant` sends every M to DeepGEMM's (flashinfer.py:309-310).  GLM-5.3's engine runs these defaults too (its row's
+target declares no `fp8_block_gemm`; capture map `fp8-block-linear-deepgemm`), so its shapes run here as it serves them.
 A phase that raises records its error and fails the verdict without stopping the others.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
@@ -64,6 +64,8 @@ every generated GEMM at a predicted launch configuration and every predicted con
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import argparse
 import contextlib
 import glob
@@ -83,7 +85,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
-from verity_vllm.program.kernels import deepgemm_schedule as S
+from verity.ml.definitions.numerics import deepgemm_schedule as S
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/deepgemm-capture/v2"
@@ -95,8 +97,16 @@ KERNEL = "FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
 #: shared expert's 3072 column- then row-parallel.
 DSV4_LINEARS = (("fused_wqa_wkv", 7168, 1536 + 512), ("wq_b", 1536, 16 * 512), ("indexer.wq_b", 1536, 64 * 128), ("wo_b", 2 * 1024, 7168),
                 ("shared_experts.gate_up_proj", 7168, 2 * 3072 // 8), ("shared_experts.down_proj", 3072 // 8, 7168))
+#: GLM-5.3's dense FP8 linears as one TP8 rank runs them, (name, K, N): hidden 6144, 64 heads (8 per rank), q_lora 2048, kv_lora 512,
+#: qk nope 192 + rope 64, v 256; the indexer's wq_b 32 x 128, replicated; dense intermediate 12288 and one shared expert of 2048,
+#: column- then row-parallel.  kv_b_proj runs on the dense-MHA prefill route (its absorbed decode forms are bf16), and the indexer's
+#: wk + weights_proj is bf16.
+GLM53_LINEARS = (("fused_qkv_a_proj", 6144, 2048 + 512 + 64), ("q_b_proj", 2048, 8 * (192 + 64)), ("kv_b_proj", 512, 8 * (192 + 256)),
+                 ("o_proj", 8 * 256, 6144), ("indexer.wq_b", 2048, 32 * 128), ("mlp.gate_up_proj", 6144, 2 * 12288 // 8),
+                 ("mlp.down_proj", 12288 // 8, 6144), ("shared_experts.gate_up_proj", 6144, 2 * 2048 // 8),
+                 ("shared_experts.down_proj", 2048 // 8, 6144))
 #: model -> (its linears, its checkpoint's scale format, its `model_type`)
-MODELS = {"dsv4": (DSV4_LINEARS, "e8m0", "deepseek_v4"), "glm53": (B.DENSE, "f32", "glm_moe_dsa")}
+MODELS = {"dsv4": (DSV4_LINEARS, "e8m0", "deepseek_v4"), "glm53": (GLM53_LINEARS, "f32", "glm_moe_dsa")}
 #: DeepSeek-V4's `wo_a` at TP8: (H local groups, K = 8 heads x 512, N = o_lora_rank), its heads per group and head split
 EINSUM = (2, 8 * 512, 1024)
 HEADS_PER_GROUP, NOPE, ROPE, MAX_POS = 8, 448, 64, 4096
@@ -424,7 +434,7 @@ def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got,
     """`ScaledMmFp8BlockCoordinate_v1{K,128}` at ``columns``: the twin's word where it is finite, else the GPU's."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.registry import fp8 as F
+    from verity.ml.definitions.registry import fp8 as F
 
     fn = bind(F.ScaledMmFp8BlockCoordinate, K=K, G=GROUP)
     for n in sorted(columns):
@@ -442,9 +452,9 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
     FlashInfer's, the linear's twin; the references on the sampled rows."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels import deepgemm_twins as T
-    from verity_vllm.program.kernels import derived_rows as R
-    from verity_vllm.program.registry import deepgemm as DG
+    from verity.ml.definitions.numerics import deepgemm_twins as T
+    from verity.ml.definitions.numerics import derived_rows as R
+    from verity.ml.definitions.registry import deepgemm as DG
 
     a = B._load(job["paths"])
     K, N, deep, rmap = job["K"], job["N"], job["branch"] == "deepgemm", job["row_map"]
@@ -476,7 +486,7 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     """Weight-block rows [b0, b1) of one processed weight against the twin of its processing, block by block."""
-    from verity_vllm.program.kernels import deepgemm_twins as T
+    from verity.ml.definitions.numerics import deepgemm_twins as T
 
     a = B._load(job["paths"])
     N, b0, b1 = job["N"], *job["block_rows"]
@@ -568,7 +578,7 @@ def einsum_launches(work: Path, Ms: tuple[int, ...], seed: int) -> tuple[list[di
 def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one einsum launch: every group's words against the grouped twin over the einsum's own operands, the
     reference on the sampled tokens."""
-    from verity_vllm.program.kernels import deepgemm_twins as T
+    from verity.ml.definitions.numerics import deepgemm_twins as T
 
     a = B._load(job["paths"])
     H, K, N, rmap = job["H"], job["K"], job["N"], job["row_map"]
@@ -663,7 +673,7 @@ def bind_check() -> dict[str, Any]:
     """The Programs bind at every shape, with the weight-scale rows each reads."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
-    from verity_vllm.program.registry import deepgemm as DG
+    from verity.ml.definitions.registry import deepgemm as DG
 
     out: dict[str, Any] = {}
     for shapes, _, _ in MODELS.values():

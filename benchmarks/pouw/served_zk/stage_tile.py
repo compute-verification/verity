@@ -1,4 +1,4 @@
-"""stage_tile.py COMMIT_DIR PARAMS UNIT OUT: unit UNIT of a served window as one C-Flock --zk unit, on the committer's rows.
+"""stage_tile.py COMMIT_DIR PARAMS UNIT OUT: unit UNIT of a served window as one Flock --zk unit, on the committer's rows.
 
 The unit is `Pc8TileSide{K=4096,TM=1,TN=1,DEV=sm120}`: A row i (fp8-pi, role X, row-seg) and B row j (fp8-pi, role W, v2)
 of the window's entry the unit falls in (`pouw.window.tile_at` of ``advice.json``: a call's kept rows, or the filler's
@@ -25,9 +25,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
-from verity.core.protocols.pouw.circuit import leaves as L  # noqa: E402
+from verity.ml.protocols.pouw.circuit import leaves as L  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import pc8  # noqa: E402
+from verity.ml.protocols.pouw.circuit import pc8  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402

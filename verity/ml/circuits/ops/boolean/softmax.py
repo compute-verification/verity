@@ -1,6 +1,6 @@
-"""Attention's softmax arithmetic as circuits over `forms` (formerly C-Flock's `tail_pieces`): the FTZ f32 operations, the
-strict compare, ``F32Max`` and ``GuardNegInfZero``. Each is its IR primitive (`verity.ml.circuits.ops.fp32`) bit for bit. The MUFU
-operations around them read tables and stay in C-Flock's `tail_pieces`.
+"""Attention's softmax arithmetic as circuits over `forms` (formerly Flock's `tail_pieces`): the FTZ f32 operations, the
+strict compare, ``F32Max`` and ``GuardNegInfZero``. Each is its word primitive (`verity.ml.circuits.ops.fp32`) bit for bit. The MUFU
+operations around them read tables and stay in Flock's `tail_pieces`.
 """
 from __future__ import annotations
 
@@ -58,6 +58,31 @@ def f32_fma_ftz(C, a, b, c):
 def f32_fma_sub_ftz(C, a, b, c):
     """``F32FmaSubFtz_v1``: ftz(RN(ftz(a) * ftz(b) - ftz(c)))."""
     return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c))))
+
+
+def f32_add_ftz_gpu(C, a, b):
+    """``F32AddFtz_v2``: ftz(RN(ftz(a) + ftz(b))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_sub_ftz_gpu(C, a, b):
+    """``F32SubFtz_v2``: ftz(RN(ftz(a) - ftz(b))), every NaN result `F32_NAN_PTX` (so no NaN's payload or sign survives)."""
+    return ftz(C, fp.f32_add(C, ftz(C, a), fp.f32_neg(ftz(C, b)), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_mul_ftz_gpu(C, a, b):
+    """``F32MulFtz_v2``: ftz(RN(ftz(a) * ftz(b))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_fma_ftz_gpu(C, a, b, c):
+    """``F32FmaFtz_v2``: ftz(RN(ftz(a) * ftz(b) + ftz(c))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), ftz(C, c), nan_word=fp.F32_NAN_PTX))
+
+
+def f32_fma_sub_ftz_gpu(C, a, b, c):
+    """``F32FmaSubFtz_v2``: ftz(RN(ftz(a) * ftz(b) - ftz(c))), every NaN result `F32_NAN_PTX`."""
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c)), nan_word=fp.F32_NAN_PTX))
 
 
 def f32_gt(C, a, b):

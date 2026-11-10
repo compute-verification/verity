@@ -1,21 +1,26 @@
-import Proofs.Accounting.TS.FanIn
-import Proofs.Accounting.TS.FoldFanIn
-import Proofs.Accounting.TS.LowBit
-import Proofs.Accounting.TS.Price
-import Proofs.Accounting.TS.Rounds
-import Proofs.Accounting.TS.Facets
-import Proofs.Accounting.TS.Receipt
-import Proofs.Accounting.TS.Tensor
-import Proofs.Accounting.TS.Sheet
-import Proofs.Accounting.TS.ProofsSound
-import Proofs.Accounting.TS.Fork
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Accounting.TS.FanIn
+public import Proofs.Accounting.TS.FoldFanIn
+public import Proofs.Accounting.TS.LowBit
+public import Proofs.Accounting.TS.Price
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.TS.Facets
+public import Proofs.Accounting.TS.Receipt
+public import Proofs.Accounting.TS.Tensor
+public import Proofs.Accounting.TS.Sheet
+public import Proofs.Accounting.TS.ProofsSound
+public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.TS.Keyed
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor–scalar model's proofs
 
-Each guarantee of `Models.Accounting.Guarantees.TS` as `Accounting.SecurityProofs.TS.G` (the gap list:
-note:20261017T0801Z-draft-lean-stmt). One file per prover group: the price lemmas (`TS/Price.lean`), the round lemmas
+Each guarantee of `Definitions.Accounting.Guarantees.TS` as `Accounting.SecurityProofs.TS.G`. One file per prover
+group: the price lemmas (`TS/Price.lean`), the round lemmas
 (`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), the
 fan-in count with FOLD-OPT and FILL-OPT from it (`TS/FanIn.lean`), the fan-in floor of a fold of binding steps and
 of duo's and fx1's runs (`TS/FoldFanIn.lean`), the low bit of a one-register fold and of li (`TS/LowBit.lean`); this file keeps the theorems built from them
@@ -27,6 +32,8 @@ All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `p
 `d̄ = ln(1/δ′)/(ln(1/p)·S)`, off `luck_rounds`' event at `K = ⌈ln(1/δ′)/ln(1/p)⌉` (`p^K ≤ δ′`, `pow_ceil_le`); Lemma C's
 is `ε_luck` at `d̄ = Λ·ln(1/δ′)/S`, off `budget_tail`'s event at `t = ln(1/δ′)`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

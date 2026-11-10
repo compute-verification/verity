@@ -4,6 +4,8 @@ that source, and none is missing.  The vLLM modules are stand-ins installed in `
 are shape-and-dtype stand-ins on a "cuda" device, so nothing here needs vLLM or a GPU."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 import sys
 import types
@@ -25,7 +27,8 @@ E, TOPK, MIL, H = ENV["E"], ENV["K"], ENV["MIL"], ENV["H"]
 
 
 class T:
-    """A device tensor as the sources read it: device, shape, dtype, numel, element_size; `view` keeps the storage's identity."""
+    """A device tensor as the sources read it: device, shape, dtype, numel, element_size; `view` (of a shape or a dtype) keeps the
+    storage's identity, `to` and `repeat_interleave` make new ones."""
 
     device = types.SimpleNamespace(type="cuda")
 
@@ -41,13 +44,24 @@ class T:
     def element_size(self) -> int:
         return torch.empty((), dtype=self.dtype).element_size()
 
-    def view(self, *shape: int) -> "T":
+    def view(self, *shape: int | torch.dtype) -> T:
+        if len(shape) == 1 and isinstance(shape[0], torch.dtype):
+            v = T(*self.shape, dtype=shape[0])
+            v.shape = (*self.shape[:-1], self.shape[-1] * self.element_size() // v.element_size())
+            v.base = self
+            return v
         known = 1
         for d in shape:
             known *= d if d != -1 else 1
         v = T(*(self.numel() // known if d == -1 else d for d in shape), dtype=self.dtype)
         v.base = self
         return v
+
+    def to(self, dtype: torch.dtype) -> T:
+        return T(*self.shape, dtype=dtype)
+
+    def repeat_interleave(self, n: int) -> T:
+        return T(self.numel() * n, dtype=self.dtype)
 
 
 class NC:

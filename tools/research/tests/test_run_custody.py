@@ -149,7 +149,7 @@ def test_a_repair_publish_deletes_a_sent_credential_too(tmp_path, monkeypatch, c
 @pytest.mark.parametrize("shape", ["inputs-is-a-file", "credential-is-a-dir", "inputs-is-a-symlink"])
 def test_a_run_dir_of_any_shape_still_gets_its_record(tmp_path, shape):
     """What a workload leaves at a credential's path is its own: custody deletes only a file there, never through a symlinked inputs/
-    (which `run_files` doesn't follow either), and an odd shape never costs the run its record (red team, #1055 F4)."""
+    (which `run_files` doesn't follow either), and an odd shape never costs the run its record."""
     run = tmp_path / "runs" / "r1"
     run.mkdir(parents=True)
     (run / "stdout.log").write_text("ok\n")
@@ -360,6 +360,61 @@ def test_custody_is_the_default_with_on_and_opting_out_is_explicit(tmp_path, mon
     assert "--no-custody-r2: this run's records stay on the machine" in capsys.readouterr().err
 
 
+def test_the_store_read_key_reads_only(tmp_path):
+    """`--store-read` gives the workload a key that can fetch from the store and write nothing."""
+    public, files = CU.mint_reader("2h", environ=dict(PARENT))
+    assert set(public["actions"]) == set(CU.READ_ACTIONS) and not {a for a in public["actions"] if "Put" in a or "Upload" in a}
+    names = dict(files)
+    assert set(names) == {f"{CU.READ_DIR_NAME}/{CU.STORE_TOML}", f"{CU.READ_DIR_NAME}/{CU.CRED_FILE}"}
+    cred = json.loads(names[f"{CU.READ_DIR_NAME}/{CU.CRED_FILE}"])
+    _, claims = C.decode_jwt(__import__("base64").b64decode(cred["AWS_SESSION_TOKEN"]).decode()[len("jwt/"):])
+    assert claims["actions"] == list(CU.READ_ACTIONS)
+    assert CU.READ_DIR_NAME == remote.STORE_READ_DIR and cred["AWS_SESSION_TOKEN"] not in names[f"{CU.READ_DIR_NAME}/{CU.STORE_TOML}"].decode()
+
+
+def test_store_read_puts_the_read_key_in_the_workload_env_and_deletes_it_when_the_workload_ends(tmp_path):
+    vault = tmp_path / "vault"
+    req, runs = _request(tmp_path, RID, ["sh", "-c", 'printf "%s %s" "$RESEARCH_STORE_CONFIG" "$AWS_SESSION_TOKEN" > "$RESEARCH_RUN_DIR/seen.txt"'],
+                         vault)
+    rd = req.parent / remote.STORE_READ_DIR
+    rd.mkdir()
+    secret = f"sk-{os.getpid():x}{'q' * 7}"           # built here, so the dirty-tree capture of this file's source can't hold it
+    (rd / CU.STORE_TOML).write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    (rd / CU.CRED_FILE).write_text(json.dumps({"AWS_ACCESS_KEY_ID": "AKread", "AWS_SECRET_ACCESS_KEY": secret,
+                                               "AWS_SESSION_TOKEN": "read-token", "expires_utc": "2026-09-25T07:00:00Z"}))
+    doc = json.loads(req.read_text())
+    doc["store_read"] = {"schema": CU.SCHEMA, "actions": list(CU.READ_ACTIONS)}
+    req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    assert out["started"], out
+    run_dir = runs / RID
+    marker = _wait_marker(run_dir)
+    assert marker, "custody still publishes with its own key"
+    assert (run_dir / "seen.txt").read_text() == f"{rd / CU.STORE_TOML} read-token"
+    assert not (rd / CU.CRED_FILE).exists(), "the workload's key is deleted when it ends"
+    for p in run_dir.rglob("*"):
+        if p.is_file() and p.name != "seen.txt":
+            assert secret not in p.read_text(errors="replace"), p
+
+
+def test_store_read_needs_on_custody_and_a_tree_that_knows_it(tmp_path, monkeypatch, capsys):
+    assert cli.main(["run", "--store-read", "--", "true"]) == 2
+    assert "--store-read hands a machine's workload" in capsys.readouterr().err
+    seen: list = []
+    monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw["store_read"]) or
+                        {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}})
+    assert cli.main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--store-read", "--", "true"]) == 0
+    assert seen == [True]
+    monkeypatch.undo()
+    mf = tmp_path / "machines.toml"
+    mf.write_text('[machines.m]\nprovider = "runpod"\npod_id = "abcdefghijkl12"\nproject = "verity"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(mf))
+    monkeypatch.setattr(remote, "pod_target", lambda m: pytest.fail("nothing is contacted before the key exists"))
+    with pytest.raises(remote.Refused, match="needs run custody"):
+        remote.launch(run_id=RID, local_dir=tmp_path / "runs" / "a", machine_name="m", project="verity", command=["true"], harness_args=[],
+                      source=None, sends=[], cwd=None, env={}, exclusive=False, custody_ttl=None, store_read=True)
+
+
 def test_a_refused_claim_deletes_the_staged_key(tmp_path):
     req, runs = _request(tmp_path, RID, ["true"], tmp_path / "vault")
     doc = json.loads(req.read_text())
@@ -521,8 +576,8 @@ def _on_host(d: Path, host: tuple[str, str], state: str | None, t: float, **tran
 def test_triage_on_the_machine_tells_a_live_runner_from_a_dead_one_and_a_pods_run_from_a_stale_one(tmp_path):
     """Node 2 runs `research run` as host processes, node 1 in Kubernetes pods. A run still marked running has ended when its runner's
     pid (same start time) is gone from the host that ran it or that host rebooted since, or, when that runner is in another pid
-    namespace, when none of its records changed for 24 h: node 1 had 326 such runs on 3 Oct, preempted before they recorded an end,
-    that nothing published."""
+    namespace, when none of its records changed for 24 h: pods preempted before they record an end leave hundreds of such runs on a
+    node, which nothing would otherwise publish."""
     runs, st = tmp_path / "runs", LocalStore(tmp_path / "s", config_path=tmp_path / "absent.toml")
     me = int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])
     live, dead, pod, stale, starting = (_fixture_run(runs, f"r20260925-01000{i}-aaaa") for i in range(5))
@@ -600,8 +655,8 @@ def test_the_custody_temp_file_a_killed_publish_leaves_is_no_file_of_the_run(tmp
 
 
 def test_a_remote_holding_another_attempt_document_is_a_conflict_that_triage_reports_with_its_repair(tmp_path, monkeypatch, capsys):
-    """3 Oct: r20261003-174723-7ea5's attempt was already on R2 with other bytes, and an attempt key is write-once, so a node's custody
-    Job failed on it every round. A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches
+    """An attempt already on R2 with other bytes, under a write-once attempt key, would fail a node's custody Job every round.
+    A failed `custody --publish` leaves its verdict in .custody (never over a marker that still vouches
     for the dir), triage reports the run as `conflict` with the repair, and the repair (reconcile, then --publish) makes it r2."""
     from research.store import attempt as A
     from research.store.local import attempt_key
@@ -687,7 +742,7 @@ def test_publish_force_takes_home_a_run_whose_runner_died_and_another_hosts_only
     """n2_custody.sh publishes a dead run (an OOM-killed scope, a preempted pod) through `research data custody --publish`, which needs
     --force for a status that never became terminal; without it the run is refused, as `attempt publish` refuses it. This host sees
     whether a runner that ran here is gone; a pod's or another machine's it can't, and a pod whose records are quiet for 24 h may
-    still run (#1004's red-team F2), so --force publishes such a run only with --runner-gone, which the caller passes once the run's
+    still run, so --force publishes such a run only with --runner-gone, which the caller passes once the run's
     own host says so, and never one whose runner runs here."""
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
@@ -713,8 +768,8 @@ def test_publish_force_takes_home_a_run_whose_runner_died_and_another_hosts_only
 
 
 def test_a_run_published_force_while_it_ran_is_not_r2_once_it_writes_its_end(tmp_path, monkeypatch):
-    """#1004's red-team F2: a pod forced as dead while it still ran ends later; its runner's own publish then returns `already` (an
-    attempt is write-once), and triage called the run r2 though its end, its result and its last logs were only on node 1. An
+    """A pod forced as dead while it still runs ends later; its runner's own publish then returns `already` (an attempt is
+    write-once), and triage must not call the run r2 while its end, its result and its last logs are only on node 1. An
     attempt published --force is r2 only while .custody shows nothing in the run dir changed after its run record was taken."""
     from research.store import attempt as A
 
@@ -769,6 +824,17 @@ def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capp
     assert "over the 24 h cap" in cli._custody_ttl_problem("25h", [])
     assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "30000", "--", "true"]) == 2
     assert "pass --custody-ttl" in capsys.readouterr().err
+
+
+def test_an_explicit_custody_key_the_run_outlives_is_refused(capsys):
+    """A bare ``--custody-ttl`` is seconds, so ``600`` beside a ``--max-min 180`` launch minted a 10-minute key whose upload
+    would fail hours later; the launch is refused, naming a lifetime that outlasts the run."""
+    why = cli._custody_ttl_problem("600", ["--timeout", "25200"])
+    assert "outlives --custody-ttl 600 (600 s; a bare number is seconds)" in why and "--custody-ttl 8h" in why
+    assert cli._custody_ttl_problem("8h", ["--timeout", "25200"]) is None
+    assert cli._custody_ttl_problem("600", []) is None
+    assert cli.main(["run", "--on", "vy-nowhere", "--custody-ttl", "600", "--timeout", "3600", "--", "true"]) == 2
+    assert "outlives --custody-ttl 600" in capsys.readouterr().err
 
 
 def test_custody_warns_before_pushing_a_run_bigger_than_the_warn_size(tmp_path, monkeypatch):

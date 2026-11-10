@@ -1,4 +1,4 @@
-"""[R17 mfast F2, COORD R17-34 (2) / M-0496, rev M-0500] the STORED form of `instances.jsonl` operand references.
+"""The STORED form of `instances.jsonl` operand references.
 
 `instances.jsonl` (one line per Compute instance) lists every operand's references.  The record form (`verity-gen/instances/v1`,
 `operand_refs_form: runs`) writes every maximal run `["space", idx, lo, hi]` -- the node-space K/V gathers of a long prefill run by run:
@@ -10,13 +10,13 @@ form.  Lossless: `compact.runs_from_file_items` returns the record's run list, i
 
 Every reader accepts both forms and expands on read where it needs runs (compare.load_oracle keeps the "p" runs of either form;
 tp.rank_match and bench.gen_batch_candidate expand); nothing caches an expansion by digest.  The writer is `run_config.persist_program`
-(`VERITY_INSTANCES_FORM=runs|progressions`, default `runs` until coord rules the v2 schema the file of record).  The fold digest of
+(`VERITY_INSTANCES_FORM=runs|progressions`, default `runs`).  The fold digest of
 record (`program.json` digest == `fold_summary.digest`) is over the Program descriptor, not over `instances.jsonl` bytes: the same fold
-has the same digest under both forms; only F-r16-24's tie fact `instances_sha256` (the bytes an oracle READ) differs, as it must.
+has the same digest under both forms; only the tie fact `instances_sha256` (the bytes an oracle READ) differs, as it must.
 
-[rev F-r17-12] this module REPLACES unit 7's compact-provenance sidecars (program.compact.json + instances.compact.jsonl written into the
+This module REPLACES unit 7's compact-provenance sidecars (program.compact.json + instances.compact.jsonl written into the
 fold dir by the record's producer and read by the fast loader after checking the SOURCES' digests): nothing the checker owned
-authenticated the sidecar's content, and a forged sidecar with the true source hashes was accepted (M-0497).  Withdrawn; no reader of a
+authenticated the sidecar's content, and a forged sidecar with the true source hashes was accepted.  Withdrawn; no reader of a
 sidecar exists.  The compact form here is the file of record itself.
 
     verity-vllm instances-form convert --form progressions|runs SRC DST

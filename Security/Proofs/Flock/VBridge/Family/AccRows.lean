@@ -1,6 +1,21 @@
-import Proofs.Flock.VBridge.Family.Ends
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Registrants
+module
+
+public import Proofs.Flock.VBridge.Family.Ends
+public import Proofs.Flock.VBridge.Family.Opened
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # VBridge G at V*'s family: `rec-acc`'s rows keyed by their registration, and the openings' tops
@@ -8,18 +23,18 @@ import Proofs.Flock.VBridge.Family.Registrants
 `Ends.lean` keys every read of `rec-acc`'s rows by one registered port `pa` (`EndKeys`, `OpenKeys`), the whole
 `Registered.Port`, name and positions included. V*'s reads files name `rec-acc` once per row port, each entry with its
 own name and positions (rec_outer.py:235-238: `acc` and `acc_out`, each `chain.reg.entry()` with the level's positions;
-rec_vstage.py:357: `acc0`, `acc1`), and at a drawn unit `OwnReads` ties a registered read's port to the circuit's port
+rec_vstage.py:357: `acc0`, `acc1`), and at a sampled proof block `OwnReads` ties a registered read's port to the circuit's port
 of its name. So:
 
-* `eq_of_port_eq`: two registered reads of one drawn unit at one registered port are reads of one port of the circuit;
-  `not_colKeyed_pair`, `not_endKeys`: `EndKeys` fails at a drawn algebra unit whose `acc0` and `acc1` columns are keyed
+* `eq_of_port_eq`: two registered reads of one sampled proof block at one registered port are reads of one port of the circuit;
+  `not_colKeyed_pair`, `not_endKeys`: `EndKeys` fails at a sampled algebra unit whose `acc0` and `acc1` columns are keyed
   by two ports (rec_residuals.py:101), as V*'s are;
-* `colKeyed_drawn`: a keyed column of a drawn unit names its port in `own` and its position in the port's reads, so
+* `colKeyed_drawn`: a keyed column of a sampled proof block names its port in `own` and its position in the port's reads, so
   `OpenKeys` puts one port, with one name and one list of positions, in every level's reads file (`openKeys_drawn`),
   which V*'s files are not (each level's `acc` reads that level's positions).
 
-The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain; not its name or
-positions): `ColKeyedS`, `SiteRowsShared` (implies `RowsShared`, `rowsShared_of_site`; from `SharedRowsS`, and that
+The restatement keys a read by its registration (`site`: value, root, leaf count, row width, domain, leaf schema; not its
+name or positions): `ColKeyedS`, `SiteRowsShared` (implies `RowsShared`, `rowsShared_of_site`; from `SharedRowsS`, and that
 from `NoRegistrantCollisionS`, since the verifier's leaf check reads only a port's registration, `opensLeaf_site`;
 all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented`, since `Accepted` excludes `RegColl`),
 `AccRowsAreS` at `accRegS` (`accRowsAreS_of_shared`), `EndKeysS`, `OpenKeysS`, and `hEnds_of_partS`,
@@ -28,6 +43,8 @@ all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented
 `hTopsL_of_out` gives `HTopsL` from `TopsOutL`, the openings' `out` columns registered bits of the cap's entry, as
 `AccOutL` gives `acc_out`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -41,21 +58,21 @@ open FlockVBridge.AccChain (levelLanes)
 open FlockSoundness.Discharge.Hm (bitL)
 open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 
-/-- The registration a registered port reads: its value, root, leaf count, row width and domain, all its fields but
-its name and its read positions (`Registered.Port`; rec_outer.py:235, `read(chain.reg.entry(), …)`). -/
-abbrev Site := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray
+/-- The registration a registered port reads: its value, root, leaf count, row width, domain and leaf schema, all its
+fields but its name and its read positions (`Registered.Port`; rec_outer.py:235, `read(chain.reg.entry(), …)`). -/
+abbrev Site := String × ByteArray × ℕ × Option ℕ × ℕ × ByteArray × String
 
 /-- A port's registration (`Site`). -/
-def site (p : Flock.Registered.Port) : Site := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain)
+def site (p : Flock.Registered.Port) : Site := (p.value, p.root, p.leaves, p.words, p.wordBits, p.domain, p.schema)
 
-/-! ## A drawn unit's registered reads -/
+/-! ## A sampled proof block's registered reads -/
 
 section Drawn
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **Two registered reads of a drawn unit at one registered port read one port of the circuit** (`hown`: each read's
+/-- **Two registered reads of a sampled proof block at one registered port read one port of the circuit** (`hown`: each read's
 port is the circuit's port of its name, `OwnReads`). -/
 theorem eq_of_port_eq {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
@@ -69,7 +86,7 @@ theorem eq_of_port_eq {ω : Lv.Ω} {R' : Reg'} {o}
   rw [hp] at hf₁
   exact Fin.ext (Option.some.inj (hf₁.symm.trans hf₂))
 
-/-- **Two columns of a drawn unit keyed by two ports of the circuit are not keyed at one registered port**: `ColKeyed`
+/-- **Two columns of a sampled proof block keyed by two ports of the circuit are not keyed at one registered port**: `ColKeyed`
 at one `pa` makes the ports' registered reads one port's (`eq_of_port_eq`). -/
 theorem not_colKeyed_pair {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
@@ -88,7 +105,7 @@ theorem not_colKeyed_pair {ω : Lv.Ω} {R' : Reg'} {o}
   subst e
   exact hne (h₁.trans h₂.symm)
 
-/-- **A keyed column of a drawn unit names its registered port in `own`, by the name of its key's port, and its
+/-- **A keyed column of a sampled proof block names its registered port in `own`, by the name of its key's port, and its
 position among the port's reads** (`hown`, `OwnReads`). -/
 theorem colKeyed_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
@@ -144,24 +161,25 @@ section Two
 open FlockSoundness.Registered (ReadsX TwoOpenings)
 open FlockSoundness.Binding (HmRowsX Collides hm96Pair hm96Pair_spec)
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (FlockSoundness.TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : FlockSoundness.Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
   {lay : FlockSoundness.Binding.Layout P plan tab decode} {rs : HmRowsX lay}
-  {C' : FlockSoundness.Audit.Circuit} {n' : ℕ} {P' : FlockSoundness.Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
+  {C' : Verity.Boolean.Circuit} {n' : ℕ} {P' : FlockSoundness.Audit.Partition C' n'} {Reg₁ : Type} {mPts' : ℕ}
   {plan' : Finset (Fin n') → Reg₁ → List (FlockSoundness.TabSpec mPts')}
   {tab' : (S : Finset (Fin n')) → (R : Reg₁) → Fin n' → Fin (plan' S R).length}
   {decode' : FlockSoundness.Audit.Partition.DecoderB (C := C') (Reg := Reg₁) plan' tab'}
   {lay' : FlockSoundness.Binding.Layout P' plan' tab' decode'} {rs' : HmRowsX lay'}
 
-/-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain and root). -/
+/-- The verifier's leaf check reads a port's registration only (`opensLeaf`: its leaf count, domain, schema and root). -/
 theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
     Flock.Registered.opensLeaf p = Flock.Registered.opensLeaf p' := by
   simp only [site, Prod.mk.injEq] at h
-  obtain ⟨-, hr, hl, -, -, hd⟩ := h
+  obtain ⟨-, hr, hl, -, -, hd, hs⟩ := h
   funext a b c
-  simp only [Flock.Registered.opensLeaf, hr, hl, hd]
+  unfold Flock.Registered.opensLeaf
+  rw [hr, hl, hd, hs]
 
 /-- **`registrants_eq_or_collides` at one registration**: two registered reads of one registration (`site`) at one
 position carry one row's bytes, or their openings collide, or hm96's leaves do (`opensLeaf_site`). -/
@@ -217,8 +235,8 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 
 /-! ## `EndKeys` and `OpenKeys` at one registered port -/
 
-/-- **`EndKeys` fails at a drawn algebra unit whose `acc0` and `acc1` columns are keyed by two ports**: at an accepted
-outer proof whose algebra session `sA r` accepts at a draw holding `uA r` (`hlive`, `hu`), where bit 0 of `acc0 0` and
+/-- **`EndKeys` fails at a sampled algebra unit whose `acc0` and `acc1` columns are keyed by two ports**: at an accepted
+outer proof whose algebra session `sA r` accepts at a sample holding `uA r` (`hlive`, `hu`), where bit 0 of `acc0 0` and
 of `acc1 0` are keyed by ports `q₀ ≠ q₁` (V*'s `acc0`, `acc1`, rec_residuals.py:101), `EndKeys` reads both at one
 port, so one port of the circuit (`not_colKeyed_pair`). -/
 theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → Flock.Registered.Port}
@@ -236,7 +254,7 @@ theorem not_endKeys {pa : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ �
     (hk R ω t R₂ τ o h r 0 (by omega) 0 (by omega)).1 (hk R ω t R₂ τ o h r 0 (by omega) 0 (by omega)).2
 
 /-- **`OpenKeys` puts its port in every level's reads file, with every opening's position among its reads**: at an
-accepted outer proof whose level-`ℓ` session accepts at a draw holding opening `j`'s unit, `pa` is one of the
+accepted outer proof whose level-`ℓ` session accepts at a sample holding opening `j`'s unit, `pa` is one of the
 session's `own`, by the name of the `acc` column's port, and reads the opening's chain position
 (`colKeyed_drawn`). V*'s level files name `rec-acc` as `acc` with that level's positions only (rec_outer.py:236), so no
 one port is in two levels' files with both levels' positions. -/
@@ -514,7 +532,7 @@ variable (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
 /-- Obligation: to be discharged by acceptance, now that the layout keys a returned output gate to its output row
 (`HiddenExec.rowOfH`), with each level's `out` a read of the
 tops registration at the opening's cap index whose rows are the cap message's entries (rec_outer.py:226-228, 236: the
-prover checks `out_rows` against `R.expected(q.cap_node)`; the cap message, the transcript lane's `MsgsRead`).
+prover checks `out_rows` against `R.expected(q.cap_node)`; the cap message, `MsgsRead`'s).
 **The openings' `out` columns are registered bits of the cap's entry**: at every accepted outer proof, the cap entry
 `HTopsL` names is 64 bytes, and the first 512 output columns of rep `r`'s opening `j` of level `ℓ` are registered bits
 of it (`RegOut`). -/

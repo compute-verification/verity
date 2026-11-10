@@ -1,0 +1,22 @@
+# The recursion profile (README.md): `job.sh`, which runs 85-rec-reprice.sh's steps on a node, and `rec_profile.py`, which
+# reads the records they leave. Not a package: `run.py` is the runner `verity bench recursion` calls, stdlib only, and the
+# suite reads records it writes itself.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_settings.py"]
+# settings.py declares the job's variables in a verity_config `Registry` and checks them with the harness's `check` (stdlib
+# only).
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
+          "verity/errors.py", "verity/__init__.py", "verity/settings.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_settings.py"]
+paths = ["benchmarks/recursion_e2e"]

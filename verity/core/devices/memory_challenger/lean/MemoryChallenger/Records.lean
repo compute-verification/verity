@@ -1,7 +1,7 @@
-import Flock.Hm96
-import Flock.HmRow
-import Randomness
-import MemoryChallenger.FrameV3
+module
+
+public import Flock.HmRow
+public import Attest.FrameV3Sha512
 
 /-!
 # The memory challenger's records and coins
@@ -12,6 +12,10 @@ and its header, the round record (`Round.value`), the records root, the signed m
 exception is an `Except.error` here, and where the Python's caller reads an exception as "no" (`verify_coin`), so does the
 Lean. Integers are big-endian.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger
 
@@ -35,7 +39,7 @@ def LATE : String := "late"
 def CLOCK : String := "CLOCK_MONOTONIC ns"
 
 /-- The stream a coin index reads, in bytes: `Randomness.uniform` reads a bounded prefix of the Python's unbounded stream.
-A draw over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
+A sample over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
 2^-64. -/
 def DRAW_BYTES : Nat := 4096
 

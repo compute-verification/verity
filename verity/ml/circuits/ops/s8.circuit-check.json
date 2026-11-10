@@ -1,16 +1,20 @@
 {
  "pieces": {
   "S32ByteCarry_v1": {
-   "and": 31
+   "and": 31,
+   "type": "2605db556cf887abb40c2b9901ad2ad385a1cac883a7619d931089c304a06f0427bd1f1ddaee94bace292aa6605285215012a5195269044bc85d4e17b1d298c1"
   },
   "S32ClampRest_v1": {
-   "and": 69
+   "and": 69,
+   "type": "2771fc93eac9a3fc91e49eda341a19132a3edd8105a0bd7117aca19ba30fdd262d82c6a1c85cd002d93136102451f030cf2d769dcd328bbf7732bc091efd7adf"
   },
   "S32ClampS8_v1": {
-   "and": 71
+   "and": 71,
+   "type": "2429b5af4a1f7b2d2749067e54f8b54422966bd8e40f3b2b16ea21c2308a2bc4db0863a29dbafdaed816329f4c338afd4664e59468770b828211f59a76f6a1a6"
   },
   "S32LowByte_v1": {
-   "and": 0
+   "and": 0,
+   "type": "b61a410ca6180e4008a1a6d37dc5bf1b265b3d6660478a5d94048dab5c8d8d3bff95edc70673f7978933a608f3b7cd957c8d0fb46fd6ea537b3e366ccc2bded6"
   }
  }
 }

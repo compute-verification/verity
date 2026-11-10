@@ -8,9 +8,9 @@ from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.registry import cuda_rmsnorm as C
+from verity.ml.definitions.registry import cuda_rmsnorm as C
 
 
 BF16 = torch.bfloat16
@@ -47,7 +47,7 @@ class CudaRmsNormRule(InPlaceRule):
             "x is bf16 [.., N], weight is bf16 [N], and eps is a static float",
             "BLOCK is cuda_rmsnorm.launch_block(number of token rows, N, fused=False)",
         ),
-        evidence_domain="structural; numerics: RMSNormCudaVector8_v1 (capture pending in draft #1970)",
+        evidence_domain="structural; numerics: RMSNormCudaVector8_v1 (capture pending)",
     )
 
     def targets(self):
@@ -74,7 +74,7 @@ class CudaRmsNormRule(InPlaceRule):
         rows, lead = rows_of(ctx.coll(x))
         wc = ctx.coll(w)
         N = rows[0].type.n
-        block = C.launch_block(len(rows), N, fused=False)
+        block = C.launch_block(launch_tokens_of(node, len(rows)), N, fused=False)
         fn = ctx.kind("rmsnorm_cuda", node, N=N, EPS=eps, BLOCK=block)
         outs = [ctx.call(fn, row, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, row in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
@@ -97,7 +97,7 @@ class CudaFusedAddRmsNormRule(InPlaceRule):
             "weight is bf16 [N], eps is a static float, and both mutated operands are rebound",
             "BLOCK is cuda_rmsnorm.launch_block(number of token rows, N, fused=True)",
         ),
-        evidence_domain="structural; numerics: RMSNormFusedCudaVector8_v1 (capture pending in draft #1970)",
+        evidence_domain="structural; numerics: RMSNormFusedCudaVector8_v3 (capture pending)",
     )
 
     def targets(self):
@@ -125,7 +125,7 @@ class CudaFusedAddRmsNormRule(InPlaceRule):
         rr, _ = rows_of(ctx.coll(res))
         wc = ctx.coll(w)
         N = xr[0].type.n
-        block = C.launch_block(len(xr), N, fused=True)
+        block = C.launch_block(launch_tokens_of(node, len(xr)), N, fused=True)
         fn = ctx.kind("rmsnorm_fused_cuda", node, N=N, EPS=eps, BLOCK=block)
         normed, residual = [], []
         for i, (a, b) in enumerate(zip(xr, rr)):

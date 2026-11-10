@@ -1,7 +1,40 @@
-import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.GS.RadiusDeploy
-import Proofs.Flock.Soundness.CompiledSound
+module
+
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.DeployTables
+public import Proofs.Flock.Claims.KS.Flock
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Flock's KS at the deployed instances, from one wait's bound
@@ -12,6 +45,8 @@ columns' zero the empty column (`instZeroListCol`): `K = 2^256 > 0` (`cap_pos`) 
 by table wherever the verifier accepts some run. At an in-scope statement the relation splits (`splits_of_inScope`, from
 `relS_split`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -29,12 +64,26 @@ theorem tableErr_nonneg (zk : Bool) (spec : SessionSpec) (st : Stmt) : 0 ≤ tab
     positivity
   · exact tableError_nonneg _ _
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- The tables' errors, summed, are nonnegative. -/
 theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x := by
   unfold εtable
   refine List.sum_nonneg fun a ha => ?_
   obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
   exact tableErr_nonneg zk p.1 p.2
+
+end Gen
+
+/-- The tables' errors, summed, are nonnegative. -/
+theorem εtable_nonneg (zk : Bool) (x : Claims.Msg) : 0 ≤ εtable zk x :=
+  Gen.εtable_nonneg (S := S₀) (zk := zk) (x := x)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The deployed relation splits by table** at an in-scope statement, for a record that reads the claims' parser,
 its tables' own statements, and the tables' traces interleaved (`relS_split`). -/
@@ -54,6 +103,18 @@ theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Fl
   refine ⟨t, ht', (Readable.relS_congr t fun i => ?_).2 hR⟩
   rw [Readable.tableWit_getD hj, ← hlen, Claims.Flock.readTables_getD r Ms (by omega),
     Claims.Flock.readTables_singleton]
+
+end Gen
+
+/-- **The deployed relation splits by table** at an in-scope statement, for a record that reads the claims' parser,
+its tables' own statements, and the tables' traces interleaved (`relS_split`). -/
+theorem splits_of_inScope {Coin Col Tr : Type} {zk : Bool} (r : Tr → Claims.Flock.Wit)
+    (D : Claims.Flock.Deploy Coin Col Tr) (hp : D.parse = parse zk Readable.relation)
+    (ht : D.table = table zk Readable.relation) (hr : D.read = Claims.Flock.readTables r) {x : Claims.Msg}
+    {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) :
+    Claims.Flock.Splits D x :=
+  Gen.splits_of_inScope (S := S₀) (Coin := Coin) (Col := Col) (Tr := Tr) (zk := zk) (r := r) (D := D) (hp := hp)
+    (ht := ht) (hr := hr) (x := x) (s := s) (hs := hs) (hin := hin)
 
 /-- **At one table the relation splits**: table 0's own statement is the statement (`table_zero_of_tables_eq_one`). -/
 theorem splits_of_one {Coin Col Tr : Type} {zk : Bool} {rel : Readable.Parsed → Readable.Relation}
@@ -76,11 +137,24 @@ theorem plain_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
     (h : Claims.Flock.OneWait H (deployPlain rel)) : Claims.Flock.KS H (deployPlain rel) :=
   Claims.Flock.KS_of_oneWait H (deployPlain rel) (fun _ => cap_pos) hk (fun x => εtable_nonneg false x) h
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/
 theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
       Claims.Flock.NoAcc H (deployZk rel).V x)
     (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=
   Claims.Flock.KS_of_oneWait H (deployZk rel) (fun _ => cap_pos) hk (fun x => εtable_nonneg true x) h
+
+end Gen
+
+/-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/
+theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+    (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
+      Claims.Flock.NoAcc H (deployZk rel).V x)
+    (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=
+  Gen.zk_of_oneWait (S := S₀) (H := H) (rel := rel) (hk := hk) (h := h)
 
 end FlockDeploy.KS

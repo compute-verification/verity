@@ -1,4 +1,4 @@
-"""Helpers shared by op rules: row iteration over leading axes, dtype checks."""
+"""Helpers shared by op rules: row iteration over leading axes, dtype and operand checks."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ import torch
 
 from verity.ml.circuits.refs import Coll, PartLog, array_of
 from verity.ml.circuits.types import Array
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.outcomes import refuse
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import Alloc, shape_of
 
 
 def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) -> tuple[PartLog, PartLog]:
@@ -27,6 +29,17 @@ def kv_logs(ctx, layer_name: str, krow_list: list[Coll], vrow_list: list[Coll]) 
         out.append(log)
     logs[layer_name] = (out[0], out[1])
     return out[0], out[1]
+
+
+#: `ctx.state` key of a pending cached prefix (`vllm_bindings.kv_prefix.KvPrefixRule`)
+CACHED_PREFIX = "kv_prefix"
+
+
+def refuse_cached_prefix(ctx, node, what: str) -> None:
+    """Refuse an attention rule that does not read a cached prefix while one is pending."""
+    if ctx.state.get(CACHED_PREFIX):
+        refuse("numerics_unregistered", node, ctx.module_path(node), f"{what} does not read a cached prefix; only the dense "
+                                                                     f"unified_attention_with_output rule does (KvPrefix[vllm])")
 
 
 def norm_kind(ctx, role: str, node, N: int, eps: float, **statics) -> tuple[object, tuple[Coll, ...]]:
@@ -46,7 +59,7 @@ def scalar_kind(ctx, role: str, node, N: int, C: float) -> tuple[object, tuple[C
     another value)."""
     if not ctx.registered_values:
         return ctx.kind(role, node, N=N, C=C), ()
-    from verity_vllm.program.registry.dense import reciprocal_bits
+    from verity.ml.definitions.registry.dense import reciprocal_bits
     bits = reciprocal_bits(C) if role == "bf16_div_scalar" else int(np.float32(C).view(np.uint32))
     return ctx.kind(f"{role}_value", node, N=N), (ctx.supplied(role.removeprefix("bf16_"), 32, bits, node, distinct=True),)
 
@@ -58,11 +71,11 @@ def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, 
     if not ctx.registered_values:
         return ()
     if cap is not None:
-        from verity_vllm.program.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+        from verity.ml.definitions.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
         return (ctx.supplied(f"softcap_mul_d{D}", 32, softcap_mul_bits(D, cap), node),
                 ctx.supplied("softcap_scale_log2", 32, softcap_scale_log2_bits(cap), node))
-    from verity_vllm.program.registry import b1
-    return (ctx.supplied(f"scale_log2_d{D}", 32, b1._scale_log2_bits(D), node),)
+    from verity.ml.definitions.registry import b1
+    return (ctx.supplied(f"scale_log2_d{D}", 32, b1.scale_log2_bits(D), node),)
 
 
 def rows_of(x: Coll) -> tuple[list[Coll], tuple[int, ...]]:
@@ -102,4 +115,42 @@ def shape(ctx, a) -> tuple[int, ...] | None:
     return ctx.shape_of_node(a) if isinstance(a, torch.fx.Node) else None
 
 
-__all__ = ["rows_of", "from_rows", "dtype_is", "shape"]
+def row_value(ctx, a, name: str, dtype: torch.dtype = torch.bfloat16) -> str | None:
+    """Why operand `a` (`name` in the refusal) is not a value collection of `dtype` with rank >= 1, or None if it is or
+    is an allocation, which a rule may write."""
+    if not isinstance(a, torch.fx.Node):
+        return f"{name} is not a graph value"
+    v = ctx.val(a)
+    if isinstance(v, Alloc):
+        return None
+    if not isinstance(v, Coll):
+        return f"{name} is not a value collection ({type(v).__name__})"
+    if not dtype_is(ctx, a, dtype):
+        return f"numerics_unregistered: {name} has dtype {ctx.dtype_of(a)}; the profile's kinds are {dtype}"
+    if not shape(ctx, a):
+        return f"{name} is a scalar"
+    return None
+
+
+def and_mul_operands(node, ctx):
+    """An `act_and_mul` kernel's `(out!, x[.., 2I])`: x a bf16 row value, out an allocation (or value) of [.., I]."""
+    out, x = node.args[:2]
+    r = row_value(ctx, x, "x")
+    if r:
+        return r
+    if not isinstance(ctx.val(out), (Alloc, Coll)):
+        return "out is not an allocation/value"
+    xs, os_ = shape(ctx, x), shape(ctx, out)
+    if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
+        return f"out {os_} vs x {xs}"
+    return True
+
+
+def call_args(node) -> dict:
+    """The call's arguments by their schema names, with the defaults the export leaves out of a call that passes them."""
+    names = node.target._schema.arguments
+    return {**{x.name: x.default_value for x in names if x.has_default_value()}, **dict(zip((x.name for x in names), node.args)),
+            **node.kwargs}
+
+
+__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "call_args"]

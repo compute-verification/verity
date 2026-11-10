@@ -1,0 +1,72 @@
+{
+ "definitions": {
+  "I32Div_v2": {
+   "and": 2141,
+   "type": "76f4c908c370d798953b94ddcf52d3a612692db0b4889f2c319922ecfc928ca0962a4f3ae901dbca96801d86d72485f9c8e3a5bf0de21a59b809ec992fbec343"
+  },
+  "I32Rem_v2": {
+   "and": 2110,
+   "type": "07ecea2720d77b1b522b355934ef95bbbb4bcd6c72a2cf6a94f9fc1b58c3b0f0460755bb7c172e9f08af9c7d63a80fb9622cbf240b6ec84f32b68b9c6f9cefad"
+  },
+  "MarlinMoeSchedule_v2{KT=2,NT=2,GRID=5}": {
+   "and": 6709,
+   "type": "01cf4fc01f4af477f27b818c0217b174c9eef79329a6ab99fe50be57d1f7d259cab0967492914f3288540219494f06bc0d9a8735057a18f6af5ccb3a2c6d4836"
+  },
+  "MarlinMoeSchedule_v2{KT=4,NT=3,GRID=7}": {
+   "and": 9519,
+   "type": "1f8704630b31a6b9dd6f51bb0039bbd5af7aa03f2a155dc136e4dc88eec3ac48581491dda8a94c8ce2636d7e6ec55b6ac3876aab562434ed72b0ddb57e7d6d97"
+  },
+  "MarlinMoeSchedule_v2{KT=5,NT=2,GRID=132}": {
+   "and": 6893,
+   "type": "87595dc976569a952dd85ab97fc11da84c1c596b4cacf3f38d4fd3342816e7d20fb12f8b977fa49a99d1e54a38767f505713a46cec6b6fb3ebe34e028d2236ff"
+  },
+  "MarlinMxfp4CoordinateW_v2{K=128,TK=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 53603,
+   "type": "6e20ca15fec2de4dbf66ea17b9ed93010e0ebbaf1a83cc1fb00400c380f6bb1f0769ec2b83742f8a6068003440bc7da357b3ec3dadb82b080d759af7d21a81a8"
+  },
+  "MarlinMxfp4Coordinate_v2{K=128,TK=64,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 52804,
+   "type": "45c4e7b77048b29d5fdcccb4d0ea9546c54c0845cb20766c624ab0b118d30a9f73f246d21966d870f8cb4a6b6e5484929e6f24bc96cd581ccb5e6c4661992305"
+  },
+  "MarlinMxfp4Group_v2": {
+   "and": 829,
+   "type": "5accbfec48a3b44c6584458504f0653d12dc3a91f99dc0848cf4465c83f34099a805136d46f96d6d3a92a95060ce749e90c9b84d48c73ef4bf9989fb3404444d"
+  },
+  "MarlinMxfp4StepActivation_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 49,
+   "type": "3da184707aa49ec7889a0678f52e1822fe777ee5eb69b81fe06ba2de450e26ad5a05a5b7ad2d2a2a26934b3251cdeb7db2ef972a5e4940d0c0740104fd4cc5be"
+  },
+  "MarlinMxfp4StepColumn_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 11133,
+   "type": "dd5e821bab0f07abb89c07658920199c18e57cd29a15afb5ef5d11ffae0b4ef4e5d2dfe680a277d8d494405709a88d0198cb9cba025e47a6a3d7c89bed398e03"
+  },
+  "MarlinMxfp4StepFromZeroActivation_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 49,
+   "type": "3da184707aa49ec7889a0678f52e1822fe777ee5eb69b81fe06ba2de450e26ad5a05a5b7ad2d2a2a26934b3251cdeb7db2ef972a5e4940d0c0740104fd4cc5be"
+  },
+  "MarlinMxfp4StepFromZeroColumn_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 10834,
+   "type": "4843626aee0b26c181eca47a81e9ced6efe8c7ac2486329d0a5b6d697583676b1277cae94a79275c656950ea270865e1d0d70c6760218d188fbf1233d08d333f"
+  },
+  "MarlinMxfp4StepFromZero_v2{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 12402,
+   "type": "0ca7991fa54302e9658d5b405f2b4382fb9b288565ea29114669f6f985e132c0a40e7edfc803854aff237be05c496bc03b7eecd1e78664662326e2b0255d9f09"
+  },
+  "MarlinMxfp4Step_v2{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 12701,
+   "type": "2a2797ffada745955d065b935d11ce3dcc5fb8e1c1855b743ee50cddbee46c49f37a180f10df8ff5b778483a07c0018ad49192d19f15cc0211923b06cdd9511d"
+  },
+  "MoeExpertE2m1Row_v2{E=3,K=128}": {
+   "and": 16896,
+   "type": "7fe9e3e8f10c0faa901e66d30f9d6e6ca482c49e794db4b4869ea5ed283f6580705c63e317c4d588ed92aad525e1a165b83fd93d68b7504824e42062a137c8e3"
+  },
+  "MoeExpertE2m1Row_v2{E=3,K=64}": {
+   "and": 8448,
+   "type": "07c43a34ca7ab9cd14efd673525c5bf1f40a68e068eb372245ded72241530f37699bed8c66b2bc550ecca6e41778e1de56308c71167b6c46006a34d94fe38b7b"
+  },
+  "MoeExpertE8m0Row_v2{E=3,K=4}": {
+   "and": 1056,
+   "type": "6e8e43bf1df0de516564f5b6ac4ed285be44b13b8be901be1e7fcf5f9a2d49f38782c26043733f12f24c1d202a9b4a7fb2dc76182c52c1d9a0427f1a45327fbb"
+  }
+ }
+}

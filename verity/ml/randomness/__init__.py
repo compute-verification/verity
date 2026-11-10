@@ -1,14 +1,14 @@
-"""verity.ml.randomness: the one challenge derivation every protocol draws through (decision 42).
+"""verity.ml.randomness: the one challenge derivation every protocol samples through (decision 42).
 
     derive(source, domain, context) -> Key
 
 `source` is a key holder's secret (an auditor key, a device's challenger key, a seed derived earlier).  It is never a prover's own commitment: Fiat-Shamir over a prover's root lets the prover re-commit until the
-sample misses its incorrect units, so outer challenges must not use it (Fiat-Shamir stays inside proofs).  `domain`
+sample misses its incorrect proof blocks, so outer challenges must not use it (Fiat-Shamir stays inside proofs).  `domain`
 is ``verity/{protocol}/{purpose}/v{n}``.  `context` names the bindings the challenge must follow (registered roots, a
 Program digest, a request header, a device), so a challenge cannot be computed before they exist.
 
-A `Key` drives exact integer samplers over counter-mode streams.  Every draw is addressed by an `index`, so the draws
-for different items are independent streams, and any shard of a population computes its own draws without the rest
+A `Key` drives exact integer samplers over counter-mode streams.  Every sample is addressed by an `index`, so the samples
+for different items are independent streams, and any shard of a population computes its own samples without the rest
 (`Key.shard` hands a worker a sub-key).  Stdlib only.
 
 Byte formats (pinned by ``verity/ml/randomness/tests/vectors.json``):
@@ -25,8 +25,8 @@ Byte formats (pinned by ``verity/ml/randomness/tests/vectors.json``):
   128-bit security against a quantum search.
 * ``uniform(n, index)`` reads w-byte big-endian words from ``stream(("u", *index))``, w = ceil((bitlen(n) + 64) / 8),
   and returns the first word below the largest multiple of n that fits, reduced mod n (exact, no modulo bias).
-* ``bernoulli(p, index)`` = uniform(denominator) on ``("b", *index)`` < numerator; p = 0 and p = 1 draw nothing.
-* ``subset(k, n, index)``: a sparse partial Fisher-Yates whose i-th swap draws uniform(n - i) on ``("s", *index, i)``,
+* ``bernoulli(p, index)`` = uniform(denominator) on ``("b", *index)`` < numerator; p = 0 and p = 1 sample nothing.
+* ``subset(k, n, index)``: a sparse partial Fisher-Yates whose i-th swap samples uniform(n - i) on ``("s", *index, i)``,
   returned sorted.
 """
 

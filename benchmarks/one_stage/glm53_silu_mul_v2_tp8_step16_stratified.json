@@ -1,0 +1,1 @@
+{"templates": ["SiluMul_v2{I=256}", "SiluMul_v2{I=1536}"], "law": "stratified:4", "scope": {"steps": [16, 17]}}

@@ -1,7 +1,11 @@
-import Models.Accounting.Guarantees.Joint
-import Proofs.Accounting.Device
-import Proofs.Accounting.Prob
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Accounting.Guarantees.Joint
+public import Proofs.Accounting.Device
+public import Proofs.Accounting.Prob
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # Proof of the joint guarantee and its covert residual
@@ -13,6 +17,8 @@ accounts beyond the residual on every one of an audit's own coins leave its acco
 of them, because each account's charge and every other account's are, together, within the device's limit
 (`Run.computeShort_of_covert` and the two beside it), so the residual follows from the joint guarantee.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

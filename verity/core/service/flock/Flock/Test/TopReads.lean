@@ -4,7 +4,12 @@ tops `rec-top-stacked-L1` at nodes 1, 3 and 1, as `rec_outer.TopValue.position` 
 without `out`, with `out` under another level's tops or the reps' `rec-top-L1`, reading another node, short of an opening,
 or past the last one is refused; only the first `out` port is read.
 -/
-import Flock.RecCoins
+module
+
+public import Flock.RecCoins
+meta import Flock.RecCoins
+
+@[expose] public section
 
 namespace Flock.Test.TopReads
 
@@ -12,7 +17,7 @@ open Flock Flock.RecCoins
 
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := .empty, leaves := 4, words := some 8, wordBits := 16, domain := .empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 
 def pos : Array Nat := #[5, 13, 6]
 

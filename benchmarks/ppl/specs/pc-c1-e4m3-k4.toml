@@ -1,4 +1,4 @@
-description = "PPL-COMPILE C1: Dither-2S (adopted-bd-lm) run exactly on E4M3 hardware by limb splitting, two E4M3 limbs per operand (16 h, l), all 4 products; every int8 product (linears, lm_head, QK and PV) recomputed from the planes, gated equal, and served"
+description = "C1: Dither-2S (adopted-bd-lm) run exactly on E4M3 hardware by limb splitting, two E4M3 limbs per operand (16 h, l), all 4 products; every int8 product (linears, lm_head, QK and PV) recomputed from the planes, gated equal, and served"
 
 [[linear]]
 step = "smooth"

@@ -1,0 +1,22 @@
+{
+ "definitions": {
+  "IoTieIdsChain_v1{CB=3,D2=3}": {
+   "and": 318,
+   "type": "d9790beabd55abe5c45170d005cdbfe6e7e23f4adc6bba8d7cada726e58627203510e5fc2cbd8ccb03d3a092f89b01b21860a0c87d29682bd2c7529daf284d0c"
+  },
+  "IoTieIdsFirst_v1{CB=3}": {
+   "and": 3,
+   "type": "b449fd30fe39e2d6c8bd7aacfa949d20c55cdcc670f74d4a1fef391d5f15ed080575cbc4fd1ec9d3474f7e8b8f6e4fcea782cee3d08e5b6981077ac5be5a0d90"
+  },
+  "IoTieIdsKeys_v1{NK=5,CB=3,D1=3}": {
+   "and": 194
+  },
+  "IoTieIdsLink_v1{CB=3}": {
+   "and": 42,
+   "type": "dca68bf9894a11da32a81028e32b145f9b9f5c79d6f076f83a8289107cee2e003a38d6d3c51f4467bc0cf13ff1464da05511f91a6d4dbbd00cb6d7bd740dfeea"
+  },
+  "IoTieIdsSlots_v1{B=512}": {
+   "and": 24670
+  }
+ }
+}

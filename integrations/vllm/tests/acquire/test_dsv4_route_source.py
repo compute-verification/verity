@@ -6,6 +6,8 @@ prefill, a short prefill and a mixed step.  Each step's routes are the union of 
 fails without it; a layer that recorded no attention rows, or indexers that disagree, fail the step."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import re
 import types
 from typing import Any
@@ -19,6 +21,9 @@ from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
 from verity_vllm.pipeline import cli
+
+#: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
+pytestmark = pytest.mark.slow
 
 #: every row-counted committed name -> its row count
 COUNTED = {n: CM.row_count_of(CMAP, tap) for p in RS.PHASES for n, (tap, _layer) in CM.committer_names(CMAP, ENV, phase=p, rank=3).items()

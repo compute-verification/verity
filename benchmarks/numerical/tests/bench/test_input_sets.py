@@ -1,7 +1,7 @@
 """Input sets (``bench.input_sets``), the template catalogue (``bench.templates``) and the IR generator (``bench.generate``).
 
-Captured and synthetic sets are interchangeable: the eight captured #101 manifests (``data/captured-101/manifests``, PR #42's
-export ``art:b5bb0ca9``) identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
+Captured and synthetic sets are interchangeable: the eight captured row 101 manifests (``data/captured-101/manifests``)
+identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
 seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the IR evaluator; a synthetic
 set of each template has the captured layout and provenance fields and verifies the same way."""
 from __future__ import annotations
@@ -14,10 +14,11 @@ import numpy as np
 import pytest
 
 from verity_numerical.bench import generate as G
-from verity_numerical.bench import input_sets as IS
-from verity_numerical.bench import templates as TM
+from verity_flock import synthetic as SY
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
-DATA = Path(__file__).parent / "data" / "captured-101"
+DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "ml" / "flock" / "tests" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
 CENSUS = Path(__file__).resolve().parents[3] / "census"
@@ -29,7 +30,9 @@ SMALL = {"gemm-coordinate": dict(K=64), "attention-head": dict(D=16, BN=16, T="1
          "rmsnorm-cuda-vec8": dict(N=64, EPS=1e-5, BLOCK=4), "gumbel-top-p-token-select": dict(V=16), "token-select-greedy": dict(V=64),
          "moe-router-topk": dict(E=16, TOPK=4, VPT=8), "moe-router-topk-norm": dict(E=16, TOPK=4, VPT=8), "moe-sum": dict(TOPK=4, H=16), "bias-add": dict(N=16),
          "bf16-mul-scalar": dict(N=16), "embedding-row": dict(V=50, H=8), "moe-expert-coordinate": dict(E=4, K=64),
-         "moe-expert-coordinate-weighted": dict(E=4, K=64), "scaled-mm-fp8-block-coordinate": dict(K=256, G=128)}
+         "moe-expert-coordinate-weighted": dict(E=4, K=64), "scaled-mm-fp8-block-coordinate": dict(K=256, G=128),
+         "ingress-prompt": dict(MODEL="m", LP=3, V=1000), "token-select-chunk": dict(C=64), "token-select-combine": dict(V=200, C=64),
+         "rmsnorm-triton-v5": dict(N=64, EPS=1e-6), "attention-head-v18": dict(D=16, BN=16, T="1:40")}
 
 
 def test_catalogue_covers_the_101_templates():
@@ -109,9 +112,9 @@ def test_generation_is_deterministic_and_prefix_stable(tmp_path):
 
 
 def test_draw_format_is_pinned():
-    """Instance words are a function of (key, draw) alone: the counter stream's bytes and the word rule, fixed here."""
+    """Instance words are a function of (key, sample) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
-    k = G.key_for(sub, 1)
+    k = SY.key_for(sub, 1)
     assert k.stream(("x", 0), 8).hex() == "cbfb52e4ff385132"
     d = sub.draw(k, 0)
     assert d.inputs["x"][:8].tolist() == [48997, 48895, 48786, 48679, 49141, 49163, 16398, 48634]
@@ -149,7 +152,7 @@ def test_evaluation_targets_equal_the_definitions():
     from verity.ml.circuits.defs import REGISTRY, bind
     from verity.ml.circuits.ops import gemm
 
-    key = G.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
+    key = SY.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
         draws = [sub.draw(key, j) for j in range(n)]
         for d in draws:
@@ -161,7 +164,7 @@ def test_evaluation_targets_equal_the_definitions():
     sub = TM.subcircuit("gemm-coordinate", K=64)
     draws = [sub.draw(key, j) for j in range(64)]
     x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
-    from verity_vllm.program.registry import prims as VP
+    from verity.ml.definitions.registry import prims as VP
     assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
     ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
     assert np.array_equal(ref, evaluate_batch(sub.target(), x, w))
@@ -235,7 +238,7 @@ def test_e4m3_words_are_pinned():
     r = np.array([0, 126, 127, 253, 254, 0xFFFFFFFF], dtype=np.uint32)
     assert TM.e4m3_finite_words(r).tolist() == [0, 126, 128, 254, 0, 15]
     sub = TM.subcircuit("gemm-coordinate", K=64, semantics="sm89.mma.m16n8k32.e4m3")
-    assert sub.draw(G.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
+    assert sub.draw(SY.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
 
 
 PINNED_ADA_X = [121, 85, 110, 206, 231, 247, 42, 81]

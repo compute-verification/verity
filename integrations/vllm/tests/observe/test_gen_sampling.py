@@ -1,4 +1,4 @@
-"""[GEN sampling] the torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
+"""The torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
 
 from __future__ import annotations
 
@@ -10,8 +10,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity_vllm.config import RowEngine
-from verity_vllm.program.kernels import sampling_rng as R
+from verity_vllm.config import RowEngine, workload_file
+from verity_vllm.engine import static_schedule
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program import sampling_rng as R
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09", "workload_b0_sampling_n2", "workload_b0_sampling_2req_seeds"]
@@ -55,11 +57,11 @@ def test_gumbel_noise_stream_keys_and_distribution():
     g = R.gumbel_noise(0, 32, V)
     assert g.dtype == np.float32 and g.shape == (V,)
     assert abs(float(g.mean()) - 0.5772) < 0.03      # Euler-Mascheroni: standard Gumbel mean
-    # the stream key is (seed, position): a different position or a different seed (the n=2 child: seed + 1) is a new draw
+    # the stream key is (seed, position): a different position or a different seed (the n=2 child: seed + 1) is a new sample
     assert R.gumbel_seed_of(0, 32) != R.gumbel_seed_of(0, 33) != R.gumbel_seed_of(1, 33)
     assert not np.array_equal(g, R.gumbel_noise(0, 33, V)) and not np.array_equal(g, R.gumbel_noise(1, 32, V))
     assert np.array_equal(g, R.gumbel_noise(0, 32, V))
-    # the same vocab index draws the same noise whatever the vocab size (keys = vocab index)
+    # the same vocab index samples the same noise whatever the vocab size (keys = vocab index)
     assert np.array_equal(g[:1000], R.gumbel_noise(0, 32, 1000))
     # drafting salt moves the stream
     assert R.gumbel_seed_of(0, 32, is_drafting=True) == R.gumbel_seed_of(0, 32 + (1 << 30))
@@ -89,12 +91,13 @@ def test_sampled_token_paths():
     assert 0 <= d["token"] < 49152
 
 
-# --- the workloads + `load_workload`'s sampling block (the adapter imports torch; exec the pure function instead) ---
+# --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch; exec the pure function instead) ---
 
 def _adapter_fn(name: str):
     src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
     tree = ast.parse(src)
-    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object, "RowEngine": RowEngine}
+    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object, "RowEngine": RowEngine, "PP": PP,
+                "static_schedule": static_schedule, "workload_file": workload_file}
     for node in tree.body:
         if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
             exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)

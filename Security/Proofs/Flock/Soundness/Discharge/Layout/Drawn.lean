@@ -1,25 +1,33 @@
-import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+
+@[expose] public section
 
 set_option Elab.async false
 
 /-!
-# The drawn units' `b ‖ c`: the population's
+# The sampled proof blocks' `b ‖ c`: the population's
 
-A drawn statement's public file is `HmRow.drawn` of the registered population's (`setupH_drawn`): its instances are the
-draw's proved units, and instance `r`'s `b ‖ c` is proved unit `D.proved[r]`'s in the population (`drawn_digest`, for a
-file without shared rows, whose `b ‖ c` are `n · np` pieces of 128 bytes, `loadPublic_digests`; the draw's units are in
+A sampled statement's public file is `HmRow.drawn` of the registered population's (`setupH_drawn`): its instances are the
+sample's proved units, and instance `r`'s `b ‖ c` is proved unit `D.proved[r]`'s in the population (`drawn_digest`, for a
+file without shared rows, whose `b ‖ c` are `n · np` pieces of 128 bytes, `loadPublic_digests`; the sample's units are in
 the population, `ofJson_lt`). So at a proved unit's `hm96` slot, block `o` and template instance `g` with `o · c.g + g = r`, a satisfying
 witness holds the population's `b ‖ c` of unit `D.proved[r]` (`bc_drawn`): the registration's, fixed by the public file
-before the draw.
+before the sample.
 -/
 
 namespace FlockSoundness.Discharge.Layout
 
 open Flock Refine
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A drawn statement's public file is the drawn units' over the population's**: setupH loads the population's public
-file and takes `HmRow.drawn` of it at the draw. -/
+/-- **A sampled statement's public file is the sampled proof blocks' over the population's**: setupH loads the population's public
+file and takes `HmRow.drawn` of it at the sample. -/
 theorem setupH_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}
     {st : Stmt} (h : Stmt.setupH tags circuitFile publicFile coins tables (some d) partition program = .ok st) :
@@ -33,8 +41,9 @@ theorem setupH_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins :
     subst h
     exact ⟨_, ‹_›, ‹_›⟩
 
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **`HmRow.drawn`'s statement**: the draw parses (`D`), its population is the registered one, its instances are the
+/-- **`HmRow.drawn`'s statement**: the sample parses (`D`), its population is the registered one, its instances are the
 proved units, and its `b ‖ c` are the proved units' (a shared-row file keeps its tables). -/
 theorem drawn_spec {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
     ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧ D.population = pop.n ∧ pub.n = D.proved.size ∧
@@ -113,6 +122,7 @@ theorem extract_size {b : ByteArray} {i K O : ℕ} (hb : b.size = HmRow.BC_BYTES
   simp only [ByteArray.size_extract, HmRow.BC_BYTES] at hb ⊢
   omega
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **The population's `b ‖ c`**: a public file without shared rows holds `n · np` of them, each 128 bytes long (its
 length check, then consecutive `BC_BYTES`-long pieces of its body). -/
@@ -154,8 +164,9 @@ theorem of_not_not_true {b : Bool} (h : ¬ (!b) = true) : b = true := by simpa u
 theorem of_not_or_not_true {a b : Bool} (h : ¬ (a || !b) = true) : b = true := by
   cases a <;> cases b <;> simp_all
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A draw's units are in its population**: `UnitDraw.ofJson` checks the drawn units, and a closure's units, against
+/-- **A sample's units are in its population**: `UnitDraw.ofJson` checks the sampled proof blocks, and a closure's units, against
 `[0, population)`. -/
 theorem ofJson_lt {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
     (∀ u ∈ D.units, u < D.population) ∧ ∀ u ∈ D.closure, u < D.population := by
@@ -174,14 +185,14 @@ theorem ofJson_lt {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson 
     | exact lt_of_all_range (of_not_or_not_true ‹¬((_ : Array ℕ).isEmpty || !(List.range _).all _) = true›)
     | simp
 
-/-- A draw without a closure proves its drawn units, which are in its population. -/
+/-- A sample without a closure proves its sampled proof blocks, which are in its population. -/
 theorem proved_lt {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) (hcl : D.closure = #[]) :
     ∀ u ∈ D.proved, u < D.population := by
   unfold Draw.UnitDraw.proved
   rw [hcl]
   exact (ofJson_lt h).1
 
-/-- **Instance `r`'s `b ‖ c` in a drawn statement is its proved unit's in the population's** (a file without shared
+/-- **Instance `r`'s `b ‖ c` in a sampled statement is its proved unit's in the population's** (a file without shared
 rows). -/
 theorem drawn_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitDraw}
     (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitDraw.ofJson d = .ok D) (hpt : pop.tables = none)
@@ -200,7 +211,7 @@ theorem drawn_digest {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.
   rw [hsz, hpopn] at *
   nlinarith
 
-/-- **A drawn statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
+/-- **A sampled statement's `hm96` chunk at block `o`, template instance `g`** is, at a proved unit, that unit's
 population `b ‖ c`. -/
 theorem bcChunk_drawn {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.UnitDraw}
     (h : HmRow.drawn c pop d = .ok pub) (hD : Draw.UnitDraw.ofJson d = .ok D) (hpt : pop.tables = none)
@@ -227,11 +238,11 @@ theorem pop_digest_size {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Pu
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
   exact h128 _ (Array.getElem_mem hi)
 
-/-- **The `b ‖ c` a satisfying witness of a drawn statement holds at a proved unit's `hm96` slot** is the unit's `b ‖ c`
+/-- **The `b ‖ c` a satisfying witness of a sampled statement holds at a proved unit's `hm96` slot** is the unit's `b ‖ c`
 in the registered population's public file: at block `o`, template instance `g` (below `2^⌊log₂ c.g⌋`), input port `p`,
 the instance `o · c.g + g` is proved unit `D.proved[o · c.g + g]`, and the 128 bytes at `bcAddr` are its population
 `b ‖ c`. It holds in the model's statement at setupH's layout whose regions contain the executable's (`hregs`), for a
-population file without shared rows (`hpt`) and a draw whose proved units are in the population (`hlt`; `proved_lt`
+population file without shared rows (`hpt`) and a sample whose proved units are in the population (`hlt`; `proved_lt`
 without a closure). -/
 theorem bc_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray}

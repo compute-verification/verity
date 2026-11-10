@@ -8,7 +8,6 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import shutil
-from pathlib import Path
 
 import pytest
 from hypothesis import strategies as st
@@ -95,7 +94,7 @@ JSON_MUTATIONS = [
 
 def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
     """Records of honest sessions, of sessions under one edit, and (with `malformed`) under one JSON edit, each under a
-    drawn mapping."""
+    sampled mapping."""
     mutations = [M._printable_scheme if m is M._scheme else m for m in M.MUTATIONS]
     schemes = st.sampled_from(SCHEME_SETS)
     honest = st.builds(record, M.sessions(signer), schemes)
@@ -110,7 +109,7 @@ def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
 
 @pytest.mark.slow
 def test_verdict_agrees(server):
-    """The whole verdict on drawn records under the test signers' keys: accepted ones, every rejection reason, refusals."""
+    """The whole verdict on sampled records under the test signers' keys: accepted ones, every rejection reason, refusals."""
     stats = D.run(port(records()), examples=500, server=server)
     assert stats.outputs > 250 and stats.rejects > 20, stats
 
@@ -130,7 +129,7 @@ def test_verdict_agrees_at_the_deployed_parameters(server):
 
 
 def _honest(spends=(1, 1, 1)) -> M.Session:
-    """A three-round session over 8 blocks of 16 bytes, its limit 10 ns, signed at leaf 1 of a height-1 test key."""
+    """A three-round session over 8 labels of 16 bytes, its limit 10 ns, signed at leaf 1 of a height-1 test key."""
     signer = M.test_signer(M.SECRETS[0], 1, 1)
     tree = mc.CoinTree.draw(b"source", bytes(32), 8, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)

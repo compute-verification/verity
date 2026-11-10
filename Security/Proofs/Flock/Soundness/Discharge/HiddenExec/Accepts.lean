@@ -1,13 +1,38 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # flock-verify's acceptance under either tag
 
-`setupTables_okH` and `setupTables_retainH` are e2e-exec's `setupTables_ok` and `setupTables_retain` under hidden outputs
+`setupTables_okH` and `setupTables_retainH` are `Exec.setupTables_ok` and `Exec.setupTables_retain` under hidden outputs
 (`hh : tags.hiddenOutputs = true`), by the same walk with `Stmt.setupHidden` for `Stmt.setupH`; `setupTables_okAny` and
 `setupTables_retainAny` put the two tags together through `setupOne`. The acceptance lemmas follow from them as
-e2e-exec's do from `setupTables_ok`, with no `hh`.
+`Discharge/Exec`'s do from `setupTables_ok`, with no `hh`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -58,10 +83,52 @@ theorem setupTables_okH (hh : tags.hiddenOutputs = true)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact Or.inl ⟨by assumption, _, by assumption, rfl, rfl⟩
+  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
-    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩, mPts_of_any (by assumption), rfl⟩
+    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
+
+set_option maxHeartbeats 4000000 in
+/-- **`setupTables` refuses pinned outputs** under a tag with hidden outputs: no table it returns has any
+(`HmRow.pinnedCount`). -/
+theorem setupTables_pinnedH (hh : tags.hiddenOutputs = true)
+    (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
+      .ok (spec, sts)) :
+    ∀ (j : ℕ) (hj : j < sts.size), HmRow.pinnedCount sts[j].c.metaJ = 0 := by
+  unfold Stmt.setupTables at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
+  replace h : jp0 () = .ok (spec, sts) := by
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp0] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp1 at h
+  replace h : jp1 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp1] at h
+  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
+  replace h : jp2 () = .ok (spec, sts) := by
+    try dsimp only at h
+    repeat' walk_step
+    all_goals exact h
+  simp (config := { zeta := false }) only [jp2] at h
+  dsimp only at h
+  simp only [throw_bind', pure_bind, ite_eq_left hh] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    obtain ⟨rfl, rfl⟩ := h
+  · intro j hj
+    have hj0 : j = 0 := by simpa using hj
+    subst hj0
+    have hr := refuse_ok (by assumption)
+    first | exact bne_eq_false_iff_eq.1 hr.2 | simpa using hr.2
+  all_goals
+    obtain ⟨-, hall⟩ := range_mapM_ok (by assumption)
+    intro j hj
+    have hr := refuse_ok (hall j hj)
+    first | exact bne_eq_false_iff_eq.1 hr.2 | simpa using hr.2
 
 theorem setupTables_okAny : SetupTablesOkAny := by
   intro tags cf pf coins count tables draw partition program work stratified closure spec sts h
@@ -77,7 +144,7 @@ theorem setupTables_okAny : SetupTablesOkAny := by
       obtain ⟨d, hd⟩ := hall j hj
       exact ⟨d, (setupOne_public (tags := { tags with identity := tags.tableIdentity count j }) hh).trans hd⟩
 
-/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some draw
+/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some sample
 (the session's, for one table): `Exec.setupTables_setupH` without `hh`. -/
 theorem setupTables_setupOne
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
@@ -155,7 +222,7 @@ theorem setupTables_retainH (hh : tags.hiddenOutputs = true)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact congrArg Tags.retainRounds (setupHidden_tags (by assumption))
+  · exact congrArg Tags.retainRounds (setupHidden_tags (ok_of_refuse (by assumption)))
   all_goals rfl
 
 /-- The session's spec retains rounds exactly when its tags do, for either tag. -/
@@ -270,7 +337,7 @@ theorem accepts_verdict_leafAny {I : Exec.Inputs} {t : Exec.Transcript}
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨
       (I.tags.hiddenOutputs = true ∧ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted"))
     (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),

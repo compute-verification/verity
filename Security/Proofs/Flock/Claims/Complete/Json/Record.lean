@@ -1,22 +1,28 @@
-import Proofs.Flock.Claims.Complete.Json.Spec
-import Proofs.Flock.Claims.Complete.Json.Hex
-import Proofs.Flock.Claims.Complete.Verdict
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Spec
+public import Proofs.Flock.Claims.Complete.Json.Hex
+public import Proofs.Flock.Claims.Complete.Verdict
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The honest session record as a JSON value
 
-`recordJson` (the honest prover's record) builds one `Json` object and prints it with `compress`. `recordObj` is that
+`recordJson` (the honest prover's record) builds one `Json` object and prints it with `printJ`. `recordObj` is that
 object, written as a pure value of the record's parts with every digest `dgOf spec h`: `recordJson` through
-`Hashes.ofSha512 h` returns `recordObj`'s `compress` when the statement names no keyed coin tree (`Bridge`).
+`Hashes.ofSha512 h` returns `recordObj`, printed, when the statement names no keyed coin tree (`Bridge`).
 
 * **The record's parts**: a round (`roundObj`), a rep stream (`streamObj`), a proof digest (`proofObj`), the link
   (`linkObj`, with `y = 0`, `yOf`) and the bytes `link_*` digests (`lbOf`).
 * **Printable** (`Good`): every object of the record is a tree of distinct keys and every number a natural, so the record
-  is printable when the statement's draw is (`good_recordObj`).
+  is printable when the statement's sample is (`good_recordObj`).
 * **Key lookups**: an object built from a list of distinct keys has each key's value (`getObjVal?_mkObj`) and no other
   key (`get?_mkObj_none`); through `Same`, a parsed object's `Record.fld`, `str`, `nat`, `arr` and `isNull` read the
   printed object's values (`fld_same`, …), and a value with no object in it parses back to itself (`Plain.same_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -200,7 +206,7 @@ theorem good_linkObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
   obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
   exact good_arr_str _
 
-/-- **The record is printable** when the statement's draw is. -/
+/-- **The record is printable** when the statement's sample is. -/
 theorem good_recordObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
     (hd : Good (spec.unitDraw.getD Json.null)) : Good (recordObj spec h #[rb] points streams proofs) := by
@@ -294,8 +300,5 @@ theorem isNull_none {l : List (String × Json)} {j' : Json} (h : Same (Json.mkOb
 theorem bytes_beq_self (b : ByteArray) : (b == b) = true := by
   show (b.data == b.data) = true
   simp
-
-theorem bytes_bne_self (b : ByteArray) : (b != b) = false := by
-  simp [bne, bytes_beq_self]
 
 end FlockComplete.JsonRT

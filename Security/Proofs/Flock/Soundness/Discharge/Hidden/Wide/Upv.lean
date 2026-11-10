@@ -1,12 +1,34 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
 /-!
 # A unit per template instance, from acceptance
 
-`HmRow.check` refuses an untyped circuit of `units_per_vu = 0` (PROTOCOL.md §16.10, D8), the one check that does when a
+`HmRow.check` refuses an untyped circuit of `units_per_vu = 0` (`Flock.HmRow`, D8), the one check that does when a
 tail returns the outputs (`check_upv_pos`), and `Stmt.setupHidden` parses its circuit through it (`setupHidden_upv_pos`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -44,8 +66,9 @@ theorem check_upv_pos {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed
 instance. -/
 theorem setupHidden_upv_pos {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : 0 < st.c.upv := by
-  obtain ⟨hp, -⟩ := parse_untyped ht (setupHidden_spec' h).parse
+    (hi : tags.isTmpl = false) (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    0 < st.c.upv := by
+  obtain ⟨hp, -⟩ := parse_untyped ht ((setupHidden_spec' h).parseF hi)
   obtain ⟨ls, hls⟩ := (parse_facts hp).check
   exact check_upv_pos (parse_facts hp).typed hls
 

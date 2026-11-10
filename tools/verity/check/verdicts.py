@@ -13,7 +13,7 @@ identical to the ones that earned it.  It is trusted as far as its source: `chec
 runs (`gather_verdicts`).
 Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), `lean-builds/` (the Lean audit's kept builds,
 `lean_audit.WarmBuilds`, whose `ir/*.setup.json` run to 9 MB each and grew a combined pack past 15 GB), `lean-artifacts/`
-(Lake's cache of built modules, `lean_audit.LakeArtifacts`, whose `outputs/` entries name files no pack carries), the trees steps build in, not even walked since a
+(Lake's cache of built modules, `lean_audit.LakeArtifacts`, whose index entries name files no pack carries), the trees steps build in, not even walked since a
 tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-changed/` for check's early Lean step and
 `lean-records/` for the Lean fast path, and `lean_audit.py`'s `lean-audit-scratch-*/`, which another slot may remove while this one
 reads it), the suites' `logs/` and `durations.json`, and any file that isn't a finished `.json` entry. An entry that goes away while
@@ -23,7 +23,8 @@ Each root keeps a hidden index, `.verdicts-index.json`, memoizing its entries' s
 check's closing `export` stat the cache instead of re-reading it (hundreds of GB once grown); only new or changed entries are
 read.  Hidden files are never listed and never packed, and a missing or garbled index only costs the re-read.
 
-A pack is a gzipped tar of regular files under `check/` and `tests/`. `import` refuses a pack holding anything else (a link, an
+A pack is a tar of regular files under `check/` and `tests/`, gzipped, or xz-compressed when `export_paths` writes a recorded
+check's reused passes (`check.Reused`), whose circuit-check entries share most of their bytes. `import` refuses a pack holding anything else (a link, an
 absolute or `..` path, a device, another prefix, a hidden file), and it never overwrites an entry that exists here. A member in a
 part of the caches that is never packed is left out, not refused, so a pack written before that part was is still taken.
 """
@@ -34,11 +35,17 @@ import gzip
 import hashlib
 import io
 import json
+import lzma
 import os
+import importlib.util
 import sys
 import tarfile
 from pathlib import Path
 
+_spec = importlib.util.spec_from_file_location("verdicts_settings", Path(__file__).resolve().parent / "settings.py")
+#: every environment variable check reads, declared once (`settings.py`), from beside this file: `plan.py --on` sends both
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
 SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
 
@@ -49,10 +56,9 @@ def _skipped(prefix: str, top: str) -> bool:
 
 def roots() -> dict[str, Path]:
     """The caches, where `check.py` (`cache_dir()`) and `suites.py` (`CACHE`) keep them; `tests/test_verdicts.py` pins the two."""
-    env = os.environ
-    home = Path.home()
-    return {"check": Path(env.get("CHECK_CACHE") or home / ".cache" / "verity-check"),
-            "tests": Path(env.get("VERITY_TEST_CACHE") or Path(env.get("XDG_CACHE_HOME") or home / ".cache") / "verity" / "tests")}
+    S, home = SETTINGS, Path.home()
+    return {"check": Path(S.CHECK_CACHE or home / ".cache" / "verity-check"),
+            "tests": Path(S.VERITY_TEST_CACHE or Path(S.XDG_CACHE_HOME or home / ".cache") / "verity" / "tests")}
 
 
 def entries() -> dict[str, Path]:
@@ -96,7 +102,7 @@ def _index_load(base: Path) -> dict:
 def _digests(found: dict[str, Path] | None = None) -> dict[str, str]:
     """`{pack path: sha256}` of every entry, reading only the files the root's index doesn't know by (size, mtime_ns).  The
     caches run to hundreds of GB, and re-reading every entry at both ends of a check held a finished run for an hour of disk
-    reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  A stale or garbled index only costs the
+    reads once another job had evicted the page cache.  A stale or garbled index only costs the
     re-read; an entry rewritten in place with its size and mtime_ns unchanged is the one change it would miss, and every writer
     replaces entries atomically."""
     found = entries() if found is None else found
@@ -138,20 +144,34 @@ def snapshot() -> dict[str, str]:
     return _digests()
 
 
-def _write(out: Path, items) -> int:
-    """Write ``items`` ((pack path, bytes), in order) as a pack at `out`; the number written."""
+#: an xz pack's filter: a dictionary spanning many entries, since one tree's circuit-check entries share most of what they record
+#: (300 of them, 68 MB: 11 MB gzipped, 0.35 MB this way, in less time)
+XZ_FILTERS = [{"id": lzma.FILTER_LZMA2, "preset": 1, "dict_size": 64 << 20}]
+
+
+def _compressed(raw, xz: bool):
+    # the same entries always make the same pack: no file name or mtime in the gzip header (xz has neither)
+    return lzma.LZMAFile(raw, "wb", format=lzma.FORMAT_XZ, filters=XZ_FILTERS) if xz else \
+        gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0)
+
+
+def _write(out: Path, items, xz: bool = False) -> int:
+    """Write ``items`` ((pack path, bytes or a file), in order) as a pack at `out`, gzipped, or xz-compressed (``xz``); the number
+    written."""
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
     n = 0
-    # the same entries always make the same pack: no mtimes in the tar, and no file name or mtime in the gzip header
-    with open(tmp, "wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz, \
-            tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
+    with open(tmp, "wb") as raw, _compressed(raw, xz) as z, tarfile.open(fileobj=z, mode="w", format=tarfile.PAX_FORMAT) as tar:
         for k, data in items:
             info = tarfile.TarInfo(k)
             info.mode, info.mtime = 0o644, 0
             if isinstance(data, Path):
-                info.size = data.stat().st_size
-                with open(data, "rb") as f:
+                try:
+                    f = open(data, "rb")
+                except FileNotFoundError:
+                    continue
+                with f:
+                    info.size = os.fstat(f.fileno()).st_size
                     tar.addfile(info, f)
             else:
                 info.size = len(data)
@@ -161,27 +181,47 @@ def _write(out: Path, items) -> int:
     return n
 
 
-def export(out: Path, since: dict[str, str] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written.  With `since`,
-    only the new or changed entries are read (`_digests`), so a check's closing export costs what the run stored, not the
-    whole cache."""
+def changed(since: dict[str, str]) -> dict[str, tuple[str, Path]]:
+    """`{pack path: (sha256, file)}` of the entries new or changed since `since` (a `snapshot`)."""
     found = entries()
-    if since is None:
+    return {k: (d, found[k]) for k, d in _digests(found).items() if since.get(k) != d}
+
+
+def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
+    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given) as a pack at `out`;
+    the number written.  With `since`, only the new or changed entries are read (`_digests`), so a check's closing export costs
+    what the run stored, not the whole cache."""
+    if since is None and new is None:
+        found = entries()
+
         def items():
             for k, p in sorted(found.items()):
                 data = _read(p)
                 if data is not None:
                     yield k, data
     else:
-        digests = _digests(found)
+        new = changed(since) if new is None else new
 
         def items():
-            for k in sorted(digests):
-                if since.get(k) != digests[k]:
-                    data = _read(found[k])
-                    if data is not None:
-                        yield k, data
+            for k in sorted(new):
+                data = _read(new[k][1])
+                if data is not None:
+                    yield k, data
     return _write(out, items())
+
+
+def export_paths(out: Path, paths, xz: bool = False) -> int:
+    """Write the entries here that ``paths`` (pack paths) name as a pack at `out`, in path order, each once; one that isn't here
+    (or is no verdict entry) is left out.  The number written."""
+    base = roots()
+    files = {}
+    for k in paths:
+        prefix, _, rel = k.partition("/")
+        parts = Path(rel).parts
+        if prefix in base and k.endswith(".json") and parts and ".." not in parts and not any(x.startswith(".") for x in parts) \
+                and not _skipped(prefix, parts[0]) and (base[prefix] / rel).is_file():
+            files[k] = base[prefix] / rel
+    return _write(out, sorted(files.items()), xz)
 
 
 class BadPack(Exception):
@@ -202,30 +242,34 @@ def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
 
 
 def refusal(pack: Path) -> str | None:
-    """Why `import` and `combine` would refuse the pack (not a gzipped tar, or a member that isn't a verdict entry); None when
+    """Why `import` and `combine` would refuse the pack (not a gzipped or xz-compressed tar, or a member that isn't a verdict entry); None when
     they take it."""
     try:
-        with tarfile.open(pack, "r:gz") as tar:
+        with tarfile.open(pack, "r:*") as tar:
             _members(tar)
     except (BadPack, tarfile.TarError, OSError, EOFError) as e:
         return f"{type(e).__name__}: {e}"
     return None
 
 
-def import_(pack: Path) -> tuple[int, int]:
-    """Add the pack's entries that don't exist here; (added, already here).  Nothing is written when the pack is refused."""
+def import_(pack: Path, only: str | None = None) -> tuple[int, int]:
+    """Add the pack's entries that don't exist here, with ``only`` just those whose pack path starts with it; (added, already
+    here).  Nothing is written when the pack is refused."""
     base = roots()
     added = kept = 0
-    with tarfile.open(pack, "r:gz") as tar:
+    with tarfile.open(pack, "r:*") as tar:
         members = _members(tar)
         for m in members:
+            if only is not None and not m.name.startswith(only):
+                continue
             prefix, rel = m.name.split("/", 1)
             dst = base[prefix] / rel
             if dst.exists():
                 kept += 1
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dst.with_name(f".{dst.name}.import")
+            # this process's own name: two checks on one machine can import the same entry at once
+            tmp = dst.with_name(f".{dst.name}.{os.getpid()}.import")
             tmp.write_bytes(tar.extractfile(m).read())
             os.replace(tmp, dst)
             added += 1
@@ -245,7 +289,7 @@ def combine(packs: list[Path], out: Path) -> int:
     try:
         found: dict[str, Path] = {}
         for pack in packs:
-            with tarfile.open(pack, "r:gz") as tar:
+            with tarfile.open(pack, "r:*") as tar:
                 for m in _members(tar):
                     if m.name not in found:
                         p = found[m.name] = spill / str(len(found))

@@ -9,7 +9,7 @@ How "new storage" is decided (facts, no judgement):
 * torch preserves the Python object of a storage (`t.untyped_storage() is t.untyped_storage()`), so `id(storage)`
   identifies the live `StorageImpl`; a `weakref` callback fires when the storage is destroyed (the moment its device
   memory goes back to the caching allocator) and yields a direct `StorageFree(implied=False)`.  Verified on torch
-  2.13 (pod probe 2026-09-16): pointer *and* object-id reuse both happen right after a free, so the death callback is
+  2.13 by a pod probe: pointer *and* object-id reuse both happen right after a free, so the death callback is
   what makes generations exact.
 * Fallbacks (no weakref support / no preservation): same pointer with a different `nbytes`, or a pointer range that
   overlaps another live range, is a new allocation (implied free of the overlapped ones).
@@ -137,9 +137,6 @@ class StorageAdapter:
 
     def live_count(self) -> int:
         return sum(len(t) for t in self._live.values())
-
-    def alloc_ids(self) -> list[int]:
-        return sorted(e.alloc for t in self._live.values() for e in t.values())
 
     # ------------------------------------------------------------------ internals
 

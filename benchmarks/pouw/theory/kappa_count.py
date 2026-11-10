@@ -6,8 +6,7 @@ The cap per word is Lean's: `Pouw.SecurityProofs.Eps1.ClassPSlots` (Security/Pro
 `created_le_65`): a class-P tuple word creates only incidences of its fields' own entries, a field's range has at least
 128|E| + 1 values, and `Π_k (128 e_k + 1) ≤ 2^32` with `e_k ≤ 32` caps `Σ_k e_k` at 65 (two 32-entry fields and a
 one-entry field). The guarantee charges a slot of d words `65·d`, so a word costs at least `1 + (32 − w)/κ` slots when a
-writer creates at most w (QSTAR's paper says 4; a writer that takes two segments' fields from one tuple creates 8,
-note:20261018T0230Z-draft-floors).
+writer creates at most w (the q* analysis takes 4; a writer that takes two segments' fields from one tuple creates 8).
 
 Each census kind the current epoch holds is classified: a CUDA lane kind (registers from registers, the vector route),
 a register load (the table route: its address may be data), a tensor kind (MMA forms and tensor-memory loads, the
@@ -30,9 +29,14 @@ from verity_machine_model.model import census, device, devices, model
 WORD_CAP = 65
 
 LANE = {"ALU": 1, "IMAD": 1, "FFMA": 1, "HFMA2": 1, "VIMNMX": 1, "F2FS": 1, "XU": 1, "SHFL": 1, "NOROW": 1, "SEL": 1,
-        "IDP4A": 1, "LEA": 1, "FLO": 1,
-        "ALU64": 2, "IMADW": 2, "DMUL": 2, "W2": 2, "MOV64": 2, "CVT64": 2}
-UNIFORM = {"UNI": 1, "UNI64": 2}
+        "IDP4A": 1, "LEA": 1, "FLO": 1, "VIADD": 1,
+        "ALU64": 2, "IMADW": 2, "DMUL": 2, "W2": 2, "MOV64": 2, "CVT64": 2,
+        # a predicate, charged a whole word
+        "ISETP": 1,
+        # the DC measured readings' catch-all (A2's): an instruction no class names, one word as NOROW on sm_120
+        "UNLISTED": 1}
+# REDUX writes a uniform register, ahead of NO_DEST's RED (a reduction into memory)
+UNIFORM = {"UNI": 1, "UNI64": 2, "REDUX": 1}
 LOADS = {"LDG32": 1, "LDG64": 2, "LDG128": 4, "LDG128CG": 4, "LDG128NA": 4, "LDG256": 8, "LDG256CG": 8,
          "LDS32": 1, "LDS64": 2, "LDS128": 4, "LDC64": 2, "LDCUNI": 1, "LDCDIV": 1,
          "TLD1": 1, "TLD2": 2, "TLD2D1": 1, "TLD2D4": 4, "TLD4w": 4, "TLD4G": 4,

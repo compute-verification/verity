@@ -1,26 +1,66 @@
-import Mathlib
+module
+
+public import Definitions.Claims
+public import Definitions.Core.Interaction
+public import Mathlib.Algebra.Field.ZMod
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Relative security for matmul PoUW: the vocabulary its guarantees read (trusted)
 
-The definitions `Models.Pouw.Guarantees.RelativeSecurity` and `Models.Pouw.Assumptions.RelativeSecurity` read, moved
+The definitions `Definitions.Pouw.Guarantees.RelativeSecurity` and `Definitions.Pouw.Assumptions.RelativeSecurity` read, moved
 verbatim from `Proofs.Pouw.RelativeSecurity` (same names, namespace and section variables), so the lock's `reads`
 follow them into the spec:
 
 * uniform probability (`prob`), `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance
   and deficiency) and a round's stages (`StageGame`);
-* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`);
+* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
+  adversary by adversary, `ServiceFloorPerProver`, at an adversary's error `breakBound`, read through the analysis's
+  collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound` at budgets computed from the
+  adversary's time);
 * Theorem K's runs (`BitAff`, `bitInd`, `Slp`, `SlpG`), the re-encoded design's prefix words (`DBits`, `dPrefix`,
   `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
   deficiency (`spotDef`);
 * the staged spot check (`StagePlay`, `StagedPlay`, `DStage`) and an adversary's window run on it (`StagedRun`);
-* the spot check over a round's overlapping draws: its bit points (`drawInd`, `mergeAt`), K∥'s products (`AffMulAt`),
-  the per-draw deficiency (`ovDef`), the play (`OvPlay`, its game and errors), the round's bits, cell-blocks, draws
+* the spot check over a round's overlapping samples: its bit points (`drawInd`, `mergeAt`), K∥'s products (`AffMulAt`),
+  the per-draw deficiency (`ovDef`), the play (`OvPlay`, its game and errors), the round's bits, cell-blocks, samples
   and coins (`OBits`, `OCells`, `ODraws`, `OSpot`), and an adversary's window run on it (`OverlapRun`);
-* the parity luck's scope: one-sided products of any form (`LeftOnly`, `RightOnly`, `OneSided`; per draw,
+* the parity luck's scope: one-sided products of any form (`LeftOnly`, `RightOnly`, `OneSided`; per sample,
   `OneSidedAt`), `Z/2³²` read mod 2 (`toF2`), a cell-block's frame (`dFrame`), products two-sided at a frame
-  (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across draws, `SlpG.ChargePureAt`).
+  (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across samples, `SlpG.ChargePureAt`).
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 
@@ -28,9 +68,9 @@ open Finset
 
 section Probability
 
-/-- The probability of an event under the uniform distribution on a finite type. -/
-noncomputable def prob {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : ℝ := by
-  classical exact ((univ.filter p).card : ℝ) / (Fintype.card Ω : ℝ)
+/-- The probability of an event under the uniform distribution on a finite type (Core's `Claims.prUniform`). -/
+noncomputable abbrev prob {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : ℝ :=
+  Claims.prUniform p
 
 end Probability
 
@@ -71,8 +111,8 @@ end Rounds
 
 section Stages
 
-/-- **A round's stages**: per stage, its cheat step `a` and the wrong share `u` its draw adds, then the rest of the
-round, which may depend on the draw. -/
+/-- **A round's stages**: per stage, its cheat step `a` and the wrong share `u` its sample adds, then the rest of the
+round, which may depend on the sample. -/
 inductive StageGame (Ω : Type) : ℕ → Type
   | done : StageGame Ω 0
   | stage {m : ℕ} (a : ℝ) (u : Ω → ℝ) (next : Ω → StageGame Ω m) : StageGame Ω (m + 1)
@@ -81,7 +121,7 @@ namespace StageGame
 
 variable {Ω : Type}
 
-/-- The round's deficiency `D = Σ_s a_s` along its draws. -/
+/-- The round's deficiency `D = Σ_s a_s` along its samples. -/
 def defi : {m : ℕ} → StageGame Ω m → Paths Ω m → ℝ
   | _, .done, _ => 0
   | _, .stage a _ next, x => a + (next x.1).defi x.2
@@ -150,7 +190,7 @@ end Machine
 
 section Service
 
-/-- The proof service's layer of a protocol (AGENTS.md's one proof service): live coins, messages and the verifier.
+/-- The proof system's layer of a protocol (AGENTS.md's one proof system): live coins, messages and the verifier.
 A protocol is a service with a problem (`correct`) and an honest Solve. -/
 structure Service where
   Seed : Type
@@ -172,6 +212,56 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
     prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
+
+/-- **The service's adversary floor, adversary by adversary**: every adversary `M` that commits first has its accepted
+runs charged below `F` with probability at most `κ Ω M`, a bound of its own, `⊤` where there is none. `ServiceFloor` is
+one bound for every adversary, which a service on SHA-512 commitments meets only at 1: an adversary that hard-codes a
+collision opens a leaf two ways. -/
+def ServiceFloorPerProver (Mc : Machine) (S : Service) (F : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
+    (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
+    ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧
+      Mc.charge M ω < F) ≤ κ Ω M
+
+/-- **The analysis's collision finders, adversary by adversary**: for each adversary `M` in `Mc` against `S`, each
+value `r` of its own coins and each round `w`, the finder the analysis builds from `M` at `r` to turn round `w`'s break
+into a collision of the commitments' hash (`Claims.Finder`: its coins, its output, and its SHA-512 calls on each coin).
+Its cost counts everything it computes, the runs of `M` it plays and whatever else it reads off them, such as the error
+table the analysis fixes from a commitment. Like `RunMap`, it is the analysis's; a service premise per prover takes one
+for the binding breaks and one for the zero-knowledge breaks. The cost is declared, so the bounds never read it as a
+number: they read a budget computed from `M`'s time (`breakBound`), and a finder whose expected cost exceeds it gives
+no bound. -/
+abbrev Finders (Mc : Machine) (S : Service) (R : ℕ) : Type 1 :=
+  ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → Fin R → Claims.Finder
+
+/-- **An adversary's finder term at one value of its coins, at the budget `q`**: the `ecr/sha-512` bounds of its
+finders for every round (`Claims.ecrBound` at the hash `sha` and the budget), summed: `R · q / 2^256` where every
+finder meets the assumption within `q` calls in expectation, `⊤` otherwise. -/
+noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+    (fd : Finders Mc S R) (q : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) :
+    ENNReal :=
+  ∑ w, Claims.ecrBound sha (fd Ω M r w) q
+
+/-- **An adversary's error in the floors per prover**: at each value `r` of its coins, the luck term `ε`, the
+constants `δb` and `δz` of each of the `R` rounds' binding and zero-knowledge breaks, and its binding and
+zero-knowledge finder terms at `r` (`finderTerm`) at the weights `βb` and `βz`, capped at 1, a probability; then
+averaged over `r`. The cap keeps one value of the coins whose finder fails `ecr/sha-512` (a prover that merely tries
+its coins as a collision) from sending the whole bound to `⊤`: that value adds its share of the coins, `1/|Ω|`.
+
+Each path's finders are read at a budget computed from the adversary: `cb · time M + db` SHA-512 calls for the
+binding finders and `cz · time M + dz` for the zero-knowledge ones, at constants the analysis states (its finders'
+reruns of `M` per unit of `M`'s time, and the calls they make besides). `M`'s time is the machine's worst case
+(`Machine.time`), which `M` can't set low, and the finders' declared costs only have to fit under the budgets. Where
+every finder fits and meets `ecr/sha-512`, the error is
+`ε + R (δb + δz) + R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256`, capped at 1. -/
+noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+    (fb fz : Finders Mc S R) (cb db cz dz : ℝ) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω]
+    (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=
+  ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *
+    min 1 (ENNReal.ofReal (ε + R * (δb + δz)) +
+      ENNReal.ofReal βb * finderTerm sha fb (cb * Mc.time M + db) Ω M r +
+      ENNReal.ofReal βz * finderTerm sha fz (cz * Mc.time M + dz) Ω M r)
 
 end Service
 
@@ -285,15 +375,15 @@ section Overlap
 
 variable {St : ℕ} {ι : Fin St → Type} [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] {R : Type} [CommRing R]
 
-/-- The round's bit point at draws `U`: draw `s`'s bits are ones on `U s`. -/
+/-- The round's bit point at samples `U`: sample `s`'s bits are ones on `U s`. -/
 def drawInd (U : ∀ s, Finset (ι s)) : (Σ s, ι s) → R := fun v => bitInd (U v.1) v.2
 
-/-- The round's bit point at draws `U` with draw `t`'s bits replaced by `z`. -/
+/-- The round's bit point at samples `U` with sample `t`'s bits replaced by `z`. -/
 def mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) : (Σ s, ι s) → R :=
   fun v => Function.update (fun s => (bitInd (U s) : ι s → R)) t z v.1 v.2
 
-/-- **K∥'s operands**: a product of two operands affine in draw `t`'s bits at every bit point of the other draws',
-for every draw `t`. -/
+/-- **K∥'s operands**: a product of two operands affine in sample `t`'s bits at every bit point of the other samples',
+for every sample `t`. -/
 def AffMulAt (π : ((Σ s, ι s) → R) → R) : Prop :=
   ∀ (U : ∀ s, Finset (ι s)) (t : Fin St), ∃ A B : BitAff (ι t) R, ∀ z, π (mergeAt U t z) = A.eval z * B.eval z
 
@@ -304,16 +394,16 @@ section OverlapLuck
 variable {St : ℕ} {κ ι : Fin St → Type} [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)]
   {R : Type} [CommRing R]
 
-/-- A round's deficiency with overlapping draws (RS-D1E r2 §2.5): the share of cells and draws at which the cell's
-error, on its own draw's bits with every other draw's at theirs, is nonzero at some bit point with at most two
+/-- A round's deficiency with overlapping samples (RS-D1E r2 §2.5): the share of cells and samples at which the cell's
+error, on its own sample's bits with every other sample's at theirs, is nonzero at some bit point with at most two
 ones. -/
 noncomputable def ovDef (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) : ℝ :=
   prob fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) =>
     ∃ S : Finset (ι a.1.1), S.card ≤ 2 ∧ e a.1 (mergeAt a.2 a.1.1 (bitInd S)) ≠ 0
 
-/-- **A prover's play with overlapping draws** over `n` rounds: per round, its error table on every draw's bits, fixed
-before the round's first draw (the round's run straight-line over every draw's bits), then the rest of the play,
-which may depend on the round's draws and its check. -/
+/-- **A prover's play with overlapping samples** over `n` rounds: per round, its error table on every sample's bits, fixed
+before the round's first sample (the round's run straight-line over every sample's bits), then the rest of the play,
+which may depend on the round's samples and its check. -/
 inductive OvPlay (κ ι : Fin St → Type) (A : Type) : ℕ → Type
   | done : OvPlay κ ι A 0
   | round {n : ℕ} (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) (next : (Σ t, κ t) × (∀ s, Finset (ι s)) → OvPlay κ ι A n) :
@@ -323,8 +413,8 @@ namespace OvPlay
 
 variable {A : Type} [CommRing A]
 
-/-- **The window's game** of a play with overlapping draws: round `w`'s deficiency is `ovDef` of its errors, and its
-check passes where the drawn cell's error vanishes at the drawn bits of every draw. -/
+/-- **The window's game** of a play with overlapping samples: round `w`'s deficiency is `ovDef` of its errors, and its
+check passes where the sampled cell's error vanishes at the sampled bits of every sample. -/
 noncomputable def game : {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
   | _, .done => .done
   | _, .round e next => .round (fun _ => ovDef e) (fun a => e a.1 (drawInd a.2) = 0) fun a => (next a).game
@@ -432,10 +522,10 @@ noncomputable def spotDef (e : C → (V → R) → R) : ℝ :=
 
 end Spot
 
-/-- **A round's staged spot play** (per-stage draws: decision 36 as RS-E-REF r5 V.3 repaired it): per stage, its
+/-- **A round's staged spot play** (per-stage samples: decision 36 as RS-E-REF r5 V.3 repaired it): per stage, its
 error table (its committed words minus their targets, per cell, as functions of the stage's bits, both noise blocks
-of the stage's products drawn in its draw), fixed by the stage's operand commitment before its draw, then the rest of
-the round, which may depend on the draw. -/
+of the stage's products sampled in its sample), fixed by the stage's operand commitment before its sample, then the rest of
+the round, which may depend on the sample. -/
 inductive StagePlay (C V A : Type) : ℕ → Type
   | done : StagePlay C V A 0
   | stage {m : ℕ} (e : C → (V → A) → A) (next : Finset V → StagePlay C V A m) : StagePlay C V A (m + 1)
@@ -445,21 +535,21 @@ namespace StagePlay
 variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
 
 omit [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] in
-/-- Stage `s`'s error table along the round's draws. -/
+/-- Stage `s`'s error table along the round's samples. -/
 def errAt : {m : ℕ} → StagePlay C V A m → Paths (Finset V) m → Fin m → C → (V → A) → A
   | _, .done, _, s => s.elim0
   | _, .stage e next, x, s =>
     Fin.cases (motive := fun _ => C → (V → A) → A) e (fun s' => (next x.1).errAt x.2 s') s
 
 omit [Fintype C] [Fintype V] in
-/-- The round's check at stage `s` and cell `c`: the error vanishes at the stage's drawn bits. -/
+/-- The round's check at stage `s` and cell `c`: the error vanishes at the stage's sampled bits. -/
 def ok : {m : ℕ} → StagePlay C V A m → Paths (Finset V) m → Fin m → C → Prop
   | _, .done, _, s, _ => s.elim0
   | _, .stage e next, x, s, c =>
     Fin.cases (motive := fun _ => Prop) (e c (bitInd x.1) = 0) (fun s' => (next x.1).ok x.2 s' c) s
 
 /-- **The round's stage game**, `M` stages in all: stage `s`'s step is `1/M` of its share of uncertified cells,
-and its draw adds `1/M` of the share of cells it finds wrong. -/
+and its sample adds `1/M` of the share of cells it finds wrong. -/
 noncomputable def sgame (M : ℕ) : {m : ℕ} → StagePlay C V A m → StageGame (Finset V) m
   | _, .done => .done
   | _, .stage e next =>
@@ -468,7 +558,7 @@ noncomputable def sgame (M : ℕ) : {m : ℕ} → StagePlay C V A m → StageGam
 end StagePlay
 
 /-- **A prover's staged play** over `n` rounds of `M` stages: per round, its stage play, then the rest of the play,
-which may depend on the round's draws and its check. -/
+which may depend on the round's samples and its check. -/
 inductive StagedPlay (C V A : Type) (M : ℕ) : ℕ → Type
   | done : StagedPlay C V A M 0
   | round {n : ℕ} (P : StagePlay C V A M) (next : Paths (Finset V) M × (Fin M × C) → StagedPlay C V A M n) :
@@ -479,7 +569,7 @@ namespace StagedPlay
 variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A] {M : ℕ}
 
 /-- **The window's game** of a staged play: round `w`'s deficiency is its stage game's, and its check passes where
-the drawn stage's error at the drawn cell vanishes at that stage's bits. -/
+the sampled stage's error at the sampled cell vanishes at that stage's bits. -/
 noncomputable def game : {n : ℕ} → StagedPlay C V A M n → RoundGame (Paths (Finset V) M × (Fin M × C)) n
   | _, .done => .done
   | _, .round P next =>
@@ -499,17 +589,17 @@ end StagedPlay
 cell-block. -/
 abbrev DStage (St n L np B n' : ℕ) : Type := Paths (Finset (DBits n L np B n')) St × (Fin St × DCells n n' B)
 
-/-- A round's bits with overlapping draws: draw `t`'s design bits, stage `t` of shape `(n t, L, B t, n' t)`. -/
+/-- A round's bits with overlapping samples: sample `t`'s design bits, stage `t` of shape `(n t, L, B t, n' t)`. -/
 abbrev OBits (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type := Σ t, DBits (n t) L np (B t) (n' t)
 
 /-- A round's cell-blocks, over all its stages. -/
 abbrev OCells (St : ℕ) (n n' B : Fin St → ℕ) : Type := Σ t, DCells (n t) (n' t) (B t)
 
-/-- A round's draws with overlapping stages: draw `t`'s bits. -/
+/-- A round's samples with overlapping stages: sample `t`'s bits. -/
 abbrev ODraws (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
   ∀ t, Finset (DBits (n t) L np (B t) (n' t))
 
-/-- A round's coins with overlapping stages: the check's cell-block, among every stage's, and every stage's draw. -/
+/-- A round's coins with overlapping stages: the check's cell-block, among every stage's, and every stage's sample. -/
 abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
   OCells St n n' B × ODraws St n L np B n'
 
@@ -517,12 +607,12 @@ section ParityOverlapRound
 
 variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : ℕ}
 
-/-- **K∥'s products for one-sided operands of any form**: at every bit point of the other draws, one-sided on draw
-`t`'s bits, for every draw `t`; each side may depend on the other draws' bits in any way. -/
+/-- **K∥'s products for one-sided operands of any form**: at every bit point of the other samples, one-sided on sample
+`t`'s bits, for every sample `t`; each side may depend on the other samples' bits in any way. -/
 def OneSidedAt (π : (OBits St n L np B n' → Ar) → Ar) : Prop :=
   ∀ (W : ODraws St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
 
-/-- **Charging purity across draws**: at every bit point of the draws, no product is two-sided at the frames of two
+/-- **Charging purity across samples**: at every bit point of the samples, no product is two-sided at the frames of two
 cell-blocks, of any stages, whose words read it with odd coefficients (mod 2 through `φ`). -/
 def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (OBits St n L np B n') Ar N)
     (word : OCells St n n' B → Fin N) : Prop :=
@@ -533,7 +623,7 @@ def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG
 end ParityOverlapRound
 
 /-- **An adversary's window run on the staged design**, as the analysis reads it: its staged play (per round and
-stage, the error table fixed by the stage's operand commitment before its draw), the per-round binding and
+stage, the error table fixed by the stage's operand commitment before its sample), the per-round binding and
 zero-knowledge break events, the noise reads `V`, and along every play `x` each round's stages as straight-line
 programs over `Ar` on the stage's bits (`prog x w s`), on committed constants `pc x w s` and `vq x w s`, with the slot
 of each cell's committed prefix word (`word x w s`). -/
@@ -553,10 +643,10 @@ service `S` and each value `r` of its own coins, its run. -/
 abbrev RunMap (Mc : Machine) (S : Service) (R St n L np B n' : ℕ) (Ar : Type) [CommRing Ar] : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → StagedRun R St n L np B n' Ar
 
-/-- **An adversary's window run with overlapping stages**, as the analysis reads it: its play over the round's draws
-(per round, the error tables of every stage fixed before the round's first draw), the per-round binding
+/-- **An adversary's window run with overlapping stages**, as the analysis reads it: its play over the round's samples
+(per round, the error tables of every stage fixed before the round's first sample), the per-round binding
 and zero-knowledge break events, the noise reads `V`, and along every play `x` each round's run as one straight-line
-program over `Ar` on every draw's bits (`prog x w`), on committed constants per stage (`pc x w t`, `vq x w t`), with
+program over `Ar` on every sample's bits (`prog x w`), on committed constants per stage (`pc x w t`, `vq x w t`), with
 the slot of each cell's committed prefix word (`word x w`). -/
 structure OverlapRun (R St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) (Ar : Type) [CommRing Ar] where
   play : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R

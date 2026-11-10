@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "Dsv4CompressorScore_v2{W=4}": {
+   "and": 3124,
+   "type": "5ad0ad2fb85b3e449eb82a8bf9c4860d98fb26573d6dc0738efd56e77379d7ef90e6f9031643431a9bddd8b8d6dbe43ef0e2998c083fac2d2c0cc2204c5066aa"
+  },
+  "Dsv4InvRope_v2{ROPE=4}": {
+   "and": 14612,
+   "type": "d6ca59bf611b152802da48c26bbbc73bfeeda31289847f8ae1aefa3786e8179187a5876251db4787bff2bd7a86272c3bed62532f517cb29d51d19d8597e14f00"
+  },
+  "Dsv4ShortContextTopK_v2{TOPK=12,RATIO=3}": {
+   "and": 155,
+   "type": "ec230b87749690e91754ea99bb18309d7ecd5a827597a104ca069ebbc1a7a1786be262b17988902b6b11d7a63d45c6733d43695bfc265bacfe11f31a54335240"
+  },
+  "Dsv4ShortContextTopK_v2{TOPK=128,RATIO=128}": {
+   "and": 603,
+   "type": "b73876ac7252b9821508f79896a1d9a3580392d67c7b42e54f2acb891db901593391f416a879cb02432ac1e1011a181e35d7412b9925de91258b93a605669fea"
+  },
+  "Dsv4ShortContextTopK_v2{TOPK=16,RATIO=4}": {
+   "and": 154,
+   "type": "1b98315441458b5754f3c8ebf4ca051bb1b89aa8a5776884edcb52a1458ad48066849d0761cf90e6474a597f6406801cf3470f3b2921d9d69495c1e7608e320d"
+  }
+ }
+}

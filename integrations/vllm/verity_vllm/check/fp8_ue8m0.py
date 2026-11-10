@@ -8,7 +8,9 @@ Kernel` delegates to) runs `requant_weight_ue8m0_inplace` on each rank's block-F
     s' = 2 ^ ceil(log2(amax / 448));  w' = e4m3(w_dq * (1 / s'))  (per_block_cast_to_fp8, use_ue8m0=True)
 
 so the served weight and `weight_scale_inv` are (w', s'), not the checkpoint's words.  The Build names the linears it binds this way
-(derive-report `weight_roles`: `fp8_w_requant_ue8m0` / `fp8_ws_requant_ue8m0`).  MLA's `kv_b_proj` is one such linear the Program does
+(derive-report `weight_roles`: `fp8_w_requant_ue8m0` / `fp8_ws_requant_ue8m0`).  A checkpoint whose block scales are already e8m0
+(DeepSeek-V4's ue8m0 scales) is not requantised: `deepgemm_post_process_fp8_weight_block` upcasts such scales to the f32 words
+`byte << 23` (`_upcast_e8m0_to_fp32`) and keeps the weight, and so does the record.  MLA's `kv_b_proj` is one such linear the Program does
 not read: `MLAAttention.process_weights_after_loading` (mla_attention.py:1154-1252) dequantises it through the kernel on an identity
 (`get_and_maybe_dequant_weights`; the identity's ue8m0 input quant is exact, and the one non-zero product of each output is exact in
 the f32 accumulator, which turns -0 into +0) into bf16 `W_UK_T` [NH][DN][L] and `W_UV` [NH][L][DV], the fields of role `mla.absorb`;
@@ -26,6 +28,7 @@ import numpy as np
 REQUANT_ROLES = ("fp8_w_requant_ue8m0", "fp8_ws_requant_ue8m0")
 ABSORB_ROLE = "mla.absorb"
 SCALE = ".weight_scale_inv"
+E8M0_UPCAST = "e8m0 -> f32 (byte << 23, vLLM's _upcast_e8m0_to_fp32)"
 
 
 def build_roles(program_dir: str | None) -> dict[str, dict[str, Any]]:
@@ -46,12 +49,16 @@ def build_roles(program_dir: str | None) -> dict[str, dict[str, Any]]:
 
 
 def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = None) -> tuple[np.ndarray, str] | None:
-    """A bf16 field whose checkpoint tensor is e4m3 beside a `weight_scale_inv`: vLLM's upcast at load (deepseek_v2
-    `_try_load_fp8_indexer_wk`: GLM-5.3's indexer wk, fused bf16 with weights_proj) = bf16_RNE(f32(w) * scale over its block); else None."""
+    """An f32 field whose checkpoint tensor is an e8m0 block scale: its upcast (`E8M0_UPCAST`).  A bf16 field whose checkpoint tensor is
+    e4m3 beside a `weight_scale_inv`: vLLM's upcast at load (deepseek_v2 `_try_load_fp8_indexer_wk`: GLM-5.3's indexer wk, fused bf16
+    with weights_proj) = bf16_RNE(f32(w) * scale over its block).  Else None."""
+    if bits == 32 and ck.dtype(src) == "F8_E8M0":
+        from verity.ml.definitions.numerics.deepgemm_twins import upcast_e8m0
+        return upcast_e8m0(ck.array(src, rows=rows)), E8M0_UPCAST
     scale = src + "_scale_inv"
     if bits != 16 or ck.dtype(src) != "F8_E4M3" or not src.endswith(".weight") or not ck.has(scale):
         return None
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32
     w, s = ck.array(src), ck.array(scale).astype(np.float32)
     full = np.repeat(np.repeat(s, w.shape[0] // s.shape[0], axis=0), w.shape[1] // s.shape[1], axis=1)
     u = np.ascontiguousarray(np_e4m3_to_f32(w) * full, dtype=np.float32).view(np.uint32)
@@ -61,7 +68,7 @@ def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = No
 
 def requant(w: np.ndarray, s: np.ndarray, G: int) -> tuple[np.ndarray, np.ndarray]:
     """(e4m3 words [N, K], f32 words [cdiv(N, G), K / G]) -> the ue8m0 requantised pair, as `requant_weight_ue8m0_inplace`."""
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat
     N, K = w.shape
     NB, KB = -(-N // G), -(-K // G)
     sf = s.view(np.float32).reshape(NB, KB)
@@ -76,7 +83,7 @@ def requant(w: np.ndarray, s: np.ndarray, G: int) -> tuple[np.ndarray, np.ndarra
 
 def absorbed(w: np.ndarray, s: np.ndarray, G: int, NH: int, DN: int, DV: int, which: str) -> np.ndarray:
     """bf16 words of `W_UK_T` [NH][DN][L] or `W_UV` [NH][L][DV] from the rank's requantised kv_b_proj (w', s')."""
-    from verity_vllm.program.kernels.fp8_twins import np_e4m3_to_f32
+    from verity.ml.definitions.numerics.fp8_twins import np_e4m3_to_f32
     full = np.repeat(np.repeat(s.view(np.float32), G, axis=0), G, axis=1)[:w.shape[0], :w.shape[1]]
     deq = np.where((w & 0x7F) == 0, np.float32(0.0), np_e4m3_to_f32(w) * full).view(np.uint32)
     if np.any(deq & 0xFFFF):   # an e4m3 word times a power of two is exact in bf16; anything else is not this rule
@@ -103,24 +110,30 @@ class Rewrites:
         return self.G > 0 and (field in self.requant or field in self.absorb)
 
     def _requanted(self, weight: str) -> tuple[np.ndarray, np.ndarray, dict]:
-        if weight not in self._pair:
+        # one linear's pair is kept at a time, and threads composing side by side (cpu_replay) may replace it between two reads
+        got = self._pair.get(weight)
+        if got is None:
             (w, nw), (s, ns) = self.raw(weight), self.raw(weight[:-len(".weight")] + SCALE)
-            self._pair = {weight: (*requant(w, s, self.G), {**nw, "sources": nw["sources"] + ns["sources"]})}
-        return self._pair[weight]
+            note = {**nw, "sources": nw["sources"] + ns["sources"]}
+            if ns.get("cast") == E8M0_UPCAST:
+                got = (w, s, {**note, "rule": "vLLM keeps the weight and upcasts its e8m0 scales (DeepGEMM linear: no requant)"})
+            else:
+                got = (*requant(w, s, self.G), {**note, "rule": f"vLLM load-time ue8m0 requant (DeepGEMM linear, block {self.G})"})
+            self._pair = {weight: got}
+        return got
 
     def compose(self, field: str, shape: list[int]) -> tuple[np.ndarray, dict]:
-        rule = f"vLLM load-time ue8m0 requant (DeepGEMM linear, block {self.G})"
         if field in self.absorb:
             if not self.requant:
                 raise KeyError(f"{field}: mla.absorb without the DeepGEMM requant path has no composition rule")
             w, s, note = self._requanted(self.absorb[field])
             c = self.config
             arr = absorbed(w, s, self.G, int(shape[0]), int(c["qk_nope_head_dim"]), int(c["v_head_dim"]), field.rsplit(".", 1)[1])
-            rule = f"{rule}, then MLA's bf16 {field.rsplit('.', 1)[1]} of kv_b_proj (identity GEMM)"
+            note = {**note, "rule": f"{note['rule']}, then MLA's bf16 {field.rsplit('.', 1)[1]} of kv_b_proj (identity GEMM)"}
         else:
             weight = field if field.endswith(".weight") else field[:-len(SCALE)] + ".weight"
             w, s, note = self._requanted(weight)
             arr = w if field == weight else s
         if list(arr.shape) != list(shape):
             raise ValueError(f"{field}: rewritten shape {list(arr.shape)} != Program shape {shape}")
-        return arr, {**note, "rule": rule}
+        return arr, note

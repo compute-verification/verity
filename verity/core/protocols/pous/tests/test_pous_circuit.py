@@ -10,7 +10,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as EB
-from verity.core.protocols.pous import circuit as P
+from verity.ml.protocols.pous import circuit as P
 
 RNG = random.Random(11)
 
@@ -57,7 +57,7 @@ def test_fold_refuses_a_c0_two_folds_cannot_reduce():
 
 
 def test_counts_at_the_circuit_check_binding():
-    """The binding `circuit-check` traces; its C-Flock lowering is pinned in circuit_check's `pins.json`."""
+    """The binding `circuit-check` traces; its Flock lowering is pinned in circuit_check's `pins.json`."""
     assert EB.compile(bind(P.PousModSquare, W=128, C0=21065)).counts == {"and": 10636, "xor": 27158, "not": 1086}
 
 

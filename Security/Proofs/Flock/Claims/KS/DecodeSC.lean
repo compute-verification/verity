@@ -1,5 +1,47 @@
-import Proofs.Flock.Claims.Bridge.DecodePlain
-import Proofs.Flock.Claims.KS.Entries
+module
+
+public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.KS.Entries
+public import Proofs.Flock.Claims.KS.Trace
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The deployed plain decoder, with no opening off the table
@@ -13,6 +55,8 @@ root is the live strategies' and on which the deployed plain reader looks up no 
   `accepts_opens₀L` reads, so an opening off `C` without a self-clash is a column off `C` the reader looks up
   (`Claims.Flock.exists_ne_of_entries`), which `TxNoOff` excludes.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.DecodePlain
 
@@ -36,7 +80,7 @@ theorem wrP1_oneOf {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj : Finset (F
 and decodes, the deployed plain reader looks up no column off `C` in the entries of the table's reps' stream rounds and
 the first two proof files, at the table's shape, below level 0's `2^d`. -/
 def TxNoOff (I : Exec.Inputs) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     Exec.setupOf I t.record = .ok (spec, #[st]) → Record.decode spec t.record = .ok sess →
     _root_.Flock.fast100 st.m = some sch →
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ →

@@ -4,7 +4,8 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
     dsa_norm_rope(positions, q_c, q_w, q_eps, kv_c, kv_w, kv_eps, k_pe, cos_sin, index_k?, index_k_w?, index_k_b?, index_k_eps,
                   index_cos_sin?, interleave, kv_c_out!, k_pe_out!) -> (q_c, index K e4m3 [T, D], index K scale f32 [T])
         `_fused_norm_rope_kernel` per token: `dsa_rmsnorm{N,EPS}` of q_c and of kv_c (kv_c_out rebound), `dsa_kv_rope{NHEADS=1,D}` of
-        k_pe (k_pe_out rebound), and on an indexer layer `DsaIndexerKRow_v1{D,ROPE,EPS}` (the index-K cache slot)
+        k_pe (k_pe_out rebound), and on an indexer layer `DsaIndexerKRow_v1{D,ROPE,EPS}` (the index-K cache slot); in class G's
+        batched form (`batched_form`) the two are one `DsaLatentRow_v1{KVL,R,EPS}` per token, its row [kv_c | k_pe]
     dsa_q(positions, q_pe, cos_sin, index_q?, index_cos_sin?, index_weights?, softmax_scale, head_scale, interleave)
         -> (q_pe roped [T, NH, R], index q e4m3 [T, H, D], index weights f32 [T, H])
         `_fused_q_kernel` per token: `dsa_q_rope{NHEADS,D}` of q_pe and on an indexer layer `DsaIndexerQ_v1{H,D,ROPE}`
@@ -12,30 +13,39 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         -> attention rows [T, NH, L]
         the layer's caches as history keyed by `layer_name` (rows [kv_c | k_pe], index-K slots and scales); per query row of n = P + 1
         keys, on an indexer layer `DsaMqaLogits_v3{N=n,H,D}` and `DsaTopKShortRow_v1{TOPK}` (n <= TOPK: the kernels' short-row
-        shortcut, slot i = i), on an IndexShare layer the top-k the last indexer layer wrote for the same positions; then
-        explicitly pinned `SparseMla_v1{T=n,...}` or default `SparseMlaSplit_v1{T=n,NS,...}` over the history's first n rows
+        shortcut, slot i = i), or past TOPK, at the row's class N (`long_row_keys`: n rounded up to a multiple of TOPK, the keys
+        past n `PAD_SCORE`), the logits' top-TOPK set (`DsaTopKMask_v1{N,TOPK}`) and the concentrator's settings for it
+        (`DsaButterflySettings_v1{N,K=TOPK}`); on an IndexShare layer the top-k the last indexer layer wrote for the same
+        positions; then explicitly pinned `SparseMla_v1{T,...}` or default `SparseMlaSplit_v1{T,NS,...}` over the history's first n
+        rows (T = n), or past TOPK over the rows `DsaButterflyRows_v1{N,K=TOPK,W,E=16}` routes at those settings, in ascending
+        index order (T = TOPK; `DsaButterflyRowsPad_v1{T=n,N,...}` where n < N).  In the batched form a call's rows past TOPK go in
+        blocks (`long_row_blocks`), each over the history's first N_b rows: `DsaMqaLogits_v3{N=N_b}`, `DsaTopKMaskCounted_v1{N,TOPK}`
+        of the logits and the row's own key count, the settings, and the rows routed from N_b (`DsaButterflyRowsPad_v1{T=N_b,N}`),
+        each op over the block's rows in turn
 
-and two ops around them: the latent absorptions `bmm(q_nope^T, W_UK_T)` and `bmm(attn^T, W_UV)` (`batched_gemm{B,K,N,DOT}` per token)
-and `output.copy_(rows)` (an allocation written whole).  A role the vocabulary lacks refuses by name.
+and `output.copy_(rows)` (an allocation written whole); the latent absorptions around them are `vllm_dsa_absorb.py`'s.  A role the
+vocabulary lacks refuses by name.  The leaf the shim exports in dsa_indexer_attn's place on a prefill vLLM serves by dense MHA,
+`dsa_dense_mha`, is `vllm_dsa_dense.py`'s; it opens the same histories.
 """
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 import torch
 
-from verity.ml.circuits.refs import Coll, PartLog, array_of, concat
+from verity.ml.circuits.refs import Coll, PartLog, Refs, array_of, concat
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
-from verity_vllm.program.frontend.rules.patterns import Consumed
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
+from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, batched_form, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
-from verity_vllm.program.registry import dsa
-from verity_vllm.program.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.program.frontend.torch_frontend import _tensor_type
+from verity.ml.definitions.registry import dsa
+from verity.ml.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn
@@ -55,10 +65,57 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                 "dsa_indexer_q": "the index query of _fused_q_kernel (DsaIndexerQ_v1)",
                 "dsa_mqa_logits": "DeepGEMM's fp8 MQA logits (DsaMqaLogits_v3)",
                 "dsa_topk_short_row": "the top-k of a row of at most TOPK keys (DsaTopKShortRow_v1)",
+                "dsa_topk_mask": "the top-TOPK set of a row past TOPK keys, a mask of its logits (DsaTopKMask_v1)",
+                "dsa_topk_mask_counted": "the same over a block's keys, of the row's own (DsaTopKMaskCounted_v1)",
+                "dsa_latent_row": "kv_a_layernorm and k_pe's interleaved RoPE in _fused_norm_rope_kernel as one row (DsaLatentRow_v1)",
+                "dsa_butterfly_settings": "the concentrator's settings for a row's top-TOPK mask (DsaButterflySettings_v1)",
+                "dsa_butterfly_rows": "the history rows sparse MLA reads past TOPK keys, routed in ascending index order at the "
+                                      "concentrator's settings (DsaButterflyRows_v1)",
+                "dsa_butterfly_rows_pad": "the same at a row whose keys are no multiple of TOPK: its history and the pad to its "
+                                          "size class two arguments (DsaButterflyRowsPad_v1)",
                 "sparse_mla": "FA3's sparse MLA (SparseMla_v1)",
                 "sparse_mla_split": "FA3's sparse MLA at vLLM's default split count (SparseMlaSplit_v1)",
+                "attention_dot": "FA3's dense causal prefill attention, FlashAttnPrefillBackend's (Attention_v4; AttentionSplit_v1 "
+                                 "where FA3 splits it)",
                 "batched_gemm": "the latent absorption bmm, cuBLAS's batched bf16 GEMM (BatchedGemm_v1{B,K,N,DOT})",
                 "const": "a constant word"}
+
+#: the score of a key past a long row's own (`long_row_keys`): its `dsa_topk.topk_key` is 0, the least, and a real key it ties
+#: with has the lower index, so every real key precedes it and the top-TOPK set of a row of at least TOPK keys never holds one
+PAD_SCORE = 0xFFFFFFFF
+
+
+def long_row_keys(n: int, topk: int) -> int:
+    """The class a row of n > topk keys is selected over: n rounded up to a multiple of topk, so a request's rows past TOPK share
+    one specialization of the mask form per class (each of its Definitions' bodies grows with its N) at under TOPK keys more a
+    row.  The keys past n score `PAD_SCORE` and their history rows are zero: no output of the concentrator reads one."""
+    return -(-int(n) // int(topk)) * int(topk)
+
+
+#: the multiple a call's rows past TOPK round their keys up to in the batched form, a block's rows sharing one (`long_row_blocks`)
+BLOCK_KEYS = 256
+
+
+def long_row_blocks(keys: list[int], topk: int) -> list[tuple[int, list[int]]]:
+    """A call's rows past `topk` keys (`keys` in row order, increasing) in the batched form, as (the block's keys, its rows'
+    indices): a row's keys rounded up to a multiple of `BLOCK_KEYS`, at most the call's last row's, so a block's rows share one
+    specialization of each long-row Definition and batch (`prune.batched_form`), each row selecting among its own keys alone
+    (`DsaTopKMaskCounted`)."""
+    out: list[tuple[int, list[int]]] = []
+    for i, n in enumerate(keys):
+        if n > topk:
+            N = min(-(-n // BLOCK_KEYS) * BLOCK_KEYS, keys[-1])
+            if out and out[-1][0] == N:
+                out[-1][1].append(i)
+            else:
+                out.append((N, [i]))
+    return out
+
+
+def pad_words(topk: int, words: int = 1) -> int:
+    """The words of a Program's one block of a pad (a batch of one constant, sliced at each long row, so a row's pad is one run
+    of references, not one per word): the most keys a row's class adds (`long_row_keys`), topk - 1, of ``words`` words each."""
+    return (int(topk) - 1) * int(words)
 
 
 def _args(node, names: tuple[str, ...]) -> dict:
@@ -67,11 +124,11 @@ def _args(node, names: tuple[str, ...]) -> dict:
     return d
 
 
-def _missing(ctx, roles) -> str | None:
+def _missing(ctx, roles, kernels: dict = ROLE_KERNELS) -> str | None:
     gone = [r for r in roles if not ctx.vocab.has(r)]
     if not gone:
         return None
-    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({ROLE_KERNELS[r]})" for r in gone)
+    return "numerics_unregistered: the vocabulary has no " + "; no ".join(f"{r} ({kernels[r]})" for r in gone)
 
 
 def _value(ctx, a, dt, shp, what: str) -> str | None:
@@ -101,9 +158,9 @@ def _positions(ctx, a) -> list[int] | str:
     return v.flat()
 
 
-def _table(ctx, a, width: int, positions: list[int], what: str) -> str | None:
-    """None when ``a`` is a bf16 rotary cache [MAX_POS, width] holding every position."""
-    r = _value(ctx, a, BF16, (None, width), what)
+def _table(ctx, a, width: int, positions: list[int], what: str, dt=BF16) -> str | None:
+    """None when ``a`` is a rotary cache [MAX_POS, width] of ``dt`` holding every position."""
+    r = _value(ctx, a, dt, (None, width), what)
     if r:
         return r
     n = shape(ctx, a)[0]
@@ -183,7 +240,7 @@ class DsaNormRopeRule(InPlaceRule):
     def applies(self, node, ctx):
         a = _args(node, _NORM_ROPE)
         has = a.get("index_k") is not None
-        if (r := _missing(ctx, ["dsa_rmsnorm", "dsa_kv_rope"] + (["dsa_indexer_k_row"] if has else []))):
+        if (r := _missing(ctx, ["dsa_rmsnorm", "dsa_latent_row" if batched_form() else "dsa_kv_rope"] + (["dsa_indexer_k_row"] if has else []))):
             return r
         if ctx.registered_values:
             return "numerics_unregistered: the DSA norms take eps as a static; no registered-values twin"
@@ -235,15 +292,23 @@ class DsaNormRopeRule(InPlaceRule):
         Nq, L, R = shape(ctx, a["q_c"])[1], shape(ctx, a["kv_c"])[1], shape(ctx, a["k_pe"])[1]
         cs = ctx.coll(a["cos_sin"])
         qn = ctx.kind("dsa_rmsnorm", node, N=Nq, EPS=float(a["q_eps"]))
-        kn = ctx.kind("dsa_rmsnorm", node, N=L, EPS=float(a["kv_eps"]))
-        kr = ctx.kind("dsa_kv_rope", node, D=R)
         qw, kvw = ctx.coll(a["q_w"]), ctx.coll(a["kv_w"])
         q_out = [ctx.call(qn, qc[i], qw, node=node, rule=self, name=f"{h}/q_c[{i}]") for i in range(T)]
-        kv_out = [ctx.call(kn, kvc[i], kvw, node=node, rule=self, name=f"{h}/kv_c[{i}]") for i in range(T)]
-        pe_out = [ctx.call(kr, kpe[i], cs[pos[i]], node=node, rule=self, name=f"{h}/k_pe[{i}]") for i in range(T)]
+        if batched_form():
+            lr = ctx.kind("dsa_latent_row", node, KVL=L, R=R, EPS=float(a["kv_eps"]))
+            lat = [ctx.call(lr, Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])), kvw, cs[pos[i]], node=node, rule=self,
+                            name=f"{h}/latent[{i}]") for i in range(T)]
+            kv_out = [Coll(Array(L, Value(16)), r.refs.slice(0, L)) for r in lat]
+            pe_out = [Coll(Array(R, Value(16)), r.refs.slice(L, L + R)) for r in lat]
+            ids = [qn.id, lr.id]
+        else:
+            kn = ctx.kind("dsa_rmsnorm", node, N=L, EPS=float(a["kv_eps"]))
+            kr = ctx.kind("dsa_kv_rope", node, D=R)
+            kv_out = [ctx.call(kn, kvc[i], kvw, node=node, rule=self, name=f"{h}/kv_c[{i}]") for i in range(T)]
+            pe_out = [ctx.call(kr, kpe[i], cs[pos[i]], node=node, rule=self, name=f"{h}/k_pe[{i}]") for i in range(T)]
+            ids = [qn.id, kn.id, kr.id]
         ctx.rebind(a["kv_c_out"], array_of(kv_out), self, what="kv_c_out")
         ctx.rebind(a["k_pe_out"], array_of(pe_out), self, what="k_pe_out")
-        ids = [qn.id, kn.id, kr.id]
         ik = iks = None
         pre = {"T": T, "positions": [pos[0], pos[-1]], "Nq": Nq, "L": L, "R": R, "q_eps": float(a["q_eps"]), "kv_eps": float(a["kv_eps"]),
                "indexer": has}
@@ -346,6 +411,7 @@ class DsaQRule(OpRule):
 
 
 _ATTN = ("positions", "ql_nope", "q_pe", "kv_c", "k_pe", "index_q", "index_weights", "index_k", "index_k_scale", "layer_name", "topk", "scale")
+_DENSE = ("positions", "q_nope", "q_pe", "k_nope", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
 
 
 def _observed_sparse_mla(layer_name: str) -> str | None:
@@ -364,21 +430,62 @@ def _observed_sparse_mla(layer_name: str) -> str | None:
     return None
 
 
-def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
-    """None when a call of T query rows takes the top-k MQA path (`MLAAttention.forward_impl`): the layer has no dense-MHA prefill
-    backend, or `sparse_mla_force_mqa`, or the call is at most the decode threshold, so the builder counts it a decode.  A longer
-    call is a prefill, which the prefill backend serves by dense MHA while its rows have at most TOPK keys."""
-    obs = _OBSERVED["attention_impls"][layer_name]
-    pb, heads = obs.get("prefill_backend"), obs.get("q_heads_per_rank")
-    if pb is None or obs.get("sparse_mla_force_mqa") is True:
-        return None
+def _decode_threshold(layer_name: str) -> int | str:
+    """The metadata builder's decode threshold at the layer's observed query heads per rank: a call of more query rows is a prefill."""
+    heads = _OBSERVED["attention_impls"][layer_name].get("q_heads_per_rank")
     if not isinstance(heads, int):
-        return f"no observed query heads per rank for {layer_name!r}, the decode threshold its prefill backend {pb!r} is behind"
-    limit = DECODE_THRESHOLD.get(heads, DECODE_THRESHOLD_DEFAULT)
-    if T <= limit:
+        return (f"no observed query heads per rank for {layer_name!r}, the decode threshold its prefill backend "
+                f"{_OBSERVED['attention_impls'][layer_name].get('prefill_backend')!r} is behind")
+    return DECODE_THRESHOLD.get(heads, DECODE_THRESHOLD_DEFAULT)
+
+
+def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
+    """None when a call of T query rows takes the top-k MQA path (`MLAAttention.forward_impl`) as a decode: the layer has no dense-MHA
+    prefill backend, or `sparse_mla_force_mqa`, or the call is at most the decode threshold.  A longer call is a prefill, which the
+    prefill backend serves by dense MHA while its rows have at most TOPK keys (`vllm_iface.dsa_dense_mha`, `DsaDenseMha[vllm-dsa]`);
+    one that reaches this op has rows past TOPK, which vLLM serves by sparse MQA over the indexer's prefill top-k."""
+    obs = _OBSERVED["attention_impls"][layer_name]
+    if obs.get("prefill_backend") is None or obs.get("sparse_mla_force_mqa") is True:
         return None
-    return (f"numerics_unregistered: {layer_name!r}: a call of {T} query rows is a prefill (decode threshold {limit} at {heads} query "
-            f"heads per rank), which its dense-MHA prefill backend {pb!r} serves, and no Definition states it")
+    limit = _decode_threshold(layer_name)
+    if isinstance(limit, str) or T <= limit:
+        return limit if isinstance(limit, str) else None
+    return (f"numerics_unregistered: {layer_name!r}: a call of {T} query rows is a prefill (decode threshold {limit} at "
+            f"{obs.get('q_heads_per_rank')} query heads per rank) that reached the top-k MQA op; vLLM serves a prefill by its prefill "
+            f"backend {obs.get('prefill_backend')!r}'s dense MHA while its rows have at most TOPK keys (vllm_iface.dsa_dense_mha) and by "
+            f"sparse MQA over the indexer's prefill top-k past them, which no Definition states")
+
+
+def _open_history(ctx, node, layer: str, pos: list[int], has: bool) -> tuple[dict, int]:
+    """The layer's history (rows [kv_c | k_pe], index-K slots and scales) and its length before this call, once the call passes what
+    every call of the layer must: one module writes the layer's caches, the positions continue the history, and the layer has an
+    index-K cache at every step or at none."""
+    mp = ctx.module_path(node)
+    owner = ctx.state.setdefault("dsa_owner", {})
+    if owner.setdefault(layer, mp) != mp:
+        refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
+    hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
+    P0 = len(hist["latent"])
+    if pos != list(range(pos[0], pos[0] + len(pos))) or (P0 and pos[0] != hist["next"]):
+        refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} do not continue {layer!r}'s history"
+                                  + (f" of {P0} rows (next position {hist['next']})" if P0 else " (not consecutive)"))
+    if has != bool(hist["ik"]) and P0:
+        refuse("side_input", node, mp, f"{layer!r} has an index-K cache at some steps only")
+    hist["next"] = pos[-1] + 1
+    return hist, P0
+
+
+def _append_rows(ctx, hist: dict, a: dict, has: bool) -> None:
+    """Append the call's cache rows to the layer's history: [kv_c | k_pe] per row, and on an indexer layer its index-K slot and scale."""
+    kvc, kpe = _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
+    T, L, R = kvc.type.n, shape(ctx, a["kv_c"])[1], shape(ctx, a["k_pe"])[1]
+    for i in range(T):
+        hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
+    if has:
+        ik, iks = _rows(ctx, a["index_k"], 8), _rows(ctx, a["index_k_scale"], 32)
+        for i in range(T):
+            hist["ik"].append(ik[i])
+            hist["iks"].append(iks[i])
 
 
 class DsaIndexerAttnRule(StateRule):
@@ -387,20 +494,31 @@ class DsaIndexerAttnRule(StateRule):
     (the step wrapper's `pos0`, as the dense attention rule's `kv_history` opens), and every later call continues it; row i of a call
     that finds P0 rows reads the first n = P0 + i + 1 rows.  An indexer layer emits the row's logits and its top-k, an IndexShare layer takes the top-k the last indexer layer selected for
     the same positions, and both the pinned one-split or default split sparse MLA over the selected rows: with n <= TOPK the
-    selection is rows 0..n-1 in order."""
+    selection is rows 0..n-1 in order.  Past TOPK the circuit computes it from the logits at the row's class N (`long_row_keys`,
+    the logits past n `PAD_SCORE` and the history rows past n zero): `DsaTopKMask_v1{N,TOPK}` marks the row's top-TOPK set,
+    `DsaButterflySettings_v1{N,K=TOPK}` sets an order-preserving concentrator of the N rows for it, and sparse MLA reads the TOPK
+    rows `DsaButterflyRows_v1{N,K=TOPK}` routes at those settings, in ascending index order (the row `VERITY_DSA_TOPK=canonical`
+    serves); an IndexShare layer reads the indexer layer's settings, so the wiring is static.  Below N it reads them through
+    `DsaButterflyRowsPad_v1{T=n,N}`, the history and its pad two arguments, so the history is a cut one row longer than the row
+    before's, which the descriptor writes as an alias plus a part."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
                                    "the workload either declares the one-split pin or leaves FA3's split heuristic at its default",
-                                   "the call takes the top-k MQA path: no dense-MHA prefill backend, sparse_mla_force_mqa, or T at most the "
-                                   "metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD)",
+                                   "the call takes the top-k MQA path as a decode: no dense-MHA prefill backend, sparse_mla_force_mqa, or T "
+                                   "at most the metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD); "
+                                   "a prefill of at most TOPK keys is DsaDenseMha[vllm-dsa]'s",
                                    "the target's compute capability is 9.0 (FA3)",
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
                                    "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
-                                   "every row has at most TOPK keys (the top-k kernels' short-row shortcut)",
+                                   "a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one reads the rows "
+                                   "DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below its class) routes at the settings "
+                                   "DsaButterflySettings_v1 computes for DsaTopKMask_v1's set "
+                                   "(an IndexShare layer's rows have the indexer layer's key counts)",
                                    "layer_name static and written from one module; not under registered_values"),
-                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, SparseMla_v1 or SparseMlaSplit_v1")
+                    evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, DsaTopKMask_v1, DsaButterflySettings_v1, "
+                                    "DsaButterflyRows_v1, DsaButterflyRowsPad_v1, SparseMla_v1 or SparseMlaSplit_v1")
 
     def targets(self):
         return {iface.dsa_indexer_attn.default}
@@ -428,6 +546,11 @@ class DsaIndexerAttnRule(StateRule):
         T = len(pos)
         if (r := _prefill_by_dense_mha(layer, T)):
             return r
+        hist = (ctx.state.get("dsa_history") or {}).get(layer)
+        if (len(hist["latent"]) if hist else 0) + T > topk and (
+                r := _missing(ctx, ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"] + (
+                    ["dsa_topk_mask_counted" if batched_form() else "dsa_topk_mask", "dsa_butterfly_settings"] if has else []))):
+            return r
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
         NH = (shape(ctx, a["ql_nope"]) or (0, 0, 0))[1]
@@ -453,6 +576,7 @@ class DsaIndexerAttnRule(StateRule):
         return True
 
     def emit(self, node, ctx):
+        refuse_cached_prefix(ctx, node, self.rule_id)
         a = _args(node, _ATTN)
         has = a.get("index_q") is not None
         layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])
@@ -461,229 +585,116 @@ class DsaIndexerAttnRule(StateRule):
         T = len(pos)
         _, NH, L = shape(ctx, a["ql_nope"])
         R = shape(ctx, a["k_pe"])[1]
-        owner = ctx.state.setdefault("dsa_owner", {})
-        if owner.setdefault(layer, mp) != mp:
-            refuse("side_input", node, mp, f"the caches of {layer!r} are written from two modules ({owner[layer]} and {mp})")
-        hist = ctx.state.setdefault("dsa_history", {}).setdefault(layer, {"latent": [], "ik": [], "iks": [], "next": None})
-        P0 = len(hist["latent"])
-        if pos != list(range(pos[0], pos[0] + T)) or (P0 and pos[0] != hist["next"]):
-            refuse("shape", node, mp, f"positions {pos[0]}..{pos[-1]} do not continue {layer!r}'s history"
-                                      + (f" of {P0} rows (next position {hist['next']})" if P0 else " (not consecutive)"))
-        if has != bool(hist["ik"]) and P0:
-            refuse("side_input", node, mp, f"{layer!r} has an index-K cache at some steps only")
-        hist["next"] = pos[-1] + 1
+        hist, P0 = _open_history(ctx, node, layer, pos, has)
         keys = [P0 + i + 1 for i in range(T)]
-        kvc, kpe = _rows(ctx, a["kv_c"], 16), _rows(ctx, a["k_pe"], 16)
-        for i in range(T):
-            hist["latent"].append(Coll(Array(L + R, Value(16)), concat([kvc[i].refs, kpe[i].refs])))
+        _append_rows(ctx, hist, a, has)
         latent = _log(ctx, (layer, "latent"), hist["latent"])
         G = FA3_SPARSE_GEOMETRY[(R, L)]
         obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
         pinned_one = obs.get("num_splits") == 1
-        splits = ([1] * T if pinned_one else
-                  launch_num_splits(keys, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0)))
-        too_long = [(P, n) for P, n in zip(pos, keys) if n > TOPK]
-        if too_long:
-            refuse("numerics_unregistered", node, mp, f"{layer!r}: position {too_long[0][0]} has {too_long[0][1]} keys > TOPK {TOPK}: the top-k "
-                                                     f"kernels' radix selection has no Definition (DsaTopKShortRow_v1 states rows of at most TOPK)")
+        if pinned_one:
+            splits = [1] * T
+        else:
+            # one launch over every token of the step, each with its top-k's valid keys: a token's split count is a function of
+            # that count given the launch
+            batch = [min(n, TOPK) for n in launch_keys_of(node, keys)]
+            by_keys = dict(zip(batch, launch_num_splits(batch, int(active_target_profile().num_sms), TOPK, int(obs.get("num_splits") or 0))))
+            splits = [by_keys[min(n, TOPK)] for n in keys]
+        past = [P for P, n in zip(pos, keys) if n > TOPK]
+        pads = ctx.state.setdefault("dsa_pads", {})
+
+        def pad(w: int, bits: int, words: int, count: int) -> Refs:
+            if (w, bits) not in pads:
+                pads[(w, bits)] = ctx.B.batch(ctx.kind("const", node, W=w, BITS=bits), axes=(), n=words, name=f"{h}/pad{w}").refs
+                k = len(ctx.B.nodes) - 1
+                ctx.node_hints[k], ctx.node_sources[k], ctx.node_fx[k] = f"{h}/pad{w}", node.name, node
+            return pads[(w, bits)].slice(0, count)
+
+        blocks = long_row_blocks(keys, TOPK) if batched_form() else []
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
-            ik, iks = _rows(ctx, a["index_k"], 8), _rows(ctx, a["index_k_scale"], 32)
-            for i in range(T):
-                hist["ik"].append(ik[i])
-                hist["iks"].append(iks[i])
             klog, slog = _log(ctx, (layer, "ik"), hist["ik"]), _log(ctx, (layer, "iks"), hist["iks"])
             sel_fn = ctx.kind("dsa_topk_short_row", node, TOPK=TOPK)
             selected = {}
             for i, (P, n) in enumerate(zip(pos, keys)):
+                if blocks and n > TOPK:
+                    break
                 lg = ctx.kind("dsa_mqa_logits", node, N=n, H=H, D=D)
-                ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
-                         node=node, rule=self, name=f"{h}/logits[t={P}]")
-                ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
-                selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
-            ctx.state["dsa_topk"] = {"layer": layer, "rows": selected}
+                logits = ctx.call(lg, iq[i], iw[i], Coll(Array(n, Array(D, Value(8))), klog.cut(n)), Coll(Array(n, Value(32)), slog.cut(n)),
+                                  node=node, rule=self, name=f"{h}/logits[t={P}]")
+                if n <= TOPK:
+                    ln = ctx.call(ctx.kind("const", node, W=32, BITS=n), node=node, rule=self, name=f"{h}/len[t={P}]")
+                    selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
+                    continue
+                N = long_row_keys(n, TOPK)
+                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs)
+                mask = ctx.call(ctx.kind("dsa_topk_mask", node, N=N, TOPK=TOPK), scores, node=node, rule=self,
+                                name=f"{h}/topk_mask[t={P}]")
+                selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
+                                       name=f"{h}/topk[t={P}]")
+            for Nb, rows in blocks:
+                N, lg = long_row_keys(Nb, TOPK), ctx.kind("dsa_mqa_logits", node, N=Nb, H=H, D=D)
+                ik, iks = Coll(Array(Nb, Array(D, Value(8))), klog.cut(Nb)), Coll(Array(Nb, Value(32)), slog.cut(Nb))
+                logits = [ctx.call(lg, iq[i], iw[i], ik, iks, node=node, rule=self, name=f"{h}/logits[t={pos[i]}]") for i in rows]
+                counts = [Coll(Value(32), pad(32, keys[i], 1, 1)) for i in rows]
+                tail = [pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
+                fm, fs = ctx.kind("dsa_topk_mask_counted", node, N=N, TOPK=TOPK), ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK)
+                masks = [ctx.call(fm, Coll(Array(N, Value(32)), concat([lgt.refs, *tail])), c, node=node, rule=self,
+                                  name=f"{h}/topk_mask[t={pos[i]}]") for i, lgt, c in zip(rows, logits, counts)]
+                for i, m in zip(rows, masks):
+                    selected[pos[i]] = ctx.call(fs, m, node=node, rule=self, name=f"{h}/topk[t={pos[i]}]")
+            ctx.state["dsa_topk"] = {"layer": layer, "rows": selected, "keys": dict(zip(pos, keys))}
             source = layer
         else:
             last = ctx.state.get("dsa_topk")
             if last is None or any(P not in last["rows"] for P in pos):
                 refuse("side_input", node, mp, f"IndexShare layer {layer!r} reads a top-k no indexer layer selected for positions "
                                                f"{pos[0]}..{pos[-1]}")
-            source = last["layer"]
+            odd = [(P, n) for P, n in zip(pos, keys) if n > TOPK and last["keys"][P] != n]
+            if odd:
+                refuse("side_input", node, mp, f"IndexShare layer {layer!r} has {odd[0][1]} keys at position {odd[0][0]}, but "
+                                               f"{last['layer']!r} selected its top-{TOPK} among {last['keys'][odd[0][0]]}")
+            selected, source = last["rows"], last["layer"]
         ql, qr = _rows(ctx, a["ql_nope"], 16), _rows(ctx, a["q_pe"], 16)
+        row = Array(L + R, Value(16))
+        rows_of = {}
+        for Nb, rows in long_row_blocks(keys, TOPK) if batched_form() else ():
+            N, hb = long_row_keys(Nb, TOPK), Coll(Array(Nb, row), latent.cut(Nb))
+            rest = (Coll(Array(N - Nb, row), pad(16, 0, pad_words(TOPK, L + R), (N - Nb) * (L + R))),) if N > Nb else ()
+            fr = (ctx.kind("dsa_butterfly_rows_pad", node, T=Nb, N=N, TOPK=TOPK, W=L + R) if rest
+                  else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
+            for i in rows:
+                rows_of[i] = ctx.call(fr, selected[pos[i]], hb, *rest, node=node, rule=self, name=f"{h}/rows[t={pos[i]}]")
         outs = []
         for i, (P, n, ns) in enumerate(zip(pos, keys, splits)):
             role = "sparse_mla" if pinned_one else "sparse_mla_split"
-            statics = {"T": n, "NH": NH, "DR": R, "DV": L, "BN": G["BN"], "DOT": G["DOT"], "INV": G["INV"], "SM_SCALE": scale}
+            statics = {"T": min(n, TOPK), "NH": NH, "DR": R, "DV": L, "BN": G["BN"], "DOT": G["DOT"], "INV": G["INV"], "SM_SCALE": scale}
             if not pinned_one:
                 statics["NS"] = ns
             attn = ctx.kind(role, node, **statics)
-            outs.append(ctx.call(attn, ql[i], qr[i], Coll(Array(n, Array(L + R, Value(16))), latent.cut(n)), node=node, rule=self,
-                                 name=f"{h}[t={P}]"))
+            kv = rows_of[i] if i in rows_of else Coll(Array(n, row), latent.cut(n))
+            if n > TOPK and i not in rows_of:
+                N = long_row_keys(n, TOPK)
+                rest = (Coll(Array(N - n, row), pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R))),) if N > n else ()
+                rows = (ctx.kind("dsa_butterfly_rows_pad", node, T=n, N=N, TOPK=TOPK, W=L + R) if rest
+                        else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
+                kv = ctx.call(rows, selected[P], kv, *rest, node=node, rule=self, name=f"{h}/rows[t={P}]")
+            outs.append(ctx.call(attn, ql[i], qr[i], kv, node=node, rule=self, name=f"{h}[t={P}]"))
         ctx.define(node, array_of(outs))
         ctx.record(self, node, {"layer_name": layer, "positions": [pos[0], pos[-1]], "history_rows_after": P0 + T, "NH": NH, "DR": R, "DV": L,
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
-                                "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots)",
-                                "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
+                                "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots); past "
+                                "TOPK DsaTopKMask_v1's set of the logits at the row's class (long_row_keys), its rows in ascending index "
+                                "order by DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below the class) at DsaButterflySettings_v1's settings",
+                                "past_topk": past, "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T} (splits {splits})" +
-                           (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T}" if has else f" (top-k of {source})"))
+                           (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T - len(past)}" if has else f" (top-k of {source})") +
+                           (f" + {('DsaTopKMaskCounted_v1' if blocks else 'DsaTopKMask_v1') + ', DsaButterflySettings_v1, ' if has else ''}"
+                            f"DsaButterflyRows[Pad]_v1 x{len(past)}"
+                            if past else ""))
 
 
-class MlaAbsorbBmmRule(OpRule):
-    """`aten.bmm(x [B, M, K] bf16, W [B, K, N] bf16 parameter)`, MLA's latent absorptions (`W_UK_T`, `W_UV`): per token m,
-    `batched_gemm{B,K,N,DOT}(x[:, m, :], W^T)` over all B heads; the node is [B, M, N]."""
-    modes = frozenset({"profile"})
-    info = RuleInfo("MlaAbsorbBmm[vllm-dsa]", 1, "op-binding", applies_to="aten.bmm(x [B, M, K], W [B, K, N]) with W a parameter",
-                    preconditions=("x a bf16 value [B, M, K]; W a bf16 parameter [B, K, N] (W_UK_T or W_UV)",
-                                   "DOT the target's k16 step (frontend.targets.tensor_core_dot)"),
-                    evidence_domain="structural; numerics: batched_gemm (cuBLAS's batched bf16 GEMM)")
+VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule()]
 
-    def targets(self):
-        return {aten.bmm.default}
-
-    def applies(self, node, ctx):
-        x, w = node.args[0], node.args[1]
-        if ctx.weight_of(w) is None:
-            return "the right operand is not a parameter"
-        if (r := _missing(ctx, ["batched_gemm"])):
-            return r
-        if (r := _value(ctx, x, BF16, (None, None, None), "x")):
-            return r
-        B, _, K = shape(ctx, x)
-        if (r := _value(ctx, w, BF16, (B, K, None), "W")):
-            return r
-        from verity_vllm.program.frontend import targets as TG
-        try:
-            TG.tensor_core_dot(active_target_profile())
-        except TG.UnregisteredTarget as e:
-            return f"numerics_unregistered: {e}"
-        return True
-
-    def emit(self, node, ctx):
-        from verity_vllm.program.frontend import targets as TG
-        x, w = node.args[0], node.args[1]
-        B, M, K = shape(ctx, x)
-        N = shape(ctx, w)[2]
-        DOT = TG.tensor_core_dot(active_target_profile())
-        fn = ctx.kind("batched_gemm", node, B=B, K=K, N=N, DOT=DOT)
-        where = ctx.module_path(node)
-        xa = _permute(_rows(ctx, x, 16), (1, 0, 2), where)
-        wt = _permute(_rows(ctx, w, 16), (0, 2, 1), where)
-        h = ctx.hint_name(node)
-        outs = [ctx.call(fn, xa[m], wt, node=node, rule=self, name=f"{h}[{m}]") for m in range(M)]
-        ctx.define(node, _permute(array_of(outs), (1, 0, 2), where))
-        wl = ctx.weight_of(w)
-        ctx.bind_weight_role(w, self, "mla.absorb", B=B, K=K, N=N)
-        ctx.record(self, node, {"B": B, "M": M, "K": K, "N": N, "DOT": DOT.name, "weight": wl.name}, emitted=f"{fn.id} x{M}")
-
-
-_ASSERTS = {aten._assert_tensor_metadata.default}
-
-
-def _single_data_user(node):
-    users = [u for u in node.users if u.target not in _ASSERTS]
-    return users[0] if len(users) == 1 else None
-
-
-def _transpose_01(node, ctx) -> bool:
-    if not isinstance(node, torch.fx.Node) or node.target is not aten.transpose.int or len(shape(ctx, node) or ()) != 3:
-        return False
-    d0, d1 = int(node.args[1]), int(node.args[2])
-    d0 = d0 + 3 if d0 < 0 else d0
-    d1 = d1 + 3 if d1 < 0 else d1
-    return {d0, d1} == {0, 1}
-
-
-class MlaAbsorbTransposePatternRule(OpRule):
-    """The source spelling ``bmm(x.transpose(0,1), W).transpose(0,1)`` of an MLA absorb.
-
-    The first transpose can span millions of leaves over the composite reference sequence made by splitting q into
-    q-nope/q-pe.  It has no compact generic view.  This rule recognises the whole single-use chain and emits the same
-    per-token ``batched_gemm`` calls directly from untransposed x, so the large intermediate never enters the Program.
-    """
-
-    modes = frozenset({"profile"})
-    info = RuleInfo(
-        "MlaAbsorbTranspose[vllm-dsa]",
-        1,
-        "op-binding",
-        applies_to="x [M,B,K].transpose(0,1) -> aten.bmm(., W [B,K,N] parameter) -> transpose(0,1)",
-        preconditions=(
-            "both transposes swap axes 0 and 1 of rank-3 bf16 tensors",
-            "the first transpose and bmm each have exactly one non-assert reader, so no absorbed intermediate escapes",
-            "W is a bf16 parameter [B,K,N], batched_gemm is registered, and the target's k16 DOT is registered",
-        ),
-        evidence_domain="structural; numerics: batched_gemm (cuBLAS's batched bf16 GEMM)",
-    )
-
-    def targets(self):
-        return {aten.transpose.int}
-
-    def _match(self, node, ctx):
-        if not _transpose_01(node, ctx):
-            return "the anchor is not a rank-3 transpose of axes 0 and 1"
-        x = node.args[0]
-        if (r := _value(ctx, x, BF16, (None, None, None), "x")):
-            return r
-        bmm = _single_data_user(node)
-        if bmm is None or bmm.target is not aten.bmm.default or bmm.args[0] is not node:
-            return "the transpose is not read only as aten.bmm's left operand"
-        out = _single_data_user(bmm)
-        if out is None or not _transpose_01(out, ctx) or out.args[0] is not bmm:
-            return "the bmm is not read only by a trailing transpose of axes 0 and 1"
-        w = bmm.args[1]
-        if ctx.weight_of(w) is None:
-            return "the right operand is not a parameter"
-        M, B, K = shape(ctx, x)
-        if (r := _value(ctx, w, BF16, (B, K, None), "W")):
-            return r
-        N = shape(ctx, w)[2]
-        if shape(ctx, bmm) != (B, M, N) or shape(ctx, out) != (M, B, N):
-            return f"the bmm / trailing transpose shapes are {shape(ctx, bmm)} / {shape(ctx, out)}, not {(B, M, N)} / {(M, B, N)}"
-        if (r := _missing(ctx, ["batched_gemm"])):
-            return r
-        from verity_vllm.program.frontend import targets as TG
-
-        try:
-            TG.tensor_core_dot(active_target_profile())
-        except TG.UnregisteredTarget as e:
-            return f"numerics_unregistered: {e}"
-        return {"x": x, "w": w, "bmm": bmm, "out": out, "M": M, "B": B, "K": K, "N": N}
-
-    def applies(self, node, ctx):
-        m = self._match(node, ctx)
-        return True if isinstance(m, dict) else f"not the MLA absorb transpose pattern ({m})"
-
-    def emit(self, node, ctx):
-        from verity_vllm.program.frontend import targets as TG
-
-        m = self._match(node, ctx)
-        assert isinstance(m, dict)
-        DOT = TG.tensor_core_dot(active_target_profile())
-        fn = ctx.kind("batched_gemm", node, B=m["B"], K=m["K"], N=m["N"], DOT=DOT)
-        x = _rows(ctx, m["x"], 16)
-        wt = _permute(_rows(ctx, m["w"], 16), (0, 2, 1), ctx.module_path(node))
-        h = ctx.hint_name(m["bmm"])
-        outs = [ctx.call(fn, x[i], wt, node=m["out"], rule=self, name=f"{h}[{i}]") for i in range(m["M"])]
-        for n in (node, m["bmm"]):
-            ctx.env[n] = Consumed(self.rule_id, m["out"])
-            for u in n.users:
-                if u.target in _ASSERTS:
-                    ctx.env[u] = None
-        ctx.define(m["out"], array_of(outs))
-        wl = ctx.weight_of(m["w"])
-        ctx.bind_weight_role(m["w"], self, "mla.absorb", B=m["B"], K=m["K"], N=m["N"])
-        ctx.record(
-            self,
-            node,
-            {"B": m["B"], "M": m["M"], "K": m["K"], "N": m["N"], "DOT": DOT.name, "weight": wl.name,
-             "chain": [node.name, m["bmm"].name, m["out"].name]},
-            emitted=f"{fn.id} x{m['M']}",
-        )
-
-
-VLLM_DSA_PATTERN_RULES = [MlaAbsorbTransposePatternRule()]
-VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule(), MlaAbsorbBmmRule()]
-
-__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "MlaAbsorbBmmRule",
-           "MlaAbsorbTransposePatternRule", "VLLM_DSA_PATTERN_RULES", "VLLM_DSA_RULES"]
+__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "VLLM_DSA_RULES"]

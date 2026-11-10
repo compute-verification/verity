@@ -81,10 +81,20 @@ def test_a_pack_carries_the_verdicts_and_nothing_else_and_never_replaces_an_entr
     assert not (b["check"] / "lean-deps").exists() and not (b["tests"] / "durations.json").exists()
 
 
+def test_an_import_of_one_part_takes_only_its_entries(tmp_path, monkeypatch):
+    """`check.py --no-cache --circuit-cache` (drive's after-landing run) imports circuit-check's entries of a pack alone, so no
+    suite, Lean or step pass it carries is here for a step to reuse."""
+    _fill(_machine(tmp_path, monkeypatch, "a"))
+    V.export(pack := tmp_path / "pack.tar.gz")
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.import_(pack, "check/circuit-check/") == (1, 0)
+    assert sorted(V.entries()) == ["check/circuit-check/v1/d/e1.json"]
+
+
 def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
     """A recorded check snapshots and exports the caches around its steps, and a Lean build tree holds a package's whole
-    dependency copy (some 170k files); its `.json` files (records, `lake-manifest.json`, `links.json`) were packed as verdicts
-    (red team, #966)."""
+    dependency copy (some 170k files); its `.json` files (records, `lake-manifest.json`, `links.json`) are never packed as
+    verdicts."""
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)
     _write(r["check"] / "lean-audit" / ".lake" / "x.json", "{}")
@@ -115,7 +125,7 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
 
 def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):
     """The caches run to hundreds of GB; re-reading every entry at both ends of a check held a finished run for an hour of
-    disk reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  The per-root index memoizes each
+    disk reads once another job had evicted the page cache.  The per-root index memoizes each
     entry's sha256 by (size, mtime_ns): a second snapshot reads nothing, and a closing export reads only the run's own writes."""
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)
@@ -168,6 +178,24 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
         assert sorted(tar.getnames()) == VERDICTS[:-1]
 
 
+def test_a_pack_of_the_entries_named_is_xz_and_import_and_combine_read_it(tmp_path, monkeypatch):
+    """`check.Reused`'s pack: the entries a plan found, each once, in path order; a name that is no verdict entry here (absent,
+    hidden, outside the caches, a part never packed) is left out, never read."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    names = ["tests/k1.json", "check/lean-audit/k2.json", "tests/k1.json", "tests/absent.json", "tests/../k1.json",
+             "check/circuit-check/v1/d/.e2.tmp", "check/lean-deps/m/manifest.json", "other/k1.json", "tests/durations.json"]
+    pack = tmp_path / "reused.tar.xz"
+    assert V.export_paths(pack, names, xz=True) == 2
+    assert pack.read_bytes()[:6] == b"\xfd7zXZ\x00" and V.refusal(pack) is None
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["check/lean-audit/k2.json", "tests/k1.json"]
+    V.export(gz := tmp_path / "new.tar.gz")
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.combine([pack, gz], both := tmp_path / "both.tar.gz") == 4 and V.import_(pack) == (2, 0)
+    assert V.import_(both) == (2, 2)
+
+
 SKIPPED = ["check/lean-deps/m.json", "tests/logs/a.json", "check/lean-changed/links.json",
            "check/lean-records/build-0/p/lean-audit.json", "tests/durations.json", "check/lean-audit-scratch-x1/p/lake-manifest.json",
            "check/lean-changed/p/lean-audit.json", "check/lean-builds/k/ir/P/M.setup.json",
@@ -192,7 +220,7 @@ def _pack_with(tmp_path: Path, member: str) -> Path:
 @pytest.mark.parametrize("member", SKIPPED)
 def test_a_member_in_a_part_of_the_caches_never_packed_is_left_out_and_the_rest_taken(tmp_path, monkeypatch, member):
     """Packs written before `lean-builds/` was skipped hold its kept builds' `ir/*.setup.json`: their verdicts still count, and
-    neither `import` nor `combine` carries the builds (12 Oct: a combine of them ran a 15 GB VM out of disk)."""
+    neither `import` nor `combine` carries the builds (a combine of them runs a 15 GB VM out of disk)."""
     r = _machine(tmp_path, monkeypatch, "b")
     pack = _pack_with(tmp_path, member)
     assert V.refusal(pack) is None
@@ -254,10 +282,10 @@ def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tm
 
 def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
     check = _load("check")
-    base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "LEAN_NUM_THREADS": "8"}
+    base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "VERITY_SLOW": "1"}
     one = check._env_key({**base, "HOSTNAME": "a1b2", "RUNPOD_POD_ID": "abc", "RUNPOD_PUBLIC_IP": "1.2.3.4", "PUBLIC_KEY": "ssh-ed25519 A"})
     other = check._env_key({**base, "HOSTNAME": "c3d4", "RUNPOD_POD_ID": "xyz", "RUNPOD_PUBLIC_IP": "5.6.7.8", "PUBLIC_KEY": "ssh-ed25519 B"})
-    assert one == other == {"LEAN_NUM_THREADS": "8", "PATH": "<tree>/.venv/bin:/usr/bin"}
+    assert one == other == {"VERITY_SLOW": "1"}
 
 
 class _Store:
@@ -275,8 +303,8 @@ class _Store:
         import sqlite3
 
         db = sqlite3.connect(":memory:")
-        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL)")
-        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?)",
+        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL, manifest_json TEXT)")
+        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?, '{}')",
                        [(rid, self.states.get(rid, "done"), f"2026-10-12T{23 - i:02d}:00:00Z", self.walls.get(rid, 1.0))
                         for i, rid in enumerate(self.runs)])
         return db.execute(query, params).fetchall()
@@ -314,8 +342,8 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
 
 
 def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
-    """16 Oct: a pre-warm of #2113's cold circuit-check ran 4.5 h while drive started more than twelve warm checks; ordered by
-    start, its pack was out of the window when the train it warmed ran."""
+    """A pre-warm of a cold circuit-check can run 4.5 h while drive starts more than twelve warm checks; ordered by start, its
+    pack would be out of the window when the train it warmed ran."""
     check = _load("check")
     packs = {}
     for name in ("short", "long"):
@@ -329,8 +357,8 @@ def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_
 
 def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,
                                                                                                           capsys):
-    """A pack holding anything but verdict entries (9 Oct: a Lean audit's scratch in a recorded check's pack crashed every
-    `--record`; such a part is now left out of a pack, and a link or another prefix still refuses it) is skipped and the next one
+    """A pack holding anything but verdict entries (a Lean audit's scratch is left out of a pack, and a link or another
+    prefix still refuses it) is skipped and the next one
     taken; none of its entries is reused."""
     check = _load("check")
     bad = tmp_path / "bad.tar.gz"
@@ -369,6 +397,22 @@ def test_a_failed_or_cancelled_checks_pack_is_gathered_and_a_running_ones_is_not
     assert V.import_(got) == (2, 0)
 
 
+def test_a_sigkilled_checks_pack_is_taken_from_its_run_record(tmp_path, monkeypatch, capsys):
+    """A cancel's SIGKILL (rc 137) leaves no result.json, so the attempt has no run files listed from it, only the run record
+    custody uploaded, which holds the pack `record` declares."""
+    check = _load("check")
+    r = _machine(tmp_path, monkeypatch, "killed")
+    _write(r["tests"] / "killed.json", "k")
+    V.export(pack := tmp_path / "killed.tar.gz")
+
+    class Killed(_Store):
+        def get_attempt(self, rid: str) -> dict:
+            return {"outputs": {"run_record": f"art:{rid}"}}
+
+    check.gather_verdicts(tmp_path / "out", Killed(tmp_path, {"r-killed": pack}, {"r-killed": "cancelled"}))
+    assert "1 entries gathered from 1 recorded checks (r-killed)" in capsys.readouterr().out
+
+
 def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):
     check = _load("check")
 
@@ -403,3 +447,18 @@ def test_a_pack_given_is_added_to_the_gathered_ones_and_survives_a_store_that_ca
     assert V.import_(got) == (2, 0)
     with pytest.raises(SystemExit, match="no such pack"):
         check.gather_verdicts(tmp_path / "x", _Store(tmp_path, {}), given=tmp_path / "absent.tar.gz")
+
+
+def test_two_imports_on_one_machine_never_share_a_temporary_file(tmp_path, monkeypatch):
+    """Two checks on one machine import the same pack at once: each writes its entries through a file of its own, so neither
+    renames the other's away (a shared name fails `verdicts_in` with FileNotFoundError)."""
+    _fill(_machine(tmp_path, monkeypatch, "a"))
+    pack = tmp_path / "pack.tar.gz"
+    assert V.export(pack) == 4
+    b = _machine(tmp_path, monkeypatch, "b")
+    other = b["check"] / "lean-agreement" / f".k3.json.{os.getpid() + 1}.import"
+    _write(other, "another import, half written")
+    assert V.import_(pack) == (4, 0)
+    assert other.read_text() == "another import, half written"
+    assert (b["check"] / "lean-agreement" / "k3.json").read_text() == '{"key": "k3"}'
+    assert not list((b["check"] / "lean-agreement").glob(f".k3.json.{os.getpid()}.import"))

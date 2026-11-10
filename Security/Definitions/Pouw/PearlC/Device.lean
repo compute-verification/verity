@@ -1,12 +1,13 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Accum
-import Definitions.Pouw.PearlC.PeelExactP
-import Definitions.Pouw.PearlC.SkipP
-import Definitions.Pouw.PearlC.FormingPDefs
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.PearlC.PeelExactP
+public import Definitions.Pouw.PearlC.SkipP
+public import Definitions.Pouw.PearlC.FormingPDefs
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
-# Pearl-C at a device record (trusted; the cheap-binding lane's file)
+# Pearl-C at a device record (trusted)
 
 `pearlCProtocol` is Pearl-C on the H100: the ticket chain is `hopperStep` promoted every 4 atoms, U is `PeelExact`'s
 Hopper BF16 order, the debit's flags are `Skip`'s, the salt-dead predicate is P3's at the Hopper atom-mix, and the costs
@@ -18,17 +19,19 @@ are H100 W1 prices. A device record makes each of them a parameter, as the schem
 - `pearlCProtocolDev` and `pearlCTilesDev`: the named protocol and its audit tiles at a device record. The domain rules
   (`PearlCSem.OperandOK`) are E4M3's, and `sem` still carries the noise, the forming chain and the scales.
 - `devH100`: today's H100 record. `pearlCProtocolDev devH100 = pearlCProtocol · Costs.adopted`
-  (`pearlCProtocolDev_h100`, `DeviceGamma.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
+  (`pearlCProtocolDev_h100`, `DeviceGap.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
 
 - `devAt p G pr`: the record at any captured FP8 step `p` (a `Pipeline`), from the FP8 lane's twins: `Accum.chainAt`,
   `PeelExactP.peelExactValP`, `SkipP.unitFlagsAt` and `FormingP.saltDeadP`. At `hopperE4m3K32`, 4 and `Prices.h100` it
-  is `devH100` (`devAt_hopper`, `DeviceGamma.lean`).
+  is `devH100` (`devAt_hopper`, `DeviceGap.lean`).
 - `devSm120v1 pr`: `pearl-c-sm120` v1, the RTX PRO 6000's E4M3 step `⟨[32], 26, −133⟩` (`sm120E4m3`) promoted every 4
   atoms, at prices `pr`. Its named assumption takes `sem.fc = FormingP.atomMixP sm120E4m3`, the sm_120 atom-mix.
 - `devSm120v2 pr`: `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its flags are `SkipP.unitFlagsAt`'s
   at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not `SkipP.unitFlagsP · 0`, which would judge one group
   over all of k.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -109,7 +112,7 @@ noncomputable def PearlCSem.unitUsefulDev (sem : PearlCSem Q R S) (d : PearlCDev
     (u : ℕ) (act : Codes) : Matrix (Fin (U.layout.shape u).m) (Fin (U.layout.shape u).n) (Option ℚ) :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
-  let W := wordsVal sh.n sh.k (U.weight (U.layout.wid u))
+  let W := wordsVal sh.n sh.k (U.fixed (U.layout.fixedId u))
   let z := sem.noise H s U u act
   let AB := sem.unitChain H s U u act
   let be := fun (β : ℚ) (e : Fin Params.pi.r → Code) (p : Fin 32) => codeBf16 (lineCodes β e p)
@@ -132,18 +135,27 @@ noncomputable def pearlCProtocolDev (d : PearlCDevice) (sem : PearlCSem Q R S) (
   ticket := fun H s U u act => atNat (d.ticket (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2)
   useful := fun H s U u act => atNat (sem.unitUsefulDev d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
-  weightOK := fun sh w j => sem.RowOK sh.n sh.k w j
+  fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
     ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u act) : ℚ) : ℝ)
   capOK := fun H s U u act => debitDev d (sem.unitDebitDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)
   Wref := fun L u => (wrefDev d (L.shape u) : ℝ)
 
-/-- Pearl-C's shape domain at a device: positive dimensions, k a whole number of 128-deep kernel tiles and, when the
-record promotes, of promotion groups, and `k ≤ 2^16`. Without promotion (`G = 0`) the group condition is void: read as
-`32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is `pearlCDomain Params.pi`. -/
+/-- Pearl-C's shape domain at a device: positive `m`, `n` a positive multiple of 64, k a whole number of 128-deep
+kernel tiles and, when the record promotes, of promotion groups, and `k ≤ 2^16`. Without promotion (`G = 0`) the group
+condition is void: read as `32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is
+`pearlCDomain Params.pi` with `n`'s floor (`pearlCDomainDev_h100`).
+
+The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `δPearlC` allows. The binding
+attack is partial guessing: compute most of a unit's words and guess the rest. Under W1 a winning strategy must save the
+unit's `n·c` (the weight-side forming and `B̃·F_A`, online and uncredited) plus `g₀` of its credit, and the cheapest
+such saving guesses about 96% of one row: 124 words at `n = 64` on the H100 (123 on sm_120), about 995 at `n = 512`.
+Each guessed word then needs only about 1.04 bits of salt-dependent min-entropy at `n = 64`, and about 0.13 at
+`n = 512`, which TT_OUT already assumes. `64 ∣ n` matters as much as `64 ≤ n`: a `1 × (n mod 64)` edge tile is guessed
+whole. `m` stays free, so a one-row unit is in the domain (`pearlCDomainDev_split`). -/
 def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
-  ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n ∧ 0 < (L.shape u).k ∧ 128 ∣ (L.shape u).k ∧
-    (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
+  ∀ u < L.N, 0 < (L.shape u).m ∧ (64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n) ∧ 0 < (L.shape u).k ∧
+    128 ∣ (L.shape u).k ∧ (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
 
 /-- The domain restricted to one shape. -/
 def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : Layout) : Prop :=
@@ -166,7 +178,7 @@ def qwen3_8bLinears : Finset (ℕ × ℕ) := {(6144, 4096), (4096, 4096), (24576
 
 open Classical in
 /-- A tile's replayed debit at a device, as `PearlCSem.tileDebit` with the device's flags, salt-dead predicate and prices.
-The forming part is P3's per-tile rule (`internal/pouw-fp8/pearl-c-forming.md`, "The per-tile cap"). -/
+The forming part is P3's per-tile rule ("The per-tile cap"). -/
 noncomputable def PearlCSem.tileDebitDev (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
     (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u

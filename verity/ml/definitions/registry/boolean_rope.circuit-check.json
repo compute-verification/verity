@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "RoPEGptJ_v3{NHEADS=2,D=8}": {
+   "and": 47456,
+   "type": "3d8a0a8abb15c06edb75a4db3c015d0b57c1817aea9e45c788a5e9940ab91711f3a840f5175c2d670a14faa06a733f4775bf6aa06df801be41be15993afde5a3"
+  },
+  "RoPEHead_v2{D=8}": {
+   "and": 23728,
+   "type": "db53edcf8cb9456a8b9e607f28c4ccf1e20029ad991fd9b5c9271f94b2600d405bd5072a6e950c851cac015ba206c99e86a5009a1b53fbd43ee4bb9bb64714fb"
+  },
+  "RoPE_v2{NHEADS=2,D=8}": {
+   "and": 47456,
+   "type": "04e96b034cdd04a175f6ad5fa080c8184c0f7620bdf6ce5423fc6d5f902b26860ec5c7dacb9c6c4bee1b11619ca72a8cee9170462fc238cbb81940cb26d44bc3"
+  },
+  "RopeOutAdd_v2": {
+   "and": 2966,
+   "type": "6acebe0a498db4f5418ab5544c39f329c2d3c09de8ec06b9eb27b99f1e4fe5f099d1edf5c9bbdded6ba78586ded4b5c96ea3e42ed63ffd944eb2e1ae270d18cb"
+  },
+  "RopeOut_v2": {
+   "and": 2966,
+   "type": "7fc571c04c42ccb16c68264b8f30d6690748c2fcd4d9bea64a24c8c75343e0b037bda1f79c696e77d92cf1251f3c0b2c7015c0d74a0d35ccf61ac06085763094"
+  }
+ }
+}

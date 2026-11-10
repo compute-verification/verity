@@ -2,7 +2,7 @@
 
 Lean's ρ is free, while the served chain fixes α, β and X (`pearl_c.s5_stats`).  The largest ρ that `hsat`
 (α·(|x| + 4ρ) ≤ 448) allows is ρ_max = (448/α − s)/4, with equality at the row's largest element, and it is the best ρ for
-`hfloor` and `hlive`, which only get easier as ρ grows.  At ρ_max, per credited row i (δ = `Params.pi.δ` = 1):
+`hfloor` and `hlive`, which only get easier as ρ grows.  At ρ_max, per credited row i (the noise scale σ = `Params.pi.σ` = 1, Pearl's δ):
 
 - `hfloor` (1 ≤ α·ρ) holds iff α·s ≤ 444; the margin is 444 − α·s;
 - `hlive` (`LiveOperand 1 ρ X`: 64·#{(i, l) : 8ρ_i ≤ |X i l|} ≤ m·k) counts x_l loud iff |x_l|·α ≥ 2·(448 − α·s), over a
@@ -32,8 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 QMAX, FLOOR_AS, TILE = 448, 444, 64
 C_LO, C_HI = Fraction(2667, 5000), Fraction(4)
@@ -194,7 +194,8 @@ def check_split(path: Path, jobs: int) -> dict:
     worst_slack = sorted(units, key=lambda u: u["slack"])[:5]
     margins = [u for u in units if u["min_margin"] is not None]
     worst_margin = sorted(margins, key=lambda u: u["min_margin"])[:5]
-    total = lambda key: sum(u[key] for u in units)
+    def total(key):
+        return sum(u[key] for u in units)
     return {"units": len(units), "rows_checked": total("m_cred"), "rows_out_of_domain": total("rows_out"),
             "min_margin": worst_margin[0]["min_margin"] if worst_margin else None,
             "min_margin_at": [{"unit": u["index"], "row": u["min_margin_row"], "margin": u["min_margin"]} for u in worst_margin],

@@ -1,7 +1,7 @@
-// The exact MMA configurations of ../../fp_exact/ beside int8 IMMA: 16 warps, 8 independent accumulators a warp, one
-// MMA each an iteration, so the rate is the tensor pipe's and not one chain's latency. Operands are on fp_exact's exact
+// The exact FP8 and FP4 MMA configurations beside int8 IMMA: 16 warps, 8 independent accumulators a warp, one
+// MMA each an iteration, so the rate is the tensor pipe's and not one chain's latency. Operands are on the formats' exact
 // grids (E4M3 integers, E2M1 x2 values) with unit block scales. Each format also has a `_data` probe: the same opcode on
-// the sweep's drawn operands and mix block scales, whose rate (and SM clock) against the fixed probe rules out a
+// the sweep's sampled operands and mix block scales, whose rate (and SM clock) against the fixed probe rules out a
 // data-dependent clock. Joint points: rows.jsonl only (machine_model has one MMA kind, the honest GEMM's). MACs an
 // instruction: m16n8k32 4096, m16n8k64 8192, 2:4 sparse m16n8k128 16384.
 #include "../probe.cuh"
@@ -69,7 +69,7 @@ __device__ __forceinline__ uint32_t fold(const float (*d)[4], uint32_t lane) {
   return s;
 }
 
-// ---- the sweep's own operands (not fixed bit patterns): each thread draws finite grid operands and mix scales from a
+// ---- the sweep's own operands (not fixed bit patterns): each thread samples finite grid operands and mix scales from a
 // counter hash, so a data-dependent clock (if any) would show as a rate or SM-clock change against the probes above.
 __device__ __forceinline__ unsigned long long smix(unsigned long long z) {
   z += 0x9E3779B97F4A7C15ull;
@@ -82,7 +82,7 @@ __device__ const uint8_t E4M3I[17] = {0x00, 0x38, 0x40, 0x44, 0x48, 0x4A, 0x4C, 
 __device__ const uint8_t UE8M0MIX[7] = {124, 125, 126, 127, 128, 129, 130};            // 2^-3 .. 2^3
 __device__ const uint8_t UE4M3MIX[8] = {0x38, 0x44, 0x4A, 0x4E, 0x51, 0x53, 0x55, 0x57};  // 1, 3, 5, ..., 15
 
-// The draws run once before the timed loop, so their loops roll (#pragma unroll 1) to keep live registers low.
+// The samples run once before the timed loop, so their loops roll (#pragma unroll 1) to keep live registers low.
 __device__ __forceinline__ uint32_t draw_e4m3(unsigned long long& s) {  // four E4M3 bytes of integers in [-16, 16]
   uint32_t w = 0;
 #pragma unroll 1
@@ -182,7 +182,7 @@ __device__ __forceinline__ void omma_sp_body(const OpArgs& a) {
 OP_KERNEL(omma_sp_mxf4, TPB) { omma_sp_body<false>(a); }
 OP_KERNEL(omma_sp_nvf4, TPB) { omma_sp_body<true>(a); }
 
-// The same opcodes on the sweep's drawn operands and mix scales (data-dependent-clock check).
+// The same opcodes on the sweep's sampled operands and mix scales (data-dependent-clock check).
 OP_KERNEL(qmma_e4m3_data, TPB) {
   const uint32_t lane = threadIdx.x & 31;
   unsigned long long s = smix(((unsigned long long)blockIdx.x << 32) ^ lane ^ 0xE4A3ull);
@@ -233,7 +233,7 @@ __device__ __forceinline__ void omma_sp_data_body(const OpArgs& a) {
 #pragma unroll
   for (int r = 0; r < 4; r++) y[r] = draw_nibbles(s);
   const uint32_t sc = draw_scale<NV>(s);
-  const uint32_t e = 0x4E4E4E4Eu;  // a valid 2:4 metadata (pairs {0,1} and {2,3}); the draw varies the values, not it
+  const uint32_t e = 0x4E4E4E4Eu;  // a valid 2:4 metadata (pairs {0,1} and {2,3}); the sample varies the values, not it
   float d[8][4] = {};
   OP_BEGIN
   OP_LOOP(it) {

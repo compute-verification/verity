@@ -4,12 +4,12 @@
   refuses before any engine is built;
 * only the keys a spec sets reach `LLM`, arrays as lists;
 * the digest changes with every option but ``protocols_config``, which `LLM` never hashes;
-* `LLM.from_spec` records it as ``engine_record["spec_digest"]``;
-* every pinned preset under ``benchmarks/specs`` resolves as an engine spec to its checkpoint pin.
+* `LLM.from_spec` records it as ``engine_record["spec_digest"]``.
+
+That every pinned benchmark preset resolves as an engine spec is benchmarks/specs' own suite (`test_engine_spec_presets.py`).
 """
 from __future__ import annotations
 
-import tomllib
 from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,12 +17,10 @@ from types import SimpleNamespace
 import pytest
 import verity_config
 
-from verity_vllm.config import EnginePin
-from verity_vllm.pipeline import engine_spec as ES
-from verity_vllm.pipeline import llm as L
+from verity_vllm.engine import spec as ES
+from verity_vllm import llm as L
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
-BENCH_SPECS = Path(__file__).resolve().parents[4] / "benchmarks" / "specs"
 
 SPEC = f'''schema = "verity-vllm/engine-spec/v0"
 model = "{LLAMA[0]}"
@@ -95,21 +93,3 @@ def test_a_refused_spec_builds_no_engine(tmp_path, monkeypatch):
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: pytest.fail("built an engine for a refused spec"))
     with pytest.raises(verity_config.ConfigError):
         L.LLM.from_spec(_write(tmp_path, SPEC + "bogus = 1\n"))
-
-
-def _presets() -> list[dict]:
-    out = []
-    for p in sorted(BENCH_SPECS.glob("*.toml")):
-        doc = tomllib.loads(p.read_text())
-        if doc.get("schema") == "verity-bench/vllm-spec/v0" and doc["preset"].get("revision"):
-            out.append(doc["preset"])
-    return out
-
-
-@pytest.mark.parametrize("preset", _presets(), ids=lambda p: p["id"])
-def test_every_pinned_benchmark_preset_resolves_as_an_engine_spec(preset):
-    spec = ES.from_mapping({"schema": ES.SCHEMA, "model": preset["model"], "revision": preset["revision"],
-                            "engine": {"tensor_parallel_size": preset["gpu_count"],
-                                       "max_model_len": preset["engine_settings"]["max_model_len"]}})
-    pin = EnginePin.resolve(spec.model, spec.revision, world=spec.engine.tensor_parallel_size)
-    assert pin.case == preset["case"]

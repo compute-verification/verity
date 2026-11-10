@@ -1,7 +1,7 @@
 """A TP Commit's warm-up instrumented run is bounded staging's learn-only pass on every rank, as the single-rank Commit's
 (`pipeline.tp.warmup`, `acquire.sources.taps.warmup`): learn-only goes on for that run alone, the ranks' finalize binds, attributes,
-compares and replays nothing of it, and `bounded_warmup_<kind>.json` records each rank's pass.  Without it the warm-up was a record run:
-a learning step over the transient budget raised on every rank ('its plan was not pre-learned', cov-gm352 TP2 B8, r20261002-185311-7fa2).
+compares and replays nothing of it, and `bounded_warmup_<kind>.json` records each rank's pass.  Without it the warm-up is a record run:
+a learning step over the transient budget raises on every rank ('its plan was not pre-learned').
 The record runs that follow finalize with learn-only off and carry their bounded-staging record for the verdict.  CPU-only: the ranks
 are `TP2CaptureWorkerExtension`'s commit methods over a stand-in committer, and the LLM dispatches `collective_rpc` to them."""
 from __future__ import annotations
@@ -11,7 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
+from verity_vllm.acquire.committer_api import StepCommitment
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline.tp import warmup as WU
 
 
@@ -39,7 +40,7 @@ class _Com:
         learned = [0] if self.bounded and self.learn_only else []
         bs = {"enabled": self.bounded, "learn_only": self.learn_only, "learned_only_steps": learned, "learned_only_bytes": (4352 << 20) if learned else 0,
               "transient_peak_bytes": 0, "learn_budget_bytes": 4096 << 20, "plan_mismatches": 0}
-        return SimpleNamespace(steps=[SimpleNamespace(n_leaves=3, n_bytes=12, n_tensors=2)], run_root=(b"" if learned else b"\x01" * 32), root_ready_delay_s=0.0,
+        return SimpleNamespace(steps=[StepCommitment(0, b"", b"", 3, 12, 2, b"", 1.0, 1.5, 0)], run_root=(b"" if learned else b"\x01" * 32), root_ready_delay_s=0.0,
                                t_finalize_s=0.0, spans={"total_s": 0.0}, weight_registration=None, persistent_bytes=0, temporary_bytes_peak=0,
                                extra={"bounded_staging": bs, "native_collect": {"plans_cached": 5}, "pinned_pool_bytes": 1 << 20, "errors": []})
 

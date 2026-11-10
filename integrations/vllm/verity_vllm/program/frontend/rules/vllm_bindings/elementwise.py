@@ -6,11 +6,12 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, scalar_kind, shape
+from verity_vllm.program.frontend.rules.common import (and_mul_operands, call_args, dtype_is, from_rows, row_value, rows_of, scalar_kind,
+                                                      shape)
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
+from verity.ml.definitions.registry.dsv4_moe import limit_bits
 
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------
@@ -50,7 +51,7 @@ class ScalarTensorMulRule(OpRule):
         if ops is None:
             return f"neither operand is a scalar tensor (shapes {shape(ctx, node.args[0])} x {shape(ctx, node.args[1])})"
         x, sc = ops
-        r = _row_value(ctx, x, "x")
+        r = row_value(ctx, x, "x")
         if r:
             return r
         if not dtype_is(ctx, sc, BF16):
@@ -79,34 +80,53 @@ class GeluTanhAndMulRule(InPlaceRule):
     def targets(self):
         return targets_for("gelu_tanh_and_mul")
 
-    def registered_tables(self, ep, mode):
-        ts = self.targets()
-        return ("gelu_tanh_bf16",) if any(n.op == "call_function" and n.target in ts for n in ep.graph.nodes) else ()
-
     def applies(self, node, ctx):
-        out, x = node.args[:2]
-        r = _row_value(ctx, x, "x")
-        if r:
-            return r
-        if not isinstance(ctx.val(out), (Alloc, Coll)):
-            return "out is not an allocation/value"
-        xs, os_ = shape(ctx, x), shape(ctx, out)
-        if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
-            return f"out {os_} vs x {xs}"
-        return True
+        return and_mul_operands(node, ctx)
 
     def emit(self, node, ctx):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
         I = rows[0].type.n // 2
-        if ctx.registered_values:
-            fn, table = ctx.kind("gelu_tanh_mul_table", node, I=I), (ctx.table("gelu_tanh_bf16", node),)
-        else:
-            fn, table = ctx.kind("gelu_tanh_mul", node, I=I), ()
-        outs = [ctx.call(fn, r, *table, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        fn = ctx.kind("gelu_tanh_mul", node, I=I)
+        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
+
+
+class SiluAndMulWithClampRule(InPlaceRule):
+    """`_C.silu_and_mul_with_clamp(out!, x[.., 2I], limit, alpha, beta)` -> `silu_mul_clamp{I,LIMIT}` (SiluMulClamp_v1) per row; `out`
+    is rebound (mirrors SiluAndMul). SwiGLU-OAI's sigmoid scale and up bias (alpha != 1, beta != 0) have no Definition and are refused."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("SiluAndMulWithClamp[vllm]", 1, "in-place-binding",
+                    applies_to="_C.silu_and_mul_with_clamp(Tensor! out, x[.., 2I], float limit, float alpha=1., float beta=0.)",
+                    preconditions=("x is bf16 [.., 2I]", "out is an unwritten allocation (or value) [.., I]",
+                                   "limit is a positive finite bf16 value", "alpha = 1.0 and beta = 0.0"),
+                    evidence_domain="structural; numerics: SiluMulClamp_v1 (vLLM act_and_mul_kernel with HAS_CLAMP)")
+
+    def targets(self):
+        return targets_for("silu_and_mul_with_clamp")
+
+    def applies(self, node, ctx):
+        a = call_args(node)
+        if (a["alpha"], a["beta"]) != (1.0, 0.0):
+            return f"numerics_unregistered: alpha {a['alpha']}, beta {a['beta']}; SiluMulClamp_v1 is the clamp at alpha 1.0, beta 0.0"
+        try:
+            limit_bits(a["limit"])
+        except ValueError as e:
+            return f"numerics_unregistered: {e}"
+        if not ctx.vocab.has("silu_mul_clamp"):
+            return "numerics_unregistered: the vocabulary has no silu_mul_clamp (SiluMulClamp_v1{I,LIMIT})"
+        return and_mul_operands(node, ctx)
+
+    def emit(self, node, ctx):
+        a = call_args(node)
+        rows, lead = rows_of(ctx.coll(a["input"]))
+        I, LIMIT = rows[0].type.n // 2, float(a["limit"])
+        fn = ctx.kind("silu_mul_clamp", node, I=I, LIMIT=LIMIT)
+        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        ctx.rebind(a["result"], from_rows(outs, lead), self, what="out")
+        ctx.record(self, node, {"I": I, "LIMIT": LIMIT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 class Bf16ScalarChainRule(OpRule):
     """bf16 row-wise ops with a static Python-float constant: `aten.div.Tensor(x, C)` -> `bf16_div_scalar{N,C}`,
@@ -121,7 +141,7 @@ class Bf16ScalarChainRule(OpRule):
 
     def applies(self, node, ctx):
         x = node.args[0]
-        r = _row_value(ctx, x, "x")
+        r = row_value(ctx, x, "x")
         if r:
             return r
         if node.target is aten.tanh.default:
@@ -147,7 +167,7 @@ class Bf16ScalarChainRule(OpRule):
 
 
 def _softcap_member(node, ctx) -> str | None:
-    """[R15 dense / manifest] `aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
+    """`aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
     its module returns: the row names carry the member hint `out` (the manifest's `members_for` reads it; the div / tanh rows are the
     chain's interior).  Structural test only: the operand is a `aten.tanh` of a `aten.div.Tensor(_, C)` with the same C, in one module."""
     x = node.args[0]

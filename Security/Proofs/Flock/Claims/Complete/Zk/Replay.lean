@@ -1,6 +1,44 @@
-import Proofs.Flock.Claims.Complete.Zk.Walk
-import Proofs.Flock.Claims.Complete.Zk.Transfer
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.Walk
+import Flock.With.ZkEq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Transfer
 
 /-!
 # The masked replay passes (`Replay`)
@@ -12,6 +50,8 @@ ended at, every round retained (`RunZk.walk`), so the stream carries the rounds 
 replay at the run's oracle returns too (`replayWith_xfer`, from `Zk.replay` as `Zk.replayWith` at SHA-512,
 `zk_replayWith_std`): `replay_goal`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -47,14 +87,15 @@ theorem innerP_pre (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (la
 theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) (t₀ : Transcript) :
+    (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (t₀ : Transcript) :
     Ret ((repPZk (asksS resp) (Hashes.ofSha512 h) st sch tPad rep dom tr t cm0 extras pads ic extra lanePad
-      salt nonce).run t₀) fun pt => ∃ R rp t₁,
+      salt nonce prior words).run t₀) fun pt => ∃ R rp t₁,
         (Zk.replay st (Zk.PadLayout.new st.m st.kLog sch.k0) pt.1.proof ic.root).run (Transcript.init R dom) =
           .ok (rp, t₁) ∧ Prefix R pt.2.rounds := by
   unfold repPZk
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨zp, zc⟩ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨lp, lc⟩ _ _ => ?_
+  refine Replay.Ret.run_bind (Ret.true _) fun _ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨ss, T, sws⟩ _ _ => ?_
   refine Replay.Ret.run_bind (Ret.true _) fun ⟨lg, zl, rec⟩ s₄ _ => ?_
   refine Replay.Ret.run_bind (get_ret s₄) fun tr' s₅ ⟨h1, h2⟩ => ?_
@@ -70,15 +111,15 @@ theorem repPZk_replay (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The masked replay passes** from the rep's recorded rounds: the goal `Replay`. -/
-theorem replay_goal (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem replay_goal (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hR : JsonRT.RepShapedZk H rel) : Replay H rel := by
   intro o i hi r hr
-  obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, -, -, hrep⟩ := JsonRT.RunZk.walk S h64 hS hP hR o
+  obtain ⟨st, v, cm, e, streams, htabs, hsch, hss, hbytes, hstream, -, -, hrep⟩ := JsonRT.RunZk.walk h64 hS hP hR o
   rw [htabs] at hi
   obtain rfl : i = 0 := by simpa using hi
-  obtain ⟨p, ic, l, t', l', -, hzp, hst', hrun⟩ := hrep r hr
-  have hroot := (JsonRT.Ret.go (JsonRT.repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
-  obtain ⟨R, rp, t₁, hre, C, hC⟩ := JsonRT.Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
+  obtain ⟨p, ic, l, t', l', prior, ws, -, hzp, hst', hrun⟩ := hrep r hr
+  have hroot := (JsonRT.Ret.go (JsonRT.repPZk_fields _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun).2.2
+  obtain ⟨R, rp, t₁, hre, C, hC⟩ := JsonRT.Ret.go (repPZk_replay _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
   refine Replay.ok_val ?_
   have hlay : o.lay 0 = Zk.PadLayout.new (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog v.1.k0 := by
     simp [RunZk.lay, htabs, hsch]

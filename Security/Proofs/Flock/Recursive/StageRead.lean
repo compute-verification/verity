@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.Stage
+module
+
+public import Proofs.Flock.Recursive.Stage
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: V*'s stages at the wires V* reads
@@ -7,13 +24,15 @@ import Proofs.Flock.Recursive.Stage
 (`InnerRepCheck` pads a row port of `n` elements to `64 ⌈8 n / 64⌉` words and reads its first `128 n` bits), in no
 unit's `io`, so `VFull` fails there. `VFullR` and `VDecodesR` are the two at the wires some unit reads (`ReadW`). The
 transfer reads a commit string only at a wire where the layer disagrees with the openings' values, and a layer that
-agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is read, and the full draw draws its unit:
+agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is read, and the full sample samples its unit:
 
 * `sessions_stage_le_read`, `outerV_stage_le_read`, `zk_sessions_recursive_read`, `zk_sessions_recursive_fork_read`:
   `sessions_stage_le`, `outerV_stage_le`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork` at `VFullR` and
   `VDecodesR`, with the same bounds;
 * `vFullR_of_vFull`, `vDecodes_of_vDecodesR`: `VFull` gives `VFullR`, and `VDecodesR` gives `VDecodes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -25,7 +44,7 @@ variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type}
 
 /-- **A stage's transfer at V*'s sessions, at the read wires**: `sessions_stage_le` where every layer agreeing with the
 values `wv` on the read wires of the commit strings `Sk j` satisfies `Q`, and each read wire of `Sk j` is a wire of
-some unit. A layer failing `Q` disagrees with `wv` at a read wire, which every draw reads. -/
+some unit. A layer failing `Q` disagrees with `wv` at a read wire, which every sample reads. -/
 theorem sessions_stage_le_read
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -154,7 +173,6 @@ theorem vDecodes_of_vDecodesR {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.M
 /-- **The recursive audit is sound at the read wires**: `zk_sessions_recursive_full` at `VDecodesR` and `VFullR`, its
 transfer from `outerV_stage_le_read`, with the same bound. -/
 theorem zk_sessions_recursive_read
-    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -183,7 +201,7 @@ theorem zk_sessions_recursive_read
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
+  refine zk_sessions_recursive_upto zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
@@ -199,7 +217,6 @@ theorem zk_sessions_recursive_read
 /-- **The recursive audit is sound at the read wires, in fork form**: `zk_sessions_recursive_fork` at `VDecodesR` and
 `VFullR`, from `zk_sessions_recursive_read` at no finder budgets, with the same disjuncts and bound. -/
 theorem zk_sessions_recursive_fork_read
-    (hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -245,7 +262,7 @@ theorem zk_sessions_recursive_fork_read
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_read hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
+  refine (zk_sessions_recursive_read zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
     hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
     hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
   simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,

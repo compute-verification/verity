@@ -8,11 +8,11 @@ import pytest
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import b1, dense, hopper
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import fa2_softcap as F2S
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import b1, dense, hopper
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import fa2_softcap as F2S
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
@@ -67,6 +67,7 @@ def tanh_table():
     return words, lo
 
 
+@pytest.mark.slow
 def test_the_vectorised_tanh_is_mufu_tanh(tanh_table):
     from tests.properties import fa2_softcap_capture_gpu as S
 
@@ -132,8 +133,8 @@ def test_the_capture_compare_accepts_the_definitions_own_rows(tanh_table, tmp_pa
 
 @pytest.mark.parametrize("masked_from", [2, 0])
 def test_the_replay_row_kernel_is_the_definition(masked_from):
-    from verity_vllm.program.kernels import rows as R
-    from verity_vllm.program.kernels import softcap_rows as SR
+    from verity.ml.definitions.numerics import rows as R
+    from verity.ml.definitions.numerics import softcap_rows as SR
 
     rng = np.random.default_rng(20 + masked_from)
     T, NH, KVH, D, BN = 40, 4, 2, 16, 16
@@ -182,7 +183,7 @@ def test_the_builder_kind_binds_the_softcap_chain_only_with_fa2_masked_from():
 
 
 def test_the_partition_rule():
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "CAP": CAP, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"},
                "INV": {"fn": "Fa2InvSum_v1"}}

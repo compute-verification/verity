@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""`tools/verity/check/post_train.py [COMMIT] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM reference regression's
-manifest rebuilds on a landing of main.
+"""`tools/verity/check/post_train.py [COMMIT] [--attempt RID] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM
+reference regression's manifest rebuilds and the fast rows of record's neutrality on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
-about an hour of CPU in one process) run here instead, once per landing (Daniel, 3 Oct).  `research merge --push` starts
+about an hour of CPU in one process) run here instead, once per landing.  `research merge --push` starts
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
+After the rebuilds the same run rebuilds the fast rows of record's Programs and compares them with their pins (`verity-vllm
+neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
+fast row's Program without re-pinning it is a red: each row that moved or didn't build is named in the label beside the
+rebuilds' rows (`regression fail:<row>`), and @vllm, which owns the rows of record, is rung at once in the merge thread, as ci,
+with the run to read.  A carried verdict rings no one: the run it carries from rang.
+
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
-`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Its tree is checked
+`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Drive passes the check it landed
+on as `--attempt RID`, taken when RID ran on COMMIT or on the train COMMIT merges onto a moved main (its second parent): a landing
+with deferred steps has no passing check in the store when this starts.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
 VERITY_REGRESSION_REBUILD=1 and VERITY_STORE_REQUIRED=1, at nice 19.  `research run --on` returns at launch, so this fetches the
 run's records until they show its end (each POLL_S); then that check attempt is labelled `note=regression pass` or
@@ -23,7 +31,7 @@ is left alone unless --force.
 Jobs started here run one at a time (a lock in the temp directory: the cores are one slot), so a landing waits for the one before
 it.  When that one is labelled and the change between them touches none of the `verity-vllm` suite's inputs (`suites.py
 --changed`), its verdict is carried: the same value, with the same run as `--ref`, and no rebuild.  About three trains in four
-touch them (130 of 171 between 27 Sep and 3 Oct: 19 a day, 32 on the busiest), and a job takes one to two hours, so jobs queue:
+touch them (about 19 a day, 32 on the busiest day measured), and a job takes one to two hours, so jobs queue:
 one that waited, and finds main at a later landing, is labelled `note=regression superseded:<that landing's attempt>` and runs
 nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips `superseded:` and
 `inconclusive:`.
@@ -43,9 +51,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-MACHINE = "vy-nebius-1"
-#: node 1's guest cores; its check slots hold 8-95 and 128-159, and 160-191 is proofs' (infra, 4 Oct: 96-127 at nice 19)
-CORES = "96-127"
+#: node 2: its two 560 GB check slots hold all 120 of its cores, so the rebuilds run unpinned at nice 19 beside them, in the
+#: ~480 GB of its 1600 GB slice the slots leave
+MACHINE = "vy-nebius-2"
+CORES = ""
 BY = "regression"
 PREFIX = "regression "
 PASS = f"{PREFIX}pass"
@@ -54,10 +63,17 @@ SUPERSEDED = f"{PREFIX}superseded:"
 INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
+#: the neutrality tier's report, under the run's out/ (`neutrality_tier.sh`), and who is rung, by whom, when a row moved
+NEUTRALITY = Path("neutrality") / "neutrality.json"
+OWNER, SENDER = "@vllm", "ci"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-#: the run's bound on the machine: the rebuilds took 89 and 104 min on cores 96-127 beside other lanes' jobs (3 Oct; #39's is the
-#: longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
+#: the run's bound on the machine: a rebuild takes up to about 104 min on 32 cores beside other jobs; a run that outlives
+#: it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
+#: the run's memory, reserved on the machine (`research run --mem-gb`, waiting up to MEM_WAIT_S for it), and its xdist workers
+#: capped at MEM_GB // WORKER_GB: about 20 workers at ~28 GB each with nothing reserved, 570 GB, fill a node's slice and get
+#: other runs killed
+MEM_GB, WORKER_GB, MEM_WAIT_S = 200, 28, 3600
 #: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
 POLL_S = 60
 #: a runner that died before writing its end is waited for no longer than the run's bound and the runner's publish margin, twice
@@ -65,6 +81,9 @@ POLLS = (TIMEOUT_S + 1800) // POLL_S
 SLEEP = time.sleep
 ENDED = ("done", "failed", "cancelled")
 CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
+#: the trailer of drive's lock commit (`Driver._commit_locks`: `Lock records regenerated for ...`), which names the files it
+#: regenerated
+LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
 
 JOB = """set -u
@@ -72,13 +91,17 @@ out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
 uv run -q --locked --all-packages --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
-  integrations/vllm/tests/regression/expected > "$out/fetch-fixtures.json" || exit 1
+  integrations/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
 cd integrations/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
   {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
   --junitxml "$out/junit.xml" > "$out/pytest.log" 2>&1
 rc=$?
 tail -n 40 "$out/pytest.log"
+{pin}bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality" > "$out/neutrality.log" 2>&1
+n=$?
+tail -n 20 "$out/neutrality.log"
+[ $rc -ne 0 ] || rc=$n
 exit $rc
 """
 
@@ -87,18 +110,56 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True).stdout.strip()
 
 
-def check_attempt(commit: str, cwd: Path = ROOT) -> str | None:
+def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> str | None:
     """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
     `%(trailers)` doesn't read), else, for a commit on origin/main, the newest check that passed on its clean tree (`passed`): a
-    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit."""
-    m = CHECK_RE.search(git("log", "-1", "--format=%B", commit, cwd=cwd))
-    if m:
+    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit.
+
+    With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
+    commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
+    a train commit's own second parent is a PR's head, which no check of the train ran on): a landing made with `--defer` lands
+    while its check runs, or cancels it then, so no passed attempt is in the store to find."""
+    body = git("log", "-1", "--format=%B", commit, cwd=cwd)
+    m = CHECK_RE.search(body)
+    if m and attempt in (None, m.group(1)):
         return m.group(1)
     sha = git("rev-parse", "--verify", f"{commit}^{{commit}}", cwd=cwd, check=False)
     if not sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, "origin/main"], cwd=cwd,
                                  capture_output=True).returncode:
         return None
-    return passed(sha)
+    if attempt is None:
+        return passed(sha)
+    src = source_of(attempt)
+    checked = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M)
+    merged = checked and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd, check=False)
+    # drive's lock commit (`Lock records regenerated for ...`) names the lock run, which ran on its parent
+    locked = checked and LOCKS_RE.search(body) and git("rev-parse", "--verify", "-q", f"{sha}^1", cwd=cwd, check=False)
+    if src and src in (sha, merged, locked):
+        return attempt
+    print(f"post-train: {attempt} ran on {src[:12] if src else 'no commit its attempt or run record names'}, which is neither "
+          f"{sha[:12]}, the train it merged (its second parent, with `Checked: {attempt}`), nor the train its lock records were "
+          "regenerated on (its parent, with `Regenerated:`), so it is no check of this landing", file=sys.stderr)
+    return None
+
+
+def source_of(rid: str) -> str | None:
+    """The commit run ``rid`` checked: its attempt's clean source in the store, else its run record's (`research status RID
+    --json`'s `tree_sha`), for a check still running or one whose attempt hasn't reached the store."""
+    try:
+        from research.store.local import LocalStore
+
+        store = LocalStore()
+        if store.remote is not None:
+            store.refresh(attempts_only=True)
+        rows = store.index.sql("SELECT source_commit FROM attempts WHERE id = ? AND source_dirty = 0", (rid,))
+        if rows and rows[0][0]:
+            return rows[0][0]
+    except Exception as e:  # noqa: BLE001  (the run record is read instead)
+        print(f"post-train: the store can't be read for {rid}'s source ({type(e).__name__}: {e})", file=sys.stderr)
+    try:
+        return json.loads(research("status", rid, "--json").stdout)["runs"][0].get("tree_sha") or None
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return None
 
 
 def passed(sha: str) -> str | None:
@@ -122,25 +183,58 @@ def _order(row: str) -> tuple[int, int, str]:
     return (0, int(row[1:]), "") if re.fullmatch(r"r\d+", row) else (1, 0, row)
 
 
-def verdict(junit: Path, rc: int | None = None, cut: str | None = None) -> str:
-    """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), or why
-    there is nothing to read.  A skip (a check `fixtures.toml` retires on a row) is neither.  A run cut off before its end (``cut``:
-    `timeout`, `cancelled`) is `regression inconclusive:<cut>`, whatever it wrote."""
+def moved(report: Path) -> list[str] | None:
+    """The rows of record the neutrality tier's ``report`` names not neutral (a pinned Program digest not reproduced, or a Build
+    that didn't finish); None when there is no report."""
+    if not report.is_file():
+        return None
+    return sorted(r for r, e in json.loads(report.read_text())["rows"].items() if not e["neutral"])
+
+
+def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: Path | None = None) -> str:
+    """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), then each
+    fast row of record the neutrality tier's ``report`` names (`moved`), then why there is nothing to read.  A skip (a check
+    `fixtures.toml` retires on a row) is neither.  A run cut off before its end (``cut``: `timeout`, `cancelled`) is
+    `regression inconclusive:<cut>`, whatever it wrote."""
     if cut:
         return INCONCLUSIVE + cut
-    if not junit.is_file():
-        return f"{FAIL}no junit (run rc={rc})"
-    failed, passed = [], 0
-    for case in ET.parse(junit).iter("testcase"):
-        if case.find("failure") is None and case.find("error") is None:
-            passed += case.find("skipped") is None
-            continue
-        name = case.get("name", "")
-        m = ROW_RE.search(name)
-        failed.append(m.group(1) if m else name.removeprefix("test_").removesuffix("_refusal_reproduces"))
-    if failed:
-        return FAIL + ",".join(sorted(set(failed), key=_order))
-    return PASS if passed else f"{FAIL}nothing ran (run rc={rc})"
+    failed, why, passed = [], [], 0
+    if junit.is_file():
+        for case in ET.parse(junit).iter("testcase"):
+            if case.find("failure") is None and case.find("error") is None:
+                passed += case.find("skipped") is None
+                continue
+            name = case.get("name", "")
+            m = ROW_RE.search(name)
+            failed.append(m.group(1) if m else name.removeprefix("test_").removesuffix("_refusal_reproduces"))
+        why += [] if failed or passed else ["nothing ran"]
+    else:
+        why.append("no junit")
+    rows = moved(report) if report is not None else []
+    why += ["no neutrality report"] if rows is None else []
+    named = [*sorted(set(failed), key=_order), *(rows or []), *why]
+    return FAIL + ",".join(named) + (f" (run rc={rc})" if why else "") if named else PASS
+
+
+def ring(sha: str, attempt: str | None, rid: str, rows: list[str] | None, dry_run: bool = False) -> None:
+    """Ring OWNER at once in the merge thread, as SENDER, when the run's neutrality tier moved ``rows`` or left no report (None):
+    the rows of record are OWNER's, and a landing that moved one is re-pinned or fixed forward long before the daily sweep."""
+    what = f"moved {', '.join(rows)}" if rows else "ran and left no report, so it compared nothing (out/neutrality/setup.fail)"
+    text = (f"{OWNER} post-train: the fast neutrality tier at landing {sha[:12]} (check {attempt}) {what}. Run {rid}: "
+            f"`research fetch {rid} --all`; out/neutrality/neutrality.json names each Program's pinned and built digests. A row "
+            "moved on purpose is re-pinned (`verity-vllm neutrality ROW --update`), else its landing is fixed forward.")
+    if dry_run:
+        print(f"post-train: --dry-run, so {OWNER} is not rung: {text}")
+        return
+    p = research("msg", "send", "--as", SENDER, "--thread", merge_thread(), "--to", OWNER, "--quiet", "--report", "--text", text)
+    if p.returncode:
+        print(f"post-train: ringing {OWNER} failed: {(p.stderr or p.stdout).strip()[-300:]}", file=sys.stderr)
+
+
+def merge_thread() -> str:
+    from research.monitors import MERGE_THREAD
+
+    return MERGE_THREAD
 
 
 def research(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess:
@@ -179,13 +273,42 @@ def carried(sha: str, tree: Path) -> dict | None:
     return {**lab, "from": prev}
 
 
+def queued_path() -> Path:
+    """Beside LOCK: each job's landing and the check drive landed it on (`--attempt`), so a job that waited finds the tip's."""
+    return LOCK.with_name(LOCK.stem + ".attempts.json")
+
+
+def note_attempt(sha: str, attempt: str, keep: int = 200) -> None:
+    """Record ``sha``'s attempt for `later_landing`: drive's landings carry no `Check:` line, and drive cancels a train's check
+    once it lands, so `check_attempt` finds no attempt for main's tip, and without this record no queued job is ever
+    superseded."""
+    p = queued_path()
+    with open(p.with_suffix(".lock"), "a") as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            got = json.loads(p.read_text())
+        except (OSError, ValueError):
+            got = {}
+        got = {k: v for k, v in got.items() if k != sha}
+        got[sha] = attempt
+        p.write_text(json.dumps(dict(list(got.items())[-keep:])))
+
+
+def queued_attempt(sha: str) -> str | None:
+    try:
+        return json.loads(queued_path().read_text()).get(sha)
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def later_landing(sha: str, cwd: Path = ROOT) -> str | None:
-    """The attempt of origin/main's tip when that tip is a landing after ``sha``, else None."""
+    """The attempt of origin/main's tip when that tip is a landing after ``sha`` (its `Check:` line or passed check, else the
+    attempt its own post-train job recorded, `note_attempt`), else None."""
     git("fetch", "-q", "origin", "main", cwd=cwd)
     tip = git("rev-parse", "origin/main", cwd=cwd)
     if tip == sha or subprocess.run(["git", "merge-base", "--is-ancestor", sha, tip], cwd=cwd, capture_output=True).returncode:
         return None
-    return check_attempt(tip, cwd=cwd)
+    return check_attempt(tip, cwd=cwd) or queued_attempt(tip)
 
 
 def _status(p: Path) -> dict:
@@ -203,21 +326,29 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="post_train.py", description=__doc__.split("\n\n")[1])
     ap.add_argument("commit", nargs="?", default="origin/main", help="a landing of main (default origin/main)")
     ap.add_argument("--on", default=MACHINE, metavar="MACHINE", help=f"where the rebuilds run (default {MACHINE})")
-    ap.add_argument("--cores", default=CORES, metavar="LIST", help=f"`taskset -c LIST` for them (default {CORES}; '' for none)")
-    ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12)")
+    ap.add_argument("--cores", default=CORES, metavar="LIST",
+                    help=f"`taskset -c LIST` for them (default {CORES or 'none'}; '' for none)")
+    ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12; at most --mem-gb "
+                                                                f"// {WORKER_GB})")
+    ap.add_argument("--mem-gb", type=int, default=MEM_GB, help=f"the memory the run reserves on the machine (default {MEM_GB})")
     ap.add_argument("--project", default="verity")
     ap.add_argument("--force", action="store_true", help="run even when the attempt has its label, or could carry the one before's")
     ap.add_argument("--dry-run", action="store_true", help="run, and print the label instead of writing it (any commit: a branch's too)")
     ap.add_argument("--run", metavar="RID", help="a run this job launched for the commit before (its caller ended first): wait for "
                                                   "it and label from it instead of launching another")
+    ap.add_argument("--attempt", metavar="RID", help="the check the landing was admitted on (drive's `landed ... (check RID)`): "
+                                                     "labelled when it ran on COMMIT or on the train COMMIT merged onto main")
     a = ap.parse_args(argv)
     git("fetch", "-q", "origin", "main")
     sha = git("rev-parse", "--verify", f"{a.commit}^{{commit}}")
-    attempt = check_attempt(sha)
+    attempt = check_attempt(sha, attempt=a.attempt)
     if not attempt and not a.dry_run:
-        print(f"post-train: {sha[:12]} has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main",
-              file=sys.stderr)
+        why = (f"is no landing of main on {a.attempt}; nothing labelled" if a.attempt else
+               "has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main")
+        print(f"post-train: {sha[:12]} {why}", file=sys.stderr)
         return 2
+    if attempt and not a.dry_run:
+        note_attempt(sha, attempt)
     with open(LOCK, "a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -251,9 +382,10 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
         rid = a.run or new_run_id()
         if not a.run:
             print(f"post-train: {sha[:12]} (check {attempt}) on {a.on}, cores {a.cores or 'any'}: run {rid}", flush=True)
+            workers = max(1, min(a.workers, a.mem_gb // WORKER_GB))
             p = research("run", "--id", rid, "--on", a.on, "--project", a.project, "--stage", "post-train-regression", "--timeout",
-                         str(TIMEOUT_S), "--source", str(tree), "--cwd", "source", "--declared-output", "out/*", "--",
-                         "bash", "-c", job(a.cores, a.workers), cwd=tree)
+                         str(TIMEOUT_S), "--mem-gb", str(a.mem_gb), "--mem-wait", str(MEM_WAIT_S), "--source", str(tree),
+                         "--cwd", "source", "--declared-output", "out/*", "--", "bash", "-c", job(a.cores, workers), cwd=tree)
             print((p.stdout + p.stderr)[-4000:], flush=True)
             if p.returncode:
                 print(f"post-train: run {rid} was not launched; nothing labelled", file=sys.stderr)
@@ -273,13 +405,21 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
         f = research("fetch", rid, "--all", "--on", a.on, cwd=tree)
         print((f.stdout + f.stderr).strip()[-1000:], flush=True)
         cut = ("timeout" if st.get("timed_out") else "cancelled") if st.get("state") == "cancelled" else None
-        v = verdict(runs_root() / rid / "out" / "junit.xml", st.get("rc"), cut)
+        out = runs_root() / rid / "out"
+        v = verdict(out / "junit.xml", st.get("rc"), cut, out / NEUTRALITY)
+        rows = moved(out / NEUTRALITY)
+        # the tier's own log, without its report: it ran and failed before comparing (a job that ended before it rings no one)
+        rung = not cut and (bool(rows) or (rows is None and (out / "neutrality.log").is_file()))
         if a.dry_run:
             print(f"post-train: {sha[:12]}: --dry-run, so {attempt or 'no check attempt'} gets no note={v} (ref {rid})")
+            if rung:
+                ring(sha, attempt, rid, rows, dry_run=True)
             return 0 if v == PASS else 1
         lab = research("data", "label", attempt, "note", v, "--by", BY, "--ref", rid)
         print((lab.stdout + lab.stderr).strip()[-1000:])
         print(f"post-train: {attempt} ({sha[:12]}): note={v} (ref {rid})")
+        if rung:
+            ring(sha, attempt, rid, rows)
         return 0 if lab.returncode == 0 and v == PASS else 1
     finally:
         git("worktree", "remove", "--force", str(tree), check=False)

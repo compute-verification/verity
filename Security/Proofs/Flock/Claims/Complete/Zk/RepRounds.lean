@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Replay.RepRounds
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Replay.RepRounds
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Each masked rep records a round, each of at most `65536` coins (`RepRoundsZk`)
@@ -20,6 +24,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 * The `--zk` schedules squeeze fewer than `65536` coins (`zkSchedule_small`), and a masked case's table has at most
   1,024 regions (`CaseZk.regions`), so at most 2,050 claims: `repRoundsZk_goal`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -125,17 +131,6 @@ theorem get_keeps (B : ℕ) : (keepS B).R (get : TMW PS Transcript) get := by
   obtain ⟨⟨-, rfl⟩, rfl⟩ := h
   exact Keeps.same rfl
 
-theorem liftV_keeps (B : ℕ) {α : Type} (v : V α) :
-    (keepS B).R (StateT.lift (monadLift v : PS α) : TMW PS α) (StateT.lift (monadLift v : PS α)) := by
-  intro t l a t' l' e
-  change ((monadLift v : PS _) >>= fun a => Pure.pure (a, t)).go l = _ at e
-  obtain ⟨b, l₁, e1, e2⟩ := go_bind_ok e
-  rw [monadLift_go] at e1
-  simp only [Prod.mk.injEq] at e1
-  obtain ⟨-, rfl⟩ := e1
-  cases e2
-  exact Keeps.same rfl
-
 /-- A computation of the pure session, lifted to the transcript, keeps its rounds. -/
 theorem liftPS_keeps (B : ℕ) {α : Type} (y : PS α) : (keepS B).R (StateT.lift y : TMW PS α) (StateT.lift y) := by
   intro t l a t' l' e
@@ -157,14 +152,6 @@ theorem sampleKP_keeps (resp : ℕ → Claims.Msg) {B : ℕ} (h2 : 2 ≤ B) :
     (keepS B).R (sampleKP (asksS resp)) (sampleKP (asksS resp)) := by
   unfold sampleKP
   sim_walk [squeezeP_keeps resp _ _ h2]
-
-theorem zerocheckPZk_keeps (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
-    (h : Array F128) (tr : Trace) {B : ℕ} (h6 : 6 ≤ B) (hm : m - 13 ≤ B) :
-    (keepS B).R (zerocheckPZk (asksS resp) m digest cap root lay h tr)
-      (zerocheckPZk (asksS resp) m digest cap root lay h tr) := by
-  unfold zerocheckPZk sampleVecP
-  sim_walk [squeezeP_keeps resp _ _ h6, squeezeP_keeps resp _ _ hm, sampleP_keeps resp (by omega : 1 ≤ B),
-    label_keeps, absorbBytes_keeps, absorbSlice_keeps, absorbF_keeps]
 
 theorem lincheckPZk_keeps (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) {B : ℕ} (h1 : 1 ≤ B) :
@@ -408,19 +395,26 @@ theorem zerocheckPZk_grows (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap roo
   refine Grows.bind_left (squeezeP_grows resp _ 6 (by decide) h6) fun _ _ => Grows.of_keeps ?_
   sim_walk [squeezeP_keeps resp _ _ hm, sampleP_keeps resp (by omega : 1 ≤ B), absorbSlice_keeps, absorbF_keeps]
 
+theorem rankCheckP_keeps (B m kLog : ℕ) (prior : Array (List F128)) (words : List ℕ) :
+    (keepS B).R (rankCheckP m kLog prior words : TMW PS Unit) (rankCheckP m kLog prior words) := by
+  unfold rankCheckP
+  sim_walk [get_keeps B]
+
 /-- **A masked rep adds a round and keeps the rounds small**, given `Zk.Q`, `m - 13`, its claims, `n + 1` and every
 level's `q + 1` at most `B`. -/
 theorem repPZk_grows (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) {B : ℕ} (hQ : Zk.Q ≤ B) (hm : st.m - 13 ≤ B) (hx : extras.size + 2 ≤ B)
-    (hn : sch.n + 1 ≤ B) (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) :
+    (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) {B : ℕ} (hQ : Zk.Q ≤ B)
+    (hm : st.m - 13 ≤ B) (hx : extras.size + 2 ≤ B) (hn : sch.n + 1 ≤ B)
+    (hq : ∀ j, (sch.levels.getD j default).q + 1 ≤ B) :
     Grows B 1 (repPZk (asksS resp) (Hashes.ofSha512 h) st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt
-      nonce) fun _ => True := by
+      nonce prior words) fun _ => True := by
   have hB : 168 ≤ B := hQ
   unfold repPZk
   refine Grows.bind_left (zerocheckPZk_grows resp _ _ _ _ _ _ _ (by omega) hm) fun ⟨zp, zc⟩ _ => ?_
   refine Grows.bind_keeps (lincheckPZk_keeps resp _ _ _ _ _ _ (by omega)) fun ⟨lp, lc⟩ => ?_
+  refine Grows.bind_keeps (rankCheckP_keeps B _ _ _ _) fun _ => ?_
   refine Grows.bind_keeps (ringSwitchP_keeps resp _ _ (by omega) ?_) fun ⟨ss, T, sws⟩ => ?_
   · simp only [Array.size_append, abcClaims, List.size_toArray, List.length_cons, List.length_nil]
     omega
@@ -482,7 +476,7 @@ theorem _root_.FlockComplete.CaseZk.regions (c : CaseZk H rel) :
 /-- **Each masked rep records a round, each of at most `65536` coins** (`RepRoundsZk`). -/
 theorem repRoundsZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) :
     RepRoundsZk H rel := by
-  intro c st hst v hv rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce hex
+  intro c st hst v hv rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws hex
   obtain ⟨st', hst', hspec, hm1, hm2⟩ := c.table
   obtain ⟨st'', hst'', hreg⟩ := c.regions
   rw [hst'] at hst hst''
@@ -495,7 +489,7 @@ theorem repRoundsZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
   rw [hm] at hv
   obtain ⟨hn, hq⟩ := zkSchedule_small hm1 hm2 hv
   rintro l ⟨p, t'⟩ l' hrun
-  obtain ⟨⟨hs, hsz⟩, -⟩ := repPZk_grows c.resp _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (B := 65536) (by decide)
+  obtain ⟨⟨hs, hsz⟩, -⟩ := repPZk_grows c.resp _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (B := 65536) (by decide)
     (by simp [Setup.ofCircuit]; omega) (by omega) hn hq _ l _ _ _ hrun
   exact ⟨show 0 < t'.rounds.size by simp [Transcript.init] at hsz; omega, hs (by simp [CoinsLe, Transcript.init])⟩
 

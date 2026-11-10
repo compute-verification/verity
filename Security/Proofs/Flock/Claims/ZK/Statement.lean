@@ -1,4 +1,40 @@
-import Proofs.Flock.Claims.Prob
+module
+
+public import Definitions.Claims
+public import Proofs.Flock.Claims.Prob
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Zero knowledge against a malicious verifier: what the proofs add to the spec's `ZKmalR`
@@ -12,6 +48,8 @@ every coin. This module adds:
 * **The worst-case cost** (`SimCostLe`), beside the spec's expected `SimCost`, which it implies (`SimCostLe.simCost`).
 * What `findColl` finds (`findColl_ne_none_iff`, `findColl_collision`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -106,3 +144,19 @@ theorem findColl_collision (H : Msg → Msg) : ∀ l : List (Msg × Msg), (∀ p
           exact findColl_collision H l (fun p hp => hl p (List.mem_cons_of_mem _ hp)) u v h
 
 end Claims.ZKMal
+
+namespace Claims.Flock
+
+/-- **Flock's `ZK` at a given prover and simulator**: what `Claims.Flock.ZK` says of a masked record, at the record's
+reference prover and simulator (`ZK_iff_at`), stated at any. The proofs prove it at a committed-coin protocol's prover,
+which is a masked record's reference prover where the protocol's messages are the record's (`ZKMal.Proto.Honest`,
+`ZKMal.zk_zkOf`). -/
+def ZKAt {Coin Col T N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (D : Deploy Coin Col T) (P : Wit → Prover (N × Ω)) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (R D.parse) S εzk γ
+
+theorem ZK_iff_at {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    (H : Msg → Msg) (D : ZkDeploy Coin Col T) (εzk γ : Msg → ℝ) :
+    ZK H D εzk γ ↔ ZKAt H D.toDeploy D.prover D.S εzk γ := Iff.rfl
+
+end Claims.Flock

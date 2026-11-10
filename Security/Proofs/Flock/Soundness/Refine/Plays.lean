@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Refine.Run
-import Proofs.Flock.Soundness.Game.Interleave
+module
+
+public import Proofs.Flock.Soundness.Refine.Run
+public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Runs compose
@@ -9,6 +13,8 @@ these build a run of any model program step by step. `Plays.interleave_first` ru
 the first one finished before the second one moves, which is how the executable replays a table's two reps, each on its
 own stream.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

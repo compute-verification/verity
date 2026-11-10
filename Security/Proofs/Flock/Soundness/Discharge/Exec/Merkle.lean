@@ -1,5 +1,14 @@
-import Proofs.Flock.Soundness.ExecTemplate
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.ExecTemplate
+public import Proofs.Flock.Soundness.Refine.Salted
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The leaf scheme of each table flock-verify sets up (`hms`)
@@ -17,6 +26,8 @@ tags' `merkleLeaf`, and `Stmt.setupH` takes its Merkle scheme from that id (`Mer
   `merkleLeaf_circuitTypes`), each table's Merkle scheme is `hm96Sha512`.
 * `accepts_tables_hm96_of_leaf`: `accepts_tables_hm96` with `hms` discharged.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -367,6 +378,7 @@ theorem setupH_merkle_untyped {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h
@@ -429,6 +441,7 @@ theorem setupH_merkle_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
   obtain ⟨hk, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jpD] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨pin, hpin, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
@@ -496,7 +509,7 @@ local notation "𝔽" => FlockLevel3.GF128
 `accepts_tables_hm96` with `hms` discharged by `setupH_tagsAt_hm96`. -/
 theorem accepts_tables_hm96_of_leaf {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
     (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
         (∃ d, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition

@@ -1,4 +1,4 @@
-"""Automatic stage telemetry for the sweep runner (R16 BRIEF §5 / §10, lane sys).
+"""Automatic stage telemetry for the sweep runner.
 
 One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VERITY_TIMELINE`): every process the runner starts
 (row_pod.sh itself, commit_delta, m1_capture, run_config's stages) appends `start` / `end` events with a wall-clock timestamp
@@ -7,13 +7,13 @@ One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VER
     {"t": 1789875600.123, "utc": "...", "proc": "commit_delta", "pid": 123, "stage": "engine.build", "ev": "end", "s": 41.2,
      "hot": false, "engine_reused": false, "restart_reason": "fresh process", ...}
 
-Fields every runner log must carry (BRIEF §10): hot/cold process (`hot`), engine reused or restarted (`engine_reused`) + reason
+Fields every runner log must carry: hot/cold process (`hot`), engine reused or restarted (`engine_reused`) + reason
 (`restart_reason`), compile/warmup time (`prep.*` stages), workload/Commit time (`work.*`), offline validation time (`validate.*`).
 
     verity-vllm timeline report <timeline.jsonl> [--json out.json] [--md out.md]
     verity-vllm timeline mark <timeline.jsonl> <proc> <stage> <start|end|mark> [k=v ...]
 
-`report` folds the events into the BRIEF §5 table (process/model startup · preparation · workload · validation · closure) from the
+`report` folds the events into the stage table (process/model startup · preparation · workload · validation · closure) from the
 stage-name prefixes below, counts engine starts vs reuses and lists the restart reasons.  Overlapping spans are NOT summed into
 elapsed time: every category reports both its summed span time and the union of its spans.
 """
@@ -30,11 +30,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
+from verity_vllm import settings
 from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/timeline/v1"
 
-# BRIEF §5 categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)
+# stage categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)
 CATEGORIES: list[tuple[str, tuple[str, ...]]] = [
     ("startup", ("engine.build", "engine.load", "process.start", "startup.")),
     ("preparation", ("prep.", "warmup.", "compile.", "graph.", "committer.setup", "ext.", "native.")),
@@ -66,7 +67,7 @@ class Timeline:
 
     @classmethod
     def from_env(cls, proc: str, **defaults: Any) -> "Timeline":
-        return cls(os.environ.get("VERITY_TIMELINE") or None, proc=proc, **defaults)
+        return cls(settings.VERITY_TIMELINE, proc=proc, **defaults)
 
     @property
     def enabled(self) -> bool:
@@ -147,7 +148,7 @@ def _union(spans: list[tuple[float, float]]) -> float:
 
 
 def last_attempt(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
-    """[R16 sys SYS-01c] The file is append-only across attempts of the same row (reruns, retries, Commit-only repeats), and a report over
+    """The file is append-only across attempts of the same row (reruns, retries, Commit-only repeats), and a report over
     all of them adds every attempt's build / replay together (a 2 h window with 7 engine starts for a 100 s Commit).  The LAST attempt is
     what the row's table is about: events from the last `row start` mark of row_pod on (the python stages write inside that window), plus
     nothing before it.  Returns (events, attempts_seen); a file without a row envelope is one attempt."""
@@ -158,7 +159,7 @@ def last_attempt(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], in
 
 
 def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, Any]:
-    """Pair start/end events per (proc, pid, stage) into spans; fold into the BRIEF §5 categories; count engine starts/reuses.
+    """Pair start/end events per (proc, pid, stage) into spans; fold into the stage categories; count engine starts/reuses.
     `attempt="last"` (default) reports the last row attempt in an append-only file; `"all"` folds every attempt together."""
     attempts_seen = 1
     if attempt == "last":
@@ -184,7 +185,7 @@ def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, 
     leaf = [s for s in spans if s not in envelope]
     # a category's time = union of its LEAF spans that have no finer child span of the same category inside them (avoid double counting
     # `commit.commit_delta` (bash, whole process) + `engine.build` (python, inside it)): keep spans not strictly containing another span
-    # [SYS-06] a span marked `par` (row_pod's concurrent Build derives) is a leaf by construction: it may overlap -- even strictly
+    # A span marked `par` (row_pod's concurrent Build derives) is a leaf by construction: it may overlap -- even strictly
     # contain -- a sibling that ran beside it, and must not be read as that sibling's wrapper.
     def contains(a: dict, b: dict) -> bool:
         if a["fields"].get("par"):
@@ -228,7 +229,7 @@ def report_md(rep: dict[str, Any], title: str = "") -> str:
              + (f"attempt {rep.get('attempt')} of {rep.get('attempts_in_file')} in the file · " if rep.get('attempts_in_file', 1) > 1 else "") +
              f"engine starts **{rep['engine']['starts']}** (build s {[round(x, 1) for x in rep['engine']['build_s']]}) · engine reuses **{rep['engine']['reuses']}** · "
              f"restart reasons {rep['engine']['restart_reasons']} · hot {rep['engine']['hot_values']}", "",
-             "| BRIEF §5 stage | spans | summed s | union s | share of elapsed | finest stages (s) |", "|---|---:|---:|---:|---:|---|"]
+             "| stage | spans | summed s | union s | share of elapsed | finest stages (s) |", "|---|---:|---:|---:|---:|---|"]
     el = rep.get("elapsed_s") or 0
     for k, c in rep["categories"].items():
         st = ", ".join(f"{n} {v:.1f}" for n, v in sorted(c["stages"].items(), key=lambda kv: -kv[1])[:8])
@@ -251,7 +252,7 @@ def _utc(s: str) -> float:
 
 
 def derive_from_logs(row_dir: Path) -> dict[str, Any] | None:
-    """Rows run by a runner WITHOUT the timeline (r15-int-6b / r16-int-1): the row's stages.txt is itself timestamped -- a `release <tag> <utc>`
+    """Rows run by a runner WITHOUT the timeline: the row's stages.txt is itself timestamped -- a `release <tag> <utc>`
     line at every attempt start, then `<stage> <verdict> <utc> ... wall=<N>s` per stage (row_pod verdict()). The LAST attempt is reported,
     plus commit.log's own measured lines (engine build, weight registration). Labelled `derived`."""
     stages_txt = row_dir / "stages.txt"
@@ -290,7 +291,7 @@ def derive_from_logs(row_dir: Path) -> dict[str, Any] | None:
 
 def collect(dirs: list[Path]) -> dict[str, Any]:
     """One table over many rows: per row the §5 categories, engine starts/reuses and hot/cold from `timeline*.jsonl` when the runner wrote
-    one, else the log-derived envelopes; totals over the set (the coordinator's 'engine starts vs reuses as they accumulate')."""
+    one, else the log-derived envelopes; totals over the set (engine starts vs reuses as they accumulate)."""
     rows: list[dict[str, Any]] = []
     for d in dirs:
         if not d.is_dir():
@@ -300,7 +301,7 @@ def collect(dirs: list[Path]) -> dict[str, Any]:
             tls = sorted(row_dir.glob("timeline*.jsonl"), key=lambda p: p.stat().st_mtime)
             if tls:
                 for tl in tls:
-                    rep = report(read(tl))            # last attempt in an append-only file (SYS-01c)
+                    rep = report(read(tl))            # last attempt in an append-only file
                     rows.append({"row": row_dir.name, "source": tl.name, "measured": True, "elapsed_s": rep["elapsed_s"],
                                  "attempts_in_file": rep["attempts_in_file"],
                                  "categories": {k: v["union_s"] for k, v in rep["categories"].items()}, "engine": rep["engine"],
@@ -370,7 +371,7 @@ class MarkOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class ReportOptions:
-    "fold a timeline into the BRIEF §5 table"
+    "fold a timeline into the stage table"
 
     path: str = option("path")
     json: str | None = option("--json", default=None)

@@ -1,6 +1,41 @@
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.Complete.Sim
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.Complete.Sim
+import Flock.With.SimVerify
+import Flock.With.SimWalk
 import Flock.With.SimZk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The honest masked run as a pure session
@@ -9,6 +44,8 @@ The plain prover's simulation (`simS`, `Complete/Sim.lean`) on the masked prover
 related to its pure run (`zerocheckPZk_sim`, …, `sessionPZk_sim`), and the honest masked run's sends are the pure
 masked session's bodies (`sessionSZk`, `honestRunZk_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -68,19 +105,20 @@ theorem innerP_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (
 
 theorem repPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (st : Setup) (sch : Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
-    (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
+    (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List F128)) (words : List ℕ) :
     ((simS H resp).st Transcript).R
-      (repPZk asks Hashes.pi st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce)
+      (repPZk asks Hashes.pi st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words)
       (repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st sch tPad rep dom tr t cm0 extras pads ic extra lanePad
-        salt nonce) := by
-  unfold repPZk
+        salt nonce prior words) := by
+  unfold repPZk rankCheckP
   sim_walk [zerocheckPZk_sim H resp, lincheckPZk_sim H resp, ringSwitchP_sim H resp, ligeritoPZk_sim H resp,
     innerP_sim H resp]
 
 theorem sessionPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
-    (tabs : Array Setup) (trs : Array Trace) (tape : TapeZk) :
-    (simS H resp).R (sessionPZk asks Hashes.pi spec tabs trs tape)
-      (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs trs tape) := by
+    (tabs : Array Setup) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk) :
+    (simS H resp).R (sessionPZk asks Hashes.pi spec tabs words trs tape)
+      (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape) := by
   unfold sessionPZk
   sim_walk [simS_link H resp, commitPZk_sim H resp, innerCommitP_sim H resp, repPZk_sim H resp,
     recordJson_sim H resp]
@@ -89,7 +127,8 @@ theorem sessionPZk_sim (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
 sends' bodies. -/
 def sessionSZk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt)
     (w : Claims.Flock.Wit) (ω : TapeZk) : Except String (String × Array ByteArray) × Array Claims.Msg :=
-  (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (tracesOf sts w) ω).go #[]
+  (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w)
+    ω).go #[]
 
 /-- **The honest masked run is the pure masked session's**: its sends are the session's bodies, each of tag `0`, and its
 last message the session's record and proof files after the statement. -/
@@ -98,15 +137,16 @@ theorem honestRunZk_eq (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Cla
     (hs : setupOf true x = some (s, spec, sts)) {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : sessionSZk H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (rec, pfs), bs)) :
     honestRunZk H x w ω r = (bs.toList.map (List.cons 0), Final.encode ⟨x, rec, pfs⟩) := by
-  obtain ⟨bs', h1, h2⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq r j).bytes) spec (tabsOf sts) (tracesOf sts w) ω
-    #[]
+  obtain ⟨bs', h1, h2⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq r j).bytes) spec (tabsOf sts)
+    (MaskRank.masksOf sts) (tracesOf sts w) ω #[]
   unfold sessionSZk at hS
   rw [hS] at h1 h2
   dsimp only at h1 h2
   unfold honestRunZk progZk
   rw [hs]
   dsimp only
-  change (PI.bind (sessionPZk asks Hashes.pi spec (tabsOf sts) (tracesOf sts w) ω).run _).sim _ _ 0 = _
+  change (PI.bind (sessionPZk asks Hashes.pi spec (tabsOf sts) (MaskRank.masksOf sts) (tracesOf sts w) ω).run _).sim
+    _ _ 0 = _
   rw [PI.sim_bind]
   have h1' := h1
   simp only [Array.size_empty] at h1'

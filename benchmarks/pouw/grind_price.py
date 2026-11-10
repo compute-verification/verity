@@ -1,9 +1,9 @@
-"""The price of hashed seeds' grinding (GRIND, decision 112; Derived): ε_grind per family, model, regime and kind.
+"""The price of hashed seeds' grinding (Derived): ε_grind per family, model, regime and kind.
 
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries
-draws T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
+samples T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
 a scope's gain is L − κ·U (lucky and unlucky savings); outside δ every seed group realizes at most
 
     π* = ln(T·M/δ) / θ
@@ -31,13 +31,14 @@ must exceed 3.
 **h sensitivities.** At h bits a unit (compile's unit, a tile), π* = log₂(T/δ)/h tiles a seed group; h = 0.415 is
 p = ¾'s log₂(4/3).
 
-**Deployed attention's floor (ATTN-NOISE, note:compute-accounting/20261018T0634Z-draft-attn-noise §5).** H1's QKᵀ and P·V
+**Deployed attention's floor.** H1's QKᵀ and P·V
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
-and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`). ATTN-NOISE's own form,
+and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,
+`verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
-the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
+the (query head, request) pairs a decode seed must cover. A seed over several query heads samples a KV head's K rows' and
 V columns' noise once, read by its heads/kv query heads (GQA). At decode the query's rows bind, so that moves nothing and
 a decode seed's cover counts every (query head, request) pair; at prefill K's rows bind, so a call's floor divides by the
 KV heads, not the query heads, and a prefill seed's cover counts (KV head, request) pairs.
@@ -58,12 +59,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity.core.protocols.pouw.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
+
 sys.path.insert(0, str(Path(__file__).parent))
 import budget as BU
 import eps_budget as EB
 
-LN2 = math.log(2)
-DELTA_BITS = 40                      # δ = 2⁻⁴⁰, the grind's own failure probability (outside ε)
 T_BITS = (80, 128)                   # the cheater's hash queries a salt's epoch
 TILE = (32, 32)                      # h1tile's r × c (compile.Scheme.tile)
 SEG = 32                             # a receipt word's products (h1tile's 32-wide segments)
@@ -75,11 +76,10 @@ KAPPA_LIVE = BU.P_PASS / (1 - BU.P_PASS)
 PROVED = (4.0, 1 / 256)
 KAPPAS = tuple(round(3 + 0.05 * i, 2) for i in range(181))   # 3 … 12
 H_BITS = (0.415, 1.44, 6.0, 16.0)    # sensitivities, bits a tile
-FLAG = 1e-3                          # a cell over 0.1% is flagged
 PREFILL = (2048, 32768)
 DECODE_BATCH = (1, 8, 64, 256)
 DECODE_CTX = (2048, 32768)
-#: ATTN-NOISE §5's operand rows: (rows a seed group, noise bits a row, units reading a row) for one head; a unit is a
+#: attn_noise's operand rows: (rows a seed group, noise bits a row, units reading a row) for one head; a unit is a
 #: QKᵀ score or a P·V output coordinate
 H1_NOISE = {"q": 448, "k": 128, "p": 224}
 
@@ -111,12 +111,8 @@ def y_star(c: int, kappa: float, q: float = Q_BIT, wmax: int = SEG, p: float = P
     return best
 
 
-def ln_t_over_delta(t_bits: int) -> float:
-    return (t_bits + DELTA_BITS) * LN2
-
-
 @dataclass(frozen=True)
-class Site:
+class SeedGroup:
     """One seed group: a matmul of one layer at one step (every head, the step's batch)."""
     kind: str        # "linears", "qk", "pv"
     name: str
@@ -134,19 +130,19 @@ class Site:
         return self.macs / self.tile_macs
 
 
-def sites(shape: EB.Shape, regime: str, n: int, ctx: int) -> list[Site]:
+def sites(shape: EB.Shape, regime: str, n: int, ctx: int) -> list[SeedGroup]:
     """A layer's seed groups: prefill of one n-token sequence (ctx = n), or a decode step of batch n at context ctx."""
     r_lin = TILE[0] if regime == "prefill" else min(n, TILE[0])
     tokens = n
-    out = [Site("linears", name, tokens * k * nn, r_lin, min(nn, TILE[1]), k) for name, k, nn in shape.linears]
+    out = [SeedGroup("linears", name, tokens * k * nn, r_lin, min(nn, TILE[1]), k) for name, k, nn in shape.linears]
     att = shape.heads * shape.d * (ctx * (ctx + 1) / 2 if regime == "prefill" else n * ctx)
     r_att = TILE[0] if regime == "prefill" else 1
-    out.append(Site("qk", "qk", att, r_att, TILE[1], shape.d))
-    out.append(Site("pv", "pv", att, r_att, min(shape.d, TILE[1]), ctx))
+    out.append(SeedGroup("qk", "qk", att, r_att, TILE[1], shape.d))
+    out.append(SeedGroup("pv", "pv", att, r_att, min(shape.d, TILE[1]), ctx))
     return out
 
 
-def premium(site: Site, t_bits: int, kappa: float, q: float = Q_BIT, y: float | None = None) -> float:
+def premium(site: SeedGroup, t_bits: int, kappa: float, q: float = Q_BIT, y: float | None = None) -> float:
     """π* in products for one seed group at the template's θ = y/r (y = y* unless given; inf when θ = 0)."""
     if y is None:
         y = y_star(site.c, kappa, q)
@@ -155,7 +151,7 @@ def premium(site: Site, t_bits: int, kappa: float, q: float = Q_BIT, y: float | 
     return math.inf if y == 0 else ln_t_over_delta(t_bits) * site.r / y
 
 
-def eps_by_kind(ss: list[Site], t_bits: int, kappa: float, q: float = Q_BIT,
+def eps_by_kind(ss: list[SeedGroup], t_bits: int, kappa: float, q: float = Q_BIT,
                 y: float | None = None) -> dict[str, float]:
     """ε_grind per kind and for the whole layer (the model's, since layers repeat): Σ π* / Σ products."""
     out = {}
@@ -167,7 +163,7 @@ def eps_by_kind(ss: list[Site], t_bits: int, kappa: float, q: float = Q_BIT,
     return out
 
 
-def eps_at_h(ss: list[Site], t_bits: int, h: float) -> dict[str, float]:
+def eps_at_h(ss: list[SeedGroup], t_bits: int, h: float) -> dict[str, float]:
     """ε at h bits a tile: log₂(T/δ)/h tiles a seed group."""
     pi_tiles = (t_bits + DELTA_BITS) / h
     out = {}
@@ -177,7 +173,7 @@ def eps_at_h(ss: list[Site], t_bits: int, h: float) -> dict[str, float]:
     return out
 
 
-def best_kappa(ss: list[Site], t_bits: int, eps_luck: float, q: float = Q_BIT) -> tuple[float, float, float]:
+def best_kappa(ss: list[SeedGroup], t_bits: int, eps_luck: float, q: float = Q_BIT) -> tuple[float, float, float]:
     """(κ*, its excess on ε_luck, the model's ε_grind there) minimizing their sum."""
     best = None
     for kappa in KAPPAS:
@@ -186,28 +182,6 @@ def best_kappa(ss: list[Site], t_bits: int, eps_luck: float, q: float = Q_BIT) -
         if best is None or extra + g < best[1] + best[2]:
             best = (kappa, extra, g)
     return best
-
-
-def visible_premium(rows: list[tuple[float, int, float]], t_bits: int) -> float:
-    """π* in units for visible matched rows: min over θ of (ln(T/δ) + Σ N ln(1 − 2^{-b} + 2^{-b} e^{θu}))/θ."""
-    lt = ln_t_over_delta(t_bits)
-
-    def obj(theta: float) -> float:
-        s = lt
-        for n, b, u in rows:
-            x, lq = theta * u, -b * LN2
-            a, d = math.log1p(-math.exp(lq)), x + lq
-            m = max(a, d)
-            s += n * (m + math.log(math.exp(a - m) + math.exp(d - m)))
-        return s / theta
-
-    grid = [10 ** (e / 20) for e in range(-160, 41)]
-    i = min(range(len(grid)), key=lambda j: obj(grid[j]))
-    lo, hi = grid[max(i - 1, 0)], grid[min(i + 1, len(grid) - 1)]
-    for _ in range(100):
-        a, b = lo + (hi - lo) / 3, hi - (hi - lo) / 3
-        lo, hi = (lo, b) if obj(a) < obj(b) else (a, hi)
-    return obj((lo + hi) / 2)
 
 
 def _h1_rows(regime: str, L: int, d: int, pairs: float, gq: int) -> dict:
@@ -227,7 +201,7 @@ def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "
     seed a head and request (`head`, as deployed), one a call (`call`: the layer's heads and the step's whole batch),
     one over every layer's call of the kind in a step (`step`, which no seed binding the call's roots allows: see
     `decode_lever`), or an int g: g (query head, request) pairs of one layer under one seed, each reading its own K
-    rows. A call's or a step's seed draws a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
+    rows. A call's or a step's seed samples a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
     heads."""
     if isinstance(group, int):
         return _h1_rows(regime, ctx, shape.d, group, 1)
@@ -238,7 +212,7 @@ def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "
 
 def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
                  group: str | int = "head") -> dict[str, float]:
-    """ATTN-NOISE's deployed QKᵀ and P·V floor under hashed seeds: ε per kind, the cheater matching the rows it picks
+    """attn_noise's deployed QKᵀ and P·V floor under hashed seeds: ε per kind, the cheater matching the rows it picks
     after the seed (`visible_premium`)."""
     return {kind: min(visible_premium(rows, t_bits) / units, 1.0)
             for kind, (rows, units) in h1_rows(shape, regime, n, ctx, group).items()}
@@ -246,7 +220,7 @@ def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
 
 def h1_h_form(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
               group: str | int = "head") -> dict[str, float]:
-    """ATTN-NOISE §5's form of the same floor: log₂(T/δ)/(h·N), with h the least, over operand rows, of a row's noise
+    """attn_noise's form of the same floor: log₂(T/δ)/(h·N), with h the least, over operand rows, of a row's noise
     bits over the units reading it, and N the units under the seed. It leaves out the cheater's choice of rows after
     the seed, which `h1_attention` charges, so it sits slightly below it."""
     return {kind: min((t_bits + DELTA_BITS) / (min(b / u for _, b, u in rows) * units), 1.0)
@@ -255,7 +229,7 @@ def h1_h_form(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
 
 def decode_cover(t_bits: int, ctx: int = 2048, gmax: int = 1 << 16) -> dict[str, dict[str, int]]:
     """The least (query head, request) pairs of one layer under one decode seed that bring H1's QKᵀ and P·V under 0.1%,
-    in ATTN-NOISE's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
+    in attn_noise's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
     depend on the head count, and the query's rows bind, so query heads sharing a KV head's rows don't change it."""
     shape = EB.MODELS["llama-3.1-8b"]
     out = {}
@@ -298,8 +272,8 @@ def decode_lever(shape: EB.Shape, ctx: int, b: int, t_bits: int, kappa: float = 
     """A decode step's attention under each seed group. A seed binds its call's operand roots, and a step's calls run in
     order (layer ℓ + 1's operands and P·V's P exist only after the call before them), so the largest group a decode
     step has is one call: a layer's QKᵀ (or P·V) over every head and every request of the step's batch. `step` (every
-    layer's call under one seed drawn from the step's inputs) needs a premise nothing states: that a cheater can't steer
-    a later call's operands, after seeing its noise, without a deviation the draw catches."""
+    layer's call under one seed derived from the step's inputs) needs a premise nothing states: that a cheater can't steer
+    a later call's operands, after seeing its noise, without a deviation the sample catches."""
     return {"template_call": template_attention(shape, ctx, b, t_bits, kappa),
             **{f"h1_{g}": h1_attention(shape, "decode", b, ctx, t_bits, g) for g in ("head", "call", "step")}}
 

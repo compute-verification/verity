@@ -1,12 +1,14 @@
-import Flock.Program
-import Evaluate.Scalar
-import Evaluate.Casts
-import Evaluate.TC.Dots
-import Evaluate.Words
-import Evaluate.Libdevice
-import Evaluate.Mufu
-import Evaluate.Decimal
-import Evaluate.Act
+module
+
+public import Flock.Program
+public import Evaluate.Scalar
+public import Evaluate.Casts
+public import Evaluate.TC.Dots
+public import Evaluate.Words
+public import Evaluate.Libdevice
+public import Evaluate.Mufu
+public import Evaluate.Decimal
+public import Evaluate.Act
 
 /-!
 # The primitives the evaluator implements
@@ -28,6 +30,10 @@ Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands 
 A primitive is recognized by its id and must declare the signature the registry holds for it, parameter names included
 (`codec.decode_program`'s check). Every other primitive is refused by name, never guessed.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 
@@ -175,7 +181,7 @@ def dots : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
 
 private def quaternary (f : Nat → Nat → Nat → Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]! xs[1]! xs[2]! xs[3]!
 
-/-- PoUW's and NCP's word primitives by id (`verity.core.protocols.pouw.circuit.words`, the vLLM integration's
+/-- PoUW's and NCP's word primitives by id (`verity.ml.protocols.pouw.circuit.words`, the vLLM integration's
 `pouw_rows`), with the signatures the registry holds for them. -/
 def words : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Words in
@@ -246,8 +252,8 @@ def mufu : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
 signatures the registry holds for them. -/
 def decimals : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Decimal in
-  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn),
-   ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
+  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32LogRn_v1", #[("x", f32)], f32, unary f32LogRn),
+   ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn), ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
 
 /-- The activations and RoPE's outputs by id (the vLLM integration's `prims`, `act` and `dense`), with the signatures the
 registry holds for them. -/

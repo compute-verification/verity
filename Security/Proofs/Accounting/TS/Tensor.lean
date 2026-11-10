@@ -1,15 +1,20 @@
-import Models.Accounting.Guarantees.TS
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor slots and the output count
 
-T1, its tightness and Lemma 2's count (EPS1-TENSOR; gap list M10–M12: note:20261017T0801Z-draft-lean-stmt).
+T1, its tightness and Lemma 2's count (EPS1-TENSOR).
 
 * `TensorSlotCount`: an injective map of `N` committed words into slot writes gives `N ≤ Σ_i w_i n_i`, and
   `w_i ≤ ρ_T c_i` (`div_le_rhoT`) turns it into `N/ρ_T ≤ Σ_i c_i n_i`.
 * `TensorSlotTight`: both ratios lie in `(0, 1]`, so their product is `1` iff both are.
 * `OutputCount`: the head writes number `Σ_t ω(cls t) = Σ_k ω_k n_k`, and an image is no larger than its type.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

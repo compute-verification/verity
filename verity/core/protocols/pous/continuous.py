@@ -1,11 +1,11 @@
 """The continuous audit's memory challenger: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
 of them miss.
 
-Its model is the memory challenger of `Security/Definitions/Pous/Model/Continuous.lean` (#954), with the
+Its model is the memory challenger of `Security/Definitions/Pous/Model/Continuous.lean`, with the
 guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory challenger sends `n` uniform, independent indices and
 counts a miss for every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
 (`Security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
-`audit.UnsignedRounds` over the whole stream, with its clock and its index draws:
+`audit.UnsignedRounds` over the whole stream, with its clock and its index samples:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
    (`UnsignedRounds.challenge`), and each deadline runs from the memory challenger's own clock reading when it reveals
@@ -16,7 +16,8 @@ counts a miss for every round that is not a hit: wrong, late or rejected.  Three
    refused.  That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
    conservative.
 3. **Every late answer counted.** Every answer past `Δ + RTT`, rejected or not, is a miss, and so is every wrong one
-   (`AuditResult.misses`).  Every challenge closes with an `Answer` recorded, whether answered, rejected or expired.
+   (`AuditResult.misses`).  Every challenge closes with a `ChallengeReply` recorded, whether answered, rejected or
+   expired.
 
 A graded audit's window also needs a cap on its whole duration (`Pous.SecurityProofs.BackgroundRebuildExcluded`):
 with `audit_cap=audit.AUDIT_CAP` (1,505 calls of `call_ns`, ≈ 363.5 ms at 241.5 µs), a receipt past it rejects the
@@ -26,7 +27,7 @@ the continuous audit's guarantee does not need it and its arrivals may spread pa
 Every count of calls here (`D`, `D_late`, the cap) converts wall-clock time at `call_ns` per whole `Π₂` call, which
 holds in the ideal-permutation model only.  `ContinuousAudit` is sound in that model, but at the reference
 Feistel-SHAKE256 `Π₂` a prover holding 1.53% of `C` answers every challenge in 481 Keccak-f, about 24 µs, so the
-storage conclusion fails there (red team, 4 Oct 2026, art:7617c8017e80; `primitives.pi2_keccak_f`).
+storage conclusion fails there (the red team's state attack, `primitives.pi2_keccak_f`).
 
 `n` is fixed before the stream (the realized number of arrivals, from the memory challenger's own randomness), so the
 stream is never stopped or extended on misses, though it may reject early once they pass `max_misses` (`exceeded`).
@@ -42,7 +43,7 @@ from dataclasses import dataclass
 
 from verity.ml.randomness import Key
 
-from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, Answer, AuditResult, UnsignedRounds
+from .audit import DEADLINE_NS, RTT_ALLOWANCE_NS, AuditResult, ChallengeReply, UnsignedRounds
 from .verifier import VerifierKey
 
 
@@ -74,12 +75,13 @@ class ContinuousMemoryChallenger:
     The continuous audit runs only on this class, never on a bare `UnsignedRounds` with a hard deadline.  That one's
     `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
     the next one, a hit when both ask for the same block.  That block was on the wire, not in the memory the model
-    measures at the send time, so the audit would credit storage the responder does not hold (#954's red team)."""
+    measures at the send time, so the audit would credit storage the responder does not hold (a red-team finding)."""
 
     def __init__(self, vk: VerifierKey, key: Key, n: int, *, late_deadline_ns: int, max_misses: int = 0,
                  deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS,
-                 clock: Callable[[], int] = time.perf_counter_ns, on_answer: Callable[[Answer], None] | None = None,
-                 root_only: bool = False, audit_cap: int | None = None) -> None:
+                 clock: Callable[[], int] = time.perf_counter_ns,
+                 on_answer: Callable[[ChallengeReply], None] | None = None, root_only: bool = False,
+                 audit_cap: int | None = None) -> None:
         if late_deadline_ns is None:
             raise ValueError("the continuous audit needs a hard deadline")
         if n < 1 or max_misses < 0:
@@ -103,7 +105,7 @@ class ContinuousMemoryChallenger:
         return self.timed.late_limit_ns
 
     @property
-    def answers(self) -> tuple[Answer, ...]:
+    def answers(self) -> tuple[ChallengeReply, ...]:
         return tuple(self.timed.answers)
 
     @property
@@ -161,13 +163,14 @@ class ContinuousMemoryChallenger:
         i = self.timed.challenge()
         return self.timed.pending, i
 
-    def respond(self, j: int, block: bytes, path: tuple[bytes, ...] | None = None, report: object = None) -> Answer:
+    def respond(self, j: int, block: bytes, path: tuple[bytes, ...] | None = None,
+                report: object = None) -> ChallengeReply:
         if j != self.timed.pending:
             state = "closed" if j < len(self.timed.answers) else "not revealed"
             raise RuntimeError(f"challenge {j} is {state}: an answer counts only for the open challenge")
         return self.timed.respond(block, path, report)
 
-    def expire(self) -> Answer:
+    def expire(self) -> ChallengeReply:
         return self.timed.expire()
 
     def result(self) -> AuditResult:

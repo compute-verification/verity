@@ -6,13 +6,14 @@ A proof edit reaches the record as a prover that sent the edited proof would hav
 (`rounds[k].msg`) of that rep holding the old bytes gets the new ones, with its `msg_sha512` rebuilt, and the rep's
 `proof_sha512` follows the file. The coins stay: the coin tree (live PROTOCOL.md §9) commits them at `Hello`, before any
 message, so only the check the edit breaks can reject it. A value no round absorbs (`τ`'s opening, the opened columns,
-their salts and paths, which follow the last coin) changes the file alone. Record edits change one field of
-`session.json`. The edits are table `T`'s (the first by default); a session of several tables adds its first two tables'
-rep-0 proofs swapped.
+their salts and paths, which follow the last coin) changes the file alone, and so does a nonce edit, whose rounds keep the
+prover's absorbed `0` (no replacement carries a nonce's eight zero bytes alone). Record edits change one field of
+`session.json`, or one round's count and coins together. The edits are table `T`'s (the first by default); a session of
+several tables adds its first two tables' rep-0 proofs swapped.
 
 Writes OUT_DIR/<name>/ per case and OUT_DIR/zk_mutants.json, the `--expect` form of `agree.py`: the verdict both verifiers
 must reach, the Lean verifier's reason prefix, and `upstream_accepted` where upstream's offline replay, which takes the
-record's coins without re-deriving them from the coin tree (verifier PROTOCOL.md §7.4), accepts what the Lean verifier
+record's coins without re-deriving them from the coin tree (`Flock.CoinTree`), accepts what the Lean verifier
 refuses.
 """
 import hashlib, json, shutil, sys
@@ -61,7 +62,7 @@ def ybar_short(b, off):
 
 
 def trailing(b, off):
-    """Bytes after the inner proof (ignored, as after §8's pair)."""
+    """Bytes after the inner proof: refused by the Lean verifier (`verity/ml/flock/verifier/README.md`, D17), ignored by upstream."""
     b += b"\x00" * 16
 
 
@@ -101,10 +102,18 @@ PROOF = [
     ("zk-inner-opened", 0, flip("in.open", 7), reject("zk inner: column")),
     ("zk-inner-salt", 0, flip("in.salt", 2, 40), reject("zk inner: column")),
     ("zk-inner-path", 0, flip("in.path", 5, 1), reject("zk inner: column")),
-    ("zk-trailing-bytes", 0, trailing, ACCEPT),
+    ("zk-trailing-bytes", 0, trailing, reject("zk proof: the file has ", upstream_accepted=True)),
     ("zk-rep1-tau", 1, flip("in.tau"), TAU),
     ("zk-rep1-l0-e0", 1, flip("zk.e0"), reject("zk inner: the batched constraint fails")),
     ("zk-rep1-lane-message", 1, flip("lig.msg", 2), reject("zk inner: the batched constraint fails")),
+]
+
+#: (name, rep, edit, expect): a nonce of the file made 1, its rounds left as they are: the decoder refuses it before any replay
+#: (`Flock.Proof`, D21 in `verity/ml/flock/verifier/README.md`), and upstream's replay rejects it at the rounds' digests.
+NONCES = [
+    ("zk-lig-query-nonce", 0, flip("lig.qn"), reject("grinding_nonce ≠ 0 (R4)")),
+    ("zk-lig-claim-nonce", 0, flip("lig.cbn", 1), reject("claim_batch_grinding_nonce ≠ 0 (R4)")),
+    ("zk-lig-consistency-nonce", 0, flip("lig.consn"), reject("consistency_batch_grinding_nonce ≠ 0 (R4)")),
 ]
 
 
@@ -158,7 +167,7 @@ def write(out, name, rec, src, files):
     """Case `name`: `rec`, every proof file of `src`, and `files` (`{file name: bytes}`) in their place."""
     d = out / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "session.json").write_text(json.dumps(rec))
+    (d / "session.json").write_text(rd.session_text(rec))
     for f in src.glob("*.rep*.bin"):
         if f.name not in files:
             shutil.copy(f, d / f.name)
@@ -183,14 +192,14 @@ def main(src, out, table=None):
     table = table or tables[0]
     proof = lambda rep: f"{table}.rep{rep}.bin"
     manifest = []
-    for name, rep, edit, expect in PROOF:
+    for (name, rep, edit, expect), rebuild in [(c, True) for c in PROOF] + [(c, False) for c in NONCES]:
         rec = json.loads(json.dumps(base))
         before = (src / proof(rep)).read_bytes()
         off = rd.layout(before, zk=True)
         b = bytearray(before)
         edit(b, off)
         rounds = []
-        for _key, old, new in edited_values(before, b, off):
+        for _key, old, new in edited_values(before, b, off) if rebuild else ():
             rounds += carry(rec, table, rep, old, new)
         set_proof_digest(rec, f"{table}/rep{rep}", b)
         write(out, name, rec, src, {proof(rep): bytes(b)})
@@ -210,12 +219,11 @@ def main(src, out, table=None):
     def coin_tree(field, value):
         return lambda rec: rec["coin_tree"].__setitem__(field, value(rec["coin_tree"][field]))
 
-    # round 0's coins are r_skip, drawn and never read (§19 A1)
+    # round 0's coins are r_skip, sampled and never read (`verity/ml/flock/verifier/README.md` A1)
     record_case("zk-coin-unused", coin(0), ACCEPT)
     record_case("zk-coin-round1", coin(1), reject("ligerito: final check failed"))
     record_case("zk-coin-last-round", coin(-1), reject("zk inner: column"))
-    # the verifier checks the record's coin tree, not its openings: the commitment protects the prover (verifier PROTOCOL.md
-    # §7.4); upstream's offline replay ignores `coin_tree` (divergence D6)
+    # the verifier checks the record's coin tree, not its openings: the commitment protects the prover (`Flock.CoinTree`); upstream's offline replay ignores `coin_tree` (divergence D6)
     record_case("zk-coin-tree-key", coin_tree("key", lambda h: flip_hex(h, 5)), ACCEPT)
     record_case("zk-coin-tree-root", coin_tree("root", lambda h: flip_hex(h, 5)), ACCEPT)
     record_case("zk-coin-tree-key-bit-2047", coin_tree("key", lambda h: h[:-2] + "%02x" % (int(h[-2:], 16) | 0x80)),
@@ -236,6 +244,14 @@ def main(src, out, table=None):
         return edit
     record_case("zk-retained-not-digest", retained(False), reject("S12:"))
     record_case("zk-retained-edited", retained(True), reject("R2: round 0"))
+
+    def recount(rec):
+        r = r0(rec)[0]
+        r["coins"].append(r["coins"][-1])
+        r["n"] += 1
+    # a round issuing one coin more than the replay squeezes, its count and coins agreeing (S12) and its bytes unchanged
+    n0 = len(r0(base)[0]["coins"])
+    record_case("zk-round-count", recount, reject(f"R2: round 0: {n0} coins requested, {n0 + 1} issued"))
 
     def swap(a, b):
         """Proof files `a` and `b` (`(table, rep)`) exchanged, with their digests."""

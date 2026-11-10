@@ -1,9 +1,12 @@
-"""The DeepSeek-V4-Pro indexer capture without a GPU: the numpy twins' word steps are `dsv4_indexer.WORD`'s primitives on special
-and random words, each twin is its Definition (the score row, the cache entry of the state rows the kernel reads, the head, the
-fill), the state rows' and the head layout's wiring, the operands' edges, each comparison job takes the kernel's words and finds a
-flipped one, the top-k checks at 1024, the PTX scan, the bindings, the statics, the verdict and `main` end to end (the GPU run is
+"""The DeepSeek-V4-Pro indexer capture without a GPU: the numpy twins' word steps (`kernels.dsv4_indexer_twin.NumpyOps`) are
+`dsv4_indexer.WORD`'s primitives on special and random words, each twin is its Definition (the score row and the head, the replay's
+row kernels in `kernels.dsv4_indexer_twin`, and the harness's cache entry of the state rows the kernel reads and its fill), the
+state rows' and the head layout's wiring, the operands' edges, each comparison job takes the kernel's words and finds a flipped one,
+the top-k checks at 1024, the PTX scan, the bindings, the statics, the verdict and `main` end to end (the GPU run is
 `tests/properties/dsv4_indexer_capture_gpu.py --out ...` on an H200)."""
 from __future__ import annotations
+
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import copy
 import json
@@ -16,7 +19,8 @@ import torch
 from tests.properties import dsv4_indexer_capture_gpu as D4
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.registry import dsa
+from verity.ml.definitions.numerics import dsv4_indexer_twin as T
+from verity.ml.definitions.registry import dsa
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 I, X = D4.I, D4.X
@@ -77,7 +81,7 @@ def test_the_numpy_steps_are_the_word_primitives(name: str) -> None:
     prim = I.WORD.get(name, I.F32Neg)
     args = _operands(name if name != "neg" else "fabs", _words(1), rng)
     with np.errstate(all="ignore"):
-        got = np.broadcast_to(getattr(D4.OPS, name)(*args), args[0].shape).astype(np.int64)
+        got = np.broadcast_to(getattr(T.OPS, name)(*args), args[0].shape).astype(np.int64)
     want = np.array([evaluate(prim, *(int(a[i]) for a in args))[0] for i in range(args[0].size)], dtype=np.int64)
     bad = np.flatnonzero(got != want)
     assert bad.size == 0, [(name, [hex(int(a[i])) for a in args], hex(int(want[i])), hex(int(got[i]))) for i in bad[:4]]
@@ -90,7 +94,7 @@ def test_the_score_twin_is_the_definition() -> None:
     score[1] = np.resize(_words(3), D4.STATE_W)
     ape = _f32(rng, 3, D4.STATE_W, scale=0.5)
     ape[2, :len(SPECIAL)] = SPECIAL
-    want = D4.score_twin(score, ape)
+    want = T.score_twin(score, ape)
     fn = bind(I.Dsv4CompressorScore, W=D4.STATE_W)
     assert [list(evaluate(fn, score[i].tolist(), ape[i].tolist())) for i in range(3)] == want.astype(np.int64).tolist()
 
@@ -103,10 +107,10 @@ def _entry_operands(rng: np.random.Generator) -> tuple[np.ndarray, ...]:
     kv = _f32(rng, n, D4.ROWS, D4.D, scale=2.0)
     sc = _f32(rng, n, D4.ROWS, D4.D, scale=4.0)
     kv[1, :4], sc[1, :4] = 0, D4.NEG_INF
-    kv[2] = (D4._f(kv[2]) * np.float32(2.0 ** 70)).view(np.uint32)
+    kv[2] = (T._f(kv[2]) * np.float32(2.0 ** 70)).view(np.uint32)
     kv[2, 5, 3], kv[2, 6, 5], kv[2, 7, 7] = 0x7FC00000, 0x7F800000, D4.NEG_INF
     sc[2] = D4.NEG_INF
-    kv[3] = (D4._f(kv[3]) * np.float32(2.0 ** -140)).view(np.uint32)
+    kv[3] = (T._f(kv[3]) * np.float32(2.0 ** -140)).view(np.uint32)
     sc[3] = np.float32(-1e30).view(np.uint32)
     sc[3, 3] = 0
     sc[4] = 0x7F800000
@@ -134,7 +138,7 @@ def _head_operands(rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     a rotary row of cos 0 and sin -1."""
     x = _bf16(rng, 7, D4.HD, scale=3.0)
     x[1] = 0
-    x[2] = (np.asarray(D4._f(x[2].astype(np.uint32) << 16), np.float64) * 2.0 ** 100).astype(np.float32).view(np.uint32) >> 16
+    x[2] = (np.asarray(T._f(x[2].astype(np.uint32) << 16), np.float64) * 2.0 ** 100).astype(np.float32).view(np.uint32) >> 16
     x[3] = _bf16(rng, D4.HD, scale=2.0 ** -130)
     x[4, 5], x[4, 450], x[4, 500] = 0x7F80, 0x7FC0, 0xFF80
     x[5] = (448.0 * np.exp2(rng.integers(-8, 8, D4.HD))).astype(np.float32).view(np.uint32) >> 16
@@ -148,7 +152,7 @@ def _head_operands(rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
 
 def test_the_heads_twin_is_the_definition() -> None:
     x, cs = _head_operands(np.random.default_rng(5))
-    q, s = D4.heads_twin(x, cs)
+    q, s = T.heads_twin(x, cs, D4.QG, D4.ROPE)
     fn = bind(I.Dsv4InvRopeQuantHead, CHUNKS=D4.CHUNKS, QG=D4.QG, ROPE=D4.ROPE)
     for i in range(x.shape[0]):
         y = evaluate(fn, x[i].tolist(), cs[i].tolist())
@@ -267,7 +271,7 @@ def _score_job(tmp_path: Path, flip: bool = False) -> dict:
     score = _f32(rng, n, D4.STATE_W, scale=4.0)
     score[3] = np.resize(_words(7), D4.STATE_W)
     ape = _f32(rng, n, D4.STATE_W, scale=0.5)
-    got = D4.score_twin(score, ape)
+    got = T.score_twin(score, ape)
     if flip:
         got[17, 200] ^= 1
     paths = D4._save(tmp_path / "score", score=score, ape=ape, got=got, tokens=np.arange(n) + 1000)
@@ -303,7 +307,7 @@ def test_the_entries_jobs_take_the_kernel_bytes(tmp_path) -> None:
 
 def _heads_job(tmp_path: Path, flip: bool = False) -> dict:
     x, cs = _head_operands(np.random.default_rng(9))
-    q, s = D4.heads_twin(x, cs)
+    q, s = T.heads_twin(x, cs, D4.QG, D4.ROPE)
     if flip:
         s[4, 3] ^= 1 << 23
     paths = D4._save(tmp_path / "heads", x=x, cs=cs, q=q, s=s, ids=np.arange(7) + 32)

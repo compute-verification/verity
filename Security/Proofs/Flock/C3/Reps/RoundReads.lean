@@ -1,4 +1,22 @@
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.C3.Reps.RoundLinks
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # `RoundReads` and `WRoundReads` at the verifier's message-round ports
@@ -23,6 +41,8 @@ and the unit a rep reads at (`hun`).
   (`AcceptedAt`), and at the checked family.
 -/
 
+@[expose] public section
+
 namespace FlockC3.Reps.RoundReads
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -34,7 +54,7 @@ open FlockVBridge.Family (partsOf)
 
 theorem mem_ownAt {ss : Array VStar.Stmt} {j : ℕ} {s : VStar.Stmt} (hj : ss[j]? = some s)
     {q : String × String × Array (Option ℕ)} (hq : q ∈ RecVStar.ownPorts s) :
-    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, reads := q.2.2 } ∈ ownAt ss j := by
+    { (default : Flock.Registered.Port) with name := q.1, value := q.2.1, readsRel := q.2.2 } ∈ ownAt ss j := by
   simp only [ownAt, hj, Option.map_some, Option.getD_some, List.map_toArray, List.mem_toArray]
   exact List.mem_map_of_mem (List.mem_append_left _ hq)
 
@@ -240,7 +260,7 @@ local notation "ℐ" => holoInnerAt T CT st hp
 
 -- The session binders carry `ℐ` in their types, so they go on each theorem, never in a `variable` block: a
 -- `variable` whose binders use a local notation over section variables makes Lean silently drop every declaration
--- after it (the audit's `dropped` check, #1923, refuses the package).
+-- after it (the audit's `dropped` check refuses the package).
 
 /-- **`RoundReads` at the checked family** (`C3Family.checked`), at `ownAt ss`: `SessStmt` from the prover's sessions'
 tags (`sessStmt_checked`, the guarantee's `_hF`), `MsgNamesAt` from the verifier's checks (`msgNamesAt_of_accepted`,

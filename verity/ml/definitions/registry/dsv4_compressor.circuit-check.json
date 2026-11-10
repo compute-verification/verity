@@ -1,0 +1,12 @@
+{
+ "pieces": {
+  "Ue8m0CeilByte_v1": {
+   "and": 29,
+   "type": "573975d833b42eb136ca3707d985f17b440cf69f7903f3d7bc068c7cbfb2ee61c9fb27157d61044a0252f6c77b0a07a708d8eec761fe3d3edd1eaaaaa4855ae0"
+  },
+  "Ue8m0InvScale_v1": {
+   "and": 7,
+   "type": "c923959621082d2a54e1806178482e295fecd6290260ae3aa1973ae288799ef6e2213fec9cbbf76c46b390cac4528b1f1cbc1d83f19cd6f9df2004b8e6cc82d3"
+  }
+ }
+}

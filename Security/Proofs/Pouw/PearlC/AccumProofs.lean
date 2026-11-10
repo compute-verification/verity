@@ -1,6 +1,10 @@
-import Definitions.Pouw.PearlC.Accum
-import Definitions.Pouw.PearlC.PeelExactP
-import Proofs.Pouw.PearlC.PeelExactProofs
+module
+
+public import Definitions.Pouw.PearlC.Accum
+public import Definitions.Pouw.PearlC.PeelExactP
+public import Proofs.Pouw.PearlC.PeelExactProofs
+
+@[expose] public section
 
 namespace Pouw.PearlC.Accum
 
@@ -9,8 +13,6 @@ open Pouw.Fp8Atom Pouw.PearlC Matrix
 variable {m n k : Nat}
 
 theorem groupWordP_hopper : groupWordP hopperE4m3K32 = groupWord := rfl
-
-theorem totalP_hopper : totalP hopperE4m3K32 = total := rfl
 
 theorem chainP_hopper (G : Nat) : chainP hopperE4m3K32 G = chain G := rfl
 

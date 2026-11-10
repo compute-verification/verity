@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "E8m0ShlBf16_v2": {
+   "and": 0,
+   "type": "642a8d664b8501d4460427e1147db740410a9f4493d6d98678d14ea426c903cd7b28b410e8f37a3311266301e9b35e0c4c55665ed488abfd22133089417e6083"
+  },
+  "FlashMlaGatherRow_v2{DN=16,DR=16,QT=8}": {
+   "and": 10004,
+   "type": "e3961443c4325fcadf17df3c7ed682e229513cb5f0b4648370d4d04230bb02eb7676ef9cab187eb057127e4226561f255d82c23f485588972984a608723ad08c"
+  },
+  "FlashMlaPrefillValid_v2": {
+   "and": 66,
+   "type": "5516f0e22c02ccf938bf8ca93fa35111fb479ccb2a34b955cf7e4f0616ec6209ca37bc8581e96f81c70503373cf8aa83ad019f06997e3e9a07cdc7af7b8948cc"
+  }
+ }
+}

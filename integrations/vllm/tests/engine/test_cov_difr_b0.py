@@ -9,11 +9,11 @@ import importlib
 import json
 from pathlib import Path
 
-from verity_vllm.engine.profiles import profile_module_for_case, vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles import profile_module_for_case, vllm_d9105ea80_sm89_eager as BASE
 
-OVB0 = importlib.import_module("verity_vllm.engine.profiles.derived_B0_ovs")
-OVB1 = importlib.import_module("verity_vllm.engine.profiles.derived_B1_ovs")
-from verity_vllm.engine.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
+OVB0 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0_ovs")
+OVB1 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B1_ovs")
+from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import TokenSampleGumbel
 from tests.observe.test_gen_sampling import _adapter_fn
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
@@ -34,7 +34,7 @@ def test_b0_profile_is_the_pinned_profile_plus_the_sampler_recognizer():
 
 def test_default_b0_profile_is_the_derived_one_without_the_recognizer():
     assert profile_module_for_case("B0") == "derived_B0"
-    from verity_vllm.engine.profiles import derived_B0
+    from verity_vllm.observe.fold.profiles import derived_B0
     assert not any(isinstance(x, TokenSampleGumbel) for x in derived_B0.PROFILE.patterns)
 
 

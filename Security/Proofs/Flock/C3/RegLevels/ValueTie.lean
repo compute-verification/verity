@@ -1,6 +1,23 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.Recursive.ValueSrc
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides
@@ -34,6 +51,8 @@ verifier's tree once (`4n` for the leaves, row digest, salt digest, `treeLeaf` a
 `2^D - 1` nodes), the two hm96 leaves (3 each), the two frame-v3 leaves (2) and the climb (2 a level, `2D`). A row of
 `w` words hashes `128 · (1 + ⌈w/64⌉)` bytes; every other input is at most 3 blocks.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -224,7 +243,8 @@ theorem checkRows_root {salt : String → ℕ → ByteArray} {c : Flock.Circuit}
     (h : RecCoins.checkRows salt c pub own port value rows what = .ok ()) :
     ∃ reg prog, own.find? (·.name == port) = some reg ∧ reg.leaves = rows.size ∧
       reg.reads = (Array.range rows.size).map some ∧ c.metaJ.getObjValAs? String "program_sha512" = .ok prog ∧
-      FV3.root reg.domain (leavesV reg.domain rows (salt prog)) Sha512.hash = reg.root := by
+      FV3.root reg.domain (leavesV reg.domain rows (salt prog)) Sha512.hash = reg.root ∧
+      reg.schema = HmRow.ROW_SCHEMA := by
   unfold RecCoins.checkRows at h
   dsimp only at h
   split at h
@@ -247,7 +267,7 @@ theorem checkRows_root {salt : String → ℕ → ByteArray} {c : Flock.Circuit}
           · cases h
           rename_i hroot
           simp only [bne_iff_ne, ne_eq, Bool.or_eq_true, not_or, not_not] at hl hr
-          refine ⟨reg, prog, hf, hl.1.1, hr, hprog, .trans ?_ (eq_of_not_bne hroot)⟩
+          refine ⟨reg, prog, hf, hl.1.1.1, hr, hprog, .trans ?_ (eq_of_not_bne hroot), hl.2⟩
           refine congrArg (FV3.root reg.domain · Sha512.hash) (Array.map_congr_left fun i hi => ?_)
           rw [getElem!_map_range _ (by simpa using hi)]
         · cases h
@@ -373,14 +393,16 @@ theorem some_collides {o : Option (List UInt8 × List UInt8)} {p : List UInt8 ×
   obtain ⟨a, b⟩ := p
   exact ⟨a, b, h, hc⟩
 
-/-- **`valueColl`'s spec**: where the registered root is the verifier's (`hroot`) and the registrant's hm96 leaf of
-`r` under `y` opens it at `i` (`opensLeaf`), `r` is the verifier's row's bytes, or `valueColl` collides. -/
+/-- **`valueColl`'s spec**: where the registered root is the verifier's (`hroot`), of `hm96-sha512/row/v1` rows (`hs`),
+and the registrant's hm96 leaf of `r` under `y` opens it at `i` (`opensLeaf`), `r` is the verifier's row's bytes, or
+`valueColl` collides. -/
 theorem valueColl_spec {reg : Registered.Port} {rows : Array (Array ℕ)} {salt : ℕ → ByteArray} {i : ℕ}
     {r y : List UInt8} {path : ByteArray}
     (hroot : FV3.root reg.domain (leavesV reg.domain rows salt) Sha512.hash = reg.root) (hn : reg.leaves = rows.size)
-    (ho : Registered.opensLeaf reg (H512 (hm96Input r y)).1 i path = true) :
+    (hs : reg.schema = HmRow.ROW_SCHEMA) (ho : Registered.opensLeaf reg (H512 (hm96Input r y)).1 i path = true) :
     r = rowInV rows[i]! ∨ ∃ a b, valueColl reg rows salt i r y path = some (a, b) ∧ a ≠ b ∧ H512 a = H512 b := by
-  simp only [Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at ho
+  rw [Registered.opensLeaf_row hs] at ho
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at ho
   obtain ⟨⟨hi, hp⟩, hc⟩ := ho
   rw [hn] at hi
   by_cases hr : r = rowInV rows[i]!
@@ -415,7 +437,7 @@ theorem valueColl_spec {reg : Registered.Port} {rows : Array (Array ℕ)} {salt 
 
 section Reads
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
@@ -435,7 +457,7 @@ theorem tie_read (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (h
     u < rows.size ∧ (rs.enc p (rd.wv p) = rowInV rows[u]! ∨
       ∃ x y, valueColl (rd.port p) rows (salt prog) u (rs.enc p (rd.wv p)) (rd.ws p)
         (rd.wpath p) = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) := by
-  obtain ⟨reg, prog', hf, hn, hreads, hprog', hroot⟩ := checkRows_root h
+  obtain ⟨reg, prog', hf, hn, hreads, hprog', hroot, hs⟩ := checkRows_root h
   obtain rfl : prog' = prog := Except.ok.inj (hprog'.symm.trans hprog)
   obtain rfl : reg = rd.port p := hone reg (Array.mem_of_find?_eq_some hf) (by simpa using Array.find?_some hf)
   rw [hreads] at hpos
@@ -443,23 +465,24 @@ theorem tie_read (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (h
   split at hpos
   · rename_i hu
     simp only [Option.map_some, Option.some.injEq] at hpos
-    refine ⟨hu, valueColl_spec hroot hn ?_⟩
+    refine ⟨hu, valueColl_spec hroot hn hs ?_⟩
     rw [hpos]
     exact rd.committed p hp
   · cases hpos
 
 /-- **A registered read of a root that is the verifier's tree over `rows`** (`tie_read` with the root in place of
 `checkValue`): where the read's port's root is `FV3.root` of `rows` under `salt` (`hroot`) over `rows.size` leaves
-(`hn`), the read is of a row of `rows`, and its row bytes are that row's (`rowInV`), or `valueColl` collides. -/
+(`hn`) of `hm96-sha512/row/v1` rows (`hs`), the read is of a row of `rows`, and its row bytes are that row's
+(`rowInV`), or `valueColl` collides. -/
 theorem tie_root (rd : FlockSoundness.Registered.ReadsX lay rs) {p : lay.Pos} (hp : rd.isRead p)
     {rows : Array (Array ℕ)} {salt : ℕ → ByteArray}
     (hroot : FV3.root (rd.port p).domain (leavesV (rd.port p).domain rows salt) Sha512.hash = (rd.port p).root)
-    (hn : (rd.port p).leaves = rows.size) :
+    (hn : (rd.port p).leaves = rows.size) (hs : (rd.port p).schema = HmRow.ROW_SCHEMA) :
     rd.readAt p < rows.size ∧ (rs.enc p (rd.wv p) = rowInV rows[rd.readAt p]! ∨
       ∃ x y, valueColl (rd.port p) rows salt (rd.readAt p) (rs.enc p (rd.wv p)) (rd.ws p) (rd.wpath p) =
         some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) := by
   have ho := rd.committed p hp
-  refine ⟨?_, valueColl_spec hroot hn ho⟩
+  refine ⟨?_, valueColl_spec hroot hn hs ho⟩
   simp only [Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at ho
   rw [← hn]
   exact ho.1.1
@@ -525,7 +548,7 @@ theorem value_tie {salt : String → ℕ → ByteArray} {port value : String} {r
 (without segments), the read is of opening `u`, and the registrant's bit `b < H` is bit `b` of the verifier's
 position (`dirsRow pos H`'s), at every valid `H` (`H ≤ 32`), or `valueColl` collides. -/
 theorem dirs_tie {c3 : RecCoins.C3} {LANES H : ℕ} (h : RecCoins.checkStackedLevel c3 c zo.pub zo.own LANES H = .ok ())
-    {o : RecCoins.Opening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
+    {o : RecCoins.RegisteredOpening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
     (hL : 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES)
     (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) (h32 : H ≤ 32) {prog : String}
     (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog) {u : Fin nv} {q : Fin c.ports.size}

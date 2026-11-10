@@ -1,5 +1,7 @@
-import Models.Accounting.Guarantees.TS.Steer
-import Proofs.Accounting.TS.Stages
+module
+
+public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.TS.Steer
 
 /-!
 # Steering under one σ: proofs
@@ -15,6 +17,8 @@ independent of each other and of `ω₀` (`Steer.prob_pi_mem`), so all `n` hit t
 `μ^n`. The grinding bound is that union over the `T` queries: split query `q`'s seed off the coins (`Steer.splitAt`),
 and since its target doesn't read its own seed, `SteerUnion` with one configuration bounds it by `C(G, n)·μ^n`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 
@@ -178,11 +182,11 @@ theorem segUntouched_single (seg : Fin m → Fin G) (act : Finset (Fin m)) (i : 
     Finset.mem_erase, Finset.notMem_empty, IsEmpty.forall_iff, implies_true, and_true]
   exact ⟨fun ⟨h, hne⟩ => ⟨Ne.symm hne, h⟩, fun ⟨hne, h⟩ => ⟨h, Ne.symm hne⟩⟩
 
-/-- `s` coordinates drawn independently, each landing in its own event: the probability is the product. -/
+/-- `s` coordinates sampled independently, each landing in its own event: the probability is the product. -/
 theorem prob_pi_mem {B : Type} [Fintype B] [Nonempty B] (S : Finset (Fin G)) (q : Fin G → B → Prop) :
     prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = ∏ g ∈ S, prob (q g) := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   have hB : (Fintype.card B : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
   have key : ∀ (inst : DecidablePred fun b : Fin G → B => ∀ g ∈ S, q g (b g)),
       (@Finset.filter _ (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) inst Finset.univ).card =
@@ -215,7 +219,7 @@ theorem prob_pi_le {B : Type} [Fintype B] (S : Finset (Fin G)) (q : Fin G → B 
   · rcases S.eq_empty_or_nonempty with hS | ⟨g, hg⟩
     · rw [hS, Finset.card_empty, pow_zero]; exact prob_le_one _
     · have : IsEmpty (Fin G → B) := ⟨fun f => hB.false (f g)⟩
-      have h0 : prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = 0 := by unfold prob; simp
+      have h0 : prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = 0 := by unfold prob Claims.prUniform; simp
       rw [h0]; positivity
   · rw [prob_pi_mem, ← Finset.prod_const]
     exact Finset.prod_le_prod₀ (fun g _ => prob_nonneg _) fun g _ => hq g
@@ -308,7 +312,7 @@ theorem GrindUnion : Guarantees.TS.GrindUnion := by
     intro q
     rcases isEmpty_or_nonempty (Fin G → B) with hX | hX
     · have : IsEmpty (Ω₀ × (Fin T → Fin G → B)) := ⟨fun ω => hX.false (ω.2 q)⟩
-      have h0 : prob (E q) = 0 := by unfold prob; simp
+      have h0 : prob (E q) = 0 := by unfold prob Claims.prUniform; simp
       rw [h0]; positivity
     obtain ⟨x₀⟩ := hX
     set Φ := splitAt (Ω₀ := Ω₀) (X := Fin G → B) q

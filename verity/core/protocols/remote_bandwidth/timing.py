@@ -1,12 +1,12 @@
 """The honest schedule of a remote session, the passes it certifies, what the live-coin alternative would cost, and the
 verifier's bandwidth for openings.
 
-`honest` plays the honest prover against the verifier's messages in integer nanoseconds.  `σ_0` leaves the verifier at 0
-and window t's boundary message at `(t + 1)·T`; each reaches the prover `down_ns` plus a jitter later.  Passes run back
-to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU, which
-the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root reaches
-the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a fixed
-pseudorandom pattern.  The tests replay the schedule against `audit.Session` (`tests/test_remote_bandwidth.py`).
+`honest` plays the honest prover against the verifier's messages in integer nanoseconds.  `chal_0` leaves the verifier
+at 0 and window t's boundary message at `(t + 1)·T`; each reaches the prover `down_ns` plus a jitter later.  Passes run
+back to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU,
+which the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root
+reaches the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a
+fixed pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_remote_bandwidth.py`).
 
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
@@ -48,46 +48,80 @@ JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
 SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8
-"""A node's RTX PRO 6000s (vy-nebius: 8 of them and a host of two Xeon 6776P sockets).  The prover is the whole node,
-one undifferentiated resource (Daniel, 12 Oct, #1884), so each unprefixed rate and capacity below is the node's, the
+"""A node's RTX PRO 6000s (8 of them, on a host of two Xeon 6776P sockets).  The prover is the whole node,
+one undifferentiated resource, so each unprefixed rate and capacity below is the node's, the
 sum over its devices; the `GPU_` and `HOST_` constants are one device's."""
 GPU_SHA512_PER_S = 7.0e9
-"""One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms
-(#1916, art:dea3a309)."""
+"""One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms."""
 SHA512_PER_S = GPUS * GPU_SHA512_PER_S
 """The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
+SKETCH_OUTSIDE = 2 ** 20
+"""F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
+own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
+on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
+one operator's fleet.  At 16 rows it costs a session's line 0.4 bits of error (2^-29.95 to 2^-29.55 at 2118 passes),
+since AuditRO's 2^-41 a pass dominates it; 64 rows would bring δs under 2^-50 at τ 1.226 a pass on the reader, the
+option if that slack is ever cut.  Provisional, under the sketch's random-oracle assumption."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
-in the honest session of 14 Oct (prover r20261014-193057-8fec), rounded down.  ra-word-codec's 1.488e12 (#1840,
-r20261012-051505-ed9d, art:51a27942) is a slower kernel's."""
+in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
 GPU_SPEC_BYTES_PER_S = 1.597e12
 """The RTX PRO 6000 Server Edition's datasheet memory bandwidth, 1,597 GB/s (NVIDIA's product page and datasheet, as
 the census's `rtx-pro-6000-server` entries cite them), which no measured kernel reaches."""
 HOST_READ_BYTES_PER_S = 606.8e9
 """The host DRAM's measured read rate: 8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any
-reader mix measured; DRAM caps the sum, not the root complex (r20261015-081037-5ecf, art:3250e5915dd8,
-note:20261015T0731Z-draft-model-constants)."""
+reader mix measured; DRAM caps the sum, not the root complex."""
 HOST_SPEC_BYTES_PER_S = 819.2e9
 """The host DRAM's specified read bandwidth: 16 channels of DDR5-6400."""
 READ_BYTES_PER_S = GPUS * GPU_READ_BYTES_PER_S + HOST_READ_BYTES_PER_S
 """R measured: the node's read capacity over every registered tier, its GPUs' HBM and its host DRAM, each at its
 measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and leaves host DRAM's share idle."""
 SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
-"""R specified, the headline (Daniel, 13 Oct): every tier at its datasheet rate."""
+"""R specified, the headline: every tier at its datasheet rate."""
+GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
+"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the datasheet's 1,597 GB/s,
+the bus's own rate (512 bits at the 12,481 MHz memory clock it ran at), 4.4% above every write measured on it.  Labels
+derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
+constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
+engines and 51.40 by zero copy (`benchmarks/bandwidth/write.cu`).  A ceiling must bound every prover, and a measured
+rate bounds only the kernels tried, so the sheet's rate stands.  A fill of codec labels
+derived from a seed is bounded lower, by the labeller: the node's `SQUARINGS_PER_S[width]` over the codec's
+`encode_squarings` a block (`audit.Rebuild`), about 1.05 GB/s a GPU under `codec.DEFAULT`."""
+HOST_WRITE_BYTES_PER_S = HOST_SPEC_BYTES_PER_S
+"""The host DRAM's write ceiling: its specified 819.2 GB/s, 16 channels of DDR5-6400, above every write measured on it.
+16 cores of one socket, all a guest got on a loaded node, wrote labels at 207.69 GB/s by non-temporal AVX-512 stores,
+88.16 by `rep stosb` and 82.35 by cached stores (`benchmarks/bandwidth/write_host.c`); a GPU streams labels in at
+57.25 GB/s over its link (D2H, `benchmarks/bandwidth/write.cu`), and 8 links at PCIe 5.0 x16's 63 GB/s are below the
+DRAM's rate.  The sheet's rate stands for `GPU_WRITE_BYTES_PER_S`'s reason, and so does its bound on derived labels.
+No DPU write ceiling is stated: no BlueField-3 fill rate is measured, only its coverage, and the datacenter model reads
+an unset rate as infinite, timing a DPU's wipe by its links."""
 GPU_CHIP_BYTES = 263_163_904
 """One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
-uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, `chip.cu`, runs
-art:2b6cac05 to art:90de6479)."""
-HOST_CHIP_BYTES = 940_435_456
-"""The host's on-chip storage, its two Xeon 6776P sockets' caches: an estimate (M1-v2's `sm120_schip`,
-note:20261015T0553Z-draft-gpu-model-m1-v2)."""
+uniform registers and warp state, its L2, TLB and 1 MiB of buffers (`benchmarks/bandwidth/chip.cu`)."""
+HOST_CHIP_BYTES = 1_000_341_504
+"""The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
+share of them its VM gets (the measured node's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
+each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers and buffers. The cache sizes are the
+guest's CPUID topology on that host type (its lscpu), and the 128 cores the host's
+(`benchmarks/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
+threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and
+fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
-"""S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1,
-note:20261015T0705Z-draft-bandwidth-core-redteam)."""
-GPU_SQUARINGS_PER_S = {"p1024": 1.597 * 1.499e10, "p512": 1.567 * 5.13e10}
+"""S_chip, the node's: every GPU's on-chip storage and the host's caches."""
+LINK_WINDOW_BYTES = 6_291_456
+"""One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
+receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
+holds less)."""
+GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
 """Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form
-on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs
-(ra-squaring-ceiling #1887).  The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024."""
+on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs.
+The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024.  At
+1,024 bits the best form is `kv.cu`'s FOLD 6 at ILP 1, 2.044e10 a second (1.364× the reference), so s =
+1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42).
+A higher ceiling only raises μ_rebuild, from 0.062% to
+0.065% of the node's measured R (γ +0.003 points), so the raise is the conservative direction.  The MOV/SEL-free form
+is modeled, not built, and stays below the conservative reading, Karatsuba's own model (s = 1.68, 1.885× with the
+host)."""
 SQUARINGS_PER_S = {width: GPUS * rate for width, rate in GPU_SQUARINGS_PER_S.items()}
 """C_sq, the node's stated squaring ceiling per width, the sum over its devices: each GPU at s times the reference and
 the host at s·h times the 8 GPUs' reference, above its IFMA bound h."""
@@ -184,7 +218,7 @@ def live_best_interval(pass_ns: int, *, gap_ns: int = 0, rtt_ns: int, jitter_ns:
 
 def opening_bytes(blocks: int, tile_bytes: int = 0) -> int:
     """One opening on the wire (`audit.Opening.size`): the block, its receipt leaf and salt, both paths, the payload's
-    salt, the indices, and PoUW's tile evidence, which PoUW's own sampled check already pays for when the draws
+    salt, the indices, and PoUW's tile evidence, which PoUW's own sampled check already pays for when the samples
     coincide."""
     receipt_depth = math.ceil(math.log2(max(1, math.ceil(blocks / PER_LEAF))))
     payload_depth = math.ceil(math.log2(max(1, blocks)))
@@ -228,15 +262,25 @@ def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
     return min(((r, sketch_rate(rows, r)) for r in range(1, min(rows, SECTOR_BYTES) + 1)), key=lambda x: x[1])
 
 
-def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None) -> Fraction:
+def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None,
+                   blocks: int = 0, outside: int = SKETCH_OUTSIDE) -> Fraction:
     """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
-    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes.  Every key the
-    prover sees is a seed it computed or one of the session's, so it sees at most `compressions + passes`, ground or
-    not, and every guess is a compression: `C · 2^-8r + (C + P) · SECTORS · sign_rank_at_most(rows, r − 1)`."""
+    default), over a session of `passes` passes of `blocks` blocks, against a prover of `Q = outside · compressions`
+    SHA-512 compressions: `compressions` the node's own over the span (C), and `outside` the outside-compute factor F
+    (`SKETCH_OUTSIDE`).  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
+    `Q + passes`, ground or not, and every guess is a compression:
+    `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-257`, the third
+    term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
+    (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose 256-bit sign keys collide share their signs.  At 16 rows
+    and r = 12 it is the δ at which `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
+    if type(outside) is not int or outside < 1:
+        raise ValueError("the outside-compute factor F is a positive integer")
     if r is None:
         r = sketch_reading(rows)[0]
-    return (compressions * Fraction(1, 2 ** (8 * r))
-            + (compressions + passes) * SECTORS * sign_rank_at_most(rows, r - 1))
+    q = outside * compressions
+    return (q * Fraction(1, 2 ** (8 * r))
+            + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** (8 * DIGEST_BYTES)))
+            + Fraction((q + passes) ** 2, 2 ** 257))
 
 
 def grind_compressions(leaves: int) -> int:
@@ -254,7 +298,7 @@ def log2(x: Fraction) -> float:
 
 def samples_for(epsilon: float, delta: float) -> int:
     """The fewest openings with `ε_s ≤ epsilon` at `delta`: `C(n − m, s)/C(n, s) ≤ (1 − m/n)^s`, so the bound on wrong
-    receipts is at most `n·(1 − δ^(1/s)) ≤ n·ln(1/δ)/s`.  A draw the prover can grind over `Q` transcripts needs
+    receipts is at most `n·(1 − δ^(1/s)) ≤ n·ln(1/δ)/s`.  A sample the prover can grind over `Q` transcripts needs
     `samples_for(epsilon, delta / Q)`."""
     return math.ceil(math.log(1 / delta) / epsilon)
 
@@ -270,9 +314,9 @@ def spanning(gpu_bytes: int) -> int:
     return GPUS * gpu_bytes + math.floor(gpu_bytes * HOST_READ_BYTES_PER_S / GPU_READ_BYTES_PER_S)
 
 
-def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = 2.0 ** -40,
+def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = audit.DELTA,
            gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
-           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.Ledger:
+           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.GammaTerms:
     """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`
     (R measured; `SPEC_BYTES_PER_S`, the headline): a pass is the store's read at `read_bytes_per_s`, `samples`
     openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold `CHIP_BYTES`, and
@@ -285,7 +329,7 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
     st = honest(window_ns, windows, pass_ns, gap_ns=gap_ns, down_ns=rtt_ns // 2, up_ns=rtt_ns - rtt_ns // 2,
                 jitter_ns=jitter_ns)
     starts = (0, *st.boundaries[:-1])
-    record = audit.Record(bytes(64), bytes(64), blocks, BLOCK_BYTES, tuple(
+    record = audit.Record(bytes(DIGEST_BYTES), bytes(DIGEST_BYTES), blocks, BLOCK_BYTES, tuple(
         audit.WindowRecord(t, (blocks,) * n, b, d, d, IntegrityProfile(
             ("receipt",), (blocks * n,), {"receipt": Subset(samples)}, delta, drawn={"receipt": samples}))
         for t, (n, b, d) in enumerate(zip(st.passes, starts, st.deadlines))))
@@ -327,7 +371,7 @@ def _sizing(gap: int) -> None:
           f"({store / 1e9:.0f} GB, {p * 1e3:.1f} ms passes), in the steady state at g = {gap // US} µs.  A receipt of m "
           f"blocks: its bits for C(q, k) at q = 2^{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges "
           "them, and the bits 0.05% allows; an opening on that store with a payload leaf a receipt or a block; τ a pass "
-          "scaled from #1916's 8 GiB pass (sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); "
+          "scaled from an 8 GiB pass (sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); "
           "sketch-sha512's rate a compression at m·128 sectors, log2")
     print("| m | KiB | q^k bits | λ | q^k/k! bits | λ | bits at 0.05% | opening B, payload a receipt | a block | τ | rate |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
@@ -506,11 +550,13 @@ def _grid() -> None:
             mark = " (r*)" if r == star else ""
             print(f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |")
     print()
+    fl = SKETCH_OUTSIDE.bit_length() - 1
     for k, (star, rate) in readings.items():
+        q40, q64 = -40 - log2(rate), -64 - log2(rate)
         print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure stays below 2^-40 up to "
-              f"C = 2^{-40 - log2(rate):.2f} compressions ({2 ** (-40 - log2(rate)) / SHA512_PER_S / 86400:.3g} days of "
-              f"{GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), and below 2^-64 up to "
-              f"C = 2^{-64 - log2(rate):.2f} ({2 ** (-64 - log2(rate)) / SHA512_PER_S:.3g} s)")
+              f"Q = 2^{q40:.2f} compressions, the node's C = 2^{q40 - fl:.2f} at F = 2^{fl} "
+              f"({2 ** (q40 - fl) / SHA512_PER_S:.3g} s of {GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), "
+              f"and below 2^-64 up to Q = 2^{q64:.2f}, C = 2^{q64 - fl:.2f}")
     print()
     print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
           f"midstates kept), at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
@@ -522,13 +568,14 @@ def _grid() -> None:
         c = grind_compressions(n)
         print(f"| {name} | {n} | {c} | {c / GPU_SHA512_PER_S * 1e9:.2f} | {math.log2(SHA512_PER_S / c):.2f} |")
     print()
+    f = f"F = 2^{SKETCH_OUTSIDE.bit_length() - 1}"
     print(f"| a session of {GPUS} GPUs, every compression a guess or a key, 50 passes a second | C, log2 | failure at "
-          "r*, 16 rows | 64 rows |")
-    print("| --- | --- | --- | --- |")
+          f"r*, 16 rows, F = 1 | {f} | 64 rows, {f} |")
+    print("| --- | --- | --- | --- | --- |")
     for name, secs in (("1 s", 1), ("10 min", 600), ("1 hour", 3600), ("1 day", 86400), ("30 days", 30 * 86400)):
         c, p = round(SHA512_PER_S * secs), secs * 50
-        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p)):.2f} | "
-              f"2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
+        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
+              f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
 
 
 if __name__ == "__main__":

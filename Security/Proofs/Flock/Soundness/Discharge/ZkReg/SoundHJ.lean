@@ -1,5 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game
 
 /-!
 # One hidden-output `--zk` sampled session of `J` tables with registered reads
@@ -7,16 +30,17 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 `zk_session_soundHJR`: `ZkHidden.zk_session_soundHJ` for `flock-verify verify --zk --registered F` sessions over hidden
 outputs at `--session-tables J` (`J = nTab I`), the production configuration, `own` F's ports, over a public file with
 or without shared-row tables (no `pub.tables = none`, which would make the event empty: `Registered.check` refuses a
-registered port outside a shared-row file's tables). It is to `zk_session_soundHJ` what `zk_session_soundHR` is to
-`zk_session_soundH`. Its first conjunct is `zk_session_soundHJ`'s bound at the event `LiveAcceptsZKR I own` (which
-checks every table's statement) and the rows `rsZHJS`; its second is the registered check's consequence at every
-accepted outcome: the shadow layout's registered reads that are the verifier's own at the draw of the table their unit is
-drawn into (`OwnReadsHJ`) are `Checked` at the outcome's registration, through the paths that table's drawn statement
-gives (`regPathsHJ`).
+registered port outside a shared-row file's tables). Its first conjunct is `zk_session_soundHJ`'s bound at the event
+`LiveAcceptsZKR I own` (which checks every table's statement) and the rows `rsZHJS`; its second is the registered
+check's consequence at every accepted outcome: the shadow layout's registered reads that are the verifier's own at the
+sample of the table their unit is sampled into (`OwnReadsHJ`) are `Checked` at the outcome's registration, through the paths
+that table's sampled statement gives (`regPathsHJ`).
 
 What it rests on: `zk_session_soundHJ`'s assumptions, and nothing more for the second conjunct, which reads only the
 executable's checks.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -39,12 +63,12 @@ theorem zk_session_soundHJR
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

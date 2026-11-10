@@ -1,22 +1,35 @@
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.VBridge.Algebra.Ligerito
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.VBridge.Algebra.Lincheck
+module
+
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.VBridge.Algebra.Build
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G: `Flock.Assumptions.VBridge` at the compiled inner protocol
 
-`vbridge_compiled` concludes `Flock.Assumptions.VBridge` with the inner protocol C-Flock's compiled table
+`vbridge_compiled` concludes `Flock.Assumptions.VBridge` with the inner protocol Flock's compiled table
 (`flockInnerCL`: round messages are the level-0 cap, each round's proof messages and Merkle tops with the prover's
-choices of rep, then, in the round after the last coin, the openings with their salts, which is what the firewall
+choices of rep, then, in the round after the last coin, the openings with their salts, which is what the ZK server
 commits and V* registers). Its hypotheses are the pieces still open, each a
 statement about V* or the verifier, so that each can be proved on its own against this interface:
 
 * `AlgebraDecodes` (G items 1–3): at an accepted outer proof whose layers are all `Good`, each rep's values in V*'s
   layers (`rep`) meet the preconditions E's stage theorems take, apart from the running sums: the verifier rows at the
   rep's coins (`verifierRows`), the structure (`structureOf`), the ports' sizes, and every residual zero. Its proof reads
-  the algebra units the verifier pins (#1590), `PartS.res_partS` for each part, every part present (coverage), and the
+  the algebra units the verifier pins, `PartS.res_partS` for each part, every part present (coverage), and the
   decode of the port columns from the registered reads.
 * `AccChains` (G item 4): at the same outer proofs, each rep's running sums `rec-acc` differ by the levels' consistency
   sums weighted by `kappa`, E's `hacc`, from the chain of level sessions sharing `R₂`.
@@ -31,6 +44,8 @@ statement about V* or the verifier, so that each can be proved on its own agains
 
 The composition itself is proved here; nothing in it is assumed beyond the hypotheses.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Compiled
 
@@ -119,14 +134,14 @@ section target
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [DecidableEq K] {D Sl : Type}
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-/-- **VBridge G: V*'s circuits compute C-Flock's compiled inner verifier.** `Flock.Assumptions.VBridge` with the inner
+/-- **VBridge G: V*'s circuits compute Flock's compiled inner verifier.** `Flock.Assumptions.VBridge` with the inner
 protocol `flockInnerCL` (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins),
 from the pieces still open: the algebra decoded from V*'s layers (`AlgebraDecodes`), the running sums' chain
 (`AccChains`), the inner verifier's stages run from E's conclusions (`StagesAccept`), and V*'s files and laws
 (`VCommits`, `VDecodesR`, `VFullR`). -/
 theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
-    (sch : Accounting.Schedule) {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (sch : FlockSoundness.Accounting.Schedule) {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → Hidden cls)

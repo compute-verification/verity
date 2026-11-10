@@ -8,7 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from verity_vllm.check.verdict import from_record, mapping_markdown
+from verity_vllm.check.verdict import from_record
+from verity_vllm.check.verdict_names import mapping_markdown
 from verity_vllm.config import option
 
 

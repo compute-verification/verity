@@ -1,6 +1,50 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.Soundness.Refine.Ligerito
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+import Batteries.Recycling.MonadSatisfying.Array
+import Flock.With.Eq
+import all Init.Data.Array.Basic
+import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.LawfulXor.Basic
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Session
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Every level's Merkle opening passes at every honest rep
@@ -16,9 +60,11 @@ Merkle check passes at its query coins (`MerkleOk`), given that the table's sche
   verifier's check (`merkleCheckWith`) against its cap: each query's siblings climb from its leaf to its cap entry
   (`climb_ok`).
 * **The honest openings** (`ligeritoP_opens`, `Opens`): the honest prover's Ligerito, run from round `k`, opens level
-  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier draws them; the
+  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier samples them; the
   rounds are counted by `KRuns`, every run of a step from round `k` ending `d` rounds on.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -402,10 +448,9 @@ theorem KRuns.pow {L : ℕ} (nonce : ℕ → ℕ → UInt64) (kind : ℕ) (k : �
     KRuns L (powP nonce kind) k k fun _ => True := by
   refine KRuns.still (fun st t l => ?_) k
   rcases kind with _ | _ | kind
-  · exact ⟨(), { st with qn := st.qn.push (nonce 0 st.qn.size) }, pN (nonce 0 st.qn.size), rfl, trivial⟩
-  · exact ⟨(), { st with cn := st.cn.push (nonce 1 st.cn.size) }, pN (nonce 1 st.cn.size), rfl, trivial⟩
-  · exact ⟨(), { st with cbn := st.cbn.push (nonce (kind + 2) st.cbn.size) }, pN (nonce (kind + 2) st.cbn.size), rfl,
-      trivial⟩
+  · exact ⟨(), { st with qn := st.qn.push 0 }, pN 0, rfl, trivial⟩
+  · exact ⟨(), { st with cn := st.cn.push 0 }, pN 0, rfl, trivial⟩
+  · exact ⟨(), { st with cbn := st.cbn.push 0 }, pN 0, rfl, trivial⟩
 
 theorem KRuns.sampleVec {L : ℕ} (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (k : ℕ) :
     KRuns L (liftT (sampleVecP (asksS resp) n)) k (k + 1) fun v => v = (Array.range n).map (coinOf (resp (L + k))) := by
@@ -509,7 +554,7 @@ theorem KRuns.query {L : ℕ} (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ �
   refine (KRuns.pow nonce 1 _).bind fun _ _ => (KRuns.sampleVec resp (Nat.succ_ne_zero _) _).bind fun _ _ => ?_
   exact KRuns.pure (by rw [hc]) rfl
 
-theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
+theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (last : Bool) (k : ℕ) :
     KRuns L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
           let r ← liftT (sampleKP (asksS resp))
@@ -521,7 +566,7 @@ theorem levelChalsK {L : ℕ} (resp : ℕ → Claims.Msg) (k : ℕ) :
             { tab := embedF (splitK st.tab), w := liftU st.w, msgs := st.msgs, oods := st.oods, qn := st.qn,
               cn := st.cn, cbn := st.cbn }
           let st ← get
-          FlockComplete.sendMsg (roundPoly st.tab st.w)
+          FlockComplete.sendMsg (if last = true then roundPoly d.tab d.w else roundPoly st.tab st.w)
           pure (ForInStep.yield d.tab)
         else do
           let _ ← challengeP (asksS resp) false
@@ -556,7 +601,7 @@ theorem KRuns.absorbAll {L : ℕ} (ws : Array F128) (k : ℕ) :
 
 /-! ## The honest openings -/
 
-/-- Level `j`'s query positions, drawn at round `k + qOff sch j`. -/
+/-- Level `j`'s query positions, sampled at round `k + qOff sch j`. -/
 def posAt (sch : Schedule) (cf : ℕ → ℕ → F128) (k j : ℕ) : Array ℕ :=
   positions (sch.levels.getD j default) ((Array.range (sch.levels.getD j default).q).map (cf (k + qOff sch j)))
 
@@ -649,7 +694,7 @@ theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
       rw [if_pos hj]
       by_cases hj1 : j + 1 < R
       · rw [if_pos hj1]
-        refine (levelChalsK resp _).bind fun f _ => ?_
+        refine (levelChalsK resp _ _).bind fun f _ => ?_
         refine KRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
         refine (KRuns.commit h ms _ _ _ _).bind fun cmN hcmN => ?_
         refine (KRuns.absorb _ (pBytes _) (fun t => Flock.RecAlgebra.absorbBytes_eq _ t) _).bind fun _ _ => ?_
@@ -677,7 +722,7 @@ theorem ligeritoP_opens (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
           · exact hop
       · rw [if_neg hj1]
         have hjR : j + 1 = R := by omega
-        refine (levelChalsK resp _).bind fun f _ => ?_
+        refine (levelChalsK resp _ _).bind fun f _ => ?_
         refine KRuns.ite (fun hc => absurd hc (by simp [hjR])) fun _ => ?_
         refine (KRuns.absorbAll _ _).bind fun _ _ => ?_
         refine (KRuns.query resp nonce ms _ s.2.1 (hq _ (by omega)) _).bind fun q hq' => ?_

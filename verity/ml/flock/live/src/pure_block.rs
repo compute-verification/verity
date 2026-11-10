@@ -1,5 +1,5 @@
 //! `verity/flock-pure-block/v1`: the Flock backend's committed relation as ONE block R1CS, so Flock-CUDA can prove it
-//! (no union prover, no wiring argument). Lane flock-gpu-link; the backend and the CPU union statement are flock-backend's.
+//! (no union prover, no wiring argument). The CPU union statement is the Flock backend's own.
 //!
 //! Block `b = 3 v + c` is chunk `c` of VU `v` (a 16-bit row is 3 BLAKE3 chunks, each read by 32 units). `k_log` 20:
 //! - slots 0..16 (2^14 bits each): the x row's chunk `c`, 16 compressions (Flock's circuit);
@@ -14,7 +14,7 @@
 //!   are `A = B = [i]`), and its accumulator input a copy of unit u − 1's `c_out` (u ≥ 1);
 //! - every sub-circuit's constant a copy of the one pinned column (slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps):
+//! Public regions, each opened at two verifier points sampled after the commitment (both reps):
 //! the key (slot 0 and 16 chaining inputs), the counter (all 32 compressions: `c`), the chunk chaining values (slot 15
 //! and 31 `out_lo`, sent in `Commit` and checked natively against the leaf digests), unit 0's accumulator input and
 //! unit 31's `c_out` (a prover-committed public word per block: block (v, c)'s AccOut and block (v, c + 1)'s AccIn open
@@ -50,7 +50,7 @@ pub const TAG: &[u8] = b"verity/flock-pure-block/v2";
 /// Coordinates per verifier point: the regions' free in-block bits come from `r[..16]`, block bits from `r[16..]`.
 pub const PT_LOCAL: usize = 16;
 
-/// The `flock-unit-io/v1` lowered unit (flock-backend's `verity_flock.lowering`), read-only.
+/// The `flock-unit-io/v1` lowered unit (`verity_flock.lowering`), read-only.
 /// The block shape of one relation family.
 /// - `Chunk(n)` (rows of n whole BLAKE3 chunks, 32 units per chunk: 16-bit K = 1536 is `Chunk(3)`, K = 2048 `Chunk(4)`,
 ///   K = 8192 `Chunk(16)`; 8-bit K = 2048 `Chunk(2)`, K = 8192 `Chunk(8)`): block (v, c) is chunk c of VU v; `k_log` 20;
@@ -313,7 +313,7 @@ impl UnitNet {
     }
 }
 
-/// The instance file (`flock-pure-instances/v1`, flock-backend's `verity_flock.instances`), read-only.
+/// The instance file (`flock-pure-instances/v1`, `verity_flock.instances`), read-only.
 #[derive(Clone)]
 pub struct Instances {
     pub header: serde_json::Value,

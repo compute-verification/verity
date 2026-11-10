@@ -4,7 +4,7 @@ events shaped as vLLM d9105ea80 issues them for GLM-5.3 at a TP8 rank on the H20
 default dynamic block-FP8 linears.
 
 It checks that the scope claims every event and binds the gate (both tiers, through the profile's `gate_spec`), the shared expert's
-two dynamic block-FP8 linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with #1944's
+two dynamic block-FP8 linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with the
 MMAv2/QGMMA step selection (`fp8_moe.sm90_dot`), the routed SiLU and its quant and `moe_sum`, with operand rows the Definitions'
 parameters fit, and that the combine after the op is `ResidualAdd_v1`; that without a `gate_spec` the gate is the Build's
 (`served_gate_spec`); and that it refuses, by name, a gate with no Definition, an unattested cuteDSL gate, a missing attestation, a
@@ -12,6 +12,8 @@ bad k32 pin, another router, another block, the fused SiLU quant and shared expe
 attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import dataclasses
 import importlib
@@ -21,17 +23,18 @@ import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
-from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import TRITON_EXPERTS, MoEFusedExpertsFp8
-from verity_vllm.engine.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8, served_gate_spec
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import TRITON_EXPERTS, MoEFusedExpertsFp8
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8, served_gate_spec
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import moe as MOE
+from verity.ml.definitions.registry.prims import BF16, F32
 
-Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 H, I, SI, E, TOPK, G, RSF = 6144, 256, 256, 256, 8, 128, 2.5
 C = {"NUM_EXPERTS": E, "TOPK": TOPK, "H": H, "I": I, "SHARED_I": SI, "ROUTED_SCALING_FACTOR": RSF}
 CUDA = "cuda:0"
@@ -236,7 +239,7 @@ def _reasons(res) -> list:
     return [getattr(r, "reason", r) for r in res if isinstance(r, Unsupported)]
 
 
-#: #1944's tile-dependent e4m3 step (`fp8_moe.sm90_dot`): the M=4 tile (8, 64) puts the dot's N at 8 under SWAP_AB, MMAv2;
+#: the tile-dependent e4m3 step (`fp8_moe.sm90_dot`): the M=4 tile (8, 64) puts the dot's N at 8 under SWAP_AB, MMAv2;
 #: the M=16 (16, 64) and M=32 (16, 128) tiles are wgmma, QGMMA
 @pytest.mark.parametrize("M,gate,dot", [(4, GATE_CUBLAS, "HopperE4m3MmaV2Dot32_v1"), (32, GATE_CUBLAS, "HopperE4m3QgmmaDot32_v1"),
                                         (4, GATE_CUTEDSL, "HopperE4m3MmaV2Dot32_v1"), (16, GATE_CUTEDSL, "HopperE4m3QgmmaDot32_v1")])
@@ -292,7 +295,9 @@ def test_the_cutedsl_gate_binds_the_gate_weight_root_by_the_empty_it_fills():
 @pytest.mark.parametrize("M,tier,want", [
     (1, GATE_CUTEDSL, "LlBf16DotprodGemm_v1{N=256,K=6144,BS=128,VEC=8,FMA=1}"),
     (256, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}"),
-    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (64, GATE_CUBLAS, None)])
+    (64, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}"),
+    (2049, GATE_CUBLAS, "GemmF32Out_v1{K=6144,N=256,DOT=HopperBF16WgmmaDot16_v1}"),
+    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (BC.CUBLAS_ROUTES["m_max"] + 1, GATE_CUBLAS, None)])
 def test_without_a_gate_spec_the_gate_is_the_builds_on_the_tier_vllm_dispatches(M, tier, want):
     got = served_gate_spec(H200, H, E, M, tier)
     assert (got[0].id if got else None) == want

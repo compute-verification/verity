@@ -109,7 +109,7 @@ def test_the_lead_refuses_by_name_a_group_it_cannot_run(tmp_path):
                         (lambda r: setattr(r.ck_, "replay_deferred", "0"), "--replay-deferred"),
                         (lambda r: setattr(r.ck_, "hot_engine", "1"), "--hot-engine 1"),
                         (lambda r: setattr(r.ck_, "serving_rows", "p.json"), "--serving-rows"),
-                        (lambda r: setattr(r, "protocols", ("pouw:ncp", "sampled-proofs:vllm-v1")), "protocol options")]:
+                        (lambda r: setattr(r, "protocols", ("pouw:ncp", "sampled-proofs:rows-sha512")), "protocol options")]:
         r = Fake(tmp_path, "a")
         change(r)
         assert why in RG.refusal(r)
@@ -153,7 +153,7 @@ class Member(Fake):
     def commit_prepare(self):
         if self.stop == "commit":
             raise Stop(12)
-        return 600, self.cmd or ["py", "-m", "verity_vllm.pipeline.cli", "commit", "--label", self.row]
+        return 600, self.cmd or ["py", "-m", "verity_vllm.pipeline.cli", "commit", "--label", self.row], ""
 
 
 def test_a_member_whose_preparation_stops_or_whose_environment_differs_is_refused_by_name(tmp_path):

@@ -8,15 +8,29 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import env as engine_env, served
 
 
-def apply(target: Any) -> tuple[dict[str, str], dict[str, Any]]:
-    """The environment knobs ``target`` declares, applied (`engine.env.apply_target`), and the engine arguments it declares; nothing
-    without a declared target."""
+def apply(target: Any, execution: str | None) -> tuple[dict[str, str], dict[str, Any]]:
+    """The environment the row's ``execution`` label (`engine.served.apply`) and then ``target`` declare, applied, and the engine
+    arguments ``target`` declares (none without a declared target).  Its int8 parts are registered here and exported to the ranks
+    (`engine.int8_ranks`)."""
+    env = served.apply(execution)
     if target is None:
-        return {}, {}
-    return engine_env.apply_target(target.env()), target.engine_args()
+        return env, {}
+    from verity_vllm.engine.build import register_int8_parts
+    env = {**env, **engine_env.apply_target(target.env())}
+    register_int8_parts(target)
+    return env, target.engine_args()
+
+
+def extension(target: Any, want: str | None) -> str | None:
+    """The engine's `worker_extension_cls`: `want`, else `engine.int8_ranks.EXTENSION` when ``target`` serves int8 parts (its ranks
+    import it before they build the model), else None."""
+    if want is None and getattr(target, "int8_parts", ()):
+        from verity_vllm.engine.int8_ranks import EXTENSION
+        return EXTENSION
+    return want
 
 
 def as_json(target: Any) -> dict | None:
@@ -47,4 +61,4 @@ def require_ranks(llm: Any, target: Any, timeout: float) -> list[dict[str, Any]]
     return answers
 
 
-__all__ = ["apply", "as_json", "rank_mismatches", "require_ranks"]
+__all__ = ["apply", "as_json", "extension", "rank_mismatches", "require_ranks"]

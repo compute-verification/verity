@@ -1,0 +1,12 @@
+{
+ "deepseek_v4": {
+  "source": "vllm deepseek_v4.nvidia.model._make_deepseek_v4_weights_mapper: MXFP4 experts' .scale is their weight_scale, FP8 experts' weight_scale_inv as every other block scale",
+  "regex": [["(\\.experts\\.\\d+\\.w[123])\\.scale$", {"by": "expert_dtype", "fp4": "\\1.weight_scale", "else": "\\1.weight_scale_inv"}],
+            ["\\.scale$", ".weight_scale_inv"]],
+  "substr": [[".shared_experts.w2", ".shared_experts.down_proj"], ["mtp.", null]],
+  "prefix": [["layers.", "model.layers."], ["embed.", "model.embed."], ["norm.", "model.norm."], ["hc_head", "model.hc_head"],
+             ["mtp.", "model.mtp."]],
+  "suffix": [["head.weight", "lm_head.weight"], ["embed.weight", "embed_tokens.weight"],
+             [".ffn.gate.bias", ".ffn.gate.e_score_correction_bias"]]
+ }
+}

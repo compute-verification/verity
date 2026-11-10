@@ -1,22 +1,20 @@
 """Hidden rows R5–R8 (FA2 fp32 scores, softmax weights, bf16 P fragments, running max / rescale / lane sums / accumulators / epilogue)
-as an acquisition source of `native_host`: CMT-2's **M1 export tap** (`out/gen/r9/cmt-hidden/API.md` §1; tap-enabled FA2 extension
-`verity_fa2_matAll.so`, pinned FA2 tree 506341a1 + `verity_tap_v7.patch`, `VERITY_TAP=3`, `VERITY_MAT_SRC=63`).
+as an acquisition source of `native_host`: the **M1 export tap** (the tap-enabled FA2 extension `verity_fa2_matAll.so`, pinned FA2 tree 506341a1 + `verity_tap_v7.patch`, `VERITY_TAP=3`, `VERITY_MAT_SRC=63`).
 
 Mechanism: vLLM's FA2 backend calls `torch.ops._vllm_fa2_C.varlen_fwd(...)`; we replace that attribute with a wrapper that (i) derives the
 kernel geometry (HB = b·h slabs, M query rows, NB key-block cap) exactly as `hidden_tap.kernel_geometry`, (ii) points the tap at a
 preallocated per-geometry i32 stream buffer (padded to whole 64-word chunks) with the per-launch tag, (iii) calls the TAPPED kernel
-(`torch.ops.verity_fa2_matAll.varlen_fwd`, same signature; out/lse bit-identical to the installed kernel — CMT-2 `check_base.json`,
-`xcheck_m1.json`, 38 shapes) and (iv) hands the stream buffer to the committer's arena acquisition on the compute stream (a D2D snapshot
+(`torch.ops.verity_fa2_matAll.varlen_fwd`, same signature; out/lse bit-identical to the installed kernel) and (iv) hands the stream buffer to the committer's arena acquisition on the compute stream (a D2D snapshot
 ordered after the kernel, before the buffer is reused by the next layer).  The stream is then part of the SAME packed step stream / step
 root / run root as the native rows, in `chunk`-byte position-identified leaves (identity = (step, byte range) → tensor `fa2.m1/L<k>`
-with its geometry in the layout digest).  Complete-but-slow reference: prefill_155 exports 4.40 MB per launch (×30 layers), decode 28 KB.
+with its geometry in the layout digest).
 
-Stream layout (CMT-2 `StreamLayout`): S, P [HB, M, N] f32; RP [HB, M, N/2] u32 (bf16 pairs); ROW [HB, M, NB, 8] f32; O [HB, M, NB, D]
+Stream layout (`StreamLayout`): S, P [HB, M, N] f32; RP [HB, M, N/2] u32 (bf16 pairs); ROW [HB, M, NB, 8] f32; O [HB, M, NB, D]
 f32; FIN [HB, M, 4], with N = NB * kBlockN.  Rows ≥ seqlen_q / blocks ≥ n_block_max are never written: the buffer is reused
-deterministically (same launch sequence ⇒ same bytes, CMT-2 `xcheck_m1.json`); unvisited words carry the previous launch's content of
+deterministically (same launch sequence ⇒ same bytes); unvisited words carry the previous launch's content of
 the same geometry — bound but outside the layout (the verifier's queries never address them).
 
-R13 lane fa2 (C-FA2-HDIM, tap layout v8): the layout is arithmetic in the kernel tile (kBlockN, head_dim) -- 128/64 for SmolLM2/Llama,
+Tap layout v8 (C-FA2-HDIM): the layout is arithmetic in the kernel tile (kBlockN, head_dim) -- 128/64 for SmolLM2/Llama,
 64/96 for Phi-3, 64/128 for Qwen2.5/Mistral/OLMoE (num_splits == 1 "align" kernel, `fa2_kblock_n`).  The wrapper declares the tile per
 launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equals the declaration, otherwise it counts the launch in
 `verity_tap_skipped` and writes nothing -- which the wrapper turns into a collector error (X-03: expected != committed -> COMMIT FAIL).
@@ -24,14 +22,14 @@ launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equa
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Mapping
 
 from verity_vllm.engine import hooks
 
 KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
 CHUNK_WORDS = 64
-LEGACY_TILE = (128, 64)   # (kBlockN, head_dim) of the R9 hd-64 tap: same stream layout, names and roots as before R13
+LEGACY_TILE = (128, 64)   # (kBlockN, head_dim) of the v7 hd-64 tap: v8 keeps its stream layout, names and roots
 
 
 def fa2_kblock_n(head_dim: int, num_splits: int) -> int:
@@ -49,12 +47,12 @@ def fa2_kblock_n(head_dim: int, num_splits: int) -> int:
 
 def fa2_swapped(max_seqlen_q: int, H: int, Hk: int, head_dim: int, window_left: int, window_right: int, dropout_p: float = 0.0,
                 alibi_slopes=None) -> bool:
-    """[R15 capacity] `seqlenq_ngroups_swapped` of the pinned FA2 varlen forward (flash_api.cpp:646): a decode launch (max_seqlen_q == 1)
+    """`seqlenq_ngroups_swapped` of the pinned FA2 varlen forward (flash_api.cpp:646): a decode launch (max_seqlen_q == 1)
     of a GQA model folds the H/Hk query heads of each KV group into the row dimension (rows = groups, heads = Hk) ONLY when no sliding
     window is set (window_left < 0 and window_right < 0), dropout is 0, head_dim % 8 == 0 and there are no alibi slopes.  vLLM passes
     window_size (sliding_window - 1, 0) on the sliding layers of Gemma-2 (every other layer) / Phi-3, so their decode launches run the
-    UN-swapped kernel (b*H slabs of 1 row); the R13 mirror (`max_seqlen_q == 1 and H > Hk`) declared the swapped geometry there and the
-    kernel refused the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
+    UN-swapped kernel (b*H slabs of 1 row); a mirror of `max_seqlen_q == 1 and H > Hk` alone would declare the swapped geometry there and
+    the kernel would refuse the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
     a wrong binding).  This mirrors the kernel's own rule so the declared (HB, M) is the launched one."""
     return (int(max_seqlen_q) == 1 and H > Hk and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
             and head_dim % 8 == 0 and alibi_slopes is None)
@@ -68,20 +66,20 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int = 128, D: int = 64, ms: bo
 
 
 def fa2_tap_words_per_seq(h: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
-    """[R18 tap, F-r17-23] Words of the padded M1 tap buffer ONE sequence occupies in a multi-sequence launch: its h slabs x the launch's
+    """Words of the padded M1 tap buffer ONE sequence occupies in a multi-sequence launch: its h slabs x the launch's
     row pitch M (= max_seqlen_q) x the six plane widths -- `mat_total_words(HB, M, NB, BN, D) / HB`.  Independent of the sequence's own
     length (the buffer is pitched to the batch maximum); the STAGED bytes are the compacted rows < seqlen_q only (native_collect.cpp p0b)."""
     return mat_total_words(1, M, NB, BN, D, ms) * h
 
 
 def fa2_tap_buffer_words(b: int, h: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
-    """Padded (whole 64-word chunks) tap buffer of a launch of `b` sequences -- the allocation F-r17-23 named (B64 llama 1024: 6,585,057,280
-    words = 26,340,229,120 B = 24.53 GiB; the exact byte count of the r17_0738 OOM)."""
+    """Padded (whole 64-word chunks) tap buffer of a launch of `b` sequences (B64 llama 1024: 6,585,057,280 words =
+    26,340,229,120 B = 24.53 GiB, an allocation that ran out of device memory; `plan_fa2_tap_groups` bounds it)."""
     return -(-(b * fa2_tap_words_per_seq(h, M, NB, BN, D, ms)) // CHUNK_WORDS) * CHUNK_WORDS
 
 
 def plan_fa2_tap_groups(b: int, words_per_seq: int, cap_words: int) -> list[tuple[int, int]]:
-    """[R18 tap, F-r17-23] Consecutive sequence groups [g0, g1) of a `b`-sequence launch such that every group's padded tap buffer
+    """Consecutive sequence groups [g0, g1) of a `b`-sequence launch such that every group's padded tap buffer
     (g1 - g0) * words_per_seq (rounded to whole chunks) fits `cap_words`; order preserved, every sequence in exactly one group.  A single
     sequence larger than the cap forms its own group (the driver records `cap_exceeded` -- the per-sequence cost h*M*W is the residual bound
     the split cannot lower; it is quadratic in the sequence length, not in the batch).  cap_words <= 0 -> one group (bounded path off)."""
@@ -97,8 +95,19 @@ def plan_fa2_tap_groups(b: int, words_per_seq: int, cap_words: int) -> list[tupl
 
 def tap_row3(ns: Any) -> int:
     """What word 3 of the build's ROW entries holds (`verity_tap_row3`): 0 = never written (builds before the op included), 1 = the guarded
-    max (`query.guarded_max`)."""
+    max (`TAP_ROW3`)."""
     return int(ns.verity_tap_row3()) if hasattr(ns, "verity_tap_row3") else 0
+
+
+#: `verity_tap_row3()` of the tap build a manifest built under the guarded-max policy needs (ROW word 3 the guarded max of each key
+#: block after a row's first, and the MS class after FIN); no manifest is built under it since the M1 stream left the manifest
+TAP_ROW3 = 1
+
+
+def guarded_max_policy(manifest: Mapping[str, Any] | None) -> bool:
+    """Whether a manifest was built under the guarded-max policy (its query header has a `guarded_max` record)."""
+    q = (manifest or {}).get("query")
+    return isinstance(q, dict) and isinstance(q.get("guarded_max"), dict)
 
 
 def tap_ms(src: int) -> bool:
@@ -108,8 +117,8 @@ def tap_ms(src: int) -> bool:
 
 
 def stream_name(k: int, HB: int, M: int, NB: int, BN: int, D: int) -> str:
-    """Identity of launch k's stream in the step layout (the geometry is part of the layout digest).  The hd-64 tile keeps the
-    pre-R13 name so hd-64 roots are unchanged; other tiles carry (kBlockN, head_dim) explicitly."""
+    """Identity of launch k's stream in the step layout (the geometry is part of the layout digest).  The hd-64 tile
+    (`LEGACY_TILE`) keeps its stream's original name so hd-64 roots are unchanged; other tiles carry (kBlockN, head_dim) explicitly."""
     base = f"fa2.m1/L{k}/g{HB}x{M}x{NB}"
     return base if (BN, D) == LEGACY_TILE else f"{base}x{BN}x{D}"
 
@@ -131,8 +140,8 @@ class HiddenM1Source:
         if self.mode != 3:
             raise RuntimeError(f"{ns}: compiled tap mode {self.mode} != 3 (M1)")
         self.tapped_op = self.ns.varlen_fwd
-        # R13 fa2 v8: head-dim-portable build exposes verity_set_tap_v8 (declares (kBlockN, head_dim)) and verity_tap_hdims (compiled hd mask);
-        # the R9 build has neither and covers hd 64 only.
+        # the head-dim-portable v8 build exposes verity_set_tap_v8 (declares (kBlockN, head_dim)) and verity_tap_hdims (compiled hd mask);
+        # the v7 build has neither and covers hd 64 only.
         self.v8 = hasattr(self.ns, "verity_set_tap_v8")
         self.hdims = int(self.ns.verity_tap_hdims()) if self.v8 else (1 << 2)
         self.installed_ns = getattr(torch.ops, self.INSTALLED_NS)
@@ -148,10 +157,9 @@ class HiddenM1Source:
         self.time_launch = None
 
     def require_row3(self, guarded_max: bool) -> None:
-        """Refuse a build whose ROW word 3 or MS class is not the manifest's: the guarded-max policy needs a build that writes the guarded
-        max and the MS class, any other manifest one that writes neither (the stream bytes of record)."""
-        from verity_vllm.query.guarded_max import TAP_ROW3
-
+        """Refuse a build whose ROW word 3 or MS class is not the manifest's: a manifest built under the guarded-max policy
+        (`guarded_max_policy`) needs a build that writes the guarded max and the MS class, any other manifest one that writes neither
+        (the stream bytes of record)."""
         want = TAP_ROW3 if guarded_max else 0
         policy = "is under the guarded-max policy" if guarded_max else "has no guarded-max policy"
         if self.stats["row3"] != want:
@@ -179,7 +187,7 @@ class HiddenM1Source:
             raise RuntimeError(f"fa2 tap {self.ns_name}: head_dim {head_dim} not compiled (hdims {self.stats['hdims']}); rebuild with pod_fa2_tap.sh")
         BN = fa2_kblock_n(head_dim, num_splits)
         if not self.v8 and (BN, head_dim) != LEGACY_TILE:
-            raise RuntimeError(f"fa2 tap {self.ns_name}: R9 (v7) build declares the hd-64 layout only; tile ({BN}, {head_dim}) needs the v8 build")
+            raise RuntimeError(f"fa2 tap {self.ns_name}: the v7 build declares the hd-64 layout only; tile ({BN}, {head_dim}) needs the v8 build")
         return BN, head_dim
 
     def arm(self, buf, HB: int, M: int, NB: int, BN: int, D: int, tag: int) -> None:
@@ -199,8 +207,8 @@ class HiddenM1Source:
             self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.c.errors.append(f"fa2 tap skipped count: {e!r}"[:200])
         self.ns.verity_set_tap(0, None, None, 0, 0, 0, 0)
         self.active = False
 
@@ -274,15 +282,15 @@ class HiddenM1Source:
                  "rule": None, "count": None, "bytes": self.stats["bytes"], "tensors": self.stats["launches"],
                  "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"], **({"row3": "guarded max"} if self.stats["row3"] else {}),
                  **({"ms": "max * scale per key block"} if self.ms else {}),
-                 "evidence": (f"CMT-2 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
+                 "evidence": (f"FA2 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
                               f"{self.stats['hdims']}) in place of _vllm_fa2_C.varlen_fwd; stream buffer per launch acquired into the packed step "
                               f"stream (same run root); geometries (HB, M, NB[, kBlockN, head_dim]) {self.stats['geometries']}; tap_skipped "
-                              f"{self.stats['skipped']}; value correspondence: CMT-2 xcheck_m1.json / check_base.json (hd 64, 38 shapes); out/lse "
+                              f"{self.stats['skipped']}; out/lse "
                               f"bit-identical to the installed kernel: verity_vllm.properties.fa_tap_exactness")}]
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# R13 lane hopper: the same M1 export-and-commit source for FlashAttention-3 (sm90, `_vllm_fa3_C.fwd`), tap layout v9 = the FA2 v8 word
+# the same M1 export-and-commit source for FlashAttention-3 (sm90, `_vllm_fa3_C.fwd`), tap layout v9 = the FA2 v8 word
 # layout over PackGQA-packed rows (`verity_vllm/acquire/fa3_tap_src/verity_tap_fa3.h`; exactness: verity_vllm.properties.fa_tap_exactness).
 # ----------------------------------------------------------------------------------------------------------------------------------
 def fa3_tile(head_dim: int, max_seqlen_q: int, qheads_per_kvhead: int, num_splits: int) -> tuple[int, int]:
@@ -360,8 +368,8 @@ class HiddenM1SourceFA3(HiddenM1Source):
             self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.c.errors.append(f"fa3 tap skipped count: {e!r}"[:200])
         self.ns.verity_set_tap_off()
         self.active = False
 
@@ -431,7 +439,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
                  "rule": None, "count": None, "bytes": self.stats["bytes"], "tensors": self.stats["launches"],
                  "tap_layout": self.stats["tap_layout"], "hdims": self.stats["hdims"], "tiles": dict(self.stats["tiles"]),
                  **({"row3": "guarded max"} if self.stats["row3"] else {}), **({"ms": "max * scale per key block"} if self.ms else {}),
-                 "evidence": (f"R13 hopper FA3 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
+                 "evidence": (f"FA3 M1 export tap {self.ns_name} (mode {self.mode}, src {self.src}, layout v{self.stats['tap_layout']}, hdims "
                               f"{self.stats['hdims']}) in place of _vllm_fa3_C.fwd; stream buffer per launch acquired into the packed step stream "
                               f"(same run root); geometries (HB=b*h_k, M=packed rows, NB, kBlockN, head_dim) {self.stats['geometries']}; tiles {self.stats['tiles']}; "
                               f"tap_skipped {self.stats['skipped']}; out/lse bit-identical to the installed _vllm_fa3_C.fwd (hd 64/128, tiles 192x128 / "
@@ -449,8 +457,9 @@ def hidden_class_for(flash_attn_version: int | None) -> str:
 
 def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
     """The attention hidden class this Commit binds, `{"family": class | None, "why": ...}`: None when the model instantiated no
-    FlashAttention impl (`engine.build.flash_attn_versions`; MLA / DSA sparse MLA, GLM-5.3: no `varlen_fwd`, no M1 tap fires); else the
-    hidden family the required-value `manifest`'s identities name, or without one (or none named) the impls' FA version's class."""
+    FlashAttention impl (`engine.build.flash_attn_versions`; MLA / DSA sparse MLA, GLM-5.3: no `varlen_fwd`, no M1 tap fires) or the
+    required-value `manifest` names none (`query.required`: the M1 stream is no Value of the Program); else the hidden family its
+    identities name, or without a manifest the impls' FA version's class."""
     from verity_vllm.engine.build import flash_attn_versions
 
     vs = flash_attn_versions(model)
@@ -461,6 +470,8 @@ def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
         raise ValueError(f"required manifest names two attention hidden families {fams}")
     if fams:
         return {"family": fams[0], "why": "required manifest identities"}
+    if manifest is not None:
+        return {"family": None, "why": "the required manifest names no attention hidden stream"}
     return {"family": hidden_class_for(int(next(iter(vs))) if len(vs) == 1 and None not in vs else None),
             "why": f"the attention impls' vllm_flash_attn_version {sorted(vs, key=str)}"}
 
@@ -497,7 +508,7 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
                        manifest=None):
     """The M1 source matching the tap build at `so_path` (an FA3 v9 build exposes `verity_set_tap_v9`; FA2 v7/v8 builds `verity_set_tap`).
     Refuses a tap of the other attention implementation than the engine's `flash_attn_version` (when given): the FA2 tap loaded under
-    FA3 never fires (F-hw-08) -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
+    FA3 never fires -- that is a configuration error to report at attach time, not a zero to discover at the verdict.  With the
     required-value `manifest`, also refuses a build whose ROW word 3 or MS class is not the manifest's (`require_row3`)."""
     import torch
 
@@ -510,7 +521,5 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
     cls = (fa3_cls or HiddenM1SourceFA3) if is_fa3 else (fa2_cls or HiddenM1Source)     # a committer may supply its native (C++) twins
     src = cls(committer, so_path, ns=ns)
     if manifest is not None:
-        from verity_vllm.query.guarded_max import policy_of
-
-        src.require_row3(policy_of(manifest))
+        src.require_row3(guarded_max_policy(manifest))
     return src

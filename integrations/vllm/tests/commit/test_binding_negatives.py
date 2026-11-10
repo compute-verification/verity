@@ -1,15 +1,15 @@
-"""R14 BIND-01 — the six mandatory negatives of brief §4 against the binding map + coverage checker (`verity_vllm/commit/binding.py`),
+"""The six mandatory binding negatives against the binding map + coverage checker (`verity_vllm/commit/binding.py`),
 through the committer's offline core (no engine, no CUDA): the verifier holds the ORIGINAL RunCommitment and the binding map fixed at
 finalize; the expected population is independent of the collector (structure x workload).
 
 | mutation                                  | expected                                             | test |
-| drop output member `/1`, bind `/0` twice  | coverage FAIL (old X-03 identity_check PASSES: F-rev-01) | test_drop_member_and_duplicate_other_is_rejected |
+| drop output member `/1`, bind `/0` twice  | coverage FAIL (identity_check alone PASSES)          | test_drop_member_and_duplicate_other_is_rejected |
 | omit a whole producer family              | coverage FAIL                                        | test_omitted_family_is_rejected |
 | omit one request / step / TP rank         | coverage FAIL                                        | test_omitted_{request,step,rank}_is_rejected |
 | read a buffer after overwrite             | openings verify, value-correspondence FAIL           | test_late_read_verifies_but_fails_correspondence |
 | relabel data from a different occurrence  | coverage ok, openings verify, correspondence FAIL    | test_relabelled_occurrence_is_rejected |
 | wrong root or layout                      | opening / context FAIL                               | test_wrong_root_or_layout_is_rejected |
-Openings are drawn from the expected population (incl. the last step and every family), not from the leaves that exist.
+Openings are sampled from the expected population (incl. the last step and every family), not from the leaves that exist.
 """
 from __future__ import annotations
 
@@ -18,13 +18,15 @@ import random
 
 import pytest
 
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-CHUNK = 64
+CHUNK = step_rows.ROW_BYTES
 PD = hashlib.sha256(b"program").hexdigest()
 LAYERS = 2
 STEPS = 3
+#: the run's identities coin, as the auditor host's challenger would open it after the run's root
+COIN = b"identities coin"
 
 
 def structure() -> dict:
@@ -56,11 +58,11 @@ def step_names() -> list[str]:
 
 def produce(seed: int = 7, steps: int = STEPS) -> list[list[tuple[str, bytes]]]:
     rng = random.Random(seed)
-    return [[(n, rng.randbytes(300 + 17 * i)) for i, n in enumerate(step_names())] for _ in range(steps)]
+    return [[(n, rng.randbytes(6000 + 17 * i)) for i, n in enumerate(step_names())] for _ in range(steps)]
 
 
 def committer(program: bytes = b"program") -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(program).digest())
+    return NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha256(program).digest())
 
 
 def commit(stream, program: bytes = b"program", **map_kw):
@@ -83,7 +85,7 @@ def reference(stream) -> dict[str, bytes]:
 
 
 def open_population(c, run, bmap, pop, k: int = 16, salt: bytes = b"t"):
-    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt)
+    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt, source=COIN)
     assert picks, "no identities drawn"
     bound = [(ident, e, leaf) for ident, e, leaf in picks if e is not None]
     unbound = [ident for ident, e, _ in picks if e is None]
@@ -121,26 +123,46 @@ def test_honest_run_covers_population_and_openings_correspond():
     # the map is fixed before the challenge: its digest is over the entries, and the challenge changes with it
     assert bmap["digest"] == hashlib.sha256(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     other = dict(bmap, digest="00" * 32)
-    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t") != picks
-    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never drawn as a leaf
+    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t", source=COIN) != picks
+    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never sampled as a leaf
     st_w = dict(structure(), weights_registered=True)
     pop_w = list(B.expected_population(st_w, workload()))
     assert not B.coverage_check(pop_w, bmap)["ok"]                      # this run registered no weights -> missing
     bmap_w = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=CHUNK, weight_registration={"root": "ab" * 32})
     assert B.coverage_check(pop_w, bmap_w)["ok"]
-    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40))
+    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40, source=COIN))
 
 
-# ---------------------------------------------------------------------- 1. drop /1, bind /0 twice (F-rev-01)
+def test_map_leaves_are_the_committers_leaves():
+    """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
+    map in 256 B units sent its population samples past each step's stream: `identity_of` raised IndexError on every
+    rank."""
+    stream = produce()
+    c = committer()
+    rows = c.chunk
+    run = c.commit_offline(stream)
+    bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD)
+    leaves = [e for e in bmap["entries"] if e["kind"] == "leaf"]
+    assert leaves and all(e["leaf_lo"] == e["stream_offset"] // rows for e in leaves)
+    pop = list(B.expected_population(structure(), workload()))
+    picks, bound, unbound, ops = open_population(c, run, bmap, pop)
+    assert not unbound and all(c.verify(run, o) for o in ops)
+    vc = B.value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
+    assert vc["ok"] and vc["checked"] == len(ops), vc
+    with pytest.raises(ValueError, match=f"{rows}-byte leaves"):
+        B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=256)
+
+
+# ---------------------------------------------------------------------- 1. drop /1, bind /0 twice
 
 def test_drop_member_and_duplicate_other_is_rejected():
     stream = produce()
     victim = f"model.layers.{LAYERS - 1}.input_layernorm"
     mutated = [[(victim + "/0" if n == victim + "/1" else n, raw) for n, raw in tensors] for tensors in stream]   # same count, /0 twice
     c, run, bmap = commit(mutated)
-    # the pre-R14 checks pass: equal counts, and the per-step name multiset is the same in every step (step 0 is itself mutated)
+    # the count and identity checks pass: equal counts, and the per-step name multiset is the same in every step (step 0 is itself mutated)
     man = {"modules": sorted({n.split("/")[0] for n in step_names()}), "attention_layers": [], "fa2_hidden_per_layer": 0, "sampler_ids": 1}
-    assert c.identity_check(man)["ok"] is True, "F-rev-01: the R13 identity check does not see the dropped member"
+    assert c.identity_check(man)["ok"] is True, "the identity check alone does not see the dropped member"
     assert sum(s.n_tensors for s in run.steps) == sum(len(t) for t in stream)
     cov = B.coverage_check(list(B.expected_population(structure(), workload())), bmap)
     assert not cov["ok"]
@@ -166,8 +188,8 @@ def test_omitted_step_is_rejected():
     c, run, bmap = commit(produce(steps=STEPS - 1))
     cov = B.coverage_check(list(B.expected_population(structure(), workload(steps=STEPS))), bmap)
     assert not cov["ok"] and {m["step"] for m in cov["missing"]} == {STEPS - 1}
-    # and openings drawn from the expected population reach the missing late step: they cannot be opened
-    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8)
+    # and openings sampled from the expected population reach the missing late step: they cannot be opened
+    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8, source=COIN)
     assert any(e is None and ident[2] == STEPS - 1 for ident, e, _ in picks)
 
 
@@ -199,7 +221,7 @@ def test_omitted_request_is_rejected():
 
 
 def test_global_manifest_addresses_must_follow_engine_row_order(tmp_path):
-    """B=2 global manifest (lane manifest's shape: workload ids in `requests_declared`, GLOBAL element ranges, batch-level rows with
+    """B=2 global manifest (the required-value manifest's shape: workload ids in `requests_declared`, GLOBAL element ranges, batch-level rows with
     `request_id "*"` + `engine_step`): ranges at the engine's row order are covered; ranges assuming declaration order when the runner
     put r1's rows first are `address_mismatch` (bound elsewhere, NOT covered) -- the live Llama B2 step-0 disagreement."""
     stream = produce()
@@ -302,7 +324,7 @@ def test_wrong_root_or_layout_is_rejected():
     assert not any(c2.verify(run, o) for o in ops), "a verifier holding the other context rejects them"
 
 
-# ---------------------------------------------------------------------- R15 manbind: B8 global binding map (request-local addressing + composition)
+# ---------------------------------------------------------------------- B8 global binding map (request-local addressing + composition)
 
 B8_LP = [5, 9, 7, 6, 2, 1, 3, 8]            # prompt lengths (the real row: [389, 1007, 757, 515, 13, 8, 195, 1024])
 B8_CAP = [3, 4, 1, 5, 2, 2, 1, 5]           # max_tokens per request (the real row: [47, 77, 5, 128, 15, 21, 2, 123]); all arrive at step 0
@@ -351,7 +373,7 @@ def b8_stream(rows: dict[int, list[tuple[str, int, int]]], seed: int = 3) -> lis
 
 
 def b8_manifest(tmp_path, declared: dict[int, list[tuple[str, int]]]) -> str:
-    """The global manifest the way `required_manifest.build_global_manifest` writes it (R15: request-LOCAL ranges, `engine_steps`
+    """The global manifest the way `required_manifest.build_global_manifest` writes it (request-LOCAL ranges, `engine_steps`
     composition, `composition_reference`, request ids r<k> with the workload UUID beside)."""
     import json
 
@@ -458,7 +480,7 @@ def _repack(rr: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:
     return out
 
 
-# ---------------------------------------------------------------------- R15 manbind: manifest input trust (rev-cb M-0108 F-cb-07/09/10/13)
+# ---------------------------------------------------------------------- manifest input trust
 
 def _b8_doc(tmp_path):
     import json
@@ -477,7 +499,7 @@ def _write(tmp_path, name, doc):
 
 def test_manifest_edited_after_digesting_is_refused(tmp_path):
     p, doc = _b8_doc(tmp_path)
-    doc["identities"].pop(7)                                              # F-cb-07 / F-cb-11: rows changed, manifest_digest kept
+    doc["identities"].pop(7)                                              # rows changed, manifest_digest kept
     with pytest.raises(ValueError, match="edited after digesting"):
         B.load_required_manifest(_write(tmp_path, "edited.json", doc), PD)
     doc["manifest_digest"] = "0" * 64
@@ -492,12 +514,12 @@ def test_manifest_zero_width_identity_is_refused_not_vacuously_covered(tmp_path)
     from verity_vllm.query.manifest.format import manifest_digest as _mdig
 
     p, doc = _b8_doc(tmp_path)
-    doc["identities"][3]["element_range"] = [0, 0]                        # F-cb-10: an EXISTING identity made zero-width
+    doc["identities"][3]["element_range"] = [0, 0]                        # an EXISTING identity made zero-width
     doc["manifest_digest"] = _mdig(doc["identities"])                     # ... with an honestly recomputed digest
     with pytest.raises(ValueError, match="zero-width"):
         B.load_required_manifest(_write(tmp_path, "zw.json", doc), PD)
     p, doc = _b8_doc(tmp_path)
-    doc["identities"].append(dict(doc["identities"][0], op_path="model.layers.0.mlp.phantom", element_range=[0, 0]))   # F-cb-09: phantom op, zero width
+    doc["identities"].append(dict(doc["identities"][0], op_path="model.layers.0.mlp.phantom", element_range=[0, 0]))   # phantom op, zero width
     doc["manifest_digest"] = _mdig(doc["identities"])
     with pytest.raises(ValueError, match="zero-width"):
         B.load_required_manifest(_write(tmp_path, "zw2.json", doc), PD)
@@ -507,11 +529,11 @@ def test_manifest_request_id_not_r_k_is_refused(tmp_path):
     from verity_vllm.query.manifest.format import manifest_digest as _mdig
 
     p, doc = _b8_doc(tmp_path)
-    doc["identities"][0]["request_id"] = "5b7fee10-6a81-52b7-b730-133d6cc768da"   # F-cb-13: a bare workload UUID no declaration resolves
+    doc["identities"][0]["request_id"] = "5b7fee10-6a81-52b7-b730-133d6cc768da"   # a bare workload UUID no declaration resolves
     doc["manifest_digest"] = _mdig(doc["identities"])
     with pytest.raises(ValueError, match="not r<k>"):
         B.load_required_manifest(_write(tmp_path, "uuid.json", doc), PD)
-    # ... but a UUID that requests_declared maps to r<k> is fine (the manifest of a pre-ruling-2 Build)
+    # ... but a UUID that requests_declared maps to r<k> is fine
     p, doc = _b8_doc(tmp_path)
     doc["identities"][0]["request_id"] = "uuid-0"
     doc["requests_declared"][0]["request_id"] = "uuid-0"
@@ -531,7 +553,7 @@ def test_manifest_program_digest_must_be_a_string(tmp_path):
 
 
 def test_composition_check_skips_a_one_request_manifest_whose_engine_steps_are_numbers():
-    """rel M-0213 (1) / r15-int-2 canary RED: a B=1 `build` manifest's engine_steps are the request's engine-step NUMBERS (ints, rc3
+    """A B=1 `build` manifest's engine_steps are the request's engine-step NUMBERS (ints, rc3
     schema); only build-global writes the dict composition.  The int list must be skipped (recorded), never indexed as a dict."""
     bmap = {"entries": []}
     r = B.composition_check({"engine_steps": [0, 1, 2, 3], "composition_reference": {}}, bmap)
@@ -546,9 +568,9 @@ def test_composition_check_skips_a_one_request_manifest_whose_engine_steps_are_n
 
 
 def test_commit_delta_refuses_a_required_manifest_without_the_build_program_digest():
-    """COORD M-0205 (C1) / rev-cb F-cb-06: --required-manifest without --program-digest is a named refusal before any engine is built
-    (commit_delta calls this right after parse_args)."""
-    with pytest.raises(SystemExit, match="REFUSED: --required-manifest requires --program-digest.*M-0205"):
+    """--required-manifest without --program-digest is a named refusal before any engine is built (commit_delta calls this right
+    after parse_args): a manifest cannot vouch for its own Program."""
+    with pytest.raises(SystemExit, match="REFUSED: --required-manifest requires --program-digest.*cannot vouch for its own Program"):
         B.require_build_program_digest("/x/manifest.json", None)
     with pytest.raises(SystemExit):
         B.require_build_program_digest("/x/manifest.json", "  ")
@@ -557,9 +579,8 @@ def test_commit_delta_refuses_a_required_manifest_without_the_build_program_dige
 
 
 def test_load_required_manifest_accepts_a_one_request_manifest_whose_engine_steps_are_numbers(tmp_path):
-    """[R15 rel, r15-int-2 canary #2] `required_manifest build` (B=1) writes `engine_steps` as ints (arrival + s) and the loader's
-    composition normalisation subscripted them ('int' object is not subscriptable -> every B=1 Commit 'binding map not built', both
-    canaries).  The loader must keep the numbers, declare NO composition, and composition_check must skip (named) on that header."""
+    """`required_manifest build` (B=1) writes `engine_steps` as ints (arrival + s), which a composition normalisation must not
+    subscript ('int' object is not subscriptable -> every B=1 Commit 'binding map not built').  The loader must keep the numbers, declare NO composition, and composition_check must skip (named) on that header."""
     p, doc = _b8_doc(tmp_path)
     doc["global"] = False
     doc.pop("requests_declared"); doc.pop("composition_reference")

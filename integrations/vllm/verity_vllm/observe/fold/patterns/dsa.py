@@ -8,6 +8,8 @@ Definitions used by the export frontend.
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import math
 from dataclasses import dataclass
 from typing import Any
@@ -18,7 +20,7 @@ from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_maj
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
-from verity_vllm.observe.fold.patterns.rotary import _positions_ok
+from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import (
     Compute,
@@ -34,11 +36,11 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
 )
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.program.registry import dsa
-from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
-from verity_vllm.program.registry.dsa_norm import DsaRMSNorm
-from verity_vllm.program.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity_vllm.program.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
+from verity.ml.definitions.registry import dsa
+from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.ml.definitions.registry.dsa_norm import DsaRMSNorm
+from verity.ml.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity.ml.definitions.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
 
 NORM_KERNEL = "_fused_norm_rope_kernel"
 Q_KERNEL = "_fused_q_kernel"
@@ -97,23 +99,48 @@ def _slot_rows(v: ViewDesc, width: int) -> ViewDesc:
     return ViewDesc(v.alloc, v.offset, (v.shape[0] * v.shape[1], width), (v.strides[1], 1), v.dtype, v.device)
 
 
-def _index_scale_rows(v: ViewDesc) -> ViewDesc:
-    """The f32 word in bytes 128..131 of each 132-byte index-cache row."""
-    if v.rank != 3 or v.dtype != "float32" or v.shape[2] != 33 or v.strides[1:] != (33, 1):
-        raise GeometryError(f"index scale cache is not f32 [blocks, block, 33]: {v!r}")
-    return ViewDesc(v.alloc, v.offset + 32, (v.shape[0] * v.shape[1],), (33,), v.dtype, v.device)
+@dataclass(frozen=True)
+class IndexCache:
+    """The index-K cache as `_fp8_quant_and_cache_write` lays it out (vLLM d9105ea80 deepseek_v32/common/kernels.py:63-87): block b of
+    the [blocks, BS, W] byte cache holds its BS slots' D e4m3 bytes one row after another, then their BS f32 scales, so slot s =
+    BS b + o has its row at byte BS W b + D o and its scale at byte BS W b + BS D + 4 o.  ``rows`` is the cache as [blocks R, D] bytes
+    (R = BS W / D rows a block, the last R - BS of them the scales' bytes) and ``scales`` the f32 words from block 0's first scale;
+    `row` and `scale` are slot s's index in each."""
+
+    rows: ViewDesc
+    scales: ViewDesc
+    BS: int
+    R: int
+    SW: int
+
+    def row(self, s: int) -> int:
+        return self.R * (s // self.BS) + s % self.BS
+
+    def scale(self, s: int) -> int:
+        return self.SW * (s // self.BS) + s % self.BS
+
+    @property
+    def slots(self) -> int:
+        return self.rows.shape[0] // self.R * self.BS
 
 
-def _positions(node: TreeNode, ctx: StepContext, pos: Any, rows: int) -> tuple[int, ...] | Unsupported:
-    if not isinstance(pos, ViewDesc):
-        return unsupported(node, "positions argument is not a tensor view", positions=repr(pos))
-    why = _positions_ok(pos, rows, ctx)
-    if why:
-        return unsupported(node, why)
-    out = tuple(int(p) for p in ctx.start.positions[:rows])
-    if len(out) != rows:
-        return unsupported(node, "StepStart positions do not cover the kernel rows", rows=rows, positions=len(out))
-    return out
+def _index_cache(k: ViewDesc, s: ViewDesc, block_size: Any, stride: Any, D: int) -> IndexCache:
+    """`IndexCache` of the kernel's ``indexer_cache_ptr`` (the [blocks, BS, W] cache) and ``indexer_cache_scale_ptr`` (the same bytes
+    as f32 [blocks, BS, W / 4], `fused_norm_rope`'s `view(torch.float32)`), at its ``indexer_cache_block_size`` and
+    ``indexer_cache_stride`` arguments, which the kernel's addressing reads."""
+    if k.rank != 3 or k.itemsize != 1 or k.strides != (k.shape[1] * k.shape[2], k.shape[2], 1):
+        raise GeometryError(f"index-K cache is not a row-major byte [blocks, block, width]: {k!r}")
+    nb, BS, W = k.shape
+    if (block_size, stride) != (BS, W) or W < D + 4 or W % 4 or BS * W % D or BS * D % 4:
+        raise GeometryError(f"index-K cache {k!r} at block size {block_size!r} and stride {stride!r} is not D={D} bytes and a "
+                            "4-byte scale a slot in whole D-byte rows")
+    SW = BS * W // 4
+    if s.alloc != k.alloc or s.dtype != "float32" or 4 * s.offset != k.offset or s.shape != (nb, BS, W // 4) \
+            or s.strides != (SW, W // 4, 1):
+        raise GeometryError(f"index scale cache {s!r} is not the index-K cache {k!r} as f32")
+    return IndexCache(ViewDesc(k.alloc, k.offset, (nb * BS * W // D, D), (D, 1), k.dtype, k.device),
+                      ViewDesc(s.alloc, s.offset + BS * D // 4, (nb * SW - BS * D // 4,), (1,), s.dtype, s.device),
+                      BS, BS * W // D, SW)
 
 
 def _slots(node: TreeNode, ctx: StepContext, rows: int, limit: int) -> tuple[int, ...] | Unsupported:
@@ -135,6 +162,32 @@ def _pin_topk(node: TreeNode, ctx: StepContext, topk: Any) -> Unsupported | None
         return unsupported(node, "IndexShare layer does not use the indexer layers' top-k allocation", observed=identity, established=old)
     state["topk"] = identity
     return None
+
+
+def _topk_rows(node: TreeNode, ctx: StepContext, out: ViewDesc) -> slice | Unsupported:
+    """The step rows a top-k launch writes: its output is rows [lo, lo + m) of the top-k allocation `_pin_topk` established (the
+    prefill chunk's `topk_indices_buffer[token_start:token_end]`, the decodes' leading rows)."""
+    est = _state(ctx)["topk"]
+    lo, rem = divmod(out.offset - est[1], 2048) if est is not None else (0, 1)
+    if est is None or (out.alloc, out.shape[1], out.strides) != (est[0], est[2], est[3]) or rem or not 0 <= lo <= len(ctx.start.rows) - out.shape[0]:
+        return unsupported(node, "top-k output is not a run of the step's rows of the indexer layers' top-k allocation", output=repr(out),
+                           established=est, step_rows=len(ctx.start.rows))
+    return slice(lo, lo + out.shape[0])
+
+
+def _indexer_launches(ctx: StepContext) -> list:
+    """[decode rows, prefill requests] of the step as vLLM's indexer launches them (`split_decodes_and_prefills` at decode threshold 1
+    with uniform decodes): the leading requests of one row each are decodes, every request after them a prefill as (request, rows)."""
+    reqs: list[tuple[str, list[int]]] = []
+    for i, (req, _pos) in enumerate(ctx.start.rows):
+        if reqs and reqs[-1][0] == req:
+            reqs[-1][1].append(i)
+        else:
+            reqs.append((req, [i]))
+    k = 0
+    while k < len(reqs) and len(reqs[k][1]) == 1:
+        k += 1
+    return [[rows[0] for _req, rows in reqs[:k]], reqs[k:]]
 
 
 @dataclass
@@ -166,7 +219,7 @@ class DsaNormRope:
         if not all(isinstance(v, ViewDesc) for v in (q, qo, qw, kv, kvw, kpe, cs, latent)):
             return unsupported(node, "fused norm/RoPE pointer arguments are not bound", args={k: repr(v) for k, v in a.items() if k.endswith("_ptr")})
         M = q.shape[0]
-        pos = _positions(node, ctx, a.get("pos_ptr"), M)
+        pos = step_positions(node, ctx, a.get("pos_ptr"), M)
         if isinstance(pos, Unsupported):
             return pos
         if M != len(ctx.start.rows) or q.shape != (M, 2048) or qo.shape != (M, 2048) or kv.shape != (M, 512) or kpe.shape != (M, 64):
@@ -214,17 +267,18 @@ class DsaNormRope:
             if ik.shape != (M, 128) or iw.shape != (128,) or ib.shape != (128,) or ics.rank != 2 or ics.shape[1] != 64:
                 return unsupported(node, "index-K inputs have the wrong shape", index_k=repr(ik), weight=repr(iw), bias=repr(ib), cs=repr(ics))
             try:
-                ik_rows, is_rows = _slot_rows(ikc, 128), _index_scale_rows(isc)
+                ix = _index_cache(ikc, isc, a.get("indexer_cache_block_size"), a.get("indexer_cache_stride"), 128)
             except GeometryError as e:
                 return unsupported(node, str(e))
-            if ik_rows.alloc != is_rows.alloc or 4 * is_rows.offset != ik_rows.offset + 128 or ik_rows.shape[0] != is_rows.shape[0]:
-                return unsupported(node, "index-K values and scales are not the two views of one 132-byte slot layout")
+            if any(s >= ix.slots for s in slots):
+                return unsupported(node, "a current-token slot is outside the index-K cache", slots=slots[:8], cache_slots=ix.slots)
             ieps = float(a.get("index_k_layer_norm_eps"))
             parts.append(Compute(bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=ieps), M,
                                  (PerRow(ik), Shared(iw), Shared(ib), Gather(ics, pos)),
-                                 (Gather(ik_rows, slots), Gather(is_rows, slots)), (), hint=f"{_module(node)}/indexer_k",
-                                 pattern=self.name, roots=(None, _root(ctx, iw), _root(ctx, ib), _root(ctx, ics))))
-            ms.update({"index_k": ik_rows, "index_scale": is_rows})
+                                 (Gather(ix.rows, tuple(map(ix.row, slots))), Gather(ix.scales, tuple(map(ix.scale, slots)))), (),
+                                 hint=f"{_module(node)}/indexer_k", pattern=self.name,
+                                 roots=(None, _root(ctx, iw), _root(ctx, ib), _root(ctx, ics))))
+            ms.update({"index_cache": ix})
         else:
             if c.get("INDEX_K_DIM") != 1 or c.get("INDEX_K_BLOCK_SIZE") != 1:
                 return unsupported(node, "IndexShare layer has unexpected dummy index-K dimensions",
@@ -257,7 +311,7 @@ class DsaQ:
         if not all(isinstance(v, ViewDesc) for v in (q, qo, cs)):
             return unsupported(node, "fused-q RoPE pointers are not bound")
         M = q.shape[0]
-        pos = _positions(node, ctx, a.get("pos_ptr"), M)
+        pos = step_positions(node, ctx, a.get("pos_ptr"), M)
         if isinstance(pos, Unsupported):
             return pos
         if q.shape != (M, 8, 64) or qo.shape != (M, 8, 64) or q.dtype != "bfloat16" or qo.dtype != "bfloat16" \
@@ -290,7 +344,7 @@ class DsaQ:
             parts.append(Compute(bind(dsa.DsaIndexerQ, H=32, D=128, ROPE=64), M,
                                  (PerRow(iq), Gather(ics, pos), PerRow(iw)), (PerRow(iqo), PerRow(iwo)), (),
                                  hint=f"{_module(node)}/indexer_q", pattern=self.name, roots=(None, _root(ctx, ics), None)))
-            ms.update({"index_q": iqo, "index_weights": iwo, "mqa_after": node.id})
+            ms.update({"index_q": iqo, "index_weights": iwo, "mqa_after": node.id, "mqa_launches": _indexer_launches(ctx)})
         else:
             if c.get("NUM_INDEX_Q_HEADS") != 1 or c.get("INDEX_Q_HEAD_DIM") != 1:
                 return unsupported(node, "IndexShare layer has unexpected dummy index-Q dimensions")
@@ -299,7 +353,10 @@ class DsaQ:
 
 @dataclass
 class DsaMqaAllocation:
-    """The f32 allocation DeepGEMM fills without an observer dispatch event."""
+    """The f32 allocation DeepGEMM fills without an observer dispatch event: one per launch of the layer's indexer, in vLLM's order --
+    each prefill chunk's ``fp8_mqa_logits`` ``[align(rows, 4), width]``, its row of request j at position p holding p + 1 logits from
+    column ``cu_j`` (the request's first key among the chunk's gathered keys, `DsaMqaGather`), then the decodes' ``fp8_paged_mqa_logits``
+    ``[decode rows, width]`` from column 0."""
 
     name = "dsa.mqa_logits.invisible_deepgemm"
 
@@ -310,42 +367,73 @@ class DsaMqaAllocation:
         if not ms.get("mqa_after") or node.id <= ms["mqa_after"]:
             return None
         outs = node.output_views()
-        if len(outs) != 1:
+        if len(outs) != 1 or outs[0].dtype != "float32" or outs[0].rank != 2:
             return None
         out = outs[0]
-        M = len(ctx.start.rows)
-        if out.dtype != "float32" or out.shape != (M, 512) or not is_row_major(out):
-            return None
-        q, w, kc, ks = (ms.get(k) for k in ("index_q", "index_weights", "index_k", "index_scale"))
-        if not all(isinstance(v, ViewDesc) for v in (q, w, kc, ks)):
+        q, w, ix = (ms.get(k) for k in ("index_q", "index_weights", "index_cache"))
+        if not (isinstance(q, ViewDesc) and isinstance(w, ViewDesc) and isinstance(ix, IndexCache)):
             return unsupported(node, "invisible MQA allocation lacks the fused-q or index-cache views", module=_module(node))
+        launch = self._launch(node, ctx, ms, out)
+        if isinstance(launch, Unsupported):
+            return launch
         parts: list[Compute] = []
-        for i, (req, position) in enumerate(ctx.start.rows):
+        for r, (i, cu) in enumerate(launch):
+            req, position = ctx.start.rows[i]
             n = int(position) + 1
             try:
                 slots = kv_slots(ctx, req, n, layer=_module(node))
             except GeometryError as e:
                 return unsupported(node, str(e), request=req, T=n)
-            if n > out.shape[1] or any(s >= kc.shape[0] for s in slots):
-                return unsupported(node, "MQA row or cache does not cover its valid keys", T=n, output_width=out.shape[1], cache_slots=kc.shape[0])
-            ov = ViewDesc(out.alloc, out.offset + i * out.strides[0], (1, n), (out.strides[0], 1), out.dtype, out.device)
+            if cu + n > out.shape[1] or any(s >= ix.slots for s in slots):
+                return unsupported(node, "MQA row or cache does not cover its valid keys", T=n, first_key=cu, output_width=out.shape[1],
+                                   cache_slots=ix.slots)
+            ov = ViewDesc(out.alloc, out.offset + r * out.strides[0] + cu, (1, n), (out.strides[0], 1), out.dtype, out.device)
             parts.append(Compute(bind(dsa.DsaMqaLogitsV3, N=n, H=32, D=128), 1,
-                                 (PerRow(_one_row(q, i)), PerRow(_one_row(w, i)), GatherMany(kc, (slots,)), GatherMany(ks, (slots,))),
+                                 (PerRow(_one_row(q, i)), PerRow(_one_row(w, i)), GatherMany(ix.rows, (tuple(map(ix.row, slots)),)),
+                                  GatherMany(ix.scales, (tuple(map(ix.scale, slots)),))),
                                  (PerRow(ov),), (node.id,) if not parts else (), hint=f"{_module(node)}/mqa[t={position}]",
                                  kernels=("fp8_mqa_logits", "fp8_paged_mqa_logits"), attribution=((req, int(position)),), pattern=self.name))
-        ms.pop("mqa_after", None)
+        if not any(ms["mqa_launches"]):
+            ms.pop("mqa_after", None)
         return Group(tuple(parts), tuple(sorted(node.ids())), hint=_module(node), pattern=self.name)
+
+    @staticmethod
+    def _launch(node: TreeNode, ctx: StepContext, ms: dict, out: ViewDesc) -> list[tuple[int, int]] | Unsupported:
+        """(step row, first key column) of each logits row the allocation holds: the next prefill chunk when a gather staged its keys,
+        else the decodes."""
+        decode, prefill = ms["mqa_launches"]
+        keys = ms.pop("mqa_keys", None)
+        if keys is not None:
+            rows, total = [], 0
+            while prefill and total < keys:
+                req, rws = prefill.pop(0)
+                rows += [(i, total) for i in rws]
+                total += int(ctx.start.seq_lens.get(req, 0))
+            height = -(-len(rows) // 4) * 4
+        else:
+            rows, total, height = [(i, 0) for i in decode], 0, len(decode)
+            decode.clear()
+        if not rows or total != (keys or 0) or out.shape[0] != height or not is_row_major(out):
+            return unsupported(node, "MQA logits allocation is not the next indexer launch's: a prefill chunk of whole requests over the keys "
+                               "its gather staged ([align(rows, 4), width]), else the decodes ([rows, width])", allocation=repr(out),
+                               gathered_keys=keys, request_keys=total, rows=len(rows))
+        return rows
 
 
 @dataclass
 class DsaMqaGather:
-    """DeepGEMM's K-cache gather is a staging copy; the MQA Definition reads the cache directly."""
+    """DeepGEMM's K-cache gather is a staging copy; the MQA Definition reads the cache directly.  The number of keys it stages names the
+    prefill chunk the next logits allocation holds (`DsaMqaAllocation`)."""
 
     name = "dsa.mqa_cache_gather"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != MQA_STAGE:
             return None
+        dst = bound_args(node).get("dst_k", bound_args(node).get("arg1"))
+        if not isinstance(dst, ViewDesc) or dst.rank != 2:
+            return unsupported(node, "indexer K-cache gather destination is not a [keys, D] view", dst_k=repr(dst))
+        _module_state(ctx, node)["mqa_keys"] = dst.shape[0]
         return Transparent("noop", tuple(sorted(node.ids())), hint=f"{_module(node)}/indexer K-cache staging",
                            kernels=(MQA_STAGE,), pattern=self.name)
 
@@ -362,15 +450,15 @@ class DsaTopK:
         a = bound_args(node)
         out = a.get("indices") if op_name(node.op) == TOPK_PREFILL else a.get("output")
         topk = a.get("topK") if op_name(node.op) == TOPK_PREFILL else a.get("k")
-        if not isinstance(out, ViewDesc) or topk != 2048 or out.dtype != "int32" or out.shape != (len(ctx.start.rows), 2048) \
+        if not isinstance(out, ViewDesc) or topk != 2048 or out.dtype != "int32" or out.rank != 2 or out.shape[1] != 2048 \
                 or not is_row_major(out):
-            return unsupported(node, "top-k output is not contiguous i32 [step rows,2048]", output=repr(out), topk=topk)
-        bad = _pin_topk(node, ctx, out)
-        if bad is not None:
-            return bad
+            return unsupported(node, "top-k output is not contiguous i32 [rows,2048]", output=repr(out), topk=topk)
+        rows = _topk_rows(node, ctx, out)
+        if isinstance(rows, Unsupported):
+            return rows
         parts = []
         kernel = "topKPerRowPrefill" if op_name(node.op) == TOPK_PREFILL else "cooperative_topk"
-        for i, (req, position) in enumerate(ctx.start.rows):
+        for i, (req, position) in enumerate(ctx.start.rows[rows]):
             n = int(position) + 1
             if n > 2048:
                 return unsupported(node, "DSA top-k row exceeds the short-row shortcut", position=position, keys=n, TOPK=2048)

@@ -1,6 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results (statements)
@@ -27,6 +41,8 @@ The statements:
   that are those constraints in their order (`LinRel`), every result of `innerGameC` is a check that holds on the
   proof's openings.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -138,9 +154,9 @@ def ZkInnerAccepts : Prop :=
     ∀ v, Plays fOf (ZkLink.innerGameC hs512.H hs512.Ep hs512.Lp hs512.Lτ T.dom T.np T.nP T.q T.pos rows T.tr
         (toDig pr.root))
       [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩, ⟨Fin (T.np + T.nP) → 𝔽, vecOf (T.np + T.nP) pr.y⟩]
-      (consumed t.rounds t.k t'.k) v → v (innerOpensOf pr)
+      (consumed t.rounds t.k t'.k) v → v.1 (innerOpensOf pr)
 
-/-- **A `--zk` rep's result accepts** (live PROTOCOL.md §1–§7, PROTOCOL.md §14). At the `--zk` schedule under
+/-- **A `--zk` rep's result accepts** (live PROTOCOL.md §1–§7, `Flock.Merkle`). At the `--zk` schedule under
 `hm96-sha512/v1`, at a compiled table whose dimensions (`ZkTabSeam`), pads and inner code (`ZkTabLay`) are the
 executable's, whose statement's fold the setup's circuit fold realizes and whose extra claims at the link points are
 the executable's, on a decoded proof and well-formed rounds, when a run of rep `r`'s transcript program consumes every
@@ -169,7 +185,7 @@ def ZkRepAccepts : Prop :=
       ZkLink.OpensOKZ H512 enc512 leaf512 (ZkLink.width₀ T) cap₀ r.val pend.lig os.rows os.salts
 
 /-- **The compiled `--zk` table accepts at the two reps' results, under `hm96-sha512/v1`** (live PROTOCOL.md §1–§7,
-PROTOCOL.md §5, §14, S16). When both reps of table `i` pass `Zk.verifyRep` with one cap, at a compiled table whose
+`Flock.Record`, `Flock.Merkle`, S16). When both reps of table `i` pass `Zk.verifyRep` with one cap, at a compiled table whose
 dimensions, pads and inner code are the executable's, whose statement's fold the setup's circuit fold realizes and
 whose extra claims at the link points `pts` are the session's, each rep's stream and proof file decode, the two reps'
 compiled games, played with their proof files' messages and their streams' coins, have results, and at every pair of
@@ -178,7 +194,7 @@ results they reach the table's verdict `accZ`, at the cap `capOfRoot` reads off 
 def ZkTableVerdict : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts) (S : Finset (Fin n)) (R : Reg)
     (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
-    (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray),
+    (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray),
     Zk.schedule st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam (T S R) st sch tPad →
     ZkTabLay (T S R) st sch → FoldRealizes st.fold (T S R).S →
     ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts) →

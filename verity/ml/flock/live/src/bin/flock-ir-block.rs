@@ -1,6 +1,6 @@
 //! flock-ir-block: an IR subcircuit template's identical units (`flock_live::ir_block`, `verity/flock-ir-block/v1`) as ONE
 //! block R1CS, proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a flock-128-r2
-//! live session. Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu, minus the frame-v3
+//! live session. The session protocol is flock-pure-gpu's, minus the frame-v3
 //! commitments (the unit inputs and outputs are public, read by the verifier from its own instance file).
 //!
 //!   flock-ir-block serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
@@ -350,7 +350,7 @@ fn forge_aggregate(inst: &IrInstances, cm: &CutMap, t: &Tables) -> IrInstances {
     })
 }
 
-/// Red-team-flock-2's IR4 file: the tail's eps (its smallest positive constant) x 100, every instance's cut words recomputed
+/// A forged instances file: the tail's eps (its smallest positive constant) x 100, every instance's cut words recomputed
 /// with that tail and every unit's outputs recomputed from its inputs. Returns the file and the forged tail.
 fn forge_eps(inst: &IrInstances, cm: &CutMap, net: &IrUnitNet, t: &Tables) -> (IrInstances, Vec<Op>) {
     let mut tail = cm.tail.clone();
@@ -575,7 +575,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }
@@ -600,6 +600,7 @@ fn refuse(why: String) -> ! {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(IrInstances::load(&arg("--instances", "instances.bin")));

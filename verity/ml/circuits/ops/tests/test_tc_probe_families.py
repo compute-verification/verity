@@ -1,4 +1,4 @@
-"""``benchmarks/tc_probe/tc_probe.py`` tile generation without a device (lane pin-bf16): the FP8 families of tc-probe-fp8 are byte-identical
+"""``benchmarks/tc_probe/tc_probe.py`` tile generation without a device: the FP8 families are byte-identical
 for a fixed seed, the accumulator / adder families now exist for BF16 with shapes, dtypes and determinism, the adder-width ratios
 bracket every BF16 pipeline's width so the survive/truncate boundary is observable, and the D15(b) floor probe cannot tell any
 adder floor in [-152, -126] apart under the pinned Hopper FP8 model (the structural reason is tested on ``group_sum`` directly).
@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S
 from verity.ml.circuits.silicon.models import group_sum
 from verity.ml.circuits.silicon.term import Term, e4m3_product, fp32_term
 
@@ -21,8 +21,8 @@ REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").
 SEED = 20260902
 N_RANDOM = 64
 
-# sha256[:16] of A || Bt || C for families(rng(SEED), N_RANDOM, fmt, M, K), recorded on main 156bf21 before pin-bf16 touched
-# families(): the FP8 tile generation must stay byte-identical (the H100 / 4090 FP8 sweeps and canaries are keyed on these draws).
+# sha256[:16] of A || Bt || C for families(rng(SEED), N_RANDOM, fmt, M, K), recorded before the BF16 families were added to
+# families(): the FP8 tile generation must stay byte-identical (the H100 / 4090 FP8 sweeps and canaries are keyed on these samples).
 FP8_BASELINE = {
     ("e4m3", 16, 32): {
         "randn_zero_acc": "809bc060a317c7e3", "randn_random_acc": "f820887b9092ddbe", "uniform_bits": "aa40694d1545c47c",
@@ -192,7 +192,7 @@ def test_no_adder_floor_in_the_h100_fit_range_is_observable_under_the_hopper_fp8
         try:
             acc = fp32_term(int(rng.integers(0, 1 << 31)) | (int(rng.integers(0, 2)) << 31)) if rng.random() < 0.7 else Term(False, -126, int(rng.integers(0, 1 << 23)))
             prods = [e4m3_product(int(rng.integers(0, 256)), int(rng.integers(0, 256))) for _ in range(int(rng.integers(0, 5)))]
-        except Exception:  # noqa: BLE001 - a NaN operand / non-finite accumulator in the random draw
+        except Exception:  # noqa: BLE001 - a NaN operand / non-finite accumulator in the random sample
             continue
         terms = [acc, *prods]
         ref = group_sum(terms, width=base.width, zero_exponent=-139)

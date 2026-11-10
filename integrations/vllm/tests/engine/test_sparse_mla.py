@@ -2,6 +2,8 @@
 split, through that module's own global, armed before the module is imported or installed on it; any other value is refused."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import sys
 import types
 
@@ -89,7 +91,8 @@ def test_a_rank_arms_the_switch_at_import_and_the_driver_before_it_builds() -> N
     import ast
     import inspect
 
-    from verity_vllm.engine import build, rank_worker
+    from verity_vllm.engine import build
+    from verity_vllm.pipeline.tp import rank_worker
 
     top = ast.parse(inspect.getsource(sparse_mla)).body
     assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)

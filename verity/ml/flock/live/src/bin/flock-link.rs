@@ -8,7 +8,7 @@
 //! public. The verifier checks those public chunk values against the leaf digests natively (the keyed parent
 //! compressions), so no middle block, counter, flag, length or key is free.
 //!
-//! The link (L1, L2): after `Commit(root_F, root_B, public words)` the verifier draws two GF(2^128) points over the
+//! The link (L1, L2): after `Commit(root_F, root_B, public words)` the verifier samples two GF(2^128) points over the
 //! linked positions, the prover sends `y_k = z^(r_k)`, and both reps open `z^(r_k) = y_k` in their merged opening
 //! (a ring-switched claim with eq weights), so each rep's reduction is a fresh round-by-round bound on live coins.
 //!
@@ -507,7 +507,7 @@ impl PrimeProxy {
         let l = std::os::unix::net::UnixListener::bind(path).expect("--prime-sock");
         let px = Arc::new(PrimeProxy { hello: false.into(), done: Mutex::new(None) });
         let p2 = px.clone();
-        let h = std::thread::spawn(move || {
+        let h = flock_live::spawn(move || {
             let Ok((conn, _)) = l.accept() else { return json!({"error": "no prime connection"}) };
             let mut r = BufReader::new(conn.try_clone().unwrap());
             let mut w = BufWriter::new(conn);
@@ -867,7 +867,7 @@ enum L3Case {
 
 /// Two chain tables in ONE session (L3): the second table's root is computed first (its prove runs up to the
 /// binding, where the hook stops it: the commit is deterministic), so the single `Commit` carries both roots before
-/// the link points are drawn; each table opens its own y at the shared points in both reps.
+/// the link points are sampled; each table opens its own y at the shared points in both reps.
 fn session_l3(ch: &Arc<Chain>, case: L3Case) -> Value {
     let names = ["chain0", "chain1"];
     let data: Vec<Vec<u8>> = (0..2).map(|i| words(0xA + 0x100 * i as u64, ch.leaves * ch.k * 2)).collect();
@@ -1135,6 +1135,7 @@ fn selftest(ch: Arc<Chain>) {
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let vus: usize = arg("--vus", "8").parse().unwrap();
     let k: usize = arg("--k", "1536").parse().unwrap();
@@ -1255,7 +1256,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }

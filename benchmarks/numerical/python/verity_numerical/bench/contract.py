@@ -138,7 +138,7 @@ __all__ = [
     "fingerprint",
     "identity",
     "incomparable",
-    "instances_ref",
+    "input_set_ref",
     "joint",
     "measurement",
     "NATIVE_REFERENCE",
@@ -165,7 +165,7 @@ PROFILE = FIRST.name
 DOMAIN = "finite-only"
 #: The vocab's ``domain`` values (``research.store.vocab.DOMAINS``); a fingerprint records the one its statement covers.
 DOMAINS = ("total", "finite-only")
-#: What results registered before 2026-09-27 wrote: every writer hardcoded ``finite``, whatever its statement's domain.
+#: What older registered results wrote: every writer hardcoded ``finite``, whatever its statement's domain.
 LEGACY_DOMAINS = {"finite": "finite-only"}
 #: Every profile a result may name: the targets of ``verity.ml.circuits.targets.target.TARGETS`` (FIRST and the FP8 drafts).
 #: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
@@ -200,20 +200,20 @@ REQUIRED_FIELDS = (
 INSTANCES_DATASET = census.INPUT_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
-#: The frozen FP8 Ada input set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``archive/direct/ligero/fp8/chain.py``
-#: draws (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
+#: The frozen FP8 Ada input set (``FP8_ADA_INSTANCES_DATASET``): the synthetic VUs ``archive/direct/ligero/fp8/chain.py``
+#: samples (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
-#: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
-#: (``verity_numerical.bench.tables``) recognise the set without importing the prover; a change to the recipe is a new tier.
+#: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here so a reader
+#: recognises the set without importing the prover; a change to the recipe is a new tier.
 _FP8_ADA = census.INPUT_SETS["bench-instances-fp8-ada-v1"]
 FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
 FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
-#: The frozen Hopper input sets (``bf16-hopper-mma-draft/2026-09-22``, ``fp8-hopper-wgmma-draft/2026-09-22``): the synthetic
-#: VUs ``archive/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``; lane
-#: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
+#: The frozen Hopper input sets (``BF16_HOPPER_INSTANCES_DATASET``, ``FP8_HOPPER_INSTANCES_DATASET``): the synthetic
+#: VUs ``archive/direct/ligero/relchain.py`` samples for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``)
+#: -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
 #: (``benchmarks/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
-#: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
-#: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
+#: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (after the rows
+#: with preserved proof dumps) so a reader recognises the sets without importing the prover; a change to a
 #: recipe is a new tier.
 _BF16_HOPPER = census.INPUT_SETS["bench-instances-bf16-hopper-v1"]
 BF16_HOPPER_INSTANCES_DATASET, BF16_HOPPER_INSTANCES_TIER = _BF16_HOPPER.dataset, _BF16_HOPPER.tier
@@ -221,12 +221,12 @@ BF16_HOPPER_INSTANCES_SEED, BF16_HOPPER_INSTANCES_DIGEST = _BF16_HOPPER.seed, _B
 _FP8_HOPPER = census.INPUT_SETS["bench-instances-fp8-hopper-v1"]
 FP8_HOPPER_INSTANCES_DATASET, FP8_HOPPER_INSTANCES_TIER = _FP8_HOPPER.dataset, _FP8_HOPPER.tier
 FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_HOPPER.manifest_sha256
-#: The frozen NVFP4 sm_120 input set (``nvfp4-sm120-mma-draft/2026-09-22``): the synthetic VUs
-#: ``archive/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
+#: The frozen NVFP4 sm_120 input set (``NVFP4_INSTANCES_DATASET``): the synthetic VUs
+#: ``archive/direct/ligero/fp4/chain.py`` samples (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
 #: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
 #: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
 #: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,
-#: pinned here (frozen 2026-09-22); a change to the recipe or the family list is a new tier.
+#: pinned here; a change to the recipe or the family list is a new tier.
 _NVFP4 = census.INPUT_SETS["bench-instances-nvfp4-sm120-v1"]
 NVFP4_INSTANCES_DATASET, NVFP4_INSTANCES_TIER = _NVFP4.dataset, _NVFP4.tier
 NVFP4_INSTANCES_SEED, NVFP4_INSTANCES_DIGEST = _NVFP4.seed, _NVFP4.manifest_sha256
@@ -243,7 +243,7 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BUCKETS = ("witness", "encoding_commitment", "arithmetic", "lookup", "zk_additional", "serialization")
 BUCKET_NAMES = tuple(f"t.{b}" for b in BUCKETS)
 T_TOTAL = "t.total"
-#: The prover's time INCLUDING its waits on a live verifier over the network (lane live-verifier); never below t.total.
+#: The prover's time INCLUDING its waits on a live verifier over the network; never below t.total.
 T_TOTAL_LIVE = "t.total_live"
 _JOINT_PREFIX = "t.joint."
 _JOINT_SEP = "+"
@@ -271,7 +271,7 @@ UNITS: dict[str, str] = {
     "census.memory_passes": "count",
     "census.bytes_moved": "B",
     "verifier.seconds": "s",
-    # the live-verifier axis (lane live-verifier, additive): the prover's time INCLUDING its waits on a live verifier over
+    # the live-verifier axis (additive): the prover's time INCLUDING its waits on a live verifier over
     # the network (t.total stays the prover's own time), the network the session cost, and the verifier's own cost
     "t.total_live": "s",
     "net.rtt_ms": "ms",
@@ -442,7 +442,7 @@ def measurement(name: str, value: float | int, unit: str | None = None) -> dict[
     return {"name": name, "value": value, "unit": unit}
 
 
-def instances_ref(tier: str, lo: int, hi: int, manifest_sha256: str, dataset: str = INSTANCES_DATASET) -> dict[str, Any]:
+def input_set_ref(tier: str, lo: int, hi: int, manifest_sha256: str, dataset: str = INSTANCES_DATASET) -> dict[str, Any]:
     """The ``instances`` entry for ids ``[lo, hi)`` of ``tier``: ``{"dataset", "tier", "range": [lo, hi], "manifest_sha256"}``.
     ``manifest_sha256`` is the sha256 of the dataset's ``manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``)."""
 
@@ -488,7 +488,7 @@ def fingerprint(
     """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
     ``ValueError`` listing every problem rather than emitting a bad one.  ``N_subbatches`` is always written, so a
     batch chopped into several proofs is visible beside ``B``; so is ``instances`` (``null`` = not measured on the
-    shared input set -- see :func:`instances_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
+    shared input set -- see :func:`input_set_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
     caller gave one."""
 
     software = dict(software)

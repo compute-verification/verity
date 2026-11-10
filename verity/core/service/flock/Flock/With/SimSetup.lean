@@ -8,9 +8,13 @@ With the oracles of `Flock.With.Log`: forgetting the log gives back setup at `h`
 the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with the counting oracle makes
 (`Stmt.setupLogged_size`).
 -/
-import Flock.With.SimWalk
-import Flock.With.Setup
-import Flock.With.Log
+module
+
+public import Flock.With.Log
+public import Flock.With.Setup
+public import Flock.With.SimWalk
+
+@[expose] public section
 
 namespace Flock.With
 
@@ -55,7 +59,7 @@ theorem fv3LeafWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes 
 theorem fv3RootWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (dom : ByteArray) (leaves : Array ByteArray) :
     S.R (FV3.rootWith hs dom leaves) (FV3.rootWith hs' dom leaves) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   sim_walk [fv3HashWith_sim S hh]
 
 theorem typeDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
@@ -95,7 +99,7 @@ theorem readWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws 
 
 theorem descParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :
-    S.R (TemplateQuery.Desc.parseWith hs bytes) (TemplateQuery.Desc.parseWith hs' bytes) := by
+    S.R (TemplateQuery.Desc.parseWith hs.sha512 bytes) (TemplateQuery.Desc.parseWith hs'.sha512 bytes) := by
   unfold TemplateQuery.Desc.parseWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk
@@ -259,6 +263,24 @@ theorem hmOutParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : T
   sim_walk [parseWith_sim S tM tN hh, readWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [parseWith_sim S tM tN hh, readWith_sim S tM tN hh])
 
+theorem hmOutParseTmplWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) :
+    S.R (HmOut.parseTmplWith hs tags bytes tables) (HmOut.parseTmplWith hs' tags bytes tables) := by
+  unfold HmOut.parseTmplWith
+  simp -zeta only [tM.bind, tN.bind]
+  sim_walk [parseWith_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [parseWith_sim S tM tN hh])
+
+theorem hmOutParseCommitWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) :
+    S.R (HmOut.parseCommitWith hs tags bytes tables) (HmOut.parseCommitWith hs' tags bytes tables) := by
+  unfold HmOut.parseCommitWith
+  split
+  · exact hmOutParseTmplWith_sim S tM tN hh tags bytes tables
+  · exact hmOutParseWith_sim S tM tN hh tags bytes tables
+
 theorem hmOutCheckPublicWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pub : Public) :
     S.R (HmOut.checkPublicWith hs c pub) (HmOut.checkPublicWith hs' c pub) := by
@@ -282,10 +304,10 @@ theorem hmInDrawnWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Th
   drawnWith_sim S tM tN hh _ pub draw
 
 theorem hmLinksCheckWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
-    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public) (program : ByteArray) :
-    S.R (HmLinks.checkWith hs c pop program) (HmLinks.checkWith hs' c pop program) := by
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public)
+    (readers : Option (Array Nat)) (program : ByteArray) :
+    S.R (HmLinks.checkWith hs c pop readers program) (HmLinks.checkWith hs' c pop readers program) := by
   unfold HmLinks.checkWith
-  simp -zeta only [tM.bind, tN.bind]
   sim_walk [programDecodeWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDecodeWith_sim S tM tN hh])
 
@@ -298,18 +320,18 @@ theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
       (Stmt.setupHiddenWith hs' tags circuitFile publicFile coins tables draw partition program publicInputs) := by
   unfold Stmt.setupHiddenWith
   simp -zeta only [tM.bind, tN.bind]
-  sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
+  sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
     hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
     hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
     qwordFindingWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
-    all_goals sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
+    all_goals sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
       hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
       hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]
 
--- the walk meets each of the three draw checks' join points at every call that does not throw
+-- the walk meets each of the three sample checks' join points at every call that does not throw
 set_option maxHeartbeats 800000 in
 theorem setupTablesWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (circuitFile publicFile : ByteArray)

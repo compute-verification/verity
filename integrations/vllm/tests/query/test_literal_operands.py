@@ -1,7 +1,7 @@
 """The literal-operand rule of `Q_module_body_v1`: a Call that reads no Value is a literal of the Program (its output is written in the
 descriptor), never a boundary Value and never required -- wherever the correspondence places it and whatever it is named.
 
-`sampler_program()` is #101's seeded-Gumbel shape under the v1-annotation fallback (a v1-frontend Build carries no correspondence
+`sampler_program()` is a seeded-Gumbel shape under the v1-annotation fallback (a v1-frontend Build carries no correspondence
 record), two steps::
 
     ids --Embedding[model.model.embed]--> h --Gemm[model.model.lm_head]--> logits --GumbelTopPTokenSelect[root]--> tok --Embedding--> ...
@@ -9,7 +9,7 @@ record), two steps::
 
 The frontend names the three literals `<select node>/top_p` ...; the fallback parses `<a>/<b>` as `<module>/<fx node>`, so they form a
 body `gumbel_topp_token_select` of their own and their Values cross into the root body: the 32 extra `gumbel_topp_token_select_<s>/out`
-identities (and the `two producers` incompleteness) #101 showed under ENGINE=v2.
+identities (and the `two producers` incompleteness) under ENGINE=v2.
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ def test_request_manifest_requires_no_literal():
         assert man["complete"] and man["unmodelled"] == {}
         rows = sorted((x["family"], x["step"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"])
         per_step = lambda s: [("input_token_ids", s, f"{W}.embed", "in", (0, 1)), ("instance_outputs", s, f"{W}.embed", "out", (0, 4)),  # noqa: E731
-                              ("instance_outputs", s, f"{W}.lm_head", "0", (0, 4)), ("sampled_token_ids", s, "runner.sampler", "sampled_token_ids", (0, 1)),
+                              ("instance_outputs", s, f"{W}.lm_head", "out", (0, 4)), ("sampled_token_ids", s, "runner.sampler", "sampled_token_ids", (0, 1)),
                               ("sampler_seed", s, "runner.sampler", "seed", (0, 1)), ("sampler_splits", s, "runner.sampler", "splits", (0, 1))]
         assert rows == sorted([("weights", "*", EMBED_W, "weight", (0, None)), ("weights", "*", HEAD_W, "weight", (0, None))] + per_step(0) + per_step(1))
         assert man["populations"]["literal_calls"] == 6 and man["populations"]["steps"] == 2

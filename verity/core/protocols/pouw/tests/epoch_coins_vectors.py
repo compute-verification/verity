@@ -1,27 +1,32 @@
-"""Pinned vectors for PoUW's epoch coins (`verity.core.protocols.pouw.coins`) and the salt and draw keys derived
+"""Pinned vectors for PoUW's execution-phase coins (`verity.core.protocols.pouw.coins`) and the salt and sample keys derived
 from them: ``uv run python verity/core/protocols/pouw/tests/epoch_coins_vectors.py`` rewrites
 ``tests/vectors/epoch_coins_v1.json``.  A change to that file is a change to the coin commitment or a derivation, and needs a
 reason in the PR.
 
-A case's challenger draws from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are
+A case's challenger samples from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are
 SHA-256("verity/pouw/epoch-coins-vectors/v1", case, "weights" | "transcript").  A case pins every coin, hm96 salt,
-committed value and path, the root, the epoch's salt (`audit.salt_of`), the generic draw's key (`audit.AUDIT_DOMAIN`) and
-Pearl-C's (`pearl_c_work.draw_key`) under a records root SHA-256(…, case, "records")."""
+committed value and path, the root, the execution phase's salt (`audit.salt_of`), and the clear audit's sample keys, the generic
+sample's (`clear_audit.AUDIT_DOMAIN`) and Pearl-C's (`clear_work.draw_key`) under a records root SHA-256(…, case, "records")."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import epoch_coins as E
 from verity.ml.randomness import derive
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw import coins as EC
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+
+# the sample keys are the clear audit's, a reference tool (benchmarks/pouw/clear) imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
+import clear_audit as CA  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 OUT = Path(__file__).with_name("vectors") / "epoch_coins_v1.json"
-#: (case, the challenger's seed, epoch)
+#: (case, the challenger's seed, execution phase)
 CASES = (("epoch-7", E.SEED, 7), ("epoch-0", b"another challenger", 0), ("epoch-2^40", E.SEED, 1 << 40))
 
 
@@ -40,9 +45,9 @@ def case_vector(case: str, seed: bytes, epoch: int) -> dict:
         "openings": [salt_coin.to_json(), draw_coin.to_json()],
         "weights_root": weights.hex(), "salt": salt.hex(),
         "transcript_root": transcript.hex(),
-        "audit_key": derive(draw_coin.coin, au.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
+        "audit_key": derive(draw_coin.coin, CA.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
         "records_root": records.hex(),
-        "pearl_c_draw_key": W.draw_key(draw_coin.coin, transcript, records, salt).value.hex(),
+        "pearl_c_draw_key": CW.draw_key(draw_coin.coin, transcript, records, salt).value.hex(),
     }
 
 

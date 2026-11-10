@@ -121,6 +121,24 @@ def test_a_lock_held_under_a_dead_owners_line_is_held_not_free(c, tmp_path):
     assert [a.gpus for a in sh.unowned] == [(2,)]
 
 
+def test_a_gpu_with_live_foreign_memory_is_held_so_a_whole_node_grant_waits(c, tmp_path):
+    """On vy-nebius-2, a vLLM engine outside any lease held GPU 7 (`7.foreign`); the planner counted 7 free and granted
+    all 8 to a prover, which gpu-lease refused, so 0-6 sat idle. A `.foreign` naming a live pid is held; a dead one isn't."""
+    gl, proc = tmp_path / "gl", tmp_path / "proc"
+    gl.mkdir()
+    (proc / "4121212").mkdir(parents=True)
+    (proc / "locks").write_text("")
+    for i in range(8):
+        (gl / f"{i}.lock").touch()
+    (gl / "7.foreign").write_text("pid=4121212 mem=78392MiB user=research seen=2026-10-21T01:38:31Z cmd=python -m x\n")
+    (gl / "6.foreign").write_text("pid=999 mem=2000MiB user=research seen=2026-10-21T01:00:00Z cmd=gone\n")
+    obs = nebius2.read(0, gl, proc)
+    assert obs.held == (7,)
+    sh = shadow.Shadow(c, tmp_path / "out")
+    sh.step(obs)
+    assert [a.gpus for a in sh.unowned] == [(7,)]
+
+
 @pytest.mark.skipif(not Path("/proc/locks").exists(), reason="needs /proc/locks")
 def test_locked_reads_the_kernels_proc_locks(tmp_path):
     p, q = tmp_path / "0.lock", tmp_path / "1.lock"
@@ -230,7 +248,7 @@ def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it
 
 
 def test_a_waiter_pinned_to_more_gpus_than_it_asks_for_is_granted_only_from_them(c, tmp_path):
-    """5:55 PM PDT on 30 Sep: a `gpu-lease 1 --on 2,3,4,5,6,7` request read without its `on=` was granted GPU 0, which gpu-lease
+    """A `gpu-lease 1 --on 2,3,4,5,6,7` request read without its `on=` was granted GPU 0, which gpu-lease
     can't take, and the node sat idle behind it. `on=` naming more GPUs than the request is its pool."""
     from cluster.plan import Start, plan
     line = "pid=355694 n=1 on=2,3,4,5,6,7 run=r1 who=w since=2026-10-01T00:51:49Z max=20 preempt=1"

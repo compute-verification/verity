@@ -1,5 +1,42 @@
-import Proofs.Flock.Claims.KS.MixtureZk
+module
+
+public import Proofs.Flock.Claims.KS.MixtureZk
+public import Proofs.Flock.Claims.KS.Refit
+public import Proofs.Flock.Claims.KS.TableBound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainBound
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The masked table bound from masked sessions after `Commit`
@@ -19,13 +56,15 @@ escapes' term (`mean_epsSZ_le`). What is left are the hypotheses on the deployed
 * its mean `Adv`s (levels, pads roots, `τ`) and self-clash are at most the escapes' events (the escapes);
 * a table that does not extract is not committed to `T`, at every table `Ok` allows (`zk_not_committed`, at `T`'s
   statement, schedule, padding and `c₀`);
-* `T` is C-Flock ZK's table at the statement: its schedule, padding, extra lanes, shape, pads domain, queries and
+* `T` is Flock ZK's table at the statement: its schedule, padding, extra lanes, shape, pads domain, queries and
   radius (`mean_epsSZ_le`'s), and a pads domain within the deployed one (`oldEscZ_fitsFork_zk`'s).
 
 With the mixture the simulated strategies after `Commit` (`simAtZ`) of live strategies whose roots agree, the first is
 the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting with
 no opening off `C` (`ZkLiveAt`, which `zk_tableBoundθAt_of_live` reads).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -46,7 +85,7 @@ def AccOneZ {D Sl : Type} [Inhabited D] [Inhabited Sl] (outs : List (OutZC 𝔽 
 
 open Classical in
 /-- **The masked table bound at a statement, from masked sessions after `Commit`**: where the setup has the one table
-`st` and `T` is C-Flock ZK's padded table there, when every prover has escapes at fork rounds `j`, no two one, such
+`st` and `T` is Flock ZK's padded table there, when every prover has escapes at fork rounds `j`, no two one, such
 that, at each tape and each table `C` `Ok` allows, a mixture `σ` of masked sessions after a `Commit` of cap `cap₀`
 bounds the deployed runs accepting on `C` by its acceptance with no opening off `C`, and the escapes' events bound its
 `Adv`s and self-clash; and no table `Ok` allows that does not extract is committed to `T`. -/
@@ -105,7 +144,7 @@ theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Dec
     intro t
     have hs := session_sound_of_table_accZ A hA Hs T [] [] cap₀
       (fun outs => AccOneZ outs ∧ ¬ Off₀Z Hs T cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutZC))
-      (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
+      (fun _ h i hi => by obtain rfl := Nat.le_zero.1 hi; exact h.1) (Claims.Flock.oracleOf C) (σ t)
     have e : (ind fun outs : List (OutZC 𝔽 D Sl) =>
         (AccOneZ outs ∧ ¬ Off₀Z Hs T cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutZC)) ∧
           ¬ T.Committed A (Claims.Flock.oracleOf C)) = ind fun outs => AccOneZ outs ∧

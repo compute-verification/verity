@@ -1,5 +1,13 @@
-import Proofs.Flock.C3.RegLevels.TopHold
+module
+
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Defs
+public import Flock.RecVStar
 import Batteries.Recycling.MonadSatisfying.Array
+import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # R's held stream has a round of coins for each round of R's schedule
@@ -10,6 +18,8 @@ two claims, and as many rounds as `stackedRounds` at it), and keeps each of the 
 (`candidate3_held`), at the shape `RecVStar.innerCommits` was given (`innerCommits_held`). The walks are
 `TopHold.candidate3_top`'s and `TopHold.innerCommits_top`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels.StackedCoins
 
@@ -125,6 +135,7 @@ theorem innerCommits_held {tr : Json} {record : String} {reg : Option Json} {bou
   split at h
   · cases h
   simp (config := { zeta := false }) only [jpMain] at h
+  obtain ⟨_, -, h⟩ := eok_bind h
   obtain ⟨held, -, h⟩ := eok_bind h
   split at h
   rotate_left

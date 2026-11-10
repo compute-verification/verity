@@ -1,11 +1,11 @@
-"""The B1 serving program authored in torch through the frontend (lane FE2).
+"""The B1 serving program authored in torch through the frontend.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
     Commitment positions -> physical authentication locations for those values,
                             not semantic components of gate outputs.
 
-Every composite of TA1's hand-built program from `RMSNormTriton` up to `Serve` (`verity_vllm/program/registry/b1.py`)
+Every composite of TA1's hand-built program from `RMSNormTriton` up to `Serve` (`verity/ml/definitions/registry/b1.py`)
 written as `@function`s over tensors: `ops.<Prim>` for the registered primitives, `ops.Gemm(K=, N=)` etc. for
 the registered leaf composites (`DotBf16`, `Gemm`, `BiasAdd`, `RoPE`, `SiluMul`, `Embedding`, `TokenSelect` — the
 same corrected TA1 definitions on both sides), `batch`/`bind` for the structural forms, and torch views
@@ -20,10 +20,11 @@ leaf. Needs torch (the pod); `tests/program/test_b1_authored.py` skips without i
 import torch
 
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16, F32, I32
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.prims import BF16, F32, I32
 from verity.ml.circuits.types import Array, Tuple as TupleT
-from verity_vllm.program.frontend.torch_frontend import Arr, Bound, Dep, Prim, Registered, Tup, batch, bind, function, ops
+from verity_vllm.program.frontend.schemas import Arr, Dep, Tup
+from verity_vllm.program.frontend.torch_frontend import Bound, Prim, Registered, batch, bind, function, ops
 
 BN = b1.BN  # kBlockN = 64
 
@@ -141,7 +142,7 @@ def AttnBlock(q: Arr["D", BF16], k: Arr[BN, "D", BF16], v: Arr[BN, "D", BF16], m
         bmax = ops.F32Max(bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else ops.F32Max(m_prev, bmax)
     m_use = ops.GuardNegInfZero(m_new)
-    scale_log2 = _c32(b1._scale_log2_bits(D))
+    scale_log2 = _c32(b1.scale_log2_bits(D))
     if not FIRST:  # B2: rescale factor
         scores_scale = ops.MufuEx2Ftz(ops.F32MulFtz(ops.F32SubFtz(m_prev, m_use), scale_log2))
     max_scaled = ops.F32MulFtz(m_use, scale_log2)
@@ -316,7 +317,7 @@ def Serve(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"])
     return torch.stack(toks)
 
 
-# -- [E7 D54/D57 2026-09-13] the attention chain with the kernel's key-block size as a DECLARED static BN (b1.AttnBlockV3 / -----
+# -- the attention chain with the kernel's key-block size as a DECLARED static BN (b1.AttnBlockV3 / -----
 # -- AttentionHeadV3 / AttentionV3) and Serve_v4 (b1.ServeV4): the v1 bodies with `BN` bound from the program identity instead ---
 # -- of the constant 64.  Registered ids AttnBlock_v3{D,NVIS,FIRST,BN} / AttentionHead_v3{T,D,BN} / Attention_v3{...,BN} / ----------
 # -- Serve_v4{C,LP,STEPS,BN}; `check_identity` against the registry as for v1. ---------------------------------------------------
@@ -333,7 +334,7 @@ def AttnBlockV3(q: Arr["D", BF16], k: Arr["BN", "D", BF16], v: Arr["BN", "D", BF
         bmax = ops.F32Max(bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else ops.F32Max(m_prev, bmax)
     m_use = ops.GuardNegInfZero(m_new)
-    scale_log2 = _c32(b1._scale_log2_bits(D))
+    scale_log2 = _c32(b1.scale_log2_bits(D))
     if not FIRST:  # B2: rescale factor
         scores_scale = ops.MufuEx2Ftz(ops.F32MulFtz(ops.F32SubFtz(m_prev, m_use), scale_log2))
     max_scaled = ops.F32MulFtz(m_use, scale_log2)
@@ -448,7 +449,7 @@ def ServeV4(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
 
 
 # -- CF1: the factored definitions (composition.md §2) — the same bodies, the accidental constants and hard-coded ------
-# -- callees as statics (`verity_vllm/program/registry/b1.py`: DotBf16_v2 … Serve_v2) ------------------------------------------
+# -- callees as statics (`verity/ml/definitions/registry/b1.py`: DotBf16_v2 … Serve_v2) ------------------------------------------
 #
 # `DOT` (the k16 tensor-core step), `BN` (kBlockN), `INV` (the softmax epilogue inverse sum) and the serving-level
 # records `GEMM = {"DOT"}`, `ATTENTION = {"BN", "DOT", "INV"}`, `NORM = {"L0", "FUSED"}` are declared statics, so
@@ -460,7 +461,7 @@ def ServeV4(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
 
 def _callable(f):
     """A static-valued function as a frontend callable: a `Prim`/`Bound`/`Function` as is; a registered primitive or a
-    complete registered specialisation wrapped (`_ir_static` maps both back to the same IR definition)."""
+    complete registered specialisation wrapped (`_ir_static` maps both back to the same circuit Definition)."""
     if hasattr(f, "_resolve"):
         return f
     if isinstance(f, PrimitiveDefinition):
@@ -475,7 +476,7 @@ ATTENTION_FA2 = {"BN": BN, "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}  
 
 
 def attention_fa2(D: int) -> dict:
-    """[E7 D54] The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
+    """The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
     return {"BN": b1.fa2_kblock_n(D), "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}
 
 
@@ -496,7 +497,7 @@ def AttnBlockV2(q: Arr["D", BF16], k: Arr["BN", "D", BF16], v: Arr["BN", "D", BF
         bmax = ops.F32Max(bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else ops.F32Max(m_prev, bmax)
     m_use = ops.GuardNegInfZero(m_new)
-    scale_log2 = _c32(b1._scale_log2_bits(D))
+    scale_log2 = _c32(b1.scale_log2_bits(D))
     if not FIRST:  # B2: rescale factor
         scores_scale = ops.MufuEx2Ftz(ops.F32MulFtz(ops.F32SubFtz(m_prev, m_use), scale_log2))
     max_scaled = ops.F32MulFtz(m_use, scale_log2)
@@ -645,7 +646,7 @@ def ServeV2(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
         -> Arr["STEPS + 1", I32]:
     """Greedy serving of one request with the profile's implementation records as statics (b1.ServeV2): the Ampere
     program is `ServeV2` under `GEMM_AMPERE` / `ATTENTION_FA2` / `norm_bundle(C)`, the Hopper one differs in `GEMM` and
-    `ATTENTION` only (`verity_vllm.program.registry.hopper.GEMM_HOPPER`, `.ATTENTION_FA3`)."""
+    `ATTENTION` only (`verity.ml.definitions.registry.hopper.GEMM_HOPPER`, `.ATTENTION_FA3`)."""
     caches, finals = _forward_positions_v2(C, GEMM, ATTENTION, NORM, prompt, weights, 0, LP, None)
     tok = FinalV2(finals[-1][0], finals[-1][1], weights["norm"], weights["embed"], C=C, GEMM=GEMM, NORM=NORM, name=f"t={LP - 1}/final")
     toks = [tok]

@@ -1,5 +1,46 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Walk
+module
+
+public import Proofs.Flock.Claims.Complete.Walk
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Std.Data.String.ToNat
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The masked session's reps, by index
@@ -12,6 +53,8 @@ proof rep `j` returns, on the table's trace, its masked commitment, the extra cl
 `RunZk.walk`: at the run, the record decodes to those streams, every recorded round retained, and each rep's decoded
 masked proof is the proof that rep returned (`ZkView.decode_encode`, given `RepShapedZk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -65,39 +108,40 @@ theorem push_getElem!_size {α : Type} [Inhabited α] (xs : Array α) (x : α) :
 
 /-- **Rep `rep`'s run**: the rep, on the table's trace `tr`, its packed table, the masked level-0 commitment `cm`, the
 extra claims `e`, and rep `rep`'s pads committed as `ic`, returns a proof with `q`, from the empty transcript at its
-domain, ending at the rounds `rs`. -/
+domain, ending at the rounds `rs`, its rank check at some earlier claim points and mask words. -/
 def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (rep : ℕ) (rs : Array Round)
     (q : Zk.ZkProof → Prop) : Prop :=
-  ∃ p ic l t' l', innerCommitP (Hashes.ofSha512 h : Hashes V)
+  ∃ p ic l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
       (padsOf tape 0 rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) (tape.innerSalt 0 rep) = .ok ic ∧ q p ∧
     rs = t'.rounds ∧
     ((repPZk (asksS resp) (Hashes.ofSha512 h) st v.1 v.2 rep (spec.domain spec.tables[0]! rep).toUTF8 tr
       (packed tr st.m) cm e (padsOf tape 0 rep (Zk.PadLayout.new st.m st.kLog v.1.k0)) ic (tape.extra 0)
-      (tape.lanePad 0) (tape.salt 0 rep) (tape.nonce 0 rep)).run
+      (tape.lanePad 0) (tape.salt 0 rep) (tape.nonce 0 rep) prior ws).run
         (Transcript.init #[] (spec.domain spec.tables[0]! rep).toUTF8)).go l = (.ok (p, t'), l')
 
 /-- **The one-table masked session, rep by rep**: `sessionPZk_facts` and `sessionPZk_files` on the same streams, the
 `j`th stream and proof file being rep `j`'s rounds and proof (`RepRunZk`). -/
 theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
-    (hown : Json.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
-    (trs : Array Trace) (tape : TapeZk)
+    (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
+    (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hC : ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
-    (hR : ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce,
+    (hR : ∀ v, Zk.schedule st.m = .ok v → ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
-        lanePad salt nonce).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
+        lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
-    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
+    (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
+      (.ok r, bodies)) :
     ∃ v cm e streams, Zk.schedule st.m = .ok v ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2
         (packed trs[0]! st.m) (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0 0) = .ok cm ∧
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok e ∧
-      r.1 = (recordObjZk spec (Claims.hOf H) hz ct #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams
-        r.2).compress ∧
+      r.1 = printJ (recordObjZk spec (Claims.hOf H) hz ct #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams
+        r.2) ∧
       0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64 ∧ streams.size = 2 ∧ r.2.size = 2 ∧
       (∀ rs ∈ streams, RoundsOk rs) ∧
       (∃ bs, bodies.toList = linkBody [flat cm.cap] [ByteArray.empty] :: bs ∧
@@ -179,8 +223,8 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
     rw [Still.go (Still.of_pureS (innerCommitP_pureS _ _ _)) e0] at e3
     obtain ⟨⟨pf, tr'⟩, l₂, e2, e⟩ := go_bind_ok e3
     have hex' : st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras := by simpa [ptsOf] using hex
-    have hok := Ret.go (hR v hv _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
-    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
+    have hok := Ret.go (hR v hv _ _ _ _ _ _ _ _ _ _ _ _ _ _ hex') e2
+    obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repPZk_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) e2
     simp only [go_pure, Prod.mk.injEq, Except.ok.injEq] at e
     obtain ⟨rfl, rfl⟩ := e
     have hsz : l.size = 1 + (ss.toList.flatMap Array.toList).length := by
@@ -200,7 +244,7 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
       rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | rfl
       · rw [push_getElem!_lt _ _ (by omega), push_getElem!_lt _ _ (by omega)]
         exact h₅ extras hex' j hj
-      · refine ⟨pf, ic, l, tr', l₂, hic, ?_, ?_, by simpa using e2⟩
+      · refine ⟨pf, ic, l, tr', l₂, priorOf st ss j, words[0]!, hic, ?_, ?_, by simpa using e2⟩
         · rw [← h₂, push_getElem!_size]
           simp
         · rw [← h₁, push_getElem!_size]
@@ -214,8 +258,8 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the
 verifier's extra claims are the prover's, the table has `25 ≤ m`, and rep `r`'s decoded masked proof is the proof it
 returned, ending at that stream. -/
-theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : ProverOkZk H rel)
-    (hR : RepShapedZk H rel) (o : RunZk H rel) :
+theorem RunZk.walk (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+    (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (streams : Array (Array Round)),
       o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧ streams.size = 2 ∧
       (∀ rs ∈ streams, ∀ x ∈ rs, ∃ c, x.bytes = some c) ∧
@@ -224,7 +268,7 @@ theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
         streams[r]! fun p => o.zp 0 r = p := by
   obtain ⟨st, hst, hsp, h25, -⟩ := o.table
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS o.toCaseZk
-  obtain ⟨hz, hc⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨hC, hRk⟩ := hP o.toCaseZk st (by rw [hst]; simp)
@@ -234,7 +278,7 @@ theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
   unfold sessionSZk at hrun
   rw [hst, htabs] at hrun
   obtain ⟨v, cm, e, streams, hv, hcm, he, hrec, hrb, -, hss, -, hrs, ⟨bs, -, hrecs⟩, hreps⟩ :=
-    sessionPZk_walk H _ ht hct hown hc (Setup.ofCircuit st) _ _ hC hRk hrun
+    sessionPZk_walk H _ ht hct hown hc (Setup.ofCircuit st) _ _ _ hC hRk hrun
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, ptsOf_coin] at hrec he
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by
@@ -246,7 +290,7 @@ theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
   have hdec : Record.decodeWith o.hs o.spec o.record = .ok (sessOf o.spec (Claims.hOf H) #[flat cm.cap]
       (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZk S (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm (by rw [hss, hrs1]; rfl) hrs
+    exact decode_recordObjZk (hOf_size h64) ht hct hH hdraw hsig hrb hpts hpm (by rw [hss, hrs1]; rfl) hrs
       o.proofs
   have hsess : o.sess = sessOf o.spec (Claims.hOf H) #[flat cm.cap] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
       o.proofs := by
@@ -270,12 +314,12 @@ theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : Pr
     rcases (show r = 0 ∨ r = 1 by omega) with rfl | rfl <;> simp
   refine ⟨st, v, cm, e, #[s0, s1], hotabs, hsch0, rfl, fun rs hrs x hx => ?_, hstream, hext0, h25, fun r hr => ?_⟩
   · exact Recs.bytes hrecs x (List.mem_flatMap.2 ⟨rs, Array.mem_toList_iff.2 hrs, Array.mem_toList_iff.2 hx⟩)
-  · obtain ⟨p, ic, l, t', l', hic, hb, hrr, hp⟩ := hreps r hr
+  · obtain ⟨p, ic, l, t', l', prior, ws, hic, hb, hrr, hp⟩ := hreps r hr
     have hR' := hR o.toCaseZk st v cm e hst hv (by rw [hst]; exact hcm) he r ic hic
-      (o.spec.domain o.spec.tables[0]! r).toUTF8
+      (o.spec.domain o.spec.tables[0]! r).toUTF8 prior ws
     rw [hst] at hR'
     have hps := Ret.go hR' hp
-    refine ⟨p, ic, l, t', l', hic, ?_, hrr, by rw [hst]; exact hp⟩
+    refine ⟨p, ic, l, t', l', prior, ws, hic, ?_, hrr, by rw [hst]; exact hp⟩
     have hdec' : Zk.decode (shapeZk o.tabs[0]! (o.sch 0) (o.extras 0).size) (o.bytes 0 r) = .ok p := by
       rw [show o.bytes 0 r = o.proofs[r]! by simp [RunZk.bytes], hb, hsch0, hext0,
         show o.tabs[0]! = Setup.ofCircuit st by rw [hotabs]; rfl]

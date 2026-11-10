@@ -40,9 +40,10 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
     params = [(n, str(t)) for n, t in program.fn.body.params]
     user = [n for n, _ in params if n != "weights"]
     probe = res["tp"]["collectives"]["record"]
-    peer_ranks = [r for r in range(tp) if r != rank]                       # [lane vllm-tp-n] world-1 peers per collective, in rank order
+    peer_ranks = [r for r in range(tp) if r != rank]                       # world-1 peers per collective, in rank order
     n_peer = len(probe) * len(peer_ranks)
     peer_names = user[len(user) - n_peer:]
+    n_own = len(user) - n_peer
     apps = [a for a in rep.provenance["applications"] if a.get("collective")]      # the collective rules tag their applications (kind), in call order
     if len(apps) != len(probe):
         raise RuntimeError(f"tp_links: {len(apps)} collective rule applications vs {len(probe)} probed collectives")
@@ -59,7 +60,7 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
            "model_root": model_root,
            "module_vocabulary": "link.module_path: the traced wrapper's named_modules() path + ' (Class)'; link.module: the same module in the "
                                 "recorder's model.named_modules() vocabulary = module_path minus model_root (recorded by object identity)",
-           "prompt_inputs": user[:len(user) - n_peer], "peer_inputs": peer_names,
+           "prompt_inputs": user[:n_own], "peer_inputs": peer_names,
            "peer_input_layout": "peer input k*(world-1)+j of rank r := the j-th other rank's (rank order) partial of collective k",
            "binding": "each peer input of collective k of rank r := part_rank(p) of collective k of rank p (that rank's committed partial); the received "
                       "collective output of rank r is AllReduce/AllGather(part_rank0, .., part_rank{world-1}) in rank order — never a fresh trusted input"
@@ -68,7 +69,7 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
                             "weight root commits to the shard, the run root binds every rank's weight root (rank-tagged)",
            "links": links}
     json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
-    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": len(user) - n_peer, "file": "tp_links.json"}
+    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": n_own, "file": "tp_links.json"}
 
 
 def read_tp_links(path: str) -> dict:

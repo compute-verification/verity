@@ -21,7 +21,6 @@ PROTOCOL SUMMARY (Commit stage: the execution extent check's account of record w
     `executed_prefix_len` in the record is a cross-check, recomputed and never trusted; with a Match record beside the Commit both links
     must hold when the row committed its sampled ids, and a row that committed none writes no token record (its Match link alone
     decides, the token-record link recorded as not applied); a link that places no shorter prefix is recorded, not decisive.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 
@@ -33,11 +32,12 @@ from typing import Any, Callable
 import numpy as np
 
 from verity_vllm.check import executed_prefix as EP
-from verity_vllm.check.executed_prefix import ACTIVE_REFERENCE_ONLY
 from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.program.sampling_event import circuit_token_id
 
 #: the committed family a served token is opened from
 FAMILY = (SAMPLER_OP, SAMPLED_MEMBER)
@@ -101,8 +101,8 @@ def request_entries(record: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-COMMIT_LINK_RULE = ("the executed prefix rests on the Commit's token record: (1) every served token equals the committed sampled id opened "
-                    "from the run root at its identity and verified; (2) the driver served the same list; (3) the stop predicate holds under "
+COMMIT_LINK_RULE = ("the executed prefix rests on the Commit's token record: (1) every served token is the circuit's 32-bit id zero-extended "
+                    "and equals the committed sampled id opened from the run root at its identity and verified; (2) the driver served the same list; (3) the stop predicate holds under "
                     "the declared EOS ids, with a finish_reason that agrees; (4) n_r recomputed = min(cap, a_r + LAG) on an EOS stop, the cap "
                     "on a length stop; (5) LAG declared == the record's == the engine's read-back; (6) nothing committed past the stop")
 
@@ -142,6 +142,12 @@ def _commit_link_request(rid: str, rec: dict[str, Any], e: dict[str, Any], *, op
     got: list[int | None] = []
     for s in range(a):
         ident, step = (ids[s] if s < len(ids) else None), arrive + s
+        try:
+            circuit_token_id(gen[s])
+        except ValueError as err:
+            token_probs.append(f"{rid}: (1) served token {s}: {err}")
+            got.append(None)
+            continue
         if not isinstance(ident, dict) or any(ident.get(k) is None for k in C.IDENTITY):
             token_probs.append(f"{rid}: (1) served token {s} has no committed identity in the token record")
             got.append(None)
@@ -278,13 +284,19 @@ def sampled_identities(store: Any, rid: str, arrive: int, n: int) -> list[dict[s
 def opener(store: Any) -> Callable[[str, dict[str, Any]], tuple[int | None, str]]:
     """`opened(rid, identity) -> (value | None, why)`: the committed sampled id at an identity of the record, read through `store` (a
     `CommittedStore` over an `OpenedReader`: the leaves are opened and verified against the run root before a byte is returned; a read
-    that does not verify is None by name).  The identity's invocation must be the one its op_path resolves to."""
+    that does not verify is None by name, as is a committed word that is not a 32-bit id zero-extended).  The identity's invocation must
+    be the one its op_path resolves to."""
     def opened(rid: str, ident: dict[str, Any]) -> tuple[int | None, str]:
         _canon, inv = store.resolve(str(ident["op_path"]))
         if int(ident["invocation"]) != inv:
             return None, f"invocation {ident['invocation']} is not the one {ident['op_path']} resolves to ({inv})"
         w, why = store.words(rid, int(ident["step"]), str(ident["op_path"]), str(ident["output_member"]), 0, 1)
-        return (None, why) if w is None else (int(np.asarray(w).astype(np.int64)[0]), "opened")
+        if w is None:
+            return None, why
+        try:
+            return circuit_token_id(np.asarray(w).astype(np.int64)[0]), "opened"
+        except ValueError as e:
+            return None, f"the committed sampled id: {e}"
     return opened
 
 

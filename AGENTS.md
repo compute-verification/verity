@@ -1,397 +1,307 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `DESIGN.md` has the architecture and the Glossary, whose terms
-code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
-work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
-be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
+compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose
+terms code, docs and output use. This file states what holds on `main` now; each package's README and docstrings say what
+it contains. Your checkout and your prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
 
 ## Map and commands
 
-Top-level directories (a grouping, not an import name, except `verity/`):
-
-- `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
-  Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
-  tests sit beside it as their own suite.
-  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
-    proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
-    - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
-      its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
-      remote bandwidth audit over a node's registered store (`remote_bandwidth`) and the network certifier
-      (`certifier`), each a Python
-      verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
-      (`verity/core/protocols/network/nci/`).
-    - `claims`: the ids of security claims.
-    - The Lean ports in `primitives`, `devices`, `service` and `protocols`. A port is held to the Python it replaces by
-      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
-    - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
-  - `verity/ml/` (`verity.ml`): Python and CUDA. These units are on the soundness path, because core's verifiers read
-    them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
-    `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach). The rest, C-Flock's prover and the private circuits, can't affect soundness.
-    - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
-      (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
-      (`silicon`, the exact hardware semantics) and `targets`.
-    - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
-    - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
-      (`randomness`).
-    - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
-    - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
-      C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
-      `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
-      Rust verifier as a cross-check.
-- `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
-  (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
-  builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
-  through C-Flock's prover and the Lean verifier.
+- `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
+  owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
+  - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
+    PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its
+    `lean/`) replaces it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims'
+    ids, `service/flock/` Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    release side, and `difftest` the Python held to each Lean.
+  - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
+    `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
+    `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
+    (the served workloads' Definitions), `protocols` (the circuits core's protocols' provers build, which their
+    verifiers don't read) and `flock/` (`verity_flock`, its own distribution: Flock, the proof system's prover, with its
+    verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its Python verifier reads
+    are on the soundness path: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which
+    only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`) nor the kernels. The rest
+    can't affect soundness.
+- `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
+- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+  (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
+- `examples/`: one directory per demo: its workload, placement, commands and doneness (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
-  end to end, and the benchmark tools.
-  - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
-  - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes.
-  - `benchmarks/numerical/`: the table tooling of the archived proof systems.
-- `tools/`:
-  - `verity/`: the `verity` command (`cli/`) and the tools it runs: `check/` (the one check a merge requires),
-    `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
-  - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
-    nothing from Verity.
-  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs (`research run --on auto` runs them on a node).
-  - `move`: layout moves.
-- `infra/`: our machines.
-  - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
-  - `control/`: the control pod's boot script and loops.
-  - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
-    Daniel's laptop.
-  - `nebius/`: the console's units.
-  - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
-- `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
-  the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
-- `fixtures/`: `artifacts.json`, every replicated fixture by `art:` id, and the archived proof systems' fixtures.
-- `tests/`: invariants of the whole tree, the import rules among them.
+  end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
+- `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
+- `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree. The archived
+  proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
+  archive` restores them.
+- The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
+  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
+  (its `infra/`) and its `.cursor`, nothing else.
 
-Code reaches the Nebius nodes only through `research deploy install` from a pushed commit, listed in
-`tools/research/src/research/pods/nebius/deploy.toml`. Delete data you don't own on a node only with
-`research retention gc` or `research retention rm --approved-by @OWNER`, never a bare `rm`.
+Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
+`verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
+that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
+Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
+Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
+`tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its code, by
+package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
+protocol uses reaches it through a card file citing an `art:` id.
 
-Dependencies point inward, and `tests/test_boundaries.py` enforces them:
-
-- `verity.core` may import the units of `verity.ml` that `ALLOWED` lists for it, which puts them on the soundness path
-  (`SOUNDNESS_PATH`). `verity.ml` never imports `verity.core`, apart from the files `ML_IMPORTS_CORE` names (C-Flock's
-  tests and V*'s builders, and hm96's test of its claims).
-- Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
-- Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
-  `core.claims` import no other unit.
-- A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols `ALLOWED` lists for it
-  (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
-  Definitions and silicon semantics (`ml.circuits.ops`, `silicon`, `targets`).
-- Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
-
-`verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the check a merge
-requires, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
-`verity --help` lists the rest.
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
 ~~~text
-uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
-research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source --wait -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the merge check; --record: an Attempt
+uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
+uv run tools/verity/check/suites.py             # the suites whose inputs changed; --quick: no slow tests
+uv run --extra torch-cpu verity check           # the whole check
 ~~~
+
+The team's agents run these remotely (the team skill).
 
 ## Design rules
 
-Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behind most of them.
+The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
-  every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
-- **Everything zero-knowledge.** Every protocol is zero-knowledge, PoUS included, with no clear mode. Only four kinds of
-  things are public, each with its reason:
-  - protocol structure;
-  - the protocol's outputs;
-  - the verifier's coins and draws;
-  - hiding commitments.
-
-  Partitions are private, and their properties are public. A proof unit's outputs are at most 16 bits, a literal limit.
-- **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
-  the challenger, and the verifier.
-  - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
-    with the outcome.
-  - The service owns commitments, live coins and the record, the selection, proving, verifying and the integrity
-    profile.
-  - A protocol carries no policy parameter. It surfaces what its draw established (ε at δ), and the model's size is
-    public.
-- **One hash: SHA-512 with its whole output, everywhere.**
-  - Commitments are hm96 rows in frame-v3-sha512 trees.
-  - Signatures are hash-based (LMS, n = 64).
-  - BLAKE3 leaves the served path for `archive/`. There are two named exceptions:
-    - Pearl's FP8 scheme, as Pearl defines it.
-    - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
-      bind under the named premise H-μ⁺, which is the premise ledger's row R1
-      (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
-- **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
-  - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
-    pass's root (Daniel, 12 Oct);
-  - PoUW's per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the
-    epoch's live salt and the operands' committed roots, which a drawn unit's proof derives along with its own noise.
-    Grinding is a term of the guarantee: a steer that needs m noised coordinates succeeds with probability at most
-    μ^m a try (Daniel, 18 Oct).
-
-  There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
-  firewall one at a time.
-- **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
-  witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
-  doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
-  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted.
-- **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
-  designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
-  (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
-  and later from a separate physical calibration.
-- **Soundness is one theorem** (see Lean below).
+  every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
+  committed, each under a hiding leaf; the values inside a proof block never are.
+- **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
+  reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
+  are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
+  from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
+  16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
+  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
+  refuses a plain session past what the plain theorem covers (one table today).
+- **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
+  verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
+  does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
+  integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
+  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
+  ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
+  commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
+  the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
+  exfiltration. The demonstration adds the network certifier as a separate layer: it stamps each request's release order
+  and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
+  SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
+  and proof; the two compose only above both.
+- **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
+  leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
+  are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
+  and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
+  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`).
+- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
+  inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
+  per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
+  phase's live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
+  of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
+  retries: a failed proof is a visible failure, and nothing resamples. In the core protocols, outer proofs go through the ZK server as independent
+  sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
+  coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
+  every verdict counts (provisional).
+- **Output accounting: every output bit is explained, certified or charged.** What leaves (y, the certifier's record of
+  every byte out, timing included) must be a function of what came in (x, certified), registered information (weights,
+  configs, the compiler B, Definitions), advice (a, committed before the coins) and the wrong blocks: given those, at most
+  one y is self-consistent (else the bound adds log₂ of how many are). Explanation: the circuit C = B(x, y, a) outputs y's
+  serialization and the audit checks the equality, and every bit B reads from y is such an output. Prefix stability:
+  changing y at or after step s doesn't change what C computes before s. Every block is a function of its committed
+  inputs. Anything the prover chooses that reaches y or B is advice and is charged; anything else that leaves is refused
+  by the egress spec.
+- **Nondeterminism is quantified, never buried.** Every value a circuit reads is the output of one of its
+  blocks, a certified input, a registered value, or advice charged at its width. A value the served hardware decides
+  (an atomics order, a split choice) that no block computes is never a free witness checked by a relation: serving makes it
+  canonical so a block computes it, or it is advice. A relation check stands in for computing only where its outputs are
+  unique: a Lean lemma, once per Definition and for all its other inputs, that any two witnesses it accepts give the
+  same value on every output wire. Its witness then carries no bits; until the lemma holds, it counts as free input at
+  its width.
+- **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
+  proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
+  or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
+  (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
+  (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
+- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
+  effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
+  useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
+  to the same floor.
+- **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
+  witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
+  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-host`.
+  Nothing the developer runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
+- **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
+  SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
+  and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
+  capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
+  plan.
+- **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
+  speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
+  Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
+- **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
+  prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
+- **That a circuit computes what the model computes is completeness, never proved.** It decides only whether
+  honest serving passes: every guarantee is about the registered circuit, one that passes circuit-check, and the
+  developer validates the match empirically (circuit-check, hardware captures, served outputs). Nobody proves it, lists it
+  as an assumption or counts it as a gap. Lean holds one description of the circuit, the parsed circuit file the verifier
+  checks, and defines every other layer's circuit from it.
+- **Integrations are frontends, and Verity is agnostic to them.** Verity's vocabulary is circuits, values,
+  commitments, coins, proofs and verdicts; models, checkpoints, requests, batches and schedulers stay out of `verity/`, and
+  those still in it (the certifier's advice format, vLLM's scheduler) move out. An integration hands Verity only: a
+  circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
+  choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
+  never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
+  before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
+  sample, the sampled proof blocks' openings, to the prover behind the ZK server.
+- **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
+  period (Glossary), not the execution phase, the run or the demo. Every result, in a report, a
+  table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
+  all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
+  one. The datacenter's size (from `benchmarks/census/`) and the execution phase's length are stated parameters, and a
+  figure scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over
+  the period and as a share of the compute it covers, beside the per-execution-phase figure, never instead of it: a
+  per-execution-phase δ that looks weak is not the result.
 
 ## Tests
 
-Every package's tests live in its own `tests/` and run as one suite, in its own process (a `parallel` suite runs in
-pytest-xdist workers), cached by input. The repository's own suite (`tests/`) holds only invariants of the whole tree. The
-testing skill, `.agents/skills/testing/SKILL.md`, says how to run them, what a suite may read (`[tool.verity.tests]
-inputs`), and the rules for slow tests, fixtures and dummy credentials.
+Each package's tests are one suite in its own `tests/`, run in its own process and cached by input; the root `tests/`
+holds only invariants of the whole tree. How to run them, what a suite may read, and the rules for slow tests, fixtures
+and dummy credentials: the testing skill.
 
-An agent VM does no work beyond editing (Daniel, 18 Oct): it is 16 GB, shared by every agent on it, and one
-out-of-memory kill takes all of them down. Locally, run only git (`git merge-tree` included), reading and editing,
-messaging and the notes, one named test file or `-k` selection of under about a minute and 1 GB, `lake env lean` on one
-file in an already-built tree, a Lean package with no Mathlib or ArkLib, and the lock fast path. Everything else runs
-remotely through `research run --on auto --cwd source [--wait] -- CMD` (the shipped tree needs its own `uv sync`), on the cluster queue as an `agent-test` job (4 CPUs, 16 GiB,
-60 min unless `--cpus`, `--mem-gb` or `--timeout` say otherwise), outside the check slots: every suite (`suites.py`),
-`verity check` and `check.py`, circuit-check (24 GB a process), any build of `Security` or `Security/Proofs`, cargo, nvcc, every e2e run
-and every GPU job (the writing-runs skill). The shell hook refuses those commands locally and names the remote one;
-`AGENT_GUARD_LOCAL_OK=1` in the command is the explicit opt-in.
+No test reads wall-clock time (no sleeps, clock readings or timeouts:
+wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its exceptions in `ALLOWED`). A test that flakes is
+deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
+cheaper test can't.
 
-No test depends on wall-clock time: no sleeps, clock readings or timeouts. Wait on the event itself or inject the clock.
-`tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
-
-A test that flakes is deleted, not fixed or rerun. A test that adds more than about a minute to `check` says in its
-docstring what it catches that a cheaper test can't.
+Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
+paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
+everything that can make a claim false or can't be undone still fail.
 
 ## Circuits
 
-Any change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) must pass
-`circuit-check` (`uv run circuit-check <definition|template|row>`); include its report in the PR. A new Definition needs a
-small binding in its module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`; `circuit_check.sidecars`),
-which the suite enforces.
+A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
+`uv run circuit-check <definition|template|row>`, with its report in the PR. A new Definition gets a binding in its
+module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
 ## Checking and merging
 
-There is no GitHub Actions CI. `check` (`verity check`, which runs `tools/verity/check/check.py`) is the one check, run on a
-multi-core CPU pod. It covers:
-
-- every test suite;
-- `circuit-check --all`;
-- C-Flock's Rust build and tests;
-- the Lean verifier's build and its partition check;
-- the Lean check;
-- `merge_requires` (declared per job in `tools/verity/check/ci.toml`): the steps a change's paths demand, such as `lean-agreement`, the cross-check
-  against upstream's Rust verifier, for C-Flock (`verity/ml/flock/`, and its Lean verifier in `verity/core/service/flock/`;
-  `check.py --record` sends what it needs).
+There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
+`circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
+`lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
+suite, test, target and step's real verdict. What gates, what may stay red and what a red triggers is drive's config,
+`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
+which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
+fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
+landing on `checked`'s tip, where a red holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
+unchanged.
 
-Landing, as Daniel set it (7 Oct; the CI page in Notion): `main` always passes the whole `check`, and the check is to stay
-fast by reusing a part's verdict whenever its inputs haven't changed. Each verdict is to be keyed on a hash of the part's
-declared inputs (the read guard enforces them), the base image and the code that decides that verdict (a suite's runner and
-harness, not every line of the check tool; Daniel, 9 Oct), so that a docs-only change reruns nothing, a deleted test reruns
-its suite, and a layout move or a change to the runner reruns everything. The merge
-queue runs the check on the queued group, and a nightly uncached check must agree; a disagreement means some part reads
-something it doesn't declare, and it is fixed in the check, not by reverting anyone's change.
-
-Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
-lands on its own passing check without its file owner's review, and the owner is told. infra owns check time as an
-outcome. Spend past a budget line, and moving a part out of what `main`'s passing check covers, go to Daniel. Hand
-landing is automated, and ci owns that: from a ready mark to `main` moving, no agent acts unless the automation
-refuses, and the lander handles what it refuses.
-
-Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
-right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
-A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
-whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
-landing.
-
-PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
-
-- Drive admits a PR once its owner marks it ready at its head: `research queue ready N --mark --by LANE`, or
-  `research data label pr:N@SHA ready true --by LANE`. It needs no quick-tier pass, and a new head needs a new mark. The
-  owner is the lane a `Lane NAME` line in the PR's body names, else the Cursor agent id the body carries. Marks written
-  before `marked_after` in `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out.
-  `research queue status` says what each PR waits for.
-- No change waits on a per-head grant: not red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
-- Drive stacks admitted PRs on `next`, checks them in trains and lands the newest train whose check passed. What it
-  refuses (a conflict, a failed check) goes to the lander, who ejects the PR that caused it; its owner is told, and
-  marks its fixed head ready.
-- A new head doesn't cancel a running train (top, 17 Oct): a train being checked runs on at the head its owner marked, and
-  lands that head if it passes; the new head rejoins `next` above once that train ends. Only when the PR's own train has
-  failed does the new head rebuild at once, since then the push is the fix.
-- A landing that breaks `main` is reverted at once (`git revert -m 1`), and its owner relands with the fix.
-- A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
-  of the queue, since drive doesn't order it: the lander lands it with `research merge` on its own passing check, and
-  drive's next sync rebuilds `next` on it.
+A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
+only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
+its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
+culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
+it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
+reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
+revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
+rule for each case: the team skill's Landing.
 
 ## Lean
 
-- **Soundness is one theorem** (a rule, not a claim that `main` proves it): one theorem over everything the compiled
-  Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form.
-  The verifier must refuse any form the proof doesn't cover, and it gains no new form ahead of its proof. Circuit inputs
-  and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
-- **Lean is either code or security analysis.**
-  - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
-    (`verity/core/service/flock/`, no dependencies), the PoUS grader (`verity/core/protocols/pous/lean/`) and
-    the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
-    difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
-    bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
-  - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
-    assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
-    `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
-    each proved guarantee.
-    `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
-    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
-    `security_proofs`.
-  - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
-    `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
-  - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
-    until its spec is extracted.
-  - All packages share one toolchain and one Mathlib revision (`tests/test_lean_packages.py`). Bump them together, in a
-    PR of their own.
-- **The Lean check.** Every Lake package has a lock, `lean-audit.json`, and `check` runs the Lean check on every declaration
-  (`tools/verity/lean/check.py`):
-  - only `propext`, `Classical.choice` and `Quot.sound`;
-  - no `sorry`, `axiom`, `native_decide` or kernel bypass;
-  - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
-    lock with its own record;
-  - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (DESIGN.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
-  statement and every definition the statement reads; those records are the lock.
-  - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
-    waits on it.
-  - A guarantee that only moved sends nothing (`--update --moved MOVES.json`).
-- **How to work on Lean**, how parallel Lean lanes avoid conflicts (two agents never share a writable `.lake`), and which
-  assumptions get an `upstream` watch entry: the lean-proofs skill, `.agents/skills/lean-proofs/SKILL.md`.
+- **Soundness is one theorem.** Protocol soundness (`Verity.Soundness`) is to be one theorem over everything the compiled
+  Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form;
+  this is a requirement, not a claim that `main` proves it. The verifier refuses any form the proof doesn't cover and
+  gains none ahead of its proof. Circuit inputs and outputs use one canonical format, proved in general, so a new
+  workload needs no verifier or proof change.
+- **The math is modular.** Each layer is proved once over the guarantee of the layer below: the knowledge soundness of
+  one run's verifier for sampling, sampling's for an audit, an audit's for an accounting bound. Each configuration
+  (zero-knowledge, plain, recursive) and each protocol instantiates those theorems, and a proof that redoes a layer is
+  refactored onto the shared one.
+- **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and samples,
+  probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
+  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  (`tests/test_lean_vocabulary.py`).
+- **Lean is code or security analysis.** Code stays with its subsystem and never requires `Security/`: Flock's
+  executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
+  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
+  computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
+  hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
+  (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
+  statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean
+  functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
+  `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
+  or properties trees reads the proofs tree (`trees` in `Security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
+  `Pouw`, `Pous`, `NetworkCertifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
+  bumped together in a PR of their own.
+- **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
+  only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
+  premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
+  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean` or a module under it, and
+  every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
+  `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
+  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
+  (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
+  to; the check prints each one's gap, the number Daniel drives to zero.
+- **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
+  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
+  A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
+  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
+  the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
+  no longer rests on, a missing owner, or a cap of `unread-caps.json` or
+  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
+  malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
+  merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
+  drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
+- How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
+  lean-proofs skill.
 
 ## Working principles
 
-Research velocity comes first (Daniel, 6 Oct). Be as generous as possible with what lands, and cut ceremony: propose
-cutting any gate, review or step that slows landing without catching real errors, and fix what breaks later. Our machines
-are research infrastructure, not a rehearsal of deployment, so don't mimic deployment settings.
-
-Solve the current task with the smallest clear implementation. Reuse existing code and commands before adding
-abstractions or procedures. Enforce deterministic requirements in code, with the fix in the failure message, rather than
-in prose. Remove obsolete rules and machinery rather than accumulating them.
-
-**A decision rolls out in the change that records it.** When Daniel rules, or a PR retires a term, a path or a procedure,
-that PR rewrites every place that states the old way: `git grep` the old phrase across this file, DESIGN.md and its
-Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
-owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
-it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
-
-Make every decision yourself except keys and claims (Daniel, 8 Oct; spend became its lead's call 13 Oct). Access and
-keys, and what a guarantee says or rests on, go to Daniel through your coordinator, with your recommendation; pods
-still bound themselves under a `budgets.toml` line, and a budget line named in a standing ruling stands. A change that
-crosses owners goes to the other owner, and the coordinator settles a disagreement. When a tool, rule or step gets in
-your way, fix it at the source if the fix is clearly yours. Record each ruling you get. The friction skill,
-`.agents/skills/friction/SKILL.md`, has the rulings so far and the friction notes.
-
-A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
-results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
-`budgets.toml`), and runs preserve their results from the pod.
-
-Never print a secret's value.
-
-- List environment variable names with `compgen -e`, never `env | cut`, `env | grep`, `printenv | …` or tmux's
-  `show-environment`: a multi-line value's later lines print as if they were names.
-- `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
-  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
-  environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs
-  `install.sh`.
-- A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
-  on the VM.
+- Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
+  deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
+  machinery rather than accumulating them.
+- **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
+  do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
+  baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
+  run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
+- **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
+  delete dead and superseded code, and move data and logs to the evidence store.
+- **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
+  procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
+  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
+  naming a dead path.
+- Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
+  `show-environment`.
 
 ## Where writing goes
 
-- **Work items** are Linear issues (Daniel, 14 Oct). The full brief — context, done-condition, pointers — lives in the
-  issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
-  is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
-- **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
-  `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
-  - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
-    whose README is an outline, signposts and its core API, and the PR whose Lean covers it deletes the file.
-  - `tests/test_repository.py` enforces the file rules: report-genre names, generated output, the 256 KiB cap. Large
-    fixtures: the testing skill.
-- **Lane reports, checkpoints, findings, drafts and friction notes** are Markdown under
-  `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md`, with YAML front-matter (`id`, `campaign`, `lane`,
-  `kind: report|finding|draft|friction`, `status`, `repo`, `origin`). Cite them as `note:<id>`.
-  - Notes are records, never messages. A handoff, an order or an ask goes on Slack, or to your own Cursor workers as a
-    follow-up.
-  - `research notes sync --path lanes/<lane>` publishes notes from any VM with `RESEARCH_NOTES_TOKEN` set.
-  - A Cursor agent store is its agent's scratch: nothing another agent or a person needs lives only there, and nothing
-    cites a `store:` path.
-- **Evidence and generated output** (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports)
-  go in the evidence store only, never Git: neither this repo nor the notes.
-  - `research run` publishes every run, completed or failed, as an Attempt with its outputs. The contract is
-    `tools/research/src/research/store/README.md`.
-  - Anything else goes in with `research data put --kind K --file|--tree P --preserve`. Cite it as `art:<id>`.
-  - Tables and reports are rendered on demand from code plus the store.
-- **Findings and claims about a run** are labels, never edits to a shared table:
-  `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
-- **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
-  team (the using-slack skill).
-- **Architecture decisions** and Daniel's decisions log go in Notion, which the admin keeps.
+**The repository says what is true now and how to reproduce it. It is not a record.** A reader learns from it what each
+part is and does, its contract in the Glossary's terms, the rules, and how to run each measurement (a benchmark's runner
+and its parameters). What a run measured, what happened and who decided live outside it, and the tree doesn't cite them:
 
-## Lanes (worker agents)
-
-If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
-
-Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
-one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
-There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
-quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
-Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
-(`infra/cursor/README.md`).
-
-- **Reread the rules every night.** At the start of each night, reread this file and the rulings in
-  `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane
-  that acts on a retired one waits on gates that no longer exist.
-- **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
-  the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
-  or to change their plan.
-- **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
-  '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
-  ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
-  with your message as the refusal's text, and the agent re-runs it. Agents on other VMs: through their coordinator on
-  Slack.
-- **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
-  `kb/onboarding.md`, check `research notes approaches`, and claim yours at your first checkpoint
-  (`research notes claim`).
-- **Work toward outcomes.** A lane's night is one or two outcomes, each with a done-condition anyone can check, which its
-  lead proposed and Daniel approved.
-- **Push your branch after every commit** (never `main`, never `--force`). A push to a PR in a train being checked waits
-  for that train to end (Checking and merging). Only drive and the lander move `main`.
-- **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
-  VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
-  branches you created or were handed.
-- **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
-  lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
-  its check fails.
-- **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
-  A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
-  `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing
-  goes); Slack is the conversation around it, not the brief.
+- **In the tree:** code, tests, Lean, circuits and their pins, the parameters and configuration code reads (with their
+  public sources: a data sheet, the census), small fixtures beside their generators, and maintained current-truth docs
+  (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, the root's `GLOSSARY.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`,
+  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). The root has no README: an agent starts at
+  this file and `ARCHITECTURE.md`, and a directory keeps a README only where an agent couldn't find its way without one.
+  A protocol keeps its `PROTOCOL.md` only while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
+- **Not in the tree, and not cited from it** (code, comments, docstrings, Lean, READMEs, docs): measured results
+  (numbers, tables, plots, overheads), reports and drafts, and the process's ids and names: run, `art:` and `note:` ids,
+  Notion pages, Linear issues, Slack threads, PR numbers, agent ids, lane and worker names, dates, and attributions such
+  as "(name, date)". A rule or a constraint is stated as itself. Only the skills, which describe the team's process,
+  name its roles (a handle as an owner). Results are published from the store, never copied into the tree: a
+  reader who finds no overhead figure in the repository has found it working as intended, and runs the benchmark or reads
+  the published result.
+- **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
+  outside the repository (the team skill).
+- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
+  `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
+  docstring or a doc.
 
 ## Skills
 
-- Writing or launching a job for `research run` (its cwd, outputs, `--declared-output`, scratch):
-  `.agents/skills/writing-runs/SKILL.md`.
-- Testing: `.agents/skills/testing/SKILL.md`.
-- Lean: `.agents/skills/lean-proofs/SKILL.md`.
-- GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
-- When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
-- Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
-  `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
-  `.agents/skills/process-design/SKILL.md`.
-- Creating or modifying a skill: `.agents/skills/authoring-skills/SKILL.md`.
+`.agents/skills/`: `testing`, `lean-proofs`, `kernel-engineering` (PoUW GPU kernels on sm_120), `smell-check` (before you
+call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
+something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
+The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
+`coordinating`, `using-slack`, `asking-daniel` and `writing-goals` (your goals in the plan Daniel reads).

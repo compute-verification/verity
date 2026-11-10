@@ -77,6 +77,95 @@ def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):
     assert PT.check_attempt(lane, cwd=tmp_path) is None
 
 
+def test_drive_s_attempt_is_the_landing_s_when_it_ran_on_the_commit_or_on_its_merged_train(tmp_path, monkeypatch, capsys):
+    """A landing with deferred steps has no passed attempt in the store (its check still runs, or was cancelled at landing).  Drive
+    names the attempt it landed on; it is taken when it ran on the commit main was fast-forwarded to, or on the train main was
+    merged onto (the merge's second parent), and refused otherwise."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    _git(repo, "checkout", "-q", "-b", "pr1")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "#1's head")
+    head = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", "HEAD^")
+    _git(repo, "merge", "-q", "--no-ff", "-m", "Queue: #1 a change\n\nPR: #1", head)
+    ff = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 another")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "--detach", ff)
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a pure move, landed alone")
+    moved = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "merge", "-q", "--no-ff", "-m", f"Merge {train[:12]}\n\n#2\n\nChecked: r20261019-020000-0002 (...)", train)
+    merge = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    lane = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{merge}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    ran = {"r20261019-010000-0001": ff, "r20261019-020000-0002": train, "r20261019-020500-0003": moved,
+           "r20261019-030000-0004": lane, "r20261019-005000-0006": head}
+    monkeypatch.setattr(PT, "source_of", ran.get)
+    assert PT.check_attempt(ff, cwd=repo) is None, "no passed attempt in the store: refused"
+    assert PT.check_attempt(ff, cwd=repo, attempt="r20261019-010000-0001") == "r20261019-010000-0001", "fast-forwarded"
+    assert PT.check_attempt(merge, cwd=repo, attempt="r20261019-020000-0002") == "r20261019-020000-0002", "merged onto moved main"
+    capsys.readouterr()
+    for commit, rid in ((merge, "r20261019-020500-0003"), (merge, "r20261019-010000-0001"), (ff, "r20261019-020000-0002"),
+                        (lane, "r20261019-030000-0004"), (ff, "r20261019-040000-0005"), (ff, "r20261019-005000-0006")):
+        assert PT.check_attempt(commit, cwd=repo, attempt=rid) is None, (commit, rid)
+    err = capsys.readouterr().err
+    assert f"r20261019-020500-0003 ran on {moved[:12]}, which is neither {merge[:12]}, the train it merged" in err
+    assert "r20261019-040000-0005 ran on no commit its attempt or run record names" in err
+    assert f"r20261019-005000-0006 ran on {head[:12]}, which is neither {ff[:12]}" in err, "a train's second parent is a PR head"
+    assert err.count("so it is no check of this landing") == 5, "a commit off main is refused before its attempt is read"
+
+
+def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(tmp_path, monkeypatch, capsys):
+    """A landing with drive's lock commit on top has its check run on the train, the lock commit's parent, which
+    `check_attempt` reads, so its job labels it."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #1 a change")
+    train = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m",
+         "Lock records regenerated for #1\n\nChecked: r20261020-152946-96c9 (the lock run of `checked` x, passed by regenerating "
+         "them)\n"
+         "Regenerated: Security/lean-audit.json")
+    lock = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 later\n\nChecked: r20261020-152946-96c9 (copied)")
+    later = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", f"{later}:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    monkeypatch.setattr(PT, "source_of", {"r20261020-152946-96c9": train}.get)
+    assert PT.check_attempt(lock, cwd=repo, attempt="r20261020-152946-96c9") == "r20261020-152946-96c9"
+    assert PT.check_attempt(later, cwd=repo, attempt="r20261020-152946-96c9") is None, "no Regenerated: line, no lock commit"
+
+
+def test_a_deferred_landing_labels_the_attempt_drive_names_and_refuses_one_it_did_not_land_on(tmp_path, monkeypatch, capsys):
+    calls, _ = _fake_landing(tmp_path, monkeypatch, None)
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None:
+                        attempt if (sha, attempt) == (SHA, "r20261019-010000-0001") else None)
+    assert PT.main([SHA, "--attempt", "r20261019-010000-0001"]) == 1
+    assert calls[-1] == ("data", "label", "r20261019-010000-0001", "note", "regression fail:r39", "--by", "regression",
+                         "--ref", _launched(calls))
+    calls, _ = _fake_landing(tmp_path / "other", monkeypatch, None)
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None: None)
+    assert PT.main([SHA, "--attempt", "r20261019-020500-0003"]) == 2 and calls == []
+    assert f"{SHA[:12]} is no landing of main on r20261019-020500-0003; nothing labelled" in capsys.readouterr().err
+
+
+def test_source_of_reads_the_run_record_when_the_store_has_no_attempt(monkeypatch):
+    import research.store.local as L
+
+    monkeypatch.setattr(L, "LocalStore", lambda: (_ for _ in ()).throw(OSError("no store")))
+    monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(
+        a, 0, json.dumps({"runs": [{"id": a[1], "state": "running", "tree_sha": "a" * 40}]}), ""))
+    assert PT.source_of("r20261019-010000-0001") == "a" * 40
+    monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(a, 1, "", "research status: no run"))
+    assert PT.source_of("r20261019-010000-0001") is None
+
+
 def test_check_starts_it_after_each_landing():
     spec = importlib.util.spec_from_file_location("check_tool_under_test", ROOT / "tools" / "verity" / "check" / "tool.py")
     mod = importlib.util.module_from_spec(spec)
@@ -86,13 +175,18 @@ def test_check_starts_it_after_each_landing():
 
 SHA = "f" * 40
 PREV = "r20261003-120000-0001"
+LLAMA = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+QWEN = "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+NEUTRAL = {LLAMA: True, QWEN: True}
+THREAD = "1790000000.000001"
 
 
-def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None):
+def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None, r39="fail", rows=NEUTRAL):
     """A landing ``SHA`` admitted on ``attempt``, after a landing admitted on PREV that carries ``prev_label``; every call to
-    `research` is recorded, and a run (launched with the lock held: jobs run one at a time) fails r39, its records showing its end
-    after ``polls`` fetches (at launch for 0, never for -1), or ends with the runner's status ``cut`` and no junit.  Returns the
-    calls and the sleeps between fetches."""
+    `research` is recorded, and a run (launched with the lock held: jobs run one at a time) gives r39 ``r39`` and a neutrality
+    report of ``rows`` (each row: neutral or not; None: the tier ran and wrote none), its records showing its end after ``polls``
+    fetches (at launch for 0, never for -1), or ends with the runner's status ``cut`` and nothing written.  Returns the calls and
+    the sleeps between fetches."""
     runs = tmp_path / "runs"
     tmp_path.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
@@ -102,10 +196,15 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
     left = [polls]
 
     def end(rid):
-        (runs / rid / "out").mkdir(parents=True, exist_ok=True)
+        out = runs / rid / "out"
+        (out / "neutrality").mkdir(parents=True, exist_ok=True)
         if not cut:
-            _junit(runs / rid / "out", {"test_reproduces[T0-manifest_digest-r39]": "fail"})
-        (runs / rid / "status.json").write_text(json.dumps(cut or {"state": "done", "rc": 1}))
+            _junit(out, {"test_reproduces[T0-manifest_digest-r39]": r39})
+            (out / "neutrality.log").write_text("[neutrality] ...\n")
+            if rows is not None:
+                (out / PT.NEUTRALITY).write_text(json.dumps({"rows": {r: {"neutral": n} for r, n in rows.items()}}))
+        ok = r39 == "pass" and rows is not None and all(rows.values())
+        (runs / rid / "status.json").write_text(json.dumps(cut or {"state": "done", "rc": 0 if ok else 1}))
 
     def research(*args, cwd=None):
         calls.append(args)
@@ -127,8 +226,9 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
         return subprocess.CompletedProcess(args, 0, "", "")
     monkeypatch.setattr(PT, "research", research)
     monkeypatch.setattr(PT, "git", lambda *a, **k: SHA if a[0] == "rev-parse" else "")
-    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
+    monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, **_k: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
     monkeypatch.setattr(PT, "untouched", lambda tree, rev: untouched and rev == f"{SHA}^1")
+    monkeypatch.setattr(PT, "merge_thread", lambda: THREAD)
     import research.runs
     monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
     return calls, sleeps
@@ -139,15 +239,73 @@ def _launched(calls) -> str:
     return run[run.index("--id") + 1]
 
 
+def test_the_run_reserves_its_memory_and_sizes_its_workers_to_it(tmp_path, monkeypatch):
+    """About 20 workers at ~28 GB each with nothing reserved fill a node's slice and get other runs killed."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    PT.main(["--workers", "40"])
+    run = next(c for c in calls if c[0] == "run")
+    assert run[run.index("--mem-gb") + 1] == str(PT.MEM_GB) and run[run.index("--mem-wait") + 1] == str(PT.MEM_WAIT_S)
+    assert f"-n {PT.MEM_GB // PT.WORKER_GB} " in run[-1] or f"-n{PT.MEM_GB // PT.WORKER_GB} " in run[-1], run[-1]
+
+
 def test_a_landing_gets_its_label_and_a_dry_run_writes_none(tmp_path, monkeypatch):
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
-    assert PT.main(["--cores", "96-127"]) == 1
+    assert PT.main(["--cores", "0-31"]) == 1
     assert ("data", "label", "r20261003-145201-e806", "note", "regression fail:r39", "--by", "regression",
             "--ref", _launched(calls)) in calls
     calls, _ = _fake_landing(tmp_path / "dry", monkeypatch, None)
     assert PT.main(["HEAD", "--dry-run"]) == 1
     assert [c[0] for c in calls] == ["run", "fetch"], "a dry run reads no label and writes none"
     assert PT.main(["HEAD"]) == 2, "without --dry-run, a commit that is no landing has nothing to label"
+
+
+def test_the_neutrality_tier_names_each_fast_row_that_moved_after_the_rebuilds_rows(tmp_path):
+    report = tmp_path / "neutrality.json"
+    report.write_text(json.dumps({"rows": {QWEN: {"neutral": False}, LLAMA: {"neutral": False}, "tp2": {"neutral": True}}}))
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r57]": "fail", "test_reproduces[T0-manifest_digest-r23]": "pass"})
+    assert PT.verdict(j, 1, report=report) == f"regression fail:r57,{LLAMA},{QWEN}"
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r23]": "pass"})
+    assert PT.verdict(j, 1, report=tmp_path / "absent.json") == "regression fail:no neutrality report (run rc=1)"
+    report.write_text(json.dumps({"rows": {LLAMA: {"neutral": True}}}))
+    assert PT.verdict(j, 0, report=report) == "regression pass"
+
+
+def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral_tier_passes(tmp_path, monkeypatch):
+    """A landing that moves a fast row of record's Program without re-pinning it is labelled with the row, and @vllm, which owns
+    the rows of record, is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
+    reproduced its pins passes and rings no one."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows={LLAMA: False, QWEN: True})
+    assert PT.main([]) == 1
+    rid = _launched(calls)
+    assert ("data", "label", "r20261003-145201-e806", "note", f"regression fail:{LLAMA}", "--by", "regression", "--ref", rid) in calls
+    (ring,) = [c for c in calls if c[0] == "msg"]
+    assert ring[:-1] == ("msg", "send", "--as", "ci", "--thread", THREAD, "--to", "@vllm", "--quiet", "--report", "--text")
+    assert ring[-1].startswith(f"@vllm post-train: the fast neutrality tier at landing {SHA[:12]} (check r20261003-145201-e806) "
+                               f"moved {LLAMA}. Run {rid}:") and QWEN not in ring[-1]
+    calls, _ = _fake_landing(tmp_path / "neutral", monkeypatch, "r20261003-145201-e806", r39="pass")
+    assert PT.main([]) == 0
+    assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression pass", "--by", "regression",
+                         "--ref", _launched(calls))
+    assert not any(c[0] == "msg" for c in calls)
+
+
+def test_vllm_is_rung_for_its_own_tier_once_and_a_dry_run_rings_no_one(tmp_path, monkeypatch, capsys):
+    """A tier that ran and wrote no report compared nothing: its label says so and @vllm is rung.  A rebuild's failure alone is
+    the regression's, read by the daily sweep; a carried verdict rings no one (the run it carries from rang); a dry run prints
+    the ring instead."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows=None)
+    assert PT.main([]) == 1
+    assert calls[-2][4] == "regression fail:no neutrality report (run rc=1)"
+    assert [c[0] for c in calls[-2:]] == ["data", "msg"] and "ran and left no report" in calls[-1][-1]
+    calls, _ = _fake_landing(tmp_path / "rebuild", monkeypatch, "r20261003-145201-e806")
+    assert PT.main([]) == 1 and calls[-1][4] == "regression fail:r39" and not any(c[0] == "msg" for c in calls)
+    prev = {"key": "note", "value": f"regression fail:{LLAMA}", "by": "regression", "ref": "r20261003-120500-beef"}
+    calls, _ = _fake_landing(tmp_path / "carried", monkeypatch, "r20261003-145201-e806", prev, untouched=True)
+    assert PT.main([]) == 1 and not any(c[0] in ("run", "msg") for c in calls)
+    calls, _ = _fake_landing(tmp_path / "dry", monkeypatch, None, r39="pass", rows={LLAMA: False})
+    capsys.readouterr()
+    assert PT.main(["HEAD", "--dry-run"]) == 1 and [c[0] for c in calls] == ["run", "fetch"]
+    assert f"--dry-run, so @vllm is not rung: @vllm post-train: the fast neutrality tier at landing {SHA[:12]}" in capsys.readouterr().out
 
 
 def test_a_landing_that_touches_none_of_the_inputs_carries_the_verdict_before_it(tmp_path, monkeypatch):
@@ -255,6 +413,31 @@ def test_a_later_landing_is_main_s_tip_when_it_is_a_landing_after_the_commit(tmp
     assert PT.later_landing(_git(repo, "rev-parse", "HEAD"), cwd=repo) is None, "a commit main doesn't contain"
 
 
+def test_a_later_landing_with_no_check_line_is_found_by_the_attempt_its_own_job_recorded(tmp_path, monkeypatch):
+    """drive's landings carry no `Check:` line and drive cancels a train's check once it lands, so without a record no queued
+    job would ever be superseded. Each job records its landing's attempt (`note_attempt`), and a job that waited finds main's
+    tip by it."""
+    monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+
+    def land(msg: str) -> str:
+        _git(repo, "commit", "-q", "--allow-empty", "-m", msg)
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        return _git(repo, "rev-parse", "HEAD")
+    first = land("Queue: #1 a\n\nPR: #1")
+    tip = land("Queue: #2 b\n\nPR: #2")
+    monkeypatch.setattr(PT, "passed", lambda sha: None)
+    assert PT.later_landing(first, cwd=repo) is None, "no Check: line, no passed check, nothing recorded"
+    PT.note_attempt(first, "r20261019-100000-0001")
+    PT.note_attempt(tip, "r20261019-110000-0002")
+    assert PT.later_landing(first, cwd=repo) == "r20261019-110000-0002"
+    assert PT.queued_attempt(first) == "r20261019-100000-0001"
+    PT.note_attempt(tip, "r20261019-120000-0003")                         # a relaunch records its newer attempt
+    assert PT.queued_attempt(tip) == "r20261019-120000-0003"
+
+
 def test_superseded_is_no_verdict_to_carry(tmp_path, monkeypatch):
     prev = {"key": "note", "value": "regression superseded:r20261003-160000-0002", "by": "regression", "ref": "r20261003-160000-0002"}
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", prev, untouched=True)
@@ -278,3 +461,8 @@ def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     assert "nice -n 19 ../../.venv/bin/python -m pytest" in free
     assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
     assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned
+    tier = 'bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality"'
+    assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
+    assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
+    assert (ROOT / "integrations" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from integrations/vllm"
+    assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"

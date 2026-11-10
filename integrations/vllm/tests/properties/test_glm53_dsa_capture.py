@@ -5,6 +5,8 @@ PTX scan, the bindings, the verdict and `main` end to end (the GPU run is `tests
 an H200)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 import json
 from pathlib import Path
@@ -16,12 +18,13 @@ import torch
 from tests.properties import glm53_dsa_capture_gpu as X
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import dsa
-from verity_vllm.program.registry import ref_prims as RP
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import dsa
+from verity.ml.definitions.registry import ref_prims as RP
+from verity.ml.definitions.registry import sparse_mla as M
+from verity_vllm.engine.env import SERVED_DEFAULTS
+from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 PAIRS = [(a, b) for fs in (X.L_FORMS, X.H_FORMS) for i, a in enumerate(fs) for b in fs[i + 1:]]
@@ -265,6 +268,42 @@ def test_the_logits_rerun_compares_the_words_each_row_writes() -> None:
     assert X.logits_rerun(a, b) == (True, 2)
     b[3, 3] = torch.nextafter(a[3, 3], torch.tensor(float("inf")))
     assert X.logits_rerun(a, b) == (False, 2)
+    ks, ke = torch.tensor([0, 3, 0, 0, 0], dtype=torch.int32), torch.arange(3, 8, dtype=torch.int32)
+    assert X.logits_rerun(a, b, ks, ke) == (False, 2)
+    b[3, 3] = a[3, 3]
+    assert X.logits_rerun(a, b, ks, ke) == (True, 2)
+
+
+def _split(seq_lens, query_lens, workspace, max_logits_bytes):
+    """`split_indexer_prefill_chunks` for one request (indexer.py:180-224): rows in sub-chunks of max(1, budget // keys)."""
+    m, n = int(query_lens[0]), int(seq_lens[0])
+    step = max(1, max_logits_bytes // 4 // n)
+    return [(slice(0, 1), slice(q, min(q + step, m))) for q in range(0, m, step)]
+
+
+def test_the_sizes_are_the_constants_at_seq_and_reach_131072() -> None:
+    s = X.sizes()
+    assert s == (X.SEQ, X.NB, X.MAX_MODEL_LEN, X.FULL_ROWS, X.DECODE_LENS) and s.full_rows[-1] == X.SEQ - 1
+    s = X.sizes(131_072)
+    assert (s.seq, s.nb, s.max_model_len) == (131_072, 2048 + X.NB - X.SEQ // X.BLOCK, 131_072)
+    assert {2047, 65_535, 131_071} <= set(s.full_rows) and set(X.FULL_ROWS) <= set(s.full_rows) and s.full_rows[-1] == 131_071
+    assert s.decode_lens == X.DECODE_LENS + (65_536, 131_072)
+    assert X.sizes(32_768).decode_lens == X.DECODE_LENS + (32_768,) and 16_383 in X.sizes(32_768).full_rows
+    for bad in (X.SEQ - X.BLOCK, X.SEQ + 1):
+        with pytest.raises(ValueError, match="a multiple of 64"):
+            X.sizes(bad)
+
+
+def test_the_prefill_calls_are_the_served_steps_and_sub_chunks() -> None:
+    """One call at SEQ keys (the square `phase_topk` reads); at 131,072 keys the steps of PREFILL_CHUNK rows, each split to at
+    most budget // keys rows against the keys up to the step's end (1,024 rows of 131,072 keys in the last step), tiling the rows."""
+    mb = 512 * 1024 * 1024
+    assert X.prefill_calls(X.SEQ, X.PREFILL_CHUNK, mb, 40 * X.MAX_MODEL_LEN, _split) == [(X.SEQ, 0, X.SEQ)]
+    calls = X.prefill_calls(131_072, X.PREFILL_CHUNK, mb, 40 * 131_072, _split)
+    assert [c[1] for c in calls] == [0] + [c[2] for c in calls[:-1]] and calls[-1][2] == 131_072
+    assert all(c[0] % X.PREFILL_CHUNK == 0 and c[0] - X.PREFILL_CHUNK <= c[1] < c[2] <= c[0] for c in calls)
+    assert all((c[2] - c[1]) * c[0] * 4 <= mb for c in calls) and len(calls) == 76
+    assert calls[-8:] == [(131_072, 122_880 + 1024 * i, 122_880 + 1024 * (i + 1)) for i in range(8)]
 
 
 # ------------------------------------------------------------------------------------------------------------- attention
@@ -399,12 +438,13 @@ COMPS = [("k", "served"), ("k", "probe"), ("q", "served"), ("logits", "prefill")
 
 
 def _doc() -> dict:
-    return {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True}, "ptx": {"ok": True}, "bind": {"ok": True},
-            "rope": {"ok": True}, "topk": {"ok": True}, "launches": copy.deepcopy(LAUNCHES),
+    return {"schema": X.SCHEMA, "gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "selection": {"ok": True}, "ptx": {"ok": True},
+            "bind": {"ok": True}, "rope": {"ok": True}, "topk": {"ok": True}, "launches": copy.deepcopy(LAUNCHES),
             "comparisons": [{"phase": p, "case": c, **TOT} for p, c in COMPS], "totals": {k: v * len(COMPS) for k, v in TOT.items()}}
 
 
-@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "logits"), "boom"), (("selection", "ok"), False),
+@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("served", "ok"), False), (("errors", "logits"), "boom"),
+                                        (("selection", "ok"), False),
                                         (("ptx", "ok"), None), (("bind", "ok"), False), (("rope", "ok"), False), (("topk", "ok"), False),
                                         (("totals", "mismatch"), 1), (("totals", "unresolved"), 1), (("totals", "reference"), 0),
                                         (("totals", "twin_mismatch"), 1), (("totals", "words"), 0),
@@ -434,10 +474,32 @@ def test_each_case_has_its_own_verdict() -> None:
     assert {k for k, c in X.cases(doc).items() if not c["ok"]} == {"k/probe", "logits/prefill"}
 
 
-def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
-    """`main` with the GPU's phases stood in for (the comparison jobs of the tests above, one word flipped in the decode logits)
-    and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case verdicts, the sealed record, the
-    ROPE line and the exit status, so a slip in the orchestration shows here and not in the H200's first hour."""
+def test_a_run_of_fewer_phases_is_judged_on_them() -> None:
+    """With `phases` logits only, the k, q and attn cases, rope and topk are not judged (they did not run), and the logits still are."""
+    doc = _doc()
+    doc.update(phases=["logits"], rope={"ok": None}, topk={"ok": None})
+    doc["launches"] = [x for x in doc["launches"] if x["phase"] == "logits"]
+    doc["comparisons"] = [x for x in doc["comparisons"] if x["phase"] == "logits"]
+    assert X._verdict(doc) and list(X.cases(doc)) == ["logits/prefill", "logits/decode"]
+    doc["comparisons"][1]["mismatch"] = 1
+    assert not X._verdict(doc)
+    doc["comparisons"][1]["mismatch"] = 0
+    assert not X._verdict({**doc, "phases": list(X.PHASES)})
+
+
+@pytest.mark.parametrize("args,message", [(["--keys", "131072"], "topk and attn read"), (["--keys", "3000"], "a multiple of 64"),
+                                          (["--prefill-chunk", "1024"], "topk and attn read"), (["--phases", "topk"], "topk needs logits"),
+                                          (["--phases", "logits,bogus"], "unknown"), (["--phases", "logits", "--prefill-chunk", "0"],
+                                                                                       "at least 1")])
+def test_main_refuses_a_run_it_cannot_make(tmp_path, capsys, args: list[str], message: str) -> None:
+    with pytest.raises(SystemExit) as e:
+        X.main(["--out", str(tmp_path), *args])
+    assert e.value.code == 2 and message in capsys.readouterr().err
+
+
+def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
+    """`main`'s surroundings stood in for (vLLM's config module, the gate, the PTX scan, the bindings): what `served` saw of the
+    environment, a k-slots job and the logits jobs."""
     import contextlib
     import sys
     import types
@@ -447,14 +509,26 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in ("VLLM_USE_DEEP_GEMM", "VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
         monkeypatch.setenv(k, "")
+    monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    seen: list[dict] = []
+    monkeypatch.setattr(X, "served", lambda: (seen.append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS}), {"ok": True})[1])
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"kernels": {}, "ok": True})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
-    k = _kslots_job(tmp_path / "k")
-    logits = _logits_job(tmp_path / "l")
+    return seen, _kslots_job(tmp_path / "k"), _logits_job(tmp_path / "l")
+
+
+def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
+    """`main` with the GPU's phases stood in for (the comparison jobs of the tests above, one word flipped in the decode logits)
+    and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case verdicts, the sealed record, the
+    ROPE line and the exit status, so a slip in the orchestration shows here and not in the H200's first hour."""
+    seen, k, logits = _stub_main(tmp_path, monkeypatch)
     gotd = np.array(X._load(logits[-1]["paths"])["gotd"])
     gotd[1] ^= 4
     logits[-1] = {**logits[-1], "paths": {**logits[-1]["paths"], **X._save(tmp_path / "l2", gotd=gotd)}}
@@ -475,10 +549,40 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert {c: v["ok"] for c, v in doc["cases"].items()} == {"k/served": True, "k/probe": False, "q/served": False,
                                                              "logits/prefill": True, "logits/decode": False, "attn": False}
     assert doc["totals"]["mismatch"] == 1 and doc["totals"]["words"] == 3 * (X.D + 1) + 21 + 6
-    assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "0" and doc["env"]["DG_JIT_CACHE_DIR"].endswith("deep_gemm")
+    assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and seen == [{k: None for k in SERVED_DEFAULTS}]
+    assert not set(SERVED_DEFAULTS) & set(doc["env"]) and doc["env"]["DG_JIT_CACHE_DIR"].endswith("deep_gemm")
+    assert doc["env"]["CUDA_HOME"] == "/usr/local/cuda" and doc["env"]["PATH"].split(":")[1] == "/usr/local/cuda/bin"
     printed = capsys.readouterr().out
     assert "ROPE k_pe=RoPEHeadGptJ_v1 q_pe=RoPEHeadGptJ_v1" in printed and "GLM53-DSA NO-GO" in printed
     assert "no-go cases=['k/probe', 'q/served', 'logits/decode', 'attn']" in printed
+    assert doc["phases"] == list(X.PHASES) and doc["keys"] == X.SEQ and doc["phases_ok"] is False and "PARTIAL" not in printed
+
+
+def test_main_on_the_logits_alone_at_131072_keys(tmp_path, monkeypatch, capsys) -> None:
+    """`--keys 131072 --phases logits` (the served logits at the raised limit): `gpu` gets the size and the phases, the logits
+    cases alone are judged, the exit status is theirs, kept words land under <out>/logits/, and the record's `ok` stays false
+    (the property needs every phase), so it is never a capture of record."""
+    _, _, logits = _stub_main(tmp_path, monkeypatch)
+    got: dict = {}
+
+    def gpu(work, outdir, quick, doc):
+        got.update(keys=doc["keys"], phases=doc["phases"], chunk=doc["prefill_chunk"])
+        doc["selection"], doc["rope"], doc["topk"] = {"ok": True}, {"ok": None}, {"ok": None}
+        doc["launches"] += [x for x in copy.deepcopy(LAUNCHES) if x["phase"] == "logits"]
+        (work / "logits").mkdir()
+        (work / "logits" / "r.npy").write_bytes(b"x")
+        return logits
+
+    monkeypatch.setattr(X, "gpu", gpu)
+    out = tmp_path / "out"
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--keys", "131072", "--phases", "logits",
+                   "--keep-logits"]) == 0
+    doc = json.loads((out / X.RECORD).read_text())
+    assert got == {"keys": 131_072, "phases": ["logits"], "chunk": X.PREFILL_CHUNK}
+    assert doc["phases_ok"] is True and doc["ok"] is False and doc["digest"] == digest_of(doc) and list(doc["cases"]) == [
+        "logits/prefill", "logits/decode"]
+    assert doc["kept"] == ["logits"] and (out / "logits" / "r.npy").read_bytes() == b"x"
+    assert "GLM53-DSA PARTIAL GO" in capsys.readouterr().out
 
 
 def test_the_record_is_a_registered_property() -> None:

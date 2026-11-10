@@ -1,0 +1,60 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-1gpu-pearl-c-whole-served"
+# Pearl-C served through the whole-step graph path (the experimental arm `pouw-pearl-c-whole`,
+# `bench_arm.PearlCWholeArm`: each decode step one CUDA graph replay of vLLM's FULL decode graph with every call's Pearl-C
+# graph steps inside it), beside `llama31-8b-1gpu-pouw-protocol-served`'s three arms, all in one run under one host load:
+# `stock-fp8` (eager, batch invariant), `pouw:pearl-c-sm120-v1-h3` (the PoUW option as served today: eager, batch
+# invariant, the deferred schedule) and `stock-fp8@compiled` (vLLM's serving defaults). The preset and the protocol arm's
+# settings are that spec's.
+#
+# The whole-step arm runs vLLM's FULL_DECODE_ONLY graphs at the preset's capture sizes without torch.compile, at the
+# `compiled` execution label (vLLM's kernels without batch invariance, as `stock-fp8@compiled`), the serial schedule and
+# each call's tile hashing beside the next call (`whole_defer`) and its A tree beside its own forming and GEMM
+# (`whole_defer_a`); prefill and mixed steps run eagerly. Its gate is the
+# Pearl-C call check with the calls graphed and `e2e.whole_check` (a forward captured whole, replayed bit for bit as the
+# eager calls). The PoUW option refuses a non-eager engine (`pouw.refusals`), so this arm installs Pearl-C itself, as
+# `PearlCArm` does, with one pass per engine step. Pearl-C's y carries the epoch's live salt: no arm is its token control.
+arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled", "pouw-pearl-c-whole"]
+arm_modules = ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
+sweep = "quick"
+reps = 3
+eager = true
+setup = "benchmarks/harness/setup/pearl_c.sh"
+
+[arm_settings."pouw:pearl-c-sm120-v1-h3"]
+precision = "bfloat16"
+control = "none"
+
+[arm_settings."pouw:pearl-c-sm120-v1-h3".protocols_config.pouw]
+device = "cuda"
+kernel = "benchmarks/pouw/pearl_c_sm120"
+cubin = "$PEARLC_CUBIN"
+schedule = "deferred"
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama31-8b-1gpu-pearl-c-whole-served"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+case = "LLAMA31_8B"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+resident_gpu_memory_utilization = 0.40
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 4096
+max_num_seqs = 128
+resident_kv_cache_memory_bytes = 8589934592
+block_kv_cache_memory_bytes = 8589934592
+
+[admission]
+max_minutes = 120

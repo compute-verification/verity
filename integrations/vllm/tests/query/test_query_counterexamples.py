@@ -1,17 +1,19 @@
-"""Counterexamples for the query track (the 2026-09-17 query-interface freeze): families with an overlap,
+"""Counterexamples for the query track: families with an overlap,
 with a gap (a forgotten Input gate, a forgotten constant gate), a set whose interface bound exceeds 32 while the exact
 w_out is 32 (dead return), sets whose exact w_out exceeds 32 (AttnBlock calls: 640 / 672 bits), scan-carry boundaries,
 fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Unsupported` is never a pass.
 
 The three core modules are other owners' (`verity.ml.circuits.query_ast`, `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`): every test
 `importorskip`s what it needs, so this file SKIPS (never fails) until the branches are merged.  The oracle side of every
-assertion is `fixtures_query` (explicit `GateSelection` on the expanded circuit)."""
+assertion is `fixtures_query` (the explicit `query_ast.oracle_in` / `oracle_out` on the expanded circuit)."""
 from __future__ import annotations
 
 import pytest
 
 from verity.ml.circuits.parts import Limits, Part, Unsupported
 from tests.program import fixtures_query as FX
+
+SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1")
 
 # ---------------------------------------------------------------------------------------------------------
 # module access (skip, never fail, while a module or a constructor is missing)
@@ -44,7 +46,7 @@ def PT():
 
 @pytest.fixture(scope="module")
 def PTW():
-    """partition with widths: `validate_width` / `validate_vu_partition` call `boundary` at run time."""
+    """partition with widths: `validate_width` calls `boundary` at run time."""
     _mod("boundary")
     return _mod("partition")
 
@@ -122,8 +124,7 @@ def check_part(BD, program, part: Part, *, exact_required: bool) -> tuple[bool, 
 # ---------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", FX.FIXTURE_NAMES)
-@pytest.mark.slow
+@pytest.mark.parametrize("name", [pytest.param(n, marks=pytest.mark.slow) if n in SLOW_FIXTURES else n for n in FX.FIXTURE_NAMES])
 def test_boundary_root_parts_match_oracle(BD, name):
     P = FX.fixture(name)
     parts = FX.body_parts(FX.root_scope(P))
@@ -421,25 +422,26 @@ def test_readiness_32bit_reports_the_64_bit_constants(PT):
     assert not getattr(r0, "violators", None)
 
 
-def test_vu_partition_default32_is_exact_and_narrow(GS, PTW):
+def test_block_partition_default32_is_exact_and_narrow(GS, PTW):
     """`default(32)` is a partition by construction and every member's w_out <= 32 (out of a single call / member is a
     subset of its declared returns), except where a primitive gate itself is wider than 32."""
     PT = PTW
-    validate_vu = need(PT, "validate_vu_partition")
-    default = need(GS, "default")
+    validate_partition, validate_width = need(PT, "validate_partition"), need(PT, "validate_width")
+    evaluate, default = need(GS, "evaluate"), need(GS, "default")
     for name in FX.VLLM_FAMILY_FIXTURES + ("tiny_io", "fan_out", "dead_return", "dead_param", "scan_carry"):
         P = FX.fixture(name)
-        v = validate_vu(P, default(32), 32)
-        assert v.partition.status == "exact", f"{name}: {v.partition.status} {v.partition.codes}"
-        assert not v.width.violators, f"{name}: width violators {v.width.violators}"
-        assert not v.width.unsupported, f"{name}: width unsupported {v.width.unsupported}"
-        assert v.count > 0
-    # the 64-bit case: partition exact, width NOT passed, readiness lists the constants, overall status not pass
-    v = validate_vu(FX.gumbel_program(), default(32), 32)
-    assert v.partition.status == "exact"
-    assert v.width.violators and v.width.max_seen == 64
-    assert getattr(v.readiness_32, "violators", None)
-    assert not is_pass(v.status)
+        fam = evaluate(P, default(32))
+        p, w = validate_partition(P, fam), validate_width(P, fam, 32)
+        assert p.status == "exact", f"{name}: {p.status} {p.codes}"
+        assert not w.violators, f"{name}: width violators {w.violators}"
+        assert not w.unsupported, f"{name}: width unsupported {w.unsupported}"
+        assert fam.count() > 0
+    # the 64-bit case: partition exact, width not passed (its readiness is `test_readiness_32bit_reports_the_64_bit_constants`)
+    P = FX.gumbel_program()
+    fam = evaluate(P, default(32))
+    assert validate_partition(P, fam).status == "exact"
+    w = validate_width(P, fam, 32)
+    assert w.violators and w.max_seen == 64 and not is_pass(w.status)
 
 
 # ---------------------------------------------------------------------------------------------------------

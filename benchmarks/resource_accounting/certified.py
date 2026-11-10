@@ -1,13 +1,13 @@
 """What a point's arms certify, and each resource's covert residual.  Pure (stdlib and `verity`), so it runs on a CPU.
 
-* **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Models/Pouw/Guarantees/Game.lean``) bounds the chance that an
-  audit of t draws accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
-  W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the drawn statement's
-  reference work over the credited cells (`pearl_c_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
+* **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Definitions/Pouw/Guarantees/Game.lean``) bounds the chance that an
+  audit of t samples accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
+  W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the sampled statement's
+  reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
-  draw cites (`pearl_c_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
-  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (#1809, `GAMMA_PIN`), so
-  every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
+  sample cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
+  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (`GAMMA_PIN`), so
+  every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 samples
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
 * **Q_cert, bandwidth**: ``Bandwidth.SecurityProofs.AuditRO`` at the point the red team granted at 5761861fd (`Q_GRANT`,
@@ -44,27 +44,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
+CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
 #: the panel line and version Pearl-C's arms run (`price_twins.statement` drops the hashing format)
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)
-#: the PR whose (n, k) and layout lookup prices γ at the Llama linears (compute-accounting's)
-GAMMA_PIN = "#1809"
+#: the Lean domains of the twins stated at a linear's (n, k) and over a served layout's linears (`price_twins`' n, k
+#: and layout keys), which price γ at the Llama linears
+GAMMA_PIN = "pearlCDomainDevNK, pearlCDomainDevShapes"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
-#: the bandwidth protocol's red-team grant (#1805, with conditions), whose point `granted_params` is
+#: the bandwidth protocol's red-team grant (with conditions), whose point `granted_params` is
 Q_GRANT = "red-team grant at 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 GRANTED_T_NS = 1_200_000
 RESIDUAL = "residual, worst case over the audit's coins (CovertResidual's weak form)"
-PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model (Daniel's "
-           "decision 9; #1821's CovertResidualPerRun, and #1827: BudgetAbort holds for constant-cost models and W1's "
-           "operand refund breaks it), so none is shown")
-FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute (Daniel's ruling); a priced-sum column, "
-               "compute + p·reads at p the device's DRAM rate in MAC units, waits for compute-accounting's priced lemma "
+PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for the deployed cost model "
+           "(CovertResidualPerRun; BudgetAbort holds for constant-cost models and W1's operand refund breaks it), so "
+           "none is shown")
+FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute; a priced-sum column, "
+               "compute + p·reads at p the device's DRAM rate in MAC units, waits for the priced lemma "
                "(w1Priced)")
-S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "
-           "#1790) is held")
+S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing) "
+           "is held")
 NO_POUS = "no PoUS arm in this run"
 SUMMARIZE = ROOT / "benchmarks" / "bandwidth" / "summarize.py"
 
@@ -119,9 +121,17 @@ def price_twins():
     return sys.modules["price_twins"]
 
 
+def clear_work():
+    """PoUW's work sampling design, the clear audit's (`clear_work`; benchmarks/pouw/clear is not a package)."""
+    if str(CLEAR) not in sys.path:
+        sys.path.append(str(CLEAR))
+    import clear_work
+    return clear_work
+
+
 def scheme():
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
     from verity.core.protocols.pouw.serving import SchemeId
     sid = SchemeId.parse(SCHEME)
     s = C.PearlC(forming=sid.forming, device=DEVICES[sid.device], hashing=sid.hashing)
@@ -131,9 +141,8 @@ def scheme():
 
 
 def priced_path(s) -> str:
-    """The priced path the scheme's draw cites, from its statement's name (``...Cast8p72...`` is ``cast-8.72``)."""
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-    at = PW.draw_wref(s)
+    """The priced path the scheme's sample cites, from its statement's name (``...Cast8p72...`` is ``cast-8.72``)."""
+    at = clear_work().draw_wref(s)
     if at is None:
         raise ValueError(f"{s.name}: its draw cites no statement")
     m = re.search(r"Cast(8p72|32p06|16|32|8)", at.statement)
@@ -145,11 +154,10 @@ def priced_path(s) -> str:
 def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
     """γ for Pearl-C at (n, k), or of a served `layout` (`LAYOUT`): `price_twins.lookup`'s record (both prices, the larger
     published, what's missing), with the statement's cap held to the scheme's and K to ε_s and δ."""
-    from verity.core.protocols.pouw.circuit import plan
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.ml.protocols.pouw.circuit import plan
     P, s = price_twins(), scheme()
     stmt = P.statement(LINE, VERSION)
-    if P.CAPS[stmt] != s.cap or PW.draw_wref(s).cap != s.cap:
+    if P.CAPS[stmt] != s.cap or clear_work().draw_wref(s).cap != s.cap:
         raise ValueError(f"{stmt}: the twins' cap {P.CAPS[stmt]} is not the scheme's {s.cap}")
     if plan.record_k(EPS_S, DELTA) != plan.RECORD_K:
         raise ValueError(f"K at ε_s = {EPS_S}, δ = {DELTA} is not plan.RECORD_K")
@@ -159,10 +167,10 @@ def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
 
 
 def wref_cell(n: int, k: int) -> Fraction:
-    """One credited cell's reference work at (n, k), every channel kept: the drawn statement's (`ticket_cell`)."""
+    """One credited cell's reference work at (n, k), every channel kept: the sampled statement's (`ticket_cell`)."""
     from verity.core.protocols.pouw.protocol import Matmul, Shape
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-    return PW.ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))
+    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+    return clear_work().ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))
 
 
 def compute(n: int, k: int, credited_rows: int, seconds: float, native_rate: float | None, g: dict | None = None) -> dict:

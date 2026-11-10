@@ -8,7 +8,7 @@ from collections.abc import Iterator
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major, sub_rows
-from verity_vllm.observe.fold.patterns.ops import base_op, op_name, triton_name
+from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import hint_of, unsupported
 from verity_vllm.observe.fold.resolver import PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
@@ -19,7 +19,7 @@ ALIAS_OPS = frozenset({
     "aten.expand_as", "aten.alias", "aten.detach", "aten.narrow", "aten.as_strided", "aten.unbind", "aten.unfold",
     "aten.view_as_real", "aten.view_as", "aten.flatten", "aten.unflatten", "aten.lift_fresh", "aten.resolve_conj",
     "aten.resolve_neg", "aten.detach_", "aten.movedim", "aten.chunk", "aten.tensor_split",
-    "aten.numpy_T",   # [R15 fp8] `Tensor.T` (all axes reversed): the FP8 linears pass `weight.T` / `weight_scale_inv.T` to cutlass_scaled_mm
+    "aten.numpy_T",   # `Tensor.T` (all axes reversed): the FP8 linears pass `weight.T` / `weight_scale_inv.T` to cutlass_scaled_mm
 })
 MOVE_OPS = frozenset({"aten.clone", "aten.contiguous", "aten.copy_", "aten._to_copy", "aten.to", "aten.copy"})
 #: alias ops that torch documents as "view if possible, else copy": a fresh output allocation from one of these is the copy case
@@ -43,6 +43,7 @@ COPY_KERNELS = ("Memcpy", "elementwise_kernel", "vectorized_elementwise_kernel",
 FILL_KERNELS = ("FillFunctor", "Memset", "fill_kernel", "vectorized_elementwise_kernel")
 
 SCRATCH_INT_COPIES = "int_copies"   # ctx.scratch key: dst alloc -> (src view, dst view) of integer copies seen this step
+SCRATCH_INT_FILLS = "int_fills"     # ctx.scratch key: alloc -> [(view, value)] of the integer `fill_`s seen this step, in order
 SCRATCH_F32_UPCASTS = "f32_upcasts"  # ctx.scratch key: dst alloc -> (src view, dst view) of exact float widenings (bf16 -> f32)
 
 
@@ -86,7 +87,7 @@ def classify_transparent(node: TreeNode, ctx: StepContext) -> Transparent | Unsu
         in_allocs = {v.alloc for v in ins}
         stray = [o for o in outs if o.alloc not in in_allocs]
         if stray:
-            # [R15 fp8 / Qwen3] `aten.reshape` (and `flatten`) COPY when the requested shape is not expressible as a view of the input's
+            # `aten.reshape` (and `flatten`) COPY when the requested shape is not expressible as a view of the input's
             # strides -- vLLM's `rms_norm_batch_invariant` does `q.view(M, NH, D).reshape(-1, D)` on the strided q slice of the fused
             # QKV output ([M, NH, D] strides (QKV, D, 1): viewable only at M == 1).  torch's contract for that case is an element-order-
             # preserving copy (`clone(contiguous)` of the logical row-major order), i.e. exactly the "reshaping copy" move below:
@@ -101,6 +102,8 @@ def classify_transparent(node: TreeNode, ctx: StepContext) -> Transparent | Unsu
         return Transparent("alias", (node.id,), hint=hint)
     if b in ALLOC_OPS:
         if outs and all(is_int(o) for o in outs):
+            if b == "aten.fill_":
+                ctx.scratch.setdefault(SCRATCH_INT_FILLS, {}).setdefault(outs[0].alloc, []).append((outs[0], bound_args(node).get("value")))
             return Transparent("noop", (node.id,), hint=f"{hint}: integer metadata allocation")
         if outs and all(o.numel == 0 for o in outs):
             return Transparent("noop", (node.id,), hint=f"{hint}: zero-element allocation")
