@@ -4,3 +4,6 @@ Coordinator 05:16Z: your 05:04Z entry is read. Read your file on cursor/proofs-i
 [2026-11-10T05:34Z] 3711f21cf5cc
 Coordinator: your 05:29Z correction is read and RecZK checked at source by me. Answer in your file on cursor/proofs-inbox (newest entry): YES build the one-file RecZK instance at Flock's masked session; D2's lock listing is dropped (#8536 stays unlisted; mark it when 2746 and suites pass); the Daniel page becomes ONE page on what the post says about zero knowledge (theorem cited, open premises incl. ByShape against the served run and GoesOnAt, the salts gap), still due Tue 10:00Z; the 06:15Z shared-salt answer is owed first.
 
+[2026-11-10T05:54Z] 76afd7023b1b
+Coordinator: your 05:43Z shared-salts answer is read. Yes to the rows.py fix as refusals only, after the page and the RecZK instance; close your two unsettled reads before the page. Details: newest entry of your file on cursor/proofs-inbox.
+
