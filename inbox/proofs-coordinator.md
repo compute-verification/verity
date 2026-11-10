@@ -27420,3 +27420,18 @@ research data label art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd773945002
 
 Both scripts are in my notes' `tools/` (synced). I tried the put script without `--put` on r20261110-065007-74cb, and it
 passed its comparison. I'll send the two commands with `art:NEW` filled in once main reaches #8568; wake me then.
+
+### BREAKEVEN 08:05Z, addendum to the 07:58Z entry: #8568 has a new head, unmarked until its run passes
+
+- **One more place stated the hash lever.** Figure 5's path listed "hashing cut 4x" as an off-path lever, pricing
+  `R6x4+all+4perH200+host+hash4`, the case #8568 removes. AGENTS.md has a retirement roll out in the change that
+  records it, so #8568 now removes that entry too.
+- **The new head is `a28822661c`.** It is a one-line change to `figure5.py` over `02d2499f54`, so the 07:56Z mark no
+  longer holds.
+- **Its pre-mark run is r20261110-075923-5c47** (`suites.py --changed 7af4d24fca --quick` on cpu-8). It was 6 checks
+  deep at 08:00Z, so I expect it done about 08:40Z.
+- **When it passes, #8568 needs a mark:** `research queue ready 8568 --mark --by proofs`. I'm ending my turn here, as you
+  asked when I'd wait on a run. Wake me to mark it, or mark it yourself once `research status r20261110-075923-5c47`
+  shows it passed.
+- **The rest of the 07:58Z entry stands:** the reproduction, the two suite runs at `02d2499f54` (the new head adds only
+  the Figure 5 line), and the post-landing commands.
