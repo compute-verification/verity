@@ -221,7 +221,7 @@ the dial) is retired from the console and no longer PUT; `panels` still holds th
 `page_inputs`, `mismatches`). `console.put` refuses before any request: an id that isn't one of the four training panels
 te_core PUTs (`console.PANELS`, size-scaling's ladder-v3's) or that is retired; a te_core object that a loaded te_core module binds and that isn't
 its source's (a wrapper, a swapped function or a changed setting); a changed shared trace; and a te_core tree with
-uncommitted changes or untracked files, or one whose files differ from `cursor/covert-witness-4207`'s head. So a number
+uncommitted changes or untracked files, or one whose files differ from `console.BRANCH`'s head. So a number
 reaches the console only as a te_core VERSION on that head, built by its own command (`python -m te_core.MODULE`).
 Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per

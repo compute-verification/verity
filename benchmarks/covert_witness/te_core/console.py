@@ -44,7 +44,7 @@ PANELS = ("training/algorithm-policy", "training/frontier-fit", "training/standa
 RETIRED = {"training/frontier-branches": "frontier-branches is stored only, never PUT (te_core.panels)"} | {
     f"training/{n}": "te_core.plots' panels are off the console" for n in NAMES}
 #: the branch whose head's te_core every published panel is built on
-BRANCH = "cursor/covert-witness-4207"
+BRANCH = "cursor/training-replot-55a1"
 HERE = Path(__file__).resolve().parent
 BODY_MAX = 65536
 NOTE_MAX = 500
