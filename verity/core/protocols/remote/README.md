@@ -530,14 +530,14 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|
-| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
-| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
+| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
+| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
 
 - **What the figures mean.** Each figure is the slowdown over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** Draft. `output-premise` (`draft:E1-Prop6b`) sets them, `reference-remote-h200-pouw`'s and
-  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, contested at its premise
-  `draft:E1-output-premise`. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
+- **Their status.** Draft (`draft:no-straddle`). `min-cut` sets them, `reference-remote-h200-pouw`'s and
+  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
+  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all

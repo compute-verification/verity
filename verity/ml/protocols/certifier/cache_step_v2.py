@@ -5,10 +5,10 @@
 
 `CacheStep_v1` (`cache_step`) checks a hit against a cache that never evicts, so past the cumulative pool bound advice
 v1 sends each hit's shortfall. This unit models what vLLM d9105ea8's `BlockPool` does to the cached blocks (the
-replay's `_KV` is its line-for-line model): which requests hold each cached block, the free queue's order, eviction
+replay's `pool.BlockPool` is its line-for-line model): which requests hold each cached block, the free queue's order, eviction
 and the blocks a leaving request returns. So the hit, the evictable count `ev` and the returns `ret` that
 `ReplayStep_v1` reads are derived at every step, past the bound too. `reference` is the specification in Python. The
-encodings' `test_cache_step_v2.py` holds it to `_KV` over whole traces.
+encodings' `test_cache_step_v2.py` holds it to `pool.BlockPool` over whole traces.
 
 **The pool** is a trie of whole hit units of U tokens (the block; U a power of 2) in a table of N entries. An entry is
 a unit (its U token ids), its parent (ROOT = N for a request's first unit), its owner (the lowest-numbered request that
@@ -65,7 +65,7 @@ ROOT), KU = ⌈L / U⌉, HW = bitlen(KU), LW = bitlen(L), SL = bitlen(R − 1), 
 little-endian. A slot's mask bit and its stamps' order are the only places the call reads a slot's number, and an
 invalid entry's unit, parent, owner and level are never read (`decode` drops them).
 
-**Composition** (`compile_slice_v2.CompileSlice_v2`): the calls follow the replay's `_KV` calls in order. `ReplayStep_v1`
+**Composition** (`compile_slice_v2.CompileSlice_v2`): the calls follow the replay's `pool.BlockPool` calls in order. `ReplayStep_v1`
 reads each reached candidate's hit and evictable count from its lookup, and each victim's and leaving slot's returns
 from its free. Each free's `held` and each compute's `new` are ReplayStep_v1's own (⌈comp / B⌉ and the row's need), and
 its free count is hf plus the queued copies. The slice's pool rows carry the pool. `trail` and `sources` give a hit's

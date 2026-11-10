@@ -1,8 +1,8 @@
 """Ratchet machinery shared by the rule lints in this directory (one rule per ``test_pNN_*.py``).
 
 Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``), and the
-circuit Definitions that moved from it to ``verity/ml/definitions/`` (``LIBRARY``: circuits' since the move, held to the
-ratchets as they stood), with ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm
+circuit Definitions that moved from it to ``verity/ml/definitions/`` (``LIBRARY`` and ``MOVED_OUT``: circuits' since the
+move, held to the ratchets as they stood), with ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm
 and run in seconds.  What a scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the
 violations that existed when the rule was introduced.
 
@@ -32,7 +32,10 @@ ROOT = HERE.parents[1]                     # integrations/vllm
 REPO = ROOT.parents[1]
 PKG = ROOT / "verity_vllm"
 CORE_PKG = REPO / "verity"
-DEFINITIONS = CORE_PKG / "ml" / "definitions"
+DEFINITIONS = REPO / "verity" / "ml" / "definitions"
+#: what of ``DEFINITIONS`` moved out of the integration: the modules at its top and these packages of it. Any other package
+#: of that directory is core's
+MOVED_OUT = frozenset({"numerics", "registry", "tests"})
 #: the scanned packages: the integration's, and the Definitions that moved out of it
 LIBRARY = (PKG, DEFINITIONS)
 ALLOWLISTS = HERE / "allowlists"
@@ -54,10 +57,19 @@ class Violation:
 
 # --- the scanned tree -------------------------------------------------------------------------------------------------
 
+def in_library(p: Path) -> bool:
+    """Whether ``p`` is the library's: under the integration's package, or of ``DEFINITIONS`` and moved out of the
+    integration (``MOVED_OUT``)."""
+    if p.is_relative_to(DEFINITIONS):
+        parts = p.relative_to(DEFINITIONS).parts
+        return len(parts) == 1 or parts[0] in MOVED_OUT
+    return p.is_relative_to(PKG)
+
+
 @lru_cache(maxsize=None)
 def library_files(suffix: str = ".py", root: Path | None = None) -> tuple[Path, ...]:
     """Library files under ``root`` (default every ``LIBRARY`` package), excluding ``tests`` directories and ``test_*`` files;
-    a root outside ``LIBRARY`` (core's) without the ``LIBRARY`` packages inside it."""
+    a root outside ``LIBRARY`` (core's) without the library's files inside it (``in_library``)."""
     if root is None:
         return tuple(p for r in LIBRARY for p in library_files(suffix, r))
     out = []
@@ -65,7 +77,7 @@ def library_files(suffix: str = ".py", root: Path | None = None) -> tuple[Path, 
         parts = p.relative_to(root).parts
         if any(d in SKIP_DIRS for d in parts[:-1]) or parts[-1].startswith("test_"):
             continue
-        if root not in LIBRARY and any(p.is_relative_to(r) for r in LIBRARY):
+        if in_library(p) != (root in LIBRARY):
             continue
         out.append(p)
     return tuple(out)
@@ -76,7 +88,7 @@ def rel(p: Path) -> str:
 
 
 def module_name(p: Path) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/ml/definitions/a.py`` -> ``verity.ml.definitions.a``; a
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/ml/definitions/tiny.py`` -> ``verity.ml.definitions.tiny``; a
     package's ``__init__.py`` names the package."""
     parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":
