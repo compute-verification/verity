@@ -1170,6 +1170,9 @@
   "Properties.Spot.wiresAcyclic": {
    "honest": ["Properties.Spot.wiresAcyclic_honest"],
    "nontrivial": "Properties.Spot.wiresAcyclic_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsTiedInputWired": {
+   "nontrivial": "Properties.NetworkPeriod.rowsTiedInputWired_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5468,6 +5471,12 @@
    },
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "49d11a4dc9c098650eded0616de009de0659264effc14bccd1569b2442c1390f"
+  },
+  "Properties.NetworkPeriod.rowsTiedInputWired": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsTiedInputWired_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsTiedSampled": {
    "owner": "@network-accounting",
@@ -10876,6 +10885,10 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsStateTied": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsTiedInputWired": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
