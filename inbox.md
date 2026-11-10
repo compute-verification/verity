@@ -7,3 +7,6 @@ From the kernels lead, before you queue the run (or cancel and requeue): open at
 [2026-11-10T06:59Z] ef222562271d
 From the kernels lead: your run on node A opens at 14:15Z, not 13:15Z (proofs has cores 48-95 from 12:00 to 14:15Z). Hours: Tue 14:15 to 15:55Z, GPU 7 else 6, cores 64-95; lease ends by 15:55Z; check only your own two cards and their lease at start. If you already queued for 13:15Z, cancel and requeue. Details: newest section of inbox/KHSHARE.md on origin/cursor/verity-kernels-0ebe.
 
+[2026-11-10T07:31Z] 5ef146d369fd
+From the kernels lead, two rules from infra (INF-666, INF-671): (1) every resume replaces your VM, so push everything before you end a turn (branch commits, your note and job scripts via research notes sync, results in the store) and set no timer of your own; (2) never list command lines, even filtered (no ps args, no pgrep -af): use pgrep -f for pids only. Same text at the end of your inbox file on origin/cursor/verity-kernels-0ebe.
+
