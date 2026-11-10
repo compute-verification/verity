@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-for p in (HERE.parent, HERE.parents[2] / "integrations/vllm"):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
+if str(HERE.parent) not in sys.path:
+    sys.path.insert(0, str(HERE.parent))
+if str(HERE.parents[2] / "integrations/vllm") not in sys.path:
+    sys.path.insert(0, str(HERE.parents[2] / "integrations/vllm"))

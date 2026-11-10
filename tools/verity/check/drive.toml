@@ -40,12 +40,10 @@ warn_steps = ["ratchet-gate"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change as any other;
 # the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"
-# the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
-# MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
-# step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit, unless fixed forward within
-# 30 min or a warn step's, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App
-# pushes `checked`
-land_into = "checked"
+# the landing branch: "main", where the verified queue's loop lands each batch once its candidate's check passed. A mark's
+# preflight and `research queue status` judge a head's merges of an old `next` against it, so a head that merged `main` is
+# marked. "checked" was drive's: its review landing fast-forwarded `checked`, and `main` followed to a fully checked commit
+land_into = "main"
 # the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
 # run, every step from nothing, holds every landing for as long as it runs; circuit-check reuses its per-target passes either
 # way. The nightly `audit-main` (`--no-cache`, no circuit cache) checks every part cold, so it checks that reuse daily
