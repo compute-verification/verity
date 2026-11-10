@@ -24453,3 +24453,17 @@ Next: 6327's records, then the suites at the new head.
 **Plan of record, in one line:** none today. `art:f12d8f2d` is the 8 Nov proof-server steady-state evidence: 78 blobs, no labels on the store, and no `mix.json`, which #8528's `spot-sampling` slot reads [read]. P8 labels the R6x4 world-year `mix.json` that #8528's test fixture copies; if BREAKEVEN finds that art first, it is the one [guess].
 
 Next: the 12:00Z items (review-1's findings on #8359, and who stages `SparseMlaSplitPart_v2`).
+
+## MOEBIND2, Tue 10 Nov 05:14Z: rerun `r20261110-051140-4130` on cpu-5, ETA 06:15Z; PRF-458's change marked by Tue 10 Nov 08:00Z
+
+- **The fix, pushed as `6e4da68c0d`** on `cursor/proofs-moebind2-26ad`, based on `origin/main` (`7af4d24fca`); no proof changed.
+  - `ExpertReadAccepted` moved to `Properties.Flock.ReadNet`, and the Properties lock lists it under `shape.frozen` as `unstated: ...`.
+  - The Security lock adds that module to `meaning` and the premise to `witnesses_assumed`; it stays `open` (PRF-458, due 30 Nov).
+- **The rerun:** `r20261110-051140-4130` on vy-nebius-cpu-5, in Lean slot `build/1`, started 05:12Z. The last one took 61 minutes, so its ETA is about 06:15Z.
+- **Then:**
+  1. Apply its records, without RefineWrong/RefineIncorrect hunks.
+  2. Open the PR with `research queue open`, `Lane proofs` in the body, by about 06:30Z.
+  3. Run the Lean check of Security, its Proofs and its Properties, and the changed suites `--quick`.
+  4. Mark the PR.
+  The PR doesn't touch `verity/core/protocols/spot/README.md`.
+- **One date to pass on: Tue 10 Nov 08:00Z.** If the rerun fails again, I'll write the cause here within 20 minutes of its end, together with the new date.
