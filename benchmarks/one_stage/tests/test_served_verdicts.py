@@ -3815,6 +3815,20 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
         "with the run"], [])
 
 
+def test_the_preflight_refuses_signed_limits_where_no_period_would_sign_them(tmp_path):
+    """SIGNED_LIMITS=1 moves the period's open and has it sign the limits, so a run with no period to open (in-process
+    coins: no gate) is refused before anything runs, naming what to set, as is a SIGNED_LIMITS that is not 1."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, "SIGNED_LIMITS": "1"})
+    assert (rc, order) == (3, []) and lines == [
+        "PREFLIGHT: SIGNED_LIMITS=1 has the lane's Pearl-C period sign the limits and the first registration record's "
+        "digest at its open, which needs PEARLPLUS_TIE=1 and its gate (PEARLC_CHALLENGER_GATE): SIGNED_LIMITS is 1, "
+        "PEARLPLUS_TIE '1' and the gate unset: set them, or unset SIGNED_LIMITS"], lines
+    rc, lines, order, _limits = _v3c(tmp_path / "yes", (), **{**PEARL_TIED, "SIGNED_LIMITS": "yes",
+                                                              "PEARLC_CHALLENGER_GATE": GATE})
+    assert (rc, order) == (3, []) and lines[0].startswith("PREFLIGHT: SIGNED_LIMITS=1 has the lane's") and \
+        "SIGNED_LIMITS is yes, PEARLPLUS_TIE '1' and the gate set: set them" in lines[0], lines
+
+
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
 SHORT_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, 772288 short of PEARLPLUS_INODES "

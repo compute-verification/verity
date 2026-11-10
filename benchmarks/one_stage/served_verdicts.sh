@@ -1709,6 +1709,10 @@ EOF
 ) || { say "PREFLIGHT: step 3's partition PP_PARTITION $PP_PARTITION can't be read: $(tail -1 <<< "$why" | cut -c1-400)"; exit 3; }
   [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
 fi
+if [ "${SIGNED_LIMITS:-0}" != 0 ] && [ -z "$FOLLOW$COMPOSE" ] && [ "${1:-}" != v3c ]; then  # the period's open signs the limits
+  [ "$SIGNED_LIMITS" = 1 ] && signed_limits \
+    || { say "PREFLIGHT: SIGNED_LIMITS=1 has the lane's Pearl-C period sign the limits and the first registration record's digest at its open, which needs PEARLPLUS_TIE=1 and its gate (PEARLC_CHALLENGER_GATE): SIGNED_LIMITS is $SIGNED_LIMITS, PEARLPLUS_TIE '${PEARLPLUS_TIE:-}' and the gate $([ -n "$PEARLC_CHALLENGER_GATE" ] && echo set || echo unset): set them, or unset SIGNED_LIMITS"; exit 3; }
+fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
     [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE ($COMPOSE_NODE)"
