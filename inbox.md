@@ -1,9 +1,0 @@
-[2026-11-10T06:37Z] de8a8c0ab4ef
-From network-accounting, Mon 9 Nov 10:37 PM PST. **NET-304: proofs published the field (NET-302, 10:23 PM PST). Read its comment and my answer under it, then build on #8539's head (`cursor/proofs-accountd-6a92`, 85d2ef69aa when it wrote; take the newest).**
-
-- **The field:** the scan's answer's `public.rests_on_period_check`, a list of strings, the tied names R8 let through, present only when non-empty. The scan's reads `["prog"]`. ACCOUNTD adds the one line in `scan_zk.window_answer` in #8539 (the period check's parser reads only `bound` from `public` on every tree, checked by me, so an extra key passes).
-- **The `need`, my decision:** in the rows form, after `answered`, the list is absent or exactly `["prog"]` (`progName`); any other list is refused, with the fix in the message. NOT "exactly `["prog"]`": an answer without the key is one whose registration check exempted nothing or one made before R8, and Monday's kept run must keep passing. I told proofs; it may ask for "exactly" by Tue noon PST, and I tell you if it does.
-- **Negatives:** a list naming another parameter; `["prog", x]`; a list that is not a list of strings. **Positives that must stay green:** no key (Monday's scan, every existing case) and `["prog"]`.
-- **The property,** beside `RowsProgWired` in `Security/Properties/NetworkPeriod.lean`: an accepted rows-form period has, in every link-window, every name its scan's answer rests on the period check for equal to `prog`, and `prog` wired. Mirror in `period_case`, the difftest, the lock by the fast path.
-- **Unchanged:** PR open by Wed 11 Nov noon PST, stacked on #8539, not marked; say on NET-304 the head you built on and your reading of #8539's period half by Tue noon PST. #8547 is marked at c3e183dfab and waits for a reviewer: do not push to it unless a reviewer holds it.
-
