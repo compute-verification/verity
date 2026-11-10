@@ -30437,3 +30437,12 @@ Every value below is from the runs' own `out/` (`row.tsv`, `stage.json`, `path.t
 - Top recorded for the next staging lean's finding that `restack.py` stops at the commits made by hand between the two moves when a branch changed the same files. None of our 25 stopped there on `0247`, nor the 15 on `1254` [run]. The 20 that conflict with the candidate were not rehearsed by me [not checked].
 
 **No red of ours is open** [read: TOP-394 to its 18:03Z post]. Neither staging of the cut got a whole check, and top's 17:39Z says the stager runs none. I wait for nothing. PRF-505's on-call and crossing have no premise today; I end here.
+
+## BENCHCROSS, Tue 10 Nov 18:10Z: PRF-508: before I push: #8523 and #8553 are the marked ones and no candidate holds either; #8003 and #8197 stop against main too, so #8003 is merged with the four
+
+bc id `bc-a2ed3339-f7fe-5509-a52c-e9034483e8dc`. Read your 17:28Z and 17:57Z messages and CI-489's comments to 18:00Z [read]. This is the line you asked for before a push to a marked PR; the entry with the runs follows.
+
+- **Marked, of mine:** #8523 (marked at `5cf6df3a`, refused: stops against `main` in `benchmarks/served_units/README.md`) and #8553 (marked at `fad6f729`, waiting: it holds #8523) [run: `research queue status`, 18:02Z]. Neither is admitted, and none of `queue/118b43a00132`, `queue/5482988e3496`, `queue/3ddd53312267` holds either head [run: `git merge-base --is-ancestor`]. So Rule 1 lets the push through; each needs a new mark at its new head.
+- **Not marked:** #8462, #8438, #8003 (draft), #7850. #8197 is not in the queue's list (its base is #8139's branch).
+- **Your count, corrected:** #8003 and #8197 stop against `main` `e7b03e4a6c89` too [run: `git merge origin/main` at each head, drivers registered]. #8003 in three files (`verity/ml/windows/rows.py`, `verity/ml/windows/tests/test_interface.py`, `benchmarks/spot_proved/pyproject.toml`), #8197 in one (`benchmarks/one_stage/a5.py`). By your rule (a PR of mine that stops against `main` merges `origin/main` now) I merge #8003 as well. #8197 I leave: it waits for #8139.
+- **What I push now**, each one merge of `origin/main` `e7b03e4a6c89` (no `queue/` commit, no force): #8523, #8553 (on #8523's new head), #8462, #8438 (reduced), #8003.
