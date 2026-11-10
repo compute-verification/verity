@@ -32073,3 +32073,48 @@ proofs (BREAKEVEN), Tue 10 Nov: **which share of a request's prompt tokens repea
 - **One caution:** whether a record is named is inferred from any `/` anywhere in it, so adding a table renames every link. The toy names every port `<member>/<port>` (`verity/ml/windows/rows.py:279`). Giving vllm's layout that one spelling too would let `byTemplate` go, but not this week.
 
 **Runs:** `r20261110-190742-45ff` (`integrations/vllm` at N2's head), vy-nebius-cpu-13, ETA about 20:20Z.
+
+## SPOTCROSS, Tue 10 Nov 19:48Z: #8139 is ready to mark at `bec1e5cdaa18e8e52e04ef6aa4f544a779d2a423` (records `r20261110-180940-8875`, quick tiers `r20261110-182135-2813` and `r20261110-191243-e737`, all passed); that is the head for BENCHCROSS's #8197; #8339 is merged with `main` at `f0453a514e14` with two runs up
+
+One line a PR:
+
+- **#8139: ready to mark at `bec1e5cdaa18e8e52e04ef6aa4f544a779d2a423`.** It is `ab93cfdcef06` plus one lock-only commit, pushed 19:11Z, fast-forward [run]. BENCHCROSS merges #8197 onto this head.
+- **#8339: not ready yet.** New head `f0453a514e148ac4c717d46a62d9f3857af8588f` (`b51bd3382126` merged with `origin/main` `5482988e3496`), pushed 19:14Z, fast-forward [run]. It waits for `r20261110-191513-caf6` and `r20261110-191834-3ddc`.
+- **#7780:** closed.
+
+**Task 1.1, what each run covered** [run: I fetched each run's records and logs and read them]:
+
+- `r20261110-180940-8875` (vy-nebius-cpu-12), at `ab93cfdcef062b51ecbc018d6e5e19ee6f6aa6be`: `lean_changed.py --records Security/Proofs --update`. `Security/Proofs` passed as its record stands (check.py exit 0 in 567 s; 193,150 declarations in 3,814 modules; axioms `propext`, `Classical.choice`, `Quot.sound`). `Security` and `Security/Properties` failed only on record differences, were regenerated, and passed. Outcome `regenerated`. It is the fast path: a build and the audit, no kernel replay and no tests.
+- `r20261110-182135-2813` (vy-nebius-cpu-8), at `ab93cfdcef06`: `suites.py --changed e7b03e4a6c89c544365033af6fb6b5e07dab3d27 --quick`. "71 suites: 71 passed (1 cached), 0 failed".
+- `r20261110-191243-e737` (vy-nebius-cpu-3), at `bec1e5cdaa18`: `suites.py --changed ab93cfdcef062b51ecbc018d6e5e19ee6f6aa6be --quick`, the suites the lock-only commit touches. "8 suites: 8 passed (0 cached), 0 failed": `repository`, `verity-graph`, `verity-pouw-benchmarks`, `verity/core/protocols/pouw`, `verity/core/protocols/pous`, `verity/ml/circuits/ops`, `benchmarks/nci`, `benchmarks/rho`.
+
+How they cover `bec1e5cdaa18`: it differs from `ab93cfdcef06` in the two locks alone, and each is the record `8875` wrote, byte for byte (sha256 `397a2723…` and `0c2dbae8…`, as in its `result.json`) [run]. `2813` covers every suite at the parent; `e737` reruns at the head the ones that read the two locks.
+
+**Task 1.2, against `main` at `5482988e3496`** [run]:
+
+- `git merge-tree --write-tree` exits 0 for `ab93cfdcef06` and for `bec1e5cdaa18`. Three files changed on both sides, each merged without a stop: `Security/lean-audit.json`, `test_composition_difftest.py`, `spot/tests/test_difftest.py`. So I made the lock-only commit and pushed once.
+- The lock-only commit: in both locks the hashes of `Spot.OneStage.paramsParsed` and `Spot.Registration.check` with their groups' digests; in `Security/lean-audit.json` three entries also change place. No guarantee's statement changed.
+- A trial merge of `bec1e5cdaa18` with `main` (local, discarded): no stop, pins not stale, and the merged `Security/lean-audit.json` and `Security/Properties/lean-audit.json` are byte for byte the records `r20261110-164306-7f23` regenerated at the scratch (sha256 `eee221fe…` and `0c2dbae8…`). That scratch is this merge plus #8378 and #8515, which change no Lean. So the lock that lands needs no repair, and `7f23` (done, rc 0) and `765c` stand for the Lean and the quick tier of the merged tree, but for #8515's tooling.
+- It also merges without a stop with the candidates in flight: `3ddd53312267`, `d6ab14d90da6` and `6fbb335916c3` (45 members).
+
+**Task 1.3, CI-489** [read 19:09Z, the 12 comments from 17:56Z to 18:59Z, with the Linear reader; `research msg linear` has no `show`]:
+
+- ci 18:59Z: `main` is `5482988e3496`; in flight are C `3ddd53312267` (15 PRs led by #8633) and D `d6ab14d90da6`. Neither list names #8139 or #8339.
+- ci 17:56Z: merge `main` itself, never a candidate; "a land carries if the own change is unchanged; otherwise it needs a fresh one". #8139's verdict was at `20d813fc6a0d`; the merge changed its own lines in `test_difftest.py`, `TRUSTED.sha256` and the locks, so I expect it needs a fresh one [guess].
+- ci 18:21Z and top 18:09Z: the mark's preflight still merges a head onto `next`; until #8683 lands ci allows `--no-preflight` for a head refused only on files `next` holds. Yours to know when you mark.
+- Rule 1 as I read it at 18:00Z; nothing in these 12 changes it. Before each push [run 19:10Z and 19:14Z]: drive listed #8139 and #8339 `waiting`, not marked, and none of the five candidates on origin held either. So neither clause applied and the pushes cost no mark and no verdict.
+
+**#8139's body** has three paragraphs more (`research queue edit`, 19:46Z): the locks at the head, the three runs, and the merge with `main` at `5482988e3496`.
+
+**Task 2, #8339** [run]:
+
+- The merge stopped in the 7 files of the plan; each takes `main`'s text. `ReadsAt.lean`, `DrawnAt.lean` and their two imports are gone. `fixtures/artifacts.json` names `art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81`. The head differs from `main` in that one line; pins not stale. No Lean, so no records run.
+- Its body is replaced (`research queue edit`, 19:22Z): the fixture, what the merge closed, where `ReadsAt` and `DrawnAt` go, the runs, and what the guard does not show. The title still says "runOkAt accepts the honest toy at (b) and refuses two negatives". I left it; a title that fits is "Two-stage guard: the fixture exported again at main's guard, with the rows its Held reads".
+- One thing to weigh: my merge commit's message says `ReadsAt.lean` "does not build beside main's round 2". What I ran is a build failure on a tree whose Lean is `main`'s (`r20261110-170045-7b73`); I did not isolate the cause.
+
+Runs up, each launched with `research run --on auto --cwd source` at `f0453a514e14`:
+
+- `r20261110-191513-caf6`, vy-nebius-cpu-3: `suites.py --changed 5482988e3496f12fe6683ccf355583a486cf4246 --quick`, 6 suites; 3 passed at 19:46Z. ETA about 20:05Z [guess].
+- `r20261110-191834-3ddc`, vy-nebius-cpu-6: the suite `benchmarks/two_stage`, then `guard_node.py --pytest`. So far [run 19:46Z]: the fixture came by its id (1 blob, 5.1 MB), the suite passed (9 passed, 3 skipped), and `lake build` of the guard's two modules is at 10,152 of 10,899. The test itself takes about 35 min. ETA about 20:45Z to 21:05Z [guess].
+
+The VM restarted again at 19:02Z; I recreated the worktrees from origin and nothing was lost. I am `bc-620a35fa-6df3-5b43-9c93-59767f937835`.
