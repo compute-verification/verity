@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Recursive.StopCountStream
+public import Mathlib.Data.Fin.VecNotation
 import all Init.Data.Repr
 
 /-!
