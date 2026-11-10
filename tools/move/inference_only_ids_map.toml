@@ -4,7 +4,8 @@
 # these rename an executable, a constant or a lock's reason, so the change they make is an ordinary one, reviewed as such.
 # - `nci-` becomes `inference-only-` where it starts a name in kebab case: the check's executables (`nci-check`, the six
 #   difftests') and `nci-phases`, in the lakefiles, the scripts that build and run them, and every mention.
-# - The constants `NCI_SCRIPTS`, `NCI_CONSTS` and `NCI_CONSTANTS`, and the variable `NCI_COST_FLAGS`.
+# - The constants `NCI_SCRIPTS`, `NCI_CONSTS`, `NCI_CONSTANTS`, `NCI_PACKAGE`, `NCI_REFERENCE` and `NCI_CHECK`, and the
+#   variable `NCI_COST_FLAGS`.
 # - The check's lock's `runs` reasons, which name the check's Lean and its Python reference.
 # What stays: a constant named `NCI` alone (three files name the check's package or the policy's protocol id so), a hand
 # edit, since one word has one map and `inference_only_map.toml` has this one's; `benchmarks/nci/`'s own names and the
@@ -16,6 +17,9 @@
 "NCI_CONSTS" = "INFERENCE_ONLY_CONSTS"
 "NCI_CONSTANTS" = "INFERENCE_ONLY_CONSTANTS"
 "NCI_COST_FLAGS" = "INFERENCE_ONLY_COST_FLAGS"
+"NCI_PACKAGE" = "INFERENCE_ONLY_PACKAGE"
+"NCI_REFERENCE" = "INFERENCE_ONLY_REFERENCE"
+"NCI_CHECK" = "INFERENCE_ONLY_CHECK"
 
 # A name in kebab case, whole: `nci-check`, never `inference_only-check`.
 [[words_in]]

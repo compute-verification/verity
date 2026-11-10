@@ -21,6 +21,9 @@
 #   and the cited draft `draft:nci-search`.
 # - The Definitions the check's vector generators name (`"NciHandBlk"`, `f"NciDecl{seed}"`): the vectors spell them, and
 #   the check's lock pins the vectors' digests, so they change with a regenerated lock ([keep]).
+# - The period check's refusal that names `NciCheck.Desc.rootLaidOut` (`NetworkCheck.Period.scanOf`, and the test that
+#   expects it): the text is part of what `scanOf` computes, so renaming it changes a definition the locks' guarantees
+#   read, where a move leaves every record the same statement under its old names ([keep]).
 #
 # It renames declarations the Lean locks record (`Nci.Guarantees.*`, `NciCheck.*`): their records follow in a commit of
 # their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
@@ -44,10 +47,12 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
             '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*']
-# GLOSSARY.md's rows of older names, and the slowdown calculator's family of `benchmarks/nci`'s algorithms.
+# GLOSSARY.md's rows of older names, the slowdown calculator's family of `benchmarks/nci`'s algorithms, and the period
+# check's refusal.
 strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
            "the Lean's `Nci.Dampener` and `Dampener*` names",
-           "and the Lean's `Nci.Dampener.unmonitoredShare`"]
+           "and the Lean's `Nci.Dampener.unmonitoredShare`",
+           "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"]
 
 [keep_paths]
 "benchmarks/nci/**" = ["nci"]
