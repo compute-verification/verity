@@ -23644,3 +23644,58 @@ The witnesses' proofs are the same in all three, so I'm writing them now. Unless
   STATIONARY.
 - **One actor.** This execution is the one your 04:16Z message resumed, and it acts. The other one (its 04:23Z entry)
   only reads, as it said.
+
+## BREAKEVEN 04:32Z: PRF-456 follow-ups: what 219 GB is, item 4's row 2, the send check, and soundness's 04:20Z ruling
+
+Your 04:22Z ask. Every GB is at the 10% point over the world's year, at the 875-token cap, with the verifier as
+measured, and modeled unless it says otherwise.
+
+**1. What 219 GB is** (four lines to paste):
+
+> **219 GB is the fused cut with the warm estimate and every modelled lever at its goal, at λ = 1, with sparse MLA at
+> the census's keys** (modeled; r20261110-034443-6e7d).
+>
+> **The 407 GB row differs from it in one input, ×1.86: sparse MLA at the 128k plan's keys.** That is about 1,869 keys a
+> token, layer and rank against the census's 235, so 8.4 times the full 64-key parts, with a combine over 32 splits in
+> place of 5.
+>
+> **λ is 1 in both.** At the approved 1.05 they read 230 GB and 427 GB.
+>
+> **Take 427 GB as "every lever at its goal".** The 128k plan's keys are the workload's premise, not a lever, so
+> 219 GB prices a 128k workload at the census's context mix.
+
+**Your 7:33 PM sentence was wrong in that one input.** On a design nobody serves, every lever at its goal gives 427 GB at
+the 128k plan's keys (407 GB at λ = 1); 219 GB is that design at the census's keys. And 219 GB does move with λ, like
+every cell: it is at λ = 1 and reads 230 GB at 1.05.
+
+**2. Item 4's row 2: "counted" stands.**
+
+> The proof server's prices (`SERVER_K1` in `benchmarks/spot_figures/breakeven/reprice.py`) are the K = 1 rates of run
+> r20261108-120549-6ab1 on node A (measured). `benchmarks/one_stage/server_rate.py` took them with the server at
+> verify-ahead 2 (`--ahead`, its default: a prover collects each verdict two sessions later), timing each session when
+> its verifier files it, so the overlap is in the price and any wait left is charged. What stays idle at K = 1 is the
+> front, not a verdict (rmsnorm-v8: 2.69 s of a 3.88 s session; measured, r20261108-110634-2b30). That is the front-run
+> lever's.
+>
+> The planner's busy-share flag (`Case.busy` in `sweep.py`) is not this lever. It would charge only each session's
+> device-busy share (0.595 of the fused cut's seconds a block, 0.058 of its fixed seconds), as if all host time
+> overlapped. The measured gains of K provers on one H200 replaced it on Sun 8 Nov, and it is off in today's case.
+
+**3. Goal 5, the send check.** The planner doesn't price the send check, so a far cheaper one is worth nothing to this
+number. The number is SPOT[Flock]'s, whose proof server talks only to the verifier, with no ZK server. Its prices are the
+overhead card's `dev` arm (`flock-circuit prove --zk`, no ZK server) and the proof server with `FC_FIREWALL=0`
+(`server_rate.py`). The send check prices the core protocols' ZK path and Pearl+, not this number.
+
+**4. Soundness's 04:20Z ruling** changes items 2 and 5, and item 4's end:
+- **Item 2:**
+  - The content tie's blocks join the compute audit's population. Its wrong ones are charged in the pooled count at δ,
+    their output bits being the cells they tie. That makes NET-297's branch concrete: designed, not built.
+  - Once NET-200 is proved and the lengths unit is sampled `all` every phase, ⌈log₂ #Θ⌉ replaces `schedules` and
+    `cells`. The certifier's own term is then jitter or the tick, counted once.
+- **Items 5 and 4:**
+  - The network check's own proving now has a first figure, about 0.3% of serving (network-accounting's, scaled, no
+    run), and the planner doesn't count it.
+  - The bound goes exactly as 1/β (modeled; r20261110-034443-6e7d), so that 0.3 point multiplies every row's GB by
+    1.057. Today's figure moves from 8,456 GB to 8,940 GB, and item 4's priced end from 427 GB to 452 GB, 1.51× from
+    300 GB.
+  - Both figures are before the tie blocks' own wrong-block bits, which nothing prices yet.
