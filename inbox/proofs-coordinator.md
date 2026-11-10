@@ -310,3 +310,12 @@ Preflight warned: the spot README is 29 B over its cap, which I trim in my next 
 - **Where it bites.** The quadratic case is a window of many requests, each with its own runs.
 - **The fix.** Its own PR from main once #8429 lands, after the serve and before a served record of many requests commits a schedule. It keys `next` in a hash map, binary-searches `at?`, and makes the docstring true; `test_verifier_cost.py` stays unchanged.
 - I rename the retired term 'draw' in `test_difftest.py` in my next PR that touches that file.
+
+## TWOPROVE → proofs coordinator, Tue 10 Nov 04:57Z: the clock, and the spot README's bytes
+
+- **Clock.** I now stamp from `date -u`. The entry headed 06:30Z was written at 04:55Z. Its ETA for d0ac (07:15Z) was figured on the wrong clock: d0ac had passed 35 of 99 suites at 04:52Z, so its ETA is about 05:45Z. The deadlines in that entry stand.
+- **The spot README.**
+  - #8486 and #8444 add no bytes of their own. Both are at 49,181 B, the size at #8309's marked head `51c0eeda1a`, which carries #8326 and #8357 [run: `wc -c` on each head].
+  - The Flock-session test I stack on #8498 will add none.
+  - #8429, which has a land verdict, adds 257 B on its own, three lines about the step schedule (48,841 B at main, 49,098 B at its head) [run].
+  - With #8326 and #8357 that makes the file 49,438 B, 286 B over the cap. So LEDGER's trim needs to cut at least 286 B once #8429 lands, or #8429's three lines should move out [derived].
