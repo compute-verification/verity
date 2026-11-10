@@ -69,7 +69,7 @@ def test_a_lean_build_in_the_shared_tree_runs_holding_its_lock_and_other_runs_ta
     bin_dir.mkdir()
     (bin_dir / "lake").write_text(FAKE_LAKE)
     (bin_dir / "lake").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
     monkeypatch.chdir(tree)
     assert main(["run", "--runs-dir", str(runs), "--no-sampler", "--cwd", "source", "--", "lake", "build", "Flock"]) == 0
     [run_dir] = [d for d in runs.iterdir() if d.is_dir()]
