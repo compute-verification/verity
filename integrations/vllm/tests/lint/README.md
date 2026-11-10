@@ -42,6 +42,11 @@ failure message carries its fix.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
  extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
+- **Ruff with vLLM's rules** (`test_ruff_vllm.py`, config `ruff_vllm.toml`, allowlist `allowlists/ruff_vllm.json`): vLLM's
+ selection less the rules `ruff.toml` selects (so no finding is in both lists) and less line length, with `print` (T201)
+ flagged in `verity_vllm/` outside `pipeline/cli.py`: a diagnostic goes to the logger. In the suite, a finding the list
+ lacks, or an entry that matches nothing, warns; the gate fails a change that adds a finding, and judges `ruff_vllm.toml`
+ as this lint's code. Once both lists are small, one config and one list replace the two.
 - **mypy** (`test_mypy.py`, allowlist `allowlists/mypy.json`): mypy under vLLM's settings (`[tool.mypy]` in
  `integrations/vllm/pyproject.toml`), the library at `follow_imports = "silent"` and `tests/` on its own at `skip`, an error
  keyed by file, error code and enclosing symbol, with a count; one the list lacks, or an entry that matches nothing, warns in the suite. `CLEAN` names the directories held to no error. Its findings
@@ -59,7 +64,8 @@ file, P07's) is held by its total instead: a key may rise, or a new one appear, 
 at least as much, so a move from one file to another passes, but the kind's total may not grow. P10's count is a size,
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
-extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
+extends and the root `dev` group's ruff pin (with vLLM's rules, `test_ruff_vllm.py` and `ruff_vllm.toml`), so the gate reruns
+it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
 tracked file outside this lint's own), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
