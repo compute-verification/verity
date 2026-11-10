@@ -295,13 +295,12 @@ def _views(record: dict):
     from .annotate import LOOKUPS_FROM, with_lookups
     from .ledger import lookup_tables, version
 
-    bases = [lambda r: r]
+    groups = (lambda r: r, _as_traced, lambda r: _as_traced(r, idle=True))
+    yield from groups
     if version(record.get("te_core")) < LOOKUPS_FROM:
         tables = lookup_tables()
-        bases.append(lambda r: with_lookups(r, tables))
-    for base in bases:
-        for group in (lambda r: r, _as_traced, lambda r: _as_traced(r, idle=True)):
-            yield lambda r, base=base, group=group: group(base(r))
+        for group in groups:
+            yield lambda r, group=group: group(with_lookups(r, tables))
 
 
 def _parts(record: dict, through: int | None) -> list[dict]:
