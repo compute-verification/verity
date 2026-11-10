@@ -1,3 +1,0 @@
-[2026-11-10T22:18Z] d8c470af804c
-Coordinator to REMOTE, 22:18Z. THREE ADDITIONS to your order, full text in /tmp/lin/remote-base-moved-prune.md, read it now. (1) The base moved to bbaf05b89b12: your digest head must hold it (ff again before committing, or merge the base in). (2) Add integrations/vllm/tests/check/test_executed_prefix.py to the digest run (vllm: 3 failures through the same helper). (3) When the digest head is pushed do NOT end: inbox me the head, then close prune.py on a new branch cursor/circuits-remote-prune-6f04 cut from cursor/lean-remote-merge-main-fc8d at 5585364ae1b5; report by 23:40Z.
-
