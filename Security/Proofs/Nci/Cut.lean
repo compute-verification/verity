@@ -50,9 +50,11 @@ share a pair of values) and applies AM–GM (`amgm_bound`). With shared arrays, 
 **Over a set of blocks.** `counts_on` is steps 1 to 4 with the cap on a set `G` of blocks only, each block of `G` under
 its own, and the entries of all the blocks together at most a total `T`. The split MACs and the leaving gates are
 entries, whichever block reads them, so they are counted against `T`; steps 2 and 3 are per block
-(`card_held_sq_le`), so they need the cap on `G` alone and count only the outputs with a wire in a block of `G`
-(`outOn`: at most the output wires in the blocks of `G`, `wiresOn`, themselves at most `O`; `outOn_le_wiresOn`,
-`wiresOn_le`); and the MACs a block outside `G` holds are counted apart, at most its gates (`sum_card_inBlock_le`).
+(`card_held_sq_le`), so they need the cap on `G` alone and count only the pairs of a block of `G` and an output with a
+wire in it (`outOn`). An output with wires in two blocks of `G` counts once for each: nothing here bounds `N` with the
+distinct outputs in the pairs' place. The pairs are at most the output wires in the blocks of `G` (`wiresOn`),
+themselves at most `O` (`outOn_le_wiresOn`, `wiresOn_le`). The MACs a block outside `G` holds are counted apart, at
+most its gates (`sum_card_inBlock_le`), and `T` is over every block, those outside `G` too.
 Those are the MACs each of whose gates is in the block (`card_whole_eq`). `counts` is `counts_on` at every block.
 `bound_on_caps` is step 5 on those counts, with `S = ∑ Π(κ u)` over `G` for `m Π(k)` (`real_step_on`). Under (H) at
 each block's own cap and its own `β_x`, and (E), `bound_on_rows` puts `κ u² / (4 β_w β_x u)` for each `Π(κ u)`;
@@ -282,7 +284,8 @@ def fedBy {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin 
 def hit {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (u : Fin m) : Finset W.Out :=
   univ.filter fun o => ¬ Disjoint (W.y o) (P.gates u)
 
-/-- `O` over the blocks of `G`: the pairs of a block of `G` and an output with a wire in it. -/
+/-- `O` over the blocks of `G`: the pairs of a block of `G` and an output with a wire in it. An output with a wire in
+each of two blocks of `G` counts twice: the count over `G` is in these pairs, not in the distinct outputs. -/
 def outOn {ι : Type} [Fintype ι] (P : Partition C m) (W : Work C ι) (G : Finset (Fin m)) : ℕ :=
   ∑ u ∈ G, (hit P W u).card
 
@@ -554,9 +557,9 @@ theorem Bound : Guarantees.Bound := by
   exact real_step (Nat.cast_nonneg m) (Nat.cast_nonneg _) (Nat.cast_nonneg _) (Nat.cast_nonneg E) hN' hV' hbE hE'
 
 /-- **The bound over a set of blocks, each under its own cap.** Block `u` of `G` reads at most `κ u` gates outside `θ`
-and all the blocks together at most `T`. With `S = ∑_{u ∈ G} Π(κ u)`: `N` is at most the MACs the blocks outside `G`
-hold, plus `T + √(S O_G) + √(S T / b_y)`, with `O_G` the outputs with a wire in a block of `G` (`outOn`), at most
-`O`. -/
+and all the blocks together, those outside `G` too, at most `T`. With `S = ∑_{u ∈ G} Π(κ u)`: `N` is at most the MACs
+the blocks outside `G` hold, plus `T + √(S O_G) + √(S T / b_y)`, with `O_G` the pairs of a block of `G` and an output
+with a wire in it (`outOn`), at most `O`. -/
 theorem bound_on_caps {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {T : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (G : Finset (Fin m)) (κ : Fin m → ℕ)
     (hκ : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ κ u)
@@ -580,8 +583,8 @@ theorem bound_on_caps {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredC
 
 /-- **The bound over a set of blocks.** Each block of `G` reads at most `k` gates outside `θ` and all the blocks
 together at most `T`: `N` is at most the MACs the blocks outside `G` hold, plus
-`T + √(Π(k) |G| O_G) + √(Π(k) |G| T / b_y)`, with `O_G` the outputs with a wire in a block of `G` (`outOn`), at most
-`O`. At every block and `T = m k` it gives `Bound`. -/
+`T + √(Π(k) |G| O_G) + √(Π(k) |G| T / b_y)`, with `O_G` the pairs of a block of `G` and an output with a wire in it
+(`outOn`), at most `O`. At every block and `T = m k` it gives `Bound`. -/
 theorem bound_on {ι : Type} [Fintype ι] [DecidableEq ι] {d : RegisteredCircuit} {k T : ℕ} (W : Work d.D ι)
     (P : Partition d.D m) (G : Finset (Fin m)) (hk : ∀ u ∈ G, (d.unregistered (P.gates u)).card ≤ k)
     (hT : ∑ u, (d.unregistered (P.gates u)).card ≤ T) :
@@ -972,8 +975,8 @@ theorem HEShared : Guarantees.HEShared := by
 /-- **The bound over a set of blocks, under (H) and (E).** `HE`'s premises on the values, with (H) at the cap `k` of
 the blocks of `G` and (E) at `b > 0`; all the blocks together read at most `T` gates outside `θ`. `N` is at most the
 MACs the blocks outside `G` hold, plus `T + (k/2) √(|G| O_G / (β_w β_x)) + (k/2) √(|G| T / (β_w β_x b))`, with `O_G`
-the outputs with a wire in a block of `G` (`outOn`), at most `O`. At every block and `T = m k` it gives `HE`'s
-bound. -/
+the pairs of a block of `G` and an output with a wire in it (`outOn`), at most `O`. At every block and `T = m k` it
+gives `HE`'s bound. -/
 theorem bound_on_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit} {W : Work d.D ι}
     {val : Finset (Fin d.D.N) → V} {k T : ℕ} {βw βx b : ℝ} (P : Partition d.D m) (G : Finset (Fin m))
     (hw : 0 < βw) (hx : 0 < βx) (hb : 0 < b) (hval : ValuesInjective W val) (hshare : NoSharedPair W val)
@@ -1003,10 +1006,10 @@ theorem bound_on_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] 
 
 /-- **The bound over a set of blocks, (H) at each block's own cap and its own `β_x`.** `HE`'s premises on the values
 and (E) at `b > 0`; each block `u` of `G` takes (H) at its own cap `κ u` and its own `β_x u`, so
-`Π(κ u) ≤ κ u² / (4 β_w β_x u)`; all the blocks together read at most `T` gates outside `θ`. With `Q` at least the sum
-over `G` of `κ u² / (β_w β_x u)`: `N` is at most the MACs the blocks outside `G` hold, plus
-`T + ½ √(Q O_G) + ½ √(Q T / b)`, with `O_G` the outputs with a wire in a block of `G` (`outOn`), at most `O`. No block's
-cap or cost is another's. -/
+`Π(κ u) ≤ κ u² / (4 β_w β_x u)`; all the blocks together, those outside `G` too, read at most `T` gates outside `θ`.
+With `Q` at least the sum over `G` of `κ u² / (β_w β_x u)`: `N` is at most the MACs the blocks outside `G` hold, plus
+`T + ½ √(Q O_G) + ½ √(Q T / b)`, with `O_G` the pairs of a block of `G` and an output with a wire in it (`outOn`), at
+most `O`. No block's cap or cost is another's. -/
 theorem bound_on_rows {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {d : RegisteredCircuit}
     {W : Work d.D ι} {val : Finset (Fin d.D.N) → V} {T : ℕ} {βw b Q : ℝ} (P : Partition d.D m)
     (G : Finset (Fin m)) (κ : Fin m → ℕ) (βx : Fin m → ℝ) (hw : 0 < βw) (hx : ∀ u ∈ G, 0 < βx u) (hb : 0 < b)
