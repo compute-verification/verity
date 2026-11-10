@@ -424,6 +424,41 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
+def test_a_seeded_clone_gets_the_record_drivers_it_lacks_once_and_plain_git_then_merges_two_records_with_merge_py(
+        world, monkeypatch):
+    """A queue clone seeded from a copy without the drivers (or with another value) gets every `RECORD_DRIVER` key on its
+    first sync, logged once, and a later sync only reads them; then a git without `git_env`'s settings merges two PRs'
+    lean-audit.json records in that clone through merge.py rather than line by line."""
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    wd = world.tmp / "q" / "verity"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
+    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
+
+    def said() -> list[str]:
+        return [x for x in world.logs if "set the record merge drivers" in x]
+
+    world.queue().sync()
+    (line,) = said()
+    assert line.endswith(", ".join(RECORD_DRIVER)), line
+    assert {k: _git(wd, "config", "--local", "--get", k) for k in RECORD_DRIVER} == RECORD_DRIVER
+    world.queue().sync()
+    assert said() == [line]
+
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    a, b = (world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}, base=base)
+            for g in "AB")
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    _git(wd, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    tree = _git(wd, f"--attr-source={base}", "merge-tree", "--write-tree", "--no-messages", a, b)
+    assert set(json.loads(_git(wd, "show", f"{tree}:pkg/lean-audit.json"))["guarantees"]) == {"T", "A", "B"}
+
+
 def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_built(world, monkeypatch):
     """A sync that merges each candidate in the clone's worktree takes tens of minutes when many conflict.  `_merge`
     merges with `git merge-tree` and `git commit-tree` and touches no worktree; over 30 PRs (conflicts in one and two files,
@@ -1924,6 +1959,21 @@ def test_status_lists_every_open_pr_whose_body_names_no_linear_issue(world, monk
                                                                                   4: "none: docs only"}
 
 
+def test_the_status_command_says_a_move_lands_only_with_a_land_verdict_and_refuses_one_that_conflicts_with_main(world):
+    """The verified queue builds a move PR by its merge, as any PR, and only with a land verdict: `status --loop` refuses one
+    that doesn't merge onto `main`, and says of one that does that it never lands on its mark alone."""
+    base = _git(world.origin, "rev-parse", "main")
+    _move_main(world, {"a.txt": "main\n"})
+    world.gh.put(1, world.change({"b.txt": "1\n"}))
+    for n, files, at in ((2, {"c.txt": None, "moved/c.txt": "c\n"}, "origin/main"), (3, {"a.txt": "3\n"}, base)):
+        world.gh.put(n, world.change(files, base=at), body=f"Lane `lane-{n}`.\nMove: tools/move/x_map.toml\n")
+    loop = world.queue(land_into="checked").status(loop=True)
+    assert [loop[n].state for n in (1, 2, 3)] == ["ready", "ready", "refused"], loop
+    assert loop[1].why.endswith(", or on its mark alone when it is low-risk"), loop[1]
+    assert loop[2].why.endswith(": a move lands only with one, never on its mark alone"), loop[2]
+    assert loop[3].why == "conflicts with `main` in a.txt: merge `main` into the branch and re-mark it", loop[3]
+
+
 def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labels(world, monkeypatch, capsys):
     """The lock refuses a second queue command at once, and a fresh VM's listing read labels for minutes under it, so every
     verdict meanwhile was refused.  A command that only reads holds it while it clones and fetches, not after."""
@@ -1980,6 +2030,76 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
     assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
+def test_review_records_a_verdict_at_an_open_prs_head_and_refuses_its_owner_and_its_ready_marks_author_whatever_the_case(
+        world):
+    """`research queue review N`: a PR the queue's branch doesn't hold takes the verdict at its head on GitHub, or at the head
+    ``sha`` names, as a `reviewed` label with its ref; its owning lane and the author of its ready mark write none, and a PR
+    neither held nor open takes none."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, old := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.store.add_label(label_target(2, world.gh.prs[2].head), vocab.READY, "true", "marker")
+    q, labels = world.queue(), StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(q, world.store, labels, 1, "land", "note:ci/x", "lane-9") == 0
+    (lab,) = world.store.labels(label_target(1, old), key=vocab.REVIEWED)
+    assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
+    world.gh.put(1, world.change({"a.txt": "2\n"}))
+    assert Q.review(q, world.store, labels, 1, "hold", "read the old head", "lane-9", sha=old) == 0
+    assert [x.value for x in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["land", "hold"]
+    for pr, by in ((1, "Lane-1"), (2, "MARKER")):
+        with pytest.raises(QueueError, match=f"#{pr} is {by}'s own PR"):
+            Q.review(q, world.store, labels, pr, "land", None, by)
+    assert world.store.labels(label_target(2, world.gh.prs[2].head), key=vocab.REVIEWED) == []
+    with pytest.raises(QueueError, match="#9 is neither on `next` nor open"):
+        Q.review(q, world.store, labels, 9, "land", None, "lane-1")
+
+
+def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_short_or_full_sha(world):
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    q.sync()
+    old = world.gh.prs[1].head
+    world.gh.put(1, new := world.change({"a.txt": "2\n"}))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    with pytest.raises(QueueError, match=f"GitHub has its head at {new[:12]}.*pass --sha"):
+        Q.review(q, world.store, labels, 1, "land", None, "lane-9")
+    assert Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha=new[:10]) == 0
+    assert Q.review(q, world.store, labels, 1, "hold", "old", "lane-9", sha=old[:10]) == 0
+    assert [lab.value for lab in world.store.labels(label_target(1, new), key=vocab.REVIEWED)] == ["land"]
+    assert [lab.value for lab in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["hold"]
+    with pytest.raises(QueueError, match="full 40-character SHA"):
+        Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha="0badc0de")
+    with pytest.raises(QueueError, match="neither #1's head"):                     # a mistyped full SHA
+        Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha=new[:12] + "0" * 28)
+    assert Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
+
+
+def test_review_with_signed_verdicts_refuses_a_verdict_it_cant_sign_and_writes_one_its_holder_signs(world):
+    """drive.toml's `signed_verdicts`: `review` writes through a signer, which refuses a verdict it can't sign while the flag
+    is on, and a verdict its handle's holder signed counts (`StoreLabels` with a verifier)."""
+    from research import labelauth
+    from research.queue import StoreLabels
+    from test_labelauth import OTHER, TS, _mint, _verifier
+
+    world.with_store_remote()
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q, labels = world.queue(), StoreLabels(world.store, log=lambda s: None, verify=_verifier())
+
+    def down(nonce: str) -> str:
+        raise labelauth.AuthError("the Cursor identity socket is unavailable")
+
+    with pytest.raises(QueueError, match="isn't written: drive.toml's `signed_verdicts` is on at `main`, and it can't be signed"):
+        Q.review(q, labelauth.Signer(world.store, down, required=True, now=lambda: TS), labels, 1, "land", None, "proofs")
+    assert labels.reviews(1, world.gh.prs[1].head) == []
+    assert Q.review(q, labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS), labels, 1, "land", None, "proofs") == 0
+    assert [(lab.by, lab.value) for lab in labels.reviews(1, world.gh.prs[1].head)] == [("proofs", "land")]
+
+
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     """An ejection doesn't live only in the ejecting VM's queue state, where drive, on another VM, would rebuild `next` with
     the ejected PR."""
@@ -2007,7 +2127,7 @@ def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
 def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
     """A hand eject's notice isn't only a handoff note on the ejecting VM, which syncs no notes, and the eject doesn't log that
     it told the owner when it didn't."""
-    import research.drive as D
+    import research.landing as L
     import research.queue as Qm
 
     cfg = world.tmp / "store.toml"
@@ -2024,7 +2144,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     world.gh.put(1, head := world.change({"a.txt": "1\n"}))
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
     posts, ok = [], [True]
-    monkeypatch.setattr(D, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
+    monkeypatch.setattr(L, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
     argv = ["queue", "eject", "1", "--reason", "breaks suite `verity`", "--by", "ci", "--workdir", str(world.tmp / "q" / "verity"),
             "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
     assert research_main(argv) == 0
@@ -2041,12 +2161,12 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
 def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
     """GitHub's rulesets let only drive's App move `main` and `next`, yet don't stop verity-agents[bot] force-pushing `next` from a
     VM's `research queue eject` that syncs. Off drive an eject only withdraws the mark; sync refuses."""
-    import research.drive as D
+    import research.landing as L
     import research.queue as Qm
 
     monkeypatch.delenv("RESEARCH_DRIVE")
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
-    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    monkeypatch.setattr(L, "merge_thread_post", lambda *a, **k: True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
@@ -4700,11 +4820,20 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and drive only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync only: `eject` would act"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync only: `ready` would act"),
+                      (["queue", "status", "--priority-file", "p"], "--priority-file is for sync only")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
+
+
+def test_delegate_takes_an_agent_id_where_a_pr_number_goes(world, monkeypatch, capsys):
+    """`delegate AGENT` reaches `delegate`, which judges the agent id, rather than refusing it as a PR number."""
+    monkeypatch.chdir(world.dev)
+    argv = ["queue", "delegate", "bc-x", "--by", "ci", "--repo", "o/verity", "--store", str(world.tmp / "qs")]
+    assert research_main(argv) == 1
+    assert "'bc-x' isn't a Cursor agent id" in capsys.readouterr().err
 
 
 def test_research_queue_ready_and_judge_name_a_lane_never_merge_queue(world, monkeypatch, capsys):
@@ -5048,3 +5177,91 @@ def test_drive_and_ready_take_the_preflight_root_they_are_given(tmp_path):
 
     assert Preflight(tmp_path, "origin", None, root=tmp_path / "fast").root == tmp_path / "fast"
     assert Preflight(tmp_path, "origin", None).root == Path(tempfile.gettempdir())
+
+
+def test_a_fetch_holds_the_clones_worktree_lock_shared_and_other_git_takes_none(tmp_path, monkeypatch):
+    """A fetch reads every worktree's HEAD, and `git worktree add` writes a placeholder one first: a sync's fetch beside a
+    restack job's add failed on it (`bad object worktrees/restack-…/HEAD`). So each fetch holds the clone's worktree lock
+    shared, which `tools/move/restack.py` holds alone while it adds or forgets a scratch worktree, and fetches side by side,
+    like every other git command, wait on nothing."""
+    import fcntl
+
+    _git(tmp_path, "init", "-q", "-b", "main", "origin")
+    _git(tmp_path / "origin", "commit", "-q", "--allow-empty", "-m", "c")
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin"), "clone")
+    clone, seen, real = tmp_path / "clone", [], subprocess.run
+
+    def probed(argv, *args, **kw):
+        if (sub := Q._subcommand(tuple(argv[1:]))) in ("fetch", "status"):
+            with open(clone / ".git" / Q.WORKTREES_LOCK, "a") as f:
+                for op in (fcntl.LOCK_SH, fcntl.LOCK_EX):
+                    try:
+                        fcntl.flock(f, op | fcntl.LOCK_NB)
+                        fcntl.flock(f, fcntl.LOCK_UN)
+                        seen.append((sub, op, "free"))
+                    except BlockingIOError:
+                        seen.append((sub, op, "held"))
+        return real(argv, *args, **kw)
+
+    monkeypatch.setattr(Q.subprocess, "run", probed)
+    Q._git(clone, *Q.STALL, "fetch", "-q", "origin")
+    Q._git(clone, "status", "--short")
+    assert seen == [("fetch", fcntl.LOCK_SH, "free"), ("fetch", fcntl.LOCK_EX, "held"),
+                    ("status", fcntl.LOCK_SH, "free"), ("status", fcntl.LOCK_EX, "free")]
+
+
+@pytest.mark.parametrize("rc, log, results, said, how, interrupted", [
+    (0, "", [{"status": "clean", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0", False),
+    (0, "", [{"status": "up-to-date", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0", False),
+    (1, "a\nb", [{"status": "conflicted", "step": "moved", "files": ["a.py", "b.py"]}],
+     {"why": f"{Q.RESTACK} conflicts at its moved merge in a.py, b.py"}, "exit 1: a | b", False),
+    (1, "", [{"status": "based-after", "error": "based after the move\nmerge it as usual"}],
+     {"why": f"{Q.RESTACK}: based-after: based after the move"}, "exit 1", False),
+    (0, "", None, None, "exit 0; its results don't read (JSONDecodeError: Expecting value: line 1 column 1 (char 0))", False),
+    (137, "Killed", None, None, "exit 137: Killed", False),
+    (124, "", None, None, f"exit 124, stopped {Q.RESTACK_WAIT_S // 60} min after its start", False),
+    (143, "Terminated", None, None, "exit 143: Terminated", True),
+    (130, "", None, None, "exit 130", True),
+])
+def test_a_restack_jobs_end_reads_as_the_sync_caches_it(tmp_path, rc, log, results, said, how, interrupted):
+    """What `restack.py --json` said of its head, as a sync caches it ({result} or {why}), how its job ended, and whether
+    something else interrupted it (SIGTERM's or SIGINT's exit, not SIGKILL's or `timeout`'s own); its directories removed."""
+    d, out = tmp_path / "job", tmp_path / "out"
+    d.mkdir()
+    out.mkdir()
+    (d / "log").write_text(log)
+    (d / "rc").write_text(f"{rc}\n")
+    (out / Q.RESTACK_OUT).write_text("" if results is None else json.dumps(results))
+    assert Q.restack_end({"dir": str(d), "out": str(out), "pid": os.getpid(), "at": 0.0}, 0.0) == (said, how, interrupted)
+    assert not d.exists() and not out.exists()
+
+
+@pytest.mark.parametrize("verb", ["drive", "baseline", "promote", "accept-checked", "drive-shard-add"])
+def test_no_verb_moves_main_or_checked_beside_the_verified_queues_loop(verb, capsys):
+    """`main` moves only as the verified queue's loop moves it: drive's tick and the verbs that moved `main` or `checked`
+    beside it are gone, so a script still calling one fails before it reads or pushes anything."""
+    with pytest.raises(SystemExit) as e:
+        Q.main([verb, "0123456789ab", "--by", "ci"])
+    assert e.value.code == 2 and f"invalid choice: '{verb}'" in capsys.readouterr().err
+
+
+def test_first_is_refused_naming_the_priority_file_which_holds_the_landing_order(world, monkeypatch, capsys):
+    """The landing order has one source, the priority file: a `--first` refuses the command before it reads anything, with
+    the fix."""
+    monkeypatch.chdir(world.dev)
+    with pytest.raises(SystemExit) as e:
+        Q.main(["sync", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
+                "--store", str(world.tmp / "store"), "--first", "7,8"])
+    assert e.value.code == 2 and not (world.tmp / "q").exists()
+    assert Q.FIRST_RETIRED in capsys.readouterr().err
+
+
+def test_sync_takes_the_priority_file_it_is_given(world, monkeypatch):
+    seen = []
+    monkeypatch.setattr(Q.Queue, "sync", lambda self, dry_run=False: seen.append((self.priority_file, dry_run)))
+    monkeypatch.chdir(world.dev)
+    path = world.tmp / "priority"
+    assert Q.main(["sync", "--dry-run", "--priority-file", str(path), "--workdir", str(world.tmp / "q" / "verity"), "--remote",
+                   str(world.origin), "--repo", "o/r", "--store", str(world.tmp / "store")]) == 0
+    assert [(str(p), d) for p, d in seen] == [(str(path), True)]
+

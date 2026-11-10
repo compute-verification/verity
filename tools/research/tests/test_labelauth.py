@@ -294,11 +294,14 @@ def test_a_mark_or_verdict_the_signer_refuses_is_not_written(store, capsys):
 
 def test_the_flag_is_off_by_default_and_on_only_while_the_low_risk_lane_cant_change_who_holds_a_handle():
     assert DriveFlags().signed_verdicts is False
-    excludes = '["*.lean", "drive.py", "queue.py"]'
+    excludes = '["*.lean", "landing.py", "queue.py"]'
     with pytest.raises(QueueError, match="registry.json or tools/research/src/research/labelauth.py land on its ready mark"):
         DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {excludes}\n")
-    full = '["*.lean", "drive.py", "queue.py", "labelauth.py", ".agents/skills/using-slack/"]'
+    full = '["*.lean", "landing.py", "queue.py", "labelauth.py", ".agents/skills/using-slack/"]'
     assert DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {full}\n").signed_verdicts
+    without_landing = '["*.lean", "drive.py", "queue.py", "labelauth.py", ".agents/skills/using-slack/"]'
+    with pytest.raises(QueueError, match="a change to tools/research/src/research/landing.py land on its ready mark"):
+        DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {without_landing}\n")
     assert DriveFlags.parse("signed_verdicts = true\nlowrisk_lane = false\n").signed_verdicts
     with pytest.raises(QueueError, match="true or false"):
         DriveFlags.parse('signed_verdicts = "yes"\n')

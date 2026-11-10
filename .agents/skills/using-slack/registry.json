@@ -505,9 +505,7 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py",
-        "tools/research/src/research/drive.py",
-        "tools/research/tests/test_queue_drive.py"
+        "tools/research/src/research/merge.py"
       ],
       "branch_suffixes": [
         "4292",

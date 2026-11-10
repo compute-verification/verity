@@ -1,30 +1,31 @@
-"""`research.vqueue_slim`: the run beside each candidate of the verified queue of what graph2 doesn't check, launched as drive
-launches its run beside the executor's check (`Driver._start_slim`) and judged as drive judges it (`Driver._follow_slim`), on
-drive's own fakes: `Harness`'s launches, run states, evidence and clock, `_slim`'s ended run, and the lint log drive names a
-culprit by.  Pending while it launches or runs, infra when it registered no run, never ran, was lost or was killed, fail on a
-step on the gate it failed, pass on every one it passed; each failure keyed by the content the step reads at the candidate
-and at its base, so `vqueue.decide` takes one its base fails too as inherited; and `combine`'s table."""
+"""`research.vqueue_slim`: the run beside each candidate of the verified queue of what graph2 doesn't check, launched and read
+through `research.landing`, on its fakes (`test_landing`): `Harness`'s launches, run states, evidence and clock, `_slim`'s
+ended run, and a lint log whose failure names its paths.  Pending while it launches or runs, infra when it registered no run,
+never ran, was lost or was killed, fail on a step on the gate it failed, pass on every one it passed; each failure keyed by
+the content the step reads at the candidate and at its base, so `vqueue.decide` takes one its base fails too as inherited;
+`combine`'s table; and the check that gates: the after-landing run as shards, judged on the steps `main` waits for at the
+base, each failure by the tests it names."""
 from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from research import merge
-from research.drive import ACTIVE, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, step_paths, step_records, touches
+from research.landing import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, shard_machines,
+                              step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
-                             Red, Snapshot, Verdict, decide, meets)
-from research.vqueue_slim import BUILD, WHOLE, based, combine, judge, key, reads, start, step_test
-from test_drive_executor import PREFLIGHTS, _slim
-from test_drive_policy import _policy
-from test_drive_review import GATED_TREE, _main, _move_main
+                             Red, Snapshot, Verdict, _inherited, decide, meets)
+from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, audit_failures, based, combine, judge, key, reads, start,
+                                  step_test, unnamed)
+from test_landing import GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _policy, _slim
 from test_queue import World, _git
-from test_queue_drive import LINT_LOG, Harness
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
 OFF = ("circuit-check", "ratchet-gate")
-#: what drive's naming finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
+#: what `step_paths` finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
 #: a graph build family declaring lean-agreement's reads in the shape the tree's does
 BUILD_SRC = ('VERIFIER = "verity/ml/flock/verifier"\nLEAN = "verity/core/service/flock"\n'
@@ -52,7 +53,7 @@ def world(tmp_path):
     return World(tmp_path)
 
 
-class Drive(Harness):
+class Beside(Harness):
     """`Harness`, whose launch of a run beside a check gives ``got`` when it is set: a detached launch's record, or the ids and
     tail of a train.sh that printed none."""
     got: dict | tuple[list[str], str] | None = None
@@ -65,22 +66,22 @@ class Drive(Harness):
 
 
 def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple[str, ...] = OFF, tree: dict | None = None,
-             change: dict | None = None, **kw) -> tuple[Drive, str, str, list]:
-    """Drive's harness on `main` (with ``tree``'s files) under policy.toml's ``off_gate``, candidate ``sha`` one commit above it
+             change: dict | None = None, **kw) -> tuple[Beside, str, str, list]:
+    """`Beside` on `main` (with ``tree``'s files) under policy.toml's ``off_gate``, candidate ``sha`` one commit above it
     (``change``, else f.txt) in the queue's clone, and the bases and commits lean-agreement's check asked of
     (`merge.required_steps`), which finds it changed with ``agreement``."""
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
         {"lean-agreement": ["verity/ml/flock/"]} if agreement else {}))
-    h = Drive(world, monkeypatch, **kw)
+    h = Beside(world, monkeypatch, **kw)
     h.q._clone()
     base, sha = _main(world), world.change(change or {"f.txt": "1\n"})
     _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{sha}")
     return h, base, sha, asked
 
 
-def _failed(h: Drive, base: str, sha: str, step: str, inputs: frozenset[str] = frozenset()) -> Failed:
+def _failed(h: Beside, base: str, sha: str, step: str, inputs: frozenset[str] = frozenset()) -> Failed:
     """The `Failed` of ``step`` failed at candidate ``sha`` on ``base``: keyed by the content it reads at each, its one test
     the step's."""
     return Failed(f"step {step}", key(h.q.workdir, sha, step), inputs, key(h.q.workdir, base, step), frozenset({step_test(step)}))
@@ -106,27 +107,20 @@ def _down(rid: str, sha: str, why: str) -> Verdict:
 
 
 @pytest.mark.parametrize("agreement", [False, True])
-def test_start_launches_what_drive_launches_beside_the_executors_check_with_main_below_as_its_verified(world, monkeypatch,
-                                                                                                      agreement):
-    """The candidate's run is drive's: the steps and keywords `Driver._start_slim` launches for it with ``base`` as the verified
-    `main`, lean-agreement only when what it checks changed between them, and drive's record of it, with ``base``."""
+def test_start_launches_the_steps_beside_the_executors_check_with_main_below_as_its_base(world, monkeypatch, agreement):
+    """The candidate's run: the steps it sends with `Landing.beside_args`' keywords, ``base`` the `main` below it, lean-agreement
+    only when what it checks changed between them, and its record, with ``base``."""
     h, base, sha, asked = _harness(world, monkeypatch, agreement)
     rec = start(h.d, sha, base)
     steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
-    assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False,
-                                                "no_regenerate": True})]
+    assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_regenerate": True,
+                                                "train_from": OWN_TRAIN})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     assert asked == [(base, sha, "check")]
     assert any(x == f"research queue vqueue: train.sh {sha[:12]} m1 --deferred {','.join(steps)} --base {base[:12]}"
                + (" --agreement" if agreement else "") + f" --no-regenerate beside candidate {sha[:12]}'s check: r-post-0"
                for x in world.logs), world.logs
-    pl = {"verified": base}
-    h.d._start_slim({}, pl, sha, False)
-    assert h.posted[1] == h.posted[0], "drive's own launch of the same run"
-    assert pl["slim"]["ratchet_base"] == base
-    assert {k: v for k, v in pl["slim"].items() if k not in ("ids", "ratchet_base")} == \
-        {k: v for k, v in rec.items() if k not in ("ids", "base")}
 
 
 def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_puts_in_the_record(world, monkeypatch, tmp_path):
@@ -164,7 +158,27 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     h.clock += LAUNCH_LOST_S
     assert judge(h.d, rec) == Verdict(PENDING)
     h.clock += 1
-    assert judge(h.d, rec).infra[0].task.startswith("the run beside its check registered no run: no run ids 60 min after its launch")
+    lost = judge(h.d, rec).infra[0]
+    assert lost.task.startswith(f"the run beside its check registered no run: no run ids "
+                            f"{LAUNCH_LOST_S // 60} min after its launch") and lost.launch
+    assert judge(h.d, rec).infra == (lost,), "the record keeps it, launch and all"
+
+
+@pytest.mark.parametrize("tail, launch", [
+    ("train: no run launched in the wait; stopped its launcher (pid 7), so none launches later; see /l/log", True),
+    ("train: 0e4f on m1 (its process is gone with no exit written: a restart of the pod)", True),
+    ('Traceback (most recent call last):\n  File "tools/verity/check/check.py", line 9, in <module>\nImportError: boom\n'
+     "train: no run launched; see /l/log", False),
+    ("train.sh: refused", False)])
+def test_only_a_launch_that_outran_its_wait_or_that_the_pod_lost_is_launch_only_infra(world, monkeypatch, tmp_path, tail,
+                                                                                         launch):
+    """train.sh runs the candidate's own check.py, so a launcher that exited without a run may be the tree's doing: only a
+    launcher stopped in its wait, or one the pod lost, is `Failed.launch`, which the loop retries before blaming anyone."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.got = {"dir": str(tmp_path / "launch"), "pid": 1}
+    h.d.launched = lambda got: ([], tail)
+    got = judge(h.d, start(h.d, sha, base))
+    assert got.state == INFRA and got.infra[0].launch is launch, got
 
 
 @pytest.mark.parametrize("how", ["dry_run", "shadow"])
@@ -176,12 +190,12 @@ def test_a_dry_run_or_a_shadow_queue_launches_nothing(world, monkeypatch, how):
                for x in world.logs), world.logs
 
 
-def test_start_needs_drives_machines(world, monkeypatch):
-    """The loop's Driver is built with no machines unless it is given drive.toml's `on`, and a train.sh with none registers
+def test_start_needs_the_queues_machines(world, monkeypatch):
+    """The loop's Landing is built with no machines unless it is given drive.toml's `on`, and a train.sh with none registers
     nothing: `start` says so rather than launch it."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on = ""
-    with pytest.raises(ValueError, match="build the Driver with drive.toml's `on`"):
+    with pytest.raises(ValueError, match=r"build the Landing with drive.toml's `on` \(`research\.queue\.flags_at\(repo, main\)\.on`\)"):
         start(h.d, sha, base)
     assert h.posted == []
 
@@ -198,7 +212,7 @@ def test_judge_is_pending_while_the_run_runs(world, monkeypatch, state):
 
 
 def test_judge_reads_the_runs_state_afresh_each_call(world, monkeypatch, tmp_path):
-    """The loop's Driver outlives its ticks, and `Driver._states` reads each run once a tick: `judge` reads it every call."""
+    """The loop's Landing outlives its ticks: `judge` reads each run's state every call."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
     assert judge(h.d, rec) == Verdict(PENDING)
@@ -214,8 +228,8 @@ def test_a_run_that_passed_every_step_it_judges_passes(world, monkeypatch, tmp_p
     assert judge(h.d, rec) == Verdict(PASS) and rec["verdict"] == {"state": PASS, "passed": list(PREFLIGHTS)}
 
 
-def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_culprit_by(world, monkeypatch, tmp_path):
-    """No graph/v2 task runs the preflights: a failed one fails the candidate, its `Failed` holding what drive's naming finds
+def test_a_failed_preflight_fails_the_candidate_with_the_paths_its_failure_names(world, monkeypatch, tmp_path):
+    """No graph/v2 task runs the preflights: a failed one fails the candidate, its `Failed` holding the paths its failure names
     (`step_paths`), the paths the suspects are the members whose changes meet."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
@@ -225,24 +239,23 @@ def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_c
     assert judge(h.d, rec) == Verdict(FAIL, (_failed(h, base, sha, "preflight-lints", LINT_PATHS),), ended=True)
 
 
-def test_a_failures_absolute_paths_meet_the_files_drive_matches_them_to(world, monkeypatch, tmp_path):
-    """A traceback's frame is an absolute path, which drive matches to a landing's file it ends in (`touches`): the `Failed`'s
-    inputs meet the same files."""
+def test_a_failures_absolute_paths_meet_the_files_they_end_in_under_a_directory(world, monkeypatch, tmp_path):
+    """A traceback's frame is an absolute path, which meets a landing's file it ends in under a directory: the `Failed`'s
+    inputs meet those files, the test its failure names, and no other."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
-    d = _slim(h, tmp_path, preflight_lints='FAILED tests/test_x.py::test_y - KeyError\n  File "/x/site/pkg/conftest.py", line 3\n')
-    (st,) = [st for st in step_records(d) if st["status"] == "failed"]
+    _slim(h, tmp_path, preflight_lints='FAILED tests/test_x.py::test_y - KeyError\n  File "/x/site/pkg/conftest.py", line 3\n')
     (failed,) = judge(h.d, rec).failed
-    for files in ({"pkg/conftest.py"}, {"site/pkg/conftest.py"}, {"x/site/pkg/conftest.py"}, {"conftest.py"},
-                  {"other/pkg/conftest.py"}, {"tests/test_x.py"}, {"tests/test_z.py"}):
-        assert meets(files, failed.inputs) is bool(touches(files, step_paths(d, st))), files
-    assert meets({"pkg/conftest.py"}, failed.inputs) and not meets({"conftest.py"}, failed.inputs)
+    for files, met in (({"pkg/conftest.py"}, True), ({"site/pkg/conftest.py"}, True), ({"x/site/pkg/conftest.py"}, True),
+                       ({"conftest.py"}, False), ({"other/pkg/conftest.py"}, False), ({"tests/test_x.py"}, True),
+                       ({"tests/test_z.py"}, False)):
+        assert meets(files, failed.inputs) is met, files
 
 
 @pytest.mark.parametrize("off_gate", [OFF, ("circuit-check",)])
 def test_a_red_ratchet_gate_fails_the_candidate_only_on_the_gate(world, monkeypatch, tmp_path, off_gate):
-    """ratchet-gate is off the gate in the tree, so its red holds no candidate, as it holds no `main` in drive; on the gate,
-    the candidate's own policy.toml says so, it fails it."""
+    """ratchet-gate is off the gate in the tree, so its red holds no candidate; on the gate, the candidate's own policy.toml
+    says so, it fails it."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=off_gate)
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, ratchet_gate="  merge 1 (0123456789ab): failed: grows p01.json 2 -> 3 entries\n")
@@ -324,13 +337,131 @@ def test_judge_keeps_its_verdict_in_the_record_and_reads_the_run_no_more(world, 
     assert judge(h.d, saved) == got == judge(h.d, rec)
 
 
-def test_start_and_judge_write_nothing_of_drives(world, monkeypatch, tmp_path):
+def test_start_and_judge_write_nothing_to_the_queues_state_and_tell_and_stop_nothing(world, monkeypatch, tmp_path):
     h, base, sha, _ = _harness(world, monkeypatch)
     before = h.q.load_state()
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, preflight_lints=LINT_LOG)
     assert judge(h.d, rec).state == FAIL
     assert h.q.load_state() == before and h.posts == [] and h.cancelled == []
+
+
+# -- the check that gates
+
+#: lean-audit's log of a package that failed its build, in the scratch tree ``n``, and one more failure it may print
+AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+         "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n  closure: {n} modules checked, 2 reused\n"
+         "  trust gap: 2 premises outside their trust\n    G: 2 (a, b)\n")
+RECORD = "  record: the statement of G changed\n"
+
+
+@pytest.mark.parametrize("shards", [1, 3])
+def test_start_launches_each_shard_with_the_loops_own_train_sh(world, monkeypatch, shards):
+    """A candidate's tree doesn't decide how long its launch is waited for: every launch runs the loop's own train.sh, this
+    tree's, which the loop's pin deploys."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, given, launch = "m1,m2,m3", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, train_from=None, **kw: given.append(train_from) or launch(
+        repo, commit, machine, steps, **kw)
+    start(h.d, sha, base, shards=shards)
+    assert given == [OWN_TRAIN] * shards and OWN_TRAIN.is_file()
+    assert OWN_TRAIN == Path(__file__).resolve().parents[3] / "tools" / "verity" / "check" / "train.sh"
+
+
+@pytest.mark.parametrize("agreement", [False, True])
+def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_a_launch(world, monkeypatch, agreement):
+    """The check that gates is the after-landing run of the candidate above ``base``: every step sent, with
+    `Landing.beside_args`' keywords, `--shard K/N` on shard K's machines, the record holding each shard's run ids and its
+    ``gate``."""
+    h, base, sha, _ = _harness(world, monkeypatch, agreement)
+    h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    rec = start(h.d, sha, base, shards=3)
+    kw = h.d.beside_args(sha, base)[0]
+    assert kw == {"base": base, "agreement": agreement, "no_regenerate": True}
+    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3", "train_from": OWN_TRAIN}) for k in (1, 2, 3)]
+    assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4", "m2", "m3"]
+    assert rec == {"ids": ["r-post-0", "r-post-1", "r-post-2"], "groups": [["r-post-0"], ["r-post-1"], ["r-post-2"]],
+                   "tip": sha, "base": base, "at": h.clock, "gate": CHECK,
+                   "steps": [s for s in AFTER_LANDING if agreement or s != "lean-agreement"],
+                   **({} if agreement else {"skip": ["lean-agreement"]})}
+    whole = start(h.d, sha, base, shards=1)
+    assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "train_from": OWN_TRAIN}) and machines[3] == "m1,m2,m3,m4"
+    assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
+
+
+@pytest.mark.parametrize("second", [["r-2"], []])
+def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_registered_no_run_stops_the_others(
+        world, monkeypatch, tmp_path, second):
+    """Each shard's train.sh runs detached: pending until every one printed its run ids, none read before (a launch read
+    once is gone, and the record is saved between), then the run's ids are every shard's.  One that printed none is infra,
+    the shards that registered a run cancelled."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, printed = "m1,m2", {}
+    launches = [{"dir": str(tmp_path / f"launch-{k}"), "pid": 1} for k in (1, 2)]
+    h.d.launch_postland = lambda *a, **kw: launches[int(kw["shard"][0]) - 1]
+    h.d.launched = lambda got: (printed.get(got["dir"]), "train.sh: no slot")
+    rec = start(h.d, sha, base, shards=2)
+    assert rec["ids"] == [] and rec["shards"] == [{"ids": [], "launch": x} for x in launches]
+    assert judge(h.d, rec) == Verdict(PENDING)
+    printed[launches[0]["dir"]] = ["r-1"]
+    assert judge(h.d, rec) == Verdict(PENDING) and [r["launch"] for r in rec["shards"]] == launches
+    printed[launches[1]["dir"]], h.run_state["r-1"], h.run_state["r-2"] = second, ("running", None, None), ("running", None, None)
+    got = judge(h.d, json.loads(json.dumps(rec)) if second else rec)
+    if second:
+        assert got == Verdict(PENDING) and h.cancelled == []
+        assert judge(h.d, rec) == Verdict(PENDING) and (rec["ids"], rec["groups"]) == (["r-1", "r-2"], [["r-1"], ["r-2"]])
+        assert "shards" not in rec and "verdict" not in rec
+    else:
+        assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
+        assert not got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
+
+
+@pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
+                                        ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
+def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
+    """Every step `main` waits for at the base gates, the preflights among them: not one policy.toml takes off the gate there
+    (circuit-check), drive.toml's warn step (ratchet-gate) or one a run may skip by name (lean-changed).  The candidate's
+    own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
+    h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
+        "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
+    h.d.warn_steps = ("ratchet-gate",)
+    rec = start(h.d, sha, base, shards=1)
+    _slim(h, tmp_path, **{red.replace("-", "_"): "error: it failed\n"})
+    got = judge(h.d, rec)
+    assert got.state == state and [f.task for f in got.failed] == [f"step {red}"] * (state == FAIL)
+    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-changed", "lean-agreement", "circuit-check", "ratchet-gate")]
+    if red not in PREFLIGHTS:
+        assert sorted(rec["verdict"]["passed"]) == sorted(s for s in gates if s != red or state == PASS)
+
+
+def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
+    log = ("lean-audit: verity/core/primitives/world: PASS reused\n" + AUDIT.format(n=1)
+           + "  tamper: /w/lean-audit-scratch-1-x/Security/Proofs/A.olean changed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Security: PASS  12 declarations\n  note: fine\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (Security/Proofs, Flock); reports in /out\n"
+           "lean-audit: FAIL: unread: Core grew\n")
+    named = {"Security/Proofs::build: exit 1", "Security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",
+             "Security/Proofs::tamper: Security/Proofs/A.olean changed", "Flock::rest", "lean-audit: FAIL: unread: Core grew"}
+    assert audit_failures(log, "rest") == named == audit_failures(log.replace("scratch-1-x", "scratch-22-y"), "rest")
+    assert audit_failures("AUDIT: PASS; reports in /out\n", "rest") == set()
+
+
+@pytest.mark.parametrize("more", ["", RECORD])
+def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the_base_s(world, monkeypatch, tmp_path, more):
+    """The base's check and the candidate's fail lean-audit on the same error of the same package, each in its own scratch
+    tree: inherited by what the audit printed.  One more failure under the package is the candidate's own."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec_base = start(h.d, base, base, shards=1)
+    _slim(h, tmp_path, lean_audit=AUDIT.format(n=1))
+    assert judge(h.d, rec_base).state == FAIL
+    rec = start(h.d, sha, base, shards=1)
+    _slim(h, tmp_path, lean_audit=AUDIT.format(n=2) + more)
+    (f,) = based(judge(h.d, rec), rec_base).failed
+    assert f.key != f.base_key and f.inputs == {"Security/Proofs/A.lean"} and _inherited(f) is (not more)
+    assert f.tests - f.base_tests == ({"Security/Proofs::record: the statement of G changed"} if more else set())
+    assert unnamed(f.key) not in f.tests
 
 
 # -- content keys

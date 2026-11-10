@@ -3,29 +3,31 @@ drive's), derives a `vqueue.Snapshot` from what is outside it, asks the policy (
 applies its actions in order, stopping the tick at the first that fails: the next tick derives everything again.  Between ticks
 it keeps only what a snapshot reads: the refs, the labels, graph2's results and the decision log (`--log`), from which come
 the candidates, `history`, each candidate's `tries`, `reruns` and first enqueue, the results a retry or a rerun set aside, the
-record of the run beside each check, a ring's, a red's and a flake's once-only and the owners already told.  `--state` is a
-report it rewrites each tick: each candidate's verdict beside graph2's and the run beside it's, the jobs and kinds its graph
-lacks, and the `queue/*` branches it ignores.
+record of the run beside each check and of each records run, a ring's, a red's and a flake's once-only and the owners already
+told.  `--state` is a report it rewrites each tick: each candidate's verdict beside graph2's, the run beside it's and its
+records run's, the jobs and kinds its graph lacks, and the `queue/*` branches it ignores.
 
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner (its head's, or with
-drive.toml's `verdict_carry` "on" at `main` one drive's verdict carry takes from another of its heads whose commits since only
-merge trusted ones, `Driver._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
-`lowrisk_lane` and `lowrisk_excludes` at `main`), not on `main` yet, ranked by drive's priority file then mark time, each after
-the ready PRs it contains; `files` is its change against its merge base with `main`, `lean` drive's Lean-change test
-(`queue.lean_change`), and `conflict` whether `Queue._merge` merges it onto `main`, kept by (head, `main`).
+drive.toml's `verdict_carry` "on" at `main` one the verdict carry takes from another of its heads whose commits since only
+merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
+`lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by its merge), not on
+`main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files` is its change
+against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict` whether
+`Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the files it
+conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`); its mark stays.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
 the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
-no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`drive.RATCHET_STEP`: it judges
+no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`landing.RATCHET_STEP`: it judges
 each merge against its first parent, which a task keyed by its inputs can't) or off the gate in policy.toml at the candidate,
 so graph2's lean-agreement gates as the run beside the check's does: a failed task an unexpired
-allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
+allowance of that policy covers passed (`Landing._task_allowed`); else a failed or blocked task is fail,
 each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
 (result/v1's `failed_tests` and those graph2's verdict names of it, or what a task's own fault names: `_fault_tests`) and its
 key and failing tests in its base's graph as graph2 listed it, where there are (`Failed.base_key`, `Failed.base_tests`),
@@ -45,8 +47,8 @@ It is pending while its base's check isn't listed, or, with a failure, while gra
 graph it listed of the base can't be read, or a task there hasn't ended, unless it or what it reads there ended in an infra
 error (`World._base`): no failure is the candidate's own, so none ejects or bisects, until the base's keys say.  The loop
 enqueues such a base's check again each `BASE_RETRY_S` while a candidate waits on it for want of its graph or of graph2's
-word on it, and rings `CI` and `drive.INFRA` about it (`Loop._bases`).  No graph while graph2 says its listing failed
-(`verdict`, else its `ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`drive.gating`)
+word on it, and rings `CI` and `landing.INFRA` about it (`Loop._bases`).  No graph while graph2 says its listing failed
+(`verdict`, else its `ready_verdict` label), a graph that can't be read, one lacking a job `main` waits for (`landing.gating`)
 or a kind of task on the merge gate its base's graph lists, unless that kind's job went to another kind (`World._gone`), and
 failing nothing of its own, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where
 it has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
@@ -56,42 +58,68 @@ ends, it is judged each tick, its record logged whenever it changes, and combine
 only when both pass.  One more runs beside `main`'s own check: the candidate's `main` advanced to, else one the snapshot
 starts at startup and each time `main` moves (and once more after infra).  A step a candidate's run failed is inherited when
 `main`'s failed it too, and its own when `main`'s passed it (`vqueue_slim.based`); while `main`'s runs, at most `pending_s`
-after it started, a fail whose every other failure is inherited is pending.
+after it started, a fail whose every other failure is inherited is pending.  With ``records`` (`research.vqueue_records`), a
+candidate built with its records run first (its build line's `records_first`, while no line enqueued its check) waits: its
+check is pending, no listing of it is read and no run beside it starts, and its records run is judged each tick
+(`vqueue_records.judge`), its record logged whenever it changes (`regenerate`).  A records commit's build line names the
+candidate it `repairs`, and the walk of a candidate's members steps over a records commit at its tip (`World._walk`).
+
+The gate (`--gate`).  With `graph2`, the default, a candidate's verdict is the two combined, as above.  With `check`, drive's
+after-landing check gates in graph2's place: the run beside each candidate, and beside `main`, is every after-landing step
+as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``), judged on every step `main` waits for,
+and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A Lean
+candidate's records run comes first under either gate: neither its graph2 check nor its check starts until that run passed,
+and both start on its records commit, or on it as built when the run regenerated nothing (`Loop._enqueue`).  A failed step
+is inherited by its failing tests, those the run beside its base's check failed too.  graph2's check is enqueued, read,
+retried with the check and cancelled at a drop as before, in shadow: its verdict (`Judged.shadow`) holds, ejects and
+advances nothing, no candidate is held or rung for a task the loop and graph2 dispute or a base graph2 hasn't listed, and
+once it and the check have both ended they are compared in one logged line, `agree` or `disagree` with the tasks graph2
+failed or erred on and the steps the check failed (`Loop._compare`).
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
 before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues `ready:<sha>` as graph/v2 at its priority and
-starts the run beside its check.
-Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
-(`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
-Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs (one still launching once
-it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its inherited failures,
-their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head (`Queue.eject`, under the
-clone's queue lock) and tells its owner the failed tasks, their keys and where their logs are.  Retry enqueues again (graph2
-lists a check whose listing failed, reruns what ended in infra errors once its own verdict is infra, and leaves a pending one
-as it is), reruns those keys itself while graph2's verdict is another (a
-task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun
-runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without
-graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells `drive.INFRA` (or its `pr`'s owner), once a candidate and
-why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads infra in the
-same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph or of graph2's word on it is
-rung to `CI` and `drive.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and when
-graph2 still hasn't listed it or said `BASE_RING_S` after it was first asked for (`Loop._bases`); a task a candidate is held
-on because graph2's verdict and the loop's reading disagree on it, there or at its base, is rung to `CI` with both keys and
-both readings, and a listing the loop read that isn't graph2's with both, once each (`Loop._disputes`).  Red tells
+starts the run beside its check; with `records` (a member changes Lean, a lock or a spec) it starts the candidate's records
+run instead (`vqueue_records.start`: drive's lock run, on drive's machines, on its tree), logged (`regenerate`), and its check
+waits.  Every check starts at one seam (`Loop._enqueue`: the enqueue, its line and the run beside it).
+Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
+(`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
+Regenerate starts the candidate's records run again and logs it.  Commit starts the check of a candidate whose records run
+passed: on it as built when the run regenerated nothing (`vqueue_records.commit`); else on the records commit of what it
+regenerated, made on top of it in drive's lock commit's form, which the merge gate vouches for, and pushed: a candidate on the
+same base with the same members, which `repairs` the one beneath it, dropped for it the next tick.  The bookkeeping its records
+run repaired is told as drive tells it, to `lean` and each owner a warning names, once a records commit (`bookkeeping`); a
+records commit that can't be made or vouched for is held, logged (`commit`) and rung to `CI` once, and its candidate is dropped
+once it is held `pending_s` (`vqueue.decide`).
+Drop cancels the check (graph2's `cancel`, where it has one), and the run beside it and its records run while they run (one
+still launching once it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its
+inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
+(`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and where their logs are.
+Retry enqueues again (graph2 lists a check whose listing failed, reruns what ended in infra errors once its own verdict is
+infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is another (a task still runs, or
+one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun runs the keys afresh
+(graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without graph2's `rerun` it is
+logged `absent`, and counts as done.  Ring tells whom it names (`to`), else `landing.INFRA` (or its `pr`'s owner), once a
+candidate and why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads
+infra in the same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph or of graph2's word
+on it is rung to `CI` and `landing.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and
+when graph2 still hasn't listed it or said `BASE_RING_S` after it was first asked for (`Loop._bases`); a task a candidate is
+held on because graph2's verdict and the loop's reading disagree on it, there or at its base, is rung to `CI` with both keys
+and both readings, and a listing the loop read that isn't graph2's with both, once each (`Loop._disputes`).  Red tells
 `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it is red on
 them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its file's
-owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's message
-is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one whose tick
-stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its result
-is one JSON line in the log, whose directory also holds the loop's caches.
+owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, conflict's, ring's, red's or
+flake's message is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one
+whose tick stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its
+result is one JSON line in the log, whose directory also holds the loop's caches.
 
 `--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
-drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
-clone, never pushed, else its log's newest advance) while origin's `main` is below it, a pass its `main` no longer holds is no
-history, and a PR it ejected stays out until marked again.  `--dry-run` prints the snapshot and the actions and writes
-nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop never writes drive's state, its
-priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
+drops, retries, reruns, starts the runs beside and the records runs, and commits records: its `main` is the newest candidate
+it advanced (`refs/vqueue/shadow` in the clone, never pushed, else its log's newest advance) while origin's `main` is below
+it, a pass its `main` no longer holds is no history, and a PR it ejected stays out until marked again.  `--no-records` starts
+every candidate's check at once, with no records run before it: stale records fail it as any failure.  `--dry-run` prints the
+snapshot and the actions and writes nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop
+never writes drive's state, its priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
 
 On the control pod it runs beside drive, from a pinned checkout of this tree, in drive's clone (or its own clone of origin):
 `research queue vqueue --shadow --log /data/vqueue/decisions.jsonl` (`--batch`, `--depth` and `--lean` default to 16, 3 and
@@ -118,24 +146,34 @@ from operator import or_
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, vqueue
-from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Driver, cancel_runs, gating, merge_thread_post
-from .drive import INFRA as INFRA_HANDLE
+from . import carry, policy, vqueue, vqueue_records
+from .landing import (CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Landing, cancel_runs, gating,
+                      merge_thread_post)
+from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at,
-                    label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
-                    unreviewed)
+from .queue import (PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, conflicting_files,
+                    flags_at, label_verifier, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners,
+                    rules_at, unreviewed)
 from .store import vocab
-from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                     Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
+from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
+                     Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
+from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
+#: a freeze's paths, one git pathspec a line (`#` lines skipped): while the file exists, a PR whose change renames or deletes a
+#: file under one waits, as does one that moves a word map there; ordinary edits don't, nor does a head the freeze's owner
+#: cleared against the branch it protects (a `cleared-by HANDLE KEY` line: a `KEY = true` label by HANDLE at the head)
+FROZEN = Path("/data/vqueue/live/frozen")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
+#: what gates a candidate (`--gate`): graph2's check with the run beside it, or drive's after-landing check alone, as `SHARDS`
+#: shards unless `--shards` says another; the second is also the ``gate`` of that check's record (`vqueue_slim.CHECK`)
+GATES = GRAPH2_GATE, CHECK_GATE = "graph2", "check"
+SHARDS = 3
 INTERVAL_S = 60
 #: the most members a candidate holds, candidates stacked at once and members changing Lean, a lock or a spec in a candidate
 BATCH, DEPTH, LEAN = 16, 3, 3
@@ -153,13 +191,6 @@ TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d
 READY_VERDICT = "ready_verdict"
 #: who graph2 writes its labels as (its `research data label ... --by executor`): a label by anyone else counts for nothing
 GRAPH2_BY = "executor"
-#: the id prefix of graph2's task checking a Lean package's lock records, and what an ejection for one tells its owner: no
-#: lock run regenerates a change's records after it lands, so the change carries them
-LEAN_LOCK = "lean-lock:"
-LEAN_LOCK_FIX = (". The lock records of {pkgs} don't match the change: if it changes a guarantee's statement or what one reads, "
-                 "regenerate each package's records on it (`research run --on auto --mem-gb 32 --max-min 180 --project verity "
-                 "--source . --cwd clone -- python3 tools/verity/lean/check.py --build --update PKG`, the lean-proofs skill's full "
-                 "record), commit them, and mark it ready again")
 #: why a candidate's verdict waits on its base's check (`World._base`, `World._gone`, `World._crossed`; `BaseWait`): graph2
 #: hasn't listed it, says its listing failed, listed a graph that can't be read, or hasn't said that it fails what the
 #: candidate's failures are inherited from
@@ -172,6 +203,8 @@ BASE_COMING = (UNLISTED, BASE_UNSAID)
 BASE_RETRY_S, BASE_RING_S = 15 * 60, 30 * 60
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
+#: a lock commit's trailer naming the files it regenerated (`vqueue_records.lock_message`, which post_train reads alike)
+REGENERATED_RE = re.compile(r"^Regenerated: \S", re.M)
 #: the most first-parent commits a candidate's walk reads above its base
 WALK = 64
 #: `vqueue.Failed`'s fields: a verdict fills each it has (`_failure`)
@@ -193,6 +226,13 @@ def unstamp(s: object) -> float | None:
 
 def branch(sha: str) -> str:
     return f"refs/heads/queue/{sha[:12]}"
+
+
+def records_commit(commit: str, parents: str, body: str) -> bool:
+    """Whether ``commit`` (its ``parents`` as `%P` gives them, its message ``body``) is a lock commit in drive's form, as a
+    candidate's records commit is (`vqueue_records.commit`): one parent, and `vqueue_records.lock_message`'s subject and
+    `Regenerated:` files."""
+    return len(parents.split()) == 1 and body.startswith(LOCK_SUBJECT) and bool(REGENERATED_RE.search(body))
 
 
 def _digest(doc: object) -> str:
@@ -295,11 +335,28 @@ class Past:
         starts = [r for r in self.of("slim", sha) if str(r.get("why") or "").startswith("started")]
         return len(starts), unstamp(starts[-1].get("at")) if starts else None
 
-    def launching(self) -> dict[str, dict]:
-        """The drops whose candidate's run beside its check was still launching (`beside_launching`), by sha, but those a
-        slim line has settled since (`dropped`)."""
-        settled = {r.get("sha") for r in self.of("slim") if r.get("dropped")}
-        return {r["sha"]: r for r in self.of("drop") if isinstance(r.get("beside_launching"), dict) and r["sha"] not in settled}
+    def regenerated(self, sha: str) -> tuple[int, dict | None]:
+        """How many times ``sha``'s records run was started, and the newest record of it (`vqueue_records.start`)."""
+        recs = [r for r in self._since_records_first("regenerate", sha) if not r.get("dropped")]
+        return sum(str(r.get("why") or "").startswith("started") for r in recs), recs[-1].get("record") if recs else None
+
+    def held(self, sha: str) -> float | None:
+        """When ``sha``'s records commit was first held (a `commit` line not done: `Loop._commit`)."""
+        return next((unstamp(r.get("at")) for r in self._since_records_first("commit", sha) if not r.get("done")), None)
+
+    def _since_records_first(self, action: str, sha: str) -> list[dict]:
+        """``sha``'s lines of ``action`` after its newest build line with its records run first: a candidate dropped and built
+        again on the same tree in the same second (a held records commit's, `vqueue.decide`) has the same sha, and its records
+        run and commit start afresh."""
+        start = max((i for i, r in enumerate(self.lines) if r.get("action") == "build" and r.get("sha") == sha
+                     and r.get("records_first")), default=-1)
+        return [r for r in self.lines[start + 1:] if r.get("action") == action and r.get("sha") == sha]
+
+    def launching(self, key: str = "beside_launching", action: str = "slim") -> dict[str, dict]:
+        """The drops whose candidate's run beside its check (or, with ``key`` `records_launching` and ``action`` `regenerate`,
+        its records run) was still launching (``key``), by sha, but those a line of ``action`` has settled since (`dropped`)."""
+        settled = {r.get("sha") for r in self.of(action) if r.get("dropped")}
+        return {r["sha"]: r for r in self.of("drop") if isinstance(r.get(key), dict) and r["sha"] not in settled}
 
     def ignored(self) -> set[tuple[str, str]]:
         return {(r.get("ref"), r.get("sha")) for r in self.of("ignore")}
@@ -321,6 +378,14 @@ class Past:
             return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
 
         return {k for r in self.of("skip") if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting("skip", heads)
+
+    def conflicted(self) -> set[str]:
+        """The heads whose owners were told they don't merge onto `main` (`Loop._conflicts`)."""
+        def heads(r: dict) -> set[str]:
+            return set(r.get("heads") or ())
+
+        return {h for r in self.of("conflict") if r.get("done") or r.get("shadow") for h in heads(r)} | self._posting(
+            "conflict", heads)
 
     def reds(self, base: str) -> set[str]:
         """The tasks ``base`` was told red on."""
@@ -421,14 +486,15 @@ class Relisted:
 @dataclass
 class Judged:
     """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
-    ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
+    ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`landing.gating`) that no
     task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict as list-failed, and
     `kind K` of each kind of task its base's graph lists that it lists none of (`World._gone`), ``waits_on`` the base whose
     check its verdict waits on and why, where the loop acts on it (`BaseWait`), ``disputed`` what it is held on: the tasks
     graph2's verdict says failed or erred and the loop read passed, or the loop reads its base failing and graph2's verdict on
     the base doesn't (`Dispute`), or a listing the loop read that isn't the one graph2 runs (`Relisted`), and ``slim`` the
     verdict of the run beside the check (`vqueue_slim.judge` on its ``record``; pending until it starts), combined into
-    ``verdict``."""
+    ``verdict``.  Where the check gates (`CHECK_GATE`), ``verdict`` is that run's alone and ``shadow`` the verdict read of
+    graph2's results."""
     verdict: Verdict
     mark: str | None = None
     note: str = ""
@@ -438,6 +504,7 @@ class Judged:
     listed: bool = True
     theirs: dict | None = None
     slim: Verdict | None = None
+    shadow: Verdict | None = None
     record: dict | None = None
     waits_on: tuple[str, BaseWait] | None = None
     disputed: tuple[Dispute | Relisted, ...] = ()
@@ -511,13 +578,15 @@ class World:
     """What the loop reads and changes: git in the clone and on origin, graph2, the labels, the PRs and the merge thread.  Each
     effect is one method, so a test fakes what it doesn't run for real.  With ``labels_at`` (a new `StoreLabels`), each tick
     reads the labels afresh (`_relabel`).  ``cache`` is where it keeps the heads' own changes and the issuer's keys, not in
-    drive's files."""
+    drive's files.  ``on`` names the machines the run beside each check takes, in place of drive.toml's `on`."""
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
-                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None):
-        self.q, self.labels, self.tasks, self.graph2 = q, labels, tasks, tuple(graph2)
+                 labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
+                 frozen_file: Path | None = None):
+        self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
+        self.frozen_file, self._frozen_told = frozen_file, set()
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
@@ -535,8 +604,8 @@ class World:
         #: carries}
         self.carried: dict[int, dict] = {}
         self._prs: dict[int, PR] | None = None
-        self._driver: Driver | None = None
-        self._slim: Driver | None = None
+        self._driver: Landing | None = None
+        self._slim: Landing | None = None
         self._main: str | None = None
         #: while a snapshot reads the candidates' verdicts (`Loop.snapshot`), graph2's verdict of each sha read (`_verdict_of`)
         #: and the graph graph2 listed of each check read (`_listing`)
@@ -597,9 +666,10 @@ class World:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def ready(self, main: str) -> list[Ready]:
-        """The open PRs drive would land from `next` now, as `vqueue.Ready`."""
+        """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR as any other, built by its merge, but
+        only with a land verdict, never under the low-risk rule."""
         q, labels = self.q, self.labels
-        prs = [p for p in self.open().values() if p.base == "main" and not p.move]
+        prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
             q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
@@ -627,7 +697,12 @@ class World:
         with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
             took = [n for n in admitted if why[n] is None or n in carried
-                    or not (why[n] or "").startswith("held") and lowrisk(files[n], excludes)]
+                    or not entries[n].pr.move and not (why[n] or "").startswith("held") and lowrisk(files[n], excludes)]
+            specs, clears = self._frozen()
+            if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
+                below = old if old and not self._ancestor(old, main) else main
+                took = [n for n in took if self._cleared(n, entries[n].pr.head, clears)
+                        or not self._frozen_out(below, entries[n].pr, specs)]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
@@ -659,14 +734,36 @@ class World:
         self.prs = {n: entries[n].pr for n in chosen}
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
 
+    def _frozen(self) -> tuple[list[str], list[tuple[str, str]]]:
+        """The freeze's pathspecs and its `cleared-by` (handle, label key) pairs (`FROZEN`): none while its file is absent."""
+        if self.frozen_file is None or not self.frozen_file.is_file():
+            return [], []
+        lines = [s for line in self.frozen_file.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
+        clears = [(w[1], w[2]) for s in lines if s.startswith("cleared-by ") and len(w := s.split()) == 3]
+        return [s for s in lines if not s.startswith("cleared-by ")], clears
+
+    def _cleared(self, n: int, head: str, clears: list[tuple[str, str]]) -> bool:
+        """Whether the freeze's owner cleared ``n`` at ``head``: a `KEY = true` label there by the handle of a `cleared-by`."""
+        return any(str(lab.value).lower() == "true" and lab.by.lstrip("@").lower() == who.lstrip("@").lower()
+                   for who, key in clears for lab in self.labels._counted(n, head, key)[0])
+
+    def _frozen_out(self, below: str, p: PR, specs: list[str]) -> bool:
+        """Whether ``p``'s own change, above ``below``, renames or deletes a file under ``specs``, said once a head in the log."""
+        hits = _out(self.repo, "diff", "--name-status", "-M", "--diff-filter=RD", f"{below}...{p.head}", "--",
+                    *specs).splitlines()
+        if hits and p.head not in self._frozen_told:
+            self._frozen_told.add(p.head)
+            self.log(f"research queue vqueue: #{p.number} at {p.head[:12]} waits for the freeze to end ({self.frozen_file}): it "
+                     f"renames or deletes {len(hits)} file(s) under its paths: {'; '.join(hits[:5])}")
+        return bool(hits)
+
     def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
-        """drive's verdict carry (`Driver._carry_verdicts`), as drive.toml's `verdict_carry` at `main` says: an admitted PR
-        with no land verdict at its head (``why``, `queue.unreviewed`'s) takes the newest at another of its heads with verdicts
-        of their own when `Driver._carried_from` says so, trusting ``landed`` (`main`, and the old path's `checked` while
-        origin has it, as drive trusts both) and the heads of the admitted PRs judged before it that land on their verdicts or
-        carry one, a PR judged after those it contains (`Entry.after`), as drive's chain has them.  Each decision is kept in
-        `carried`, which the loop logs once a head.  With "on" the PRs carried (returned) count as reviewed; with "shadow"
-        none does.  No verdict is written."""
+        """The verdict carry (`carry`), as drive.toml's `verdict_carry` at `main` says: an admitted PR with no land verdict at
+        its head (``why``, `queue.unreviewed`'s) takes the newest at another of its heads with verdicts of their own when
+        `Landing._carried_from` says so, trusting ``landed`` (`main`, and the old path's `checked` while origin has it) and the
+        heads of the admitted PRs judged before it that land on their verdicts or carry one, a PR judged after those it contains
+        (`Entry.after`).  Each decision is kept in `carried`, which the loop logs once a head.  With "on" the PRs carried
+        (returned) count as reviewed; with "shadow" none does.  No verdict is written."""
         self.carried = {}
         if mode not in ("shadow", "on"):
             return set()
@@ -717,7 +814,7 @@ class World:
         return out
 
     def _delta(self, old: str, new: str, landed: list[str], trusted: set[str]) -> carry.Delta:
-        """`carry.delta` of ``new`` over ``old`` (`Driver.delta`), kept by its arguments: judging a merge takes a `git
+        """`carry.delta` of ``new`` over ``old`` (`Landing.delta`), kept by its arguments: judging a merge takes a `git
         merge-tree`, and each tick judges every carry again."""
         if (key := (old, new, tuple(landed), frozenset(trusted))) not in self._deltas:
             self._deltas[key] = carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted))
@@ -745,7 +842,7 @@ class World:
         return {ref.removeprefix(f"{NS}/queue/"): sha for ref, sha in (line.split() for line in out.splitlines())}
 
     def members(self, sha: str, base: str, prs: Iterable[int], heads: Iterable[str]) -> list[Member]:
-        """Candidate ``sha``'s members as `Driver._on_main` reads them, oldest first: the `Queue: #N` merges on its first-parent
+        """Candidate ``sha``'s members as `Landing._on_main` reads them, oldest first: the `Queue: #N` merges on its first-parent
         line above ``base``, while they are the PRs ``prs`` at ``heads`` as built; else those, without their merges."""
         prs, heads = list(prs), list(heads)
         if (walked := self._walk(sha, base)) is not None and [(m.pr, m.head) for m in walked] == list(zip(prs, heads)):
@@ -754,11 +851,23 @@ class World:
         return [Member(p, h, "", "") for p, h in zip(prs, heads)]
 
     def _walk(self, sha: str, base: str) -> list[Member] | None:
-        """The `Queue: #N` merges on ``sha``'s first-parent line above ``base``, oldest first; None when another commit is."""
+        """The `Queue: #N` merges on ``sha``'s first-parent line above ``base``, oldest first, beneath a records commit at its
+        tip (`records_commit`); None when another commit is."""
         recs = [r.strip() for r in _out(self.repo, "log", "--first-parent", f"-n{WALK}", "--format=%H%x00%P%x00%B%x1e",
                                          f"{base}..{sha}").split("\x1e") if r.strip()]
+        if recs and records_commit(*recs[0].split("\x00", 2)):
+            recs = recs[1:]
         walked = [queue_commit(*r.split("\x00", 2)) for r in reversed(recs)]
         return walked if all(walked) else None
+
+    def recommitted(self, sha: str, tip: str, parent: str) -> bool:
+        """Whether ``sha`` is records commit ``tip`` made before on ``parent`` (pushed with no line in the log, as a tick cut off
+        leaves): a records commit (`records_commit`) whose one parent is ``parent``, with ``tip``'s tree."""
+        if self._missing([sha]):
+            return False
+        commit, parents, body = _out(self.repo, "log", "-1", "--format=%H%x00%P%x00%B", sha).split("\x00", 2)
+        return parents == parent and records_commit(commit, parents, body) and \
+            _out(self.repo, "rev-parse", f"{sha}^{{tree}}") == _out(self.repo, "rev-parse", f"{tip}^{{tree}}")
 
     def rebuilt(self, sha: str, tip: str, base: str, members: list[Member]) -> bool:
         """Whether ``sha`` is ``tip``, ``members`` merged onto ``base``, built before: its tree, and their merges at their
@@ -922,8 +1031,8 @@ class World:
         return None
 
     def _allowed(self, sha: str, tasks: dict[str, dict], states: dict[str, tuple], ids: Iterable[str]) -> set[str]:
-        """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name, as drive's
-        `executor = "on"` path reads them (`Driver._task_units`, `Driver._task_allowed`): drive takes each as passed."""
+        """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name
+        (`Landing._task_units`, `Landing._task_allowed`): each is taken as passed."""
         out = set()
         for i in ids:
             if states[i][0] == FAIL:
@@ -1130,8 +1239,8 @@ class World:
         self.push(sha, "refs/heads/main", base)
 
     def on_main(self, sha: str, base: str, members: list[Member], told: list[str]) -> None:
-        """What drive does once ``members`` are on `main` at ``sha`` from ``base`` (`Driver._on_main`); ``told``, the stacked
-        PRs whose owners were told, is drive's list it extends as it tells."""
+        """What follows ``members`` reaching `main` at ``sha`` from ``base`` (`Landing._on_main`); ``told``, the stacked PRs
+        whose owners were told, is the list it extends as it tells."""
         self.driver()._on_main({"told": told, "stale_closed": self.q.load_state().get("drive", {}).get("stale_closed", {})},
                                members, base, sha, "")
 
@@ -1159,8 +1268,8 @@ class World:
         return {t["id"]: t for t in got[1]["tasks"]} if got else {}
 
     def task_owners(self, sha: str, ids: Iterable[str]) -> tuple[str, ...]:
-        """The handles owning tasks ``ids`` of ``sha``'s graph, as drive names the owner of what failed (`Driver._red_owners`):
-        a test file's suite's in the registry, else its job's in ci.toml at ``sha``."""
+        """The handles owning tasks ``ids`` of ``sha``'s graph, the owners of what failed: a test file's suite's in the registry
+        (`Landing._path_owner`), else its job's in ci.toml at ``sha`` (`Landing._step_owner`)."""
         by, d, out = self._tasks(sha), self.driver(), []
         for i in ids:
             if (t := by.get(i)) is None:
@@ -1181,24 +1290,29 @@ class World:
         """``text`` posted to ``to`` in the merge thread, as drive posts."""
         return bool(self.post(f"{' '.join(to)} vqueue: {text}", to))
 
-    def driver(self) -> Driver:
-        """drive's steps as the loop runs them (`Driver`): on the labels and the open PRs this tick reads, each `carry.delta`
-        kept (`_delta`)."""
+    def driver(self) -> Landing:
+        """The landing's steps as the loop runs them (`Landing`): on the labels and the open PRs this tick reads, each
+        `carry.delta` kept (`_delta`)."""
         if self._driver is None:
-            self._driver = Driver(self.q, on="", post=self.post, now=self.now, reviews=lambda n, h: self.labels.reviews(n, h),
-                                  ready_by=lambda n, h: self.labels.ready_by(n, h))
+            self._driver = Landing(self.q, on="", post=self.post, now=self.now, reviews=lambda n, h: self.labels.reviews(n, h),
+                                   ready_by=lambda n, h: self.labels.ready_by(n, h))
             self._driver.delta = self._delta
         self._driver._prs = self.open()
         return self._driver
 
-    def slim_driver(self) -> Driver:
-        """The Driver the run beside each check is launched and judged with (`vqueue_slim`), on drive's machines: drive.toml's
-        `on` at `main` when first asked.  It outlives the ticks, as `vqueue_slim.judge` expects."""
+    def slim_driver(self) -> Landing:
+        """The `Landing` the run beside each check and each records run are launched and judged with (`vqueue_slim`,
+        `vqueue_records`), on ``on``'s machines, else drive's: drive.toml's `on` at `main` when first asked, as its
+        `warn_steps`, which no check that gates is judged on.  It outlives the ticks, as `vqueue_slim.judge` and
+        `vqueue_records.judge` expect."""
         if self._slim is None:
-            if not (on := flags_at(self.repo, self._main or MAIN).on):
+            flags = flags_at(self.repo, self._main or MAIN)
+            if not (on := self.on or flags.on):
                 raise QueueError(f"drive.toml at main {(self._main or MAIN)[:12]} names no `on`, drive's machines, so no run "
-                                 "beside a candidate's check can launch: name them (--no-slim runs only with --shadow or --dry-run)")
-            self._slim = Driver(self.q, on=on, post=self.post, now=self.now)
+                                 "beside a candidate's check or records run can launch: name them there or with --on "
+                                 "(--no-slim runs only with --shadow or --dry-run, and --no-records checks a Lean candidate "
+                                 "with no records run first)")
+            self._slim = Landing(self.q, on=on, post=self.post, now=self.now, warn_steps=flags.warn_steps)
         return self._slim
 
 
@@ -1214,8 +1328,8 @@ def _tests(doc: object) -> frozenset[str]:
 
 
 def _job(t: dict, tasks: dict[str, dict]) -> str:
-    """The job of check's that graph task ``t`` of ``tasks`` stands for (`drive.JOB_OF_KIND`, else its kind): a test file that
-    reads what lean-build built is of a suite check runs after lean-build (`drive.SUITES_KIND`), on its outputs."""
+    """The job of check's that graph task ``t`` of ``tasks`` stands for (`landing.JOB_OF_KIND`, else its kind): a test file that
+    reads what lean-build built is of a suite check runs after lean-build (`landing.SUITES_KIND`), on its outputs."""
     if t["kind"] == "test-file" and any(isinstance(r, dict) and (tasks.get(r.get("task")) or {}).get("kind") == "lean-build"
                                         for r in t.get("reads") or ()):
         return SUITES_KIND
@@ -1466,21 +1580,32 @@ class Tick:
     wrote: list[dict] = field(default_factory=list)
     #: the record of the run beside `main`'s own check (`Loop._below`), None while none is kept
     below: dict | None = None
+    #: each candidate's records run's record as the snapshot judged it (`Loop._records_run`), by sha
+    records: dict[str, dict] = field(default_factory=dict)
     #: the verdict carry's decisions (`World.carried`)
     carried: dict[int, dict] = field(default_factory=dict)
 
 
 class Loop:
     """The verified queue's loop on ``world``: `tick` once, or `run` every ``interval`` seconds.  ``slim`` is
-    `research.vqueue_slim` (its `start`, `judge` and `combine`), or None to judge each candidate on its graph2 check alone."""
+    `research.vqueue_slim` (its `start`, `judge` and `combine`), or None to judge each candidate on its graph2 check alone.
+    ``gate`` is what gates a candidate (`GATES`): its graph2 check with the run beside it, or the check ``slim`` runs as
+    ``shards`` shards, alone.  ``records`` is `research.vqueue_records` (its `start`, `judge` and `commit`), or None to start
+    every candidate's check at once, with no records run before it (`vqueue.Snapshot.records`)."""
 
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
-                 out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False):
+                 out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
+                 gate: str = GRAPH2_GATE, shards: int = SHARDS, records=None):
+        if gate not in GATES or gate == CHECK_GATE and (slim is None or shards < 1):
+            raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
+                             f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
+                             "(`research.vqueue_slim`) as one shard or more")
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
-        self.now, self.out, self.state, self.tree_ejects = now, out, state, tree_ejects
+        self.gate, self.shards = gate, shards
+        self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
 
@@ -1504,7 +1629,7 @@ class Loop:
             builds |= {sha: r for sha, r in whole.builds().items() if sha in older}
         mine = {sha for name, sha in refs.items() if name == sha[:12] and sha in builds}
         foreign = {name: sha for name, sha in refs.items() if sha not in mine or name != sha[:12]}
-        cands, judged, wrote = [], {}, []
+        cands, judged, wrote, regen = [], {}, [], {}
         bases = {sha: builds[sha].get("base") or "" for sha in mine}
 
         def chained(sha: str, seen: tuple[str, ...] = ()) -> bool:
@@ -1516,16 +1641,24 @@ class Loop:
             for sha in sorted(mine):
                 p, b = whole if sha in older else past, builds[sha]
                 base, prs, heads = b.get("base") or "", tuple(b.get("members") or ()), tuple(b.get("heads") or ())
-                j = w.verdict(sha, base, p.since(sha), p.since(base))
-                if not j.listed and not p.tries(sha):           # pushed, and its enqueue failed or never ran
-                    j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it",
-                               graph2=j.graph2, listed=False, theirs=j.theirs)
-                if self.slim is not None and not w._ancestor(sha, main):
-                    j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
-                                     below if base == main else (p.slim(base)[1], p.slim_started(base)[1]))
+                waits = self.records is not None and bool(b.get("records_first")) and not p.tries(sha)
+                if waits:
+                    j = Judged(Verdict(PENDING), note="its check waits for its records run", listed=False)
+                else:
+                    j = w.verdict(sha, base, p.since(sha), p.since(base))
+                    if not j.listed and not p.tries(sha):           # pushed, and its enqueue failed or never ran
+                        j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it",
+                                   graph2=j.graph2, listed=False, theirs=j.theirs)
+                    # where the check gates, a candidate on `main` is read by its check too: graph2's verdict decides nothing
+                    if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
+                        j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
+                                         below if base == main else (p.slim(base)[1], p.slim_started(base)[1]))
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
-                                       enqueued=p.enqueued(sha)))
+                                       enqueued=p.enqueued(sha),
+                                       records=self._records_run(p, n, main, origin, sha, b, wrote, regen),
+                                       repairs=b.get("repairs") if isinstance(b.get("repairs"), str) else None,
+                                       waits=waits, held=p.held(sha) if waits else None))
         finally:
             w._theirs = w._listed = None
         on = {c.sha: c.base for c in cands}
@@ -1536,8 +1669,30 @@ class Loop:
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
-                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects)
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], dict(w.carried))
+                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects,
+                        records=self.records is not None)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried))
+
+    def _records_run(self, past: Past, n: int, main: str, origin: str, sha: str, built: dict, wrote: list[dict],
+                     regen: dict[str, dict]) -> RecordsRun | None:
+        """Candidate ``sha``'s records run once one was started (`Regenerate`; None before): judged each tick
+        (`vqueue_records.judge`), its record kept in ``regen`` for the tick's actions and logged (to ``wrote`` too) whenever it
+        changed; with --dry-run not judged, so pending."""
+        starts, rec = past.regenerated(sha)
+        if self.records is None or not starts:
+            return None
+        if isinstance(rec, dict):
+            regen[sha] = rec
+        if self.dry_run:
+            return RecordsRun(starts=starts)
+        was = json.dumps(rec, sort_keys=True)
+        r = self.records.judge(self.world.slim_driver(), rec)
+        if json.dumps(rec, sort_keys=True) != was:
+            self.write(got := self._line(n, main, origin, "regenerate", sha=sha, base=built.get("base") or "",
+                                         members=built.get("members") or (), heads=built.get("heads") or (),
+                                         why=f"judged {r.state}", record=rec, done=True))
+            wrote.append(got)
+        return replace(r, starts=starts)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -1563,7 +1718,7 @@ class Loop:
             past = whole if whole is not past else Past.read(self.log_path, 0)
         (started, rec), (starts, since) = past.slim(main), past.slim_started(main)
         line = dict(sha=main, base=main, members=(), heads=())
-        if started:
+        if started and not self._other(rec):
             was = json.dumps(rec, sort_keys=True)
             v = self.slim.judge(self.world.slim_driver(), rec)
             if json.dumps(rec, sort_keys=True) != was:
@@ -1587,8 +1742,11 @@ class Loop:
         failed to list stays list-failed beside a run that hasn't ended, which `combine` reads as pending: one that never
         starts would hold it so.  Each step it failed is compared with the run beside its base's check (``below``: its record
         and start, `_below` for ``main``), which `vqueue.decide` takes as inherited when that run failed it too; a fail whose
-        every other failure is inherited waits (pending) while that run, started at most `pending_s` ago, hasn't said."""
+        every other failure is inherited waits (pending) while that run, started at most `pending_s` ago, hasn't said.
+        Where the check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it
+        (`Judged.shadow`, its note marked so), and a run started while graph2 gated counts as none started."""
         started, rec = past.slim(sha)
+        started, gates = started and not self._other(rec), self.gate == GRAPH2_GATE
         line = dict(sha=sha, base=base, members=prs, heads=heads)
         if self.dry_run or not started and not chained:
             v = Verdict(PENDING)
@@ -1602,18 +1760,25 @@ class Loop:
             if json.dumps(rec, sort_keys=True) != was:
                 self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
                 wrote.append(got)
-        if j.verdict.state == LIST_FAILED and v.state == PENDING:
+        if gates and j.verdict.state == LIST_FAILED and v.state == PENDING:
             return replace(j, slim=v, record=rec)
         v = self.slim.based(v, below[0])
-        both = self.slim.combine(j.verdict, v)
+        both = self.slim.combine(j.verdict, v) if gates else v
+        if not gates:
+            j = replace(j, shadow=j.verdict, note=f"graph2, in shadow, reads {j.verdict.state}: {j.note}" if j.note else "")
         if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running,
             g = j.verdict                   # and never while graph2's check failed to list: none of its gating tasks ran
-            both = replace(both, ended=(g.state not in (PENDING, LIST_FAILED) and (g.state != FAIL or g.ended))
-                           and v.state != PENDING)
+            if gates:
+                both = replace(both, ended=(g.state not in (PENDING, LIST_FAILED) and (g.state != FAIL or g.ended))
+                               and v.state != PENDING)
             if waits := self._waits(both, v, *below):
                 return replace(j, verdict=Verdict(PENDING), slim=v, record=rec, note="; ".join(
                     [*filter(None, [j.note]), f"waiting for the run beside {base[:12]}'s check: {', '.join(waits)}"]))
         return replace(j, verdict=both, slim=v, record=rec)
+
+    def _other(self, rec: dict | None) -> bool:
+        """Whether ``rec`` records a run beside a graph2 check where the check now gates: the check starts in its place."""
+        return self.gate == CHECK_GATE and rec is not None and rec.get("gate") != CHECK_GATE
 
     def _waits(self, both: Verdict, v: Verdict, rec: dict | None, since: float | None) -> list[str]:
         """The failed steps of ``v`` (the run beside a check) whose fail ``both`` waits on: those the run beside its base's
@@ -1641,7 +1806,8 @@ class Loop:
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t)
-        new += self._flaky(t) + self._bases(t) + self._disputes(t)
+        new += self._flaky(t) + self._bases(t) + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t)) \
+            + self._conflicts(t)
         new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
@@ -1680,9 +1846,10 @@ class Loop:
         lacks."""
         if self.state is None:
             return
+        records = {c.sha: c.records.state for c in t.snap.candidates if c.records is not None}
         doc = {"at": stamp(self.now()), "tick": t.n, "main": t.main, "origin_main": t.origin,
                "candidates": {sha: {"mine": j.verdict.state, "graph2": j.graph2, "lacks": list(j.lacks), "note": j.note,
-                                    "beside": j.slim.state if j.slim is not None else None}
+                                    "beside": j.slim.state if j.slim is not None else None, "records": records.get(sha)}
                               for sha, j in t.judged.items()},
                "ignored": t.foreign,
                "disagree": sorted(sha for sha, j in t.judged.items()
@@ -1709,6 +1876,8 @@ class Loop:
             j = t.judged[c.sha]
             lines.append(f"candidate {c.sha[:12]} on {c.base[:12]}: {' '.join(f'#{n}' for n in c.members)} {c.verdict.state}"
                          f" tries {c.tries} reruns {c.reruns}" + (f" (beside: {j.slim.state})" if j.slim else "")
+                         + (f" (records run: {c.records.state})" if c.records else "")
+                         + (f" (the records commit of {c.repairs[:12]})" if c.repairs else "")
                          + (f" ({j.note})" if j.note else "")
                          + "".join(f"\n  failed {f.task} {f.key[:19]}" for f in c.verdict.failed)
                          + "".join(f"\n  infra {f.task} {f.key[:19]}" for f in c.verdict.infra))
@@ -1762,13 +1931,18 @@ class Loop:
             return self._ring(a, c, t)
         if isinstance(a, Red):
             return [self._red(a, c, t)]
+        if isinstance(a, Regenerate):
+            return self._regenerate(t, {"sha": c.sha, "base": c.base, "members": list(c.members), "heads": list(c.heads)},
+                                    "started again" if c.records is not None else "started")
+        if isinstance(a, Commit):
+            return self._commit(c, t)
         raise QueueError(f"{a}: no such action")
 
     def _build(self, a: Build, t: Tick) -> list[dict]:
         w = self.world
         if unknown := [n for n in a.members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
-        if self.slim is not None:
+        if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
         tip, merged, left = w.build([w.prs[n] for n in a.members], a.base)
         recs = []
@@ -1792,12 +1966,78 @@ class Loop:
             w.push(tip, branch(tip))
         line = {"sha": tip, "base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
                 "priority": a.priority, **({"adopted": True} if adopted else {})}
+        if a.records:
+            return [*recs, self.record(t, "build", **line, why="its records run first: its check waits for it", enqueued=False,
+                                       records_first=True, done=True), *self._regenerate(t, line)]
+        return self._enqueue(t, recs, line)
+
+    def _enqueue(self, t: Tick, recs: list[dict], line: dict) -> list[dict]:
+        """Start pushed candidate ``line["sha"]``'s check: enqueued, its build line (``line``) logged after ``recs``, and the run
+        beside its check started.  Every check starts here: a build's, and the check of one whose records run passed
+        (`_commit`)."""
         try:
-            w.enqueue(tip, a.priority)
+            self.world.enqueue(line["sha"], line["priority"])
         except (QueueError, OSError, subprocess.SubprocessError) as e:  # pushed: the next tick reads it as not enqueued
             return [*recs, self.record(t, "build", **line, enqueued=False, done=True, error=str(e)[-600:])]
         return [*recs, self.record(t, "build", **line, enqueued=True, done=True),
-                *self._start(t, tip, a.base, {"members": line["members"], "heads": line["heads"]})]
+                *self._start(t, line["sha"], line["base"], {"members": line["members"], "heads": line["heads"]})]
+
+    def _regenerate(self, t: Tick, line: dict, why: str = "started") -> list[dict]:
+        """Start the records run of candidate ``line["sha"]`` (`vqueue_records.start`), logged with its record; one that fails
+        to start is logged with no record, which `vqueue_records.judge` reads as infra."""
+        if self.records is None:
+            raise QueueError(f"{line['sha'][:12]}: no records run starts without research.vqueue_records")
+        d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick
+        try:
+            rec, error = self.records.start(d, line["sha"]), None
+        except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
+            rec, error = None, f"{type(e).__name__}: {e}"[-600:]
+        return [self.record(t, "regenerate", sha=line["sha"], base=line["base"], members=line["members"], heads=line["heads"],
+                            why=why, record=rec, done=True, **({"start_error": error} if error else {}))]
+
+    def _commit(self, c: Candidate, t: Tick) -> list[dict]:
+        """Start the check of ``c``, whose records run passed: on ``c`` as built when the run regenerated nothing
+        (`vqueue_records.commit` makes no commit), else on the records commit of what it regenerated on top of ``c``, pushed
+        (one pushed before, with no line in the log, is adopted: `World.recommitted`) and checked in ``c``'s place, a candidate
+        on ``c``'s base with ``c``'s members, which it `repairs`: the next tick drops ``c`` for it (`vqueue.decide`), so a tick
+        cut off after the push still finds ``c`` and adopts it.  The bookkeeping its records run repaired is told as drive
+        tells it (`_bookkeeping`).  A records commit that can't be made, or that the merge gate won't vouch for, is held:
+        logged, and rung to `CI` once, and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`)."""
+        w = self.world
+        rid = ((t.records.get(c.sha) or {}).get("verdict") or {}).get("run")
+        got = self.records.commit(w.slim_driver(), c.sha, rid, c.members) if self.records is not None and rid else \
+            "its records run passed, but its record names no run"
+        built = t.past.built(c.sha) or {}
+        line = {"sha": c.sha, "base": c.base, "members": list(c.members), "heads": list(c.heads),
+                "priority": built.get("priority") if isinstance(built.get("priority"), int) else 0, "run": rid}
+        if got is None:
+            return self._enqueue(t, [], {**line, "why": f"its records run {rid} regenerated nothing: checked as built"})
+        if isinstance(got, str):
+            bound = (f"; it is dropped, its members built again, once it is held {self.pending_s / 3600:g} h after it was "
+                     "first")
+            return [self.record(t, "commit", **line, why=got, done=False),
+                    *self._ring(Ring(c.sha, f"{c.sha[:12]}'s records commit is held: {got}{bound}", to=(CI,)), c, t)]
+        tip, files, told = got
+        if adopted := next((sha for name, sha in sorted(t.foreign.items())
+                            if name == sha[:12] and w.recommitted(sha, tip, c.sha)), None):
+            tip = adopted
+        else:
+            w.push(tip, branch(tip))
+        return self._enqueue(t, self._bookkeeping(t, c, tip, told),
+                             {**line, "sha": tip, "why": f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it",
+                              "repairs": c.sha, "files": files, **({"adopted": True} if adopted else {})})
+
+    def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
+        """Tell what drive tells of the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
+        `vqueue_records.bookkeeping_told`'s text and handles), once a records commit: logged, and only logged with --shadow."""
+        if told is None or any(r.get("posting") == "bookkeeping" and r.get("sha") == tip for r in t.past.of("posting")):
+            return []
+        text, to = told[0], tuple(f"@{h}" for h in told[1])
+        line = dict(sha=tip, base=c.base, members=c.members, heads=c.heads, why=f"{tip[:12]}'s records run repaired bookkeeping",
+                    text=text, to=list(to))
+        if self.shadow:
+            return [self.record(t, "bookkeeping", **line, done=False)]
+        return [self.record(t, "bookkeeping", **line, posted=self._say(t, "bookkeeping", text, to, sha=tip), done=True)]
 
     def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
         """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is
@@ -1809,7 +2049,8 @@ class Loop:
     def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started") -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         try:
-            rec, error = self.slim.start(d, line["sha"], line["base"]), None
+            rec, error = self.slim.start(d, line["sha"], line["base"],
+                                         **({"shards": self.shards} if self.gate == CHECK_GATE else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
@@ -1842,51 +2083,58 @@ class Loop:
         return self.record(t, "on_main", **line, why="drive's steps once its members are on `main`", told=told, done=True)
 
     def _drop(self, a: Drop, c: Candidate, t: Tick) -> dict:
-        """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing), delete its
-        branch and log its outcome.  A run still launching has no run ids yet: its record is logged (`beside_launching`), and
-        `_launched` cancels it once it has them."""
+        """Cancel ``c``'s check, and the run beside it and its records run while they run (they would hold drive's machines for
+        nothing), delete its branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids
+        yet: its record is logged (`beside_launching`, `records_launching`), and `_launched` cancels it once it has them."""
         w, j = self.world, t.judged.get(c.sha)
         cancel = w.cancel(c.sha)
+        why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
         rec = (j.record or {}) if j is not None and j.slim is not None and j.slim.state == PENDING else {}
         ids = list(rec.get("ids") or ())
-        failed = w.cancel_runs(ids, f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}") if ids else {}
+        failed = w.cancel_runs(ids, why) if ids else {}
+        regen = (t.records.get(c.sha) or {}) if c.records is not None and c.records.state == PENDING else {}
+        rids = list(regen.get("ids") or ())
+        rfailed = w.cancel_runs(rids, why) if rids else {}
         w.push("", branch(c.sha), c.sha)
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
                            failed=c.verdict.failed, cancel=cancel, done=True,
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
-                           **({"beside_launching": rec} if "launch" in rec else {}))
+                           **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
+                           **({"records_cancelled": rids} if rids else {}),
+                           **({"records_cancel_failed": rfailed} if rfailed else {}),
+                           **({"records_launching": regen} if "launch" in regen else {}))
 
     def _launched(self, t: Tick) -> list[dict]:
-        """The run beside each dropped candidate's check that was still launching at its drop (`Past.launching`), judged each
-        tick until its launch ends: cancelled once it printed its run ids while it runs, and settled (`dropped`) either way;
-        one that registered no run or already ended has nothing to cancel."""
-        if self.slim is None:
-            return []
+        """The run beside each dropped candidate's check, and its records run, that was still launching at its drop
+        (`Past.launching`), judged each tick until its launch ends: cancelled once it printed its run ids while it runs, and
+        settled (`dropped`) either way; one that registered no run or already ended has nothing to cancel."""
         out = []
-        for sha, drop in t.past.launching().items():
-            rec = dict(drop["beside_launching"])
-            v = self.slim.judge(self.world.slim_driver(), rec)
-            ids = list(rec.get("ids") or ())
-            if v.state == PENDING and not ids:
+        for run, key, action, prefix in ((self.slim, "beside_launching", "slim", "beside"),
+                                         (self.records, "records_launching", "regenerate", "records")):
+            if run is None:
                 continue
-            running = ids if v.state == PENDING else []
-            reason = f"vqueue: candidate {sha[:12]} was dropped: {drop.get('why')}"
-            failed = self.world.cancel_runs(running, reason) if running else {}
-            out.append(self.record(t, "slim", sha=sha, base=drop.get("base"), members=drop.get("members") or (),
-                                   heads=drop.get("heads") or (), record=rec, dropped=True, done=True,
-                                   why=f"its candidate was dropped while it launched: {'cancelled' if running else v.state}",
-                                   **({"beside_cancelled": running} if running else {}),
-                                   **({"beside_cancel_failed": failed} if failed else {})))
+            for sha, drop in t.past.launching(key, action).items():
+                rec = dict(drop[key])
+                v = run.judge(self.world.slim_driver(), rec)
+                ids = list(rec.get("ids") or ())
+                if v.state == PENDING and not ids:
+                    continue
+                running = ids if v.state == PENDING else []
+                reason = f"vqueue: candidate {sha[:12]} was dropped: {drop.get('why')}"
+                failed = self.world.cancel_runs(running, reason) if running else {}
+                out.append(self.record(t, action, sha=sha, base=drop.get("base"), members=drop.get("members") or (),
+                                       heads=drop.get("heads") or (), record=rec, dropped=True, done=True,
+                                       why=f"its candidate was dropped while it launched: {'cancelled' if running else v.state}",
+                                       **({f"{prefix}_cancelled": running} if running else {}),
+                                       **({f"{prefix}_cancel_failed": failed} if failed else {})))
         return out
 
     def _eject(self, a: Eject, t: Tick) -> dict:
         w = self.world
-        tasks = "; ".join(f"{f.task} (key {f.key})" for f in a.failed) or "none named"
-        text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. Failed: {tasks}. Each result, its "
-                f"log's digest with it: `research data labels task:<key> --key result --history`. Fix it and mark it ready "
-                f"again")
-        if locks := sorted({f.task.removeprefix(LEAN_LOCK) for f in a.failed if f.task.startswith(LEAN_LOCK)}):
-            text += LEAN_LOCK_FIX.format(pkgs=", ".join(locks))
+        tasks = "; ".join(f"{f.task} (key {f.key})" for f in a.failed)
+        text = (f"#{a.number} at {a.head[:12]} is ejected from the verified queue: {a.why}. "
+                + (f"Failed: {tasks}. Each result, its log's digest with it: `research data labels task:<key> --key result "
+                   "--history`. " if tasks else "") + "Fix it and mark it ready again")
         if (p := w.open().get(a.number)) is None or p.head != a.head:
             return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, failed=a.failed, done=False,
                                why=f"{a.why}; not ejected: " + ("closed" if p is None else f"pushed to {p.head[:12]} since"))
@@ -1993,10 +2241,11 @@ class Loop:
         priority unless it was enqueued less than `BASE_RETRY_S` ago, here or by its build or a retry where it is a candidate
         (`Past.base_enqueues`), so again each `BASE_RETRY_S` while one waits on it: graph2 lists a check whose listing failed
         again, resumes a cancelled one, and leaves one it is listing or has listed as it is.  One that fails to enqueue is
-        enqueued by the next tick.  `CI` and `drive.INFRA` are rung, naming it and the candidates on it, once a base and why
+        enqueued by the next tick.  `CI` and `landing.INFRA` are rung, naming it and the candidates on it, once a base and why
         (`Past.rung`): at once when its listing failed or its graph can't be read, and when graph2 still hasn't listed it or
-        said `BASE_RING_S` after it was first asked for (`BASE_COMING`).  Nothing is ejected or bisected on its account: its
-        candidates wait, for as long as `vqueue.decide`'s `pending_s` retries and rings them."""
+        said `BASE_RING_S` after it was first asked for (`BASE_COMING`); none where the check gates (`CHECK_GATE`), since no
+        candidate waits on it there.  Nothing is ejected or bisected on its account: its candidates wait, for as long as
+        `vqueue.decide`'s `pending_s` retries and rings them."""
         w, recs, rung, now = self.world, [], t.past.rung(), self.now()
         waiting: dict[str, list[Candidate]] = {}
         for c in t.snap.candidates:
@@ -2017,12 +2266,13 @@ class Loop:
                 else:
                     recs.append(self.record(t, "base", **line, enqueued=True, done=True))
             why = f"base {b[:12]}: {wait.why}"
-            if (b, why) not in rung and (wait.why not in BASE_COMING or first is not None and now - first >= BASE_RING_S):
+            if self.gate == GRAPH2_GATE and (b, why) not in rung and (
+                    wait.why not in BASE_COMING or first is not None and now - first >= BASE_RING_S):
                 recs.append(self._ring_base(t, b, wait, why, cands, first))
         return recs
 
     def _ring_base(self, t: Tick, base: str, wait: BaseWait, why: str, cands: list[Candidate], first: float | None) -> dict:
-        """Ring `CI` and `drive.INFRA` that ``cands`` wait on ``base``'s check (`_bases`), keyed by ``why``: a post that fails
+        """Ring `CI` and `landing.INFRA` that ``cands`` wait on ``base``'s check (`_bases`), keyed by ``why``: a post that fails
         is rung again by the next tick."""
         since = (f", {int(self.now() - first) // 60} min after it was first asked for" if wait.why in BASE_COMING and first
                  else "")
@@ -2066,18 +2316,74 @@ class Loop:
                     recs.append(self.record(t, "ring", **line, done=True, posted=True))
         return recs
 
+    def _compare(self, t: Tick) -> list[dict]:
+        """Where the check gates (`CHECK_GATE`): graph2's verdict of each candidate (`Judged.shadow`) beside its check's, once
+        both ended (neither reads pending, graph2's fail with no task still running, the check's not infra, which a retry
+        answers), as one line, logged and printed, once a candidate and line: `agree` when both read alike with their
+        inherited failures set aside (`vqueue._reading`), else `disagree`, with the tasks graph2 failed or erred on and the
+        steps the check failed."""
+        def said(v: Verdict) -> str:
+            tasks = ", ".join(f.task for f in (*(f for f in v.failed if not _inherited(f)), *v.infra))
+            return vqueue._reading(v) + (f" ({tasks})" if tasks else "")
+
+        recs = []
+        for c in t.snap.candidates:
+            j = t.judged[c.sha]
+            if j.shadow is None or (j.shadow.state == FAIL and not j.shadow.ended):
+                continue
+            theirs, mine = vqueue._reading(j.shadow), vqueue._reading(c.verdict)
+            if theirs == PENDING or mine not in (PASS, FAIL):
+                continue
+            why = f"agree: graph2 and the check {mine}" if theirs == mine else \
+                f"disagree: graph2 {said(j.shadow)}, the check {said(c.verdict)}"
+            if any(r.get("why") == why for r in t.past.of("compare", c.sha)):
+                continue
+            self.out(f"research queue vqueue: tick {t.n}: {c.sha[:12]} graph2 in shadow: {why}")
+            recs.append(self.record(t, "compare", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why,
+                                    graph2=theirs, check=mine, done=True))
+        return recs
+
+    def _conflicts(self, t: Tick) -> list[dict]:
+        """Tell the owner of each ready PR whose head doesn't merge onto `main` (`Ready.conflict`, which no build takes, a
+        move's or any other's) the files it conflicts in, and to rebase it onto `main` and mark the new head: once a head
+        (`Past.conflicted`).  Its mark stays, since the new head needs its own.  A post that fails is told again by the next
+        tick; with --shadow it is only logged."""
+        recs, told = [], t.past.conflicted()
+        for r in t.snap.ready:
+            if not r.conflict or r.head in told:
+                continue
+            files = conflicting_files(self.world.repo, t.main, r.head)
+            text = (f"#{r.number} at {r.head[:12]} doesn't merge onto `main` at {t.main[:12]}"
+                    + (f": it conflicts in {', '.join(files)}" if files else "")
+                    + ". The verified queue leaves it out of every build until it does: rebase it onto `main` (where a move "
+                      "that landed is the cause, carry it across with `tools/move/restack.py`) and mark the new head ready "
+                      f"(`research queue ready {r.number}`)")
+            to = self.owner(r.number)
+            line = dict(members=[r.number], heads=[r.head], number=r.number, files=files, text=text, to=list(to))
+            if self.shadow:
+                recs.append(self.record(t, "conflict", **line, done=False))
+            elif not self._say(t, "conflict", text, to, heads=[r.head], number=r.number):
+                recs.append(self.record(t, "conflict", **line, done=False, posted=False,
+                                        error=f"telling #{r.number}'s owner it doesn't merge onto `main` failed: the next "
+                                              "tick tells again"))
+            else:
+                recs.append(self.record(t, "conflict", **line, done=True, posted=True))
+        return recs
+
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
         if (c.sha, a.why) in t.past.rung():
             return []
         infra = "; ".join(f"{f.task} (key {f.key})" for f in c.verdict.infra)
-        text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) is {c.verdict.state} "
-                f"after {c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
+        members = " ".join(f"#{n}" for n in c.members)
+        text = (f"the verified queue's candidate queue/{c.sha[:12]} ({members}), whose check waits for its records run: {a.why}"
+                if c.waits else f"the verified queue's candidate ready:{c.sha} ({members}) is {c.verdict.state} after "
+                f"{c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
         line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
         if a.pr is not None and (held := self._outage(c, t)) is not None:
             return [self.record(t, "ring", **line, done=True, posted=False, held=held)]
         if self.shadow:
             return [self.record(t, "ring", **line, done=False)]
-        to = (INFRA_HANDLE,) if a.pr is None else self.owner(a.pr)
+        to = a.to or ((INFRA_HANDLE,) if a.pr is None else self.owner(a.pr))
         if not self._say(t, "ring", text, to, sha=c.sha, why=a.why):
             return [self.record(t, "ring", **line, done=False, posted=False,
                                 error=f"ringing {', '.join(to)} about {c.sha[:12]} failed: the next tick rings again")]
@@ -2134,6 +2440,7 @@ def _locked(path: Path):
 
 
 def main(argv: list[str]) -> int:
+    from . import queue
     from .queue import GitHub, credential_args, remote_and_repo
     from .store.local import LocalStore
 
@@ -2148,6 +2455,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--state", type=Path, default=STATE, help=f"each tick's candidates, their verdicts beside graph2's and what "
                                                               f"their graphs lack, rewritten each tick (default {STATE})")
     ap.add_argument("--priority-file", type=Path, default=PRIORITY, help=f"drive's priority list (default {PRIORITY})")
+    ap.add_argument("--frozen", type=Path, default=FROZEN, help=f"a freeze's pathspecs, one a line: while the file exists, a PR "
+                                                                f"renaming or deleting a file under one waits (default {FROZEN})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
@@ -2166,12 +2475,32 @@ def main(argv: list[str]) -> int:
                          "preflights (research.vqueue_slim), which it otherwise launches on drive's machines beside each "
                          "candidate's check when it builds it; only with --shadow or --dry-run, since `main` would move past "
                          "what that run checks")
+    ap.add_argument("--gate", choices=GATES, default=GRAPH2_GATE,
+                    help=f"what gates a candidate: `{GRAPH2_GATE}` (the default), its graph2 check with the run beside it; "
+                         f"`{CHECK_GATE}`, drive's after-landing check of it, every step as --shards shards, with graph2's "
+                         "check in shadow: read, compared with the check's verdict in one logged line, and deciding nothing")
+    ap.add_argument("--shards", type=int, default=SHARDS,
+                    help=f"with --gate {CHECK_GATE}, the shards each check runs as, an N ci.toml has a shard plan for, one "
+                         f"launch each (default {SHARDS})")
+    ap.add_argument("--on", default="", help="the machines the run beside each check and each records run take, a comma list, "
+                                             "each shard its share of them as drive gives its own (default drive.toml's `on` "
+                                             "at `main`)")
+    ap.add_argument("--no-records", action="store_true",
+                    help="start the check of a candidate with a member that changes Lean, a lock or a spec at once, with no "
+                         "records run before it (research.vqueue_records: drive's lock run, on drive's machines) "
+                         "regenerating its lock records and no records commit of them checked in its place: stale records "
+                         "fail it as any failure")
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
                                                           "them; its own main is refs/vqueue/shadow in the clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
+    ap.add_argument("--merged-root", type=Path, default=None, metavar="DIR",
+                    help="where the worktrees a build checks out go (`queue.merged_worktree`, one a merge for `ported`'s "
+                         "codemod), and where one a killed tick left is swept (default the temporary directory; the control "
+                         "pod's TMPDIR is a network volume, where each worktree add and remove takes minutes)")
     a = ap.parse_args(argv)
+    queue.MERGED_ROOT = a.merged_root or queue.MERGED_ROOT
     if a.no_slim and not (a.shadow or a.dry_run):
         print("research queue vqueue: --no-slim moves `main` past lean-agreement and the preflights unchecked: it runs only "
               "with --shadow or --dry-run", file=sys.stderr)
@@ -2179,6 +2508,10 @@ def main(argv: list[str]) -> int:
     if (slim := None if a.no_slim else _slim()) is None and not a.no_slim:
         print("research queue vqueue: research.vqueue_slim isn't in this tree, so no run beside a candidate's check can start: "
               "--no-slim judges each candidate on its graph2 check alone", file=sys.stderr)
+        return 1
+    if a.gate == CHECK_GATE and (a.no_slim or a.shards < 1):
+        print(f"research queue vqueue: --gate {CHECK_GATE} is the run beside each candidate's check, as one shard or more: "
+              "it runs with neither --no-slim nor --shards below 1", file=sys.stderr)
         return 1
     lock = None if a.dry_run else _locked(a.lock)
     if not a.dry_run and lock is None:
@@ -2198,9 +2531,11 @@ def main(argv: list[str]) -> int:
         q.branch = "main"
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
-                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent)
+                      priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
+                      frozen_file=a.frozen)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
-                    pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects)
+                    pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
+                    shards=a.shards, records=None if a.no_records else vqueue_records)
         if a.once or a.dry_run:
             loop.tick()
             return 0
