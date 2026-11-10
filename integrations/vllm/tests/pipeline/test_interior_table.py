@@ -398,3 +398,4 @@ def test_an_interior_whose_history_names_a_table_round_1_did_not_serve_under_its
                     supplied=IR.sources(LINKS, Q, [NAMES[u] for u in first.units]),
                     schemas=IR.link_schemas(MEMBER, LINKS))
     assert refused.value.verdict.codes == ("interior-table",)
+    assert refused.value.verdict.detail == {"interior-table": {"tables": [other.value]}}

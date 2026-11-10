@@ -2080,8 +2080,10 @@ class Stream:
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 tables = {} if history is None or not v.ok else HT.roots_of(leaf_layer, history)
-                if v.ok and not tables_served(first.registration.record, [(n, *rd) for n, rd in tables.items()]):
-                    v = _refuse("interior-table", {"tables": sorted(tables)}).verdict
+                served = first.registration.record
+                unserved = [n for n, rd in sorted(tables.items()) if not tables_served(served, [(n, *rd)])]
+                if unserved:
+                    v = _refuse("interior-table", {"tables": unserved}).verdict
                 got.update(program=program, earlier=earlier)
             got["checks"] = v
             if not v.ok:
