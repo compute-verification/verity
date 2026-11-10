@@ -83,9 +83,11 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let _ ← timed "checkPublic" rec_ (fun r => Service.checkPublic r (Json.str v.scheme) qd values declared)
     (fun c => match c with | .ok c => c.codes.isEmpty | .error _ => false)
   let n := (nat? (getD rec_ "population")).getD 0
-  let some rule' := rule.over n | throw (IO.userError "the rule's rate law refuses the population")
+  let some rule' := rule.over n (Select.strataSizes v.program v.query)
+    | throw (IO.userError "the rule's rate law refuses the population")
   let law ← IO.ofExcept (rule'.lawOver n)
-  let v := { v with law }
+  let workTable ← IO.ofExcept (rule.tableOver v.program v.query v.workTable)
+  let v := { v with law, workTable }
   let salt ← IO.ofExcept (← timed "seedSalt" (getD j "seed_salt") (fun e => Run.seedSaltOf e v.windowRoot) isOk)
   let _ ← timed "registration" rec_ (fun r => Registration.check r v salt) (·.isEmpty)
   let _ ← timed "partition.evaluate" v.program (fun pr => Partition.evaluate pr v.query) isOk
