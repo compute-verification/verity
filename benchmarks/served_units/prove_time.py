@@ -3,7 +3,8 @@
 (least squares over its N), its seconds a block amortized at each N (T(N) / N), and with ``--card`` (a GPU's run) the
 block's proof overhead: seconds a block times the card's peak MACs a second over the block's MACs, marginal (``per_block``)
 and amortized. A coordinate's MACs are its K; the card's peak is its s8 rate (`verity.hardware`; e4m3 runs at that rate on
-the cards here, their ``weight.e4m3`` 1).
+the cards here, their ``weight.e4m3`` 1). A type without a static K (a census type) gets its seconds a block and no
+overhead.
 
     python prove_time.py OUT_DIR [--card SKU]     prints the summary as JSON
 """
@@ -54,7 +55,7 @@ def main(out: Path, card: str | None) -> dict:
             s = session_set(d, gpu=dev == "gpu")
             rec = {"device": dev, "tag": st["tag"], "n": st["n"], "k_log": st["k_log"], "unit_log": st.get("unit_log"),
                    "vus_per_block": st["vus_per_block"],
-                   "ands": st["ands"], "macs": st["statics"]["K"], "public_inputs": st.get("public_inputs", []),
+                   "ands": st["ands"], "macs": st.get("statics", {}).get("K"), "public_inputs": st.get("public_inputs", []),
                    "accepted": s.get("accepted"), "prove_total_s": s.get("prove_total_s"),
                    "prove_total_all_s": s.get("prove_total_all_s"), "session_s": s.get("session_s"), "buckets": s.get("buckets"),
                    "gpu_util_mean_pct": s.get("gpu_util_mean_pct"), "sm_clock_mean_mhz": s.get("sm_clock_mean_mhz"),
@@ -69,18 +70,18 @@ def main(out: Path, card: str | None) -> dict:
         t = {"macs": macs, "k_log": r0["k_log"], "unit_log": r0["unit_log"], "vus_per_block": r0["vus_per_block"], "ands": r0["ands"],
              "cells_per_block": (1 << r0["k_log"]) / r0["vus_per_block"],
              "amortized": {r["n"]: {"s_per_block": r["prove_total_s"] / r["n"]} for r in recs}}
-        if peak:
+        if peak and macs:
             for r in recs:
                 t["amortized"][r["n"]]["overhead"] = r["prove_total_s"] / r["n"] * peak / macs
         if f:
             t.update(fixed_s=f[0], per_block_s=f[1], residual=[r["prove_total_s"] - (f[0] + r["n"] * f[1]) for r in recs])
-            if peak:
+            if peak and macs:
                 t["overhead"] = f[1] * peak / macs
         res["types"][key] = t
         line = f"{key}: k_log {t['k_log']} unit_log {t['unit_log']} G {t['vus_per_block']} ANDs {t['ands']:,}"
         if f:
-            line += f"; fixed {f[0]:.3f} s, {f[1] * 1e3:.3f} ms a block" + (f", overhead {t['overhead']:.3g}" if peak else "")
-        line += "; amortized " + ", ".join(f"N={n} {a['s_per_block'] * 1e3:.3f} ms" + (f" ({a['overhead']:.3g})" if peak else "")
+            line += f"; fixed {f[0]:.3f} s, {f[1] * 1e3:.3f} ms a block" + (f", overhead {t['overhead']:.3g}" if "overhead" in t else "")
+        line += "; amortized " + ", ".join(f"N={n} {a['s_per_block'] * 1e3:.3f} ms" + (f" ({a['overhead']:.3g})" if "overhead" in a else "")
                                            for n, a in t["amortized"].items())
         res["table"].append(line)
     return res
