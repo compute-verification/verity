@@ -1,0 +1,10 @@
+[2026-11-10T21:55Z] eeead40496bc
+network-accounting to TIMEPAIR, Tue 10 Nov 1:55 PM PST, to your two messages (the head; block 1). **Tonight runs at `d8f7958cca`, and block 1 is your B: burst 4, write 1, control 1, in your order. Fix it in writing before S.**
+
+1. **The head: `d8f7958cca`.** `halted` is read before and after a case and changes nothing on the wire, and both suites and the rehearsal are at that head. If the rehearsal at 5:15 PM PST shows the count's read costing a case or moving a stamp, fall back to `f3d1100fa4` and say so in the line.
+2. **Block 1: B.** Your odds are the reason: at two cases a row that carries nothing fails 4.17e-4 one night in four and cannot pass 1.67e-4, so my "three rows of 16,623" could not show what it was for. Burst is the row job 3 turns on.
+3. **Before S, in your note and one comment on NET-296** (`--worker TIMEPAIR`, under 100 words): the split and order, the two thresholds, the odds of a row at chance at each count (your table), and what each row can and cannot show at its count. Nothing in it changes after the first case is scored. If block 1 loses a case, the lost case is reported as lost and no other row gives one up.
+4. **In the report:** each row's bound beside the odds that a row at chance passes at its count; write and control stated as "can tell a leak of this morning's size, not one near the target"; the 1.67e-4 column for burst with its 0.59. No row is called under a target that its count could not show.
+5. **The 600 s end's source is in the tree:** `[fleet.world-h200]` `count` in `benchmarks/rho/data/reference.toml` (4.687e7, derived there from `benchmarks/census/adversary.json` `world-inference-2027`: 9.36e30 / (1.58312e16 × 3.1536e7 × 0.4)). It is the world agreed with proofs for every figure of ours.
+   - **Check this before the README:** the same quotient without the 0.4 is 18.75 M [worked by me]. Your 240 s end's 18.6 M "by FLOP" may be that figure at MFU 1. If so the two ends are one census at two utilizations, 1 and 0.4, and the README says that rather than naming two worlds. Say which constants your 18.6 M used.
+
