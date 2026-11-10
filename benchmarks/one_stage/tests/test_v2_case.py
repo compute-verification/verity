@@ -295,13 +295,40 @@ def test_a_drawn_members_statement_reads_its_own_files_held_to_its_own_pin(tmp_p
         V.case(w, scratch)
 
 
+def test_the_onsite_record_reads_a5s_pin_against_the_registration_the_coins_committed_to(tmp_path, RP):
+    """The pin a5 writes (`a5.public_pin`) is the one the onsite record reads (`onsite_record.pinned`): its leaf layer
+    is the window's over the public bodies (`rows.leaf_layer`), so the registration that holds it (R4) holds the pin,
+    and the kept public file is its member's; a registration holding another leaf layer doesn't."""
+    import onsite_record as OR
+
+    from verity.ml.circuits.codec import canonical_json
+    from verity.ml.windows import rows
+
+    w = kept_window(tmp_path, RP)
+    pub, pin = w / "m0" / "pub-4.bin", w / a5.PIN
+    layer = rows.leaf_layer({"m0-key": a5.body(pub)})
+    assert json.loads(pin.read_text())["leaf_layer"] == layer
+
+    def registration(leaf_layer: str) -> str:
+        return canonical_json({"format": "verity/registration/v1", "leaf_layer": leaf_layer}).hex()
+
+    assert OR.pinned(pin, registration(layer), {registration(layer)}, pub) is None
+    other = registration("00" * 64)
+    assert "leaf layer" in OR.pinned(pin, other, {other}, pub)
+
+
 def test_a_drawn_member_a5_completed_is_named_by_its_completed_file_and_held_to_the_pin(tmp_path, RP):
     """a5 rewrites its drawn member's public file after the draw under the completed header (`a5.complete_drawn`; a
     member with tables keeps its body) and pins it once the tie holds (`a5.pin_completed`). Before that pin a kept
-    completed file is refused; with it the statement's public file is the completed one, and the staged file, or a file
-    neither entry pins, is refused."""
+    completed file is refused; with it the statement's public file is the completed one, the onsite record holds it to
+    the pin and to the member's staged body (`onsite_record.pinned`), the staged bodies still the registration's leaf
+    layer, and the staged file, or a file neither entry pins, is refused."""
+    import onsite_record as OR
+
+    from verity.ml.circuits.codec import canonical_json
+
     w, scratch = kept_window(tmp_path, RP), tmp_path / "scratch"
-    pub = w / "m0" / "pub-4.bin"
+    pub, pin = w / "m0" / "pub-4.bin", w / a5.PIN
     staged = pub.read_bytes()
     completed = b"completed header\n" + a5.body(pub)
     pub.write_bytes(completed)
@@ -310,12 +337,15 @@ def test_a_drawn_member_a5_completed_is_named_by_its_completed_file_and_held_to_
     a5.pin_completed(w, [({"m": types.SimpleNamespace(key="m0-key", n=4), "st": {"dir": w / "m0"}}, [])])
     evidence = json.loads(bytes.fromhex(V.case(w, scratch)[0]["evidence"]))
     assert evidence["proofs"]["public"] == hashlib.sha512(completed).hexdigest()
+    reg = canonical_json({"format": "verity/registration/v1", "leaf_layer": json.loads(pin.read_text())["leaf_layer"]})
+    assert OR.pinned(pin, reg.hex(), {reg.hex()}, pub) is None
     pub.write_bytes(staged)
     with pytest.raises(V.Refused, match="pinned for m0"):
         V.case(w, scratch)
     pub.write_bytes(b"completed header\nanother body")
     with pytest.raises(V.Refused, match="pinned for m0"):
         V.case(w, scratch)
+    assert "isn't, by SHA-512, one --public-pin pinned" in OR.pinned(pin, reg.hex(), {reg.hex()}, pub)
 
 
 def test_a_blob_with_no_file_leaves_only_missing(tmp_path):

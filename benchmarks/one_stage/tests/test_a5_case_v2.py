@@ -222,7 +222,11 @@ def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_
     file. Once the tie holds, `pin_completed` pins it as the member's ``completed`` entry, and it is the file v2's case
     names for the member's statement: by SHA-512 the blob the case carries, not the staged file. The staged entries, each
     saying whether completion re-lays its member (``relaid``), and their leaf layer, which R4 holds to the registration,
-    are as written before the draw."""
+    are as written before the draw, and the onsite record holds the completed file to the member's staged body
+    (`onsite_record.pinned`)."""
+    import onsite_record as OR
+
+    from verity.ml.circuits.codec import canonical_json
     from verity.ml.windows import flock_inputs as FI
 
     def rows(k: int) -> bytes:
@@ -259,6 +263,8 @@ def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_
     assert named == "m1" and got["drawn"] == drawn and a5.v2_proof([{"mm": mm, "sdir": tmp_path}], True, members)["drawn"] is None
     assert mm["st"]["public"] == PF.file_sha512(proof.public) == after["members"]["m1-key"]["completed"]["file"]
     assert mm["st"]["public"] != pin["members"]["m1-key"]["file"]
+    reg = canonical_json({"format": "verity/registration/v1", "leaf_layer": pin["leaf_layer"]}).hex()
+    assert OR.pinned(tmp_path / a5.PIN, reg, {reg}, proof.public) is None
 
 
 def test_v2_says_why_an_audit_has_no_case():
