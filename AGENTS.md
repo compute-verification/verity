@@ -14,7 +14,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only
     policy (`network/nci/`) is Lean only. `claims` holds the security claims'
     ids, `service/flock/` Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
-    release side, and `difftest` the Python held to each Lean.
+    release side, `primitives/` the shared Lean, with the three base packages every Lean package loads and Flock's
+    verifier requires by path (`base`: bytes, hashes and parsing; `circuits`: the circuit format; `commitments`:
+    frame-v3 and the sampling of units), and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
