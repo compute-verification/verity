@@ -25470,3 +25470,48 @@ Kernels does not get that slot. I relaunch it from a new head of my branch by 07
 **9. The refusals PR** (third): opened by Tue 10 Nov 20:00Z, after the page's answers and the mark; vllm named as reviewer.
 
 **Could not verify:** #8536's records at b7afd40baa (running); the records check with `HidingRec.lean` in; `ByShape` or `WitnessIn` for any prover; that a Flock session's rounds read only public sizes; that every secret-dependent field of the registration is an hm96 string; the path from step roots to the run root; `WRS.Rows`'s tie between `filled.value` and the recorded output rows; rows a window for a GLM window (no staged window read); the commit-string test (not run); #8448's interior; whether #8455 lands before Thursday; the 25-lemma estimate for B, which is yours.
+
+## ACCOUNTD, Tue 10 Nov 06:14Z: (a) is built on #8539 as four commits; the field is `rests_on_period_check`; R8 before and after; the callers; the capped form reads no scan's F
+
+**1. The field, for network's `need`** (#8539 at `85d2ef69aa`, pushed; tied is `c2a8ea8689`, `700903503f`, `9e41ef9d09`, `85d2ef69aa`, so it comes off cleanly).
+- **Input `tied`:** a list of the registered Program's parameter names, in the verifier's params (`"tied": ["prog"]`, which then needs `"parameters"`), `one_stage.verifier.check(tied=)`, or the stream's `Check.tied` (in the stream digest only when non-empty).
+- **Published `rests_on_period_check`:** a list of strings, the tied names R8 let through (a node of it read by more than one proof block), in `tied`'s order, present only when non-empty, beside `fanout`. It appears in `Verdict.to_json()`, the Lean registration piece's answer (both verifiers must agree, else DISAGREE) and `WindowCommitmentRecord.rests_on_period_check`. The scan's: `"fanout": 1, "rests_on_period_check": ["prog"]`. `prog` is the scan root's parameter (`scan_root`'s, the one `scanOf`'s `readsEntries` reads), registered as `scan/prog`.
+- **The `need`:** the list is exactly `["prog"]`. Today the scan's answer doesn't carry it: `window_answer`'s `public` has bound, drawn, per_template and proved. I propose `public.rests_on_period_check`, copied from the audit record's registration verdict. It is one line in `scan_zk.window_answer`, landing with network's `need`, since the period check parses the answer. It can go in #8539 if their parser takes an extra key, otherwise in their PR.
+
+**2. Your rules: all built.**
+- The rules: `R8-tied` refuses a tied name that is not a parameter, is registered or held, or isn't one interval of run Input nodes. A tied value is never counted as registered or held. The verdict publishes the list. Not named, a shared Input is still refused.
+- Tests: test_one_stage, test_service_history on both verifiers, and the difftest's `TIED` group with an explicit case.
+- Not yet shown: that honest `scan_zk` passes. That needs the suites at the final head.
+- Not done: the interior check of a two-stage stream passes no `tied`, so a two-stage spec naming one would refuse at its interior. No such spec exists.
+
+**3. R8 for Daniel's line** (`Properties.Spot.R8`, read by `Registered … ∧ R8 v`, read by `AcceptMeans`).
+- Before: `R8 v := Partition.readAlone v.program v.query (Registration.heldGates v) = true`. In words: under a template query, every run Input node outside the registered parameters' gates is read by one proof block alone.
+- After: `R8 v := (Registration.tiedBad v).isEmpty = true ∧ Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true`. In words: every tied name is a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes; and every run Input node outside the registered and tied parameters' gates is read by one proof block alone.
+- **No hypothesis about the period check is added.** R8's docstring puts a tied Input outside its claim in so many words. It names what holds the rows (`Properties.NetworkPeriod.RowsProgWired`, with `RowsTiedSampled`), and says that "each `prog` row is the output of the block that computed it" (one-stage's ports and the commitment's binding, composed with those) is unproved. Nothing in SPOT's own check discharges it.
+- **Does R8's property need that sentence? No.** R8 states what the check refuses. Only the argument above it needs the sentence: that F counts every proof block a wrong block's rows reach, which the capped form's N = F uses. The scan isn't priced by the capped form, so nothing of ours needs it proved now.
+- **Lock records that move:**
+  - Security/Properties: `R8`, which newly reads `tiedBad`, `tiedGates`, `tiedGate`, `Verifier.tied`, `Partition.runInputs` and `within`; then `Registered`, `AcceptMeans` and what reads them.
+  - Security: the `Spot.Registration` and `Spot.Partition` reads.
+  - r20261110-060316-6121 regenerates both.
+
+**4. Callers that read a registration verdict with no period check after it.**
+- **On `main`, none can get a list.** On #8539 a list arises only for a caller that passes `tied`. Every caller that passes none gets `R8-shared-input`, so your default holds by construction for:
+  - the one-stage audit alone (`one_stage.verifier.check` and `run`: `benchmarks/one_stage`, `whole_run.py`, live_verifier, spot_proved);
+  - the stream, for any spec without `Check.tied`;
+  - the block round (`BLOCK` names none; its `prog` read is a registered read).
+- **The one caller that passes `tied`** is `scan_zk`'s honest round: its `V.check` in `audit`, its stream spec, `test_scan_zk_challenger.py`'s honest round and chain_record's scan step. `scan_zk` runs no period check: it writes answers.json for the rows form. With the stand-in, the real period check refuses the honest case at the wiring (`period_case.UNWIRED`) unless a test pins the stand-in's digest.
+- **Under your default,** `scan_zk` sets `tied=()`. The honest round is then refused at R8 (`R8-shared-input` at `prog`, node 4; r20261110-050536-b418, both verifiers), and its answer is a reject. The test must expect that refusal, so it then shows only that R8 refuses the generator form's slot entries, nothing of the scan accepting. The rows form's slow test is unaffected (its own registration, no R8). That breaks your rule "honest `scan_zk` passes".
+- **My recommendation:** keep `tied` in `scan_zk`, the producer of the period check's evidence. The verdict, and the answer once network's `need` lands, carry `["prog"]`, and its docstring says the acceptance rests on a period check that refuses the stand-in. Your call; the default is a one-line change plus the test's expectations.
+
+**5. For NET-302, "does the capped form read the scan's F": no.** `plancheck.two` reads `fanout` as N only for a two-stage registration's replay grain. Its one caller, `benchmarks/spot_figures/total_cost.py`, passes a GLM-5.3 grain's constant `FANOUT`. Nothing passes a scan's F to it or to the period check. The scan's registration is one-stage, with every unit sampled.
+
+**6. #8139:** admitted at `977eadc7`. The retired word ("drawn") at its README:349 is #8139's own new sentence and is not on #8539's branch. I fix it in my first PR on top of #8139 once it is on `main`.
+
+**7. #8462** waits on #8405, owned by network-accounting's worker CAPCERT (NET-281). #8405 has been unmarked at `ca7d59c9` since 03:24Z because its head failed verity-cli: 18 of `test_run.py`, where the deploy config refuses `max_tokens_cap = None`. CAPCERT has the fix, an uncapped config leaving the cap out. Network: the fixed head will be commented on NET-281, and if it isn't there by 18:00Z they say what's left. Nothing newer.
+
+**8. Runs.**
+- 6327's records are committed (`47c95f8eb6`).
+- r20261110-060316-6121 (cpu-12): the Lean tries with tied, then the records, ETA ~06:45Z.
+- r20261110-060403-d939 (cpu-1): the touched suites at `700903503f`, the old key name, so a logic signal only; ETA ~06:50Z.
+- Then the suites at the records head. #8539 stays unmarked; its body names network's lead and SCANCOUNT as reviewers of the period half.
+- The PRF-456 form is in my 12:00Z report.
