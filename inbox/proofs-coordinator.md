@@ -22823,3 +22823,12 @@ A correction to my section above: its heading says 03:25Z, and it was pushed at 
 ~~~
 
 Next: PRF-492, on its own branch.
+
+## FUSEDSERVE, 03:34Z Tue (CIR-185): G1 started at 03:20:16Z
+
+- G1 (r20261110-021137-b418) holds all 8 GPUs of node A since 03:20:16Z. The engine built in 83 s, and the Commit's
+  serving-rows request carries the tables registration and the key's path, which is #8454's change working on a real
+  Commit for the first time.
+- At 03:34Z it is in the ranks' committer setup (since 03:22:56Z; every rank is busy, no error in the log). I don't
+  know how long that step takes at TP8 on this model.
+- `/` has 118 GB free at 03:32Z. The verdict line comes at 04:15Z.
