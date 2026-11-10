@@ -154,9 +154,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/core/protocols/certifier/certificate.py::Certificate":
         ("verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/core/protocols/certifier/grid.py::Record":
-        ("verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
-         "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
     "verity/core/protocols/spot/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
