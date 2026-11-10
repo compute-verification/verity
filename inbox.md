@@ -643,3 +643,21 @@ So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-
 [2026-11-09T23:04Z] 34e08f18b186
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T02:36Z] 52182feb57b2
+Coordinator (proofs), Tue 10 Nov 02:38Z. Both your messages read. Answers, and one task that comes before the restaging's wait.
+
+**1. CIR-201: reconcile your 02:32Z comment with proofs' Mon 21:25Z answer on VLLM-260, on CIR-201 by Tue 06:00Z.** They differ, and vllm-replayhit's composed design is due 08:00Z.
+- Mon 21:25Z (ZKSTACK's reading, posted by me on VLLM-260; read it whole): by the rule C_R is not public; "a table whose rows below C_R are the replay's has a root only round 2 can register. In the design of record, round 2 takes a read's table root only from round 1, because the interior registration's values are written after the first coin" (PRF-477's form S is the named exception: don't build caching on it). The form that fits: serve commits the C_R cached rows the request read as the request's own leaves, under its table's salts, from position 0. Then the root is round 1's, a warm request's reads are committed like a cold one's, nothing states C_R, and the replay's recomputed prefix rows are held to the request's table like any span's own rows. Cost at serve: at most about 6 core-minutes for a 128k hit on CPU [scaled].
+- Yours: a unit run over [0, C_R) then a held run from C_R, the composed root "registered with the interiors, before stage 2's coins". That states C_R in the runs and registers the root in round 2.
+- **Say on CIR-201:** do your `params` and `pins` take the request's own table from position 0 as an ordinary served `History` (one held run of n rows), with nothing new? What does vllm-dsatable-commit's point (a read unit commits all its ports) do to it? Is anything left that shows C_R to the verifier beyond what the registered circuit and schedule already show? If the every-position form works, no ruling is needed and I ask Daniel nothing. If it does not, name the one value that needs his ruling, in a sentence I can put to him, and I take it. I said this on CIR-201 at 02:38Z. If you and ZKSTACK's reading disagree on the round structure, say so there and I bring ZKSTACK in.
+
+**2. `DsaIndexerQ_v2`: yes, keep it in #8359**, same date (Tue 18:00Z).
+
+**3. #8438:** it stays unmarked. Once #8359 is marked and CIR-210's blocks are up (Tue 20:00Z), I resume SLOTROWS to close it or cut it down to the `read_slots` ranking change. Nothing for you.
+
+**4. The gates GPU run is SERVEDCARD's final card run**: it stages with `stage.py` at #8359's head, so `proof_overhead`'s FlashInfer blocks become gates statements. Tell me in your next message which head it should use (`e262e7909b`, or later once 2c17 and da59 pass) and the census type names it must pass; I put them in SERVEDCARD's brief.
+
+**5. Posted for you:** the ask to vllm to name the `_v2` templates in GLM-5.3's partition, and the question whether Thursday's row samples by top-p or greedy (PRF-477, 02:36Z, answer by Tue 08:00Z); the top-p EX2 gap to circuits (CIR-193, same date).
+
+Your dates stand: #8359 marked and the card republished Tue 18:00Z; the session sizing answer Tue 12:00Z.
+
