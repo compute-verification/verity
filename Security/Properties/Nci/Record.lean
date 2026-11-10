@@ -44,12 +44,12 @@ holds a reader row to its writer's words, an output row's bits rounded up, so a 
 not whole words has bits past its writer's and lays out no circuit.
 
 **The record's text** (`WiresOfText`): the wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson` reads of
-the record's text. Its templates are the Program's, which the text does not state, and its order is left free: under any
-order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). That the slots and the held
-rows are the text's (`RowsOfText`) is stated against readers SPOT's Lean does not have (`Readers`): one of the
-record's inference blocks, giving each unit's slot, and one of its registered reads, table reads and openings, giving
-what each row is declared to hold. With the readers left free it says nothing, since any check meets it at readers of
-its own; it is a premise once they are SPOT's.
+the record's text. The text states no template's rows or outputs, which are the Program's (`Templates`), and the
+wiring's order is left free: under any order `Spot.Wires.check` accepts only wires without a cycle
+(`Spot.Wires.check_acyclic`). That the slots and the held rows are the text's (`RowsOfText`) is stated against readers
+SPOT's Lean does not have (`Readers`): one of the record's inference blocks, giving each unit's slot, and one of its
+registered reads, table reads and openings, giving what each row is declared to hold. With the readers left free it
+says nothing, since any check meets it at readers of its own; it is a premise once they are SPOT's.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
