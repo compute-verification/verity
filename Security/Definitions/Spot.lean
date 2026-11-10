@@ -27,19 +27,9 @@ without its unit functions, and the static wirings that express it. `Necessity`:
 transcript before the coins, `k` samples from a distribution fixed before it, an always-proved set), amplification, and
 what each policy's damage is (integrity's damaged egress, control at the public widths, a range-restricted dataflow).
 `Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first
-<<<<<<< ours
-detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent draw, and deviations from
-the honest egress. `DrawPressure`: the deployed draw, `k` of the `n` units uniformly without replacement, and the draws
-that miss an incorrect set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
-||||||| base
-detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent draw, and deviations from
-the honest egress. `DrawPressure`: the deployed draw, `k` of the `n` units uniformly without replacement, and the draws
-that miss a wrong set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
-=======
 detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent sample, and deviations from
 the honest egress. `SamplePressure`: the deployed sample, `k` of the `n` units uniformly without replacement, and the samples
-that miss a wrong set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
->>>>>>> theirs
+that miss an incorrect set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
 through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). -/
 
 @[expose] public section

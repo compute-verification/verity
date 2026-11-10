@@ -11,30 +11,14 @@ import Proofs.Spot.Determinacy
 # Non-exfiltration: what the egress can show with at most `m` incorrect proof blocks
 
 The egress slots `O` are what leaves; the secret slots `X` are inputs the egress must not reveal beyond what the
-<<<<<<< ours
 incorrect proof blocks write. The count is over every assignment that holds the public inputs, the secrets free, and
 whose incorrect proof blocks lie in `B` (or number at most `m`): the prover's whole freedom, whatever it knows.
-||||||| base
-faulty proof blocks write. The count is over every assignment that holds the public inputs, the secrets free, and whose
-faulty proof blocks lie in `B` (or number at most `m`): the prover's whole freedom, whatever it knows.
-=======
-incorrect proof blocks write. The count is over every assignment that holds the public inputs, the secrets free, and whose
-incorrect proof blocks lie in `B` (or number at most `m`): the prover's whole freedom, whatever it knows.
->>>>>>> theirs
 
 * `eq_on_up`, **the egress is a function of the incorrect proof blocks' writes**: in a covered acyclic population whose
   secret slots lie outside the egress's upstream cone, two such assignments that agree on what `B` writes agree on
   everything upstream of the egress, the egress included. With `X = ∅` this is robust determinacy, read on the cone.
-<<<<<<< ours
 * `card_egress_le`: so at the incorrect set `B` the egress takes at most `|V| ^ |writes B|` values, over all secrets.
 * `card_egressAt_le`: with at most `m` incorrect proof blocks, each writing at most `w` slots, at most
-||||||| base
-* `card_egress_le`: so at the wrong set `B` the egress takes at most `|V| ^ |writes B|` values, over all secrets.
-* `card_egressAt_le`: with at most `m` faulty proof blocks, each writing at most `w` slots, at most
-=======
-* `card_egress_le`: so at the wrong set `B` the egress takes at most `|V| ^ |writes B|` values, over all secrets.
-* `card_egressAt_le`: with at most `m` incorrect proof blocks, each writing at most `w` slots, at most
->>>>>>> theirs
   `(∑_{j ≤ m} C(|U|, j)) · |V| ^ (m w)` values: `m w log₂|V|` bits of value, plus the location term, the choice of which
   units are incorrect.
 * `flags_egressAt`, **the location term is needed**: `n` checked units that each write one bit, honestly `false`,
@@ -57,16 +41,8 @@ theorem mem_up_of_feeds {O : Finset S} {r t : S} (h : P.Feeds r t) (ht : t ∈ P
   obtain ⟨o, ho, hto⟩ := ht
   exact ⟨o, ho, Relation.ReflTransGen.head h hto⟩
 
-<<<<<<< ours
 /-- **The egress is a function of the incorrect proof blocks' writes**, when the secrets lie outside the egress's
 upstream cone. -/
-||||||| base
-/-- **The egress is a function of the faulty proof blocks' writes**, when the secrets lie outside the egress's upstream
-cone. -/
-=======
-/-- **The egress is a function of the incorrect proof blocks' writes**, when the secrets lie outside the egress's upstream
-cone. -/
->>>>>>> theirs
 theorem eq_on_up [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {a : S → V}
     {X O : Finset S} {B : Finset U} (hX : ∀ s ∈ X, s ∉ P.up O) {σ τ : S → V} (hσa : P.Holds a X σ)
     (hτa : P.Holds a X τ) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B)

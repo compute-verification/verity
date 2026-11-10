@@ -23,16 +23,8 @@ import Proofs.Spot.Leakage
 transcript; (ii) local checks; (iii) robust determinacy, which for opaque units is single assignment and acyclicity
 (`Dataflow.determinate_iff_checked`).
 
-<<<<<<< ours
-* The probability side. `prob_accepts`: a transcript fixed before the coins passes `k` independent draws with
-  probability `(1 − π(B))^k`, and `0` when an always-proved unit is incorrect.
-||||||| base
-* The probability side. `prob_accepts`: a transcript fixed before the coins passes `k` independent draws with
-  probability `(1 − π(B))^k`, and `0` when an always-proved unit is wrong.
-=======
 * The probability side. `prob_accepts`: a transcript fixed before the coins passes `k` independent samples with
-  probability `(1 − π(B))^k`, and `0` when an always-proved unit is wrong.
->>>>>>> theirs
+  probability `(1 − π(B))^k`, and `0` when an always-proved unit is incorrect.
 * `certificate`, **from (i) alone**: for every transcript committed before the coins, the verifier accepts it while
   `B ∩ A ≠ ∅` or `π(B) > ε` with probability at most `(1 − ε)^k`.
 * `accepts_local`, **what (ii) buys**: the verdict reads only the always-proved and sampled proof blocks' positions.
@@ -46,16 +38,8 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
   probability one, so no bound below its damage is inferable at any confidence.
 
 **The counterexamples, one family per item.**
-<<<<<<< ours
-* (i), a transcript after the coins: `adaptive_dodges`, every draw passes with every undrawn unit incorrect
-  (`flags_free` meets the hypothesis). A draw after the transcript: `late_draw_dodges`, the point mass on a correct
-||||||| base
-* (i), a transcript after the coins: `adaptive_dodges`, every draw passes with every undrawn unit wrong
-  (`flags_free` meets the hypothesis). A draw after the transcript: `late_draw_dodges`, the point mass on a correct
-=======
-* (i), a transcript after the coins: `adaptive_dodges`, every sample passes with every unsampled unit wrong
+* (i), a transcript after the coins: `adaptive_dodges`, every sample passes with every unsampled unit incorrect
   (`flags_free` meets the hypothesis). A sample after the transcript: `late_sample_dodges`, the point mass on a correct
->>>>>>> theirs
   unit passes with probability one.
 * (ii), a non-local check: `checksum_untestable`, a decision that reads fewer than `n` positions and accepts every
   transcript whose `n` values sum to zero accepts every transcript.
@@ -132,16 +116,8 @@ theorem sum_good (chk : U → T → Prop) (σ : T) :
   linarith
 
 /-- **A transcript fixed before the coins passes** with probability `(1 − π(B))^k` when no always-proved unit is
-<<<<<<< ours
 incorrect. -/
-theorem prob_accepts (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
-||||||| base
-wrong. -/
-theorem prob_accepts (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
-=======
-wrong. -/
 theorem prob_accepts (chk : U → T → Prop) (A : Finset U) (σ : T) (hd : Disjoint (bad chk σ) A) :
->>>>>>> theirs
     prob π k (fun d => Accepts chk A d σ) = (1 - mass π (bad chk σ)) ^ k := by
   classical
   have hA := (disjoint_bad_iff chk A σ).1 hd
@@ -156,16 +132,8 @@ theorem prob_accepts_eq_zero (chk : U → T → Prop) (A : Finset U) (σ : T) (h
   exact prob_congr π k fun d => by simp only [Accepts, iff_false, not_and]; exact fun h => absurd h hA
 
 /-- **The sampling certificate**, from tier 1's first item alone: for every transcript committed before the coins
-<<<<<<< ours
-(`σ` does not depend on the draw) and every draw fixed before it (`π`, `A` and `k` do not depend on `σ`), the
-verifier accepts while an always-proved unit is incorrect or `π(B) > ε` with probability at most `(1 − ε)^k`. A
-||||||| base
-(`σ` does not depend on the draw) and every draw fixed before it (`π`, `A` and `k` do not depend on `σ`), the
-verifier accepts while an always-proved unit is wrong or `π(B) > ε` with probability at most `(1 − ε)^k`. A
-=======
 (`σ` does not depend on the sample) and every sample fixed before it (`π`, `A` and `k` do not depend on `σ`), the
-verifier accepts while an always-proved unit is wrong or `π(B) > ε` with probability at most `(1 − ε)^k`. A
->>>>>>> theirs
+verifier accepts while an always-proved unit is incorrect or `π(B) > ε` with probability at most `(1 − ε)^k`. A
 randomized prover is a mixture of such transcripts, so the bound holds for it too. -/
 theorem certificate (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε ≤ 1) (σ : T) :
     prob π k (fun d => Accepts chk A d σ ∧ ¬ Certified chk π A ε σ) ≤ (1 - ε) ^ k := by
@@ -184,13 +152,7 @@ theorem certificate (chk : U → T → Prop) (A : Finset U) {ε : ℝ} (hε : ε
 /-! ## Tier 2: which damage bounds the certificate supports -/
 
 /-- **Which bounds are inferable**: the damage bound `g` holds at confidence `1 − δ` for every transcript exactly when
-<<<<<<< ours
-every transcript with damage above `g` and no always-proved unit incorrect passes the draw with probability
-||||||| base
-every transcript with damage above `g` and no always-proved unit wrong passes the draw with probability
-=======
-every transcript with damage above `g` and no always-proved unit wrong passes the sample with probability
->>>>>>> theirs
+every transcript with damage above `g` and no always-proved unit incorrect passes the sample with probability
 `(1 − π(B))^k ≤ δ`. The best inferable bound is the largest damage among transcripts with
 `(1 − π(B))^k > δ`. -/
 theorem inference_iff (chk : U → T → Prop) (A : Finset U) (dmg : T → ℝ) (g δ : ℝ)
@@ -230,19 +192,9 @@ theorem inferable_of_amp {chk : U → T → Prop} {A : Finset U} {c : U → ℝ}
       _ = K * C * ε := (mul_assoc _ _ _).symm
   exact absurd h.2 (not_lt.2 h2)
 
-<<<<<<< ours
-/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit incorrect and no draw
-weight on its incorrect units passes with probability one. -/
-theorem not_inferable_of_massless (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T)
-||||||| base
-/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit wrong and no draw
-weight on its wrong units passes with probability one. -/
-theorem not_inferable_of_massless (hπ : Dist π) (chk : U → T → Prop) (A : Finset U) (σ : T)
-=======
-/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit wrong and no sample
+/-- **No bound below a weightless damage is inferable**: a transcript with no always-proved unit incorrect and no sample
 weight on its incorrect proof blocks passes with probability one. -/
 theorem not_inferable_of_massless (chk : U → T → Prop) (A : Finset U) (σ : T)
->>>>>>> theirs
     (hd : Disjoint (bad chk σ) A) (h0 : mass π (bad chk σ) = 0) :
     prob π k (fun d => Accepts chk A d σ) = 1 := by
   rw [prob_accepts π k chk A σ hd, h0]
@@ -305,16 +257,8 @@ theorem checksum_untestable {n : ℕ} {V : Type} [AddCommGroup V] (R : Finset (F
 
 /-! ## (i) A transcript after the coins, and a sample after the transcript -/
 
-<<<<<<< ours
-/-- **A transcript chosen after the coins dodges the draw**: when every set of units is some transcript's incorrect set,
-the strategy that reads the draw passes every draw with every undrawn unit outside `A` incorrect. -/
-||||||| base
-/-- **A transcript chosen after the coins dodges the draw**: when every set of units is some transcript's wrong set,
-the strategy that reads the draw passes every draw with every undrawn unit outside `A` wrong. -/
-=======
-/-- **A transcript chosen after the coins dodges the sample**: when every set of units is some transcript's wrong set,
-the strategy that reads the sample passes every sample with every unsampled unit outside `A` wrong. -/
->>>>>>> theirs
+/-- **A transcript chosen after the coins dodges the sample**: when every set of units is some transcript's incorrect set,
+the strategy that reads the sample passes every sample with every unsampled unit outside `A` incorrect. -/
 theorem adaptive_dodges [Fintype U] [DecidableEq U] {chk : U → T → Prop} (hfree : ∀ B : Finset U, ∃ σ, bad chk σ = B)
     (A : Finset U) (k : ℕ) :
     ∃ σ : (Fin k → U) → T, ∀ d, Accepts chk A d (σ d) ∧ bad chk (σ d) = (A ∪ univ.image d)ᶜ := by
@@ -327,13 +271,7 @@ theorem adaptive_dodges [Fintype U] [DecidableEq U] {chk : U → T → Prop} (hf
   exact ⟨fun d => g (A ∪ univ.image d)ᶜ, fun d =>
     ⟨⟨fun u hu => pass _ u (by simp [hu]), fun i => pass _ _ (by simp)⟩, hg _⟩⟩
 
-<<<<<<< ours
-/-- Its incorrect set holds all but `|A| + k` units, so under the uniform draw `π(B) ≥ 1 − (|A| + k)/|U|`. -/
-||||||| base
-/-- Its wrong set holds all but `|A| + k` units, so under the uniform draw `π(B) ≥ 1 − (|A| + k)/|U|`. -/
-=======
-/-- Its wrong set holds all but `|A| + k` units, so under the uniform sample `π(B) ≥ 1 − (|A| + k)/|U|`. -/
->>>>>>> theirs
+/-- Its incorrect set holds all but `|A| + k` units, so under the uniform sample `π(B) ≥ 1 − (|A| + k)/|U|`. -/
 theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : Fin k → U) :
     Fintype.card U ≤ ((A ∪ univ.image d)ᶜ).card + A.card + k := by
   rw [card_compl]
@@ -342,19 +280,9 @@ theorem adaptive_card [Fintype U] [DecidableEq U] (A : Finset U) {k : ℕ} (d : 
   have h3 := card_le_univ (A ∪ univ.image d)
   omega
 
-<<<<<<< ours
-/-- **A draw chosen after the transcript dodges it**: the point mass on a correct unit is a draw distribution, and
-the transcript passes it with probability one, whatever its incorrect set. -/
-theorem late_draw_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
-||||||| base
-/-- **A draw chosen after the transcript dodges it**: the point mass on a correct unit is a draw distribution, and
-the transcript passes it with probability one, whatever its wrong set. -/
-theorem late_draw_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
-=======
 /-- **A sample chosen after the transcript dodges it**: the transcript passes the point mass on a correct unit with
-probability one, whatever its wrong set. -/
+probability one, whatever its incorrect set. -/
 theorem late_sample_dodges [Fintype U] [DecidableEq U] (chk : U → T → Prop) (A : Finset U) (σ : T) {u₀ : U}
->>>>>>> theirs
     (h₀ : chk u₀ σ) (hA : ∀ u ∈ A, chk u σ) (k : ℕ) :
     prob (PMF.pure u₀) k (fun d => Accepts chk A d σ) = 1 := by
   refine not_inferable_of_massless _ k chk A σ ((disjoint_bad_iff chk A σ).2 hA) ?_
@@ -596,19 +524,9 @@ committed before the coins on the given inputs and every sample fixed before it,
 theorem skeleton [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : PMF U}
     (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) (O : Finset S) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
-<<<<<<< ours
     prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.incorrect f σ) A ∧ mass π (P.incorrect f σ) ≤ ε ∧
       damaged O σ honest ⊆ P.coneEgress O (P.incorrect f σ))) ≤ (1 - ε) ^ k := by
-  refine (prob_mono π k hπ.nonneg
-||||||| base
-    prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.wrong f σ) A ∧ mass π (P.wrong f σ) ≤ ε ∧
-      damaged O σ honest ⊆ P.coneEgress O (P.wrong f σ))) ≤ (1 - ε) ^ k := by
-  refine (prob_mono π k hπ.nonneg
-=======
-    prob π k (fun d => Accepts (corr P f) A d σ ∧ ¬ (Disjoint (P.wrong f σ) A ∧ mass π (P.wrong f σ) ≤ ε ∧
-      damaged O σ honest ⊆ P.coneEgress O (P.wrong f σ))) ≤ (1 - ε) ^ k := by
   refine (prob_mono π k
->>>>>>> theirs
     (E' := fun d => Accepts (corr P f) A d σ ∧ ¬ Certified (corr P f) π A ε σ)
     fun d hd => ⟨hd.1, fun hcert => hd.2 ⟨hcert.1, hcert.2,
       damaged_sub_coneEgress P h f a hh hc hσ O⟩⟩).trans ?_
