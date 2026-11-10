@@ -1,0 +1,186 @@
+module
+
+public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
+public import Proofs.Flock.SpotFlock.InstanceStmt.File
+import Flock.HmRow
+import Flock.HmNets
+import Flock.Canon
+import Flock.JsonParse
+import Flock.Net
+import Flock.Firewall
+import Flock.Norm
+import Flock.Public
+import Flock.Statement
+import Flock.Comp
+import Flock.Bytes
+import Flock.FV3
+import Flock.Hm96
+import Flock.Hash
+import Flock.RowLeaf
+import Flock.Circuit
+import Flock.Tags
+import Flock.Zk
+import Flock.CoinTree
+import Flock.Merkle
+import Flock.Draw
+import Flock.TemplateQuery
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Std.Data.TreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Internal.Operations
+import all Std.Data.DTreeMap.Internal.Queries
+import all Std.Data.DTreeMap.Internal.Balancing
+import all Std.Data.DTreeMap.Internal.Def
+import all Init.Data.Ord.String
+import all Init.Data.Ord.Basic
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.String.Extra
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
+import all Init.Data.Nat.Fold
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Char
+import all Init.Data.String.Search
+import all Init.Data.String.Iterate
+import all Init.Data.String.Decode
+import all Init.Data.String.Termination
+import all Init.Data.Array.Attach
+import all Init.WF
+
+/-! # The two-instance statement's setup: `Stmt.setupHidden` and `Stmt.setupTables`
+
+`load_pubX` walks `HmIn.loadPublic` on the public file `pubOf` to the population `popX`: its header reads back
+(`findByte_pub`, `parse_hdr`), both instances are of the circuit's class `C` (`any_bne_two`), and the header's units
+and the header itself are as `canon` and `canonUtf8` write them, which it takes as hypotheses (`hu1`, `hu2`, `hd`).
+`setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `drawJ` and the partition `partObj` to
+the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is `hdrD`, whose text it
+takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW` keeps
+`HmRow.delta`'s. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`.
+-/
+
+@[expose] public section
+open Flock Flock.Firewall RecDeploy.VStarNets
+open FlockDeploy.Concrete (shaB hmB bne_self unit_eq plainStr_hexOf)
+open Lean (Json)
+
+set_option maxHeartbeats 0 -- the walks below step through `Stmt.setupHidden` and leave closed checks to the kernel
+set_option maxRecDepth 200000
+
+namespace SpotFlock.InstanceStmt
+
+/-- The coins `Read.setup` hands the statement: the keyed coin tree of its one table. -/
+abbrev coinsX : Coins := .tree (Zk.coinSpec (t0.tableNames 1))
+
+/-! ## The public file -/
+
+theorem extract_hdr (r : Run) (circ cls : String) :
+    (pubOf r circ cls).extract 0 (printJson (hdrJ r circ cls)).toUTF8.size = (printJson (hdrJ r circ cls)).toUTF8 :=
+  ByteArray.extract_append_eq_left rfl
+
+theorem extract_body (r : Run) (circ cls : String) :
+    (pubOf r circ cls).extract ((printJson (hdrJ r circ cls)).toUTF8.size + 1) (pubOf r circ cls).size = bodyB := by
+  rw [pubOf, tailB, ← ByteArray.append_assoc]
+  exact ByteArray.extract_append_eq_right (by rw [ByteArray.size_append]; rfl) ByteArray.size_append
+
+/-- Both instances are of class `s`: `classes.any (· != s)` is under a lambda, which a rewrite of `s != s` does not
+reach. -/
+theorem any_bne_two {l : Array String} {s : String} (hl : l = #[s, s]) : (l.any fun x => x != s) = false := by
+  subst hl
+  simp
+
+/-- `some <$>` a computation that returns, as the setup reads the partition: no rule matches a `Functor.map`. Its side
+condition is walked. -/
+theorem map_some_ok {ε α : Type} {m : Except ε α} {a : α} (h : m = .ok a) : (some <$> m) = .ok (some a) := by
+  rw [h]; rfl
+
+fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String)
+    (hr : r.Plain) (hCe : C.isEmpty = false)
+    (hu1 : canon (unitsJ (hexOf C)) = .ok s3)
+    (hu2 : canon (HmRow.unitsEntry { cO ls lh H C A B A' B' s1 with outPorts := #[] } #[0, 1]) = .ok s3)
+    (hd : canonUtf8 (hdrJ r (hexOf H) (hexOf C)) = .ok s4) :
+    HmIn.loadPublic tz (cO ls lh H C A B A' B' s1) {} (pubOf r (hexOf H) (hexOf C)) by
+  [findByte_pub hr (plainStr_hexOf H) (plainStr_hexOf C), extract_hdr r (hexOf H) (hexOf C), fromUTF8?_toUTF8,
+    parse_hdr hr (plainStr_hexOf H) (plainStr_hexOf C), norm_hdr r (hexOf H) (hexOf C),
+    extract_body r (hexOf H) (hexOf C), bne_self, hCe, any_bne_two, hu1, hu2, hd]
+  block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
+    HmRow.classOf, HmRow.parse, HmOut.parse, Flock.norm]
+  shallow [metaText]
+
+/-! ## The statement -/
+
+/-- The drawn statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
+of the two, and the drawn instance's units. -/
+def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
+  ((((hdrJ r circ cls).setObjVal! "unit_draw" drawJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
+    "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])
+
+def oA (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).1
+def oB (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).2
+
+/-- Δ of a statement without public input ports, `HmOut.delta`'s arrays kept as they are. -/
+theorem delta_in (c : Circuit) (p : Nat) : HmIn.delta c {} p = (oA c p, oB c p) := rfl
+
+fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
+    (s1 s3 s4 s5 s6 : String) (hello : ByteArray → Nat → String)
+    (hr : r.Plain)
+    (hH : Sha512.hash (bytesOf ls lh) = H)
+    (hcl : HmRow.classOf (bytesOf ls lh) "flock-circuit copy16" metaJ = .ok C)
+    (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786)
+    (hps : Net.parse (netLs "sha512x3" ls).toArray = .ok (shaB A B))
+    (hph : Net.parse (netLs "hm96" lh).toArray = .ok (hmB A' B'))
+    (hc1 : canon lsJ = .ok s1) (hc2 : canon pinJ = .ok s1)
+    (hck : ∀ c : Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
+      HmNets.check c = .ok ())
+    (hCe : C.isEmpty = false)
+    (hu1 : canon (unitsJ (hexOf C)) = .ok s3)
+    (hu2 : canon (HmRow.unitsEntry { cO ls lh H C A B A' B' s1 with outPorts := #[] } #[0, 1]) = .ok s3)
+    (hd : canonUtf8 (hdrJ r (hexOf H) (hexOf C)) = .ok s4)
+    (hd2 : canonUtf8 (hdrD r (cO ls lh H C A B A' B' s1) (hexOf H) (hexOf C)) = .ok s5)
+    (hid : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6)
+    (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
+    Stmt.setupHidden tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX [] (some drawJ) (some partObj) none none by
+  [parseOut_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck,
+    load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, map_some_ok, cpo_part, canon_part, bne_self, hd2, hid,
+    hhello, unit_eq, delta_in]
+  block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
+    HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, HmRow.checkPartitionObject,
+    HmRow.delta, HmOut.delta, oA, oB]
+  shallow [metaText]
+
+fwd_def tabX setupTables_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
+    (s1 s3 s4 s5 s6 : String) (hello : ByteArray → Nat → String)
+    (hr : r.Plain)
+    (hH : Sha512.hash (bytesOf ls lh) = H)
+    (hcl : HmRow.classOf (bytesOf ls lh) "flock-circuit copy16" metaJ = .ok C)
+    (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786)
+    (hps : Net.parse (netLs "sha512x3" ls).toArray = .ok (shaB A B))
+    (hph : Net.parse (netLs "hm96" lh).toArray = .ok (hmB A' B'))
+    (hc1 : canon lsJ = .ok s1) (hc2 : canon pinJ = .ok s1)
+    (hck : ∀ c : Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
+      HmNets.check c = .ok ())
+    (hCe : C.isEmpty = false)
+    (hu1 : canon (unitsJ (hexOf C)) = .ok s3)
+    (hu2 : canon (HmRow.unitsEntry { cO ls lh H C A B A' B' s1 with outPorts := #[] } #[0, 1]) = .ok s3)
+    (hd : canonUtf8 (hdrJ r (hexOf H) (hexOf C)) = .ok s4)
+    (hd2 : canonUtf8 (hdrD r (cO ls lh H C A B A' B' s1) (hexOf H) (hexOf C)) = .ok s5)
+    (hid : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6)
+    (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
+    Stmt.setupTables tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX 1 [] (some drawJ) (some partObj) none none
+      none none none by
+  [setup_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd hd2 hid
+    hhello]
+  block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
+    HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, Stmt.setupHidden]
+  shallow [metaText]
+
+end SpotFlock.InstanceStmt
