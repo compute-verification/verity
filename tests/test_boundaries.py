@@ -233,11 +233,11 @@ BENCHMARKS_IMPORTERS = {
     # the served path: verity_vllm runs benchmarks' code
     "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
-                                                       "`config.P2_POUS` and `config.P2_STAGE`",
+                                                       "its `P2_POUS` and `P2_STAGE`",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
-                                                                          "`config.REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`)",
+                                                                          "its `REMOTE_SESSION`) and `paged.py` "
+                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
@@ -776,7 +776,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``config.REMOTE_SESSION``), and through any function, wherever it
+    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
     is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))

@@ -35,10 +35,9 @@ from typing import Any
 
 import torch
 
-from verity_vllm import config
 from verity_vllm.engine import int8_ops
 from verity_vllm.engine.int8_window import CreditedRead, LayerKeys
-from verity_vllm.protocols.remote_bandwidth.remote import session_module
+from verity_vllm.protocols.remote_bandwidth import remote
 
 RECORD = "int8_store_gpu.json"
 ROUNDS = 3
@@ -54,7 +53,7 @@ class Codec:
     """paged.cu's build at P1024 under the seed's key: its shape, token-layer words and in-place encoders."""
 
     def __init__(self, so: str) -> None:
-        self.P = session_module("paged", config.REMOTE_SESSION.parent / "vllm_encoded")
+        self.P = remote.session_module("paged", remote.VLLM_ENCODED)
         self.lib = self.P.PagedLib("p1024", so)
         self.P.KB.set_key(self.lib, self.P.KB.lib_key(self.lib, ROUNDS))
         self.F = self.lib.field

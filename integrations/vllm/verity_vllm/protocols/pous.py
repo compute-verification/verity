@@ -64,6 +64,11 @@ NAME = "pous"
 DEFAULT_SCHEME = "p2-16448/v4"
 SETTINGS = ("salt_source", "p2_lib", "experimental")
 COVERS = "linears"
+#: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
+#: POUS encodes with.
+P2_POUS = config.ROOT.parent.parent / "benchmarks" / "pous"
+#: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
+P2_STAGE = config.ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
 
 def schemes() -> tuple[str, ...]:
@@ -147,10 +152,10 @@ def _package(name: str, directory: Path) -> None:
 def _p2(module: str) -> Any:
     """``store`` (`benchmarks/pous/p2_v1/store.py`, as ``p2_v1.store``) or ``stage``
     (`benchmarks/torch_gpu/p2_stage/stage.py`, as ``p2_stage.stage``)."""
-    _package("p2_v1", config.P2_POUS / "p2_v1")
+    _package("p2_v1", P2_POUS / "p2_v1")
     if module == "store":
         return importlib.import_module("p2_v1.store")
-    _package("p2_stage", config.P2_STAGE)
+    _package("p2_stage", P2_STAGE)
     return importlib.import_module("p2_stage.stage")
 
 
