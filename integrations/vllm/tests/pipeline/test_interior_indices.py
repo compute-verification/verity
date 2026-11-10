@@ -18,7 +18,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.refs import coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.windows import rows as CS
@@ -34,18 +34,17 @@ CELLS = (NC, G * W)
 
 def _block():
     """Each span a batch of `NC` `A` units on its own parameters, the j-th reading ``c``'s row j, and `G` batches of `W`
-    `B` units, each batch reading ``i``'s `W` rows."""
+    `B` units, each batch on its `W` rows of ``y0`` and ``ybest`` and reading ``i``'s `W` rows."""
     (ap, ar), (bp, br) = A.signature(), B.signature()
     params = (*((n, Array(NC, t)) for n, t in (ap[0], ap[1])), ("c", Array(NC, ap[2][1])),
-              *((f"{n}{g}", Array(W, t)) for g in range(G) for n, t in (bp[0], bp[1])), ("i", Array(W, bp[2][1])))
+              *((f"y{n}", Array(G * W, t)) for n, t in (bp[0], bp[1])), ("i", Array(W, bp[2][1])))
 
-    def body(B_, S_, x0, best, c, *rest):
-        return tuple_of(B_.batch(A, x0, best, c, axes=(0, 0, 0)),
-                        *(B_.batch(B, rest[2 * g], rest[2 * g + 1], rest[-1], axes=(0, 0, 0)) for g in range(G)))
+    def body(B_, S_, x0, best, c, y0, ybest, i):
+        return tuple_of(B_.batch(A, x0, best, c, axes=(0, 0, 0)), coll_concat(Array(G * W, br), [
+            B_.batch(B, y0[g * W:(g + 1) * W], ybest[g * W:(g + 1) * W], i, axes=(0, 0, 0)) for g in range(G)]))
 
     return bind(CompositeDefinition("InteriorIndicesTest", 0, (),
-                                    lambda S_: (params, Tuple(Array(NC, ar), *(Array(W, br) for _ in range(G)))), body,
-                                    register=False))
+                                    lambda S_: (params, Tuple(Array(NC, ar), Array(G * W, br))), body, register=False))
 
 
 BLOCK = _block()
