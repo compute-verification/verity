@@ -214,7 +214,7 @@ def job_env(a: argparse.Namespace) -> list[str]:
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
     env, m, limit = job_env(a), on(a), a.max_min or max_min(a)
-    job = ["bash", "benchmarks/recursion_e2e/job.sh", *env]
+    job = ["bash", "workloads/recursion_e2e/job.sh", *env]
     if direct(a):
         return ["research", "run", "--on", m, "--project", "verity", "--campaign", "recursion-e2e", "--source", str(root),
                 "--cwd", "source", "--mem-gb", str(mem_gb(a)), "--timeout", f"{limit}m", "--", "taskset", "-c", a.cores, *job]

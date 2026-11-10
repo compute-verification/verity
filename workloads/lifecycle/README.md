@@ -6,10 +6,10 @@ is the interfaces it exposes, listed in (b) and (c); where an interface doesn't 
 version of it in `lifecycle.py`, and nothing under `verity/` or `Security/` changes.
 
 ```text
-uv run python examples/lifecycle/run.py                          # one monitoring period of each composite, about 2 s on CPU
-uv run python examples/lifecycle/run.py --only onsite --cheat off-node   # the developer deviating
+uv run python workloads/lifecycle/run.py                          # one monitoring period of each composite, about 2 s on CPU
+uv run python workloads/lifecycle/run.py --only onsite --cheat off-node   # the developer deviating
 verity demo lifecycle                                         # the same, through the demo command
-uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # honest, and every deviation refused
+uv run --directory workloads/lifecycle pytest tests/test_lifecycle.py     # honest, and every deviation refused
 ```
 
 `lifecycle.py` holds the model, the site's `Layout`, the phases as functions and the two parties both composites share

@@ -2626,6 +2626,16 @@
         "benchmarks/network_traces/window_chain.py": "integrations/vllm/network_traces/window_chain.py",
         "verity/ml/commitments/": "integrations/vllm/commitments/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/recursion_e2e/": "workloads/recursion_e2e/",
+        "examples/README.md": "workloads/dither_full_util/examples/README.md",
+        "examples/dither_full_util/": "workloads/dither_full_util/",
+        "examples/lifecycle/": "workloads/lifecycle/",
+        "examples/onsite_served/": "workloads/onsite_served/",
+        "examples/vllm/": "workloads/vllm/"
+      }
     }
   ]
 }

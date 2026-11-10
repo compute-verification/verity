@@ -237,7 +237,7 @@ def test_a_gpu_run_is_a_gpu_host_job_on_node_1s_queue(capsys) -> None:
     cmd = capsys.readouterr().out.split()
     assert cmd[:6] == ["research", "run", "--queue", "--on", "vy-nebius-1", "--gpu-host"]
     assert "--gpus" not in cmd                              # 85 refuses a job holding a lease: each prove leases its own
-    assert cmd[cmd.index("--") + 1:][:2] == ["bash", "benchmarks/recursion_e2e/job.sh"]
+    assert cmd[cmd.index("--") + 1:][:2] == ["bash", "workloads/recursion_e2e/job.sh"]
     assert "N=16" in cmd and "STEPS=build,lean" in cmd     # the pipeline's order, whatever order --steps gives
     assert "--preemptible" not in cmd
     assert RUN.main(["run", "--dry-run", "--node", "vy-nebius-2", "--preemptible", "--oprove-gpu", "1"]) == 0
@@ -416,7 +416,7 @@ def test_a_firewalled_run_is_a_plain_run_on_a_cpu_node(capsys) -> None:
     head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert head[:4] == ["research", "run", "--on", "vy-nebius-cpu-2"] and "--queue" not in head and "--gpu-host" not in head
     assert head[head.index("--timeout") + 1] == f"{RUN.SETUP_MIN + 1}m"     # a plain run's limit is its --timeout
-    assert job[:5] == ["taskset", "-c", "0-31", "bash", "benchmarks/recursion_e2e/job.sh"]
+    assert job[:5] == ["taskset", "-c", "0-31", "bash", "workloads/recursion_e2e/job.sh"]
     assert "GPU=0" in job and f"FLOCK_WORK={RUN.CPU_WORK}" in job
     assert RUN.main(["run", "--dry-run", "--on", "vy-nebius-cpu-5", "--cores", "32-63", "--env", "FLOCK_WORK=/x"]) == 0
     cmd = capsys.readouterr().out.split()

@@ -30,7 +30,7 @@ import tomllib
 from pathlib import Path
 
 here, run = Path(sys.argv[1]), sys.argv[2]
-script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "examples/vllm/commit.sh", "serve": "examples/vllm/serve.sh"}[run]
+script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "workloads/vllm/commit.sh", "serve": "workloads/vllm/serve.sh"}[run]
 placement = tomllib.loads((here / "placement.toml").read_text())
 row, rows = placement["row"], here.parents[1] / "integrations" / "vllm" / "workloads"
 sums = {name.lstrip("*"): h for h, name in (line.split() for line in (rows / "SHA256SUMS").read_text().splitlines() if line.strip())}

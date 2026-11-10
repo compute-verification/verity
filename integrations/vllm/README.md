@@ -18,12 +18,12 @@ Verity itself knows nothing of vLLM.
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
   flag and record. The public release leaves out this endpoint and the window circuit, which read the network
   certifier's encoding, and that encoding stays private, so it ships without a runnable served window.
-- **`verity demo vllm`** (`examples/vllm/run.sh`) starts the served-verdicts launcher,
-  `benchmarks/one_stage/served_verdicts.sh`, on the node `examples/vllm/placement.toml` names. It runs the Build of
+- **`verity demo vllm`** (`workloads/vllm/run.sh`) starts the served-verdicts launcher,
+  `benchmarks/one_stage/served_verdicts.sh`, on the node `workloads/vllm/placement.toml` names. It runs the Build of
   record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network certifier follow where each has its piece,
-  and it ends with one record of every verdict. The launcher's header gives each step, and `examples/vllm/README.md`
+  and it ends with one record of every verdict. The launcher's header gives each step, and `workloads/vllm/README.md`
   says what the run establishes.
 - **`verity-vllm COMMAND`** (`verity_vllm/pipeline/cli.py`, or `python -m verity_vllm.pipeline.cli`): every tool here is a
   subcommand of this one command line. `verity-vllm --help` lists them all. `COMMANDS` maps each to its module, whose

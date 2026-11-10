@@ -5,7 +5,7 @@
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
 # it, a firewalled run (85's CPU prover, GPU=0) as a plain run on a CPU node:
 #   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
-#     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
+#     taskset -c 0-31 bash workloads/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
 # and a GPU one as a GPU host job on a GPU node's queue (85 leases a GPU around each prove itself).
 # env: K=4096 N=2 (85's inner statement: N template instances of GemmCoordinate_v2{K})
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
@@ -36,7 +36,7 @@ set -uo pipefail
 [ "${RELEASE:-0}" = 1 ] && export WARM=${WARM:-0} RUNS=${RUNS:-1} REPEAT=${REPEAT:-1}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
 # settings.py: an unknown REPEAT_* or OPROVE_*, or a value that doesn't parse, is refused; the value settings given are recorded
-SETTINGS=$(python3 benchmarks/recursion_e2e/settings.py record "$O/settings.json") || exit 2
+SETTINGS=$(python3 workloads/recursion_e2e/settings.py record "$O/settings.json") || exit 2
 # 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
 # measurement (85 retries the statement afresh, at most GPU_TRIES times), so the bench's are not. A firewalled V* release
 # at K = 4096 takes minutes (L3: 519 s), past 85's default lease of 10 min for the larger statements (run.py's LEASE_MIN)
@@ -51,7 +51,7 @@ MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
 # V*'s statements one at a time, as the ZK server proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
-  --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
+  --regenerate "bash workloads/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
 # 85 moves HOME where it can't write; its Lean builds (flock-verify, flock-firewall) must find the same elan
@@ -88,7 +88,7 @@ timed() {
 step() { local name=$1 i=$2; shift 2; timed "$name" "$i" env STEP=$name "$@" bash $REC; }
 
 result() {
-  python3 benchmarks/recursion_e2e/run.py result --dir "$O" --out "$O/recursion_e2e.json" --md "$O/table.md" 2> "$O/result.err" \
+  python3 workloads/recursion_e2e/run.py result --dir "$O" --out "$O/recursion_e2e.json" --md "$O/table.md" 2> "$O/result.err" \
     | tee -a "$O/job.log"
   local r=${PIPESTATUS[0]}
   [ $r = 0 ] || tail -20 "$O/result.err"
@@ -126,7 +126,7 @@ for s in ${STEPS//,/ }; do
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
       lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/flock-verify
-      timed forge-after 1 env OUT=$O/steps/forge-after/r1/out python3 benchmarks/recursion_e2e/forge_after.py \
+      timed forge-after 1 env OUT=$O/steps/forge-after/r1/out python3 workloads/recursion_e2e/forge_after.py \
         --work "$FLOCK_WORK" --tag "$TAG" --run-out "$lo" --kinds "${FORGE_AFTER:-coef,dirs,message}" --jobs "${LEAN_JOBS:-4}" \
         --bin "$([ -f $lo/lean/own-L0.txt ] || [ -f $lo/lean/own-alg-p0.txt ] && echo run || echo lean)=$fv" || rc=1 ;;
     *) log "STEPS: $s is not one of build inner icheck vstage vcap oprove oreplay lean forge-after negative"; rc=2 ;;

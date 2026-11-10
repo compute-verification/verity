@@ -126,7 +126,7 @@ ALLOWED: dict[str, int] = {
     "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json": 8,
     "examples/h200/interfaces/tests/test_report.py": 1,
     "examples/h200/m3coin.py": 1,
-    "examples/vllm/placement.toml": 1,
+    "workloads/vllm/placement.toml": 1,
     "integrations/vllm/tests/protocols/pouw_h1_rehearsal.py": 1,
     "tools/verity/check/tests/test_placement.py": 3,
     "verity/definitions/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,

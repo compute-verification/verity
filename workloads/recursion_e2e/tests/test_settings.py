@@ -25,7 +25,7 @@ NOT_IN_JOB = {*(f"REPEAT_{s.upper()}" for s in RS.REPEATED), "OPROVE_MEM_GB", "T
 def test_every_variable_job_sh_reads_is_declared_and_every_declared_one_is_read() -> None:
     read = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*):?[-+=?]", (HERE / "job.sh").read_text()))
     declared = set(RS.REGISTRY.settings)
-    assert not read - declared, f"declare it in benchmarks/recursion_e2e/settings.py: {sorted(read - declared)}"
+    assert not read - declared, f"declare it in workloads/recursion_e2e/settings.py: {sorted(read - declared)}"
     assert declared - read == NOT_IN_JOB, sorted(declared - read)
     assert set(RS.REPEATED) <= set(RUN.STEPS)
 
@@ -68,6 +68,6 @@ def test_direct_environment_uses_only_shrink() -> None:
         if "__pycache__" not in p.parts and (uses := direct_uses(p.read_text())):
             found[str(p.relative_to(HERE))] = len(uses)
     grown = {f: n for f, n in found.items() if n > BASELINE.get(f, 0)}
-    assert not grown, f"read the environment through benchmarks/recursion_e2e/settings.py (declare it there): {grown}"
+    assert not grown, f"read the environment through workloads/recursion_e2e/settings.py (declare it there): {grown}"
     shrunk = {f: found.get(f, 0) for f, n in BASELINE.items() if found.get(f, 0) < n}
     assert not shrunk, f"fewer direct uses than BASELINE allows: lower it in tests/test_settings.py to {shrunk}"

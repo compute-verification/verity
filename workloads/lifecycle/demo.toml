@@ -12,5 +12,5 @@ challenger = "local"           # the memory challenger (onsite)
 certifier = "local"            # the network certifier splitting the uplink (onsite)
 
 [evidence]
-tests = ["examples/lifecycle/tests/test_lifecycle.py::test_onsite_period",
-         "examples/lifecycle/tests/test_lifecycle.py::test_remote_period"]
+tests = ["workloads/lifecycle/tests/test_lifecycle.py::test_onsite_period",
+         "workloads/lifecycle/tests/test_lifecycle.py::test_remote_period"]

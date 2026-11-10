@@ -21,7 +21,7 @@ LAYOUT = replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_0
 """The site's first hardware registration entry: the node, and its uplink with no certifier on it."""
 
 MANIFEST = Manifest(
-    ID, 1, "examples/lifecycle/remote.py:MANIFEST",
+    ID, 1, "workloads/lifecycle/remote.py:MANIFEST",
     parties=(Role(DEVELOPER, "developer", needs=("coins",)), Role(VERIFIER, "auditor", needs=("coins",))),
     channels=(Channel(DEVELOPER, VERIFIER, ("Hardware", "Register", "Declare", "Proofs")),
               Channel(VERIFIER, DEVELOPER, ("Draw", "Done"), carries_coins=True)),

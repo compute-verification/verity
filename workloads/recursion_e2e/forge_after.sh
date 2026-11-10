@@ -2,7 +2,7 @@
 # forge-after (forge_after.py) over a firewalled run's releases, with that run's flock-verify (its out/lean.sha) and this
 # tree's (main's Lean sources), built under WORK; nothing under FLOCK_WORK is written. On the node that ran it, through a slot:
 #   research run --on NODE --project verity --source . --cwd source -- env CHECK_SLOTS=/workspace/research/locks/leanrec/slots \
-#     python3 tools/verity/check/slot.py --by benchmarks -- bash benchmarks/recursion_e2e/forge_after.sh \
+#     python3 tools/verity/check/slot.py --by benchmarks -- bash workloads/recursion_e2e/forge_after.sh \
 #     FLOCK_WORK=/workspace/cache/bench-recrun-fw TAG=k64n16fw RUN=<the run id>
 for kv in "$@"; do export "$kv"; done
 : ${FLOCK_WORK:?} ${TAG:?} ${RUN:?}
@@ -22,4 +22,4 @@ if [ ! -x $NEW ]; then
   ) > $OUT/build-lean.log 2>&1 || { tail -20 $OUT/build-lean.log; exit 1; }
 fi
 echo "run's flock-verify $OLD; this tree's $NEW (lean-$LSHA)"
-python3 benchmarks/recursion_e2e/forge_after.py --work $FLOCK_WORK --tag $TAG --run-out $RUN_OUT --bin run=$OLD --bin main=$NEW
+python3 workloads/recursion_e2e/forge_after.py --work $FLOCK_WORK --tag $TAG --run-out $RUN_OUT --bin run=$OLD --bin main=$NEW

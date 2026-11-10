@@ -7,7 +7,7 @@
 # with STAGE=0 and N the statement's template instances. Every other KEY=VALUE goes on to job.sh. Run from the verity
 # tree, as job.sh is:
 #   research run --on vy-nebius-cpu-2 --project verity --cwd source --mem-gb 128 --timeout 600m -- \
-#     taskset -c 0-31 bash benchmarks/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i8192/bf16 N=3 GPU=0 \
+#     taskset -c 0-31 bash workloads/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i8192/bf16 N=3 GPU=0 \
 #     FLOCK_WORK=/workspace/cache/rec-bench STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative
 # env: SUBCIRCUIT (a census-style id)  N=3 (seeded inputs; WINDOW: the member's own n)  SEED (rec_inner.py's)
 #      WINDOW=DIR MEMBER=0  FLOCK_WORK=/workspace/jobs/rec-bench  TAG=rb-<run id>
@@ -53,4 +53,4 @@ touch "$DD/stage/own-partition"
 N=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["n"])' "$O/stage.json") || exit 1
 cat "$O/stage.json"
 # job.sh removes data/$TAG at its end unless KEEP_DATA=1
-exec bash benchmarks/recursion_e2e/job.sh "$@" STAGE=0 N=$N TAG=$TAG FLOCK_WORK=$FLOCK_WORK
+exec bash workloads/recursion_e2e/job.sh "$@" STAGE=0 N=$N TAG=$TAG FLOCK_WORK=$FLOCK_WORK
