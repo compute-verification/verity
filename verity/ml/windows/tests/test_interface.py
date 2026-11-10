@@ -862,6 +862,29 @@ def test_an_opening_is_registered_only_where_its_reader_is_a_definition_the_veri
             I.input_count(rec, with_reader(CHECKS), PIN, PIN, bad)
 
 
+def test_a_pinned_readers_opening_is_registered_only_where_its_units_read_the_tables_root_and_domain():
+    """Under the pin of its reader an opening still fills ``registered`` only where one table read of its table's root and
+    one of its domain id, by its reader, cover its units (`rooted`). With neither read, with one of the two, with a root
+    read of two of its three units or two that cover them only together, or with the root and domain rows declared among
+    the opening's own ports, the pinned reader checks the opening against a root or domain of the prover's own, and its
+    row, salt and path are free; the table reads that remain are registered still."""
+    reg = declared().registered
+    (root, domain), (opening,) = reg.roots, reg.openings
+    reads, table, opened = 16 * (6 * 128 + 3 * 256), 16 * 3 * 32, 16 * 3 * (16 + 96 + 64)
+
+    def count(roots, ports=opening.ports) -> tuple[int, int]:
+        rec = declared(registered=replace(reg, roots=tuple(roots), openings=(replace(opening, ports=ports),)))
+        n = I.input_count(rec.description(), with_reader(CHECKS), PIN, PIN, [I.reader_digest(CHECKS)])
+        return n["registered"], n["free"]
+
+    assert count([root, domain]) == (reads + 2 * table + opened, 32)
+    assert count([]) == (reads, 32 + 2 * table + opened)
+    assert count([root]) == count([domain]) == (reads + table, 32 + table + opened)
+    assert count([replace(root, units=2), domain]) == (reads + table // 3 * 5, 32 + table // 3 + opened)
+    assert count([replace(root, units=2), replace(root, at=2, units=1), domain]) == (reads + 2 * table, 32 + opened)
+    assert count([], ("root", "domain", *opening.ports)) == (reads, 32 + 2 * table + opened)
+
+
 def test_a_readers_digest_is_its_definitions_in_any_program():
     """`reader_digest` takes a Definition's closure digest over its population of one, and it is `closure_digest` of the
     Definition's key in any Program that holds it, here a population of two templates: a Definition's digest reads
@@ -1652,7 +1675,8 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
     record with the same declarations: registered where the table's parameter is held and, for an opening, its reader is
     a Definition the verifier pinned (`CHECKS`), free without a pin or where the window's root is another, and a key a
     wire fills still wired. An opening whose reader is no pinned Definition (`FORGED` under the same name, or no readers
-    pinned) is free in both, the table reads registered still. A table that isn't its parameter's every row, a table
+    pinned) is free in both, the table reads registered still, and so is a pinned reader's whose units read the table's
+    domain id and no root (`rooted`). A table that isn't its parameter's every row, a table
     read of no declared table or off a 64-byte input row, an opening whose members lack its key or verdict, a declaration
     over part of a member, outside its template's units or of no template, over a row a wire fills, or over another's rows
     is refused by the count, as by the record and the verifier's window (`listed_reads`)."""
@@ -1676,6 +1700,12 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
     assert keyed == {**stated, I.WINDOW_INGRESS: 0, "wired": 16 * 2 * words["tok"], "free": 16 * words["tok"]}
     reg = c.registered
     root, opening = reg.roots[0], reg.openings[0]
+    unrooted = replace(reg, roots=reg.roots[1:])
+    assert reg.roots[1].of == "domain" and I.input_count(embedding(registered=unrooted).description(), pins=pins,
+                                                         roots=pins, **held) == {
+        **stated, "registered": 16 * 3 * 32, "free": 16 * 3 * (words["tok"] + 32) + opened}
+    assert I.input_count(listed_embedding(registered=unrooted), pins=pins, roots=pins, **held) == {
+        **stated, I.WINDOW_INGRESS: 0, "registered": 16 * 3 * 32, "free": 16 * 3 * (words["tok"] + 32) + opened}
     for bad, why in [(replace(reg, params={"embed": 80}), "its registered parameter's every row"),
                      (replace(reg, roots=(replace(root, table="other"),)), "a declared table's root or domain id"),
                      (replace(reg, roots=(replace(root, port="row"),)), "is not a 64-byte port"),
