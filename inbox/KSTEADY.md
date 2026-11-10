@@ -113,3 +113,16 @@ Timers may not wake the lead (INF-666), so no run's start may depend on an agent
   `types.json`, and with several steady reports for one type takes the fullest statement, then the newest. The lead asked
   benchmarks to make the prover count part of that rule. Until proofs says which count prices a type, label only
   one-prover reports, starting with r20261110-055806-f308, and check first that its layout is what the command reads.
+
+## Tue 10 Nov 07:09Z: the cards are free NOW, to 08:10Z. Use the hour if you can
+
+vllm's run ended at 07:02Z, an hour early (INF-659, vllm's lead at 07:08Z: no lease and no GPU process of vllm's since
+07:04Z; not checked by the lead on the node). Nothing of vllm's starts before 09:45Z. proofs' next row may start at
+08:10Z, so everything of yours ends by 08:05Z.
+
+- If you can launch `gq` with one prover at once and it fits before 08:05Z, do it now, with the same start check
+  (your own two cards and their leases) and `--max-min` set to end by 08:05Z. One prover only; refuse to start if less
+  time is left than it needs.
+- Then the 10:30 to 11:55Z hour takes what is next: `gq` with 2 and 4 provers if `gq` ran now, or `fi` K6144 with one
+  prover if that fits 85 minutes better. Your call, by what fits; say which on HASH-98.
+- If `gq` cannot start by about 07:25Z, leave tonight alone and keep the 10:30Z plan.
