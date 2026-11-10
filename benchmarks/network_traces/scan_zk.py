@@ -76,7 +76,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   which the round's registration holds (`own_rows`), since Lean takes registered reads only when they name every port
   of the circuit (`Flock.Registered.checkComplete`). Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
+  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names ``prog`` tied, which
+  R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict publishes it
+  (``rests_on_period_check: ["prog"]``): the acceptance rests on a period check, `NetworkCheck.Period`'s `wired`, which
+  ties ``prog``'s rows to the audit that registered them and refuses this run's stand-in block, no pinned
+  `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
@@ -942,8 +946,9 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
     of the slot entries each unit's (`entry_reads`), and its ``prog`` the one value it names tied (``tied``): every
     `EVERY` units read one slot entry, the output of the block that registered it, which `NetworkCheck.Period`'s rows
-    form ties to the scan (`progTied`, `wired`), so R8 lets it through; every other round's a population of its
-    templates, which names none."""
+    form ties to the scan (`progTied`, `wired`), so R8 lets it through and the registration verdict publishes it
+    (`rests_on_period_check`): the round's acceptance rests on that period check, which refuses the block round's
+    stand-in; every other round's a population of its templates, which names none."""
     defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
     counts = counts_of(members)
     nb = G * T // cls.EVERY
@@ -1237,7 +1242,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     member with no unit sampled runs no session. Member j's session listens on ``port + j``, or with ``port`` 0 on a
     port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An accepted audit carries its
     charge terms (`charge_terms`) and each member's cost per sampled proof block; on the challenger's coins, the outcome
-    of record is the stream's (`coins_outcome`)."""
+    of record is the stream's (`coins_outcome`). Every outcome carries the tied values R8 let through
+    (``rests_on_period_check``, the registration verdict's), on whose period check its acceptance rests."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1278,7 +1284,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
-    res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
+    res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()},
+                 "rests_on_period_check": checks["registration"].get("rests_on_period_check", [])}
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
     if not all(v["ok"] for v in checks.values()):

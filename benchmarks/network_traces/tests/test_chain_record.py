@@ -15,9 +15,10 @@ gates' records into its output keeps no gate run's witness/. On the certifier-on
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
 inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
-(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
-on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
-period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
+(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier (`scan
+accepted on the period check` when the honest round's registration let a tied value through), and `scan refused`
+(exit 1) on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On
+certifier/v0's period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
 session and key, execution phases the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
@@ -443,6 +444,15 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert rc == 0 and got["verdict"] == "scan accepted" and got["scope"] == cr.SCAN_ONLY == "scan only, N2 not given"
     assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/forged": True}
     assert "Verdict: **scan accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
+
+    put({"audit": {**rnd(True)["audit"], "rests_on_period_check": ["prog"]}}, rnd(False))
+    rc, got = run("tied")
+    scan = got["steps"]["scan"]
+    assert rc == 0 and got["verdict"] == f"scan {cr.RESTS}" == "scan accepted on the period check"
+    assert scan["verdict"] == cr.RESTS and scan["rests_on_period_check"] == ["prog"] and "refuses" in scan["why"]
+    assert scan["rounds"]["honest"]["rests_on_period_check"] == ["prog"] and got["why"]["scan"].startswith(cr.RESTS)
+    md = (tmp_path / "tied" / "report.md").read_text()
+    assert f"Verdict: **scan {cr.RESTS}**" in md and f"| scan | {cr.RESTS} |" in md and "| scan | accepted |" not in md
 
     put(rnd(True), rnd(True))
     rc, got = run("forged-accepted")
