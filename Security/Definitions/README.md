@@ -19,36 +19,32 @@ reads. [`Security/README.md`](../README.md) has the argument, the lock and what 
 
 ## Areas
 
-Each area is a root module `<Area>.lean` and the directory `<Area>/`. The owner is the registry's
-(`research msg owners PATH`).
+Each area is a root module `<Area>.lean` and the directory `<Area>/`. Its owner is read from the registry, path by
+path: `research msg owners PATH`.
 
-| Area | Owner | What it states |
-|---|---|---|
-| `Accounting` | @lean, by file | The device model every resource audit is about, and a joint audit's run on it |
-| `Assumptions` | @lean | The named assumptions: the few `Prop`s the guarantees take without proof |
-| `Claims` | @lean | Flock's claim statements, over Core's interaction model |
-| `Core` | @proofs | The model every area states its guarantees in: circuits, partitions, coins |
-| `Flock` | @lean | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |
-| `Hash` | @proofs | Messages, digests and collisions; frame-v3 trees; the served row leaf; the keyed leaf |
-| `Nci` | @compute-accounting | The inference-only policy: `Complies c k`, `CompliesRate c α` |
-| `NetworkCertifier` | @network-accounting | The network certifier's protocol: grids, the interaction, the Program |
-| `Pous` | @memory-accounting | PoUS: its game, its models and the requirement `Pous.Meets` |
-| `Pouw` | @compute-accounting | PoUW's protocol: the definitions its statements read |
-| `Spot` | @lean | Populations: units over committed value slots, their dataflow, cones and egress |
-| `WeightSecurity` | @lean | Model weight security: the setting |
-
-Under `Accounting`, the registry gives files to @memory-accounting (the bandwidth, rate and remote audits, memory,
-gates) and to @compute-accounting (PoUW's work, coin flow, `TS`).
+| Area | What it states |
+|---|---|
+| `Accounting` | The device model every resource audit is about, and a joint audit's run on it |
+| `Assumptions` | The named assumptions: the few `Prop`s the guarantees take without proof |
+| `Claims` | Flock's claim statements, over Core's interaction model |
+| `Core` | The model every area states its guarantees in: circuits, partitions, coins |
+| `Flock` | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |
+| `Hash` | Messages, digests and collisions; frame-v3 trees; the served row leaf; the keyed leaf |
+| `Nci` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
+| `NetworkCertifier` | The network certifier's protocol: grids, the interaction, the Program |
+| `Pous` | PoUS: its game, its models and the requirement `Pous.Meets` |
+| `Pouw` | PoUW's protocol: the definitions its statements read |
+| `Spot` | Populations: units over committed value slots, their dataflow, cones and egress |
+| `WeightSecurity` | Model weight security: the setting |
 
 ## Generated files
 
 A generated file is its generator's: change the generator and run it, never the file.
 
-- `Accounting/Headline/` and `Accounting/HeadlineDc/` are compute-research's. Its headline exporter
-  (`benchmarks/pouw/lean_headline.py`, `benchmarks/pouw/lean_headline_dc.py`) writes the instances there, which import
-  the `Encoding.lean` beside them.
-- `Accounting/Sheets/` is what the machine model prints (`machine-model --device DEVICE sheet --lean`,
-  `benchmarks/pouw/machine_model/`).
+- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `benchmarks/pouw/lean_headline.py` and
+  `benchmarks/pouw/lean_headline_dc.py` write the instances there, which import the `Encoding.lean` beside them.
+- `Accounting/Sheets/`: `benchmarks/pouw/machine_model/`, the ACCEL model of each measured card, prints each file
+  from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
 Each generator's tests hold the files to its output. `Security/README.md` lists every program that writes Lean under
 `Security/`.

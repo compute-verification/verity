@@ -28,22 +28,19 @@ The package `security_proofs` (`Security/Proofs/lakefile.toml`): every proof, `<
 
 ## Areas
 
-Each area but `Properties/` is a root module `<Area>.lean` and the directory `<Area>/`. The owner is the registry's
-(`research msg owners PATH`).
+Each area but `Properties/` is a root module `<Area>.lean` and the directory `<Area>/`. Its owner is read from the
+registry, path by path: `research msg owners PATH`.
 
-| Area | Owner | What it holds |
-|---|---|---|
-| `Accounting` | @lean, by file | The proofs of resource accounting's guarantees; the joint period's bridges |
-| `Core` | @proofs | `Verity.SecurityProofs.G` for core's guarantees, and every lemma behind them |
-| `Flock` | @proofs | Flock's proofs: the verifier's, level3's and soundness's (`Flock/Soundness/README.md`) |
-| `Hash` | @proofs | The hash area's proofs |
-| `Nci` | @compute-accounting | The proofs of NCI's guarantees |
-| `NetworkCertifier` | @network-accounting | The network certifier's proofs ([README](NetworkCertifier/README.md)) |
-| `Pous` | @memory-accounting | The proofs of PoUS's guarantees; `Statements` holds the lemmas' statements |
-| `Pouw` | @compute-accounting | PoUW's proofs: every theorem and lemma over `Definitions.Pouw` |
-| `Properties/` | @lean | The proofs of `Security/Properties/`, under each property's area name |
-| `Spot` | @lean | Populations: which object each policy needs of sampled proofs' guarantee |
-| `WeightSecurity` | @lean | Model weight security's proofs: the leakage lemma and its forms at a deployment |
-
-Under `Accounting`, the registry gives files to @memory-accounting (the bandwidth, rate and remote audits, memory,
-gates) and to @compute-accounting (PoUW's work, coin flow, `TS`).
+| Area | What it holds |
+|---|---|
+| `Accounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
+| `Core` | `Verity.SecurityProofs.G` for core's guarantees, and every lemma behind them |
+| `Flock` | Flock's proofs: the verifier's, level3's and soundness's (`Flock/Soundness/README.md`) |
+| `Hash` | The hash area's proofs |
+| `Nci` | The proofs of the inference-only policy's guarantees |
+| `NetworkCertifier` | The network certifier's proofs ([README](NetworkCertifier/README.md)) |
+| `Pous` | The proofs of PoUS's guarantees; `Statements` holds the lemmas' statements |
+| `Pouw` | PoUW's proofs: every theorem and lemma over `Definitions.Pouw` |
+| `Properties/` | The proofs of `Security/Properties/`, under each property's area name |
+| `Spot` | Populations: which object each policy needs of SPOT's guarantee |
+| `WeightSecurity` | Model weight security's proofs: the leakage lemma and its forms at a deployment |
