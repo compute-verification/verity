@@ -1516,6 +1516,12 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
     }
   ]
 }

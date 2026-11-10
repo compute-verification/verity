@@ -89,7 +89,7 @@ def test_the_cover_theorem_is_the_covering_count_at_c_a_one_and_aligned_at_f():
 
 
 def _nci_search():
-    path = Path(__file__).resolve().parents[2] / "nci" / "slowdown.py"
+    path = Path(__file__).resolve().parents[2] / "nci" / "bracket.py"
     spec = importlib.util.spec_from_file_location("nci_slowdown", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

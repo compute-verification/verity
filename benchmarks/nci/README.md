@@ -7,7 +7,7 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - every source we rely on, each claim quoted verbatim (`sources/`);
 - the parameters the bounds depend on, each estimate saying which findings it merges and how (`parameters.json`);
 - the policies they are evaluated under (`calibrations.json`);
-- the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
+- the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `bracket.py`).
 
 Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
 (`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
@@ -20,7 +20,7 @@ The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02, and rho's
 remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
-hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`bracket.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 
 ## Files
@@ -37,7 +37,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `arguments.py` | the map's checks (every reference resolves, including Lean names against the lock) and its rendering |
 | `catalog.py` | loading, and `problems()`: every rule below that a file breaks |
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
-| `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
+| `bracket.py` | the bracket per row; `python benchmarks/nci/bracket.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
 | `covering_priced.py` | Kimi K2's slowdown under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
 | `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
@@ -147,7 +147,7 @@ of new state per block can reach. What it throttles is moving the base model's f
 
 ## The bracket
 
-For each row under each calibration of its model, `slowdown.py` computes a bracket:
+For each row under each calibration of its model, `bracket.py` computes a bracket:
 
 - `lower` is the proven bound, `Nci.SecurityProofs.ThreadedTraining`:
   \(\text{slowdown} \ge \kappa\, b_a / (2\alpha\Lambda_T)\) with \(\alpha = K/\Gamma\) and the thread term
@@ -370,5 +370,5 @@ at most the bits of data the budgets allow.
 
 ~~~sh
 python benchmarks/nci/render.py > /tmp/nci-index.md     # never commit the output
-python benchmarks/nci/slowdown.py --calibration kimi-k2-1m-raw
+python benchmarks/nci/bracket.py --calibration kimi-k2-1m-raw
 ~~~

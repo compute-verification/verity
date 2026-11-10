@@ -178,7 +178,7 @@
    "id": "p-construction",
    "kind": "construction",
    "status": "analytic",
-   "statement": "slowdown.search: blocks cover slices of a token's computation; never run; omits gradient aggregation and attention reads.",
+   "statement": "bracket.search: blocks cover slices of a token's computation; never run; omits gradient aggregation and attention reads.",
    "refs": {
     "rows": [
      "pretrain-full"
@@ -420,7 +420,7 @@
    "title": "The construction omits reads",
    "mechanism": "Gradient aggregation and attention reads are not charged.",
    "effect": "the red line should drop 2-4x",
-   "repair": "Add aggregation and attention to slowdown.search.",
+   "repair": "Add aggregation and attention to bracket.search.",
    "refs": {}
   },
   {
