@@ -481,7 +481,7 @@ theorem pair_core (hB : S.Binds) (hCF : I.LastCoinFree H)
           ((hcs i (by omega)).trans (coinSeq_firstCoins d₂.1 (m := I.V.k (K.xI x)) (by omega)).symm))
       apply hcls
       rw [hc₁, hc₂]
-      exact congrArg (fun t : Trace => (I.opens (S.openView t.seen), t.vLog.toFinset)) hrun
+      exact congrArg (fun t : Transcript => (I.opens (S.openView t.seen), t.vLog.toFinset)) hrun
     · push Not at hall
       obtain ⟨i, hi, hri⟩ := hall
       have hfi : fork i d₁.1 d₂.1 = d₂.1 := fork_of_le (by omega) hf

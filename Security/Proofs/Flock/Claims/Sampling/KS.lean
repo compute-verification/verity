@@ -40,7 +40,7 @@ open Claims Finset
 
 /-! ## Rerun programs, evaluated -/
 
-theorem flatMapRP_eval {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) :
+theorem flatMapRP_eval {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) :
     ∀ l : List β, ((flatMapRP f l).eval H run).1 = l.flatMap fun b => ((f b).eval H run).1
   | [] => rfl
   | b :: bs => by
@@ -53,7 +53,7 @@ theorem mem_zip_finRange {S : Type} {k : ℕ} {l : List S} {j : Fin k} {a : S} (
   rw [List.mem_iff_getElem?]
   exact ⟨j.val, List.getElem?_zip_eq_some.2 ⟨by simp, h⟩⟩
 
-theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     {rs : List (List Msg × Opening Bool)} {p : List Msg × Opening Bool} (hp : p ∈ rs)
     (hok : Cm.Opens H p.1 p.2 = true) : p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1 := by
   unfold checkRevealed
@@ -67,16 +67,16 @@ theorem mem_checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm :
 /-! ## Kept openings pass their checks -/
 
 /-- Everything `p` returns passes its opening check, with that check's calls among `p`'s own. -/
-def Passes {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+def Passes {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (p : RP R (List (List Msg × Opening Bool))) : Prop :=
   ∀ q ∈ (p.eval H run).1, Cm.Opens H q.1 q.2 = true ∧ ∀ t ∈ ((Cm.opens q.1 q.2).eval H).2, t ∈ ownLog H run p
 
-theorem Passes.ret_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool) :
+theorem Passes.ret_nil {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool) :
     Passes H run Cm (.ret []) := by
   intro q hq
   simp [RP.eval] at hq
 
-theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : CommitmentScheme Bool} (p : RP R α)
+theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Transcript} {Cm : CommitmentScheme Bool} (p : RP R α)
     {f : α → RP R (List (List Msg × Opening Bool))} (hf : ∀ a, Passes H run Cm (f a)) :
     Passes H run Cm (p.bind f) := by
   intro q hq
@@ -86,7 +86,7 @@ theorem Passes.bind {R α : Type} {H : Msg → Msg} {run : R → Trace} {Cm : Co
   rw [ownLog_bind]
   exact List.mem_append_right _ (h2 t ht)
 
-theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm : CommitmentScheme Bool}
+theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Transcript} {Cm : CommitmentScheme Bool}
     {f : β → RP R (List (List Msg × Opening Bool))} {l : List β} (hf : ∀ b ∈ l, Passes H run Cm (f b)) :
     Passes H run Cm (Sampling.flatMapRP f l) := by
   intro q hq
@@ -94,7 +94,7 @@ theorem Passes.flatMapRP {R β : Type} {H : Msg → Msg} {run : R → Trace} {Cm
   obtain ⟨h1, h2⟩ := hf b hb q hq'
   exact ⟨h1, fun t ht => hlog t (h2 t ht)⟩
 
-theorem Passes.checkRevealed {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem Passes.checkRevealed {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) : Passes H run Cm (Sampling.checkRevealed (R := R) Cm rs) := by
   intro q hq
   obtain ⟨-, h1, h2⟩ := checkRevealed_mem H run Cm rs q hq
@@ -169,7 +169,7 @@ theorem accList_length_eq {R : Type} {acc : R → Prop} [DecidablePred acc] {k :
     (h : ¬ (accList acc k l).length < k) : (accList acc k l).length = k :=
   le_antisymm (accList_length_le acc k l) (not_lt.1 h)
 
-theorem getElem?_map_pair {R : Type} (run : R → Trace) {l : List R} {j : ℕ} {r : R} (h : l[j]? = some r) :
+theorem getElem?_map_pair {R : Type} (run : R → Transcript) {l : List R} {j : ℕ} {r : R} (h : l[j]? = some r) :
     (l.map fun r => (r, (run r).seen))[j]? = some (r, (run r).seen) := by
   rw [List.getElem?_map, h]
   rfl
@@ -183,7 +183,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 /-- **A checked proof block's `E^rep`** at the run `r`, on the prover's runs `run'`: Flock's waits on the unit's session
 (`unitExt`'s), `none` when `r` shows no session for `u` or the waits find no witness. -/
 noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) :
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) :
     Option Flock.Wit :=
   match D.session x u (run' r).seen with
   | none => none
@@ -208,20 +208,20 @@ noncomputable def outerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) 
     fun inner => flatMapRP (innerBody D decode x s c jo.1) ((List.finRange (D.k x)).zip inner)
 
 /-- The outer wait's kept runs, indexed. -/
-noncomputable def outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+noncomputable def outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (c : ECoins D x) : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) :=
   (List.finRange (D.k x)).zip ((waitAccC (D.k x) ((List.finRange (D.cap x)).map c.1) []).eval H run').1
 
 /-- **What the extractor keeps** at the outer runs `Z`: at an accepted judged run, `Z = outerList`. The list is a
 parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over `List.finRange (D.k x)`. -/
 noncomputable def found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : AuditStatement) (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x)
+    (s : AuditStatement) (run' : (Fin (D.V.k x) → Coin) → Transcript) (c : ECoins D x)
     (Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
   ((flatMapRP (outerBody D decode x s c) Z).eval H run').1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem found_eq (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : AuditStatement) (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x)
+    (s : AuditStatement) (run' : (Fin (D.V.k x) → Coin) → Transcript) (c : ECoins D x)
     (Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))) :
     found H D decode x s run' c Z = ((flatMapRP (outerBody D decode x s c) Z).eval H run').1 :=
   rfl
@@ -252,7 +252,7 @@ theorem ownLog_E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ �
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem Passes.unitExt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen)
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen)
     (ρ : D.UnitCoins x) : Passes H run' D.commit (Sampling.unitExt D decode x s u r v ρ) := by
   unfold Sampling.unitExt
   split
@@ -264,7 +264,7 @@ theorem Passes.unitExt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem Passes.found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (c : ECoins D x)
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (s : AuditStatement) (c : ECoins D x)
     (Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))) :
     Passes H run' D.commit (Sampling.flatMapRP (outerBody D decode x s c) Z) :=
   Passes.flatMapRP fun _ _ => Passes.bind _ fun _ => Passes.flatMapRP fun _ _ =>
@@ -273,7 +273,7 @@ theorem Passes.found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- A revealed opening that passes, from a unit whose `E^rep` found a witness, is among the unit's extraction's. -/
 theorem unitExt_mem (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x)
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x)
     {xS : Msg} {vS : Seen} (hs : D.session x u (run' r).seen = some (xS, vS)) {wF : Flock.Wit}
     (hw : unitWit H D decode x run' u r ρ = some wF) {q : List Msg × Opening Bool}
     (hq : q ∈ D.reveal s u (run' r).seen wF) (hok : D.commit.Opens H q.1 q.2 = true) :
@@ -285,7 +285,7 @@ theorem unitExt_mem (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
   exact mem_checkRevealed H run' D.commit hq hok
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem mem_outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace)
+theorem mem_outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript)
     (c : ECoins D x) {j : Fin (D.k x)} {r : Fin (D.V.k x) → Coin}
     (hj : (accList (fun r => (run' r).out = .acc) (D.k x) ((List.finRange (D.cap x)).map c.1))[j.val]? = some r) :
     (j, (r, (run' r).seen)) ∈ outerList H D x run' c := by
@@ -296,7 +296,7 @@ theorem mem_outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A unit's extraction at a kept inner run, under a kept outer run, is kept.** -/
 theorem mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : AuditStatement)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x) {Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))}
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (c : ECoins D x) {Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))}
     {j : Fin (D.k x)} {r : Fin (D.V.k x) → Coin} (hj : (j, (r, (run' r).seen)) ∈ Z)
     {l : Fin (D.k x)} {d : Fin (D.V.k x) → Coin}
     (hl : (accList (fun d => (run' (forkOn (D.stage2 x) r d)).out = .acc) (D.k x)
@@ -470,7 +470,7 @@ section Interior
 
 theorem stepWith_msgs_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       ∃ ext, (stepWith H P x ω vnext n hist as t).msgs = t.msgs ++ ext := by
   intro n
   induction n with
@@ -493,7 +493,7 @@ theorem stepWith_msgs_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : 
 `m` prover messages give runs whose first `m` messages agree. -/
 theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext vnext' : List Msg → OC Out)
     (m : ℕ) (hv : ∀ as : List Msg, as.length ≤ m → vnext as = vnext' as) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length = t.msgs.length →
       t.msgs.length ≤ m →
       (stepWith H P x ω vnext n hist as t).msgs.take m = (stepWith H P x ω vnext' n hist as t).msgs.take m := by
   intro n
@@ -517,7 +517,7 @@ theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (�
 /-- **Acceptance is the verifier's answer**: rounds that end accepting had the verifier answer `acc` to some prover
 messages. -/
 theorem stepWith_acc_next {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vnext n hist as t).out = .acc → ∃ as', ((vnext as').eval H).1 = .acc := by
   intro n
   induction n with
@@ -589,14 +589,14 @@ def ecoinsEquiv (D : Deploy Coin Col T) (x : Msg) :
 
 /-- The slot `v` is among the first `n_PU` the run `r'` checks, and its `E^rep` finds a witness. -/
 def Good (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (r' : Fin (D.V.k x) → Coin) (v : ℕ)
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (r' : Fin (D.V.k x) → Coin) (v : ℕ)
     (u : Fin (nPU D x) → D.UnitCoins x) : Prop :=
   ∃ p : Fin (nPU D x), (D.checked x r')[p.val]? = some v ∧ (unitWit H D decode x run' v r' (u p)).isSome
 
 /-- **An outer run bad for `B`**, its second stage `g`: the inner wait comes up short, or no kept inner run checks a
 slot of `B` and finds its witness. -/
 def BadOuter (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (B : Finset ℕ)
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (B : Finset ℕ)
     (g : (Fin (D.V.k x) → Coin) → Fin (D.V.k x) → Coin) (e : E1 D x) : Prop :=
   (accList (fun d => (run' (g d)).out = .acc) (D.k x) ((List.finRange (D.cap x)).map e.1)).length < D.k x ∨
     AllBad (fun d => (run' (g d)).out = .acc) (D.k x)
@@ -609,7 +609,7 @@ noncomputable def S₁ (d : Design) (Pt : Partition) (δ : ℝ) : Finset (Finset
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
 refused incorrect set `B`, every kept outer run is bad for `B`. -/
 def Fails (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (δ : ℝ) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x) : Prop :=
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) (c : ECoins D x) : Prop :=
   ∃ s Pt, D.parse x = some s ∧ D.partition s = some Pt ∧ InScope Pt s ∧
     ((accList (fun r => (run' r).out = .acc) (D.k x) ((List.finRange (D.cap x)).map c.1)).length < D.k x ∨
       ∃ B ∈ S₁ s.design Pt δ, AllBad (fun r => (run' r).out = .acc) (D.k x)
@@ -753,7 +753,7 @@ probability at most `esc`, and the checked unit any selection picks finds no wit
 inner wait (times its acceptance) comes up short or keeps only runs that miss or fail with probability at most
 `2k/K + e^{−k/8} + c·(esc + κs)`. -/
 theorem inner_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) {B : Finset ℕ} (r : Fin (D.V.k x) → Coin) {esc κs : ℝ} (hesc0 : 0 ≤ esc)
+    (run' : (Fin (D.V.k x) → Coin) → Transcript) {B : Finset ℕ} (r : Fin (D.V.k x) → Coin) {esc κs : ℝ} (hesc0 : 0 ≤ esc)
     (hκs0 : 0 ≤ κs)
     (hesc : Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
       (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some v) ≤ esc)
@@ -823,7 +823,7 @@ selection picks at first-stage coins `r` finds no witness with probability at mo
 acceptance) comes up short or, for some refused `B`, keeps only runs bad for `B`, with probability at most
 `T + c·(T + c·(δ + E[κs]))`, `T = 2k/K + e^{−k/8}`. -/
 theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {δ : ℝ} (hδ : 0 ≤ δ)
-    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (Pt : Partition)
+    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Transcript) (s : AuditStatement) (Pt : Partition)
     (hPU : nPU D x = Pt.blocks.length) (κs : (Fin (D.V.k x) → Coin) → ℝ) (hκs0 : ∀ r, 0 ≤ κs r)
     (hdraw : ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
