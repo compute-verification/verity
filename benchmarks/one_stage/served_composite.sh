@@ -13,12 +13,19 @@
 # v1 case (onsite's), remote's sampled proofs case (a5's v2 case, which only a `--zk` audit of one drawn member writes,
 # in the form `one-stage`) and the inference-only case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run without V3c
 # whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
-# SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
+# SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ as the auditor's gate signed them before the
+# serve: POLICY_LEDGER (the gate's ledger, its `ledger` verb's output, as a file), read under the challenger key
+# POLICY_KEY (a key.json or the operator's key record) pinned by H1_KEY_SHA512, POLICY_PERIOD (the period whose open
+# signed them) and POLICY_SESSION (a session of the serve, which must be a window of that period), all four
+# (`served_cases.py`'s `signed_policy`, which writes no inference-only case on some of them); with none of them a
+# development run's ALPHA and GAMMA where both are set, which nobody signed; without either no inference-only case is
+# written, and none is read off the served window's division.
+# Its log is the serve's H1 log through R's previous record;
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
-# OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json. Then
+# OUT/verdicts.txt, the inference-only case's with whose policy its α and Γ are (the auditor's only where the signed
+# open names a policy vy-admin registered or is vy-admin's own); α and Γ stay in the case's private policy.json. Then
 # `composite.py` remote and onsite,
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
@@ -98,8 +105,14 @@ for line in sys.stdin:
 fi
 
 if [ -f benchmarks/one_stage/served_cases.py ]; then
-  ag=(--from-division)
-  [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  ag=()
+  [ -n "${POLICY_LEDGER:-}" ] && ag+=(--policy-ledger "$POLICY_LEDGER")
+  [ -n "${POLICY_KEY:-}" ] && ag+=(--challenger-key "$POLICY_KEY")
+  [ -n "${POLICY_PERIOD:-}" ] && ag+=(--policy-period "$POLICY_PERIOD")
+  [ -n "${POLICY_SESSION:-}" ] && ag+=(--policy-session "$POLICY_SESSION")
+  if [ "${#ag[@]}" -gt 0 ]; then [ -n "${H1_KEY_SHA512:-}" ] && ag+=(--key-sha512 "$H1_KEY_SHA512")
+  elif [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ]; then ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  fi
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
     || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
@@ -110,7 +123,8 @@ import json, sys
 for line in sys.stdin:
     head, _, body = line.partition(" ")
     c = json.loads(body)
-    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []))' \
+    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []),
+          *(["(" + c["policy"] + ")"] if "policy" in c else []))' \
     | tee -a "$OUT/verdicts.txt"
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi
