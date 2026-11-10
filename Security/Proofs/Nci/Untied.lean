@@ -8,23 +8,25 @@ public import Mathlib.Logic.Function.Basic
 /-!
 # Untied words: what a block reads once gates leave `θ`
 
-PoUW proves a linear layer's output words, so the inference-only policy may count them as not fresh: the value tie.
-Its draw leaves a set `E` of words that may be wrong, which nobody knows, and each is fresh input of the block that
-reads it. The lemmas here are stated per block and with no threshold.
+A block's fresh input is what it reads outside `θ` (`RegisteredCircuit.unregistered`, `Nci.novelReads`). These lemmas
+bound it once a set `E` of gates no longer counts as registered, the circuit **untied at `E`**. They are stated per
+block and hold for every `E`, with no threshold in them.
 
 Two readings of "untied at `E`", since `θ` holds input gates only (`RegisteredCircuit.θ_input`):
 
 * `RegisteredCircuit.untie`: `E`'s gates leave `θ`. The circuit, its blocks and any charged work on it stay as they
-  are, so `Nci.Cut.SecurityProofs.HE` applies to `d.untie E` with the same partition and the same `Work`.
-* `RegisteredCircuit.asInputs`: `E`'s gates become input gates outside `θ` and read nothing. This is the reading for a
-  tied word that is computed gates (a linear layer put back as gates), and it is also the circuit without a set of
-  blocks, whose gates the kept blocks then read as input.
+  are, so `Nci.Cut.Guarantees.HE` applies to `d.untie E` with the same partition and the same `Work`.
+* `RegisteredCircuit.asInputs`: `E`'s gates become input gates outside `θ` and read nothing. This is the reading for
+  words that are computed gates, and it is also the circuit without a set of blocks, whose gates the kept blocks then
+  read as input.
 
-In either reading a set `R` of gates reads, outside `θ`, what it read before and the gates of `E` it reads
-(`unregistered_untie_subset`, `unregistered_asInputs_subset`). When `E` is a union of words of at most `b` gates, that
-is at most `b` for each word `R` reads (`card_unregistered_untie_words_le`), so blocks that read at most `k` gates
-outside `θ` and at most `w` words of `E` read at most `k + b w` (`readsAtMost_untie`, `readsAtMost_asInputs`; `b = 32`
-for a `y` word, `readsAtMost_untie_32`).
+In either reading a set `R` of gates reads, outside `θ`, at most what it read before and the gates of `E` it reads
+(`unregistered_untie_subset`, `unregistered_asInputs_subset`; in bits, `novelReads_untie_le`). When `E` is a union of
+words of at most `b` gates, that is at most `b` for each word `R` reads, from any `U` to `U ∪ E`
+(`card_unregistered_untie_union_le`; in bits, `novelReads_untie_union_le`). So blocks that read at most `k` gates
+outside `θ` and at most `w` words of `E` read at most `k + b w` (`readsAtMost_untie`, `readsAtMost_untie_union`,
+`readsAtMost_asInputs`, and `isCK_untie` for a `(c, k)`-partition; `b = 32` for a word of 32 gates,
+`readsAtMost_untie_32`).
 
 When each word is read by at most one block (`OneReader`), at most `|E| / (w + 1)` blocks read more than `w` words
 (`readersOver`, `card_readersOver_le`), every other block reads at most `k + b w`
@@ -34,8 +36,8 @@ When each word is read by at most one block (`OneReader`), at most `|E| / (w + 1
 `HE` quantifies over a `Partition` of every computed gate of the circuit, each block within the cap, so it takes no
 subset of a partition's blocks. The form it can take is the circuit with the other blocks' gates as inputs and the
 partition of the kept blocks, renumbered (`Partition.keep`, `readsAtMost_keep`, `readsAtMost_untie_without`). Its
-other premises are then about that circuit, not the record's: the charged work is a `Work` of it, so a matmul with one
-MAC in a dropped block is lost whole, and (H) and (E) are taken at it, for a set of dropped blocks nobody knows.
+other premises are then about that circuit, not `d`: the charged work is a `Work` of it, so a matmul with one MAC in a
+dropped block is lost whole, and (H) and (E) are taken at it, whichever blocks are dropped.
 -/
 
 @[expose] public section
@@ -106,7 +108,7 @@ theorem Partition.mem_asInputs_gates {C : Circuit} {n : ℕ} (P : Partition C n)
   show (if g ∈ T then none else P.unit g) = some u ↔ P.unit g = some u ∧ g ∉ T
   by_cases hT : g ∈ T
   · rw [ite_eq_left hT]
-    exact ⟨fun h => nomatch h, fun h => absurd hT h.2⟩
+    exact ⟨fun h => (by cases h), fun h => absurd hT h.2⟩
   · rw [ite_eq_right hT]
     exact ⟨fun h => ⟨h, hT⟩, fun h => h.1⟩
 
@@ -166,7 +168,7 @@ theorem Partition.keep_gates {C : Circuit} {n n' : ℕ} (P : Partition C n) (ι 
   cases hu : P.unit g with
   | none =>
     show none = some v ↔ none = some (ι v)
-    exact ⟨fun h => nomatch h, fun h => nomatch h⟩
+    exact ⟨fun h => (by cases h), fun h => (by cases h)⟩
   | some u =>
     show Function.partialInv ι u = some v ↔ some u = some (ι v)
     rw [hι.isPartialInv v u]
@@ -277,16 +279,42 @@ open Verity Finset Nci.Cut
 def wordsRead (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) : Finset (Finset (Fin C.N)) :=
   𝒲.filter fun W => ¬ Disjoint W (C.into R)
 
+/-- The gates of `𝒲`'s words that `R` reads lie in the words of `𝒲` it reads. -/
+theorem into_inter_biUnion_subset (C : Circuit) (𝒲 : Finset (Finset (Fin C.N))) (R : Finset (Fin C.N)) :
+    C.into R ∩ 𝒲.biUnion id ⊆ (wordsRead C 𝒲 R).biUnion id := by
+  intro a ha
+  obtain ⟨hin, hE⟩ := mem_inter.1 ha
+  obtain ⟨W, hW, haW⟩ := mem_biUnion.1 hE
+  exact mem_biUnion.2 ⟨W, mem_filter.2 ⟨hW, not_disjoint_iff.2 ⟨a, haW, hin⟩⟩, haW⟩
+
 /-- **Words.** The gates of words of at most `b` gates that `R` reads are at most `b` for each word it reads. -/
 theorem card_into_inter_biUnion_le (C : Circuit) {b : ℕ} (𝒲 : Finset (Finset (Fin C.N)))
     (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (R : Finset (Fin C.N)) :
     (C.into R ∩ 𝒲.biUnion id).card ≤ b * (wordsRead C 𝒲 R).card :=
-  calc (C.into R ∩ 𝒲.biUnion id).card ≤ ((wordsRead C 𝒲 R).biUnion id).card := by
-        refine card_le_card fun a ha => ?_
-        obtain ⟨hin, hE⟩ := mem_inter.1 ha
-        obtain ⟨W, hW, haW⟩ := mem_biUnion.1 hE
-        exact mem_biUnion.2 ⟨W, mem_filter.2 ⟨hW, not_disjoint_iff.2 ⟨a, haW, hin⟩⟩, haW⟩
+  calc (C.into R ∩ 𝒲.biUnion id).card ≤ ((wordsRead C 𝒲 R).biUnion id).card :=
+        card_le_card (into_inter_biUnion_subset C 𝒲 R)
     _ ≤ ∑ W ∈ wordsRead C 𝒲 R, W.card := card_biUnion_le
+    _ ≤ ∑ _W ∈ wordsRead C 𝒲 R, b := sum_le_sum fun W hW => h𝒲 W (mem_filter.1 hW).1
+    _ = b * (wordsRead C 𝒲 R).card := by rw [sum_const, smul_eq_mul, mul_comm]
+
+/-- The width of a union of sets of gates is at most the sum of their widths. -/
+theorem width_biUnion_le (C : Circuit) (s : Finset (Finset (Fin C.N))) :
+    C.width (s.biUnion id) ≤ ∑ W ∈ s, C.width W := by
+  induction s using Finset.induction_on with
+  | empty => simp [Circuit.width]
+  | insert W s hW ih =>
+      rw [biUnion_insert, sum_insert hW]
+      show ∑ g ∈ W ∪ s.biUnion id, C.w g ≤ ∑ g ∈ W, C.w g + ∑ W' ∈ s, C.width W'
+      exact (Nat.le.intro sum_union_inter).trans (Nat.add_le_add_left ih _)
+
+/-- **Words, in bits.** The width of the gates of words of at most `b` bits that `R` reads is at most `b` for each word
+it reads. -/
+theorem width_into_inter_biUnion_le (C : Circuit) {b : ℕ} (𝒲 : Finset (Finset (Fin C.N)))
+    (h𝒲 : ∀ W ∈ 𝒲, C.width W ≤ b) (R : Finset (Fin C.N)) :
+    C.width (C.into R ∩ 𝒲.biUnion id) ≤ b * (wordsRead C 𝒲 R).card :=
+  calc C.width (C.into R ∩ 𝒲.biUnion id) ≤ C.width ((wordsRead C 𝒲 R).biUnion id) :=
+        sum_le_sum_of_subset (into_inter_biUnion_subset C 𝒲 R)
+    _ ≤ ∑ W ∈ wordsRead C 𝒲 R, C.width W := width_biUnion_le C _
     _ ≤ ∑ _W ∈ wordsRead C 𝒲 R, b := sum_le_sum fun W hW => h𝒲 W (mem_filter.1 hW).1
     _ = b * (wordsRead C 𝒲 R).card := by rw [sum_const, smul_eq_mul, mul_comm]
 
@@ -299,6 +327,19 @@ theorem novelReads_untie_le (d : RegisteredCircuit) (E R : Finset (Fin d.D.N)) :
   calc ∑ g ∈ (d.untie E).unregistered R, d.D.w g
       ≤ ∑ g ∈ d.unregistered R ∪ d.D.into R ∩ E, d.D.w g := sum_le_sum_of_subset (d.unregistered_untie_subset E R)
     _ ≤ ∑ g ∈ d.unregistered R, d.D.w g + ∑ g ∈ d.D.into R ∩ E, d.D.w g := Nat.le.intro sum_union_inter
+
+/-- **The per-block lemma, in bits.** Untied at `U` and the words `𝒲`, each of at most `b` bits, `R` reads at most the
+fresh input bits it read untied at `U`, and `b` bits for each word of `𝒲` it reads. -/
+theorem novelReads_untie_union_le (d : RegisteredCircuit) {b : ℕ} (U : Finset (Fin d.D.N))
+    (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, d.D.width W ≤ b) (R : Finset (Fin d.D.N)) :
+    novelReads (d.untie (U ∪ 𝒲.biUnion id)) R ≤ novelReads (d.untie U) R + b * (wordsRead d.D 𝒲 R).card :=
+  calc novelReads (d.untie (U ∪ 𝒲.biUnion id)) R
+      = novelReads ((d.untie U).untie (𝒲.biUnion id)) R :=
+        congrArg d.D.width (d.unregistered_untie_untie U (𝒲.biUnion id) R).symm
+    _ ≤ novelReads (d.untie U) R + d.D.width (d.D.into R ∩ 𝒲.biUnion id) :=
+        novelReads_untie_le (d.untie U) (𝒲.biUnion id) R
+    _ ≤ novelReads (d.untie U) R + b * (wordsRead d.D 𝒲 R).card :=
+        Nat.add_le_add_left (width_into_inter_biUnion_le d.D 𝒲 h𝒲 R) _
 
 /-- **The per-block lemma, in words.** Untied at the words `𝒲`, each of at most `b` gates, `R` reads outside `θ` at
 most what it read outside `θ`, and `b` gates for each word of `𝒲` it reads. -/
@@ -335,6 +376,24 @@ theorem readsAtMost_untie_32 {m : ℕ} (d : RegisteredCircuit) (P : Partition d.
     (hw : ∀ u, (wordsRead d.D 𝒲 (P.gates u)).card ≤ w) :
     ReadsAtMost (d.untie (𝒲.biUnion id)) P (k + 32 * w) :=
   readsAtMost_untie d P 𝒲 (fun W hW => (h𝒲 W hW).le) hk hw
+
+/-- **`ReadsAtMost`, from `U` to `U ∪ E`.** If untied at `U` every block reads at most `k` gates outside `θ`, and every
+block reads at most `w` words of `𝒲`, each of at most `b` gates, then untied at `U` and `𝒲` every block reads at most
+`k + b w` gates outside `θ`. -/
+theorem readsAtMost_untie_union {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {k b w : ℕ}
+    (U : Finset (Fin d.D.N)) (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b)
+    (hk : ReadsAtMost (d.untie U) P k) (hw : ∀ u, (wordsRead d.D 𝒲 (P.gates u)).card ≤ w) :
+    ReadsAtMost (d.untie (U ∪ 𝒲.biUnion id)) P (k + b * w) := fun u =>
+  (card_unregistered_untie_union_le d U 𝒲 h𝒲 (P.gates u)).trans
+    (Nat.add_le_add (hk u) (Nat.mul_le_mul_left b (hw u)))
+
+/-- **The `(c, k)`-partition, untied.** A `(c, k)`-partition whose blocks each read at most `w` words of `𝒲`, each of
+at most `b` gates, is a `(c, k + b w)`-partition of the circuit untied at `𝒲`. -/
+theorem isCK_untie {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m) {c k b w : ℕ}
+    (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ W ∈ 𝒲, W.card ≤ b) (hP : P.IsCK d c k)
+    (hw : ∀ u, (wordsRead d.D 𝒲 (P.gates u)).card ≤ w) :
+    Partition.IsCK (d.untie (𝒲.biUnion id)) P c (k + b * w) :=
+  ⟨hP.boolean, hP.card, readsAtMost_untie d P 𝒲 h𝒲 hP.reads hw⟩
 
 /-- Each word of `𝒲` is read by at most one block of `P`. -/
 def OneReader {C : Circuit} {m : ℕ} (P : Partition C m) (𝒲 : Finset (Finset (Fin C.N))) : Prop :=
