@@ -836,7 +836,7 @@ class Held:
 
 class Bound(Held):
     """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`) and for rows committed in
-    full under its salts (`rows.commit`'s ``strings_of``): 16-bit leaves, its row schema and each row's ``b || c`` under its
+    full under its salts (`rows.commit`'s ``carried``): 16-bit leaves, its row schema and each row's ``b || c`` under its
     salt."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
@@ -1496,7 +1496,7 @@ def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
 
 def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkeypatch):
     """An input row recorded in full is committed under its registered value's salt (`rows.commit`'s ``salts_of``), and
-    `Window.close` hands over the ``b || c`` that salt carries in the value's own tree (``strings_of``). `rows.commit`
+    `Window.close` hands over the ``b || c`` that salt carries in the value's own tree (``carried``). `rows.commit`
     refuses a row that makes another string, naming it, since a salt hides one row; the strings move no root; without
     them the other row commits, to another root; and strings for a port ``salts_of`` doesn't name, or not one a row, are
     refused."""
@@ -1505,22 +1505,22 @@ def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkey
     with monkeypatch.context() as mp:
         mp.setattr(CS, "commit", lambda window, data, **kw: given.update(window=window, data=data, **kw))
         win.close(salt_key=bytes(32))
-    window, data, salts_of, strings_of = (given[k] for k in ("window", "data", "salts_of", "strings_of"))
+    window, data, salts_of, carried = (given[k] for k in ("window", "data", "salts_of", "carried"))
     port = window.members[1].port("wrow")
-    assert sorted(strings_of) == sorted(salts_of) == sorted(m.port("wrow") for m in window.members)
-    assert salts_of[port] == w.salts[2] + w.salts[3] and strings_of[port] == w.bcs[2] + w.bcs[3]
-    held = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of, strings_of=strings_of)
+    assert sorted(carried) == sorted(salts_of) == sorted(m.port("wrow") for m in window.members)
+    assert salts_of[port] == w.salts[2] + w.salts[3] and carried[port] == w.bcs[2] + w.bcs[3]
+    held = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of, carried=carried)
     free = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of)
-    assert held.roots == free.roots and held.bc == free.bc and held.bc[port] == strings_of[port]
+    assert held.roots == free.roots and held.bc == free.bc and held.bc[port] == carried[port]
     other = [dict(d, rows=dict(d["rows"])) for d in data]
     other[1]["rows"]["wrow"] = data[1]["rows"]["wrow"].copy()
     other[1]["rows"]["wrow"][1, 0] ^= 1
-    with pytest.raises(ValueError, match=re.escape(f"{port}: rows [1] are not the rows its salts already commit")):
-        CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of, strings_of=strings_of)
+    with pytest.raises(ValueError, match=re.escape(f"{port}: rows [1] are not the rows its salts already carry")):
+        CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of, carried=carried)
     assert CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of).roots[port] != held.roots[port]
-    for no in ({"salts_of": {}, "strings_of": strings_of},
-               {"salts_of": salts_of, "strings_of": {**strings_of, port: strings_of[port][:-1]}}):
-        with pytest.raises(ValueError, match="strings_of"):
+    for no in ({"salts_of": {}, "carried": carried},
+               {"salts_of": salts_of, "carried": {**carried, port: carried[port][:-1]}}):
+        with pytest.raises(ValueError, match="carried .*: not one 128-byte"):
             CS.commit(window, data, salt_key=bytes(32), **no)
     moved, _ = registered()
     moved._recorded[TID][0].words[2][:2, 0] ^= 1
