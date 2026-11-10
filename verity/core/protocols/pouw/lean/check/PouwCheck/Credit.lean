@@ -892,6 +892,7 @@ def treeAt (d : Flock.FV3.Sha512.Domain) (have_ : Std.HashMap (Nat × Nat) ByteA
 /-- `credit.tree_root`. -/
 def treeRoot (domain : ByteArray) (count : Nat) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Option ByteArray :=
   treeAt { id := domain, count } have_ (Flock.log2ceil count) 0
+
 def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 
 /-- `credit._a_link`: none when every registered A value is the tree over the segments the round log commits, else the
