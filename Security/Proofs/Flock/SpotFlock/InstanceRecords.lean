@@ -354,7 +354,7 @@ theorem atRun_interior0 {own : Spot.SecondStage.Own} {t : String} {r : Json} {sI
       (Spot.SecondStage.putAt (.str (Spot.SecondStage.setName RUN0 k)) r ["set"]) ["frame_v3", "bindings"]) := by
   have hp : ∀ p, Spot.SecondStage.heldPort own false t p = p := fun p => by
     simp [Spot.SecondStage.heldPort, hw, Spot.SecondStage.portOf]
-  simp only [Spot.SecondStage.atRun, hi, runOf_interior0, hs, hp, Array.mapM_toArray, List.mapM_cons, List.mapM_nil,
+  simp only [Spot.SecondStage.atRun, hi, runOf_interior0, hs, hp, List.mapM_toArray, List.mapM_cons, List.mapM_nil,
     portBinding_i0, portBinding_o0, Option.bind_eq_bind, Option.bind_some, Option.pure_def, Option.map_eq_map,
     Option.map_some, List.toList_toArray]
 
