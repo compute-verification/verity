@@ -35,7 +35,7 @@ from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity.hardware import load
+from verity.hardware.cards import load
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fa3_model as FA3
 from verity.definitions.registry import attention_vocab

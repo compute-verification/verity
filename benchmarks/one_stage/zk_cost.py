@@ -650,10 +650,10 @@ PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x[
 
 
 def overhead(a) -> int:
-    from verity import hardware
+    from verity.hardware import cards
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
-    card = None if a.card == "none" else hardware.load(a.card)
+    card = None if a.card == "none" else cards.load(a.card)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]
@@ -668,7 +668,7 @@ def overhead(a) -> int:
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
-        peak = float(hardware.rate(card, fmt=s0["format"])) if s0["macs"] and card else None
+        peak = float(cards.rate(card, fmt=s0["format"])) if s0["macs"] and card else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
              "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}

@@ -21,7 +21,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.hardware import load, rate
+from verity.hardware.cards import load, rate
 
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond

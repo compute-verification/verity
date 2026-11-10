@@ -127,9 +127,9 @@ def load_card(spec: str) -> dict:
         import tomllib
         return tomllib.loads(Path(spec).read_text(encoding="utf-8"))
     try:
-        from verity.hardware import load
+        from verity.hardware.cards import load
     except ImportError:
-        raise SystemExit(f"card {spec!r}: no such file, and verity.hardware isn't in this tree; pass --card with the "
+        raise SystemExit(f"card {spec!r}: no such file, and verity.hardware.cards isn't in this tree; pass --card with the "
                          "card file (verity/hardware/cards/<sku>.toml)") from None
     return load(spec)
 
