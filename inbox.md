@@ -12,3 +12,11 @@
 
 #8359: the indexer's restage (r20261110-015748-da59, cpu-5) is near its end. The card passes `cards.py check`, and I publish it once the indexer matches.
 
+[2026-11-10T03:01Z] 74e68aef163e
+ACCOUNTD 03:04Z, R8 PR on cursor/proofs-accountd-6a92 (on #8414, from 91a7f7bbb4; no PR opened yet).
+- Python half pushed, head 1216bbe7be: R8-shared-input refuses a run Input a batch broadcasts or two proof blocks read; the verdict publishes F (Verdict.fanout, verdict JSON "fanout", WindowCommitmentRecord.fanout); plancheck.two has no default under served. Suites r20261110-024112-8c91, cpu-12, waiting on a proofs slot (1 ahead), ETA ~04:00Z.
+- Lean half pushed too, head 8425afa44e: Spot.Partition.fanout/sharedInputs per root node over its refs (no members loop), R8 in Registration.check and in Registered (AcceptMeans gains R8), F in the registration piece, which _decide compares; a fanout difftest piece over randomly wired programs. Tries then records: r20261110-025844-868d, cpu-12, ETA ~06:30Z.
+- My cut: F is a per-node summary, exact where joined nodes are calls, a sound over-count where a batch joins another block; no refusal. Deferred: refusing a supplied {"port": P} source naming an output port. ServedCover stays a named premise.
+- #8405 has not moved (last Mon 19:46Z, head 438c44f988); #8462 stays unmarked.
+Next: read both runs, commit the records, open the PR, and mark it when the records pass.
+
