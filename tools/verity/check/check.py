@@ -183,6 +183,11 @@ doesn't name:
                     files, kernel bypasses, code run while compiling, dependency .olean digests, the guarantees' records, a
                     kernel replay; its reports under `lean-audit/`).  It reads only the source tree and builds nothing in the
                     checkout, so the lean group's steps never wait on it, nor it on them
+    lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
+                    keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
+                    kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
+                    run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
+                    vouches for nothing: the audit decides
     ratchet-gate    `integrations/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
                     commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
                     --ratchet-base REF's and its --base REF's; else origin/main)
