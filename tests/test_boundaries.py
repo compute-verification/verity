@@ -137,18 +137,23 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
                       "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
-#: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
+#: ``verity``.
 DEPENDENCIES = {"numpy"}
-#: Directories of ``verity`` that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
-              "verity/claims", "verity/hardware")
+#: Where ``verity``'s Python imports none of them either, only the standard library and ``verity``: every verifier's and
+#: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
+#: the hardware's cards, record and registration log, sampled proofs' planning beside its verifier, and the reporting
+#: grid.  Within them, what may use numpy.
+STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
+               "verity/claims", "verity/hardware", "verity/spot", "verity/protocols/reporting.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
-#: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units, the
-#: trees each of whose Python files (tests included) is checked, its Lean packages and its analysis (Security's Flock and
-#: Spot areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
-#: Security areas).
+#: certified input and imports none of the certifier, and the two compose only above both.  SPOT's Python units and its
+#: row of the listing, the trees each of whose Python files (tests included) is checked, its Lean packages and its
+#: analysis (Security's Flock and Spot areas and the sampling claims); then the certifier's Python units, its row,
+#: modules and Lean (its packages and its Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
+SPOT_ROW = "verity/spot"
+CERTIFIER_ROW = "verity/protocols/certifier"
 SPOT_TREES = ("verity/spot", "verity/spot/verifier/lean", "verity/flock/verifier",
               "verity/flock/prover")
 SPOT_LEAN = ("verity/spot/verifier/lean", "verity/flock/verifier")
@@ -378,16 +383,44 @@ def test_every_source_directory_is_a_package() -> None:
     assert not missing, missing
 
 
-@pytest.mark.parametrize("subtree", NUMPY_FREE)
-def test_scalar_references_are_stdlib_only(subtree: str) -> None:
-    files = _sources(ROOT / subtree)
-    assert files, f"{subtree} holds no Python of verity's own: remove it from NUMPY_FREE"
-    offenders = [f"{path.relative_to(ROOT)}:{line}: {name}"
-                 for path in files
-                 if not any(path.relative_to(ROOT).as_posix().startswith(u) for u in NUMPY_USERS)
-                 for name, line, _ in _imports(path)
-                 if name.split(".")[0] == "numpy"]
-    assert not offenders, "\n".join(offenders)
+def _under(rel: str, paths: Iterable[str]) -> bool:
+    """Whether ``rel`` is one of ``paths`` or lies under one."""
+    return any(rel == p or rel.startswith(p + "/") for p in paths)
+
+
+def test_verity_imports_the_standard_library_its_dependencies_and_itself() -> None:
+    """Python of ``verity`` (``_sources``) names no other distribution of the workspace, no external runtime and no
+    directory of the repository (``FORBIDDEN_EXTERNAL``), in an import or in a string, and imports only the standard
+    library, ``verity`` and its declared dependencies (``DEPENDENCIES``).  A verifier's and a device's Python and the
+    directories of ``STDLIB_ONLY`` import no dependency either, but for ``NUMPY_USERS``; each listed path still holds
+    Python of ``verity``."""
+    offenders, held = [], set()
+    for path in _sources():
+        rel = path.relative_to(ROOT).as_posix()
+        held |= {p for p in (*STDLIB_ONLY, *NUMPY_USERS) if _under(rel, [p])}
+        alone = (_trusted(rel) is not None or _under(rel, STDLIB_ONLY)) and not _under(rel, NUMPY_USERS)
+        offenders += [f"{rel}:{line}: {name}" for name, line, imported in _imports(path)
+                      if _external(name, imported, set() if alone else DEPENDENCIES)]
+    assert not offenders, ("verity imports the standard library, its declared dependencies and itself, and a verifier, a "
+                           "device and the scalar references (STDLIB_ONLY) the standard library and verity alone:\n"
+                           + "\n".join(offenders))
+    gone = sorted({*STDLIB_ONLY, *NUMPY_USERS} - held)
+    assert not gone, f"paths of STDLIB_ONLY or NUMPY_USERS that hold no Python of verity's own; remove them: {gone}"
+
+
+def test_the_bottom_row_imports_the_standard_library_alone() -> None:
+    """What the listing's order names no directory for under ``verity/`` is its bottom row: the files directly under
+    ``verity/`` (``verity/__init__.py`` re-exports nothing; ``errors`` and ``settings`` are shared by every row), the
+    claims' ids, the reporting grid, an ``__init__.py`` that only groups packages, and a new package until the order
+    lists it.  Each imports the standard library and nothing else, ``verity`` included, so a new package is listed
+    before it loads anything."""
+    steps = _listing().steps
+    offenders = [f"{path.relative_to(ROOT)}:{line}: {name}" for path in _sources()
+                 if steps[_row(path.relative_to(ROOT).as_posix(), steps)] == 0
+                 for name, line, imported in _imports(path) if _external(name, imported, set()) or name.split(".")[0] == "verity"]
+    assert not offenders, ("the bottom row of tests/import_order.toml imports the standard library alone: give a new "
+                           "package under verity/ its row in `order`, or move what the file needs out of it:\n"
+                           + "\n".join(offenders))
 
 
 def _reached(allowed: dict[str, set[str]], units: Iterable[str]) -> set[str]:
@@ -419,10 +452,19 @@ def _spot_python_offenders() -> list[str]:
 
 def test_spot_never_imports_the_network_certifier_in_python() -> None:
     """SPOT[Flock]'s Python imports no unit of the network certifier (``SPOT_PYTHON``): ``ALLOWED`` lets sampled proofs
-    reach none of ``CERTIFIER_PYTHON``, and no file of its trees, Flock's and their tests among them, imports one."""
+    reach none of ``CERTIFIER_PYTHON``, and no file of its trees, Flock's and their tests among them, imports one.  The
+    listing's order says the same of every load: it puts the certifier's row (``CERTIFIER_ROW``) after sampled proofs'
+    (``SPOT_ROW``) and lists no tie out of the rows up to sampled proofs' into a later one, so nothing sampled proofs'
+    Python loads, directly or through another file, is the certifier's."""
     assert set(CERTIFIER_PYTHON) <= set(ALLOWED), f"CERTIFIER_PYTHON names a unit ALLOWED doesn't: {CERTIFIER_PYTHON}"
     reached = sorted(_reached(ALLOWED, SPOT_PYTHON) & set(CERTIFIER_PYTHON))
     assert not reached, f"{SPOT_NOT_CERTIFIER}: ALLOWED lets {SPOT_PYTHON} reach {reached}"
+    listing = _listing()
+    spot, certifier = listing.steps[SPOT_ROW], listing.steps[CERTIFIER_ROW]
+    assert spot < certifier, f"{SPOT_NOT_CERTIFIER}: tests/import_order.toml lists {CERTIFIER_ROW} no later than {SPOT_ROW}"
+    ties = sorted(f"{a} -> {b}" for a, b in listing.against if listing.steps[a] <= spot < listing.steps[b])
+    assert not ties, (f"{SPOT_NOT_CERTIFIER}: a tie of tests/import_order.toml leaves the rows up to {SPOT_ROW} for a later "
+                      f"row, which may load the certifier: {ties}")
     offenders = _spot_python_offenders()
     assert not offenders, f"{SPOT_NOT_CERTIFIER}:\n" + "\n".join(offenders)
 
