@@ -973,10 +973,12 @@ def package_roots(base: Tree) -> set[str]:
         if not (p.startswith(MAPS) and p.endswith(".toml")):
             continue
         try:
-            new = tomllib.loads(base.text(p) or "").get("roots", {}).get("new", {})
+            roots = tomllib.loads(base.text(p) or "").get("roots")
+        except tomllib.TOMLDecodeError as e:
+            raise SystemExit(f"move-check: {p} doesn't parse at BASE, so the package roots it may name can't be read: {e}") from e
+        new = roots.get("new") if isinstance(roots, dict) else None
+        if isinstance(new, dict):
             out |= {d.strip("/") for d in new.values() if isinstance(d, str)}
-        except (tomllib.TOMLDecodeError, AttributeError):
-            continue
     return out
 
 
