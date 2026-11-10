@@ -1,7 +1,7 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
-takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which run after landing, in drive's
-after-landing run on `checked`'s tip.  It reports each step's real verdict; what gates and what may stay red is drive's
-(`research.policy`).
+takes off the merge gate (policy.toml's `off_gate`: circuit-check and ratchet-gate, which run after landing, in drive's
+after-landing run on `checked`'s tip, and lean-changed, which no shard runs: `shards.NO_SHARD`).  It reports each step's real
+verdict; what gates and what may stay red is drive's (`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -27,7 +27,8 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, lean-changed,
+                                                            ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with the pinned
                                                             upstream build and inputs when the commit changes verity/ml/flock/
@@ -187,7 +188,8 @@ doesn't name:
                     keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
                     kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
                     run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
-                    vouches for nothing: the audit decides
+                    vouches for nothing: the audit decides.  Off the gate and in no shard (`shards.NO_SHARD`): a recorded
+                    check skips it, and no shard of a sharded run runs it, though `--deferred` names it
     ratchet-gate    `integrations/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
                     commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
                     --ratchet-base REF's and its --base REF's; else origin/main)
@@ -1751,10 +1753,10 @@ def deferred_parts(steps: str) -> list[str]:
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
-    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
-    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), and never
+    those of `shards.NO_SHARD`, "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake
+    packages, each spec's audit on its provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there
+    is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -1767,8 +1769,8 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
-            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of)
-                      if p in mine and (not gated or p.partition(":")[0] not in OFF_GATE)],
+            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of) if p in mine and p.partition(":")[0] not in SHARDS.NO_SHARD
+                      and (not gated or p.partition(":")[0] not in OFF_GATE)],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 

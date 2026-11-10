@@ -79,6 +79,8 @@ owner = "lean"
 part = "lean"
 group = 5
 halts = true
+# Off the merge gate by drive's policy (policy.toml's `off_gate`) and in no shard, of these plans or an auto one
+# (`shards.NO_SHARD`): it catches nothing the audit doesn't.
 
 # Group 6: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
 [[job]]
@@ -125,8 +127,7 @@ group = 7
 shards = [
     ["lean-audit:Security/Proofs", "lean-audit:Security/Properties", "pytest",
      "lean-suites:verity-core-composition:3/3"],
-    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
-     "lean-changed"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3"],
 ]
 
@@ -137,7 +138,7 @@ shards = [
     ["lean-audit:Security/Proofs", "lean-audit:Security/Properties", "circuit-check:1/4",
      "lean-suites:verity-core-composition:3/3"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
-     "lean-changed", "circuit-check:2/4"],
+     "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
     ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3"],
 ]
@@ -146,7 +147,7 @@ shards = [
 [[plan]]
 shards = [
     ["lean-audit:Security/Proofs", "lean-audit:Security/Properties", "lean-suites:verity-core-composition:3/3"],
-    ["lean-audit:*", "lean-changed"],
+    ["lean-audit:*"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement"],
     ["pytest"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3"],
