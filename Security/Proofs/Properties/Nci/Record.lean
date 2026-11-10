@@ -25,10 +25,13 @@ open NciCheck.DefinitionDigest (closureDigest)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
     Complies F := by
-  intro j tr c ⟨hread, hnone⟩
+  intro j tr c hacc
+  obtain ⟨hread, hnone⟩ := hacc
   obtain ⟨hΓ, hα⟩ := hrate _ _ _ _ hnone
   have hcar := hown j tr c hread
-  have hden : (0 : ℝ) < (F.inst c).den := by exact_mod_cast hcar.2.2.2.2
+  have hden : (0 : ℝ) < (F.inst c).den := by
+    obtain ⟨-, -, -, -, h⟩ := hcar
+    exact_mod_cast h
   refine ⟨hcar, hlaid j tr c hread, fun d hd => ?_⟩
   have hmeets : ∀ u, Meets d d.𝓘 (F.inst c).gamma (((F.inst c).num : ℝ) / (F.inst c).den) u := by
     intro u
@@ -47,18 +50,20 @@ theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Cou
   exact ⟨hmeets, by unfold Nci.CompliesRate; exact ⟨d.n, d.𝓘, hmeets⟩⟩
 
 theorem pinnedOpens_of {F : Form} (hpins : DigestPins) (hprov : Provenance F) : PinnedOpens F := by
-  intro Opens text₀ j₀ P₀ k₀ key pin hof hdec₀ hparse₀ hdig₀ hk₀ hopens j tr c P pj r name p hread hdec hparse htid hheld
+  intro Opens text₀ j₀ P₀ k₀ key pin hof hdec₀ hparse₀ hdig₀ hk₀ hopens
+  intro j tr c P pj r name p hread hdec hparse htid hheld
   obtain ⟨log, run, -, -, hgood⟩ := hprov j tr c P pj hread hdec hparse
   obtain ⟨-, -, hdig, -⟩ :
       IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin.digest ∧ _ := hgood r _ hheld
   rw [htid] at hdig
-  rcases hk : P.index[key]? with _ | k
-  · exact Or.inl fun k hk' => by simp [hk] at hk'
-  · rcases hpins text₀ (F.inst c).program j₀ pj P₀ P key pin.digest k₀ k hdec₀ hdec hparse₀ hparse hdig₀ hdig hk₀ hk
+  by_cases hex : ∃ k, P.index[key]? = some k
+  · obtain ⟨k, hk⟩ := hex
+    rcases hpins text₀ (F.inst c).program j₀ pj P₀ P key pin.digest k₀ k hdec₀ hdec hparse₀ hparse hdig₀ hdig hk₀ hk
       with hsame | hcol
     · refine Or.inl fun k' hk' => ?_
-      obtain rfl : k = k' := by simpa [hk] using hk'
+      obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
       exact hof pin P₀ P k₀ k hsame hopens
     · exact Or.inr hcol
+  · exact Or.inl fun k hk' => absurd ⟨k, hk'⟩ hex
 
 end NciCheck.Properties.Record.SecurityProofs
