@@ -214,7 +214,7 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
 
 
 def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeypatch):
-    """Where the calculator has `rho.min_cut`, the bound of record is its `bound` at the policy's (c, k) on the traced
+    """Where the calculator has `min_cut`, the bound of record is its `bound` at the policy's (c, k) on the traced
     step's N, O, β_w, β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without the module, or without a traced
     step, it is not available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]

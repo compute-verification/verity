@@ -282,9 +282,10 @@ def per_period(run_gates: float, rho: dict) -> dict:
     return {"run_and_gates": run_and, "window": calculator.window()[0], "rows": rows, "parts": {
         "measured": "|C| of each seed and H, the counted gates of the records read, so p; ρ's inputs, one traced step "
                     "of the search record",
-        "proved": (f"ρ's products term is the bound of {calculator.THEOREM} (`HEShared` where its products share "
-                   "arrays) at the N, O, β_w, β_x and b_y the traced step gives, under the assumptions it rests on; p "
-                   "and the shares are not proved" if rho["binding_kind"] == "products" else
+        "proved": (f"the form of ρ's products term, {calculator.THEOREM}'s second conjunct (`HEShared`'s where its "
+                   "products share arrays): a lower bound at the N, O, β_w, β_x and b_y the traced step gives, given "
+                   "(H), (E) and the theorem's hypotheses on the circuit, which the trace doesn't check; p and the "
+                   "shares are not proved" if rho["binding_kind"] == "products" else
                    f"nothing: ρ's {rho['binding_kind']} term is computed"),
         "scaled": f"every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC at the "
                   f"{calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the run's "
