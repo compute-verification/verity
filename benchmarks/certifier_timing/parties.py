@@ -333,13 +333,16 @@ def awake(cfg: dict) -> dict:
     return {"awake": cpus}
 
 
-def _listener(cfg: dict) -> socket.socket:
-    """Where a certifier takes the observer: loopback, or `listen` and `port`. Under a launch gate every connection
-    accepted from it sends at `LAUNCH_PRIORITY`."""
-    sock = socket.create_server((cfg.get("listen", LOOPBACK), int(cfg.get("port", 0))))
+def gated(writer: asyncio.StreamWriter, cfg: dict) -> None:
+    """Under a launch gate, put a certifier's client connection at `LAUNCH_PRIORITY`, whoever then writes to it. Each
+    connection is set: one takes no priority from the socket it was accepted on."""
     if cfg.get("launch"):
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, LAUNCH_PRIORITY)
-    return sock
+        writer.get_extra_info("socket").setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, LAUNCH_PRIORITY)
+
+
+def _listener(cfg: dict) -> socket.socket:
+    """Where a certifier takes the observer: loopback, or `listen` and `port`."""
+    return socket.create_server((cfg.get("listen", LOOPBACK), int(cfg.get("port", 0))))
 
 
 async def relay(cfg: dict) -> dict:
@@ -412,6 +415,7 @@ async def warden(cfg: dict) -> dict:
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if cfg.get("listen"):
             listener.close()
+        gated(writer, cfg)
         await w.handle(reader, writer)
 
     listener = await asyncio.start_server(handle, sock=_listener(cfg))

@@ -24,6 +24,7 @@ import asyncio
 import json
 import math
 import random
+import socket
 import sys
 from pathlib import Path
 
@@ -357,10 +358,36 @@ def test_an_observer_on_another_host_leaves_its_file_by_the_cases_name(tmp_path)
     assert row[:3] == ["| r-a and r-b", "a", "b"]
 
 
+def test_a_gated_connection_sends_at_the_launch_priority():
+    """The schedule's gated class is a socket priority, and an accepted connection has none of its listener's: each
+    is set, and only under a launch gate."""
+    async def priorities() -> list[int]:
+        seen, done = [], asyncio.Event()
+
+        async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            sock = writer.get_extra_info("socket")
+            for cfg in ({}, {"launch": None}, {"launch": {"dev": "eth1"}}):
+                parties.gated(writer, cfg)
+                seen.append(sock.getsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY))
+            writer.close()
+            done.set()
+
+        listener = socket.create_server(("127.0.0.1", 0))
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, parties.LAUNCH_PRIORITY)
+        server = await asyncio.start_server(handle, sock=listener)
+        _, writer = await asyncio.open_connection(*listener.getsockname())
+        await done.wait()
+        writer.close()
+        server.close()
+        return seen
+
+    assert asyncio.run(priorities()) == [0, 0, parties.LAUNCH_PRIORITY]
+
+
 def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
     """The schedule passes the certifier's priority for the gate's opening alone and every other always, each on a
     queue of its own; `txtime` adds the queue that holds the stamped packets; and a case whose gated queue carried
-    nothing, or dropped, is named."""
+    under a packet an interval (a handshake's alone, say), or dropped, is named."""
     launch = bench._launch_arg("eth1,20,5")
     assert launch == {"dev": "eth1", "after_ms": 20.0, "open_ms": 5.0, "mode": "gate"}
     setup, remove = bench.launch_commands(launch, 1000.07, 100)
@@ -401,8 +428,9 @@ def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
     for name, queues, problems in (
             ("through", [{"kind": "taprio", "handle": "100:", "packets": 900}, {"parent": "100:1", "packets": 9},
                          {"parent": "100:2", "packets": 891, "drops": 0}], []),
-            ("around", [{"parent": "100:1", "packets": 900}, {"parent": "100:2", "packets": 0}],
-             ["none of the case's packets left by the launch gate's queue"]),
+            ("around", [{"parent": "100:1", "packets": 900}, {"parent": "100:2", "packets": 1}],
+             [f"the launch gate's queue carried 1 packets, under one for each of the case's {CFG['intervals']} "
+              f"intervals: its bytes left another way"]),
             ("dropped", [{"parent": "100:2", "packets": 880, "drops": 11}],
              ["the launch gate's queue dropped 11 packets"])):
         case = _case(tmp_path / name, gated, lambda t, writes: plan.release(t) + 3e-4)
@@ -410,7 +438,8 @@ def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
         scored = bench.score(case)
         assert scored["problems"] == problems and scored["gated"]["packets"] == queues[-1]["packets"]
     unrecorded = bench.score(_case(tmp_path / "unrecorded", gated, lambda t, writes: plan.release(t) + 3e-4))
-    assert unrecorded["problems"] == ["none of the case's packets left by the launch gate's queue"]
+    assert unrecorded["problems"] == [f"the launch gate's queue carried 0 packets, under one for each of the case's "
+                                      f"{CFG['intervals']} intervals: its bytes left another way"]
 
 
 def test_an_observers_chunks_start_and_end_where_the_bytes_say():

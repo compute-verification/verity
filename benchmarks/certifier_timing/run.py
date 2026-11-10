@@ -52,8 +52,8 @@ whole schedule offloaded (its clock, which the host keeps to TAI); `txtime`, the
 gate's opening and an ETF queue holds it till `ETF_DELTA_NS` before then, in software; `txtime-nic`, the same with
 the NIC launching each packet at its stamp. A socket's own `SO_TXTIME` plays no part: TCP sets no packet's time from
 it. `--launch` takes CAP_NET_ADMIN, `tc`, `sch_taprio` (and `sch_etf`) and a device with two transmit queues; it
-keeps the device's queue counts in launch.json, and a case none of whose packets left by the gated queue is no
-measurement.
+keeps the device's queue counts in launch.json, and a case whose gated queue carried fewer packets than it has
+intervals is no measurement.
 
 `score` measures recorded runs again, each DIR a case's directory as `run` or `serve` left it (config.json,
 server.json, observer.json, certifier.json), with `run`'s exit codes, and `table` prints results' rows. `target` prints the budget's bits an
@@ -306,8 +306,9 @@ def score(case: Path, observed: Path | None = None) -> dict:
     if cfg.get("launch"):
         queues = json.loads(f.read_text()) if (f := case / "launch.json").exists() else []
         gated = {k: sum(q.get(k, 0) for q in queues if q.get("parent") == "100:2") for k in ("packets", "drops")}
-        if not gated["packets"]:
-            problems.append("none of the case's packets left by the launch gate's queue")
+        if gated["packets"] < cfg["intervals"]:
+            problems.append(f"the launch gate's queue carried {gated['packets']} packets, under one for each of "
+                            f"the case's {cfg['intervals']} intervals: its bytes left another way")
         if gated["drops"]:
             problems.append(f"the launch gate's queue dropped {gated['drops']} packets")
     problems += [f"the server's connection: {c['error']}" for c in server["connections"] if "error" in c]
