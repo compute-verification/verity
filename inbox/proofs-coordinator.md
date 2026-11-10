@@ -33446,3 +33446,47 @@ I wrote its heading before I read the clock; the clock read 21:17:14Z when I pus
 - Any plan figure keeps the two caveats: the cache factor of 0.1 is assumed, and S = 28,000 is unchecked.
 
 **#8539** [run, 21:35Z]: `r20261110-203912-e4b1` (records, cpu-8) and `r20261110-204111-2209` (suites, cpu-6) are both still waiting for a slot. My VM restarted at about 21:32Z [run: `uptime` 4 min at 21:36Z]; the runs are on the nodes, and my worktrees are rebuilt at #8539's head `980eb64b368e`. When they end: the lock-only commit, the suites that read the two locks, then "ready to mark <sha>".
+
+## CONCRETE, Tue 10 Nov 21:36Z: (b) is possible today. The three load 1,386 Proofs modules through one import chain they use only for string lemmas; a pure move leaves `File`, `Public` and `Setup` 4, 6 and 8 modules upstream and `Trace` 205, and the longest chain goes from 47.8 to about 25.5 min. (a) is not possible for `deltaL_cW`: it evaluates `cW`, which `File`'s walk defines
+
+**For lean (CI-485): what is possible, and when**
+
+- **(b), today.** The branch `cursor/proofs-concrete-leaves-1ca7` holds it within about an hour of this entry [guess]. A node's compile of the moved files decides whether it stands, about 30 min of compile once their upstream is built [guess]. No statement changes and no lock record moves [read: the move below keeps every read definition in its module].
+- **(a), no for the heavy ones.** `deltaL_cW` and the eleven `*_cW` facts beside it evaluate `cW`. `cW` is no definition of `Flock.*`: `fwd_def` in `File.lean` defines it as what walking `HmRow.parse` returns, which is `File`'s 654 s [read]. They need `File` and `Concrete.Delta`, not `Public` or `Setup` [read], so they can leave `Trace`'s chain later (below), never `File`'s.
+- **What it buys.** In `r20261110-174821-eca8` the longest chain is 47.8 min and `File` starts at 23.1 min, after `VStarTraceOk` [run: that run's `graph.json` and build times, recomputed]. With (b)'s edges and the same times `File` starts at 0.2 min and the longest chain is 25.5 min: the three's own chain ends at 24.5 min, beside the rest's 25.5 [guess: computed, not built]. The compiles don't shorten: 654, 182 and 542 s stay.
+- **What recompiles them.** Of `main`'s 1,347 first-parent commits in 7 days, 109 touched a file upstream of the three. Under (b) 62 touch `File`'s upstream and 79 `Trace`'s [read: git log against the import closure]. 60 of the 62 are the Flock verifier's code: `File` imports all of `Flock`, 164 modules, and names things from 17 of them (75 with their imports, 26 commits) [read: by token, approximate].
+
+**Where the 1,386 come from** [read: `import` lines at `main` `5482988e34`]
+
+| Module | Proofs modules upstream today | after (b) |
+|---|---|---|
+| `Concrete.File` | 1,386 | 4 |
+| `Concrete.Public` | 1,388 | 6 |
+| `Concrete.Setup` | 1,390 | 8 |
+| `Concrete.Trace` | 1,392 | 205 |
+
+- **One chain brings them all:** `File` → `SessionLoop.ConcreteNet` (1,384) → `Claims.Recursion.VStarNets` (1,383) → `VStarTraceOk` (1,381) and `VBridge.Family.Names` (613).
+- **What the three use of it:** 5 definitions (`fileLs`, `joinNl`, `netLs`, `rowsLs`, `secLs`) and about 25 string lemmas, among them `splitOn_join`, `fileLs_noNl`, `tokens_three`, `tokens_eq`, `foldl_word`, `NoNl`, `NoWs`, `nat_noWs`, `fromUTF8?_toUTF8` and `getElem!_str`. Those read only `Flock.Net`, `Flock.HmNets`, `VStar.Unit`, `VStar.PyJson` and Mathlib.
+- **The imports the brief names are small:**
+  - `Refine.Walk`, 107 upstream: only its tactic `kernel_rfl` (2 uses in `File`, 18 in `Public`). `Fwd`'s `kernel_rfl'` gives the same proof term.
+  - `Properties.Flock.Nets` (`built`), `Recursive.FirewallJson` (`norm`, `parse_printJson`, `plainObj_iff`, `plainStr_chars`, `toDigits_digits`) and `Concrete.Fwd`: 0 upstream. `Concrete.Delta`: 1.
+- **`Trace` keeps 205** through `Concrete.Total` (161: `laidVal`, `hm_total`, `sha_total`) and `Discharge.Hm.Flat` (194: `rowNet_entryL`), which its rows' math needs. It needs `Concrete.Setup` for `stW`: `pin_stW`, `da_stW`, `c_stW`.
+
+**(b), the move**
+
+1. A new leaf `VBridge/Family/Text.lean` in the same namespace takes the string lemmas out of `Names.lean`, which imports it.
+2. `VStarNets.lean` keeps its name, its 5 definitions and their text lemmas, and imports only the leaf. Its other half (`emitNet_run` to `traceOkAt_staged`, which needs `VStarTraceOk`) goes to a new module that `Claims.lean`, `VStarFinal.lean` and `VStarTraceAt.lean` import.
+3. `ConcreteNet.lean` and `File.lean` import those. `File` drops `Refine.Walk`; `File` and `Public` write `kernel_rfl'`.
+
+- **Lock** [read]: `Security/lean-audit.json`'s `reads` groups for `…Recursion.VStarNets` (the 5), `Concrete.File` (16), `Public` (14), `Trace` (8), `Setup`, `Delta` and `Total` keep their modules, so none moves. `Names` and `ConcreteNet` have no group. `Security/Proofs/lean-audit.json` records `Concrete.Fwd`'s digest, and I edit neither `Fwd.lean` nor `Walk.lean`. If the records run prints a changed record anyway, I stop and report it.
+- **Risk:** under narrower imports a moved proof's `simp` or instance search can find less, and a module below can have leaned on a transitive import. 18 modules sit below `ConcreteNet`; `Inputs`, `Scope`, `Nontrivial` and `Honest` use `kernel_rfl` and keep `Refine.Walk` by their own imports [read]. Only a node's compile settles it. The 224 modules below `Names` recompile once.
+
+**(a), what could move, and what it is worth** [read]
+
+- **Evaluations over `Flock.*` alone, all small:** `meta_parse`, `unit_netOf`, `metaChars_last`, `noNl_meta` in `File`; `keyHex_eq`, `lp_eq`, `sd_eq`, `bc_eq`, `rootX_eq`, `rootO_eq`, `hexByte_hexC` in `Public`; `UN_a_lt`, `UN_empty`, `UN_in`, `UN_past` in `Trace`. Nobody has timed them apart [guess: little beside the walks and `deltaL_cW`]. After (b) they sit 4 to 8 modules deep, so I'd leave them.
+- **Later, `Trace` in two:** the evaluations (`deltaL_cW`, `dA_cW`, `kLog_cW` to `hmRange_cW`) in a module on `File`, `Delta` and `ExecPlacement`, 26 upstream; the rows' math after it.
+  - A change under `Total` or `Hm.Flat` then stops recompiling `deltaL_cW` and replaying it for 7 to 8 min. The three's chain drops from 24.5 to about 21 min [guess]; the longest chain stays at the rest's 25.5.
+  - `deltaL_cW`'s statement reads `E`, built on `msW`, `padW` and `wbit`, 3 of `Trace`'s 8 read definitions; `vS` and `vH` read `Total.laidVal`. So a `reads` group moves either way (no statement), and it takes a records run: Wed 11 Nov after (b) lands [guess].
+- **Narrowing `import Flock`** to the modules named: Wed 11 Nov with it [guess]. An instance or a `simp` lemma can come from a module no token names.
+
+**Runs:** none yet. Next: the branch, then one `research run` on a node, whose id and ETA I post here.
