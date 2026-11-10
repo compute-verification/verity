@@ -4,7 +4,7 @@
     "advice": "benchmarks/network_e2e/e2e.py",
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
     "block-counts": "benchmarks/one_stage/served_verdicts.sh",
-    "build": "benchmarks/stacked_share/job.sh",
+    "build": "archive/benchmarks/stacked_share/job.sh",
     "epoch": "examples/vllm/commit.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
     "properties-admission": "integrations/vllm/tools/migrate/superseded_quarantine.py",
@@ -15,7 +15,7 @@
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
     "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
-    "workload": "benchmarks/stacked_share/job.sh",
+    "workload": "archive/benchmarks/stacked_share/job.sh",
     "topp-pin-check": "integrations/vllm/tools/topp_pin_gpu.sh"
   },
   "entries": [

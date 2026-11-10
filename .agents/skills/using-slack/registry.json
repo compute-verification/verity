@@ -346,7 +346,7 @@
         "benchmarks/property_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
-        "benchmarks/stacked_share/",
+        "archive/benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "examples/onsite_served/",

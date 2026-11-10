@@ -1,5 +1,5 @@
 # Sourced by run_point.sh (a spec's `setup`): the bandwidth arms' GPU libraries (benchmarks/vllm_encoded/bench_arm.py),
-# built from this source tree as benchmarks/kv_filler/run.sh builds the encoded stack (STACK=...) at its default field
+# built from this source tree as archive/benchmarks/kv_filler/run.sh builds the encoded stack (STACK=...) at its default field
 # (1024, masked, FOLD6, 32 query heads) and the top-up, and the VERITY_VLLM_BENCH_*_LIB names the arms read exported.
 #
 # wt.cu takes nvcc about 9 minutes, so a build is kept on the node in $VERITY_BENCH_LIB_CACHE/KEY (default
