@@ -30399,3 +30399,41 @@ Every value below is from the runs' own `out/` (`row.tsv`, `stage.json`, `path.t
 - Rows 3 and 5 stop in `census_leaves`, at "a census parameter of 32 leaves of [1] bits", after 352 s and 391 s of building.
 - Row 13 stopped earlier on cpu-3, at `read_tmpl.executable()`: "flock-read-tmpl: no such executable: build it with `lake build flock-read-tmpl`". That machine's tree had no built Lean executable. KSTEADY's run on node A got past this point and stopped at `census_leaves` like rows 3 and 5.
 - My next entries cover the `tok`-as-a-word reading, then rows 3 and 5, then row 13. The rest of benchmarks' list, rows 15 and 17 to 36, is still running in `r20261110-161919-afe0` on cpu-3. It started at 16:19Z and has done rows 28, 31 and 33 so far.
+
+## HOUSEKEEP, Tue 10 Nov 18:07Z: stopped on your 17:57Z. The table on `0bda472ef80c` is whole: 25 of 25 cross clean. On `f9b81e59412a` 15 ran, all clean, and 10 were cancelled before they started. No run of mine is on a node. The recipe to redo it on a new map is in the notes
+
+**1. What I stopped.** [run]
+- At 17:59:58Z I killed the queue of the pass on `f9b81e59412a` (its `xargs`, by pid). Ten had not started and did not run: #8576, #8583, #7952, #8120, #8177, #8363, #8543, #8563, #8568, #8578.
+- Three were in flight (#8536, #8540, #8565) and ended by 18:01:59Z, under your "let a run that is nearly done end".
+- Nothing of mine runs now. Nothing was pushed to any PR's head or to any branch but this file's and the notes. The hand-row file is as it was at 15:15Z (its last change in the notes, `03a9e63ded`).
+
+**2. The table on `cursor/top-layout-staged-0247` at `0bda472ef80c` is complete; it is section 3 of my 17:49Z entry (`daa1f2ce13`).** [run]
+- Crosses clean: 25 of 25, by top's two commands, dry (`git merge BASE`, then `restack.py --main STAGE --kept --dry-run`). Stops: 0. `locks-stale` 0, `pins-stale` 0, pins commits 0.
+- 10 of the 25 would conflict by an ordinary merge of the moved tip, so the two commands are needed, not a convenience.
+- For 22 of 25 the PR's change is the same before and after by files, insertions and deletions; the other three differ by one line each, read and explained there (#8414, #8406, #8543).
+- The fixtures' digests hold (8, 7, 6 inputs; none differs, none absent) and our 48 rows are applied, on that head and on `f9b81e59412a`.
+
+**3. As far as `cursor/top-layout-staged-1254` at `f9b81e59412a` got: 15 of 15 clean, 10 not run.** [run]
+- Clean: #8354, #8368, #8552, #8406, #8411, #8414, #8423, #8425, #8453, #8454, #8458, #8517, #8536, #8540, #8565: 15 of the 17 marked ready. #8576 and #8583, ready too, did not run.
+- Same shape as on `0247`: 13 of 15 with the same files, insertions and deletions before and after; #8406 and #8414 with the same one-line difference as before; no line added that names an old place; no file left under an old root.
+- All 25 heads merge its BASE `5600df44ee4d` clean (`git merge-tree`, from my 17:49Z entry), the ten that did not run included.
+
+**4. Runs.** This resume launched no run on a node [read: my entries and notes since 16:21Z]: every rehearsal was a process on my VM (tmux `rs-a` and `lay-034a`, both idle now; about 0.2 GB a process, three at a time). The runs of mine from before 16:21Z are in my 15:15Z and 15:34Z entries, each with its result [read there; not looked up again]. `r20261110-165808-bc76` and `r20261110-172622-9260` in my entries are the stager's, not mine.
+
+**5. What a later worker needs, on a new map.** All of it is in the notes at `cfee4b8b75`:
+- **The recipe:** `lanes/proofs/layout/tools/REDO.md`: the set-up of the scratch clone (tried again at 18:03Z: seconds), the two checks on a staged head, the rehearsal's five commands, and what bit.
+- **The rows:** `lanes/proofs/layout/hand-lines.toml` (47 `[[line]]`, 1 `[[insert]]`), untouched. Rows 40, 41, 45 and 47 name `Security/`, which the second move rewrites; that is not a stop.
+- **The row to remember:** `benchmarks/verifier_cost/flock_served.sh` line 87, written out in section 4 of my 17:49Z entry and in `REDO.md`. Not added: the files are frozen. Its `want` follows wherever the new map puts Flock's verifier.
+- **One edit the new map forces:** `fixture_digests.py` names our three fixtures by today's moved paths (`verity/flock/prover/…`, `verity/spot/verifier/…`). If `flock` and `spot` go under `protocols/`, change the three paths first.
+- **The list is of its hour.** The 25 are your 16:18Z cross-list's clean ones at their heads then (`lanes/proofs/layout/clean25.tsv`). Heads move and PRs land, so the list is made again, not reused.
+- **The results:** `lanes/proofs/layout/tools/results/` (one JSON a head for both stagings, the tables, the batch log).
+
+**6. On TOP-394, what names proofs, read at about 18:05Z.** [read: every post from 17:52Z to 18:03Z]
+- **Top's architecture page is drafted and with Daniel** (top's post created 17:52Z, stamped 18:00Z): "It is the endpoint. Nothing moves until he says it is right. Correct your own line by 12 PM PST (20:00Z)." And: "Start no worker on this map."
+- **Its asks of @proofs, one comment by 12 PM PST**, in top's words: "(a) the lines for `flock/` and `spot/` and the shape `verifier/ prover/ device/` under `protocols/`; (b) where the shared composition Lean goes once `onsite/` and `remote/` are protocols, and whether the challenger service belongs with SPOT's device; (c) what it takes to move the byte, hash and parsing Lean out of Flock's package, which the page names as the order rule's one exception; (d) `messages/` for `wire/`." With @circuits: "one level of names inside `verity/circuits/library/`, and anything that must not fold in."
+- **One more, top at 18:00Z:** "@proofs: if Flock joins the `verity` distribution under `protocols/`, its registry cannot import `verity_config` (ci's comment, 2 files); say in your line whether Flock stays a distribution of its own." ci's comment names the two: Flock's `settings.py` and one test.
+- I looked into none of these: your 17:57Z gives me one entry and no more.
+- **For the recipe, from the page's tree:** `flock` and `spot` go under `verity/protocols/`. Our three fixtures are under them, and so are the files of 33 of our 48 rows (22 under `verity/flock/`, 11 under `verity/spot/`); 20 rows also name, in their `after` or `want` text, a root the page changes. [run: a count over `hand-lines.toml`] A row is matched by its `file` and its `after` line, so those rows are rewritten once the map is final. That is the larger part of redoing this, and `REDO.md` says so.
+- Top recorded for the next staging lean's finding that `restack.py` stops at the commits made by hand between the two moves when a branch changed the same files. None of our 25 stopped there on `0247`, nor the 15 on `1254` [run]. The 20 that conflict with the candidate were not rehearsed by me [not checked].
+
+**No red of ours is open** [read: TOP-394 to its 18:03Z post]. Neither staging of the cut got a whole check, and top's 17:39Z says the stager runs none. I wait for nothing. PRF-505's on-call and crossing have no premise today; I end here.
