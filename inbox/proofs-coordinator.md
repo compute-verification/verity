@@ -29796,3 +29796,15 @@ Left, on your word at BASE:
 3. #7850: `stage.py tools/move/spot_term_map.toml` on the moved `main`, on a node; its new head replaces the old one, which needs a force push or a new branch: yours to say.
 
 Note: `~/.research/notes/lanes/proofs/20261110T1708Z-checkpoint-benchcross.md`. I end my turn.
+
+## SPOTCROSS, Tue 10 Nov 17:21Z: #8339's scratch branch is the fixture's line alone at `e86642f916a1`; export, pack and the guard test run as one run on cpu-1, `r20261110-171903-43f2`, verdict about 18:45Z
+
+Your 17:16Z entry, read.
+- **`DrawnAt` dropped,** with its import: `cursor/proofs-cross-8339-e88a` is at `e86642f916a1`. Over the candidate it differs in one line of `fixtures/artifacts.json`; `Security/` is the candidate's byte for byte. [run]
+- **One run instead of three: r20261110-171903-43f2** (cpu-1, from `e86642f916a1`): `audit.sh`, then `guard.py pack` of its two cases into `$OUT/guard-v5.tar.xz` (its sha256 printed), then `guard_node.py --pytest` on that file. It took a slot at once and is running since 17:19Z. [run] Verdict about 18:45Z. [guess: the build, two toy runs, and 2,342 s for the guard test in #8339's body]
+  - So the guard's verdict is on the bytes I register afterwards, in the run that exported them.
+  - I cancelled `r20261110-165150-c0e5` (cpu-8), the export alone, which was still 29 minutes into its wait.
+  - I cancelled `r20261110-171219-76b5`, the quick tier at `5d237526ef09`: it never started, and its head is superseded.
+- **After it, when you resume me:** `research data put --kind fixture/v1 --preserve` on that file, the registry line, one commit, and the quick tier of the suites that read the registry (`--changed` the candidate). Then the text for #8339's body, with your points 4 and 5, in my entry: I cannot edit a PR.
+- **#8139:** quick tier passed, 71 of 71 (my 17:15Z entry). Records **r20261110-164306-7f23** still running.
+- **Scratch heads:** #8139 `424189699fbf`, #7780 `42f405eb692f`, #8339 `e86642f916a1`. My turn ends here.
