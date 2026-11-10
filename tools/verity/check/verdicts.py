@@ -62,14 +62,18 @@ def roots() -> dict[str, Path]:
 
 
 def entries() -> dict[str, Path]:
-    """`{pack path: file}` for every verdict entry here, a pack path being `check/...` or `tests/...`."""
+    """`{pack path: file}` for every verdict entry here, a pack path being `check/...` or `tests/...`.  A directory at a cache's
+    top that is a link (a machine keeping `circuit-check/` on another disk than the cache around it) is walked like any other:
+    the step that stores there, `import_` and `export_paths` all follow it, so a walk that didn't would pack nothing the step
+    stored.  A link further down is never followed."""
     out = {}
     for prefix, base in roots().items():
         if not base.is_dir():
             continue
-        for d, dirs, names in os.walk(base):
+        for d, dirs, names in os.walk(base, followlinks=True):
             top = Path(d) == base
-            dirs[:] = [x for x in dirs if not x.startswith(".") and not (top and _skipped(prefix, x))]
+            dirs[:] = [x for x in dirs if not x.startswith(".") and not (top and _skipped(prefix, x))
+                       and (top or not os.path.islink(os.path.join(d, x)))]
             for name in names:
                 p = Path(d) / name
                 rel = p.relative_to(base)
