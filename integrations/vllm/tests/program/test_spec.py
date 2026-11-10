@@ -13,10 +13,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits.evaluation import evaluate_call
-from verity.ml.definitions.registry import spec
-from verity.ml.definitions.registry.b1 import Serve
+from verity.circuits import Program, bind
+from verity.circuits.evaluation import evaluate_call
+from verity.definitions.registry import spec
+from verity.definitions.registry.b1 import Serve
 from tests.program.crosscheck import _standalone
 
 U32 = 0xFFFFFFFF
@@ -68,7 +68,7 @@ def test_advance_matches_reference(K):
 
 
 def _random_weights(C: dict, rng) -> list[int]:
-    from verity.ml.definitions.registry.b1 import weights_type
+    from verity.definitions.registry.b1 import weights_type
     n = weights_type(C).leaves
     w = (rng.standard_normal(n) * 0.05).astype(np.float32).view(np.uint32) >> 16
     return [int(x) for x in w]
@@ -99,8 +99,8 @@ def test_verify_branch_tiny_evaluates_and_accepts_own_argmax():
 
 
 def _eval_program(prog: Program, inputs: list[list[int]]) -> list[int]:
-    from verity.ml.circuits.evaluation import evaluate_region
-    from verity.ml.circuits.layout import resolve
+    from verity.circuits.evaluation import evaluate_region
+    from verity.circuits.layout import resolve
     C = prog.circuit
     t = {}
     for pi, vals in enumerate(inputs):

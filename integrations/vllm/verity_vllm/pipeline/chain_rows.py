@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import CHAIN_OF, CHAINS, Template, template
 from verity_vllm.pipeline.split_rows import _twins
@@ -40,7 +40,7 @@ def kind(tp: Template) -> str:
 
 
 def _visits(statics: dict[str, Any]) -> list[tuple[int, int]]:
-    from verity.ml.definitions.registry.sparse_mla import visits
+    from verity.definitions.registry.sparse_mla import visits
 
     return visits(int(statics["T"]), int(statics["BN"]))
 
@@ -68,7 +68,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity.ml.definitions.numerics.sparse_mla_split_twins import chain_rows, head_end_rows
+    from verity.definitions.numerics.sparse_mla_split_twins import chain_rows, head_end_rows
 
     tp = template(m.template)
     k = kind(tp)

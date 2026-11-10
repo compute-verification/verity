@@ -19,15 +19,15 @@ import pytest
 torch = pytest.importorskip("torch")
 # ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw.coins import Challenger
-from verity.core.protocols.spot import challenger as LC
-from verity.core.protocols.spot import remote as R
-from verity.core.protocols.spot.challenger import LiveOpening, LiveRecord
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.prover.circuit import live as L
+from verity.protocols.pouw.verifier.coins import Challenger
+from verity.spot.device import challenger as LC
+from verity.spot.device import remote as R
+from verity.spot.device.challenger import LiveOpening, LiveRecord
+from verity.spot.verifier.one_stage import registered as G
 from verity_vllm import protocols as PO
 from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
@@ -436,7 +436,7 @@ def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing
     """A claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier's claim instance
     names their source; a window is credited only on the auditor host's challenge phase (the int8 arm's test above)."""
-    from verity.core.protocols.pouw import verifier
+    from verity.protocols.pouw.verifier import verifier
     held, real = [], Challenger
 
     def named(epoch, entropy):
@@ -655,7 +655,7 @@ def _verifier(units, reject=(), seen=None, opened=lambda port: True):
     `reject`, its verdict naming the program it was handed and its registered finding the ports of the `--registered`
     file credit built that `opened` keeps, each at the root credit read from the window's entries. A statement on the
     live template's circuit file proves its round's proof block, the round its ``m@<s>`` port names, and opens every port."""
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.spot.verifier.one_stage import proofs as PF
 
     def run(proof, *, circuit_sha512, program, partition, registered):
         if circuit_sha512 == FILES[CR.LIVE]:
@@ -695,7 +695,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its sampled calls' statements
     (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
     (`credit.window`) passes its weights and refuses it only for want of its sampled calls' proof files."""
-    from verity.core.protocols.pouw import salt as PS
+    from verity.protocols.pouw.verifier import salt as PS
     k = PHC.draw_k(LAYOUT)
     assert k == 2
     auditor = periodic(k, files=FILES)
@@ -994,7 +994,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     evidence refuses the whole window. The closed period's credit
     (`period_credit`) is that window's, its period opened with ``--model`` (the auditor's registration, whose
     key salted the window's b/<K>), and a window whose ``b/<K>`` aren't the period's is refused there too."""
-    from verity.core.protocols.spot.one_stage import registered as G
+    from verity.spot.verifier.one_stage import registered as G
     k = PHC.draw_k(LAYOUT)
     auditor = periodic(k, files=FILES)
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())

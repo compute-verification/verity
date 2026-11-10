@@ -1,4 +1,4 @@
-"""I2's served window as one Circuit (`verity.ml.windows.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.windows.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired or registered.
 
 A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each
@@ -133,17 +133,17 @@ from dataclasses import dataclass, field
 from itertools import accumulate, product
 from typing import Any
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Refs, runs
-from verity.ml.circuits.types import Tuple
-from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.registry import rmsnorm_fused_split as NS
-from verity.ml.definitions.registry import int8_exact as IX
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
-from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
-from verity.ml.windows import interface as IF
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.refs import Refs, runs
+from verity.circuits.types import Tuple
+from verity.commitments.gates import embedding as E
+from verity.definitions.registry import rmsnorm_fused_split as NS
+from verity.definitions.registry import int8_exact as IX
+from verity.definitions.registry import io_shell as IO
+from verity.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
+from verity.definitions.registry.fa3_check_inf import AttentionV20
+from verity.windows import interface as IF
 from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS

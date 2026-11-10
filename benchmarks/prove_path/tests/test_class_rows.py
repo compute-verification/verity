@@ -16,7 +16,7 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
 
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import class_rows as CR  # noqa: E402

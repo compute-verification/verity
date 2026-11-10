@@ -26,7 +26,7 @@ export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/accel_v31
 E=benchmarks/pouw/gemm_rate
-export PYTHONPATH=.:tools/config
+export PYTHONPATH=.:verity/configuration/config
 PY=${PY:-uv run -q --no-project --with numpy python}
 TORCH_PY=${TORCH_PY:-${VERITY_BENCH_VENV:+$VERITY_BENCH_VENV/bin/python}}
 TORCH_PY=${TORCH_PY:-uv run -q --no-project --with torch==2.14.0 --with numpy python}
