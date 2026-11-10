@@ -31,8 +31,8 @@ from rho.params import Registry  # noqa: E402
 
 #: the served policy's public numbers
 SERVED = HERE / "served.toml"
-#: a block's work by kind, and its total in the policy's unit: the linears run at the card's dense int8 rate and the
-#: rest in BF16 at half of it, so an int8 MAC counts one and a BF16 MAC two
+#: a block's work by kind, and its total in the policy's unit: the linears are priced at the card's dense int8 rate and
+#: the rest at its BF16 rate, half of it, so a linear's MAC counts one and a BF16 MAC two
 WORK = ("linears", "attention", "lm_head")
 TOTAL = "total"
 
@@ -139,7 +139,7 @@ def stated(path: Path = SERVED) -> Policy:
                          "work's MACs positive integers")
     if work[TOTAL] != work["linears"] + 2 * (work["attention"] + work["lm_head"]):
         raise ValueError(f"{path}: [work] {TOTAL} = {work[TOTAL]:,} is not linears + 2 × (attention + lm_head): the "
-                         "policy's unit counts an int8 MAC one and a BF16 MAC two")
+                         "policy's unit counts a linear's MAC one and a BF16 MAC two")
     sh, positions = shape(model), window_class(cls).positions
     parts = []
     if bits := (doc.get("outside") or {}).get("linears"):

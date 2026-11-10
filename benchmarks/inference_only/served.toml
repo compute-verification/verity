@@ -10,9 +10,9 @@ c = 13818131814643
 k = 422197408
 n = 25165824
 
-# One block's work in MACs by kind: the layers' linears, which the card runs at its dense int8 rate, and attention's
-# products and the LM head, which it runs in BF16 at half that rate. `total` is the block's work in the policy's unit,
-# an int8 MAC one and a BF16 MAC two: linears + 2 × (attention + lm_head).
+# One block's work in MACs by kind: the layers' linears, priced at the card's dense int8 rate, and attention's products
+# and the LM head, priced at its BF16 rate, half of that. `total` is the block's work in the policy's unit, a linear's
+# MAC one and a BF16 MAC two: linears + 2 × (attention + lm_head).
 [work]
 linears = 34057748480
 attention = 41287680

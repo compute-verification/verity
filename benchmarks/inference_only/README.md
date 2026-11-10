@@ -42,7 +42,8 @@ number is `min_cut.bound`'s slowdown on one block: `max(1, N / cap)`, where `N` 
 `cap` is the most training work the count lets one block of the policy finish (`Bound.macs_a_block`). The benchmark passes the bound `N`, the
 output wires `O = N × o × b` (`o` the output values a MAC of the model's own forward matmuls, `b` a BF16 value's 16
 wires) and the circuit's size `c`; the work is taken as training of the model's own matmul shapes with its weights
-outside θ. A number of 1 says the bound shows no slowdown: one block's `k` lets it hold all of its own work as training.
+outside θ. With the circuit's size `c`, `c` cancels: the number is the blocks the count needs for one block's work. A
+number of 1 says the bound shows no slowdown: one block's `k` lets it hold all of its own work as training.
 
 The served class leaves the layers' linears outside the circuit, so a block reads their outputs as fresh input and its
 `k` is large; the class with the linears inside reads only its scan state row. `k` is the lever.
@@ -59,9 +60,10 @@ The number is a block's ratio under two named premises, on a check that Lean doe
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
   data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
   calculator's (`uv run python benchmarks/rho/periods.py`).
-- **Units, not converted.** `N` and `cap` are in the policy's own MACs, which count a MAC at the card's dense int8 rate
-  as one and a BF16 MAC as two. The bound is at `F = 1`, which charges at most two of a training step's three kinds of
-  product; the two thirds that leaves of a step where the weight-gradient products are not charged is not applied.
+- **Units, not converted.** `N` and `cap` are in the policy's own MACs, which count a MAC of the layers' linears as one
+  and a BF16 MAC (attention, the LM head) as two, the card's dense int8 rate against its BF16 rate. The bound is at
+  `F = 1`, which charges at most two of a training step's three kinds of product; the two thirds that leaves of a step
+  where the weight-gradient products are not charged is not applied.
 
 ## The policy file
 

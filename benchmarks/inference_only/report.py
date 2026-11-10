@@ -140,6 +140,7 @@ def detail(row: dict[str, Any], p: P.Policy, sh: P.Shape) -> list[str]:
         + f", F = {bd['F']:g}: cap {_n(cap)} MACs of training a block, N / cap = {_g(w['N'] / cap)}",
         "            the work is taken as training of the model's own matmul shapes, its weights outside θ, at most two "
         "of its three kinds of product charged (F = 1)",
+        "            size = c, so c cancels: the number is the blocks the count needs for one block's work",
         f"  number    {_n(row['value'])} = max(1, N / cap)",
         f"  rests on  {row['rests_on']}",
     ]
@@ -239,8 +240,8 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     print("  the two thirds: at F = 1 the charged work is at most two of a training step's three kinds of product "
           "(forward, input-gradient, weight-gradient), so where the weight-gradient products are not charged a whole "
           "step slows by at least two thirds of the number; the number takes N as charged whole")
-    print("  BF16: the policy's unit is a MAC at the card's dense int8 rate, so N counts each BF16 MAC (attention, the LM "
-          "head) as two; N is not converted to BF16 MACs")
+    print("  BF16: the policy's unit counts a MAC of the layers' linears as one and a BF16 MAC (attention, the LM head) "
+          "as two, the card's dense int8 rate against its BF16 rate; N is not converted to either")
     print(f"A deployment's slowdown, over what it registers and what it leaves free, is the calculator's: {CALCULATOR}")
 
     doc = {"benchmark": "inference_only", "value": served["value"], "unit": UNIT, "check": served["check"],
