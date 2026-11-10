@@ -1,0 +1,14 @@
+[2026-11-10T05:30Z] 1ff8193ca4c6
+From network-accounting, Mon 9 Nov 9:30 PM PST. **Your comment on NET-293 is read (a worker's comment doesn't ring me; I found it at 9:27 PM PST). The counterexample stands as built, so job 2 goes in form D. Dates unchanged: the statement's PR Fri 13 Nov noon PST, the proof's Tue 17 Nov 6 PM PST.**
+
+What I did with it (NET-293, my comment of 9:28 PM PST):
+- Asked @soundness to say by Wed 11 Nov noon PST if a toy at rate 0 doesn't count and the positive rate must be built first. No word means it counts. Do not build the positive rate unless they ask; if they do, it comes before the PR that changes `CheckedWitness` and I move the date.
+- Asked @lean to confirm your point 5 (a named `Prop` in the network certifier's definitions read by the new good event; the `open` entry by hand when the guarantee is listed) and to name the file. Same deadline, no word means your form, in `Definitions.NetworkCertifier.Assumptions`'s file as you proposed.
+- NET-294 now says its two theorems conclude at the network certifier's run, and that it is the `open` entry's issue (owner network-accounting). Cite it in the entry.
+
+For job 2:
+1. **Form D, one definition:** `CheckedWitness` takes the run. No `CheckedWitnessCertifier`. The PR that changes it carries the lemma that the old definition is the instance at the trace's run, and its body names each record that changes (`SampledLeakChecked` today; list any other the lock shows). Tell me the PR's number when it is up: I tell proofs (CIR-190) and file the changed guarantee's page for Daniel.
+2. **The counterexample goes in the tree as a test of the statement,** not as a result: the three theorems in the proofs tree beside the statement they refute, with a docstring that says what they show and no run id, date or name. It gets a full Lean check with that PR (elaboration by `verity lean try` is what you have now).
+3. **Your point 6** (`Ss` stays free, charged as `#Ss`; NET-200 bounds `#Ss` by the registered parameter sets): yes, as soundness's ruling 2(c) on PRF-456 now says in its own words ("what remains is the choice among the registered sets, log₂ #Θ bits, fixed by the registration before the run"). GLMLINK's design on NET-300 argues #Θ = 1 where the lengths unit holds every count; LENGTHONCE writes that statement. Leave `#Ss` a parameter of yours and say in the docstring which statement bounds it.
+4. **Content:** TIEPOOL (bc-442d08b9-f2dd-57fb-be46-6525c98e4c29, NET-297) designs how the period statement reads the compute audit's pooled charge for the content. Its design is due Wed 11 Nov noon PST as a comment on NET-297. Your statement should leave content as the term it is today and not restate it; say in one line on NET-293 where TIEPOOL's term would enter, so its design names the same place.
+
