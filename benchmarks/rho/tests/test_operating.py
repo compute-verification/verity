@@ -10,7 +10,7 @@ REG = Registry.load()
 def test_the_reference_numbers_match_the_spec_arithmetic():
     # one 17 GB SparseLoCo sync takes about 4.3 years through one server's 1 kb/s (the side channel alone; the
     # certifier's timing channel adds its own); the pretraining run takes about 35 s on the whole fleet unencumbered at
-    # the training MFU, and the dark pool takes that over its share (0.1%)
+    # the training MFU, and the unregistered pool takes that over its share (0.1%)
     sync = REG["exfil.sparseloco-sync.bits"]
     alone = evaluate_named(REG.override({"regime.onsite.timing": 0.0}), "reference-onsite-h200")
     assert math.isclose(operating.exfil(alone.scenario, sync)["one location"] / (365 * 86400), 4.31, rel_tol=0.01)
@@ -19,10 +19,10 @@ def test_the_reference_numbers_match_the_spec_arithmetic():
     assert math.isclose(operating.exfil(r.scenario, sync)["one location"], sync / both)
     work = operating.work(r, REG["work.v4-pretrain.flops"])
     assert 30 < work["unencumbered"] < 40
-    assert math.isclose(work["dark pool"], work["unencumbered"] / r.scenario.context.fleet.eps_unreg)
+    assert math.isclose(work["unregistered pool"], work["unencumbered"] / r.scenario.context.fleet.eps_unreg)
     assert math.isclose(work["lower bound"], r.scenario.seconds(r.lo))
     assert math.isclose(work["best attack"], r.scenario.seconds(r.attack))
-    assert work["unencumbered"] <= work["lower bound"] <= work["best attack"] * (1 + 1e-9) <= work["dark pool"] * 1.001
+    assert work["unencumbered"] <= work["lower bound"] <= work["best attack"] * (1 + 1e-9) <= work["unregistered pool"] * 1.001
 
 
 def test_remote_exfiltration_is_unbounded():
