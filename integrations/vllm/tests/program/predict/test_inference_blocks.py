@@ -102,6 +102,17 @@ def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
     assert {r.param for r in circuit.registered.reads if r.param.split("/", 1)[0] != WEIGHTS} == {SCAN_STATE}
 
 
+def test_under_a_pin_of_its_openings_reader_a_blocks_k_is_its_lane_of_the_scan_state(window, monkeypatch):
+    """With the embedding read among the pinned readers a block's openings are θ's, so its k is its slot's lane of the scan
+    state alone, in `budgets` and in the statement; under another pin k is as with none. One constant stands in for every
+    reader's digest here: `test_window_circuit` takes the catalog reader's own."""
+    circuit, program = window
+    pin, c = "cd" * 64, IB.budgets(circuit)[0]
+    monkeypatch.setattr(IF, "reader_digest", lambda fn: pin)
+    assert IB.budgets(circuit, [pin]) == (c, 4548 * 16) and IB.budgets(circuit, ["ef" * 64]) == (c, K)
+    assert IB.commit(circuit, program, readers=[pin])[0]["k"] == 4548 * 16
+
+
 def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(window):
     """The statement is the query, c and k, the block and row counts on the grid and the root: no entry, template or unit
     of the table. Each row opens under the root at the padded count, the padding rows zero; the same rows under fresh salts
