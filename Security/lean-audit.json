@@ -301,6 +301,10 @@
    "digest": "727b29fa325435eeddaf8266d17571053bd61f3138f42a01a5d24a37aaef1837",
    "why": "The layer below's guarantee at each window: the leak relation with checked inputs at the window's faulty set, which the live SampledLeakChecked gives."
   },
+  "NetTiming.PeriodOperator": {
+   "owner": "@network-accounting",
+   "why": "The period's operator at window i reads only the windows before i, closed by then: what the windows' counts multiply under, and what a continued response's operator meets."
+  },
   "Pouw.NCP.Params.InstanceU": {
    "owner": "@compute-research",
    "digest": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
@@ -4424,7 +4428,7 @@
    "nontrivial": "NetTiming.Witness.SampledLeakRegistered_nontrivial"
   },
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
-   "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
+   "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest", "NetTiming.Witness.PeriodOperator_honest"],
    "nontrivial": "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
   },
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
@@ -4494,6 +4498,10 @@
   "WeightSecurity.SecurityProofs.TheftServedMinEntropy": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
+  },
+  "NetTiming.SecurityProofs.PooledLeakAccepted": {
+   "honest": ["NetTiming.Witness.PeriodOperator_honest"],
+   "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   }
  },
  "unwitnessed": {
@@ -18910,6 +18918,12 @@
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
   },
+  "NetTiming.Witness.PeriodOperator_honest": {
+   "owner": "@network-accounting"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "NetTiming.Witness.PooledLeakChecked_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -27862,7 +27876,7 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
