@@ -54,11 +54,15 @@ import Mathlib.Topology.Sheaves.Init
 
 **Each window's bound.** On the audit's scope, the sampling relation at a trace that agrees with the network certifier
 wherever both open a gate gives the leak relation at the network certifier's rows with a valid run, where the run at
-those rows (`certifierRun`) is `valid` (`rLeakCertifierChecked_of`): the run the relation accepts at is that run, at the
-inputs pinned to the trace. An accepted audit escapes it only where `Compiled.KS` fails, the trace disagrees with a
-passing opening of the network certifier, which is a collision (`certifierColl_of_disagree`,
-`Pr_certifierColl_le_Btap`), or one of the two checks misses on that run, which `CheckedWitness` at `certifierRun`
-bounds (`periodChecked_first`).
+those rows (`certifierRun`) is `valid` (`rLeakCertifierChecked_of`). The trace filled in with the network certifier's
+values carries its records (`TapProof.carries_fillTrace`), so `accepted_of` gives `Accepted` with the incorrect proof
+blocks' committed gates held at the filled values, the advice the count charges. A held gate's input value is never
+read, any other input in a proof block is opened, and no egress gate depends on an input in none (an unread input,
+`Prog.Unread`), so the inputs move back to the trace's own values (`valOver_congr_held`), pinned at the free inputs:
+the run the relation accepts at is the run at the network certifier's rows. An accepted audit escapes the relation
+only where `Compiled.KS` fails, the trace disagrees with a passing opening of the network certifier, which is a
+collision (`certifierColl_of_disagree`, `Pr_certifierColl_le_Btap`), or one of the two checks misses on that run,
+which `CheckedWitness` at `certifierRun` bounds (`periodChecked_first`).
 
 **The count.** A window that meets `WindowGoodChecked`, whose observations the network certifier registers, has them
 among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_windowGoodChecked`). A period's
@@ -165,7 +169,9 @@ theorem encard_periodChecked_le {L K S n : ℕ} (lay : AuditStatement → Bounda
           (op i (runsBefore o i)) (o i) := fun i => ho i
     choose hl hj F hF hacc using ho'
     exact Set.mem_iUnion₂.2 ⟨F, Fintype.mem_piFinset.2 hF, fun _ => [], fun _ => [], fun _ => by simp [poolOpen],
-      fun i => leakAtCarried_of_leakAtChecked ⟨hfits i, disjoint_of_mem_faultySets (hF i), hl i, hj i, hacc i⟩⟩
+      fun i => leakAtCarried_of_leakAtChecked
+        (show LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (F i) (o i) from
+          ⟨hfits i, disjoint_of_mem_faultySets (hF i), hl i, hj i, hacc i⟩)⟩
   have hi : ∀ i, ∑ F ∈ faultySets (sw i).design (Pw i) δ,
         c i * (2 ^ faultyBits (sw i).prog (Pw i) F * Dj ^ k (sw i)) ≤
       c i * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i) := fun i =>

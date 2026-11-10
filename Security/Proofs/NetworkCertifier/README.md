@@ -85,8 +85,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                (certifierRun), the leak relation there with a valid run (RLeakCertifierChecked), a
                                window's good event with it (WindowGoodChecked)
 ../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: the period's leak with checked inputs
-                               left out and the record read under a registered parameter (PeriodLeakChecked),
-                               stated and not proved
+                               left out and the record read under a registered parameter (PeriodLeakChecked)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
                                (trivLay, notLay, certOps)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -115,15 +114,15 @@ Tap.lean        what the tap's certifier saw is what its warden sent: under trus
 RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
                                          is a record format (recordFormat); #guards hold it to the Python network
                                          certifier's egress records
-TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at a trace that agrees
-                                         with its openings gives the leak relation at them (rLeakCertifier_of_r, through the
-                                         trace filled in with its values), and a disagreement is a collision
-                                         (certifierColl_of_disagree); sampledLeak_certifier
-Period.lean     the leak through the network certifier over a monitoring period: each good window's
-                                         registered observations are among AccSeqsSampled at its registration
-                                         (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
-                                         cells decode to, read back from those observations and counted over the
-                                         windows (encard_periodGood_le, periodLeak)
+TapRows.lean    at the network certifier's rows: the trace filled in with its values carries its records
+                                         (carries_fillTrace), and a disagreement between the two is a collision
+                                         (certifierColl_of_disagree, Pr_certifierColl_le_Btap)
+PeriodChecked.lean  the period's leak with the checked inputs left out (periodLeakChecked): each window's
+                                         bound at the network certifier's rows with a valid run
+                                         (periodChecked_first), and the records counted by Carried's count at the
+                                         empty pool (encard_periodChecked_le, periodChecked_second)
+Period.lean     PeriodLeakAccepted as PeriodLeakChecked's instance at no checked input
+                                         (periodLeak_of_checked, periodLeak)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the wrong units over a monitoring period: a uniform draw misses `f` units with probability at most
@@ -164,7 +163,7 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
 PeriodCheckedChecks.lean  checks of PeriodLeakChecked: held to the trace's run its first part is false, at a toy
                           whose check passes there and misses on the run at the network certifier's rows
                           (freeL_traceRun_insufficient, periodLeakChecked_traceRun_fails, freeL_certifierRun_miss);
-                          its nontrivial lemma; readsBy_read
+                          its nontrivial lemma
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -315,8 +314,8 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   registration's commitment binds them is a separate statement, not yet proved. `Compiled.KS` is an open premise in
   the lock, and `SampledAuditAccepted` is proved.
 - **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
-  the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_certifier`) with the read-back of its
-  record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
+  the leak bound at the network certifier's rows with the read-back of its record, so the bound's content term comes
+  from the audits: over a monitoring period's windows, each registered as a
   statement, where the network certifier registers its observations at the transfer gates (`CertifierRegisters`, its openings
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
   number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
@@ -381,14 +380,15 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
     bound its miss discharges them. `SampledLeakCarried`'s honest lemma is its premises at the toy code, with a run
     that opens its row at its circuit's input gates (`SampledLeakCarried_honest`). `PooledLeakCarried`'s waits on the
     pool circuit, which pins its closing row (`CheckedClosing`), and on its period's inputs.
-- **The period statement with checked inputs** (`Guarantees/PeriodChecked.lean`), stated and not proved:
+- **The period's bound with checked inputs** (`PeriodChecked.lean`):
   `PeriodLeakChecked` is `PeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
   windows', with no factor for the schedules or a connection's cells. Window `i`'s operator reads the windows before it
   (`runsBefore`). Its check is held to the run at the network certifier's rows (`CheckedWitness` at `certifierRun`),
   which holds an incorrect proof block's committed gates at the trace filled in with the network certifier's openings;
   held to the trace's run the statement is false (`PeriodCheckedChecks.lean`). That the trace holds the registration's
-  values at the registered inputs is the named premise `RegisteredInputsHeld`.
+  values at the registered inputs is the named premise `RegisteredInputsHeld`. Its count is `Carried`'s at the empty
+  pool. `PeriodLeakAccepted` is its instance at no checked input (`checkedUnique_empty`, `checkedWitness_true`).
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
