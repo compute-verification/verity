@@ -304,6 +304,20 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     assert "the prover's files don't open its y: ValueError: " in same(exe, [path])["reason"]
 
 
+def test_a_served_y_row_that_ends_before_its_tiles_columns(exe, tmp_path):
+    """A prover's own y whose last real row is short (`short_y`: the rows file cut, the tree and root over the row as it
+    is, so it opens), on a row whose unscale is +0 at every column (`zero_a`: its A row is zero, so it is excluded and its
+    tile is opened whatever the draw), where the word a read past the Lean row's end gives, 0, is the word the check
+    wants.  Both sides open the row the file holds and refuse it by its length, and half a word is no row on either."""
+    path = T.proved_pass(tmp_path, H100, zero_a=19)[0]
+    assert same(exe, [path])["verdict"] == "accept"
+    T.short_y(path, 0, 8)
+    assert same(exe, [path])["reason"].endswith("y[19]: the opened row holds 12 words, the tile's columns end at 16")
+    T.short_y(path, 0, 1)
+    assert same(exe, [path])["reason"].endswith(
+        "the prover's files don't open its y: ValueError: buffer size must be a multiple of element size")
+
+
 def test_a_layer_past_k_max(exe, tmp_path):
     """A weight of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
     records root the pass publishes over them: the pass load refuses it (`DomainError`, k ≤ 2^16 among the domain's
