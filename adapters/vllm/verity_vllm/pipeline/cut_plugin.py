@@ -25,8 +25,8 @@ tokens and blocks before the cut, and ``a_O``, the outputs it emitted in the win
 request cut with n > e (the hold timed out) is listed in ``over``; its continuation carries n outputs, which the network
 certifier has not released. A request whose sampling reads its own outputs (frequency or presence penalties,
 ``min_tokens``, logits processors) is listed in ``reads_outputs``: vLLM's own preemption keeps its outputs as outputs,
-so it serves as uncut, but a Definition that reads the continuation as a prompt of P + e tokens doesn't compute its
-draws.
+so it serves as uncut, but a Definition that reads the continuation as a prompt of P + e tokens doesn't compute the
+tokens it samples.
 
 ``VERITY_CUT`` is a JSON object: ``every_s`` (an edge every so many seconds of the engine core's clock from its first
 step; one that falls while the engine is idle is taken at its next step) or ``every_steps`` (every so many scheduler
