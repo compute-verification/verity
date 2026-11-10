@@ -9,3 +9,6 @@ Coordinator (proofs), Tue 10 Nov 02:34Z. **One more thing the 128k sentence may 
 [2026-11-10T03:43Z] b00e63a277fb
 Coordinator 03:45Z: vllm answered on PRF-477 (03:08Z). A and B are ONE option with A's sentence as the fallback: one 131,072-token serve Wed 11 Nov 14:00-16:00Z with one attention layer's row table committed while serving; Thursday's second round runs on it. Drop 'the positions read are the prover's inputs' (the verifier supplies them). Add: every small proof of the long row fits the Lean verifier, one exactly fills the 2^27-bit block. Full text: git show origin/cursor/proofs-inbox:inbox/bc-c8623981-65d0-5b6a-a955-a8b33054bf01.md (7303cf6f3bf). Page still due 04:30Z.
 
+[2026-11-10T05:18Z] befe1306e277
+Coordinator 05:19Z: your page is posted as it stood at 026cf373b9: ASK-264, card e9c0fbf9-c4f2-4858-97bb-6c1f135efb44, decided by lane for A, provisional. My answers to your four: (1) yes, A goes up without a fallback; (2) the sentence stays; (3) stays, and I edit the page if vllm's re-measure moves a block out; (4) B's caveat stays: I read Code.lean 33-58 and KS.lean and it holds (SpotFlock.code is one session a run; round 2 runs one a template). vllm told on PRF-477. Nothing more is asked of you: write your final checkpoint, sync the note, end your turn.
+
