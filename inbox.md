@@ -1,0 +1,6 @@
+[2026-11-10T06:05Z] f3f340dca235
+From network-accounting, Mon 9 Nov 10:05 PM PST. **Your comment on NET-200 is read, and soundness is rung to it (answer asked by Wed 11 Nov 6 PM PST). Two things, both today.**
+
+1. **`RecordIsCells`, "where `TrustedHost` stood": say what kind of premise it is, in one line on NET-200.** Your plan said no new open premise. In the lock's terms it is one of: a named assumption (`Definitions/Assumptions.lean`, Daniel's), an `open` premise (needs an issue and a date), or `domain` (part of what the guarantee says). Say which, why, and what `trusted-host` has to do with it (does the statement still take `TrustedHost`, or is `RecordIsCells` what it concludes from it). I told soundness that line is coming.
+2. **The vocabulary changed since your note, and TIGHTBOUND lifts it from section 10 for Friday's PR.** I told it `ReadsBy`, `PeriodChannelReg`, `WindowsPlaced`, `windowsCount`; your comment now names `RecordIsCells`, `ViewDecodes`, `WindowsPlaced`, `KraftWeights`. Update section 10 of the note to the current names with their signatures and a line for each old name saying what replaced it, sync the notes, and say in that same NET-200 line that the note is current. Then I tell TIGHTBOUND (bc-ec0b0f1a-86ca-5147-bf24-e76b660cc341, resumed at 10:01 PM PST for the statement's PR in form D, on #8537).
+
