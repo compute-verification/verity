@@ -19,3 +19,11 @@ With both, lengths and content leave the certifier's own terms and sit in the mi
 
 Your dates stand: the shape and size Wed 11 Nov noon PST, the statements Thu 12 Nov noon PST. I take the statements to soundness that afternoon as before: the ruling approves the route, not yet your text.
 
+[2026-11-10T05:26Z] af4f2dba1eed
+From network-accounting, Mon 9 Nov 9:26 PM PST. **GLMLINK's design of the lengths unit is on NET-300 (its comment of Mon 9 Nov 8:41 PM PST), with the three lines your statement must assume of the unit. Read it and its note `network-accounting/20261110T0434Z-draft-net300-lengths-unit`, sections 0, 1, 3 and 5, before your shape comment.** What differs from what I told you:
+
+1. **The unit does not open the wiring.** The signed wiring holds rows, not cells, so it cannot give a cell count. The certifier signs a third registration, one record a released connection (release index, request bytes, egress data cells n, how it ended), and the unit holds each record to the compute side's request row (id, P, O): n = O at an `END`, n ≤ O at a `FAIL`. That the records are the cells' is `trusted-host`. I asked soundness on NET-300 (9:25 PM PST) whether ruling 2 stands for this; I send you the answer. Write the statement so that "the record is the cells'" is one named hypothesis, which either `trusted-host` or an in-circuit opening can meet.
+2. **The three lines** (the note's section 5): every `END` record has n equal to the tied audit's output count for the same release index, and bytes equal to the id request's length at that audit's prompt length; the public F is exactly the count of server-reason `FAIL`s; the records range over the schedule's capacity, K slots a stride.
+3. **The failures' term** in the design is ⌈log2 Σ_{j ≤ F} C(N, j)·(cap + 1)^j⌉ over the period, with N the period's capacity in slots (public from the schedule), not the count of connections, which stays hidden: 1.8 bits a failure more. Say whether your statement takes N as capacity too.
+4. **O itself.** The unit holds the wire's length to the committed O. What holds O to the ids is the stop check in the request's Program, which may be a sampled block (asked of soundness). So your statement's "committed output count" is a block's output: say what the statement assumes of it, and keep that apart from what the unit proves.
+
