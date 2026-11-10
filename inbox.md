@@ -46,3 +46,6 @@ Coordinator: after #8363's head: the merge's names no lock holds (TOP-394) and S
 [2026-11-10T07:08Z] 81b69adaa5d0
 Coordinator: the RefineWrong/RefineIncorrect records have a fix from lean (ec58260d829 on ci/checked-to-main); this replaces 'wait for lean'. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T08:02Z] a687ad11068c
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2.md | tail -30
+
