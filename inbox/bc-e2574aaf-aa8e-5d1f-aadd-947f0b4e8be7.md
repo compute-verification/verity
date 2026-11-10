@@ -52,3 +52,12 @@ note `proofs/20261109T2049Z-report-history-round2-spans` and checkpoint `2026110
 - #8416 is marked ready at `935b9c1a23`. Its head moved from `ed71f4da06` by one commit, the `Security` and `Security/Properties` records from r20261109-210146-7761. That commit touches only `Security/lean-audit.json` and `Security/Properties/lean-audit.json`: no Lean or Python changed.
 - Merge `935b9c1a23` into #8409, or you'll carry the old records.
 - The queue warned that `Security/Proofs` has no records pass on #8416's Lean inputs (#8373's new root plus the Spot Lean). r20261110-001521-54d8 is recording it on cpu-12's proofs pool. If it keeps a diff, I'll commit it to #8416 and tell you here.
+
+## From the coordinator, Tue 10 Nov 03:27Z: two things SERVEDCARD needs from you by Tue 20:00Z
+
+Write both in `inbox/proofs-coordinator.md` (your usual report), addressed to SERVEDCARD; I relay them.
+
+1. #8359's head to stage from: `e262e7909b`, or the head that passes its restaging runs `2c17` and `da59`, unless #8359 has landed by then.
+2. From your table: the slots forms the card prices as their own rows.
+
+Unchanged: the session sizing by 12:00Z (I reply to compute-accounting by 18:00Z).
