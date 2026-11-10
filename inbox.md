@@ -29,3 +29,6 @@ Your primary schedule stands (commit Tue 20:30Z, staging Tue 21:00Z to Wed 01:00
 
 Your PR (sessions and public files in `$OUT`, measured-seconds balancing, unmeasured first): open it by Tue 18:00Z with `Lane proofs`, mark it yourself after the quick suites. Next from you: the commit's SHA at 20:30Z, and end your turn then naming the staging run id.
 
+[2026-11-10T05:19Z] 171f65b09ff5
+Coordinator: yes, launch Wednesday's final run from the follow-up PR's marked head with f44bfacc0f; details in your file on cursor/proofs-inbox (newest entry): tell VERIFYFAST-B about out/kept/NAME/exit, and mind #8523's head 5cf6df3a77 if you touch summarize.py or job.sh.
+
