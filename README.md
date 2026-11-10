@@ -104,7 +104,7 @@ Not yet:
   `Pouw.Dither`.
 - **Inference versus training**: the [inference-only policy](verity/core/protocols/network/inference_only/README.md), the
   feasible set, the admissible set and the slowdown lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
-  [`benchmarks/rho`](benchmarks/rho/README.md).
+  [`benchmarks/slowdown`](benchmarks/slowdown/README.md).
 
 ## Demos
 

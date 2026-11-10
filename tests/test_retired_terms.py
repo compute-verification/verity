@@ -4,7 +4,7 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
 Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
-line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+line (behind a comment marker or not). Every file under `benchmarks/slowdown/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -31,7 +31,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/core/protocols/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/core/protocols/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -110,7 +110,7 @@ ALLOWED: dict[str, str] = {
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/slowdown/slowdown/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -167,7 +167,7 @@ PENDING: dict[str, str] = {
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/rho/README.md": "queued PRs on next rewrite it",
+    "benchmarks/slowdown/README.md": "queued PRs on next rewrite it",
     "benchmarks/verifier_cost/README.md": "queued PRs add the term here; the training vocabulary's rename follows them",
     "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite lines the training vocabulary's rename touches; it follows them",
     "Security/Proofs/Flock/Soundness/Audit/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -304,20 +304,20 @@ def test_the_scan_reads_each_form():
 
 
 def test_the_scan_reads_rho_terms():
-    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    """`benchmarks/slowdown`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "benchmarks/slowdown/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "benchmarks/slowdown/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
-        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
-        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
-        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+        ("benchmarks/slowdown/a.py", 1, "faulty-outputs"), ("benchmarks/slowdown/a.py", 1, "faulty step"),
+        ("benchmarks/slowdown/a.py", 2, "faulty ingress unit"), ("benchmarks/slowdown/a.py", 2, "faulty set"),
+        ("benchmarks/slowdown/data/b.toml", 1, "Faulty outputs"), ("benchmarks/slowdown/data/b.toml", 1, "faulty proof block"),
+        ("benchmarks/slowdown/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
