@@ -22572,15 +22572,16 @@
    ]
   },
   "PouwPearlPlus.Open": {
-   "digest": "888386b82edc4270a7398daa39641967af53607284d9286018d1000e4577bce3",
+   "digest": "1853440835eb76c1dad742eb3fa349e3a093cfd1826077f02769b1dab8319b85",
    "definitions": {
     "PouwCheck.PearlPlus.f32Row": "ebafc87193fd06ce5495cb0f7947b5a862c6f3382f9b8381d1692a03b8545c2a",
+    "PouwCheck.PearlPlus.f32Slice": "3eaa72f6fd9c168a4e7cfb9c91f2bfc993d1a99a9ef1d64a415ca514b919cec3",
     "PouwCheck.PearlPlus.filesOf._sparseCasesOn_1": "30750fb0051ad1541c8e856e66ea389498c8dee4b7ae62d90c361e588c3768b3",
     "PouwCheck.PearlPlus.filesOf.match_1": "ebf93c1bba70df7e242fb1de262368c9c3ed0960400f12fe920dfa4d32cf1ebd",
     "PouwCheck.PearlPlus.filesOf.match_4": "bad16c684bbbd05f8c69cd893cffaab6507f8562626d3c7b00f5ece6e64b5333",
     "PouwCheck.PearlPlus.held": "e0ff45267900d5d443abaf02cf85054e65c0c6564465946a856983e2c22137ce",
     "PouwCheck.PearlPlus.held._sparseCasesOn_3": "da1670e5ab991735ea81602606c373f3eba056608923788754ec2805b4a29f8d",
-    "PouwCheck.PearlPlus.opening": "3b029c8af1c6e97f2474696cc0d5bb9ff2880b2d1297cd61626c586e3ca562ce",
+    "PouwCheck.PearlPlus.opening": "4a08ab99c6605cdf39b92d936c71c4980d2e5fb7e2566fd044781d8acb3bc734",
     "PouwCheck.PearlPlus.pathOf": "b44bf063c726f336a16d78e056f31ba86fadd781a3326a63d32aef0ed7e69974",
     "PouwCheck.PearlPlus.pow2": "333d09a1ef4fc3f2c31534f8c02852d1ceed5822b77bc0a9382503030c7a25e2",
     "PouwCheck.PearlPlus.str?": "08ea6ce590d34cea7b0ff23c08c341a3e2cda78d8bc93173a6fe1e43cf942215",
@@ -22748,7 +22749,7 @@
    ]
   },
   "PouwPearlPlus.Rule": {
-   "digest": "054aa59af476bafd0f9071420a7883d46adffcf603d31fa8e5c01fd4f18dbd50",
+   "digest": "e7779bdfb00e5db15167623ea449dc6aa1de52ce26caaae69fc0ddd06cbdd665",
    "definitions": {
     "PouwCheck.PearlPlus.Rule.CAP_DEN": "99dcb14c409cf24823be6faeb0ce2eb4a67dd8441c5a8815c2dcf0cabe8d06f9",
     "PouwCheck.PearlPlus.Rule.CAP_NUM": "471ae5289d0a8b40f7bccbe5a2dd8b12ad09bbeb273613eded437d14b08ee837",
@@ -22796,7 +22797,7 @@
     "PouwCheck.PearlPlus.Rule.wordFlags": "e62879111c50394a25824b2a009b3be771f381947913539a062954f29b466e03",
     "PouwCheck.PearlPlus.Rule.wordOf": "59f22e81d7759763b8a444399cc4be5098945d4d66510ff3e383824b31a0ddfd",
     "PouwCheck.PearlPlus.Rule.yOf": "6c59b7797b83c9805b27efd1f6181366fecbb3c8404e716ded32b4c1b3ad20f6",
-    "PouwCheck.PearlPlus.Rule.yReason": "cc394d77f14121aae37cf8b9d2ee2ce1c036d8c1a702c29320cc03818d0ebecb"
+    "PouwCheck.PearlPlus.Rule.yReason": "17bbaa79da24a230db0eb601a9d496ceddae1877d46e9e451c8258b66e66a4b8"
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
