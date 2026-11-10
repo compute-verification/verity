@@ -70,7 +70,7 @@ REFERENCE = "reference"
 
 @dataclass(frozen=True)
 class Structure:
-    """The elementary uncertified cap `q_U(U) = ω_max U / s_×`: what an uncertified or a dark gate holds under a bound
+    """The elementary uncertified cap `q_U(U) = ω_max U / s_×`: what an uncertified or a unregistered gate holds under a bound
     (`theorem`'s `u`), and the most any block holds, `u c`."""
 
     name: str
@@ -91,7 +91,7 @@ class Structure:
     def check(self, units: Units) -> None:
         """Refuse an `s_×` and a `gates_per_flop` from different sources. The bound holds a gate at `u/w = ω_max 2G /
         (κ s_×)` of the reference's weight, so `G` cancels only when both count the same gates: a Boolean design's
-        measured `s_×` beside the FLOP model's `G` moves every term counted at `u` (the dark leaves' first) with
+        measured `s_×` beside the FLOP model's `G` moves every term counted at `u` (the unregistered leaves' first) with
         nothing to say so."""
         if (self.s_times != REFERENCE and float(self.s_times) <= 1) or self.basis == units.basis:
             return
