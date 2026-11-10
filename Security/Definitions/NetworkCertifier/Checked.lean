@@ -1,6 +1,5 @@
 module
 
-public import Definitions.NetworkCertifier.PooledLeak
 public import Definitions.NetworkCertifier.SampledCharge
 public import Definitions.NetworkCertifier.Tap
 import Mathlib.Algebra.Order.Floor.Extended
@@ -58,9 +57,7 @@ property `valid` of the whole run, not of the inputs alone.
   `valid` trace run, the incorrect proof blocks' committed gates held at the trace's values (`heldAdv`), except with
   probability `εchk` (`PrCheckMiss`).
 * `PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes` and `PeriodLeaksChecked`: a monitoring period's inputs, as
-  `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`. A window's operator is `op i o`, the period's
-  operator at the period's observations `o`, which reads only the windows before `i`, closed by then
-  (`PeriodOperator`).
+  `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`.
 -/
 
 @[expose] public section
@@ -145,14 +142,12 @@ def LeakAtChecked {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k 
     AcceptedChecked s.prog P (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) F op o
 
 /-- **A monitoring period's good event with valid runs**: the incorrect sets `W i` hold fewer than `Fmax` units in total,
-and every window's observations meet its leak relation at its own set (`LeakAtChecked`) and at its operator at the
-period's observations, `op i o`. -/
+and every window's observations meet its leak relation at its own set (`LeakAtChecked`). -/
 def PooledGoodChecked {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) (sw : Fin m → AuditStatement)
-    (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
-    (op : Fin m → (Fin m → List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (Fmax : ℕ)
+    (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Fmax : ℕ)
     (W : Fin m → Finset ℕ) (o : Fin m → List (Obs L K S)) : Prop :=
-  ∑ i, (W i).card < Fmax ∧ ∀ i, LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i o) (W i) (o i)
+  ∑ i, (W i).card < Fmax ∧ ∀ i, LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i) (W i) (o i)
 
 /-- **The covert sender's channel over a monitoring period**: the schedules in `Ss` give connection `c` at most `cap c`
 cells and the record format holds each (`RecordFormat.fits`); each secret `z ∈ Zs` runs on schedules in `Ss` and is
@@ -178,15 +173,15 @@ def PeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z →
   ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i
 
 /-- **The leak relation with a valid run at each window's own incorrect set**: window `i`'s audit accepts while its
-observations `obs z ω i` are not accepted with a valid run at `W z ω i` and at its operator at the period's
-observations, `op i (obs z ω)` (`LeakAtChecked`), with probability at most `e' i`. -/
+observations `obs z ω i` are not accepted with a valid run at `W z ω i` (`LeakAtChecked`) with probability at most
+`e' i`. -/
 def PeriodLeaksChecked {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ)
     (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
-    (op : Fin m → (Fin m → List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z)
-    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (obs : Z → (Fin m → Ω) → Fin m → List (Obs L K S)) (e' : Fin m → ℝ) : Prop :=
+    (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+    (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (obs : Z → (Fin m → Ω) → Fin m → List (Obs L K S)) (e' : Fin m → ℝ) :
+    Prop :=
   ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
-    ¬LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i (obs z ω)) (W z ω i) (obs z ω i)) ≤ e' i
+    ¬LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) (obs z ω i)) ≤ e' i
 
 end NetTiming

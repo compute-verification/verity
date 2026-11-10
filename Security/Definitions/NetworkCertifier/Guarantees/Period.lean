@@ -3,7 +3,6 @@ module
 public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.Period
-public import Definitions.NetworkCertifier.PooledLeak
 public import Definitions.NetworkCertifier.Tap
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -84,16 +83,17 @@ sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds and the tr
 (`CommitmentScheme.Binds`), over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, and `β i` bounding the committed bits of each
 of its possible incorrect sets), with an operator `op` fixed before the period and the covert sender's secrets, a
-function of the observations alone: window `i`'s operator is `op i o` at the period's observations `o`, which reads
-only the windows before `i`, closed by then (`PeriodOperator`), and window `i` only through the observations before
-each step, so no window still open and none after; with the network certifier's openings `tops s` at each statement,
+function of the observations alone: window `i`'s operator at the period's observations `o` is `op i (runsBefore o i)`,
+which reads only the windows before `i`, closed by then (`runsBefore`), and window `i` only through the observations
+before each step, so no window still open and none after; with the network certifier's openings `tops s` at each
+statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
 
 * each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeakCertifier δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 * where at every window's statement the network certifier registers its observations at that window's operator at the
-  run's observations (`CertifierRegisters`), a covert sender in the server, whose secrets a decoder recovers from the
+  run's earlier windows (`CertifierRegisters`), a covert sender in the server, whose secrets a decoder recovers from the
   client's view of the server side: its secrets whose every window meets `WindowGood`, at that window's statement
   `x z i` and extracted witness `wit z i`, number at most
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
@@ -103,8 +103,7 @@ def PeriodLeakAccepted : Prop :=
     (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))
-    (ρ : Fin n → ℕ → Bool) (op : Fin n → (Fin n → List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool)
-    (hop : PeriodOperator op) (β : Fin n → ℕ)
+    (ρ : Fin n → ℕ → Bool) (op : Fin n → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
@@ -122,7 +121,7 @@ def PeriodLeakAccepted : Prop :=
         D.κ δ m + Real.sqrt (D.γ m * Claims.PrB H D.V P m) + (Bext H D.V D.E Ω P m).Pr H +
           (Btap H D.V D.E D.commit D.parse tops Ω P m).Pr H) ∧
       ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s)
-          (op i (run tap (schedOf z, srvOf z)).2) s (tops s) ((run tap (schedOf z, srvOf z)).2 i)) →
+          (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s) ((run tap (schedOf z, srvOf z)).2 i)) →
         {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
             ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
           Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
