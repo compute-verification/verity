@@ -3458,6 +3458,7 @@
   "Proofs.Flock.Masked",
   "Proofs.Accounting.JointBridge.Guarantees",
   "Proofs.Accounting.ReadUnit.Guarantees",
+  "Properties.Flock.ReadNet",
   "PouwWindow.Lanes",
   "PouwWindow.KnownRows",
   "PouwWindow.OwnPorts",
@@ -5488,7 +5489,8 @@
   }
  },
  "witnesses_assumed": {
-  "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands."
+  "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
+  "Accounting.ReadUnit.ExpertReadAccepted": "that `ReadNet.check` accepts the served read's template as its text reads back is witnessed by `flock-read-tmpl 256 3072` exiting 0 and is open in Lean, so the honest witness takes it as it stands until a theorem concludes it."
  },
  "layers": {
   "Definitions.Core": {
