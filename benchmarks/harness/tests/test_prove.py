@@ -187,6 +187,58 @@ def test_a_row_an_art_holds_is_its_runs_and_names_the_art():
         "steady state tried as `norm` at 1 prover in r20260102-000000-0002 (rate.json of art:abababababab): its row lacks `flat`")
 
 
+def test_a_steady_row_of_no_block_type_of_the_census_is_unread_not_dropped():
+    """A steady-state row whose staged Definition the census doesn't hold, or holds no longer under its cut, is on no
+    block type's row: the table lists it as unread, at whatever prover count, with its figure where it is a
+    steady-state measurement and why it isn't one otherwise. It enters no figure: no row, no total, and not the
+    range's other end, whose median is over the census's steady-state types alone."""
+
+    census = P.Census.of(CENSUS)
+    norm, art = P.definition_id(NORM), "art:" + "cd" * 32
+    priced = steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0)
+    strays = (
+        steady("norm", norm, "r20260102-000000-0002", 8, 24.0, k_log=22),                     # a block type the cut replaces
+        steady("old-linear", "Linear_v0{K=64}", "r20260103-000000-0003", 4, 6.0, provers=2, art=art),
+        steady("old-linear", "Linear_v0{K=64}", "r20260103-000000-0003", 8, None, refused="void: out of device memory"),
+        steady("idle", "Idle_v1{N=1}", "r20260101-000000-0001", 8, 2.0),                     # a type no step ran
+    )
+    flock = P.Flock((priced, *strays), SESSIONS, "art:card")
+    whole = flock.table(census)
+    assert whole.unread == strays[1:] and {r.block: r.cost.source for r in whole.rows}[NORM] == P.STEADY
+    recut = flock.table(census.recut(CUT))
+    assert recut.unread == strays
+    out = P.report(recut, 1.0)
+    assert out["unread"] == [
+        {"record": "r20260102-000000-0002", "run": "r20260102-000000-0002", "type": "norm", "definition": norm,
+         "provers": 1, "seconds": 3.0, "why": None},
+        {"record": art, "run": "r20260103-000000-0003", "type": "old-linear", "definition": "Linear_v0{K=64}",
+         "provers": 2, "seconds": 1.5, "why": None},
+        {"record": "r20260103-000000-0003", "run": "r20260103-000000-0003", "type": "old-linear",
+         "definition": "Linear_v0{K=64}", "provers": 1, "seconds": None, "why": "void: out of device memory"},
+        {"record": "r20260101-000000-0001", "run": "r20260101-000000-0001", "type": "idle", "definition": "Idle_v1{N=1}",
+         "provers": 1, "seconds": 0.25, "why": None}]
+    alone = P.report(P.Flock((priced,), SESSIONS, "art:card").table(census.recut(CUT)), 1.0)
+    assert alone["unread"] == [] and {k: v for k, v in out.items() if k != "unread"} == {k: v for k, v in alone.items() if k != "unread"}
+    # a sampling plan takes the prover's table, its unread rows with it
+    cells = [{"block": b.name, "type": "", "taken": 1.0} for b in census.blocks]
+    assert P.Spot(flock, plan(cells), P.Serving(0.5, 4000.0, "stated")).table(census).unread == strays[1:]
+
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
+            "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+            "periods": {"gates_basis": "stated", "only": None, "rows": []}}
+    text = R.render(page)
+    assert text.endswith(
+        "\nUnread (steady-state rows of record whose staged Definition is no block type of this census under its cut; "
+        "they are in no figure above):\n\n"
+        f"- r20260102-000000-0002: `norm` at 1 prover, `{norm}`: measured at steady state, 3,000 ms per block\n"
+        "- art:cdcdcdcdcdcd, run r20260103-000000-0003: `old-linear` at 2 provers, `Linear_v0{K=64}`: measured at steady "
+        "state, 1,500 ms per block\n"
+        "- r20260103-000000-0003: `old-linear` at 1 prover, `Linear_v0{K=64}`: not a steady-state measurement: void: out "
+        "of device memory\n"
+        "- r20260101-000000-0001: `idle` at 1 prover, `Idle_v1{N=1}`: measured at steady state, 250 ms per block\n")
+    assert "Unread" not in R.render(page | alone)
+
+
 def test_a_single_session_prices_its_definition_and_k_at_another_size():
     """A block type the card doesn't measure by name takes its Definition and K's measurement at 2^Δk the seconds and
     2^-Δk the statement, Δk between the two k_logs as the census holds them."""
@@ -597,6 +649,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- served MACs inside a proof block: 98.8%; the rest are served rows no cut fits" in text
     assert "- prover GPU-seconds per token: 88,303 (range 27,644 to 88,303)" in text
     assert "the proof server's own verifier" in text and "Refused" not in text
+    assert doc["unread"] == [] and "Unread" not in text                                # every row of record is a block type's
     assert (f"- {R.STEADY}: {', '.join(RUNS[::-1])} (`prove-glm53-flock-steady`): 8 staged types measured at steady state "
             "at 1 prover\n") in text
     assert "- prover count (`--provers`, a stated input): 1;" in text
@@ -752,8 +805,16 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
         ("r20261109-000000-0005", "its `out/rate/rate.json` isn't a list of rows"),
         ("r20261109-000000-0004", "its row `failed` at 2 provers: failed: RuntimeError: the server didn't start"),
         ("r20261109-000000-0004", "its row `late` at 4 provers: skipped: past the deadline")]
-    # its rows are no block type of this census, so they price nothing
+    # its rows are no block type of this census, so they price nothing, and each is listed as unread
     assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
+    assert [(x["record"], x["type"], x["why"]) for x in doc["unread"]] == [
+        ("r20261109-000000-0004", name, why) for name, why in ROW_WHYS.items()]
+    assert [x["seconds"] for x in doc["unread"]] == [1.0, *[None] * 7]
+    text = R.render(doc, rows=0)
+    assert text.count("\n- r20261109-000000-0004: `") == 8 and text.index("Refused (not read):") < text.index("Unread (")
+    assert "- r20261109-000000-0004: `good` at 1 prover, `Good_v1{N=1}`: measured at steady state, 1,000 ms per block\n" in text
+    assert ("- r20261109-000000-0004: `bare` at 1 prover, `Bare_v1{N=1}`: not a steady-state measurement: its row lacks "
+            "`flat`, `gpus`, `stage.blocks`, `stage.full`\n") in text
 
     # an art that names its runs stands for them
     s2 = Store(tmp_path / "second")

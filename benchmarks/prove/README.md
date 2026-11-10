@@ -40,6 +40,11 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   difference. The plan's prices are its record's: they are no measurement the table reads, and they hold whatever its
   planner counts in a block's price. A plan that prices only some of its cells is refused.
 - **The share of the proving time each source covers.**
+- **The steady-state rows it didn't read,** under "Unread": a row of record whose staged Definition is no block type
+  of the census under its cut, at any prover count. Each is named with what holds it, the type and Definition it
+  staged, and its own ms per block where it is a steady-state measurement, else why it isn't one. It is on no row and
+  in no figure, the range's other end included: a census that no longer holds a type leaves its measurements listed,
+  not dropped.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
 

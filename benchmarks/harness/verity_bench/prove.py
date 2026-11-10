@@ -10,7 +10,9 @@ card) replaces the block types of the served rows it recuts.
 served token, the prover GPU-seconds a block and where that figure is from (`SOURCES`, best first):
 
 - `steady`: a row of the proof server's rate (`Steady`) at the stated prover count: statements of the type proved back
-  to back by that many provers, every session accepted and the statement cache's hit rate flat;
+  to back by that many provers, every session accepted and the statement cache's hit rate flat. A row whose staged
+  Definition is no block type of the census is on no row of the table and in no figure, the range's other end
+  included: the table lists it as unread (`Table.unread`);
 - `single`: one warm process's sessions on the type alone, a block's marginal seconds plus its share of a full
   statement's fixed seconds;
 - `k_log`: no measurement of the type, so the single-session types' median seconds a witness bit times its 2^k_log
@@ -161,13 +163,15 @@ class Row:
 
 @dataclass(frozen=True)
 class Table:
-    """A proof system's costs on a census, a row a block type; `range_basis` says what the range's other end is and
-    `verifier_basis` which verifier's seconds the rows hold."""
+    """A proof system's costs on a census, a row a block type; `range_basis` says what the range's other end is,
+    `verifier_basis` which verifier's seconds the rows hold, and `unread` the steady-state rows it was given whose
+    staged Definition is no block type of the census: they are on no row and enter no figure."""
 
     system: str
     rows: tuple[Row, ...]
     range_basis: str | None = None
     verifier_basis: str | None = None
+    unread: tuple[Steady, ...] = ()
 
     def gpu_seconds_per_token(self) -> float:
         """The prover GPU-seconds a served token, over the rows that have a figure."""
@@ -285,9 +289,11 @@ def _family(block: str) -> tuple[str, int | None]:
 class Flock:
     """Flock's prover with every block proved, each type priced at `provers` provers. A type takes its steady-state
     measurement from the rows at that prover count alone: the fullest statement any of them measured, the newest such
-    run's (a row an art holds is its run's); else `card`'s single-session one: its own block's, or its Definition and K's at 2^Δk the seconds and 2^-Δk
-    the statement, Δk between the two k_logs as the census holds them; else the k_log model fitted on the card's types.
-    A type no row at that count measured names its newest attempt at it, and the other counts that measured it."""
+    run's (a row an art holds is its run's); else `card`'s single-session one: its own block's, or its Definition and
+    K's at 2^Δk the seconds and 2^-Δk the statement, Δk between the two k_logs as the census holds them; else the k_log
+    model fitted on the card's types. A type no row at that count measured names its newest attempt at it, and the
+    other counts that measured it. A row whose staged Definition is no block type of the census, at any prover count,
+    is the table's `unread` and enters no figure, the range's other end included."""
 
     steady: Sequence[Steady] = ()
     sessions: Sequence[Session] = ()
@@ -299,7 +305,12 @@ class Flock:
         measured: dict[str, Steady] = {}
         tried: dict[str, Steady] = {}
         elsewhere: dict[str, set[int]] = {}
+        held = {definition_id(b.name) for b in census.blocks}
+        unread = []
         for s in self.steady:
+            if s.definition not in held:
+                unread.append(s)
+                continue
             if s.provers != self.provers:
                 if s.measured:
                     elsewhere.setdefault(s.definition, set()).add(s.provers)
@@ -336,7 +347,7 @@ class Flock:
                  f"every type not measured at steady state at {self.provers} prover{'' if self.provers == 1 else 's'} "
                  f"priced at the full-statement steady-state types' median, "
                  f"{steady_rate:.3g} GPU-seconds a witness bit")
-        return Table(self.name, tuple(rows), basis, VERIFIER)
+        return Table(self.name, tuple(rows), basis, VERIFIER, tuple(unread))
 
     def _single(self, census: Census) -> Callable[[Block], Cost]:
         """Each block type's cost off the steady state: `single`, `k_log` or `missing`."""
@@ -439,7 +450,7 @@ class Spot:
                 f"{len(bare)} block type(s){_some(bare)}, and the census no block type for {len(unread)} cell(s)"
                 f"{_some(unread)}. It is another census's or cut's plan, or no steady-state row of record names "
                 "those cells' staged types")
-        return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis)
+        return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread)
 
 
 def _some(names: Sequence[str]) -> str:
@@ -454,7 +465,9 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     GPU-seconds. The totals are `measured` only when every block type is measured at steady state, and `partial` when a
     type has no figure: `missing` then names each such type, the most blocks first, with its share of the blocks, and
     of the MACs where every row holds them (a type with no time has no share of the proving time). `planned` is the
-    same blocks at their sampling plan's own prices, where the plan states them (`_planned`)."""
+    same blocks at their sampling plan's own prices, where the plan states them (`_planned`). `unread` names each
+    steady-state row that is on no block type's row: what holds it, the run that measured it, the type and Definition
+    it staged, its prover count, and a block's GPU-seconds where it is a steady-state measurement, else why it isn't."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -487,8 +500,11 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
         status = "partial"
     else:
         status = "measured" if table.rows and all(r.cost.source == STEADY for r in table.rows) else "modeled"
+    unread = [{"record": s.record, "run": s.run, "type": s.type, "definition": s.definition, "provers": s.provers,
+               "seconds": s.gpu_seconds / s.blocks if s.measured else None, "why": s.refused} for s in table.unread]
     return {
         "system": table.system, "rows": sorted(rows, key=lambda r: -(r["time_share"] or 0.0)), "sources": sources,
+        "unread": unread,
         "totals": {
             "status": status, "steady_time_share": steady, "missing": missing,
             "blocks_per_token": blocks, "gpu_seconds_per_token": total, "gpu_seconds_per_token_range": [low, high],

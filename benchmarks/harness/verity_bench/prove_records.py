@@ -19,7 +19,9 @@ that names no run are left out and listed under "Refused", as is a row that name
 failed or was skipped). A row is a steady-state
 measurement when every session it ran was accepted and none refused, it isn't void, every process exited 0 and its
 statement cache's hit rate was flat (`row_why`); one that isn't, or that lacks a field, is named with its reason on its
-block type's row. A type is priced at the stated prover count (`--provers`), from the rows at that count only.
+block type's row. A type is priced at the stated prover count (`--provers`), from the rows at that count only. A row
+whose staged Definition is no block type of the census under its cut is on no row and in no figure: it is listed
+under "Unread", with its own figure where it is a steady-state measurement.
 
 The serving rate isn't a record: it is modeled from the census's MACs a served token, the fleet's assumed serving MFU
 (`FLEETS`) and the card's data-sheet peak, and the output says so.
@@ -499,4 +501,11 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     if doc["refused"]:
         lines += ["", "Refused (not read):", ""]
         lines += [f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"]]
+    if doc["unread"]:
+        lines += ["", "Unread (steady-state rows of record whose staged Definition is no block type of this census under "
+                  "its cut; they are in no figure above):", ""]
+        lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else f', run ' + x['run']}: `{x['type']}` at "
+                  f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "
+                  + (f"not a steady-state measurement: {x['why']}" if x["seconds"] is None else
+                     f"measured at steady state, {_n(1e3 * x['seconds'])} ms per block") for x in doc["unread"]]
     return "\n".join(lines) + "\n"
