@@ -207,7 +207,9 @@ def ran(tmp_path_factory):
 
 
 def test_the_route_loop_trains_scores_and_encodes_from_the_config(ran):
-    rec, cfg, _, _ = ran
+    rec, cfg, reg, _ = ran
+    final = starts.registry(reg)["data"]["tiny"]["final"]
+    assert rec["invalid"] == [] and rec["sandbox"] == {"interfaces": {"lo": False}, "final_sets": {final: "empty"}}
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]

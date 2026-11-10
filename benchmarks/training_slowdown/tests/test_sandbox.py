@@ -1,3 +1,4 @@
+import errno
 import json
 import subprocess
 import sys
@@ -62,6 +63,28 @@ def test_the_entrys_command_finds_no_interface_up_and_each_hidden_directory_empt
     assert p.returncode == 1 and f"{file} is not a directory" in p.stderr
 
 
+def test_a_machine_that_refuses_the_namespaces_fails_the_job_with_what_it_needs(tmp_path, monkeypatch):
+    """Where the kernel refuses the user namespace the entry stops with the kind's requirement, and a job whose
+    route's process never started is a failed job with no record. The kernel's refusal is a stand-in here: a libc
+    whose `unshare` fails, then an entry that exits 1."""
+    class Refusing:
+        def unshare(self, flags):
+            return -1
+
+    with monkeypatch.context() as m:
+        m.setattr(sandbox.ctypes, "CDLL", lambda *a, **k: Refusing())
+        m.setattr(sandbox.ctypes, "get_errno", lambda: errno.EPERM)
+        with pytest.raises(SystemExit, match=r"sandbox: unshare\(user, mount, network\): Operation not permitted. a "
+                                             r"machine that runs a training job lets an unprivileged process make a "
+                                             r"user namespace: sysctl kernel.unprivileged_userns_clone=1"):
+            sandbox.enter([])
+    reg = tiny_registry(tmp_path / "reg")
+    monkeypatch.setattr(run.sys, "executable", "false")
+    assert run.main(["--config", write_config(tmp_path / "a.toml"), "--seed", 0, "--split", "search", "--out",
+                     tmp_path / "out", "--starts", reg]) == 1
+    assert not (tmp_path / "out").exists()
+
+
 def test_a_routes_process_outside_the_sandbox_stops_before_it_reads_its_config(tmp_path, monkeypatch):
     """The route's process, started by hand where the final set is readable or an interface is up, is a failed job
     with the reason, and it has imported no route by then."""
@@ -84,10 +107,12 @@ def test_a_routes_process_outside_the_sandbox_stops_before_it_reads_its_config(t
     assert not (tmp_path / "out").exists()
 
 
+@pytest.mark.slow
 def test_a_final_job_is_scored_on_the_final_set_its_routes_process_cant_read(tmp_path):
     """A tiny start through the whole job on the final split: the route's process trained with no interface up and
     the final set's directory empty, which its record states, and every checkpoint it handed out was scored on the
-    final set by the job's own process; the trace reads back."""
+    final set by the job's own process; the trace reads back. The search job test_run shares shows the sandbox and
+    the trace; only a final job shows scores from the set the route's process can't read."""
     rec, cfg, reg, out = run_job(tmp_path, split="final", seeds={"search": [], "final": [0]})
     final = starts.registry(reg)["data"]["tiny"]["final"]
     assert rec["invalid"] == [] and rec["split"] == "final" and len(rec["steps"]) == 3
