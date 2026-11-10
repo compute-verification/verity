@@ -389,11 +389,12 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
-        pool: Mapping[str, Any] | None = None) -> Verdict:
+        pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
-    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool), `check_public`'s values and declared items, the receipt's challenger and place in
+    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``tied`` the tied values its check
+    let through), `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
@@ -414,7 +415,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
-                              seed_salt=seed_salt, pool=pool),
+                              seed_salt=seed_salt, pool=pool, tied=tied),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
