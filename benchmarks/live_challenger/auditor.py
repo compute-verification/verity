@@ -77,7 +77,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
-  `verity.core.protocols.certifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  `verity.protocols.certifier.verifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
   (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
   killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
@@ -155,7 +155,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.
 
 - **A certifier rehearsal** (`certifier-rehearse`, a lane's own gate key or vy-admin): the network certifier in front of
-  a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
+  a served endpoint, `verity/protocols/certifier/device/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
   auditor's device would. The gate validates the request (`--peer` one of /etc/vy/peers, `--port` the endpoint's on the
   peer's loopback, `--minutes` 1 to 170, `--tamper` one of `TAMPERS` for a tampering shim instead of an honest one
   (`certifier_serve.py`'s: `late` holds a window-0 session past every sync, `extra` writes one event more and `drop`
@@ -192,7 +192,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
-  (`verity.core.protocols.certifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
+  (`verity.protocols.certifier.verifier.warden`) as the auditor's device, `verity/protocols/certifier/device/network_traces/warden_serve.py
   rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
   client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
   `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
@@ -223,7 +223,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the warden also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
-  (`verity.core.protocols.certifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
+  (`verity.protocols.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the warden reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
@@ -1538,7 +1538,7 @@ def _after_load(spent: int) -> str:
 
 
 def _load_relay():
-    """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
+    """`verity/protocols/certifier/device/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
     if (here := str(TREE / "benchmarks" / "network_traces")) not in sys.path:
         sys.path.insert(0, here)
     import load_relay
@@ -2307,7 +2307,7 @@ def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list
     prompts = ["--prompts-file", str(out.parent / WITNESS / PROMPTS)] if varied and req.get("prompts") else []
     traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
         ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "verity" / "protocols" / "certifier" / "device" / "network_traces" / "certifier_serve.py"), "rehearse",
             "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
             *prompts, *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
 
@@ -2345,7 +2345,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
                                   ",".join(f"{h}:{p}" for h, p in sinks), "--load-program", load["program"],
                                   "--load-ready-s", str(LOAD_READY_S)]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "verity" / "protocols" / "certifier" / "device" / "network_traces" / "warden_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
@@ -2355,7 +2355,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
     """`load_relay.py write` of a `weights-write` request: its shape's stream into `store` over every core, its record
     (less the digests) to `out/store.json`."""
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "load_relay.py"), "write", "--store",
+    return [sys.executable, str(tree / "verity" / "protocols" / "certifier" / "device" / "network_traces" / "load_relay.py"), "write", "--store",
             str(store), "--shape", req["shape"], "--workers", str(os.cpu_count() or 1),
             "--out", str(out / "store.json")]
 

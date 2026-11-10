@@ -34,7 +34,7 @@ ALLOWED_EXTRA = (
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-                       "verity/core/protocols/certifier/protocol/": "verity/core/protocols/certifier/PROTOCOL.md"}
+                       "verity/protocols/certifier/verifier/protocol/": "verity/protocols/certifier/verifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
 GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})

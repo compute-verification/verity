@@ -44,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.spot.verifier.one_stage import registered as G
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch

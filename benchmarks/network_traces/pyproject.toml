@@ -70,13 +70,13 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures",
-          "verity/core/protocols/network/tests/fixtures/slot_entry.json",
+          "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
           "verity/flock/agreement/redigest.py", "verity/flock/agreement/transcript_check.py",
           "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
           "examples/h200/interfaces/verity_e2e_demo/block_record.py",
           "examples/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
-          "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]
+          "verity/protocols/certifier/verifier/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -91,7 +91,7 @@ paths = ["benchmarks/network_traces"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_compact_phase10.py"]
-paths = ["verity/core/protocols/certifier/tests"]
+paths = ["verity/protocols/certifier/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_compile_slice_zk.py"]

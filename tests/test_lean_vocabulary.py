@@ -81,8 +81,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Answer": (f"{PROTOCOL}::Core.Answer",),
     "Block": (f"{CORE}Blocks.lean::Verity.Block",),
     "Card": (f"{CORE}Accel/Card.lean::Verity.Accel.Card",),
-    "Certificate": ("verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate",
-                    "verity/core/protocols/certifier/certificate.py::Certificate"),
+    "Certificate": ("verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate",
+                    "verity/protocols/certifier/verifier/certificate.py::Certificate"),
     "Challenger": ("verity/spot/verifier/parties.py::Challenger",),
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": ("verity/ml/commitments/coin_tree.py::CoinTree",),
@@ -148,11 +148,11 @@ MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "ver
 #: A Python class held to a code-Lean declaration by a `verity_difftest` port, ``python key: (Lean key, port, reason)``: the
 #: pair counts once, as its Lean. The port is a `[[lean_exe]]` of a tracked lakefile.
 MIRRORS: dict[str, tuple[str, str, str]] = {
-    "verity/core/protocols/certifier/certificate.py::Certificate":
-        ("verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
+    "verity/protocols/certifier/verifier/certificate.py::Certificate":
+        ("verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/core/protocols/certifier/grid.py::Record":
-        ("verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
+    "verity/protocols/certifier/verifier/grid.py::Record":
+        ("verity/protocols/certifier/device/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
          "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
     "verity/spot/verifier/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
@@ -803,11 +803,11 @@ KNOWN: dict[str, str] = {
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/core/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-    "verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
+    "verity/protocols/certifier/device/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes `grid.Record`'s port beside `RecordHead` (moved) (network-accounting)",
-    "verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
+    "verity/protocols/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
-    "verity/core/devices/certifier/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
+    "verity/protocols/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
         "homonym, a link's online state: rename (network-accounting)",
     "verity/core/devices/memory_challenger/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
@@ -819,29 +819,29 @@ KNOWN: dict[str, str] = {
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/bandwidth/audit.py::Window":
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/certifier/audit.py::Verdict":
+    "verity/protocols/certifier/verifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/ml/protocols/certifier/cache_step_v2.py::Op":
+    "verity/protocols/certifier/prover/cache_step_v2.py::Op":
         "homonym, a cache call's inputs: rename (network-accounting)",
-    "verity/core/protocols/certifier/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
+    "verity/protocols/certifier/device/program/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
-    "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
+    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/ml/protocols/certifier/window_charge.py::Window":
+    "verity/protocols/certifier/prover/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/flock/verifier/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
     "verity/flock/verifier/interface/CoreProtocol/Record.lean::Core.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
-    "verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
-    "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Layout":
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Layout":
         "homonym, the certifier's bucket and slot schedule: rename (proofs)",
-    "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Registration":
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
-    "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
     "verity/core/devices/memory_challenger/challenger_party.py::Challenger":

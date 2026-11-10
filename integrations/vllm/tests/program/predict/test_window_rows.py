@@ -25,9 +25,9 @@ from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 
-from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
-from verity.core.protocols.certifier.active import id_request
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.certifier.verifier import warden as W
+from verity.protocols.certifier.verifier.active import id_request
 from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.spot.verifier.one_stage import registered as CR
 from verity.spot.verifier.one_stage import registration as REG
@@ -246,7 +246,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     import sys
     from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent.parent.parent.parent / "core" / "protocols" / "certifier" / "tests" / "scan_traffic.py")
+    spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent.parent / "verifier" / "tests" / "scan_traffic.py")
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
     scan = cls.scan

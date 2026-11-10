@@ -24,7 +24,7 @@ path = "../../verity/flock/verifier"
 
 [[require]]
 name = "certifier_program"
-path = "../../verity/core/protocols/certifier/lean"
+path = "../../verity/protocols/certifier/device/program/lean"
 
 [[require]]
 name = "core_randomness"

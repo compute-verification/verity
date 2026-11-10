@@ -207,9 +207,9 @@ SPOT_LEAN = ("verity/spot/verifier/lean", "verity/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
-CERTIFIER_MODULES = ("verity.core.protocols.certifier", "verity.ml.protocols.certifier", "verity.core.devices.certifier")
-CERTIFIER_LEAN = ("verity/core/protocols/certifier/lean", "verity/core/devices/certifier/lean",
-                  "verity/core/protocols/network/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
+CERTIFIER_MODULES = ("verity.protocols.certifier.verifier", "verity.protocols.certifier.prover", "verity.protocols.certifier.device")
+CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/protocols/certifier/device/lean",
+                  "verity/protocols/certifier/verifier/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
 #: Files outside ``infra/`` that import a package of it, each with why.
@@ -628,11 +628,11 @@ def test_spot_never_imports_the_network_certifier_in_lean() -> None:
 def test_a_spot_import_of_the_certifier_is_found() -> None:
     """The check above isn't vacuous: a certifier module that a SPOT root reaches through another module is found with the
     chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules."""
-    files_of = {"B": ["s/B.lean"], "C": ["verity/core/protocols/certifier/lean/C.lean"]}
+    files_of = {"B": ["s/B.lean"], "C": ["verity/protocols/certifier/device/program/lean/C.lean"]}
     imports = {"s/A.lean": ["Mathlib.X", "B"], "s/B.lean": ["C"]}
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
     found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
-    assert found == ["verity/core/protocols/certifier/lean/C.lean <- s/B.lean <- s/A.lean"], found
+    assert found == ["verity/protocols/certifier/device/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
     assert _covered("Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
     assert not _covered("Security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
     modules = _lean_modules(["Security/Proofs/Flock/Bytes.lean", "verity/flock/verifier/Flock/Bytes.lean"],

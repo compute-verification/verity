@@ -125,7 +125,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.circuits.codec import canonical_json
 from verity.ml.randomness import Key, derive
-from verity.core.protocols.certifier.active import RUN_ID_BYTES
+from verity.protocols.certifier.verifier.active import RUN_ID_BYTES
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import salt as PS

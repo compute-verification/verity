@@ -74,8 +74,8 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
   | tail -1
-net=$T/verity/core/protocols/network/lean
-if [ -d "$net" ] && [ -f "$T/benchmarks/network_traces/certifier_serve.py" ]; then
+net=$T/verity/protocols/certifier/verifier/lean
+if [ -d "$net" ] && [ -f "$T/verity/protocols/certifier/device/network_traces/certifier_serve.py" ]; then
   runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$net' && lake build network-records" \
     | tail -1
 fi

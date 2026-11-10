@@ -23,11 +23,11 @@ import numpy as np
 import pytest
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
-from verity.core.protocols.certifier.grid import GridParams
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.active import Proxy
+from verity.protocols.certifier.verifier.certificate import LmsKey, LmsSigner
+from verity.protocols.certifier.verifier.grid import GridParams
+from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd

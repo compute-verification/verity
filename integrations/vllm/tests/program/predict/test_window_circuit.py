@@ -32,7 +32,7 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
 from verity_vllm.records import weights_registration as WRG
 
-from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.protocols.pouw.verifier import audit as AU
 from verity.spot.verifier.one_stage import partition as P
 from verity.spot.verifier.one_stage import registered as G

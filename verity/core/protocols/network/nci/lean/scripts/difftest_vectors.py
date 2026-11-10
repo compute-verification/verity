@@ -7,7 +7,7 @@ Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), o
 reads it (`NciCheck.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
 the same line's results from
 `scripts/nci_reference.py`. The Lean audit runs `NciCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
-which pins their SHA-256), and `verity/core/protocols/network/tests/test_nci_lean_difftest.py` checks that this script
+which pins their SHA-256), and `verity/protocols/certifier/verifier/network/tests/test_nci_lean_difftest.py` checks that this script
 still writes them.
 
 A declaration is a descriptor v1 Program built with `verity.circuits` in one of five shapes: a random DAG, a chain, a

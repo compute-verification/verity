@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.active import HEADER
+from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.certifier.verifier.active import HEADER
 from verity.spot.verifier.one_stage import draw as D, verifier as V
 from verity.ml.windows import rows as SR
 

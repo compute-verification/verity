@@ -36,7 +36,7 @@ path = "../../verity/core/protocols/network/nci/lean"
 
 [[require]]
 name = "certifier_device"
-path = "../../verity/core/devices/certifier/lean"
+path = "../../verity/protocols/certifier/device/lean"
 
 [[require]]
 name = "pous_check"
@@ -52,7 +52,7 @@ path = "../../verity/flock/verifier/firewall"
 
 [[require]]
 name = "network_check"
-path = "../../verity/core/protocols/network/lean"
+path = "../../verity/protocols/certifier/verifier/lean"
 
 [[require]]
 name = "core_spot"

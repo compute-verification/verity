@@ -49,7 +49,7 @@ RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 POUS_PIECE = "benchmarks/pous/served_piece.sh"
 WIPE_PIECE = "benchmarks/pous/streamed_wipe/served_wipe.sh"
-CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
+CERTIFIER_PIECE = "verity/protocols/certifier/device/network_traces/certifier_piece.py"
 ONSITE = "verity/onsite/v0"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"

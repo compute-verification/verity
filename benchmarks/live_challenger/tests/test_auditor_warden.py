@@ -289,7 +289,7 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
     """A request.json written before the gate took `--height` runs at the deployed key's, 20, as one that gives none."""
     req = {"device": "warden", "requests": 100}
     argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
-    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/warden_serve.py", "rehearse",
+    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/verity/protocols/certifier/device/network_traces/warden_serve.py", "rehearse",
                     "--upstream", "127.0.0.1:40001", "--out", str(tmp_path), "--height", "20", "--requests", "100",
                     "--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature", "0.0", "--top-p", "1.0"]
     assert A.warden_command(req | {"height": 20}, tmp_path, "http://127.0.0.1:40001",

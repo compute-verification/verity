@@ -4,10 +4,10 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 (`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
 names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
-certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
+certificates and one-stage's answers, `verity/protocols/certifier/verifier/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
-`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
+`verity/protocols/certifier/verifier/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
 `spot`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
 `verity/spot/verifier/lean/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
