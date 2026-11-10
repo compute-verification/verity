@@ -61,12 +61,15 @@ Every path git sees changed must be one of:
   `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name. And a
   deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
   at or below it (`rules`'s `emptied` in the `--json` report);
-- a list of paths rewritten as an exact cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`:
-  a Python list, tuple or set of string literals, a TOML or JSON array of strings, the objects of `git rev-parse` and the
+- a list of paths rewritten as a cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`: a
+  Python list, tuple or set of string literals, a TOML or JSON array of strings, the objects of `git rev-parse` and the
   members of `tar`) with an entry that names what went to no one place, a directory whose files the range sent apart or
-  a file it deleted. Its new paths hold, of HEAD's files that the range did not add, exactly the files its old paths
-  held at BASE, each new path at least one, in any order and at any level; nothing else of the list changes. An
-  `__init__.py` git pairs with one where no other file of its directory went is deleted and added, not moved;
+  a file it deleted. Each new entry is an old one as the range sent it whole or as its row of the map sends it; or a
+  part, which holds, of HEAD's files that the range did not add, only files the old list's paths held at BASE, one of
+  them a file of an entry the list no longer has; or, where the old list named the `__init__.py` of a package the range
+  took away, a package level above an entry the list did not have. The new list holds every file of each old entry it no
+  longer has, in any order and at any level; nothing else of the list changes. An `__init__.py` git pairs with one where
+  no other file of its directory went is deleted and added, not moved;
 - on a line none of these explains, what the move's own path map says beyond the renames (`Rows`): the map each commit of
   the range names (`Layout-move: tools/move/NAME.toml`, `tools/move/stage.py`'s line), read as BASE has it. A reference to
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
@@ -1671,14 +1674,23 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         """Where BASE's file `f` is at HEAD: where the range moved it, itself if it stayed, None if the range deleted it."""
         return went.get(f, f if f in H.set and f not in created else None)
 
-    def cover(a: str, b: str, old: str, new: str) -> str:
-        """`a` with each list of paths that `b` writes as an exact cover of it put as `b` has it. The lists are those
-        `tools/move/layout.py` rewrites (its `lists`), paired in the file's order. A pair is a cover when an entry of the
-        old list names what went to no one place (a directory whose files the range sent apart, or a file it deleted) and
-        the new list's paths hold, of HEAD's files that the range did not add, exactly those the old list's paths held at
-        BASE: each new path holds one of them, with a prefix and a suffix (`HEAD:`, `/`, `/**`) an old entry had. Entries
-        that are no path, and the list's text between its entries, stay as they were."""
+    def cover(a: str, b: str, old: str, new: str) -> tuple[str, set[str]]:
+        """`a` with each list of paths that `b` writes as a cover of it put as `b` has it, and the rules that took them.
+        The lists are those `tools/move/layout.py` rewrites (its `lists`), paired in the file's order. A pair is a cover
+        when an entry of the old list names what went to no one place (a directory whose files the range sent apart, or a
+        file it deleted) and each entry of the new list is one of four. An old entry as the range sent it whole. An old
+        entry as its row of the maps sends it (`Rows`: `[tokens]`, or this file's `[split]` row). A part: of HEAD's files
+        that the range did not add it holds only ones the old list's paths held at BASE, one of them a file of an old
+        entry that the new list no longer has, whose prefix and suffix (`HEAD:`, `/`, `/**`) it bears. A level: the
+        `__init__.py` of a package directory above an entry the old list did not have, itself in a package, where the old
+        list named a package's `__init__.py` that the range deleted with its package. And the new list still holds every
+        file of each old entry it no longer has, one at least or a level. Entries that are no path, and the list's text
+        between its entries, stay as they were."""
         lists, entry = _rename().L.lists, _rename().L.ENTRY
+        took: set[str] = set()
+
+        def form(m: re.Match, p: str) -> tuple[str, str, str]:
+            return m["pre"], p, m["post"] or ""
         la, lb = lists(old, a), lists(new, b)
         for (_, (a0, a1), ea), (_, (b0, b1), eb) in reversed(list(zip(la, lb))) if len(la) == len(lb) else ():
             xs = [m if (m := entry.fullmatch(a, s, t)) and (m["p"] in B.set or B.has_dir(m["p"])) else a[s:t] for s, t in ea]
@@ -1689,12 +1701,31 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                 continue
             if all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
                 continue
-            held = {n for m in px for f in B.below(m["p"]) if (n := now(f)) is not None}
-            parts = [[f for f in H.below(m["p"]) if f not in created] for m in py]
-            if (held == {f for fs in parts for f in fs} and all(parts) and {m["pre"] for m in py} <= {m["pre"] for m in px}
-                    and all((m["post"] or "") in ({x["post"] or "" for x in px} if H.has_dir(m["p"]) else {""}) for m in py)):
+            files = [{n for f in B.below(m["p"]) if (n := now(f)) is not None} for m in px]
+            held, was, news = set().union(*files), {form(m, m["p"]) for m in px}, {form(y, y["p"]) for y in py}
+            sent = [{form(m, map_path(m["p"], pmap)): "whole",
+                     **({form(m, rows.parts[old, m["p"]]): "split"} if (old, m["p"]) in rows.parts else
+                        {form(m, rows.tokens[m["p"]]): "tokens"} if m["p"] in rows.tokens else {})} for m in px]
+            gone = [fs for fs, to in zip(files, sent) if not news & to.keys()]
+            anew = [y["p"] for y in py if form(y, y["p"]) not in was]
+            lost = any(x["p"].endswith("/__init__.py") and now(x["p"]) is None and emptied(posixpath.dirname(x["p"])) for x in px)
+
+            def part(y: re.Match) -> bool:
+                fs, below = {f for f in H.below(y["p"]) if f not in created}, H.has_dir(y["p"])
+                return bool(fs) and fs <= held and any(fs & got and x["pre"] == y["pre"] and (y["post"] or "") == (
+                    (x["post"] or "") if below else "") for x, got, to in zip(px, files, sent) if not news & to.keys())
+
+            def level(y: re.Match) -> bool:
+                d = posixpath.dirname(y["p"])
+                return lost and y["p"].endswith("/__init__.py") and y["p"] in H.set and not y["post"] and any(
+                    c != y["p"] and c.startswith(d + "/") and f"{posixpath.dirname(c)}/__init__.py" in H.set for c in anew)
+            by = {**{f: k for to in sent for f, k in to.items() if k != "whole"}, **{f: k for to in sent for f, k in to.items() if k == "whole"}}
+            kinds = [by.get(form(y, y["p"])) or ("level" if level(y) else "part" if part(y) else None) for y in py]
+            if (None not in kinds and (gone or "level" in kinds)
+                    and all(fs <= {f for y in py for f in H.below(y["p"])} for fs in gone)):
                 a = a[:a0] + b[b0:b1] + a[a1:]
-        return a
+                took |= {"cover", *kinds} - {"whole", "part", "level"}
+        return a, took
 
     new_projects = set()
     for e in entries:
@@ -1788,9 +1819,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             else:
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
             continue
-        if not same and not pins and k == kind(old) and k not in ("lock", "moves", "lean") and (c := cover(a, b, old, new)) != a:
-            a = c
-            took.add("cover")
+        if not same and not pins and k == kind(old) and k not in ("lock", "moves", "lean"):
+            a, covered = cover(a, b, old, new)
+            took |= covered
         at_base = a.splitlines()
         if not same and not pins and old != MOVES:
             a, unworded = worded(a, old, maps, lock=k == "lock"), a

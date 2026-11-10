@@ -251,6 +251,47 @@ def test_a_list_of_paths_that_holds_more_or_less_than_its_old_entries_held_is_re
     assert [f["path"] for f in r["refusals"]] == ["job.sh"] and r["rules"]["cover"] == ["gates.toml"]
 
 
+def _levels(tmp_path: Path, low_risk: str, marks: str) -> dict:
+    """`_covered`'s range, which also moves `other/notes.md` into `docs/` and makes `verity/commit/` a package, on a
+    `gates.toml` whose `low_risk` names `docs/` and `lib/core/` and whose `marks` names `lib/core/`'s own `__init__.py`
+    and a module of it; the two lists as given."""
+    gates = 'low_risk = ["docs/", "lib/core/"]\nmarks = ["lib/core/__init__.py", "lib/core/claims.py"]\n'
+    repo, base = _repo(tmp_path, {**COVERED, "other/notes.md": "n\n", "gates.toml": gates, "job.sh": "#!/bin/sh\n"})
+    for old, new in (("lib/core/wire", "verity/config/wire"), ("lib/core/proto", "verity/protocols/proto"),
+                     ("lib/core/claims.py", "verity/config/claims.py"), ("lib/commit", "verity/commit"),
+                     ("other/notes.md", "docs/notes.md")):
+        _move(repo, old, new)
+    _git(repo, "rm", "-q", "lib/core/__init__.py")
+    _write(repo, {"verity/__init__.py": "", "verity/config/__init__.py": "", "verity/commit/__init__.py": "",
+                  "gates.toml": f"low_risk = [{low_risk}]\nmarks = [{marks}]\n"})
+    return _check(repo, base)
+
+
+LOW_RISK = '"docs/", "verity/config/", "verity/protocols/proto/"'
+MARKS = '"verity/__init__.py", "verity/config/__init__.py", "verity/config/claims.py"'
+
+
+def test_a_cover_judges_what_the_range_rewrote_and_takes_the_package_levels_above_it(tmp_path):
+    """An entry the range sent whole is where it went, whatever else the range moved there: `docs/` gains a file the list
+    never held and is still the list's entry, beside the two parts of `lib/core/`. And a list that named a package's own
+    `__init__.py`, which the range deleted with the package, may name the levels above what the range wrote anew in it:
+    the mover writes them there, since an import of the moved module runs each."""
+    r = _levels(tmp_path, LOW_RISK, MARKS)
+    assert r["certified"], r["refusals"]
+    assert r["rules"]["cover"] == ["gates.toml"]
+
+
+def test_a_level_above_nothing_the_list_names_or_in_a_list_that_named_none_is_refused(tmp_path):
+    """`verity/commit/` is a package the range made, but `marks` names nothing below it; `low_risk` named no level, so it
+    gains none; and a part that holds a file the old list never held (`docs/notes.md`, written beside `docs/` as its own
+    entry) is no part."""
+    for case, low_risk, marks in (("above nothing", LOW_RISK, MARKS + ', "verity/commit/__init__.py"'),
+                                  ("named none", LOW_RISK + ', "verity/__init__.py"', MARKS),
+                                  ("never held", LOW_RISK.replace('"docs/"', '"docs/a.md", "docs/notes.md"'), MARKS)):
+        r = _levels(tmp_path / case, low_risk, marks)
+        assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
+
+
 def test_an_empty_init_above_the_packages_root_is_refused(tmp_path):
     """The mover stops at the root of the moved module's package, which the path map at BASE names. An `__init__.py`
     above it makes a package of a directory that was none (here `security/`, over the root `security/pous`), which no
@@ -1668,6 +1709,28 @@ def test_a_path_below_a_split_directory_that_the_tree_has_follows_only_its_own_m
         r = MC.certify(at, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
         assert [f["path"] for f in r["refusals"]] == ["SKILL.md"], case
         assert "SKILL.md" not in r["rules"]["tokens"], case
+
+
+def test_a_cover_may_hold_an_entry_its_tokens_row_sends(tmp_path):
+    """A list names the split `verity/ml/flock` beside its own `pod/`, where the mover writes it as its `[tokens]` row
+    says, and `lib/a/`, which goes two ways with no row and is covered. The certificate takes the row's entry in the
+    cover and lists the file under both rules. An entry that holds a file the old list never held (`verity`, with
+    `verity/ml/other.py`) is still refused."""
+    for case, flock in (("row", "verity/flock/prover"), ("wider", "verity")):
+        repo, base = _repo(tmp_path / case, {**FLOCK, "lib/a/x.py": "X = 1\n", "lib/a/y.py": "Y = 1\n",
+                                             "gates.toml": 'keyed = ["verity/ml/flock", "verity/ml/flock/pod", "lib/a"]\n'})
+        for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("lib/a/x.py", "p/x.py"), ("lib/a/y.py", "q/y.py")):
+            _move(repo, old, new)
+        _write(repo, {**FLOCK_MOVED, "gates.toml": f'keyed = ["{flock}", "verity/flock/pod", "p", "q"]\n'})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "row":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["cover"] == ["gates.toml"] and "gates.toml" in r["rules"]["tokens"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
 
 
 def test_the_tokens_rows_are_read_only_from_the_map_a_commit_of_the_range_names(tmp_path):
