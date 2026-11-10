@@ -5360,7 +5360,7 @@ def test_a_work_draws_design_is_cores(pieces):
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     case = {"closure": None, "program": desc, "query": _json(P.template_instances_query([t.id for t in TEMPLATES])),
-            "rule": {"law": "work:4", "rule": "law"}, "source": hashlib.shake_256(b"design").hexdigest(1500),
+            "rule": {"law": "work-rate:2/5", "rule": "law"}, "source": hashlib.shake_256(b"design").hexdigest(1500),
             "work_table": {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}}
     out = design(copy.deepcopy(case))
     assert D.replay(DESIGN, case, pieces) == ("output", D.canonical(out))
@@ -5409,7 +5409,7 @@ def test_the_slots_of_a_population_of_nested_templates(pieces):
     PROGRAMS[PO.program_sha512(program)] = program
     query = _json(P.template_instances_query([DEEP.id, PAIR.id, NEST.id, QUAD.id]))
     case = {"closure": None, "program": _json(codec.encode_program(program)), "query": query,
-            "rule": {"law": "subset:16", "rule": "law"}, "source": hashlib.shake_256(b"nested").hexdigest(400),
+            "rule": {"law": "rate:1/125", "rule": "law"}, "source": hashlib.shake_256(b"nested").hexdigest(400),
             "work_table": None}
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
