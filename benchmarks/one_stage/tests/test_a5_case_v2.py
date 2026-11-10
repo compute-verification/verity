@@ -1,17 +1,6 @@
-<<<<<<< 99c8914848
-"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
-replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest (per member, every
-member's units, circuit digest and registered file), and blobs the paths of those files and the pinned tables; and the
-audits v2 can't verify say why."""
-||||||| merged common ancestors
-"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
-replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the paths of
-those files and the pinned tables; and the audits v2 can't verify say why."""
-=======
 """a5's case for the audit on the proofs themselves, `Spot.OneStageZk`'s: v1's case with the evidence's verdicts
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
 blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why."""
->>>>>>> 7af4d24fca3e
 
 from __future__ import annotations
 
@@ -61,16 +50,8 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     table.write_bytes(b"table")
     evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
-<<<<<<< 99c8914848
-    got = a5.case_v2(case, evidence["sessions"], proofs={"circuit": "cc" * 64, "registered": None},
-                     statements=[(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))], tables=[table])
-||||||| merged common ancestors
-    got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
-                     circuit="cc" * 64, registered=None, tables=[table])
-=======
     got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
                      circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
->>>>>>> 7af4d24fca3e
     assert got["commitment"] == "ab"
     assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
                                                           "registered": None}}
@@ -81,56 +62,49 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
                                              s / "rep-0.bin", table)]
-    iface = tmp_path / "circuit.json"
-    iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
-    proofs = {"circuit": "cc" * 64, "registered": {"ports": {}}, "interface": sha(iface)}
-    held = a5.case_v2(case, evidence["sessions"], proofs=proofs,
-                      statements=[(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))],
-                      tables=[table], interfaces=[iface, iface])
-    assert held["params"]["proofs"] == proofs
-    assert held["blobs"] == [*got["blobs"], str(iface)]
 
 
-def test_the_per_member_case_names_each_statements_member_and_sessions_and_each_file_once(tmp_path, RP):
-    """In the per-member form each statement names its member and the next of the evidence's sessions, and a file two
-    members' statements share (a template's circuit, hard-linked into each drawn member's directory) is one blob."""
+def test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its_own_files(tmp_path, RP):
+    """v2 verifies one table's one session, so an audit whose sample reached two members has no v2 case and says so;
+    either member's statement alone is a case of its own files, a circuit two members share (a template's, hard-linked
+    into each sampled member's directory) named at that member's path."""
     m0, m1 = tmp_path / "m0", tmp_path / "m1"
     for d in (m0, m1):
         d.mkdir()
         (d / "pub-2.bin").write_bytes(d.name.encode())
     (m0 / "circuit.txt").write_bytes(b"circuit")
     os.link(m0 / "circuit.txt", m1 / "circuit.txt")
-    s0, s1 = (tmp_path / f"session-m{k}" / "sessions" / "a" for k in (0, 1))
+    s0, s1 = (tmp_path / f"session-m{k}" for k in (0, 1))
     for k, s in enumerate((s0, s1)):
-        s.mkdir(parents=True)
-        (s / "session.json").write_text(json.dumps({"k": k}))
-    names = [sha(s0 / "session.json"), sha(s1 / "session.json")]
-    evidence = {"draw": {"units": [1, 2]}, "sessions": names, "verdicts": {"m0": {"accepted": True}}}
+        (s / "sessions" / "a").mkdir(parents=True)
+        (s / "sessions" / "a" / "session.json").write_text(json.dumps({"k": k}))
+    names = [sha(s / "sessions" / "a" / "session.json") for s in (s0, s1)]
+    done = [{"mm": {"k": k, "m": SimpleNamespace(base=2 * k, n=2), "pin": "cc" * 64, "st": {"dir": d, "public": sha(d / "pub-2.bin")}},
+             "sdir": s} for k, (d, s) in enumerate(((m0, s0), (m1, s1)))]
+    assert a5.v2_proof(done, zk=True) == ("v2 verifies one table's session on its circuit and public file; this audit "
+                                          "drew 2 members")
+    evidence = {"draw": {"units": [1, 2]}, "sessions": names[1:], "verdicts": {"m1": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
-    own = [{"circuit": "cc" * 64, "registered": None}, {"circuit": "cc" * 64, "registered": {"ports": {}}}]
-    proofs = a5.v2_members([(0, 0, 2, 1, own[0]), (1, 2, 2, 1, own[1])])
-    statements = [(f"m{k}", PF.Proof(d / "circuit.txt", d / "pub-2.bin", (s,))) for k, (d, s) in enumerate(((m0, s0), (m1, s1)))]
-    got = a5.case_v2(case, names, proofs=proofs, statements=statements, tables=[])
-    assert got["params"] == {"delta": "1/100", "proofs": {"members": {
-        "m0": {**own[0], "units": [[0, 2]], "vus_per_block": 1}, "m1": {**own[1], "units": [[2, 4]], "vus_per_block": 1}}}}
+    got = a5.case_v2(case, names[1:], **a5.v2_proof(done[1:], zk=True))
+    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(m1 / "pub-2.bin"),
+                                                          "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
-    assert "verdicts" not in e and e["sessions"] == names
-    assert [(st["member"], st["public"], [x["name"] for x in st["sessions"]]) for st in e["proofs"]["statements"]] == [
-        ("m0", sha(m0 / "pub-2.bin"), names[:1]), ("m1", sha(m1 / "pub-2.bin"), names[1:])]
-    assert got["blobs"] == [str(p) for p in (m0 / "circuit.txt", m0 / "pub-2.bin", s0 / "session.json",
-                                             m1 / "pub-2.bin", s1 / "session.json")]
-    with pytest.raises(ValueError, match="1 names left"):
-        a5.case_v2(case, [*names, "x"], proofs=proofs, statements=statements, tables=[])
+    assert "verdicts" not in e and e["sessions"] == names[1:]
+    assert [x["name"] for x in e["proofs"]["sessions"]] == names[1:]
+    assert got["blobs"] == [str(p) for p in (m1 / "circuit.txt", m1 / "pub-2.bin", s1 / "sessions" / "a" / "session.json")]
+    with pytest.raises(ValueError, match="2 names for 1 sessions"):
+        a5.case_v2(case, names, **a5.v2_proof(done[1:], zk=True))
 
 
-def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
-    """`v2_proof`'s parameters are the window's, fixed before the draw: a window of one member is the one-statement
-    form; a window of several is the per-member form, naming every member, the undrawn too, with its units, pin, units
-    a proof block and registered file, and a statement a drawn member, even when only one was drawn."""
+def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other_members(tmp_path):
+    """`v2_proof` names the one sampled member's statement, its circuit pin, the public file's digest it was staged
+    with and its registered file, read; the window's other members and its registered circuit record add nothing to it:
+    v2 holds that public file's units to the registration's population, so a window of several members is refused
+    there, never given a form of its own."""
     def member(k: int, base: int, n: int, reads: dict | None = None) -> dict:
         d = tmp_path / f"m{k}"
         d.mkdir()
-        st = {"dir": d, "meta": {"vus_per_block": k + 1}}
+        st = {"dir": d, "meta": {"vus_per_block": k + 1}, "public": str(k) * 2 * 64}
         if reads is not None:
             st["registered_file"] = d / "registered.json"
             st["registered_file"].write_text(json.dumps(reads))
@@ -141,22 +115,18 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     (sdir / "sessions" / "a").mkdir(parents=True)
     (sdir / "sessions" / "a" / "session.json").write_text("{}")
     done = [{"mm": ms[1], "sdir": sdir}]
-    got = a5.v2_proof(done, True, ms)
-    assert got["proofs"] == {"members": {
-        "m0": {"circuit": "0" * 128, "registered": None, "units": [[0, 2]], "vus_per_block": 1},
-        "m1": {"circuit": "1" * 128, "registered": {"ports": {}}, "units": [[2, 5]], "vus_per_block": 2}}}
-    assert [(m, p.circuit, p.public, p.sessions) for m, p in got["statements"]] == [
-        ("m1", tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))]
-    one = a5.v2_proof(done, True, ms[1:])
-    assert one["proofs"] == {"circuit": "1" * 128, "registered": {"ports": {}}}
-    assert [m for m, _ in one["statements"]] == [None]
+    got = a5.v2_proof(done, True)
+    assert {k: v for k, v in got.items() if k != "proof"} == {
+        "circuit": "1" * 128, "public": "1" * 128, "registered": {"ports": {}}, "tables": []}
+    assert (got["proof"].circuit, got["proof"].public, got["proof"].sessions) == (
+        tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))
     iface = tmp_path / "circuit.json"
     iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
     for mm in ms:
         mm["st"]["interface_file"] = iface
-    got = a5.v2_proof(done, True, ms)
-    assert got["proofs"]["members"]["m1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["m0"]
-    assert got["interfaces"] == [iface]
+    held = a5.v2_proof(done, True)
+    assert {k: v for k, v in held.items() if k != "proof"} == {k: v for k, v in got.items() if k != "proof"}
+    assert held["proof"] == got["proof"]
 
 
 def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
@@ -184,8 +154,9 @@ def test_v2_hands_v2_the_tables_its_circuit_looks_up_alone(tmp_path):
 
 
 def test_v2_says_why_an_audit_has_no_case():
-    assert "plain" in a5.v2_proof([{}], zk=False, members=[{}])
-    assert "drew none" in a5.v2_proof([], zk=True, members=[{}])
+    assert "plain" in a5.v2_proof([{}], zk=False)
+    assert "drew 2 members" in a5.v2_proof([{}, {}], zk=True)
+    assert "drew 0 members" in a5.v2_proof([], zk=True)
 
 
 @pytest.fixture
@@ -217,7 +188,6 @@ def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_spot_no_case(tmp_
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
 
 
-<<<<<<< 99c8914848
 def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_reads_them(tmp_path, monkeypatch, RP):
     """`OneStage.paramsOfJson` takes exactly its keys: a case tied to W (a5's ``tie``) names the program function's
     ``parameters`` beside its registered values and their row formats as ``row_schemas``."""
@@ -237,8 +207,8 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
     assert sorted(p) == ["anchors", "delta", "law", "leaf_layer", "log", "outputs", "parameters", "partition", "ports",
                          "program", "query", "registered", "row_schemas", "scheme", "work_table"]
     assert (p["parameters"], p["row_schemas"]) == ([["v", {"bits": 32}]], {"v": "row-seg/v1"})
-||||||| merged common ancestors
-=======
+
+
 def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
     """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
@@ -251,7 +221,6 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
     assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
     assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
     assert not (tmp_path / "case-v2-error.txt").exists()
->>>>>>> 7af4d24fca3e
 
 
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
@@ -286,7 +255,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
     """`a5.link_points` records the registration's refusal of a law no draw of which ends (`link_points.NEVER_ENDS`),
     which `coins.law_problem` refuses first for every law it reads: past it, `subset:41` over 40 units is refused for
     every member."""
-    from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
+    from verity.core.protocols.spot.one_stage import link_points as LP
 
     monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
@@ -294,7 +263,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
 
 
 def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
-    """`a5.draw_ran_out`, which fails the window in v2's per-member form: `subset:9` over 10 units first reads a stream
+    """`a5.draw_ran_out`, which fails the window: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
     no word; a law that doesn't apply records why."""
     law = {"k": 9, "law": "subset"}

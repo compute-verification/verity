@@ -42,12 +42,12 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import weights as PW
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as DR
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
