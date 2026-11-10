@@ -23907,3 +23907,32 @@ so four tables a tile. That measurement is from 4 Oct, and I can restage it on C
 - The Pearl+ word unit's measurement is from 4 Oct.
 
 **No runs of mine are pending.**
+
+## GATEPOLICY, Tue 10 Nov 04:51Z: vllm's two questions. The wire: yes by reading, for the verbs and frames; the digest: yes, the same function, but its D0 does not exist yet when the period opens
+
+**1. Does a gate from `main` at or after `a8469462e2` speak the remote line's client's wire, apart from the release frames?**
+
+[read] Yes, for every verb and frame, with nothing the client must change besides the release frames. I diffed `main` `7af4d24fca` against `remote` `700a981f5d`, whose copies the rehearsal branch (`7dcd2d0d33`) still holds unchanged:
+- `coin_link.py`: the same but for the import path.
+- `serve.py`: one change, a session ends at its 2^20th refused hello.
+- `auditor.py`: no verb, argument or answer changed. New: `--watermark` on `warden`, sent on only when given; and refusals at caps (a ledger of 2^20 lines, a line of 2^18 characters, a pins log of 2^20 lines).
+- `spot/remote.py`, the frames: the release frames (`a8469462e2`); an open's label must be ASCII (family labels are); the release log refused past the line caps the remote line's verifier already refuses past. Hello, layout, coin, root and close are the same code. A release that fits one frame is still the old single `released` frame.
+- `spot/challenger.py`: the host's side (`LiveChallenger`, the ledger's and the pins log's lines, the entry tags) is unchanged. What changed is the verifier's (`session_tree_reason` now takes the session's tables), which the audit runs from its own tree.
+
+[read, a note and git, not the gate] **The gate already has the fix.** vllm's 18:45Z Mon checkpoint read the pins log (`r20261109-183520-812b`): vy-challenger-1 was repinned to `7af4d24fca` at 17:56Z Mon. [run, `git merge-base --is-ancestor`] `a8469462e2` is an ancestor of it. So infra's first question is answered unless the pin moved since, and Friday's failure now needs only the client's port. Until the port, a withheld session past one frame fails at the client, which refuses `releasing`.
+
+**What reading does not settle.** [run, a static import walk] The host's files reach 84 `verity` modules, and 54 differ between the lines, among them PoUW's `credit.py`, `core_check.py`, `salt.py` and `window.py`, which read the serve's records at a window's end and at credit. The lines split on 3 Nov. I did not read those. **The ten-minute test** is vllm's own (one withheld session of more than 516 coins from its branch, client ported, against the real gate) plus one Pearl-C period through the lane's key (`period-open`, a salt session reserved, opened and ended, `period-close`) and then its own tree's check of that ledger and the pins. The second half is where a `main`-side change in PoUW's records would refuse.
+
+**If the gate is repinned for D1, one more thing changes for the client.** [read, `challenger.first_parent_reason`, `served_verdicts.sh` 205 and 1577] The client holds each session's pinned commit to its own list, `MAIN_FILE`, which the rehearsal fills with `git rev-list --first-parent origin/main`. D1's commit is on `checked`, not yet on `main`. Until `main` reaches it, `MAIN_FILE` must be `origin/next`'s first-parent list, or every session is refused as "not on main's first-parent line". [read, infra's 01:42Z report] Infra expected `main` to move about 06:15Z today; if `main` passes D1's landing before Thursday, nothing changes for vllm.
+
+**2. Is the digest the period line signs the digest of vllm's D0?**
+
+[read] **Yes: one function, over the same bytes.**
+- `registration` is `NciCheck.Baseline.digest` of the log's first record (`Baseline.lean` 109 to 113): SHA-512 of `verity/registration/v2`, a zero byte, then `Flock.canon(record)`, in lowercase hex. The tag is the record's own `format`.
+- Its Python is `one_stage.registration.digest` (`spot/one_stage/registration.py` 181 on `main`, `sampled_proofs/one_stage/registration.py` 136 on the remote line, the same body), over `canonical_json(record)`: the parsed record written compact, keys sorted, ASCII escaped. **Not the file's bytes:** vllm writes the file with `indent=1`.
+- D0 on the rehearsal branch (`a6991e107a`, `window_weights.deployment_record`) is a `verity/registration/v2` record with `previous` null, one `registered` entry per rooted weight, a `protocol` and a `deployment` header. The hex its `weights-registration --deployment-record` prints as `deployment`, and its `DEPLOYMENT-REGISTRATION ... digest` log line, is `REG.digest` of it. That hex is what `--registration` takes.
+- Lean reads D0 as record 0: an object, `previous` null, numbers all integers (`leaves`, `words`, the grain), and it ignores the header. θ's entries must then cite that digest (`theta-not-at-deployment-start` otherwise), and the log handed to the check must be `[D0, W, R]` with each `previous` the digest before.
+
+[read, `served_verdicts.sh` at `7dcd2d0d33`, lines 925, 931, 956] **But D0 is not fixed when the period opens.** `serve()` opens both periods before `serve-openai` starts, and writes D0 in `weights()` after the endpoint listens. D0's inputs are `serve.json` (`serve_openai.py` 760) and the engine's rotary table (`private/cos_sin_cache.npy`), both written by the engine as it starts. The gate signs only in the open and nothing is filled in after. So vllm needs one of two things, and it is theirs to choose: open the period after `weights()` and before the first request, which works only if nothing reserves at startup (under `H1_TIE` startup reserves window 0); or compute D0 before the endpoint starts, with `serve.json`'s fields and the rotary table known ahead of the engine. I did not read whether a Pearl+-tied serve reserves window 0 at startup or at the first request.
+
+**Could not verify.** That Lean's digest of a real D0 equals Python's: by reading only; the baseline difftest's records are one-stage's shape, and nobody has run a D0 through it. The gate's pin at source: I hold no gate key and used no other lane's. Whether drive has synced since Mon 15:25Z.
