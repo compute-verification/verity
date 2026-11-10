@@ -57,11 +57,17 @@ record first, and the digest of the run's own record. `params` is not read.
 
 ## Blocks, rows and kinds
 
-A block is one slot of the class: unit `at + i` of an inference entry has `i`'s digits in the entry's mixed radix, the
-first the slowest, and its slot is the digit the entry's `axes` name `slot`. Every slot holds the same number of each
-template's units, so a block's gates and input bits are one figure: `gates`, each template's units in a block times
-its Definition's gates, the Program's own count (`Flock.Program.Defn.gates`); and `inputs`, every row of every unit,
-whole, 16 bits a word, whether or not a gate reads it.
+A block is one slot of the class, as the record's own `blocks.inference` divides the units: unit `at + i` of an
+inference entry has `i`'s digits in the entry's mixed radix, the first the slowest, and its slot is the digit the
+entry's `axes` name `slot`. `NciCheck.Desc.evaluate` takes its blocks from a partition of the root's nodes instead,
+and where a root node is a batch of every slot's units of a template no such partition separates two slots: on such a
+Program it has one block for the whole phase.
+
+Every slot holds the same number of each template's units, so a block's gates and input bits are one figure: `gates`,
+each template's units in a block times its Definition's gates, the Program's own count
+(`Flock.Program.Defn.gates`); and `inputs`, every row of every unit, whole, 16 bits a word, whether or not a gate
+reads it. `NciCheck.Desc.evaluate` counts only the leaves some gate reads, so over a phase its input bits are fewer by
+the rows no gate reads.
 
 Every input row of every unit has exactly one kind (`Kind`), by one total function (`Case.rowKind`): what fills the
 row (`fillAt`: the one declaration that covers it, or nothing), classed by `kindOf`. Two kinds are not fresh:
@@ -72,7 +78,8 @@ row (`fillAt`: the one declaration that covers it, or nothing), classed by `kind
 
 The rest are a block's fresh bits, and where `kindOf` cannot show a row inside or θ it is one of them:
 
-* `crossWires`: a wire whose writer `sameSlot` does not show in the reader's slot;
+* `crossWires`: a wire whose writer `sameSlot` does not show in the reader's slot. A record's wires need not stay
+  inside a slot, and SPOT's check does not ask it: one that crosses is the reading block's fresh input;
 * `free`: no declaration fills it;
 * `ingress`: an ingress declaration fills it;
 * `unregistered`: a registered read, or a table read, of a parameter that is not θ;
