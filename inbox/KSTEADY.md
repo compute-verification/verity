@@ -303,3 +303,13 @@ This replaces "label nothing yet" and the last bullet of the 17:00Z section.
 5. **Cover for row 13, on card 5 now:** row 16, `ScaledMmFp8BlockSharedScale_v1{K=256,N=4,G=128}` (0.68%; proofs'
    pin `332a01187371d5ed`, the form check accepts), and row 15, `SparseMlaCombine_v1{NSPLIT=5,DV=64,…}` (0.75%; no
    pin of proofs': if it does not stage, say so and go on). With rows 3 and 5 in, they pass 90% without row 13.
+
+## Tue 10 Nov 17:50Z: the layout does not land today; open the script's commit NOW, on `main` as it is
+
+- top, TOP-394 17:39Z: Daniel wants the target tree changed first, so nobody waits for the layout (`inbox/RULES.md`,
+  "The queue, today", rewritten at 17:50Z). Nothing of yours on node A changes.
+- **Item 2 of the 17:08Z section changes:** do not wait for a base commit. Carry `0a85da0af964` onto today's
+  `origin/main` on a new branch, with nothing else; its suites in one named run; a new pull request (`research queue
+  open --issue HASH-98`; the body quotes proofs' word of 17:02Z as the script's owner and ends `Refs HASH-98` and
+  `Goal proofs/spot-proof-server-steady-state`); its number and the run's verdict on HASH-98. The lead marks it.
+  Do it between checkpoints of the runs; rows 1 and 2 and the labels come first.

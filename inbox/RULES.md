@@ -27,28 +27,27 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## Agents, today
 
-- **top's hold (16:18Z): 88 agents run; none is launched or resumed until top posts a count under 60.** A worker
-  with work to do now stays. **A worker that only waits ends its turn**, note written and pushed, saying what it
-  waits on (a run's id and end time, the layout on `main`, an owner's answer): a waiting turn holds one of the 100.
-  The lead resumes you when what you wait on arrives and the count allows. Runs you queued keep running without you.
+- **top's hold is lifted (TOP-394, 17:36Z): 51 agents run, under Daniel's target of 60.** A worker that only waits
+  still ends its turn, note written and pushed, saying what it waits on (a run's id and end time, an owner's
+  answer): the lead resumes you. Runs you queued keep running without you.
+- **Daniel's top set (TOP-394, 17:36Z):** the repository's organization and continuous integration first, and
+  standard benchmarks with them (goals 3, 1, 4 and 5). Every kernels worker today serves one of those.
 
 ## The queue, today (Tue 10 Nov)
 
-- **Changed at 16:09Z (top, TOP-394 16:09Z): the cut is five hours earlier.** The loop builds no new candidate since
-  16:01Z. top's staging D is the layout's pull request if its check passes (its shards end about 18:30Z); the layout
-  is then on `main` at about 19:15Z. Every open pull request crosses it. top posts the base commit and the two
-  commands on TOP-394 the minute it lands: `git merge BASE` into your branch, then `tools/move/restack.py`. Do that
-  on your own open branch at your next checkpoint after it lands, rerun your suites at the new head, and say the
-  new head on your issue. Before it lands, keep writing in today's paths.
-- **Open pull requests freely; mark none without the lead's word.** A result that is one more pull request waits
-  behind about 140. Write on a branch cut from `origin/main` (`cursor/kernels-<topic>-<hex>`); when the layout is on
-  `main`, `tools/move/restack.py` carries the branch across. `cursor/top-layout-staged-af72` shows the new paths.
-- **Push nothing to a marked pull request** (kernels': #8521, #8542, #8619, #8650) and never mark one that contains
-  another of kernels' open, marked ones. A fix or a follow-up is a new pull request.
-- When the lead says mark: the suites the change touches pass first; `research queue ready N --mark --by kernels`,
-  or, if that refuses a head for holding today's `main`, `research data label pr:N@FULLSHA ready true --by kernels`,
-  said in the body. A body ends with `Refs HASH-n` and `Goal <goal id>`. No run id, issue id, date or name goes into
-  code, comments or docs in the tree.
+- **Changed at 17:39Z (top, TOP-394): the layout does not land today.** Daniel read the target tree and wants it
+  changed first; the map will change once, and every open branch then crosses one time. **Nobody waits for the
+  layout.** A step of yours that says "when the layout is on `main`", "restack" or "the moved tree" is void: work
+  on `main` as it is, in today's paths. Do not run `tools/move/restack.py`. The stager's run ends as a rehearsal.
+- **Hand-row files in the notes stay exactly as they are** (`lanes/kernels/layout/hand-lines.toml`,
+  `kmove-jobs/hash105/units-replay-rows.toml`): do not delete or rewrite them.
+- **ci lands pull requests as usual again.** Open pull requests freely on a branch cut from `origin/main`
+  (`cursor/kernels-<topic>-<hex>`); **mark none without the lead's word.** The lead marks once the suites the change
+  touches pass at the head.
+- **Push nothing to a marked pull request** (kernels': #8521, #8542, #8573, #8650, #8666, #8669) and never mark
+  one that contains another of kernels' open, marked ones. A fix or a follow-up is a new pull request.
+- When the lead says mark: `research queue ready N --mark --by kernels`. A body ends with `Refs HASH-n` and `Goal
+  <goal id>`. No run id, issue id, date or name goes into code, comments or docs in the tree.
 
 ## Runs
 

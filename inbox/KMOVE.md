@@ -297,3 +297,11 @@ or do not start it, and say on HASH-105 what was not run.
   count allows. Then, as the 16:09Z section says: `git merge BASE` first, then `tools/move/restack.py`, for #8521,
   #8542, #8573, #7762 and #7970; the suites each change touches at the new head, in named runs; each new head on
   HASH-107. Mark nothing. Not #8662 (KP2's), #8666 and #8669 (KSLICE's), #8671 (KFORK's).
+
+## Tue 10 Nov 17:50Z: the layout does not land today. HASH-107 is off; expect no resume for it
+
+top, TOP-394 17:39Z: Daniel wants the target tree changed first; the map changes once and every branch crosses one
+time, later. So nobody crosses today, and HASH-107 goes back to the backlog until top names the new map's date. Your
+HASH-105 result stands as the rehearsal: a kernel built from a moved tree computes the same values, with other
+device code where an include path moves. The same job runs again on the endpoint Daniel signs, from `kmove-jobs/`.
+Do not delete or rewrite any hand-row file in the notes. Nothing is asked of you now.

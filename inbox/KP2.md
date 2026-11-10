@@ -47,3 +47,14 @@ So what is left, in order, from your 20:00Z wake:
   lead books a second hour on a card. Then the lead marks.
 - **If the delete is not on `main` by Thu 12 Nov 02:00Z,** the lead marks #8662 as it stands at step 3's head
   (rule 5's date for the staging decode is Thu 12 Nov), and vllm's delete takes the hunks out.
+
+## Tue 10 Nov 17:50Z: the layout does not land today, so there is no restack; one more file for your later merge
+
+- top, TOP-394 17:39Z: nobody waits for the layout (`inbox/RULES.md`, "The queue, today", rewritten at 17:50Z).
+  **Step 2 of the 16:22Z section is void:** no `git merge BASE`, no `restack.py`. Your branch stays on `main`'s
+  paths. Tonight at 20:00Z: the H200 run at old `main` and at your head, then step 3's suites at your head, the
+  verdicts on HASH-106, and end your turn. Everything in the 17:02Z section stands (vllm's delete lands first).
+- **#8669 is marked** (the READMEs' Interface sections). Its table in `benchmarks/torch_gpu/README.md` says
+  `integrations/vllm/verity_vllm/protocols/pous.py` loads `p2_stage/stage.py` and `p2_stage/layout.py`, which your
+  change makes false. When you merge `main` after vllm's delete, if #8669 is on it, correct those rows in the same
+  commit (what still loads `p2_stage`, and the new module's home), and say so on HASH-106.

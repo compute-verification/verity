@@ -25,3 +25,10 @@ Daniel pushed goal 4 back (top on TOP-394, 07:50Z): a fast check and the reposit
 the moves land only landing fixes, the maps and cleanup are marked. #8573 stays open and unmarked at d2ffef178d. Both
 of your suites runs ended rc 0. The lead resumes you after the moves land, to restack, recheck and mark. If you are
 running before that for any reason: write one line in your note, launch nothing, and end your turn.
+
+## Tue 10 Nov 17:50Z: #8573 is marked by the lead; no restack
+
+The layout does not land today (top, TOP-394 17:39Z), and ci lands pull requests as usual again. The lead marked
+#8573 at d2ffef178d at 17:43Z: its two suites runs pass at that head (…93b2: `verity-bench` 172; …30fc:
+`verity-graph` 168, `repository` 280, `verity-bench` 172), `main` has not touched its two files since its base, and
+it merges clean. Push nothing to it. Nothing is asked of you now.
