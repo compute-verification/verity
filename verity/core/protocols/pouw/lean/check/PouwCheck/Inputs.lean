@@ -147,19 +147,9 @@ def rootOf? (j : Json) : Option Root := do
 its salt and the registered weights' entries (`valuesRoot?`). -/
 def WINDOW_VALUES : List String := ["activations", "registered"]
 
-<<<<<<< ours
 /-- The record's `window` item, its execution block: its kind, its context, the items it registers, and its groups of
 committed values (`WINDOW_VALUES`), each `some` exactly when the item has the key, whatever its value. -/
 structure ExecutionBlockItem where
-||||||| base
-/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
-(`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
-structure Window where
-=======
-/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
-(`WINDOW_VALUES`), each `some` exactly when the execution phase has the key, whatever its value. -/
-structure Window where
->>>>>>> theirs
   kind : String
   context : String
   items : Json
@@ -212,51 +202,17 @@ def registrationOf (b : ByteArray) : V Registration := do
 bytes it was read from. -/
 def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
 
-<<<<<<< ours
-/-! The service's draw, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
-refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its law to `outcome`. -/
-||||||| base
-/-! The service's draw, as one-stage's `draw.py` writes it. -/
-=======
-/-! The service's sample, as one-stage's `draw.py` writes it. -/
->>>>>>> theirs
+/-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
+refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its sampling design to `outcome`. -/
 
 deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.Law
 
-<<<<<<< ours
-/-- `parse_law`'s spelling. -/
-def lawName : Flock.Draw.Law → String
-||||||| base
-/-- `parse_law`'s spelling. -/
-def Law.name : Law → String
-=======
 /-- `parse_design`'s spelling. -/
-def Law.name : Law → String
->>>>>>> theirs
+def lawName : Flock.Draw.Law → String
   | .subset k => s!"subset:{k}"
   | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
-<<<<<<< ours
   | .work k _ => s!"work:{k}"
-||||||| base
-  | .work k _ _ => s!"work:{k}"
-
-/-- The verifier's draw: its law, over a population, and the units it drew. -/
-structure UnitDraw where
-  law : Law
-  population : Nat
-  units : Array Nat
-  deriving DecidableEq, Repr
-=======
-  | .work k _ _ => s!"work:{k}"
-
-/-- The verifier's sample: its sampling design, over a population, and the units it drew. -/
-structure UnitDraw where
-  law : Law
-  population : Nat
-  units : Array Nat
-  deriving DecidableEq, Repr
->>>>>>> theirs
 
 def keysAre (j : Json) (ks : List String) (ctx : String) : V Unit :=
   unless keys j == some ks do throw s!"{ctx}: keys are not {", ".intercalate ks}"
@@ -294,16 +250,8 @@ def pOf (s ctx : String) : V (Nat × Nat) :=
   | _ => throw s!"{ctx}.p: not num/den"
 
 /-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
-<<<<<<< ours
-live window's `salt` (`saltOf`). -/
-def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
-||||||| base
-live window's `salt` (`saltOf`). -/
-def drawOf (j : Json) : V UnitDraw := do
-=======
 live execution phase's `salt` (`saltOf`). -/
-def drawOf (j : Json) : V UnitDraw := do
->>>>>>> theirs
+def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
     throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
