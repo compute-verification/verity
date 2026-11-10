@@ -770,6 +770,36 @@ def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read(
     assert P.shared_inputs(Program(bind(twice)), q) == []
 
 
+def test_r8_lets_a_tied_run_input_through_and_publishes_it():
+    """R8's tied values (`registration.check`'s `tied`): a run Input two proof blocks read, named tied, is let through,
+    and the verdict publishes it beside F (`Verdict.tied`), since its acceptance rests on the later check that ties its
+    rows; not named tied, it is still refused. A tied name that isn't a parameter of the program, one whose Input is a
+    registered input, or one the verifier expects registered or holds is refused (`R8-tied`) and lets nothing through;
+    a tied value is never a registered value."""
+    q = P.template_instance_query(PAIR.id)
+    for shared in _two_programs():
+        n = P.units(shared, q)
+        ports = _ports(shared, q, n)
+        rec = R.record(shared, q, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                       leaf_layer="ee" * 64)
+        v = _check(rec, shared, q, tied=["t"])
+        assert v.ok and v.tied == ("t",) and v.to_json()["tied"] == ["t"] and v.fanout == 1
+        assert _check(rec, shared, q).codes == ("R8-shared-input",) and _check(rec, shared, q).tied == ()
+        v = _check(rec, shared, q, tied=["nope"])
+        assert v.codes == ("R8-tied", "R8-shared-input") and v.detail["R8-tied"]["tied"] == ["nope"] and v.tied == ()
+        v = _check(rec, shared, q, tied=["t", "nope"])
+        assert v.codes == ("R8-tied",) and v.tied == ("t",)
+        assert R._readers(shared, q, {"t": 2}, (), ["t"]) == (1, [], (), ["t"])
+        assert R._readers(shared, q, {"t": 2}, ["t"], ["t"])[3] == ["t"]
+        assert R._readers(shared, {"name": "Q_all"}, {}, (), ["t", "nope"]) == (None, [], (), ["nope"])
+    for registered in _two_programs(registered=("t",)):
+        assert not P.run_inputs(registered, G.held_gates(registered, ["t"])[0])
+        assert R._readers(registered, q, {}, (), ["t"]) == (1, [], (), ["t"])
+    prog, q, rec = _registration(6)
+    v = _check(rec, prog, q, tied=["x"])
+    assert v.ok and v.tied == ()
+
+
 def test_registration_check_refuses_a_query_core_does_not_digest():
     prog, q, rec = _registration(6)
     v = R.check(rec, prog, {**q, "width_rule": None}, LAW, SCHEME, _ports(prog, q, 6), leaf_layer="ee" * 64)

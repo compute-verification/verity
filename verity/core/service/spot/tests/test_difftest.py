@@ -502,7 +502,9 @@ def _log_record(e) -> None:
 
 def decode_params(j) -> dict:
     v2 = isinstance(j, dict) and j.get("registered") is not None
-    keys = PARAM_KEYS | {"parameters"} if v2 else PARAM_KEYS
+    tied = isinstance(j, dict) and "tied" in j
+    keys = PARAM_KEYS | {"parameters"} if v2 or tied else PARAM_KEYS
+    keys = keys | {"tied"} if tied else keys
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
@@ -540,10 +542,12 @@ def decode_params(j) -> dict:
     if part is not None and not (isinstance(part, dict) and isinstance(part.get("program"), str)
                                  and isinstance(part.get("query"), dict)):
         raise D.Reject("partition names no program digest or query")
-    if v2:
-        if not all(map(_nat, _obj(j["registered"], "registered").values())):
-            raise D.Reject("registered: words that are not a natural number")
+    if v2 and not all(map(_nat, _obj(j["registered"], "registered").values())):
+        raise D.Reject("registered: words that are not a natural number")
+    if v2 or tied:
         _parameters(desc, PROGRAMS[sha], j["parameters"])
+    if tied and not (j["tied"] is None or isinstance(j["tied"], list) and all(isinstance(t, str) for t in j["tied"])):
+        raise D.Reject("tied values are a list of the program's parameters")
     raw = j
     if "pool" in j:
         try:
@@ -655,7 +659,7 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   seed_salt=p.get("seed_salt"), pool=p.get("pool"))
+                   seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -803,7 +807,8 @@ def partition(j):
 def registration(j):
     j = _json(j)
     v = _registration_verdict(_params_of(j), j.get("record") if isinstance(j, dict) else None)
-    return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout})}
+    return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
+            **({"tied": list(v.tied)} if v.tied else {})}
 
 
 def registered(j):
@@ -2190,6 +2195,22 @@ SEED_SALTS = [
     _set("record", "window", lambda a, x: {k: v for k, v in a["record"]["window"].items() if k != R.SEED_SALT}),
     _server_seeded,
 ]
+
+
+def _tied(a: dict, x: int) -> None:
+    """The verifier's tied values, with the program's parameters `tied` names: none, its first parameter, every one, one
+    it expects registered, one that isn't a parameter, a parameter twice, or another form."""
+    p = a["params"]
+    sig = p.get("parameters") or _json([[name, t.to_json()] for name, t in
+                                         PROGRAMS[PO.program_sha512(p["program"])].fn.signature()[0]])
+    names = [n for n, _ in sig]
+    p["parameters"] = sig
+    p["tied"] = [names[:1], names, sorted(p.get("registered") or {})[:1], ["nope"], [*names[:1], "nope"],
+                 names[:1] * 2, [], None, "x", [5], {"x": 1}][x % 11]
+
+
+#: One change each to the run Inputs the verifier names tied (`_tied`), or its program's parameters left out.
+TIED = [_tied, _tied, lambda a, x: (_tied(a, x), a["params"].pop("parameters"))]
 GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE, SUPPLIED, BINDINGS,
           WINDOWS, SEED_SALTS]
 
@@ -2848,6 +2869,8 @@ READER_SETUPS = [Setup(_readers(2, (("call", 2, _X0 + _X00),) * 2, False), P.tem
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits(most=1, setups=READER_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([TIED], 1, 1, READER_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([TIED, REGISTERED_PARAMS], 2, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2),
     changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([SUPPLIED], 1, 0, SUPPLIED_SETUPS).map(_REGISTRATION_OF),
@@ -4924,9 +4947,10 @@ def test_a_piece_agrees(pieces, port, examples):
 def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
     broadcasting it, share the run Input `x` at F 1, and the registration is refused (`R8-shared-input`); a call reading
-    another's result, whose result a batch of two maps, joins all three at F 4, which the registration publishes; and
-    `x` registered, as a registered input or as a parameter the verifier expects registered (`held`), is no run
-    Input."""
+    another's result, whose result a batch of two maps, joins all three at F 4, which the registration publishes; `x`
+    named tied is let through, which the registration publishes where it was shared, and a tied name that isn't a
+    parameter is refused (`R8-tied`); and `x` registered, as a registered input or as a parameter the verifier expects
+    registered (`held`), is no run Input."""
     for s, f, shared in zip(READER_SETUPS, (1, 1, 4), ([0], [0], [])):
         case = {"program": s.desc, "query": _json(s.query)}
         assert fanout(case) == {"fanout": f, "shared": shared}
@@ -4939,6 +4963,12 @@ def test_r8_reads_the_readers_python_does(pieces):
         reg = registration(given)
         assert reg == {"codes": ["R8-shared-input"] if shared else [], "fanout": f}
         assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
+        sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
+        for tied, want in ((["x"], {"codes": [], "fanout": f, **({"tied": ["x"]} if shared else {})}),
+                           (["nope"], {"codes": ["R8-tied", *(["R8-shared-input"] if shared else [])], "fanout": f})):
+            tied_given = {**given, "params": {**given["params"], "parameters": sig, "tied": tied}}
+            assert registration(tied_given) == want
+            assert D.replay(REGISTRATION, tied_given, pieces) == ("output", D.canonical(want))
     program = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
     case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instance_query(PAIR.id))}
     assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": []}))

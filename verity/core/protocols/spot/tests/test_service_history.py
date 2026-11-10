@@ -158,6 +158,22 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert 25 not in {c[5] for c in forgetful if c[0] == "refused"} and forgetful != want[0]
 
 
+def test_r8_lets_a_tied_value_through_on_both_verifiers():
+    """R8's tied values on both verifiers, which compare the tied values a verdict publishes: a v1 record whose members
+    all read `W`, named tied, is let through and its verdict publishes `W`; not named, or a name that isn't a parameter
+    named instead, it is refused; and `W` named tied while expected registered is refused (`R8-tied`), since a tied value
+    is never a registered value."""
+    prog = _program()
+    first, ports = _registered_record(prog, _registered(prog))
+    v1 = R.record(prog, Q, LAW, SCHEME, first["roots"], SERVED)
+    for rec, registered, tied, codes, through in (
+            (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
+            (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
+            (first, {"W": 2}, None, (), ())):
+        v = V.check(rec, prog, Q, LAW, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
+        assert v.codes == codes and v.tied == through and v.verifiers["lean"]["codes"] == list(codes), (tied, v)
+
+
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
     candidate's check gets the last record and the first registration, and the verifier gives it the verdict the

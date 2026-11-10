@@ -835,7 +835,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
     query = sz.PA.template_instances_query([defs[s] for s in templates])
     pg = SimpleNamespace(program=program, query=query, templates=templates,
-                         stagers={s: SimpleNamespace(defn=defs[s]) for s in templates})
+                         stagers={s: SimpleNamespace(defn=defs[s]) for s in templates}, tied=())
     members = [{"name": f"{s}-{w}", "n": T, "defn": defs[s]} for s in templates for w in range(2)]
     want = {"ingress-0/row": {"leaves": T, "domain": "aa" * 64}, "egress-1/o0": {"leaves": T, "domain": "bb" * 64},
             "scan/state": {"leaves": 2 * T, "domain": "cc" * 64}}

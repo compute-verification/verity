@@ -409,7 +409,9 @@ class Check:
     from the sample; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
     without one. `registration_deadline`: seconds on the challenger's clock from
     the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
-    or before any salt, is refused (`late-registration`) and ends the epoch."""
+    or before any salt, is refused (`late-registration`) and ends the epoch. `tied`: the window Program's parameters, run
+    Inputs, whose rows a later check ties to the registrations that computed them, which R8 lets through though several
+    proof blocks read them (`registration.check`'s `tied`); the stream's digest binds them."""
 
     program: str | tuple[str, ...]
     query: Mapping[str, Any]
@@ -418,6 +420,7 @@ class Check:
     deadline: Mapping[str, Any] | None = None
     proof_deadline: float | None = None
     registration_deadline: float | None = None
+    tied: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         digests = self.program if isinstance(self.program, tuple) else (self.program,)
@@ -432,6 +435,9 @@ class Check:
         if not (isinstance(self.public_outputs, tuple) and all(isinstance(o, str) and o for o in self.public_outputs)
                 and len(set(self.public_outputs)) == len(self.public_outputs)):
             raise ValueError("a check's public outputs are distinct names")
+        if not (isinstance(self.tied, tuple) and all(isinstance(t, str) and t for t in self.tied)
+                and len(set(self.tied)) == len(self.tied)):
+            raise ValueError("a check's tied values are distinct parameter names")
         for name, d in (("proof", self.proof_deadline), ("registration", self.registration_deadline)):
             if d is not None and not (isinstance(d, (int, float)) and not isinstance(d, bool) and d > 0):
                 raise ValueError(f"a {name} deadline is a positive number of seconds, not {d!r}")
@@ -440,7 +446,8 @@ class Check:
         return {"program": list(self.program) if isinstance(self.program, tuple) else self.program,
                 "query": dict(self.query), "window": self.window,
                 "public_outputs": list(self.public_outputs), "deadline": None if self.deadline is None else dict(self.deadline),
-                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline}
+                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline,
+                **({"tied": list(self.tied)} if self.tied else {})}
 
 
 @dataclass(frozen=True)
@@ -549,7 +556,8 @@ class WindowCommitmentRecord:
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise). `fanout`
     is the fan-out F its registration verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
-    registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form."""
+    registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form. `tied` is the tied
+    values its verdict let through (`Verdict.tied`): its acceptance rests on the later check that ties their rows."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -558,6 +566,7 @@ class WindowCommitmentRecord:
     salted_at: float | None = None
     received_at: float | None = None
     fanout: int | None = field(default=None, compare=False)
+    tied: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass(frozen=True)
@@ -1904,7 +1913,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1920,7 +1929,7 @@ class Stream:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
-                                                     v.fanout)
+                                                     v.fanout, v.tied)
             op["registration"] = _registration_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -1971,9 +1980,10 @@ class Stream:
         return boundary_values(self.spec.values) if self.n_rho is not None else self.spec.values
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                      received_at: float | None = None, fanout: int | None = None) -> WindowCommitmentRecord:
+                      received_at: float | None = None, fanout: int | None = None,
+                      tied: tuple[str, ...] = ()) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout)
+                                      R.digest(record), order, salted_at, received_at, fanout, tied)
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)

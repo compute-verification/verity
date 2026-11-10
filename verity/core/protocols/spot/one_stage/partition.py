@@ -368,6 +368,20 @@ def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[ran
     return sorted(shared)
 
 
+def within(program: Program, gates: range, k: int) -> bool:
+    """Whether root node `k`'s gates lie in `gates`. The Lean's `Partition.within` is this."""
+    offsets = program.root.body.offsets
+    return gates.start <= offsets[k] and offsets[k + 1] <= gates.stop
+
+
+def run_inputs(program: Program, gates: range) -> bool:
+    """Whether the root's nodes whose gates lie in `gates` are run Input nodes, and one does: a parameter R8 may let
+    through as tied is one the run binds. The Lean's `Partition.runInputs` is this."""
+    nodes = program.root.body.nodes
+    inside = [k for k in range(len(nodes)) if within(program, gates, k)]
+    return bool(inside) and all(is_input(nodes[k].fn) and not is_registered(nodes[k].fn) for k in inside)
+
+
 def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
     """Sorted spans `rs` with the overlapping ones merged."""
     out: list[tuple[int, int]] = []
@@ -380,5 +394,5 @@ def _merged(rs: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "is_template_query", "mixed_population_program", "partition",
-           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "shared_inputs", "strata", "template_instance_query",
-           "template_instances_query", "unit_gates", "units", "QUERY_X"]
+           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "run_inputs", "shared_inputs", "strata", "template_instance_query",
+           "template_instances_query", "unit_gates", "units", "within", "QUERY_X"]

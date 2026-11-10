@@ -940,7 +940,10 @@ def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls:
 def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: Path) -> SimpleNamespace:
     """A round's Program and partition (`members_of`'s templates and counts) and each template's stager, every output
     its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
-    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
+    of the slot entries each unit's (`entry_reads`), and its ``prog`` the one value it names tied (``tied``): every
+    `EVERY` units read one slot entry, the output of the block that registered it, which `NetworkCheck.Period`'s rows
+    form ties to the scan (`progTied`, `wired`), so R8 lets it through; every other round's a population of its
+    templates, which names none."""
     defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
     counts = counts_of(members)
     nb = G * T // cls.EVERY
@@ -970,7 +973,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
+                           program_file=out / "program.json", tied=("prog",) if templates == TEMPLATES else ())
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
@@ -1123,7 +1126,7 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
               ("leaf_layer", "the leaf layer over the members' public files"),
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
     check = S.Check(tuple(PA.program_digest(Program(u)) for u in units), pg.query,
-                    proof_deadline=float(MEMBER_DEADLINE_S * len(members)))
+                    proof_deadline=float(MEMBER_DEADLINE_S * len(members)), tied=pg.tied)
     spec = S.Spec(tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)), law, check,
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(root))
     counts: dict[str, int] = {}
@@ -1271,7 +1274,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
-                                      work_table=table).to_json()}
+                                      work_table=table, tied=pg.tied or None).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")

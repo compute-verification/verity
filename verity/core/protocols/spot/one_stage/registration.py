@@ -32,7 +32,10 @@
     `R8-shared-input`), so a served port reaches a proof block only as
     its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
     on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
-    replay block (`plancheck.two`'s `fanout`).
+    replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
+    a later check ties its rows to the registrations that computed them, which this check doesn't, so the verdict
+    publishes each tied name it let through (`Verdict.tied`) and refuses one that isn't a run Input of the program's
+    own, or that it expects registered or holds (`R8-tied`).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -148,6 +151,8 @@ POOL_RESET = "pool_reset"
 POOL_WEEK = "pool_week"
 #: the window's field naming whether its week's one reset is spent at it (Pool chain)
 POOL_SPENT = "pool_spent"
+TIED_WHY = ("a tied value is a run Input of the program whose rows a later check ties to the registrations that computed "
+            "them: a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes")
 SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch broadcasts, could hold rows one of them "
               "computed, which the fan-out can't see: give each proof block its own leaves, or register the value")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
@@ -219,7 +224,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None) -> Verdict:
+          pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -254,8 +259,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     chain (`R7-pool-chain`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
-    is a parameter's that `registered` names (`partition.shared_inputs`), and the verdict carries the fan-out F of `query` on `program` (`partition.fanout`),
-    which it publishes whatever its codes; under any other query it carries none."""
+    is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
+    fan-out F of `query` on `program` (`partition.fanout`), which it publishes whatever its codes; under any other query it
+    carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the registrations that computed them
+    (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
+    through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
+    through (`Verdict.tied`), and refuses a name that isn't a parameter of `program`, one `registered` or `held` names,
+    or one whose gates aren't one interval of run Input nodes (`R8-tied`)."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -272,11 +282,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
-    fan, shared = _readers(program, query, registered or {})
+    fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
-        return c.verdict(fanout=fan)
+        return c.verdict(fanout=fan, tied=through)
     # R1
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
@@ -369,22 +379,45 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
             _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
                                                 bound))
     # R8
+    if bad:
+        c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
     if shared:
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
-    return c.verdict(fanout=fan)
+    return c.verdict(fanout=fan, tied=through)
 
 
-def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str]) -> tuple[int | None, list[int]]:
-    """R8's reading of a template query's partition of `program`: its fan-out and the run Input nodes its proof blocks
-    don't each read alone (`partition.fanout`, `partition.shared_inputs`), an Input node of a parameter the verifier
-    expects `registered` being a registered value; `(None, [])` for any other query, or one that doesn't apply. A
-    function of the program, query and verifier alone, so a verdict publishes F whatever the record."""
+def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str], held: Iterable[str],
+             tied: Sequence[str]) -> tuple[int | None, list[int], tuple[str, ...], list[str]]:
+    """R8's reading of `program`: under a template query, its fan-out, the run Input nodes its proof blocks don't each
+    read alone (`partition.fanout`, `partition.shared_inputs`) outside the gates of the parameters the verifier expects
+    `registered` (registered values) and of the `tied` ones it may let through (`_tied`), and the tied names whose Input
+    holds such a node, which it let through; and, under any query, the tied names it can't let through. `(None, [], ())`
+    and those for any other query, or one that doesn't apply. A function of the program, query and verifier alone, so a
+    verdict publishes F and the tied names it let through whatever the record."""
+    registered = list(registered)
+    gates = _tied(program, tied, registered, held)
+    bad = [t for t, g in zip(tied, gates) if g is None]
     if not P.is_template_query(query):
-        return None, []
+        return None, [], (), bad
     try:
-        return P.fanout(program, query), P.shared_inputs(program, query, G.held_gates(program, registered))
+        fan, own = P.fanout(program, query), P.shared_inputs(program, query, G.held_gates(program, registered))
     except P.QueryRefused:
-        return None, []
+        return None, [], (), bad
+    through = tuple(t for t, g in zip(tied, gates) if g is not None and any(P.within(program, g, k) for k in own))
+    return fan, [k for k in own if not any(g is not None and P.within(program, g, k) for g in gates)], through, bad
+
+
+def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held: Iterable[str]) -> list[range | None]:
+    """Each of `tied`'s Input gates where R8 may let it through, else None: a parameter of the program that the verifier
+    neither expects registered nor holds, whose gates are one non-empty interval (`registered.held_gates`) of run Input
+    nodes (`partition.run_inputs`). A tied Input is never a registered value: R7 holds nothing of it. The Lean's
+    `Registration.tiedGate` is this."""
+    fixed = {*registered, *held}
+    out: list[range | None] = []
+    for t in tied:
+        g = None if t in fixed else next(iter(G.held_gates(program, [t])), None)
+        out.append(g if g is not None and P.run_inputs(program, g) else None)
+    return out
 
 
 def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],
