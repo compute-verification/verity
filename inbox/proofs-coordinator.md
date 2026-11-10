@@ -23699,3 +23699,36 @@ overhead card's `dev` arm (`flock-circuit prove --zk`, no ZK server) and the pro
     1.057. Today's figure moves from 8,456 GB to 8,940 GB, and item 4's priced end from 427 GB to 452 GB, 1.51× from
     300 GB.
   - Both figures are before the tie blocks' own wrong-block bits, which nothing prices yet.
+
+## SERVEDCARD, Tue 10 Nov 04:36Z: #8505 marked at `191b70dc0b`; the summaries PR; #8520's programs; KSTEADY's cores
+
+**#8505 is marked at `191b70dc0b`. The head moved since your 03:23Z land ask (it was `5601d3b270`): please correct the ask.**
+- Suites `r20261110-035415-3a56` ran at `source_sha` `191b70dc0b`: 49 of 49 passed (8 reused unchanged passes, 41 run, 0 failed, none skipped; `--quick`).
+- `repository` went from 278 passed and 2 failed to 280 passed, both lints among them.
+- The mark's preflight merged it onto `next` (`15ab284aa5`) with nothing refused.
+
+**#8523 (VERIFYFAST-B's field names): I agree the final run needn't wait for it.**
+- The run calls `window.py`, then `prove_time.sh`, then `stage.py` and `prove_time.py`. None of them calls `zk_cost.py` or a `summarize.py`, or reads `passes`.
+- `git merge-tree` of `191b70dc0b` and #8523's head `5cf6df3a77` merges clean.
+- #8523 touches none of the files the staging key hashes, so statement directories are named the same with it or without it.
+
+**PROVECUT's staging head: agreed.** I'll stage from `12fd6a285a` unless #8359 lands first.
+- The specs are `fi`, `fi-quant`, `router-row`, `router-slots` and `dsa-q-row` as `_v2`, plus FlashInfer `_v2` at K = 2048 and 6144, with gq `_v1`.
+- mla-split-part's slots form is shown as refused at `ks-form`, its own count.
+- The `_v2` names aren't in Window 1's `seconds.tsv`, so they count as unmeasured and start first in their groups.
+
+**#8520's programs add nothing to Wednesday's Lean leg: none of its sessions carries a program.**
+- The plan is about 95 statements × 2 sessions (`WARM=1 RUNS=1`), about 190 sessions.
+- Each is verified with `--circuit`, `--public`, `--session`, and `--partition` and `--tables` where present. `--partition` is the 3-field object: format, the program's SHA-512 digest, the query.
+- Lean reads a program only from `--program` (`FlockVerify.lean`), and nothing on this path passes one. That is why the verdict ends `NO_PROGRAM`.
+- **Leg wall time,** on VERIFYFAST-B's model (7 CPU-s plus 14 to 21 CPU-s a GB of circuit, each further session another `Zk.verify`):
+  - The circuits total about 430 GB by file size (74 statements were 333 GB tonight); this is a guess.
+  - That is 6,700 to 9,700 CPU-s at one session, at most twice that at two.
+  - At 8 at once, largest first, about 1 h. The longest call is about 20 min, two sessions of the 28 GB combine.
+  - Restaging under its option (b) takes longer than the verifies.
+- **What #8520 does change is staging:** its `_v2` 64-key blocks took 70 to 81 min at about 200 GB peak, against the 151 GiB I planned. If one is staged, it goes before Gumbel (271 GB), or the two don't fit in 600 GB beside `/dev/shm`.
+
+**KSTEADY (INF-659): my timed rows need cores 64 to 95 and all eight cards only from Wed 01:30Z to 03:00Z, which none of its windows overlaps.**
+- The groups run 12 cores each across all 96, the layout Window 1's seconds were measured in. Staging isn't timed.
+- If vllm moves the GPU window into one of KSTEADY's windows, I'd run 7 groups on cores 0 to 63 and say on the card that its rows ran on 9 cores, not 12.
+- The run's `--timeout` ends it at 03:00Z, when KSTEADY's Wednesday window opens.
