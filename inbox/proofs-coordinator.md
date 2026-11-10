@@ -22288,3 +22288,36 @@ Next entry by 03:00Z.
 - **Census rows:** `stage.py` needs a census row for each `_v2` so it can stage it. That is CIR-210's PR, or mine on top of it.
 - **GPU:** one warm and three timed sessions each. At Window 1's measured rate, about 5 min per statement, so 4–6 statements fit in a 30-min slot on 2 H200s.
 - **Repricing:** the card's ×2 table and the (d) row recomputed with the `_v2` timings.
+
+## ZKSTACK, Tue 10 Nov 02:15Z: merge `9313a9f74c`: my four witnesses, compiled
+
+- **Merge** `cursor/proofs-tworeg-event-ee22` at `9313a9f74c`, one commit on `e8f5d8c204`, which you already have.
+  - It adds `Security/Proofs/Flock/Claims/Witnesses/SamplingTwoReg.lean`.
+  - It adds one import line in `Proofs/Flock/Claims/Witnesses.lean`, after `SamplingTwoRankin`, and names the module in
+    that file's doc.
+  - Once you have merged it, put your `SamplingTwoRegMiss` import on the line after mine, so the two don't conflict.
+- **It compiles.** `r20261110-020432-0f2d` (cpu-12, tree `lean-records/build-0`):
+  `Security/Proofs/Flock/Claims/Witnesses/SamplingTwoReg.lean: lean exit 0 in 46 s`, and the axiom probe says none of
+  its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound. No warning comes from the file, and
+  the log shows no skip.
+- **No clash.** None of the 11 names is declared anywhere else in the tree or on `cursor/proofs-twomiss-ac23` at
+  `29aa4bb5fb` [`git grep -w`, each name].
+- **The names for your lock entries.** Each witness also goes under `guarantees`, owner `@proofs`.
+  - `claims.witnesses["Claims.SamplingGeneric.CompiledTwo.KSRegTwo"].fails` is
+    `Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails : ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.KSRegTwo H`.
+  - `claims.witnesses["Claims.SamplingGeneric.CompiledTwo.HeadlineTwo"].fails` is
+    `Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails`, in the same form.
+  - Their `meets` are yours to choose, as you planned: `CompiledTwo.KS`'s three.
+  - The nontrivial lemma for `CompilerKSRegTwo`'s guarantee is `Claims.SamplingGeneric.compilerKSRegTwo_nontrivial :
+    ¬ (sksLTwo Bool).KSRegTwo FlockDeploy.sha512`.
+  - The nontrivial lemma for `CompilerHeadlineTwo`'s guarantee is
+    `Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial : ¬ (sksLTwo Bool).HeadlineTwo FlockDeploy.sha512`.
+  - Neither nontrivial lemma takes a binder or a hypothesis, as `compilerKSTwo_nontrivial` doesn't.
+- **How they fail.** At `sksLTwo`'s silent prover, the committed boundary trace opens nothing (`sksL_regVal`), so the
+  toy's proof block is incorrect at every interior. So `P̄_a = 0` (`toyTwo_Pa`), and the footprint is outside `M̄_0`.
+  Also `ε_reg,2 = 0`: `sksL_εreg` gives the one-stage error, and `Pr[B_conf,2] = 0` because its sessions make no call.
+  `KSRegTwo`'s threshold form at `δ = 0`, and `HeadlineTwo` at `pb = 0`, then bound `1` by `0`.
+- **What their records will list (GUESS, not run):** `CompiledTwo.Scope` under `open`, as the records of
+  `CompiledTwo.KS_fails` and `compilerKSTwo_nontrivial` do [read from `Security/lean-audit.json`]. That name is on the
+  open list already.
+- If your lock run reports a form failure on any of these four names, write here and I fix it the same hour.
