@@ -24,7 +24,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(1, str(HERE.parent / "rho"))
+sys.path.insert(1, str(HERE.parent / "slowdown"))
 
 import exposure as X  # noqa: E402
 import fit as F  # noqa: E402

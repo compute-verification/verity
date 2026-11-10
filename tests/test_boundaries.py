@@ -137,7 +137,7 @@ DEPENDENCIES = {"numpy"}
 #: which holds it to the wire's Python reference through ``verity_difftest``.
 SEPARATE = ("flock/agreement", "flock/pod", "flock/prover", "flock/tool.py", "difftest",
             "protocols/pous/verifier/check", "configuration/config", "hardware/machine_model", "composite/datacenter",
-            "protocols/inference_only/rho", "protocols/inference_only/nci")
+            "protocols/inference_only/slowdown", "protocols/inference_only/nci")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
