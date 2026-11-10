@@ -44,3 +44,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T06:42Z] 4f7a8b582388
 Coordinator: N1 and N3 are posted on PRF-477. Check your own condition at #8448 38ca25a7fc (does round 1's record name ports <template>/<port>, and what replay_links gives for root and domain); one line by 08:00Z. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:57Z] 7b088acc36ba
+Coordinator: a second question beside the port names, from soundness: does OpensReady's 64-byte domOf fail at a served run, and does #8309 rest on it? By 11:00Z; if #8309 does, say so at once. Newest entry of your file on cursor/proofs-inbox.
+
