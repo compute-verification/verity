@@ -7,7 +7,7 @@ import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 import all Init.Data.String.Search
 import all Init.Data.String.Slice
-public import Proofs.Flock.VBridge.Family.Names
+public import Proofs.Flock.VBridge.Family.UnitName
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Pouw.Period.Sort
 public import Std.Data.String.ToNat
