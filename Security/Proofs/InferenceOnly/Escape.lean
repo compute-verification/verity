@@ -19,7 +19,7 @@ open Verity.Game renaming prPMFReal → prob
 
 namespace InferenceOnly.SecurityProofs
 
-open InferenceOnly.Dampener
+open InferenceOnly.Slowdown
 
 open scoped Classical in
 /-- On a finite outcome space, `prob μ E` is `∑_{ω ∈ E} μ(ω)`. -/
