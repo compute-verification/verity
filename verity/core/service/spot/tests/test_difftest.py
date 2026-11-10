@@ -716,15 +716,17 @@ def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | Valu
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject when the sample's coins don't read
-    (`_coins_of`), on R1-R7, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
+    (`_coins_of`), on R1-R8, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
     verdict that ran and did not accept; undecided when only the verifier is missing or has not run; accept
-    exactly when `audit_record` accepts, with the sampled and proved units, the bounds and the profile."""
+    exactly when `audit_record` accepts, with the sampled and proved units, the bounds, the tied values R8 let through
+    when any (`rests_on_period_check`) and the profile."""
     rec, _ = c
     try:
         coins = _coins_of(p, c, e)
     except CoinError:
         return "reject", "coins"
-    if _registration(p, rec):
+    reg = _registration_verdict(p, rec)
+    if reg.codes:
         return "reject", "registration"
     mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
     if not DR.check_draw(e["draw"], rec, mine).ok:
@@ -742,7 +744,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     profile = audit.profile(rec, e["draw"], p["delta"]).to_json()
     wrong = out["wrong_units"]
     public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
-              "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
+              "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"]),
+              **({"rests_on_period_check": list(reg.rests_on_period_check)} if reg.rests_on_period_check else {})}
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
 
@@ -2294,6 +2297,7 @@ CASES = st.one_of(
     changed_audits([VERDICTS_OF], most=1, least=1).map(_case),
     changed_audits(most=1, least=1).map(_case), changed_audits(most=1, least=1).map(_case),
     changed_audits(most=2, least=2).map(_case),
+    st.deferred(lambda: changed_audits([TIED], 1, 1, READER_SETUPS).map(_case)),  # READER_SETUPS is defined below
     st.builds(lambda a, i, x: FRAMING[i](_case(a), x), changed_audits(most=0), st.integers(0, len(FRAMING) - 1),
               st.integers(0, 63)),
     JSON)
@@ -2331,6 +2335,35 @@ def test_an_accepted_case_is_compared_whole(server):
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         verdict_, line = D.replay(ONE_STAGE, case, server)
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (law, line)
+
+
+def test_an_acceptance_publishes_the_tied_values_r8_let_through(server):
+    """The one-stage answer names the tied values R8 let through (`rests_on_period_check`), Lean's as Python's: over the
+    readers that share `x`, `x` named tied accepts with `["x"]` published, and `x` not named is refused
+    (`R8-shared-input`); over the readers that share none, `x` named tied or not accepts with no key."""
+    for s, shared in zip(READER_SETUPS, (True, True, False)):
+        named, expanded = service.params_law("rate:1/2", s.program, s.query, None)
+        mine = DR.derive(s.program, s.query, named, expanded)
+        rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
+        d = {**mine, "population": s.population, "units": list(range(mine["k"]))}
+        proved = DR.proved(d)
+        evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        params = {"anchors": [], "delta": "1/20", "law": "rate:1/2", "leaf_layer": LEAF, "log": [], "partition": None,
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+                  "work_table": None}
+        sig = _json([[name, t.to_json()] for name, t in s.program.fn.signature()[0]])
+        for tied in (["x"], None):
+            given = params | ({"parameters": sig, "tied": tied} if tied else {})
+            case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": given})
+            verdict_, line = D.replay(ONE_STAGE, case, server)
+            if shared and not tied:
+                assert verdict_ == answer(case)["verdict"] == "reject", line
+                continue
+            got = json.loads(line)
+            assert verdict_ == "accept" and got == answer(case) | {"reason": None}, (shared, tied, line)
+            assert got["public"].get("rests_on_period_check") == (["x"] if shared else None), got["public"]
 
 
 ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)

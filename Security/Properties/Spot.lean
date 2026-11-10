@@ -399,13 +399,15 @@ def drawnNats (draw : Json) : Array Nat :=
 
 /-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
-for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
+for a Bernoulli sample), for a stratified or work sampling design each template's own (`Bound.stratumBound`), and the
+tied values R8 let through (`Registration.tiedThrough`), on whose later check the acceptance rests. -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
-      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
+    tied := Registration.tiedThrough p.verifier }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/
