@@ -39,7 +39,7 @@ inductive R (α : Type) where
 def EOF : String := "unexpected end of input"
 
 /-- `Lean.Json.Parser`'s `USize.size`, at 64 bits. -/
-def USIZE : Nat := 2 ^ 64
+@[noinline] def USIZE : Nat := 2 ^ 64
 
 /-- `ws`: skip tabs, newlines, carriage returns and spaces. -/
 def ws : List Char → Nat → List Char × Nat

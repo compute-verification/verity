@@ -56,6 +56,8 @@ fi
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/gemm-hill}; mkdir -p $R/out
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proofs-bf16-hill}; mkdir -p $FLOCK_WORK/home
 export HOME=$FLOCK_WORK/home FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache}
+# BF16's source (DEFS=, its Gemm_v2 row) names the Definition by id, which circuit-check's catalog binds
+export RESOLVER=${RESOLVER:-verity/ml/flock/pod/catalog.py:definition}
 [ "${STAGE_ONLY:-0}" = 1 ] || [ "${SERVE_ONLY:-0}" = 1 ] && export SM=${SM:-120}
 [ -n "${VERIFIERS:-}" ] && [ "${SERVE_ONLY:-0}" != 1 ] && export FC_VERIFIERS=$VERIFIERS
 POINTS=${POINTS:-1}; [ "${STAGE_ONLY:-0}" = 1 ] && [ "$POINTS" != 0 ] && POINTS=1

@@ -1172,13 +1172,13 @@ class LinkWindows:
     def period_draw(self, stream: S.Stream, roots: Sequence[str], k: int | None, coins: Any) -> dict[str, Any]:
         """The period's sample over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes). Every
-        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
-        count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
-        (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
-        registration. The object is `{format, stream, law, k, population, units, roots, commitment, read}`,
-        `read` the coin bytes the sample read, in order (hex), from which the network verdict's Lean samples its own
-        (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that isn't
-        this link's or holds a registration, roots that aren't n SHA-512 hex digests, and k outside [1, n]."""
+        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n (the rule `rate:k/n`), on `coins`
+        (a callable of a byte count, as a stream's); a coin source with a `commit` method is first committed to the
+        period's digest (`commitment`), so the coins come after every commitment of the period. Call it before the
+        stream's first registration. The object is `{format, stream, law, k, population, units, roots, commitment,
+        read}`, `read` the coin bytes the sample read, in order (hex), from which the network verdict's Lean samples its
+        own (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that
+        isn't this link's or holds a registration, roots that aren't n SHA-512 hex digests, and k outside [1, n]."""
         n = self._period(stream, len(roots) if isinstance(roots, Sequence) and not isinstance(roots, str) else None)
         if stream.log:
             raise ValueError("the period is committed and drawn before the stream's first registration")
@@ -1188,7 +1188,7 @@ class LinkWindows:
         if k is not None and not (type(k) is int and 1 <= k <= n):
             raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
         commitment = self._committed(stream, roots)
-        rule = S.All() if k is None else S.Law(f"subset:{k}")
+        rule = S.All() if k is None else S.Law(f"rate:{k}/{n}")
         if k is not None and callable(getattr(coins, "commit", None)):
             coins.commit(bytes.fromhex(commitment))
         read = bytearray()

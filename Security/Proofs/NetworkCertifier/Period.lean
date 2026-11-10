@@ -66,13 +66,16 @@ theorem asReg_congr {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (
   · rw [h1 g hg hf, h g hg]
   · rw [h1 g hg hf, ← h g hg]
 
-section Deploy
+section Compiled
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+open Claims.SamplingGeneric (Arg Compiled)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col T} {L K S : ℕ}
-    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ} {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
+    {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}
     (hP₀ : D.partition s₀ = some P₀) {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)}
     {op : ℕ → List (Obs L K S) → List Bool} {x : Msg} {w : Wit} {o : List (Obs L K S)}
     (htap : ∀ s, D.parse x = some s → CertifierRegisters H D.commit (lay s) (k s) op s (tops s) o)
@@ -91,8 +94,7 @@ theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col 
   rw [hprog, hlay, hk] at hfits
   exact ⟨hfits, hmem⟩
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+theorem encard_periodGood_le (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
     (hPw : ∀ i, D.partition (sw i) = some (Pw i)) (ρ : Fin n → ℕ → Bool)
@@ -151,13 +153,13 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, from
 `sampledLeak_certifier` with the registered inputs pinned (`adviceIn_asReg`), and `encard_periodGood_le`. -/
 theorem periodLeak : Guarantees.PeriodLeakAccepted := by
-  intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
+  intro Coin _ _ _ A H D hks L K S lay k δ hδ reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
     arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
-  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_certifier H D hks hb L K S lay k δ decode hδ hdec _ Dj
+  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_certifier H D hks hb L K S lay k δ hδ _ Dj
     (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P,
     encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
       schedOf srvOf hs dec hdz x wit tops⟩
 
-end Deploy
+end Compiled
 
 end NetTiming

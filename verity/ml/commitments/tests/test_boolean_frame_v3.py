@@ -33,8 +33,10 @@ PARTS = {
     ("FrameV3Node", (1,)): (166475, 815851, 16050),
     ("FrameV3Node", (2,)): (167630, 818406, 16011),
 }
-#: (D, SCHEMA) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to
-READS = {(1, ROW): 1659755, (13, SEG): 13658304, (17, ROW): 17668695}
+#: (D, SCHEMA) -> the read's gates (`SpecializedDefinition.gates`): the size a unit holding it is cut to. Each SHA-512 compression
+#: is a call of `Sha512CompressFolded`, which XORs its arguments from the bits they hold: more XORs than the compressions' gates
+#: written out (1, 4,242 and 8,515), the same ANDs
+READS = {(1, ROW): 1659756, (13, SEG): 13662546, (17, ROW): 17677210}
 
 
 def _hex(x: str) -> bytes:

@@ -258,7 +258,8 @@ def law_of(params: dict, ell: int) -> dict:
 
 
 def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
-    """P1's Spec of an execution phase at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
+    """P1's Spec of an execution phase at level `ell`: the entries and W committed, the rate K′/N of the level's N padded tiles
+    (`rate:K′/N`, subset:K′ at the level's N, scaled up with any N the prover registers past it), the tile template's
     Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
     (seconds on the challenger's clock from the execution phase's salt coin's release, the ``salt`` request that opens it,
     `Pouw.AcceptsBy`'s td: `REGISTRATION_DEADLINE`), and parameters without one raise `ValueError` (`NO_DEADLINE`)
@@ -268,7 +269,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
+                  selection=S.Law(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -985,7 +986,7 @@ class Challenger:
         """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
         Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = D.parse_design(st.spec.selection.text)
+        law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         codes = self._of_record(name, self.record.registration,

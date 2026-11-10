@@ -51,7 +51,7 @@ def decAt (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg
 
 theorem stepWith_ivstar (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg → Msg) (x : Msg)
     (ms : List Msg) (r : Fin ((S.IVStar V ans).k x) → Coin) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       as.length = t.msgs.length → t.msgs.length + (n + 1) = V.k x →
       stepWith H (replay ms) x () (S.vnAt V ans x r) (n + 1) hist as t =
         { msgs := t.msgs ++ (List.range' t.msgs.length n).map (fun i => (ms.getD i [], Out.msg (ans (coinSeq r i)))) ++
@@ -316,7 +316,7 @@ theorem accFacts (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg 
         simp only [Function.comp, Server.ansAt, show i + 1 < V.k x by omega, ↓reduceIte]
       · simp only [Server.ansAt, show ¬ (V.k x - 1 + 1 < V.k x) by omega, ↓reduceIte]
     unfold Server.openView
-    simp only [Trace.seen]
+    simp only [Transcript.seen]
     rw [hlast]
     simp only [hf, hsnd, zip_range_map _ _ hol, hacc]
 

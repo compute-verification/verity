@@ -68,7 +68,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | --- | --- | --- | --- | --- |
 | network certification (over the period: its execution phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
-| sampled proofs (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
+| SPOT (the audit on the proofs themselves, one-stage v2's, which it reads as blobs; one-stage v1 and the recursive audit, which its soundness doesn't cover, refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
 | the inference-only policy (its check: the registered circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
@@ -147,7 +147,7 @@ Lean to:
   (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage difftest's
   `check`, on v2's audits whose sample at the challenger's coins is empty, those with one break each (`V2_BREAKS`, among
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`
-  (refused as v1's), and the recursive form refused where the case names none of its files;
+  (refused as v1's), and the recursive form's params refused by name, whether or not they name its files;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_baseline`) behind

@@ -324,6 +324,27 @@ def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
     assert "no cached build of an ancestor" in lines[-1]
 
 
+def test_a_build_published_before_a_layout_move_restores_at_the_packages_new_path(s3, tmp_path, lake):
+    """A record is keyed by the package's directory. A move renames it and changes no byte Lake hashes, so until
+    integration publishes a commit after the move, the package's build is the one under its former path."""
+    b, url = s3
+    r, rev = repo(tmp_path)
+    s = stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    sh("git", "mv", "pkg", "moved", cwd=r)
+    lines = []
+    args = (client(url, READ), ["2" * 40, rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    assert not C.restore(r, "moved", *args) and "no cached build of an ancestor" in lines[-1], "no move is recorded"
+    record = r / "tools" / "research" / "src" / "research" / "store" / "moves.json"
+    record.parent.mkdir(parents=True)
+    record.write_text(json.dumps({"moves": [{"paths": {"older/": "pkg/"}}, {"paths": {"pkg/": "moved/"}}]}))
+    assert C.restore(r, "moved", *args)
+    assert f"main's build at {rev[:12]} (published as pkg, before a layout move) restored (1 artifacts;" in lines[-1]
+    assert {p.name: p.read_bytes() for p in lake[1].iterdir()} == {p.name: p.read_bytes() for p in s.iterdir()}
+    assert not C.restore(r, "moved", client(url, READ), [rev], [f"main/leanprover--lean4---v4.34.0/{PLAT}/pkg"],
+                         lines.append, env(url, tmp_path), PLAT, lake[0]), "a quarantined scope stays out"
+
+
 def test_a_tampered_blob_restores_nothing(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
