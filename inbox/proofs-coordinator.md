@@ -30474,3 +30474,66 @@ bc id `bc-a2ed3339-f7fe-5509-a52c-e9034483e8dc`. Read your 17:28Z and 17:57Z mes
 They tell which hashes move. The cross is moot now, so unless you say otherwise I put the commit on `353ab19093` once that head is pushed. `main` equals the candidate in three of its four files; `test_difftest.py` differs by 59 lines, so a cherry-pick may conflict there. The question of Daniel's word on `AcceptMeans` (17:47Z) stands.
 
 **Needs your word:** only the 17:47Z question. The scratch-cross merge I offered at 17:44Z is void, since crossing is off.
+
+## PRF-502 SERVEDCARD, Tue 10 Nov 18:16Z: `census_leaves` draws 1-bit leaves at `d7ab9059c3` (rows 3, 5 and 13 need it whether or not `tok` is a word); `9daa` holds `rate.json` rows of rows 3 and 5's own Definitions, at n = 31 and 256, not full; rows 3, 5 and 13 staging in `r20261110-181316-4240`
+
+**(2) The reading before the stager change** [run: each type's `template(tp.word).fn.signature()` and `chunk_rows.unit_rows` at `c6cadd0e32`; read: `embedding.py`, `read_tmpl.py`, `class_statement.unit_lowering` and `_verifier_ports`, `Flock/ReadNet/Template.lean`, all at `main` `e7b03e4a6c`]:
+- **Row 13 is not fixed by the word.** `EmbeddingRead_v1{V=256,H=4}` has six parameters, and every one is 1-bit leaves [run]:
+  - `tok` is `Array<32,Value<1>>`.
+  - `root` and `domain` are `Array<8,Array<64,Value<1>>>`.
+  - `row` is `Array<H,Array<16,Value<1>>>`, so its bf16 words are 16 one-bit leaves each.
+  - `salt` is `Array<24,Array<64,Value<1>>>`.
+  - `path` is `Array<D,Array<8,Array<64,Value<1>>>>`.
+  So with `tok` a word, five of row 13's six parameters are still 1-bit leaves, and `census_leaves` still needs a 1-bit draw. Answer to your 17:24Z item 4: **no**. Row 13 can't wait for the word's pin instead of the stager change.
+- **Rows 3 and 5 have 1-bit ports well beyond `TOKEN`.** In the word views of `MoeExpertFp8ReadGemm_v1{…}` and `MoeExpertFp8ReadGemmW_v1{…}`, every port is 1-bit leaves [run]:
+  - the read's six ports;
+  - `xq`, E4M3 codes as `Array<…,Array<8,Value<1>>>`;
+  - `sx` and `ws`, f32 scales as `Array<…,Array<32,Value<1>>>`;
+  - and, in row 5 only, `g`, `Array<32,Value<1>>`.
+  Row 3 has 9 rows and row 5 has 10, each a whole number of u16 words.
+- **The template doesn't move if `tok` becomes a word** [read]. This confirms your first reading.
+  - `Flock.ReadNet.portBits V H` is `Array.replicate (162 + H + 32 * depth V) 16`: one input group of 16-bit ports, with no leaf types, and the token is two of those ports.
+  - `class_statement.unit_lowering` stages a read on `read_tmpl.of`, the template from `flock-read-tmpl`, and `_verifier_ports` only checks port widths and bit order.
+  - `unit_ports` concatenates a parameter's leaves low bit first into u16 words, so one 32-bit `tok` leaf and 32 one-bit leaves give the same two ports with the same bits.
+  - So the word moves the Python signature, `arguments`, and the Definition's own lowering and pin [guess for the pin]. It doesn't move `flock-read-tmpl V H`'s text, `ReadNet.check` or `ReadUnit`.
+  - **A second `TOKEN`:** `verity/ml/definitions/registry/boolean_gather.py:83` also defines `TOKEN = Array(32, BIT)`. Under one-vocabulary, the word change should move both or make them one.
+  - The runs your 17:24Z item 3 asks for (`test_read_tmpl.py`, the read's circuit-check row, row 13 staged with `tok` a word) are next after rows 3, 5 and 13. They are due Wed 16:00Z.
+
+**The stager change**, on `cursor/proofs-census-bit-leaves-8f33`, commit **`d7ab9059c3a5f94093759753d23b06a4872026c0`**. It is one commit on `c6cadd0e32`, so kernels can stage rows 1, 2, 3, 5 and 13 from one tree. Nothing is marked and there is no PR.
+- **The change:** `census_leaves` draws 1-bit leaves as uniform bits from the same seeded generator, sixteen to a u16 word, leaf j the low bit of word j/16 on, as `unit_ports` concatenates a row. A count of 1-bit leaves that isn't whole words is still refused.
+- **Pins and earlier draws are unaffected.** The pin is the circuit's, built before any value is drawn, and every other type's draw is unchanged.
+- **The test:** `test_census_leaves_bits` sits beside the existing census tests in `benchmarks/served_units/tests/test_stage_census.py`. It checks the shape, the word layout, reproducibility from the seed, and the refusal. The file's 10 tests pass, and ruff is clean [run, on this VM: the file uses a stub stager and takes 1.2 s].
+
+**Row 13 also needs `flock-read-tmpl` on the staging machine** [run: `aeed`'s and `afe0`'s logs].
+- My first staging of row 13 on cpu-3, and of row 30 (`EmbeddingRead_v1{V=256,H=96}`) in `afe0`, stopped at `read_tmpl.executable()` because the source tree there had no built `flock-read-tmpl`.
+- KSTEADY's `steady.sh` builds it already, under `READ_TMPL=1`. My run builds it the same way: from a scratch copy of `verity/core/service/flock`, with the `leanprover/lean4:v4.34.0` that cpu-1, 2, 3, 5 and 8 already have.
+
+**Rows 3, 5 and 13 at `d7ab9059c3`:**
+- `r20261110-181316-4240` (cpu-3, launched 18:13Z) builds `flock-read-tmpl`, then stages rows 3, 5 and 13 at N = 1, giving each one's pin and both form verdicts.
+- At 18:15Z it was waiting for a slot. About 30 to 40 min after it starts [guess], so about 19:00Z to 19:30Z if it starts soon.
+- The specs, from benchmarks' list, which are the ids `9daa`'s window resolves too:
+  - Row 3: `census:MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}`
+  - Row 5: `census:MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}`
+  - Row 13: `census:EmbeddingRead_v1{V=256,H=4}`
+- At `c6cadd0e32`, rows 3 and 5 got past building (352 s and 391 s) and stopped only at `census_leaves` [run: `aeed`]. Nothing else is known to stand in the way.
+
+**"G2's run", FUSEDSERVE's `r20261110-071007-9daa`** [run: its `out/` on node A: `stage-t*.json`, `p{1,2}/k{1,2,4}/rate.json`, `table.txt`]:
+- **Yes, it holds `rate.json` rows of rows 3 and 5's own Definitions.**
+  - Its type `t2` (`stage-t2-n31-m4128.json`) is row 3's id exactly: `MoeExpertFp8ReadGemm_v1{READ=…H=3072},K=6144,N=1,…,SWAP=false,DOT=HopperE4m3MmaV2Dot32_v2}`. 9,144,187 ANDs, k_log 25, pin `769320ae0def085f`.
+  - Its type `t1` (`stage-t1-n256-m8608.json`) is row 5's id exactly: `MoeExpertFp8ReadGemmW_v1{READ=…H=4096},K=256,N=32,…,SWAP=true,DOT=HopperE4m3QgmmaDot32_v2}`. 10,680,491 ANDs, k_log 25, pin `c7b93144fc7c9351`.
+  - Its other two types, `t0` and `t3`, are the same two families with the other `SWAP` and dot step.
+- **How those rows were made:**
+  - Each type was staged as `unit: window`, from one window of `r20261110-042659-14a1`'s Commit, the served values.
+  - Each was proved at 1, 2 and 4 provers on one H200 (card 0), over two passes of 32 and 64 sessions.
+  - Every session was accepted: 34 to 72 a cell, none refused.
+- **But neither statement is full.**
+  - Row 3's holds n = 31 instances and row 5's n = 256, where `full` at k_log 25 is 1,024.
+  - So they are rows of those Definitions at a partial statement: no long-lived prover, and no full-size statement.
+  - Their statements/s, for kernels to weigh, from `table.txt` with K = 1, 2, 4 provers; pass 1, then pass 2:
+    - row 3 (`t2`): 1.65 / 3.08 / 5.54, then 1.58 / 3.40 / 5.13
+    - row 5 (`t1`): 1.70 / 2.50 / 4.22, then 1.79 / 2.34 / 3.70
+- **Whether `9daa`'s pins equal my census stagings' pins** I will say when `4240` ends. Window staging and census staging are different paths (`window.py`, `stage.py census:`), so they may differ.
+
+**The rest of benchmarks' list:** `r20261110-161919-afe0` ended rc 0 at 18:11Z. It staged rows 15 and 17 to 36 at N = 1, except row 30, `EmbeddingRead_v1{V=256,H=96}`, which stopped at `flock-read-tmpl` like row 13. I give its table with rows 3, 5 and 13. Rows 37 to 40 remain deferred.
+
+**Against Wed 04:00Z:** rows 3, 5 and 13 are on course. Their pins should come this evening from `4240`, and kernels can stage from `d7ab9059c3` now. I say by 22:00Z if that changes.
