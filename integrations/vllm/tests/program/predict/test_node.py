@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.program import RUN, input_id, is_input, is_registered
+from verity.circuits.program import RUN, input_id, is_input, is_registered
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program, check_ranks
@@ -67,7 +67,7 @@ def _joined(node, ranks: list, check_leaves: bool) -> None:
 
 
 def _runs(c):
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.refs import runs
     return runs(c.refs)
 
 

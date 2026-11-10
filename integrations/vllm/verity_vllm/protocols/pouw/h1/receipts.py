@@ -68,11 +68,11 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
-from verity.core.protocols.pouw import credit as CR
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.ml.protocols.pouw.circuit import seeds as SD
-from verity.ml.protocols.pouw.circuit import segment as SG
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.prover.circuit import segment as SG
 
 M32 = (1 << 32) - 1
 R = C_ = 32
@@ -113,8 +113,8 @@ def noise_blocks_cpu(seeds: list[bytes], n: int) -> torch.Tensor:
 
 def noise_cubin(arch: str) -> Path:
     """`NOISE_CU` built with the nvcc on the path for ``sm_<arch>`` (``"90"``: an H200, ``"120"``: an RTX PRO 6000) into a
-    cubin, with `verity.ml.kernels`' ``sha512.cuh``, in the integration's build cache (`row_tables_device.built`)."""
-    from verity.ml import kernels
+    cubin, with `verity.definitions.kernels`' ``sha512.cuh``, in the integration's build cache (`row_tables_device.built`)."""
+    from verity.definitions import kernels
 
     from verity_vllm.commit import row_tables_device as RTD
 

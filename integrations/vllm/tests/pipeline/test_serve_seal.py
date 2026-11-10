@@ -488,7 +488,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     """registration.json's compiler digest is the one PROVE-PATH's capped re-commit binds: `advice_windows.Capped`'s formula."""
     import hashlib
 
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     from verity_vllm.pipeline import advice_windows as AW
     from verity_vllm.program.predict import steps as ST
 

@@ -24,12 +24,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import runs
-from verity.ml.circuits.types import Array, Tuple as TupleT, Value
-from verity.ml.definitions.registry import dsa_topk_mask as M
-from verity.ml.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.circuits.refs import runs
+from verity.circuits.types import Array, Tuple as TupleT, Value
+from verity.definitions.registry import dsa_topk_mask as M
+from verity.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
 from verity_vllm.check.batch import own
 from verity_vllm.engine.profiles.engine_classes import CLASS_G_SERVED, DSA_TOPK_ENV
 from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
@@ -324,7 +324,7 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     `edge.ik` and `edge.iks` one field each.  Each window's Program selects the top-k of the rows it computes past INDEX_TOPK, and
     the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them.  What no cheaper
     test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
-    from verity.ml.circuits.types import field_types
+    from verity.circuits.types import field_types
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
@@ -390,7 +390,7 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     request left mid-prompt has no `edge.last`.  What no cheaper test can: that a served class G prefill, the 131,072-token
     prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only because the served Commit
     doesn't commit the edge."""
-    from verity.ml.circuits.types import field_types
+    from verity.circuits.types import field_types
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps

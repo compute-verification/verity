@@ -7,7 +7,7 @@ each scheduler, commits the same rows under the same rows-sha512 roots, and ever
 
 `ab` serves SERVE-OPENAI-ARGS (``--run-id``, ``--admit release-order``, a bench row, the Commit's options, ``--window-steps
 1``) twice, synchronously and then with ``--async-scheduling``, each a `serve` of this module in its own process, and sends
-each the same ``--batches`` loads of ``examples/vllm/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
+each the same ``--batches`` loads of ``workloads/vllm/serve_load.py --fixed``: ``--requests`` requests of ``--prompt-ids``
 ids for one step, the learn-only warm-up's static shape (`serve_learn.shape_of`), each batch its own release run and seed.
 A step's rows-sha512 root binds its salt key, fresh from the OS generator in a served run, the run id and the row's
 Program, so `serve` runs serve-openai with the step keys derived from ``--row-key-seed`` (`fixed_row_keys`) and the bench
@@ -26,7 +26,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-LOAD = Path(__file__).resolve().parents[4] / "examples" / "vllm" / "serve_load.py"
+LOAD = Path(__file__).resolve().parents[4] / "workloads" / "vllm" / "serve_load.py"
 
 
 def fixed_row_keys(seed: str) -> None:

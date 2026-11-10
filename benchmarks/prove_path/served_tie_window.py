@@ -39,8 +39,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.core.protocols.certifier import served_rows as SR
-from verity.ml.protocols.certifier import served_statics as SS, served_tie as ST
+from verity.protocols.certifier.verifier import served_rows as SR
+from verity.protocols.certifier.prover import served_statics as SS, served_tie as ST
 
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 RECORD_KEYS = ("schema", "binding", "root", "count", "n_bits")

@@ -1,17 +1,17 @@
-"""Pure-`verity.ml.circuits` frontend analyses (no torch): dead gates (§8.6), correspondence across reference
+"""Pure-`verity.circuits` frontend analyses (no torch): dead gates (§8.6), correspondence across reference
 encodings (§8.5), the registry version record (§8.1). Runs locally."""
 
 from __future__ import annotations
 
-from verity.ml.circuits import Program, bind
-from verity.ml.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
-from verity.ml.circuits.liveness import dead_gates
+from verity.circuits import Program, bind
+from verity.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
+from verity.circuits.liveness import dead_gates
 from verity_vllm.program.frontend.correspond import compare_bodies, correspond
 from verity_vllm.program.frontend.provenance import registry_version
-from verity.ml.circuits.refs import Coll, Concat, Strided, array_of
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry.prims import F32
-from verity.ml.circuits.types import Array
+from verity.circuits.refs import Coll, Concat, Strided, array_of
+from verity.definitions.registry import b1
+from verity.definitions.registry.prims import F32
+from verity.circuits.types import Array
 
 from tests.program.test_running_example import Id16, Relu16, make_program
 
@@ -123,4 +123,4 @@ def test_registry_version_is_stable_and_names_the_vocabulary():
     v1, v2 = registry_version(), registry_version()
     assert v1["digest"] == v2["digest"] and len(v1["digest"]) == 64
     assert v1["primitives"] > 20 and v1["composites"] >= 20
-    assert set(v1["sources"]) == {"verity.ml.definitions.registry.prims", "verity.ml.definitions.registry.b1"}
+    assert set(v1["sources"]) == {"verity.definitions.registry.prims", "verity.definitions.registry.b1"}
