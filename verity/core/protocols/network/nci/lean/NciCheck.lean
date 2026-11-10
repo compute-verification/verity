@@ -7,6 +7,9 @@ public import NciCheck.DescDifftest
 public import NciCheck.DescLiveness
 public import NciCheck.DescFuzz
 public import NciCheck.Baseline
+public import NciCheck.Record
+public import NciCheck.RecordCount
+public import NciCheck.RecordDifftest
 public import NciCheck.BaselineDifftest
 public import NciCheck.Protocol
 public import NciCheck.Count
@@ -28,6 +31,14 @@ Program shapes past anything `NciCheck.Desc` walks one by one, and `NciCheck.Des
 statements their agreement rests on, and the agreement itself. Code: it reads the Program with Flock's
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
+
+`NciCheck.Record` is the policy's check of an execution phase's circuit record, whose Program holds no registered
+weight and no wire between its units: it reads the record's wires through SPOT's reader (`Spot.Wires`, with
+`Flock.TemplateQuery` the package's other import for it), classes every input row of every unit once, takes one
+summary and decides the rate rule on it, counting as θ only what the registration log registers at the start of the
+deployment. `NciCheck.RecordCount` is the count of `(c, k)`-inference blocks on that summary. Both are a library: no
+executable, protocol or verdict reads them. `NciCheck.RecordDifftest` holds them to the Python reference, and the
+wiring the form reads to the one SPOT's reader reads.
 
 `NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
 the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).
