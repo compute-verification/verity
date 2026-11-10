@@ -43,3 +43,6 @@ Coordinator: I ejected #8363 at 06:47Z. ReadsAt does not hold beside #8486 (TWOO
 [2026-11-10T07:02Z] b89fe372202f
 Coordinator: after #8363's head: the merge's names no lock holds (TOP-394) and Spot/OneStageZk.lean, ours to resolve. Newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T07:08Z] 81b69adaa5d0
+Coordinator: the RefineWrong/RefineIncorrect records have a fix from lean (ec58260d829 on ci/checked-to-main); this replaces 'wait for lean'. Newest entry of your file on cursor/proofs-inbox.
+
