@@ -58,10 +58,12 @@ worker_gb = 8
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
 # the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/frontend/seed_rule.py's sidecar builds the
 # served seed rule, whose domain tag and derivation are served_seed's.
+# pouw/window.py: circuit/window_statement.py imports it (the statement on words and the entry row's layout), so building
+# its unit reads it, and the catalog's records digest it as an import site of the PoUW modules they hold
+# (`units._unchanged`).
 # Read only to check the catalog's records (conftest.py):
-# pouw/window.py and spot/service.py, which the records digest as import sites of the PoUW modules they hold
-# (`units._unchanged`), and which a whole build never imports, with spot/second_stage.py, which service.py imports, and
-# spot/schedule.py, which second_stage.py imports.
+# spot/service.py, which the records digest as such an import site too and which a whole build never imports, with
+# spot/second_stage.py, which service.py imports, and spot/schedule.py, which second_stage.py imports.
 # pouw/weights.py and spot/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py and
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
