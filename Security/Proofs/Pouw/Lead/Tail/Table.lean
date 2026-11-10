@@ -112,7 +112,7 @@ theorem table_tail {L : Pouw.Lead.Layout} (he : L.e = 7) (htile : L.tile = 64) (
   have hr : ((univ.filter fun ω : Coins L => 0 < tableHits L κ σ stream ω).card : ℝ) ≤
       (tableTail L : ℝ) * Fintype.card (Coins L) := by
     exact_mod_cast hq'
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card (Coins L)) with h0 | hpos
   · rw [h0, Nat.cast_zero, div_zero]
     unfold tableTail

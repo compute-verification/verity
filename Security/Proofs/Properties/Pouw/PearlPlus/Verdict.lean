@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.PearlPlus
-public import Proofs.Properties.Evaluate
+public import Proofs.Properties.Core.Evaluate
 public import Proofs.Properties.Pouw.Commit
 
 /-!

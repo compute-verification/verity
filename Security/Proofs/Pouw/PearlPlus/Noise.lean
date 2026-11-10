@@ -16,13 +16,13 @@ public import Mathlib.Algebra.Order.BigOperators.Group.List
 public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Pouw.PearlC.Peel
 public import Proofs.Pouw.PearlC.PeelExactProofs
-public import Proofs.Properties.Evaluate
+public import Proofs.Properties.Core.Evaluate
 
 /-!
 # Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s
 
 The check hashes with the compiled SHA-512 every tree reads (`Flock.Sha512.hash`) and keys a row's seed by its
-`sha512/row-seg/v1` digest (`Flock.HmRow.segDigest`). The deployed semantics (`sha512Sem`) draws the same lines through the
+`sha512/row-seg/v1` digest (`Flock.HmRow.segDigest`). The deployed semantics (`sha512Sem`) samples the same lines through the
 spec's SHA-512 (`Pouw.PearlC.Sha512.digest`) and row digest (`NoiseSha512.rowDigest`). Each statement here says the
 check's value is the spec's on the same bytes, and where the check returns a value, the spec's line or seed is it.
 -/
