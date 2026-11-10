@@ -34335,3 +34335,28 @@ The first two are the commands `pins.py` holds for `randomness_lean.json` and `i
 **What the rows rest on**
 - The manifest's digest is of the mover's bytes on the map I name above. If a later head moves a Lean package's directory, rows 41, 45 and 47 need the digest again: `sha256sum Security/Proofs/lake-manifest.json` on the move commit. `tools/fixture_digests.py REPO REV` on the staging's hand-lines commit says in one line a fixture whether every recorded input matches.
 - In our file now, REPORT.md's 8 to 39 are rows 7 to 38, its 41 to 47 are rows 39 to 45, and the new rows are 46 to 49.
+
+## PRF-522 PUBUNITS, Tue 10 Nov 23:21Z: started; branch `cursor/proofs-remote-publicunits-537a` is pushed at `f2090e464bd925aa65c52a6d389d70193177b0f9` on the base `97876e5336e1`; `tests/test_flock_json.py` passes at its head on my VM; no node run yet
+
+**Who and where**
+- Agent `bc-d32d98f1-391e-5b44-82ab-70ebfc3214e1`. Mailbox `inbox/bc-d32d98f1-391e-5b44-82ab-70ebfc3214e1.md` on `cursor/proofs-inbox`.
+- Branch `cursor/proofs-remote-publicunits-537a`, one commit `f2090e464bd925aa65c52a6d389d70193177b0f9`, on the base's tip `97876e5336e1f0a7c746f8ce0dff6cb0e1f74ade` (`cursor/lean-remote-merge-fc8d` as fetched at 23:13Z) [run].
+
+**The change: the one call replaced, with its import**
+- `Spot/PublicUnits.lean`: `Json.parse text` is now `Flock.JsonParse.parse text`. The file gains `public import Flock.JsonParse` and `meta import Flock.JsonParse`, as `Spot/FilePart.lean` has them. One docstring names the parser. Nothing else moved [run: `git show --stat`, 1 file, 5 lines added, 2 removed].
+- Why this and not `FilePart.header`: `FilePart.header` refuses with `the public file's header is not JSON: offset N: …` and keeps `Flock.norm` of the value. The side's `unitIndices` refuses with `the public file's header is not JSON`. The one call keeps that string and the value as they were [read].
+- The two files now hold two readers of the same header: `PublicUnits.headerLine` and `unitIndices`, and `FilePart.headerLine`, `header`, `indicesOf` and `unitIndices`. On the base nothing calls `PublicUnits.unitIndices` or `PublicUnits.headerLine` but that file's own three `#guard` lines; the `public_units` piece reads `exactly` only [read: `rg` over every tracked `.lean` and `.py`].
+
+**What ran, on my VM only**
+- `uv run pytest tests/test_flock_json.py` at `f2090e464bd9`: 3 passed [run].
+- The same at the base `97876e5336e1`: 1 failed, 2 passed; the failure names `Spot/PublicUnits.lean:31 (unitIndices)` [run].
+
+**Importers** [read: the reverse import closure over every tracked `.lean`]
+- Inside spot: `Spot.lean`, `Spot/Pieces.lean`, and through `Pieces` `Spot/DifftestMain.lean` and `Spot/VerifierMain.lean`.
+- Outside spot: `benchmarks/verifier_cost/registration/Main.lean` and `benchmarks/verifier_cost/whole_run/Main.lean`, each `import Spot`, each built by its `.sh` in a scratch package.
+- No module under `Security/` imports `Spot.PublicUnits`, `Spot.Pieces` or `Spot`. No package that requires `core_spot` does either.
+
+**Plan, next 30 minutes**
+- Run 1, on a node: `tools/verity/lean/check.py --build verity/core/service/spot` at the head. A pass says the package builds and its lock stands as committed.
+- Run 2, on a node: `tests/test_flock_json.py`, the suite's `test_a_piece_agrees[public_units]`, and the two benchmark files built against the head.
+- Then the LEAN-249 comment, once the spot package builds.
