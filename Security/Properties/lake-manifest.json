@@ -154,13 +154,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-<<<<<<< 99c8914848
-   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../sampled_proofs/../../difftest/lean",
-||||||| merged common ancestors
-   "../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../difftest/lean",
-=======
-   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../spot/../../difftest/lean",
->>>>>>> 7af4d24fca3e
+   "../../verity/core/protocols/onsite/../remote/../pouw/lean/pearlplus/../window/../../../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -168,7 +162,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote/../pouw/lean/check/../window/../commit/../../../../primitives/randomness",
+   "../../verity/core/protocols/onsite/../remote/../pouw/lean/pearlplus/../window/../commit/../../../../primitives/randomness",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -176,13 +170,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-<<<<<<< 99c8914848
-   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../sampled_proofs/../../primitives/lms/lean",
-||||||| merged common ancestors
-   "../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../primitives/lms/lean",
-=======
-   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive/../../spot/../../primitives/lms/lean",
->>>>>>> 7af4d24fca3e
+   "../../verity/core/protocols/onsite/../remote/../pouw/lean/pearlplus/../window/../../../../service/spot/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -190,7 +178,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote/../pouw/lean/check/../window/../commit/../../../../primitives/identity",
+   "../../verity/core/protocols/onsite/../remote/../pouw/lean/pearlplus/../window/../commit/../../../../primitives/identity",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -225,14 +213,6 @@
    "inputRev": "5ed2965256430c3649e86755f9576b54eca72435",
    "inherited": true,
    "configFile": "lakefile.lean"},
-  {"type": "path",
-   "scope": "",
-   "name": "core_vstar_recursive",
-   "manifestFile": "lake-manifest.json",
-   "inherited": true,
-   "dir":
-   "../../verity/core/protocols/onsite/../remote/../../service/vstar/recursive",
-   "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/plausible",
    "type": "git",
    "subDir": null,

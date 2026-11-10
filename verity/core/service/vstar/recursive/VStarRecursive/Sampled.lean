@@ -102,15 +102,6 @@ def main : List String → IO UInt32
 
 #guard (paramsOfJson (Json.mkObj [("form", "two-stage")])).toOption.isNone
 #guard (evidenceOf "{\"form\":\"recursive\"}".toUTF8).toOption.isNone
-<<<<<<< ours
-#guard match paramsOfJson (Json.mkObj [("form", ONE_STAGE), ("law", Json.mkObj [])]) with
-  | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
-  | .ok _ => false
-#guard match evidenceOf "{\"form\":\"one-stage\",\"verdicts\":{}}".toUTF8 with
-  | .error e => e == s!"the evidence names no proofs: {V1_REFUSED}"
-  | .ok _ => false
-||||||| base
-=======
 #guard match paramsOfJson (Json.mkObj [("form", ONE_STAGE), ("law", Json.mkObj [])]) with
   | .error e => e == s!"the parameters name no proofs: {V1_REFUSED}"
   | .ok _ => false
@@ -120,6 +111,5 @@ def main : List String → IO UInt32
 #guard match paramsOfJson (Json.mkObj [("form", RECURSIVE), ("recursive", Json.mkObj [])]) with
   | .error e => e == RECURSIVE_REFUSED
   | .ok _ => false
->>>>>>> theirs
 
 end VStar.Recursive.Sampled

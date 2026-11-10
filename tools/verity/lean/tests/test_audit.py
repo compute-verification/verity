@@ -3627,27 +3627,12 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     old = sha("before the move")
     moved = facts(pins={"P.sound": f["pins"]["P.sound"] | {"moved": {"sha256": old}}}, own_modules=sorted(WOWN))
     was = {**bare, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": old}}, "unwitnessed": {"P.sound": old}}
-<<<<<<< 99c8914848
-    assert witness_codes(was, moved) == [], "one `--update --moved` run passes on a moved guarantee's old entry"
-||||||| merged common ancestors
-    assert witness_codes(was, moved) == ["witnesses.unwitnessed-changed"]
-=======
     assert witness_codes(was, moved) == []
->>>>>>> 7af4d24fca3e
     assert A.unwitnessed_kept(was, moved, {}) == {"P.sound": h}
-<<<<<<< 99c8914848
-    assert witness_codes({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved) == \
-        ["witnesses.unwitnessed-changed"], "a moved guarantee whose statement changed still carries its witnesses"
-    assert witness_codes({**was, "unwitnessed": {"P.sound": sha("y")}}, moved) == ["witnesses.unwitnessed-changed"]
-    assert A.unwitnessed_kept({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved, {}) == {}
-||||||| merged common ancestors
-    assert A.unwitnessed_kept({**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}, moved, {}) == {}
-=======
     stale = {**was, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": sha("x")}}}
     assert witness_codes(stale, moved) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(stale, moved, {}) == {}
     assert witness_codes({**was, "unwitnessed": {"P.sound": sha("other")}}, moved) == ["witnesses.unwitnessed-changed"]
->>>>>>> 7af4d24fca3e
 
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
