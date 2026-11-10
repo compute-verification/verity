@@ -4163,6 +4163,58 @@ def test_the_quick_tier_runs_on_the_heads_merge_onto_mains_tip_and_a_head_that_d
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+#: the Lean audit (`LEAN_AUDIT`) as the tier runs it: records its arguments, the commit it ran at and whether the suites ran yet,
+#: and fails with a last line when FAKE_AUDIT_FAIL is set
+FAKE_AUDIT = """\
+import json, os, subprocess, sys
+head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+with open(os.environ["FAKE_AUDIT_SEEN"], "a") as f:
+    f.write(json.dumps({"argv": sys.argv[1:], "head": head, "suites_ran": os.path.exists(os.environ["FAKE_SEEN"])}) + "\\n")
+print("audited what the change reaches")
+if os.environ.get("FAKE_AUDIT_FAIL"):
+    print("Pkg.A: unknown identifier 'x'")
+    sys.exit(1)
+"""
+
+
+def test_a_change_that_touches_lean_is_marked_only_after_the_lean_audit_passes_on_its_merge_onto_main(world, monkeypatch,
+                                                                                                         capsys):
+    """The Lean audit on the merge publishes what the audit of the candidate landing it stages: it runs in the tier of a change
+    that touches Lean, on its merge onto `main`'s tip and before the suites, and a failure refuses the mark.  A change that
+    touches no Lean runs none, and neither does any change while `LEAN_AUDIT` is None."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "audit.py": FAKE_AUDIT})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    world.gh.put(1, h1 := world.change({"Pkg/A.lean": "theorem a : True := trivial\n"}), ready=False)
+    world.gh.put(2, world.change({"a.txt": "a1\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    seen, suites = world.tmp / "audits.jsonl", world.tmp / "seen.json"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setenv("FAKE_SEEN", str(suites))
+    monkeypatch.setenv("FAKE_AUDIT_SEEN", str(seen))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    monkeypatch.delenv("FAKE_AUDIT_FAIL", raising=False)
+    tier = Q.QuickTier(world.dev, str(world.origin), root=world.tmp / "ready")
+
+    assert Q.LEAN_AUDIT is None and tier(world.gh.prs[1]) is None and not seen.exists()
+    monkeypatch.setattr(Q, "LEAN_AUDIT", [sys.executable, "audit.py"])
+    assert tier(world.gh.prs[2]) is None and not seen.exists()
+    suites.unlink()
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    [ran] = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert ran["argv"][:3] == ["--base", moved, "--out"] and not ran["suites_ran"] and suites.exists()
+    assert _git(world.dev, "rev-parse", f"{ran['head']}^1", f"{ran['head']}^2").split() == [moved, h1]
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
+
+    monkeypatch.setenv("FAKE_AUDIT_FAIL", "1")
+    world.gh.put(1, h3 := world.change({"Pkg/A.lean": "theorem a : True := x\n"}, base=h1), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 1
+    assert "the quick tier failed: the Lean audit on the merge exited 1: Pkg.A: unknown identifier 'x'" in capsys.readouterr().err
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h3) is False
+
+
 def _move_main(world: World, files: dict[str, str]) -> str:
     moved = world.change(files)
     _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
@@ -4507,6 +4559,34 @@ def test_a_remote_tier_on_a_merge_onto_main_reports_the_head_it_merged_and_judge
     _git(world.dev, "worktree", "add", "-q", "--detach", str(wt := world.tmp / "not-a-merge"), h1)
     facts = quick_tier.tier(wt, world.tmp / "q", h1, moved, ["true"], merged=main)
     assert facts["error"] == f"{h1[:12]} isn't {main[:12]} merged onto {moved[:12]}" and facts["merged"] is None
+
+
+def test_a_remote_tier_runs_the_lean_audit_on_the_merge_it_ships(world, monkeypatch):
+    """`LEAN_AUDIT` reaches the machine's quick_tier.py as `--lean-audit`, shell-quoted, and runs in the shipped merge."""
+    from research import queue as Q
+
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "audit.py": FAKE_AUDIT})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    machine = Machine(world.tmp)
+    tier, _ = _remote_tier(world, monkeypatch, machine)
+    world.gh.put(1, h1 := world.change({"Pkg/A.lean": "theorem a : True := trivial\n"}), ready=False)
+    moved = _move_main(world, {"m.txt": "main moved\n"})
+    seen = world.tmp / "audits.jsonl"
+    monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
+    monkeypatch.setattr(Q, "LEAN_AUDIT", [sys.executable, "audit.py"])
+    monkeypatch.setenv("FAKE_SEEN", str(world.tmp / "seen.json"))
+    monkeypatch.setenv("FAKE_AUDIT_SEEN", str(seen))
+    monkeypatch.delenv("FAKE_FAIL", raising=False)
+    monkeypatch.delenv("FAKE_AUDIT_FAIL", raising=False)
+
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    flags = machine.launched[-1]
+    rid = flags[flags.index("--id") + 1]
+    [ran] = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert ran["argv"] == ["--base", moved, "--out", str(machine.root / "runs" / rid / "out" / "lean-audit")]
+    facts = json.loads((machine.root / "runs" / rid / "result.json").read_text())["tier"]
+    assert (facts["merged"], facts["audit"]["rc"], facts["audit"]["command"]) == (h1, 0, [sys.executable, "audit.py"])
+    assert ran["head"] == facts["head"]
 
 
 JUDGE_REFUSALS = {

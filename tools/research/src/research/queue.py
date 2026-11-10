@@ -168,7 +168,8 @@ and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR 
 marked head's, as a merge of `main` that changes no file leaves it, without a tier), and only after the quick tier passes on that
 head merged onto `main`'s tip as the loop merges it (`onto_main`; the head itself when it holds that tip): `suites.py --quick` on
 the suites the PR changes (with the slow tests of the test modules it reaches, and the vLLM
-reference regression, as check runs it), from a clean checkout, either as a `research run` on a machine (`--on`,
+reference regression, as check runs it), after the Lean audit on that merge of a change that touches Lean (`LEAN_AUDIT`, which
+publishes what it builds for the candidate's audit), from a clean checkout, either as a `research run` on a machine (`--on`,
 `RemoteQuickTier`: in one of its check slots, so several PRs' tiers run at once and the caller only waits) or here (`--local`,
 `QuickTier`); a failure refuses and names the tests, and a remote run whose result can't be read, or that reports another head, is a
 failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and the after-landing run is the head's first full check.  Draft state is ignored: agents open PRs as drafts, and
@@ -3498,6 +3499,19 @@ QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu",
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
 LEAN_BUILDS = ("verity/core/service/flock",)
+#: the Lean audit on the merge, for a change that touches Lean (`lean_audit`): run from the root of the tier's checkout, after
+#: `LEAN_BUILDS` and before the suites, with `--base {main's tip} --out DIR` (`quick_tier.py --lean-audit`), it audits what the
+#: change reaches and publishes the modules it builds and its replay entries, which the audit of the candidate landing that merge
+#: stages.  Exit 0 passes; else its last line says why, and the mark is refused.  None, no audit, while it isn't on `main`
+LEAN_AUDIT: list[str] | None = None
+
+
+def lean_audit(repo: Path, base: str, at: str) -> list[str] | None:
+    """`LEAN_AUDIT` when it is set and the change from ``base`` to ``at`` touches a Lean input (a file ending in `LEAN_SOURCES`, or a
+    lock), else None."""
+    if LEAN_AUDIT and any(f.endswith(LEAN_SOURCES) or Path(f).name == LEAN_LOCK for f in changed(repo, base, at)):
+        return LEAN_AUDIT
+    return None
 
 
 def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
@@ -3556,7 +3570,8 @@ class QuickTier:
         try:
             with self._checkout(pr) as (wt, at, base):
                 out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
-                doc = quick_tier.tier(wt, out, at, base, QUICK_TIER, LEAN_BUILDS, merged=None if at == pr.head else pr.head)
+                doc = quick_tier.tier(wt, out, at, base, QUICK_TIER, LEAN_BUILDS, merged=None if at == pr.head else pr.head,
+                                      audit=lean_audit(self.repo, base, at))
                 return quick_tier.judge(doc, at, covers=allowed(self.repo, base))
         except TierRefused as e:
             return str(e)
@@ -3700,8 +3715,10 @@ class RemoteQuickTier(QuickTier):
         rid = R.new_run_id()
         try:
             with self._checkout(pr) as (wt, at, base):
+                audit = lean_audit(self.repo, base, at)
                 args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
-                        *([] if at == pr.head else ["--merged", pr.head]), "--", *QUICK_TIER]
+                        *([] if at == pr.head else ["--merged", pr.head]), *(["--lean-audit", shlex.join(audit)] if audit else []),
+                        "--", *QUICK_TIER]
                 opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
                 r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
                                  "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
