@@ -263,15 +263,15 @@ def output_premise(k: float, map_width: float, map_width_min: float, b: float, b
 
 
 def cut(k: float, b_w: float, b_a: float, outputs: float) -> float:
-    """`Nci.Cut.Guarantees.HE` a block (`min_cut.cap`): `((B + √(B² + 4 (k + α))) / 2)²` products, with
-    `α = ½ √(k³ / (q b))`, `B = (k/2) √(o / q)` and `q = β_w β_x`, on a work of forward and input-gradient products
-    (two of the three kinds, so `F = 1`). A word's own wires are a cut, so no value costs more than its width: a weight
-    value costs `β_w = b_w`; an activation value (H)'s `β(k)` (`min_cut.beta`), at most its `b_a` bits; an output is
-    an activation, so (E)'s `b = b_a` and `o = outputs · b_a` wires a product. No cap past `β(k)`'s last `k`. That
-    the work's values are distinct words and no two of its matmuls share both operands' values is assumed, not
-    checked."""
+    """The min-cut bound a block (`min_cut.HE`, by `min_cut.macs_a_block`): `((B + √(B² + 4 (k + α))) / 2)²` products,
+    with `α = ½ √(k³ / (q b))`, `B = (k/2) √(o / q)` and `q = β_w β_x`, on a work of forward and input-gradient
+    products (two of the three kinds, so `F = 1`). A word's own wires are a cut, so no value costs more than its
+    width: a weight value costs `β_w = b_w`; an activation value (H)'s `β(k)` (`min_cut.beta`), at most its `b_a`
+    bits; an output is an activation, so (E)'s `b = b_a` and `o = outputs · b_a` wires a product. Nothing past
+    `β(k)`'s last `k`. That the work's values are distinct words and no two of its matmuls share both operands'
+    values is assumed, not checked."""
     beta = min_cut.beta(k)
-    return math.inf if beta is None else min_cut.cap(k, outputs * b_a, b_w * min(beta, b_a), b_a)
+    return math.inf if beta is None else min_cut.macs_a_block(k, outputs * b_a, b_w * min(beta, b_a), b_a)
 
 
 DEPTH = ("layers", "layer_weights")

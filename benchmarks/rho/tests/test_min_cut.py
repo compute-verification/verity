@@ -17,9 +17,17 @@ from rho.scenario import build
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
+LOCK = json.loads((ROOT / "Security" / "lean-audit.json").read_text())
 
-#: `Nci.Cut.alphaHE` and `shareF` as Security/Definitions/Nci/Cut.lean defines them, and both conjuncts of
-#: `Nci.Cut.Guarantees.HE` and `HEShared` as Security/Definitions/Nci/Guarantees/Cut.lean concludes them
+
+def lean_text(name: str) -> str:
+    """The Lean file that defines `name`, the one module whose definitions the lock lists it among, as one line."""
+    (module,) = (m for m, read in LOCK["reads"].items() if name in read["definitions"])
+    return " ".join((ROOT / "Security" / f"{module.replace('.', '/')}.lean").read_text().split())
+
+
+#: Lean's `alphaHE` and `shareF` as their file defines them, and both conjuncts of `HE` and `HEShared` as theirs
+#: concludes them
 ALPHA = "noncomputable def alphaHE (k : ℕ) (q b : ℝ) : ℝ := √(k ^ 3 / (q * b)) / 2"
 SHARE = "noncomputable def shareF (ω : ℕ) : ℝ := √(2 * (1 - 1 / ω))"
 HE = ("(W.N : ℝ) ≤ m * (k + alphaHE k (βw * βx) b) + k / 2 * √(m * W.O / (βw * βx)) ∧ "
@@ -68,10 +76,10 @@ POINTS = ((2.0e9, 3.0e7, 5.0e12, 1.0e9, 6.5e4, 15.9, 15.9, 16.0),
 def test_the_arithmetic_is_the_lean_statements():
     """The module's functions against each statement's sides, transcribed from the text pinned here: `HE` at `F = 1`
     and `q = β_w β_x`, `HEShared` at `F = shareF ω`."""
-    defs = " ".join((ROOT / "Security" / "Definitions" / "Nci" / "Cut.lean").read_text().split())
-    statements = " ".join((ROOT / "Security" / "Definitions" / "Nci" / "Guarantees" / "Cut.lean").read_text().split())
-    assert ALPHA in defs and SHARE in defs
-    assert HE in statements and HE_SHARED in statements
+    assert ALPHA in lean_text(f"{min_cut.AREA}.alphaHE") and SHARE in lean_text(f"{min_cut.AREA}.shareF")
+    assert HE in lean_text(min_cut.HE) and HE_SHARED in lean_text(min_cut.HE_SHARED)
+    assert lean.status(min_cut.HE) == lean.status(min_cut.HE_SHARED) == "proved"
+    assert lean.status(min_cut.HARDNESS) == lean.status(min_cut.EXPORTS) == "assumption"
     assert min_cut.share(2) == share_f(2) == 1 and min_cut.share(3) == share_f(3) == pytest.approx(2 / math.sqrt(3))
     for (n, o, size, c, k, bw, bx, b), m in itertools.product(POINTS, (1.0, 7.0, 1e6)):
         q = bw * bx
@@ -86,9 +94,9 @@ def test_the_arithmetic_is_the_lean_statements():
                 slowdown, rel=1e-12)
 
 
-def test_the_least_blocks_and_the_cap_a_block_are_the_count_solved():
-    """`blocks_at_least` is where the count meets `N`, `cap` is `N` over it whatever `N`, and the second conjunct is
-    never above the first solved exactly: below 0 where the outputs' term outweighs the first."""
+def test_the_least_blocks_and_the_macs_a_block_are_the_count_solved():
+    """`blocks_at_least` is where the count meets `N`, `macs_a_block` is `N` over it whatever `N`, and the second
+    conjunct is never above the first solved exactly: below 0 where the outputs' term outweighs the first."""
     for (n, o, size, c, k, bw, bx, b), share in itertools.product(POINTS, (1.0, min_cut.share(3))):
         q = bw * bx
         m = min_cut.blocks_at_least(n, o, k, q, b, share)
@@ -96,7 +104,7 @@ def test_the_least_blocks_and_the_cap_a_block_are_the_count_solved():
         below, above = (min_cut.macs_at_most(m * x, k, o, q, b, share) for x in (0.999, 1.001))
         assert below < n < above
         for scale in (1.0, 1e-3, 1e4):
-            assert min_cut.cap(k, o / n, q, b, share) == pytest.approx(
+            assert min_cut.macs_a_block(k, o / n, q, b, share) == pytest.approx(
                 n * scale / min_cut.blocks_at_least(n * scale, o * scale, k, q, b, share), rel=1e-9)
         assert min_cut.slowdown_at_least(n, o, size, c, k, q, b, share) <= m * c / size * (1 + 1e-12)
     n, o, size, c, k, bw, bx, b = POINTS[2]
@@ -128,18 +136,19 @@ WORDS = 16 * (2 * 2048 + 2 * 512 + 2 * 8192 + 2048) + 128_256
 
 def test_the_bound_at_the_served_policy_is_one():
     """A block of the served policy may finish about 1.8e13 MACs of the served model's forward, one bf16 output word
-    per 2,447 MACs, and holds 3.6e10: one block does it, and the slowdown is 1. At the first row's `k` the cap is
-    under a million MACs."""
+    per 2,447 MACs, and holds 3.6e10: one block does it, and the slowdown is 1. At the first row's `k` a block may
+    finish under a million MACs."""
     assert (POSITION, WORDS) == (1_235_746_816, 505_088)
     o = WORDS * 16 / POSITION
     r = min_cut.bound(C, K, N_OUT, N=MACS, O=MACS * o, size=C)
-    assert r.slowdown == 1 and r.blocks == pytest.approx(MACS / r.cap) and r.blocks < 1
+    assert r.slowdown == 1 and r.blocks == pytest.approx(MACS / r.macs_a_block) and r.blocks < 1
     assert r.statement == min_cut.HE and r.premises == (min_cut.HARDNESS, min_cut.EXPORTS)
     assert (r.beta_w, r.b, r.F) == (16, 16, 1) and r.beta_x == min_cut.beta(K) == pytest.approx(1.017, rel=1e-3)
     assert r.alpha == min_cut.alpha(K, 16 * r.beta_x, 16)
-    assert r.cap == pytest.approx(min_cut.cap(K, o, 16 * r.beta_x, 16)) == pytest.approx(1.845e13, rel=5e-4)
-    assert min_cut.cap(K, o, 16 * r.beta_x, 16, min_cut.share(3)) == pytest.approx(2.450e13, rel=5e-4)
-    assert min_cut.cap(145_568, o, 16 * min_cut.beta(145_568), 16) == pytest.approx(9.383e5, rel=5e-4)
+    per_block = min_cut.macs_a_block(K, o, 16 * r.beta_x, 16)
+    assert r.macs_a_block == pytest.approx(per_block) and per_block == pytest.approx(1.845e13, rel=5e-4)
+    assert min_cut.macs_a_block(K, o, 16 * r.beta_x, 16, min_cut.share(3)) == pytest.approx(2.450e13, rel=5e-4)
+    assert min_cut.macs_a_block(145_568, o, 16 * min_cut.beta(145_568), 16) == pytest.approx(9.383e5, rel=5e-4)
     assert all(s in r.rests_on for s in (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS, "β_x = 1.017"))
     assert min_cut.bound(C, K, N=MACS, O=MACS * o, size=C) == min_cut.bound(C, K, None, N=MACS, O=MACS * o, size=C) == r
 
@@ -148,7 +157,7 @@ def test_the_bound_is_the_least_blocks_priced_at_c_and_never_below_one():
     n, o, size, c, k, bw, bx, b = POINTS[1]
     r = min_cut.bound(c, k, 0, N=n, O=o, size=size, beta_w=bw, beta_x=bx, b=b)
     m = min_cut.blocks_at_least(n, o, k, bw * bx, b)
-    assert r.blocks == m and r.slowdown == m * c / size > 1e5 and r.cap == pytest.approx(n / m)
+    assert r.blocks == m and r.slowdown == m * c / size > 1e5 and r.macs_a_block == pytest.approx(n / m)
     assert r.slowdown >= min_cut.slowdown_at_least(n, o, size, c, k, bw * bx, b) > 0.99 * r.slowdown
     shared = min_cut.bound(c, k, 0, N=n, O=o, size=size, beta_w=bw, beta_x=bx, b=b, F=min_cut.share(3))
     assert shared.statement == min_cut.HE_SHARED and 1 < shared.slowdown < r.slowdown
@@ -159,8 +168,9 @@ def test_the_bound_is_the_least_blocks_priced_at_c_and_never_below_one():
 
 def test_past_the_last_row_or_on_no_work_the_bound_says_nothing():
     r = min_cut.bound(C, 1e9, N_OUT, N=MACS, O=MACS / 128, size=C)
-    assert (r.slowdown, r.blocks, r.cap, r.beta_x) == (1, 0, math.inf, None) and "no bound at k = 1e+09" in r.rests_on
-    assert min_cut.bound(C, 1e9, N_OUT, N=MACS, O=MACS / 128, size=C, beta_x=0.3).cap < math.inf
+    assert (r.slowdown, r.blocks, r.macs_a_block, r.beta_x) == (1, 0, math.inf, None)
+    assert "no bound at k = 1e+09" in r.rests_on
+    assert min_cut.bound(C, 1e9, N_OUT, N=MACS, O=MACS / 128, size=C, beta_x=0.3).macs_a_block < math.inf
     assert min_cut.bound(C, 1e6, N_OUT, N=0, O=0, size=C).slowdown == 1
 
 
@@ -176,9 +186,9 @@ def reference_profile():
     return s, s.families[0].profile(s.model, s.run)
 
 
-def test_the_class_is_the_cap_at_the_profiles_costs_and_shape():
+def test_the_class_is_the_macs_a_block_at_the_profiles_costs_and_shape():
     """A weight value at the profile's `b_w`, an activation value at `β(k)` and at most its `b_a` bits, an output at
-    `b_a` bits and wires, over the model's own outputs a product; no cap past the last row."""
+    `b_a` bits and wires, over the model's own outputs a product; nothing past the last row."""
     arg = CLASSES["min-cut"]
     assert arg.cites == (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS) and arg.counts == "kappa"
     assert lean.status(arg.cites[0]) == "proved" and lean.weakest(arg.cites) == "conditional"
@@ -187,7 +197,7 @@ def test_the_class_is_the_cap_at_the_profiles_costs_and_shape():
     a = arg.allowance(p)
     assert min_cut.beta(4e8) < p.b_a < min_cut.beta(2e7)
     for k, beta in ((1e5, p.b_a), (2e7, p.b_a), (4e8, min_cut.beta(4e8))):
-        assert a(FlopBudget(1e30, k)) == min_cut.cap(k, p.outputs_per_product * p.b_a, p.b_w * beta, p.b_a)
+        assert a(FlopBudget(1e30, k)) == min_cut.macs_a_block(k, p.outputs_per_product * p.b_a, p.b_w * beta, p.b_a)
     assert a(FlopBudget(1e30, 8e8)) < math.inf and a(FlopBudget(1e30, 8.1e8)) == math.inf
     with pytest.raises(Outside, match="outputs_per_product"):
         arg.allowance(replace(p, outputs_per_product=None))

@@ -1,14 +1,13 @@
-"""The min-cut bound's arithmetic: the one place that computes `Nci.Cut.Guarantees.HE` and `HEShared`.
+"""The min-cut bound's arithmetic: the one place that computes Lean's `HE` and `HEShared`, the bound's two statements
+(`HE` and `HE_SHARED` below are their full names).
 
 Standard library only, and it imports nothing of this package, so another benchmark loads it by path. Each function is
-one side of an inequality of `Security/Definitions/Nci/Guarantees/Cut.lean`, or that inequality solved for one of its
-terms, and says which.
+one side of an inequality those statements conclude, or that inequality solved for one of its terms, and says which.
 
-The statement. A circuit's charged work is `N` MACs with `O` output wires (`Nci.Cut.Work.N`, `Work.O`: an output's
-wires, so its values times their width). Under (H) at `q` (`Nci.Cut.Assumptions.Hardness`: a pair of a matmul's two
-operands' values costs `q = β_w β_x` cut gates) and (E) at `b` (`Nci.Cut.Assumptions.Exports`: an output a set of gates
-finishes costs `b` cut gates to send on), every partition into `m` blocks that each read at most `k` gates outside `θ`
-has
+The statement. A circuit's charged work is `N` MACs with `O` output wires (Lean's `Work.N` and `Work.O`: an output's
+wires, so its values times their width). Under (H) at `q` (`HARDNESS`: a pair of a matmul's two operands' values costs
+`q = β_w β_x` cut gates) and (E) at `b` (`EXPORTS`: an output a set of gates finishes costs `b` cut gates to send on),
+every partition into `m` blocks that each read at most `k` gates outside `θ` has
 
     N ≤ m (k + F α) + F (k/2) √(m O / q),    α = ½ √(k³ / (q b)),
 
@@ -22,7 +21,7 @@ Units: `k`, `O`, `b` and the `β` in bits (gates of the circuit: a wire is a gat
 What no function here checks, and a caller states of its work: the MACs are pairwise disjoint and each reads its two
 words; `val` is one-to-one on a matmul's words (the casts of one value are one word); the sharing its `F` needs; every
 block reads at most `k`; and (H) and (E), conjectures one set of gates refutes. A work's weights are outside `θ`: a
-registered weight has no path from an unregistered input, so (H) holds for it only at `β_w = 0`, where the bound says
+registered weight has no path from a fresh input, so (H) holds for it only at `β_w = 0`, where the bound says
 nothing.
 
 `beta(k)` is (H)'s `β` for an activation at `k`, the rows `premise.training-cut-hardness.beta` of
@@ -35,16 +34,18 @@ from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
 
-HE = "Nci.Cut.Guarantees.HE"
-HE_SHARED = "Nci.Cut.Guarantees.HEShared"
-HARDNESS = "Nci.Cut.Assumptions.Hardness"
-EXPORTS = "Nci.Cut.Assumptions.Exports"
-
 PREMISES = Path(__file__).resolve().parent.parent / "data" / "premises.toml"
+_ROWS = tomllib.loads(PREMISES.read_text())["premise"]
+#: (H) and (E), the bound's two conjectures: the Lean names their rows give (`premise.training-cut-hardness.lean`,
+#: `premise.training-cut-exports.lean`)
+HARDNESS: str = _ROWS["training-cut-hardness"]["lean"]
+EXPORTS: str = _ROWS["training-cut-exports"]["lean"]
+#: the two statements' Lean names, in their premises' area: its `Guarantees.HE` and `Guarantees.HEShared`
+AREA = HARDNESS.removesuffix(".Assumptions.Hardness")
+HE, HE_SHARED = f"{AREA}.Guarantees.HE", f"{AREA}.Guarantees.HEShared"
 #: (H)'s `β` for an activation by block size, rows `(k, β)` in bits, `k` rising (`premise.training-cut-hardness.beta`)
 BETA: tuple[tuple[float, float], ...] = tuple(
-    (float(k), float(b))
-    for k, b in tomllib.loads(PREMISES.read_text())["premise"]["training-cut-hardness"]["beta"]["value"])
+    (float(k), float(b)) for k, b in _ROWS["training-cut-hardness"]["beta"]["value"])
 
 #: a bf16 word's wires. A word's own wires are a cut, so no value costs more than its width and no output more than
 #: its own: (H) and (E) at a word's width are the most they can say.
@@ -52,12 +53,12 @@ BF16 = 16.0
 
 
 def alpha(k: float, q: float, b: float) -> float:
-    """`Nci.Cut.alphaHE`: `α = ½ √(k³ / (q b))`."""
+    """Lean's `alphaHE`: `α = ½ √(k³ / (q b))`."""
     return math.sqrt(k ** 3 / (q * b)) / 2
 
 
 def share(omega: int) -> float:
-    """`Nci.Cut.shareF`: `F = √(2 (1 − 1/ω))`, 1 at `ω = 2` and `2/√3` at `ω = 3`."""
+    """Lean's `shareF`: `F = √(2 (1 − 1/ω))`, 1 at `ω = 2` and `2/√3` at `ω = 3`."""
     return math.sqrt(2 * (1 - 1 / omega))
 
 
@@ -85,7 +86,7 @@ def slowdown_at_least(N: float, O: float, size: float, c: float, k: float, q: fl
     return c / size * (N / a - F * (k / 2) * math.sqrt(O * N / q) / a ** 1.5)
 
 
-def cap(k: float, o: float, q: float, b: float, F: float = 1.0) -> float:
+def macs_a_block(k: float, o: float, q: float, b: float, F: float = 1.0) -> float:
     """The most MACs a block of a work with `o = O / N` output wires a MAC: the count at `O = o N`, divided by `m`,
     is `N/m ≤ (k + F α) + B √(N/m)` with `B = F (k/2) √(o / q)`, so `N/m ≤ ((B + √(B² + 4 (k + F α))) / 2)²`. It is
     `N / blocks_at_least(N, o N, …)` for every `N`."""
@@ -112,8 +113,9 @@ class Bound:
     slowdown: float
     #: the least `m` the count allows (`blocks_at_least`), a real number; 0 where the bound says nothing
     blocks: float
-    #: the most of the work's MACs one block finishes at the work's own `O / N` (`cap`); `inf` where there is no cap
-    cap: float
+    #: the most of the work's MACs one block finishes at the work's own `O / N` (`macs_a_block`); `inf` where the
+    #: bound says nothing
+    macs_a_block: float
     #: the statement: `HE` at `F = 1`, `HEShared` otherwise
     statement: str
     #: the conjectures it takes, (H) and (E)

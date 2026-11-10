@@ -223,14 +223,14 @@ def measured_md(reg: Registry, m: circuits.Comparison) -> list[str]:
 
 def alone_md(rows: list[dict], bounds: Sequence[str]) -> list[str]:
     """What rows bounded by the classes `bounds` alone cover (`only`): a figure is those classes' on the blocks they
-    cap and no class's on the rest, so the share on the blocks stands beside it."""
+    bound and no class's on the rest, so the share on the blocks stands beside it."""
     shares = [x["scaled"]["per_window_share"] for x in rows]
     names = ", ".join(f"`{b}`" for b in bounds)
-    return [(f"Each row is bounded by {names} alone (`--bounds`), every other class left out. A class caps the blocks "
-             f"its premises hold at, which hold {min(shares):.2g} to {max(shares):.2g} of a row's rate here; the rest "
-             "is the uncertified routes and the unregistered pool at `q_U`, which no class sets, and a block no class "
-             "caps counts at its capacity. So a figure in these rows is a class's only on that share: \"what sets "
-             "it\" and \"Its parts\" name the rest."), ""]
+    return [(f"Each row is bounded by {names} alone (`--bounds`), every other class left out. A class bounds the "
+             f"blocks its premises hold at, which hold {min(shares):.2g} to {max(shares):.2g} of a row's rate here; "
+             "the rest is the uncertified routes and the unregistered pool at `q_U`, which no class sets, and a block "
+             "no class bounds counts at its capacity. So a figure in these rows is a class's only on that share: "
+             "\"what sets it\" and \"Its parts\" name the rest."), ""]
 
 
 def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None,

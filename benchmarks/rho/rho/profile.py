@@ -51,7 +51,7 @@ class Profile:
     kappa_forward: float | None = None
     #: `κ` of the weight-gradient products alone (the accumulators of E1's Corollary 4a)
     kappa_wgrad: float | None = None
-    #: output values per counted product, `Nci.Cut`'s `Work.O / Work.N` before an output's width (the min-cut bound)
+    #: output values per counted product, the min-cut bound's `Work.O / Work.N` before an output's width
     outputs_per_product: float | None = None
 
     # Depth (`MulBlocks.Upstream`, `ActivationChainedAt`) and layers
