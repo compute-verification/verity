@@ -32,21 +32,10 @@ entries alone has the Site's head. Registration is ASCII-only without DEL: a log
 character, as itself or escaped, is refused (`ascii`, in `Core.canonicalJson`'s words) before any entry is read.
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
-<<<<<<< ours
-fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), and an information
-entry by `previous` and then `duplicate-information`, no item registered twice, and a declaration by `previous` and
-then `duplicate-declaration`, no day declared twice. A site entry's checks hold of an information entry or a declaration
-whenever they held of the log before it, which it adds no hardware to.
-||||||| base
-fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), and an information
-entry by `previous` and then `duplicate-information`, no item registered twice. A site entry's checks hold of an
-information entry whenever they held of the log before it, which it adds no hardware to.
-=======
 fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information
 entry by `previous` and then `duplicate-information`, no item registered twice, and a declaration by `previous` and then
 `duplicate-declaration`, no day declared twice. A site entry's checks hold of an information entry or a declaration
 whenever they held of the log before it, which it adds no hardware to.
->>>>>>> theirs
 
 A subprotocol reads its view of the log by projection (`View`): the Site, θ's values, the registered compiler and the days'
 registered circuits, at the head. As a
@@ -113,12 +102,7 @@ follows and the items it registers, or a declaration naming that head and the da
 inductive Entry
   | site (e : Site.Registration.Entry)
   | information (previous : String) (items : List Item)
-<<<<<<< ours
-  | declaration (previous : String) (declared : Declared)
-||||||| base
-=======
   | declaration (previous : String) (d : Declared)
->>>>>>> theirs
   deriving DecidableEq
 
 /-- The head of the log the entry follows. -/
@@ -222,18 +206,6 @@ def Entry.ofJson (j : Json) : V Entry := do
     exactly j ["format", "items", "previous"] "an information entry"
     pure (.information (← Flock.J.str j "previous" "an entry")
       (← (← Flock.J.arr j "items" "an information entry").toList.mapM Item.ofJson))
-<<<<<<< ours
-  else if format == DECLARATION then
-    exactly j ["blocks", "day", "format", "previous", "program"] "a declaration"
-    let previous ← Flock.J.str j "previous" "an entry"
-    let day ← Flock.J.nat j "day" "a declaration"
-    let program ← hex64 (← Flock.J.get j "program" "a declaration") "a declaration's program"
-    let blocks ← (← Flock.J.arr j "blocks" "a declaration").toList.mapM (Flock.J.asStr · "a declaration's block")
-    pure (.declaration previous { day, program, blocks })
-  else throw s!"an entry: format {format} is not one of [{Site.SITE}, {INFORMATION}, {DECLARATION}]"
-||||||| base
-  else throw s!"an entry: format {format} is not one of [{Site.SITE}, {INFORMATION}]"
-=======
   else if format == DECLARATION then
     exactly j ["blocks", "day", "format", "previous", "program"] "a declaration"
     let previous ← hex64 (← Flock.J.get j "previous" "an entry") "an entry's previous"
@@ -242,7 +214,6 @@ def Entry.ofJson (j : Json) : V Entry := do
     let blocks ← (← Flock.J.arr j "blocks" "a declaration").toList.mapM (Flock.J.asStr · "a declaration's block")
     pure (.declaration previous { day, program, blocks })
   else throw s!"an entry: format {format} is not one of [{Site.SITE}, {INFORMATION}, {DECLARATION}]"
->>>>>>> theirs
 
 /-- The log as committed: its composite and its entries, `{"composite": NAME, "entries": [...]}`. -/
 structure Committed where
@@ -382,17 +353,9 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
 /-- **The registration log's check** as a core protocol, `verity/registration/log/v1`: the parameters are the auditor's
 (`{"auditor": AUDITOR, "composite"}`, the auditor as `Core.Site.Registration.Auditor.ofJson` reads it), the commitment
 is the log (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the
-<<<<<<< ours
-check passes, making public its view (`View.toJson`: its Site, θ, builder, declarations and head) and keeping its length, and rejects the first entry the check
-refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII without DEL as not ASCII. It is never undecided. -/
-||||||| base
-check passes, making public its view (`View.toJson`) and keeping its length, and rejects the first entry the check
-refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII without DEL as not ASCII. It is never undecided. -/
-=======
 check passes, making public its view (`View.toJson`: its site, θ, registered compiler (`builder`), declarations and head) and keeping its
 length, and rejects the first entry the check refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII
 without DEL as not ASCII. It is never undecided. -/
->>>>>>> theirs
 def protocol : Protocol where
   id := protocolId
   Params := Params
