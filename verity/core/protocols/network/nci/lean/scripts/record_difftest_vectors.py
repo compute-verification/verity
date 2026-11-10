@@ -18,8 +18,8 @@ reading some of its parameters' leaves (directly, through a call and through a b
 of a parameter's one-bit leaves on (`PASSES`: itself, through a call, a batch member or a scan, or handed to a callee
 that returns none of them), their units laid out by one or two inference entries each with the slot digit anywhere
 among the digits; wires from earlier templates that keep to the reader's slot, cross slots or do either unit by unit,
-each from an output whose leaves' width divides the reader's (the same width, or bits under a word) or, into a
-closed row, from any output of the row's words, written unit by unit and merged into runs
+each from an output of the row's bits whose leaves' width divides the reader's (the same width, or bits under a
+word) or, into a closed row, from any output of the row's bits, written unit by unit and merged into runs
 (`verity.ml.windows.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
 root the run's own record commits or another; and pins of most templates' Definitions, among other digests. Two in
@@ -38,10 +38,11 @@ word into a key of 32 one-bit leaves that only gates of its reader read, a close
 key of one word, both taken; a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit
 leaf by a unit of another slot (`passed_on`), refused however it passes them on (itself, with no gate of its own at
 all, through a call, a batch member or a scan), refused too where it hands them to a callee that returns none of
-them, and taken where its output is gates of its own over them; and an output whose leaves have two widths
-(`two_widths`), refused into a 32-bit leaf and taken into a closed row. Then a root that hands a unit a row that is
-not input gates of its own: the served shape with one input run handed to two rows, with a row every unit shares,
-and with a row of computed gates.
+them, and taken where its output is gates of its own over them; an output whose leaves have two widths
+(`two_widths`), refused into a 32-bit leaf and taken into a closed row; and an output of 8 bits (`short_output`),
+which lacks bits of the 16-bit row it fills, refused into one leaf and into a closed row alike. Then a root that
+hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, with
+a row every unit shares, and with a row of computed gates.
 
 Every wire of every case is one `NciCheck.Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -51,6 +52,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import copy
+import functools
 import hashlib
 import importlib.util
 import json
@@ -97,7 +99,7 @@ BROKEN = {
     "templates": ["record-program", "units", "swap", "half-word"],
     "own-rows": ["row-twice", "row-aliased", "row-broadcast", "row-computed", "row-explicit", "row-strided"],
     "wires": ["overlap", "bounds", "width", "wire-port", "wire-template", "wire-cut", "cycle", "order", "no-wires"],
-    "leaf-widths": ["leaf-wider"],
+    "leaf-widths": ["leaf-wider", "leaf-short"],
     "inputs": ["read-param", "read-leaves", "read-on-wire", "table-param", "root-port", "verdict", "ingress-units",
                "registered-keys"],
     "blocks": ["no-blocks", "slot-radix", "two-slots", "gap", "twice", "entry-template"],
@@ -105,7 +107,7 @@ BROKEN = {
     "reader-roles": ["key-port", "key-row", "root-row", "domain-row", "rows-swapped", "port-out", "ports-order",
                      "verdict-out"],
 }
-#: each way with its stage: case `seed`, where it is broken, is broken in way `seed` modulo their number
+#: each way with its stage: the broken cases take the ways in turn, in seed order (`_turns`)
 WAYS = [(stage, how) for stage, hows in BROKEN.items() for how in hows]
 #: the circuits a broken case tries for one that has what its way breaks
 TRIES = 40
@@ -390,7 +392,7 @@ def trusted(rng, digest: str, text: str, held: dict[str, tuple[str, int, int]], 
 # Random circuits
 
 PORTS = [Value(16), Value(32), Array(2, Value(16)), Array(4, Value(16)), Array(4, Value(8)),
-         Array(2, Array(2, Value(16))), Array(32, Value(1)), Array(6, Value(16))]
+         Array(2, Array(2, Value(16))), Array(32, Value(1)), Array(6, Value(16)), Array(16, Value(1))]
 OUTS = [Value(16), Value(1), Value(32), Array(2, Value(16)), Array(4, Value(16)), Array(8, Value(8)),
         Array(3, Value(16)), Value(8), Array(16, Value(1)), Array(32, Value(1))]
 DIGEST = Array(8, Value(64))
@@ -398,6 +400,10 @@ DIGEST = Array(8, Value(64))
 
 def _words(t) -> int:
     return -(-sum(t.leaf_widths()) // 16)
+
+
+def _bits(t) -> int:
+    return sum(t.leaf_widths())
 
 
 def _leaf(t) -> int:
@@ -461,7 +467,7 @@ def random_circuit(rng, seed: int) -> Circuit:
             k = c.cuts.get(tid, {}).get(p, 1)
             row = _words(t) // k
             writers = [(wt, f"o{x}") for wt, _, outs in specs[:j] for x, o in enumerate(outs)
-                       if _words(o) == row and (p in shut[tid] or _leaf(t) % _leaf(o) == 0)]
+                       if _bits(o) == 16 * row and (p in shut[tid] or _leaf(t) % _leaf(o) == 0)]
             if opening and p != "tok" or not writers or rng.random() < 0.3:
                 continue
             wt, out = rng.choice(writers)
@@ -664,6 +670,23 @@ def two_widths(S: int = 2, bits: bool = False) -> Circuit:
     return c
 
 
+def short_output(S: int = 2, bits: bool = False) -> Circuit:
+    """A circuit with a wire from an output that lacks bits of the row it fills: `Eight`, a unit a slot, its first
+    output one 8-bit leaf; `Whole`, a unit a slot, one gate over one 16-bit leaf wired from its slot's `Eight`. The
+    two rows have the same words, one, and 8 of the row's bits are no gate's. With `bits`, `Whole`'s row is 16
+    one-bit leaves, the first read by its gate and none passed on: a closed row, which the output lacks bits of all
+    the same."""
+    c = Circuit(f"short{S}", S)
+    v16 = Value(16)
+    eight = c.add(template("ShortEight", [("a", v16)], [Value(8), v16],
+                           [[("op", 8, [(0, 0)])], [("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
+    whole = c.add(template("ShortWhole", [("v", Array(16, Value(1)) if bits else v16)], [v16],
+                           [[("op", 16, [(0, 0)])]]), [([S], ["slot"], 0)])
+    c.wires = IF.coalesce([IF.Wire(whole, "v", eight, "o0", s, (1,), s, (0,), (0, 1)) for s in range(S)])
+    c.order = c.ordered()
+    return c
+
+
 WEIGHTS = ("weights/embed/table", "weights/norm", "weights/query", "weights/mixing")
 EMBED = "LowEmbed_v1"
 
@@ -690,7 +713,8 @@ def shaped() -> list[dict]:
     where the case is refused: the token a word into a key of bits that only gates read, and bits into a key of one
     word (both accepted); `passed_on`, its leaves passed on each way of `PASSES` and by a Definition of no gate
     (`leaf-widths`, the one that hands them to a callee that returns none among them), and its output gates of its
-    own (accepted); `two_widths` (`leaf-widths`), and into a closed row (accepted). Then the accepted case with its
+    own (accepted); `two_widths` (`leaf-widths`), and into a closed row (accepted); `short_output`, into one leaf
+    and into a closed row (`leaf-widths`, both). Then the accepted case with its
     Program's root edited (`own-rows`): `Norm`'s weights' row handed the input gates its `x` has, `Feed`'s selection
     not mapped, and `Select`'s row handed `Norm`'s output."""
     out = []
@@ -780,6 +804,10 @@ def shaped() -> list[dict]:
           refused=whole)
     first("an output of two widths into a closed row", two_widths(bits=True), 36, held=(), committed=(), pins=[],
           policy={})
+    first("an output that lacks bits of its row", short_output(), 37, held=(), committed=(), pins=[], policy={},
+          refused=whole)
+    first("an output that lacks bits of a closed row", short_output(bits=True), 38, held=(), committed=(), pins=[],
+          policy={}, refused=whole)
 
     def twice(nodes: list, _desc: dict) -> None:
         """`Norm`'s weights' row handed the input gates its `x` has."""
@@ -892,12 +920,20 @@ def _slots(c: Circuit, w):
         yield slot[w.reader][u], slot[w.writer][v]
 
 
+@functools.cache
+def _turns() -> dict[int, int]:
+    """The seeds below `COUNT` whose case is broken, two in five, each with its turn among them."""
+    return {seed: k for k, seed in enumerate(s for s in range(COUNT) if random.Random(s).random() < 0.4)}
+
+
 def case(seed: int) -> dict:
-    """Case `seed`: below `COUNT` a random circuit with a random registration log, two in five of them broken in the
-    way `WAYS` gives the seed, on the first of the seed's circuits that has what that way breaks; then `shaped()`'s."""
+    """Case `seed`: below `COUNT` a random circuit with a random registration log, two in five of them broken, each
+    in the way `WAYS` gives its turn among the broken, so every way comes up; on the first of the seed's circuits
+    that has what that way breaks. Then `shaped()`'s."""
     if seed >= COUNT:
         return shaped()[seed - COUNT]
-    stage, how = WAYS[seed % len(WAYS)] if random.Random(seed).random() < 0.4 else (None, None)
+    turn = _turns().get(seed)
+    stage, how = (None, None) if turn is None else WAYS[turn % len(WAYS)]
     for attempt in range(TRIES):
         rng = random.Random(TRIES * seed + attempt)
         c = random_circuit(rng, seed)
@@ -1098,20 +1134,32 @@ def _break(rng, made: dict, how: str) -> bool:
             else:
                 arg["refs"] = {"strided": ["n", at, 0, count, 0, 1, count]}
         _reroot(made, edit)
-    elif how == "leaf-wider":
+    elif how in ("leaf-wider", "leaf-short"):
         sigs = {codec.descriptor_id(fn): (fn.signature()[0], ref.fields_of(fn.signature()[1])) for fn, _ in c.templates}
         #: the rows of a table's reader: the new wire is the one thing that fills a row of another
         tabled = ({(x["reader"], x["port"]) for x in reg.get("roots", [])}
                   | {(o["reader"], p) for o in reg.get("openings", []) for p in (o["key"], *o["ports"])})
         shut = {codec.descriptor_id(fn): closed(fn) for fn, _ in c.templates}
+
+        def breaks(t: str, p: str, ty, o) -> bool:
+            """Whether a wire from an output of type `o` into row `p` of `t`, of type `ty` and the same words, is
+            refused this way: the output lacks bits of the row; or its leaves' width does not divide the row's,
+            and the row is not closed."""
+            if how == "leaf-short":
+                return _bits(o) != 16 * _words(o)
+            return p not in shut[t] and _leaf(ty) % _leaf(o) != 0
+
         found = [{"reader": t, "port": p, "writer": wt, "out": f"o{x}", "at": 0, "radix": [1], "base": 0, "step": [0]}
                  for j, t in enumerate(ids) for p, ty in sigs[t][0]
-                 if (t, p) not in tabled and p not in c.cuts.get(t, {}) and p not in shut[t]
-                 for wt in ids[:j] for x, o in enumerate(sigs[wt][1]) if _words(o) == _words(ty) and _leaf(ty) % _leaf(o)]
+                 if (t, p) not in tabled and p not in c.cuts.get(t, {})
+                 for wt in ids[:j] for x, o in enumerate(sigs[wt][1]) if _words(o) == _words(ty) and breaks(t, p, ty, o)]
         if not found:
             return False
-        #: a row of bits its template passes on, where the circuit has one: the row the closed-row rule turns on
-        w = rng.choice([w for w in found if _leaf(dict(sigs[w["reader"]][0])[w["port"]]) == 1] or found)
+        #: a row the closed-row rule turns on, where the circuit has one: for a wider leaf, a row of bits its
+        #: template passes on; for an output short of its row, a closed row, which is refused all the same
+        turns = [w for w in found if (w["port"] in shut[w["reader"]] if how == "leaf-short" else
+                                      _leaf(dict(sigs[w["reader"]][0])[w["port"]]) == 1)]
+        w = rng.choice(turns or found)
         _rewrite(made, lambda d: (_clear(d, w["reader"], w["port"]), d["wires"].append(w)))
     elif how == "overlap":
         if not wires:
@@ -1319,7 +1367,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 40
+    return COUNT + 42
 
 
 def results(case: dict) -> dict:

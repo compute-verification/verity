@@ -275,13 +275,15 @@ def hands_on(program, tid: str, port: str) -> bool:
 
 
 def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict) -> None:
-    """The Lean's `unwhole` (`leaf-widths`). The rule, restated: a wire is taken where the reader's row is closed
-    (`Template.closed`), or where the reader's row and the writer's output each have leaves of one width and the
-    writer's divides the reader's; the first wire that is neither is refused, by name, with its two widths and the
-    fix. Then what the rule stands for, leaf by leaf. Of a closed row: no unit of the reader's template hands a leaf
-    of it on (`hands_on`, once a row). Of the other: every leaf of the writer's output lies inside one leaf of each
-    row of the reader's port the wire fills (`lands_whole`), a cut port's row `j` of `k` its leaves
-    `[j·n/k, (j+1)·n/k)`."""
+    """The Lean's `unwhole` (`leaf-widths`). The rule, restated. Of every wire, the writer's output's bits are its
+    own words', which are the row's (a wire's two rows have the same words). And a wire is taken where the reader's
+    row is closed (`Template.closed`), or where the reader's row and the writer's output each have leaves of one
+    width and the writer's divides the reader's. The first wire that fails either is refused, by name, with its two
+    rows' bits or its two widths, and the fix. Then what the rule stands for, leaf by leaf, of each row of the
+    reader's port the wire fills, a cut port's row `j` of `k` its leaves `[j·n/k, (j+1)·n/k)`. The row's leaves hold
+    exactly the bits the writer's output's leaves do: no bit of the row is past its writer's. Of a closed row: no
+    unit of the reader's template hands a leaf of it on (`hands_on`, once a row). Of the other: every leaf of the
+    writer's output lies inside one leaf of the row (`lands_whole`)."""
     by = {t.tid: t for t in templates}
     kept: set[tuple[str, str]] = set()
 
@@ -290,6 +292,18 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
 
     for w in wires:
         row, out = by[w["reader"]].widths[w["port"]], by[w["writer"]].widths[w["out"]]
+        wire = f"wire {w['writer']}.{w['out']} -> {w['reader']}.{w['port']}: "
+        k, n = int(cuts.get(w["reader"], {}).get(w["port"], 1)), len(row)
+        filled = [row[j * n // k:(j + 1) * n // k] for j in range(w["c0"], w["c0"] + w["C"])]
+        bits, words = sum(out), by[w["writer"]].port(w["out"], outs=True)
+        if bits != 16 * words:
+            assert all(sum(leaves) == 16 * words > bits for leaves in filled)
+            raise refused("leaf-widths", (
+                f"{wire}the writer's output is {bits} bits and the row it fills {16 * words}. Every bit of a row a "
+                "wire fills is a bit of its writer's output: a row is whole 16-bit words, and a bit of it past its "
+                "writer's output is no gate's. Fix the Definitions, not the record: give the writer's output whole "
+                "16-bit words, each bit a gate of its own."))
+        assert all(sum(leaves) == bits for leaves in filled)
         if w["port"] in by[w["reader"]].closed:
             if (w["reader"], w["port"]) not in kept:
                 assert not hands_on(program, w["reader"], w["port"])
@@ -297,7 +311,7 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
             continue
         if len(set(row)) != 1 or len(set(out)) != 1 or row[0] % out[0]:
             raise refused("leaf-widths", (
-                f"wire {w['writer']}.{w['out']} -> {w['reader']}.{w['port']}: the writer's leaves are of {name(out)} "
+                f"{wire}the writer's leaves are of {name(out)} "
                 f"and the reader's of {name(row)}. Every leaf of a writer's output lies inside one leaf of the row "
                 "that reads it, each side's leaves of one width and the writer's dividing the reader's; or the "
                 "reader's row is one-bit leaves and its Definition passes none of them on: its return refers to no "
@@ -305,8 +319,7 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
                 "record: give the reader's row leaves of the writer's width or a multiple of it, or the writer's "
                 "output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and "
                 "have its Definition return gates of its own in their place."))
-        k, n = int(cuts.get(w["reader"], {}).get(w["port"], 1)), len(row)
-        assert all(lands_whole(row[j * n // k:(j + 1) * n // k], out) for j in range(w["c0"], w["c0"] + w["C"]))
+        assert all(lands_whole(leaves, out) for leaves in filled)
 
 
 def spot_instance(templates: list[Template], rec: dict, order=None) -> dict:

@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/record_difftest_vectors.py` writes 640 cases (600 random circuits,
-two in five broken in one way, and 40 shaped ones, most in the shape of a served class) and, on each,
+`verity/core/protocols/network/nci/lean/scripts/record_difftest_vectors.py` writes 642 cases (600 random circuits,
+two in five broken in one way, and 42 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `NciCheck.Record` and `NciCheck.RecordCount` give Python's results on every case, and unless SPOT's reader reads the
@@ -62,6 +62,8 @@ EARLY = ("instance", "params", "program", "not-topological", "record", "trusted"
 #: the cases whose wires Python's layout has no rows for
 TWO_WIDTHS = "a wire from an output of two widths"
 TWO_CLOSED = "an output of two widths into a closed row"
+#: `short_output`: an output of 8 bits into a 16-bit row, one leaf or sixteen that are closed
+SHORT, SHORT_CLOSED = "an output that lacks bits of its row", "an output that lacks bits of a closed row"
 
 
 @pytest.fixture(scope="module")
@@ -76,7 +78,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 640 cases and the reference's results, byte for byte as the record pins them."""
+    """All 642 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -227,6 +229,8 @@ ROWS = {
     GATES: (None, None),
     TWO_WIDTHS: "leaf-widths",
     TWO_CLOSED: (None, None),
+    SHORT: "leaf-widths",
+    SHORT_CLOSED: "leaf-widths",
     "2x3 one input run handed to two rows": "own-rows",
     "2x3 a row every unit shares": "own-rows",
     "2x3 a row of computed gates": "own-rows",
@@ -237,6 +241,9 @@ WHOLE = ("Every leaf of a writer's output lies inside one leaf of the row that r
          "scan. Fix the Definitions, not the record: give the reader's row leaves of the writer's width or a multiple "
          "of it, or the writer's output leaves of a width that divides the reader's, or make the reader's row "
          "one-bit leaves and have its Definition return gates of its own in their place.")
+FILLED = ("Every bit of a row a wire fills is a bit of its writer's output: a row is whole 16-bit words, and a bit of "
+          "it past its writer's output is no gate's. Fix the Definitions, not the record: give the writer's output "
+          "whole 16-bit words, each bit a gate of its own.")
 
 
 def test_a_writers_leaf_lies_inside_one_leaf_of_the_row_that_reads_it(shaped, monkeypatch):
@@ -248,6 +255,10 @@ def test_a_writers_leaf_lies_inside_one_leaf_of_the_row_that_reads_it(shaped, mo
     class's shape, the token a word (one 32-bit leaf) into a key of 32 one-bit leaves is taken, the key a closed
     row, and so is the token 32 one-bit leaves into a key of one word; each is counted as any wire. An output whose
     leaves have two widths is refused into a 32-bit leaf and taken into a closed row.
+
+    Of either way, every bit of the row is a bit of its writer's output. A wire's two rows have the same words, and
+    an output's words are its bits rounded up: an output of 8 bits fills a row of 16, whose other 8 bits are no
+    gate's. It is refused into one 16-bit leaf and into a closed row alike, the message naming the two rows' bits.
 
     What the refusal is for is `passed_on`: a template that passes on, with no gate, one bit of each of sixteen
     16-bit gates, and a unit of another slot that reads those sixteen bits as one 16-bit leaf. Without the refusal the
@@ -263,7 +274,18 @@ def test_a_writers_leaf_lies_inside_one_leaf_of_the_row_that_reads_it(shaped, mo
     into_on = ("PassWide_v1.o0 -> PassOn_v1.x", "16 bits", "1 bits")
     wires = {**dict.fromkeys((CARRIED, *PASSED, BESIDE), into_on),
              TWO_WIDTHS: ("WidthsTwo_v1.o0 -> WidthsWhole_v1.v", "more than one width", "32 bits")}
-    assert set(wires) == {what for what, want in ROWS.items() if want == "leaf-widths"}
+    short = dict.fromkeys((SHORT, SHORT_CLOSED), "ShortEight_v1.o0 -> ShortWhole_v1.v")
+    assert set(wires) | set(short) == {what for what, want in ROWS.items() if want == "leaf-widths"}
+    for what, wire in short.items():
+        said = {"error": "leaf-widths",
+                "message": f"wire {wire}: the writer's output is 8 bits and the row it fills 16. {FILLED}"}
+        assert got[what]["detail"] == got[what]["public"] == said, what
+        assert got[what]["count"] == got[what]["kinds"] == got[what]["exported"] == {"error": "leaf-widths"}, what
+        eight, whole = (ref.Template(codec.descriptor_id(fn), fn, n) for fn, n in shaped[what]["circuit"].templates)
+        # the two rows have the same words, which SPOT's check holds, and the row has bits the output has not
+        assert eight.port("o0", outs=True) == whole.port("v") == 1
+        assert (sum(eight.widths["o0"]), sum(whole.widths["v"])) == (8, 16)
+        assert whole.closed == (["v"] if what == SHORT_CLOSED else [])
     for what, (wire, writer, reader) in wires.items():
         said = {"error": "leaf-widths", "message": f"wire {wire}: the writer's leaves are of {writer} and the reader's "
                                                    f"of {reader}. {WHOLE}"}
@@ -346,8 +368,9 @@ def test_a_writers_leaf_lies_inside_one_leaf_of_the_row_that_reads_it(shaped, mo
     assert whole.closed == ["v"] and whole.widths["v"] == (1,) * 32
     # without the stage the reference refuses none of them, and counts the carried row as the one row across slots
     monkeypatch.setattr(ref, "leaf_widths", lambda *_: None)
-    off = {what: vectors.results(shaped[what]["case"]) for what in wires}
+    off = {what: vectors.results(shaped[what]["case"]) for what in (*wires, *short)}
     assert not any("error" in r["detail"] for r in off.values())
+    assert all(off[what]["detail"]["complies"] and off[what]["count"]["complies"] for what in short)
     for what in (CARRIED, *PASSED, BESIDE):
         carried = off[what]
         assert carried["detail"]["complies"] and carried["count"]["complies"], what
