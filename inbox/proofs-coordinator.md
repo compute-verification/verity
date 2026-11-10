@@ -23948,3 +23948,96 @@ so four tables a tile. That measurement is from 4 Oct, and I can restage it on C
   - In Header: `headerLine hr hc hk` (the public file's first line parses to `hdrJ r circ cls`), `jsonOf_draw` and `jsonOf_reg`.
   - In `InstanceStmt.Round2`: `stmt_ofJson`, `keys_stmt`, `checked_stmt` and `good_drawJ`.
   - Not yet, waiting on this run: `decode_x` and `x_small` (Sizes), `progHex_eq` and `partHex_eq` (Digests), and `insOf_x` and `hiddenOf_x` (Inputs).
+
+## 05:02Z Tue — VERIFYFAST-B: CIR-210's block (which Lean calls read a traced program, reading it once, Thursday); #8523 marked
+
+**#8523 is marked ready at `5cf6df3a77`** (04:49Z). Its suites run `r20261110-041237-4c8a` (vy-nebius-cpu-11) passed at
+that head: 6 suites, 0 failed. `verity-pouw-benchmarks` had 21 skips, none in the four changed test files, which have no
+skip. The preflight onto `next` refused nothing.
+
+**The block for CIR-210, to paste.** [read] is from the code, [run] names its run, [derived] is arithmetic on those
+(scaled lines are linear in the program's bytes, as EX2GATES found `draw` is), and [guess] is a guess.
+
+> **proofs, Tue 10 Nov 05:02Z. The 2.8 GB program costs 20 to 30 minutes and about 98 GiB a Lean call, and reading it
+> once a window would still be O(unrolled). The fix belongs in the form. Lean reading the program once a call is a
+> constant factor that proofs takes after Thursday.**
+>
+> **1. Which Lean calls read a program of this kind.**
+> - **Wednesday's final card run: none** [read]. No call there passes `--program`: neither the Lean leg (`verify --zk`
+>   and `ks-form` per statement) nor anything under `benchmarks/served_units/`. Each `verify` ends at `NO_PROGRAM` once
+>   `Zk.verify` and the checks before it pass. SERVEDCARD counts the job's own calls.
+> - **Thursday, counted at `long_row.py`'s check at `d713b37fba`** (option (a) of proofs' 04:27Z question on PRF-477;
+>   vllm answers by 06:30Z). It has no `_v2` key block, but it is still a traced program:
+>   - It is **396 MB** in 123 definitions [run r20261110-044416-3cd2]. 40% is `Sha512CompressFolded_v1`, SHA-512
+>     compressions traced once a fold pattern. Then `DsaPositionsMerge_v1` 19%, `DsaRadixTies_v1` 12%, the four
+>     `DsaTopKDigitPick_v1` 11% and `DsaMaskPositions_v1` 8%.
+>   - The check is 54 templates an instance [read], and round 2 proves at least one unit of each in a sampled span
+>     (vllm-longrow-s1b's 01:32Z on PRF-477, `service.TwoStage`). So at least 54 `verify --zk --program` calls a sampled
+>     span (56 in the chunk form), plus one `draw`, and each reads the whole 396 MB.
+> - **Thursday, if the long request registers the whole step** (option (b)), every call reads the step's program [read].
+>   - At #8520's head, step 16's sparse-MLA partition has 11 strata at `stratified:1`, so 11 `verify` calls and one
+>     `draw`.
+>   - Every call reads the window's one program with its 2.8 GB of key blocks, a column-end or combine stratum's call
+>     included.
+>   - `glm53_all_families_tp8_step16.json` adds 19 strata. Its program already holds `DsaRMSNorm_v2`'s 723 MB on `main`.
+>
+> **2. Reading the program once a window.**
+> - **PRF-464 doesn't touch the program** [read]. Its changes are to the circuit file.
+>   - On `main`: the templated statement (#7998, #7999, #8008), its session check (#8136), constants built once (#8287),
+>     and the template checked once and hashed beside its parse (#8315).
+>   - Not on `main`: #8326 (on `checked`), #8358, #8404, #8425 and #8453.
+>   - The batch entry (one parse a block type) is planned for circuit files and is on no branch.
+> - **How often a call reads it** [read]: once for its digest, then 3 to 5 times for each sampled session. Those are the
+>   stratified law (in the tables setup, and again in each table's hidden setup), the template units, the links (a whole
+>   `Program.decode`) and the registered check. `draw` reads it once.
+> - **Where the time goes,** in one read of the 396 MB program [run r20261110-044416-3cd2]:
+>   - `Flock.JsonParse.parse`: 19.5 s at a 14.1 GiB peak, 36 bytes of memory a byte, since it reads the text as a
+>     `List Char`;
+>   - `canon`, the parsed JSON written back as text: 18.6 s, and its output is the file's own bytes;
+>   - SHA-512: 0.9 s; the UTF-8 check: 0.7 s;
+>   - `Desc.parse` whole: 38.7 s; `Program.decode` whole: 62.6 s, the extra 24 s being its definitions decoded node by
+>     node;
+>   - for comparison only, core's `Lean.Json.parse`: 8.2 s at 7.2 GiB.
+> - **So the time is parse and re-serialization, about half each.** The hash is 2%. There is no separate unroll: the body
+>   is written as its traced gates, so decoding it is the unroll.
+> - **A call is 0.43 to 0.65 s a MB** [derived]: 3 to 4 minutes on 396 MB; 20 to 30 minutes and about 98 GiB on 2.8 GB
+>   (scaled). EX2GATES's stand-in (+50 s on 115 MB) is the low end; `draw` (0.1 s a MB, 35 GB a GB) is one read.
+> - **What's missing, and how large:**
+>   - **Once a call:** the program's parse doesn't depend on the sample, so one parse can serve every setup and session,
+>     each still deriving its own units from it [read].
+>     - The way I'd do it [guess]: cut each reader at its parse, so its proofs move by rewriting. That is one Lean PR in
+>       `verity/core/service/flock` (`FlockVerify`, `With/Setup`, `HmRow`, `HmLinks`, `Registered`, `ProvedScope`), of
+>       a few hundred lines. It is not low-risk.
+>     - It is 3 to 4× on every program, about 7 minutes a call on 2.8 GB [derived].
+>   - **Skipping `canon`** saves 48% of a read [run]. It needs a reader that refuses non-canonical bytes and hashes the
+>     file itself; the codec already writes canonical bytes, annotations aside.
+>   - **A byte-level reader** could about halve the parse, judging by core's parser [run]. Flock's reader must stay its own
+>     and be proved equal (`@[csimp]`).
+>   - **Once a window:** one process over a window's statements, or the verifier keeping its read by the program's digest
+>     between calls. Each needs a new entry point and a lemma that it gives each statement's verdict. Neither exists.
+> - **The fix belongs in the form.** A flat `_v2` body is its traced gates, so its description is the unrolled circuit.
+>   Reading it once a window is still O(unrolled): about 7 minutes and 98 GiB a window on 2.8 GB [derived].
+>   - Described by its Calls, the key block's description stays the size of one key's circuit, as `DsaMqaLogits_v4`'s
+>     already does (one Call to what its keys share, then a batch of the per-key Definition, `EW.shared_specialized`).
+>   - The same holds for `DsaRMSNorm_v2`, and for the long row's merge and SHA folds.
+>   - Lean's once-a-call read is worth having for every program, but it doesn't meet the rule.
+>
+> **3. For Thursday.**
+> - **If the long request is the long row's check (a): pay it.** It has no key block. Each call takes 3 to 4 minutes and
+>   14 GiB, so 54 calls take 2.6 to 3.9 hours one at a time, or 20 to 30 minutes eight at a time [derived]. Circuits needs
+>   to change nothing for Thursday.
+> - **If it is the whole step (b): describe the two key blocks by their Calls,** if EX2GATES's 12:00Z numbers bear it out.
+>   Paying 2.8 GB is 20 to 30 minutes and 98 GiB a call. The sparse partition's 12 calls take 4 to 6 hours one at a time,
+>   or about an hour six at a time on a whole 755 GB node [derived]. The other 19 strata come on top.
+> - **From EX2GATES's numbers I need:**
+>   - the verify call's seconds and peak memory, with its sessions and tables, which checks my count of 3 to 5 reads a
+>     session;
+>   - the Calls form's program size at the served statics;
+>   - whether it still stages flat with `ks_form_why` None;
+>   - Lean's verdict and seconds on one key block in that form.
+> - **Ours:** Lean reading the program once a call, marked by Tue 17 Nov 18:00Z, after Friday's Lean PR. It is not for
+>   Thursday.
+
+**No run of mine is pending.** `r20261110-044416-3cd2` (vy-nebius-cpu-12) ended at 04:57Z with rc 0. Its scripts are in
+`/cursor/stores/self/vfb/prog/`. Next: Wed from 03:30Z, the Lean leg; by Wed 12:00Z, the `SampledKSLiveV3` and `V5`
+statements.
