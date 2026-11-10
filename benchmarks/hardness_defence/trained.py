@@ -100,8 +100,10 @@ def head_table(args, spec: dict, model: str) -> dict:
 
     Quality: each arm's `cpu70b.sh` arms (its quality runs: the whole model with the head's trained codes,
     `qat.py --load-codes`, on the untrained point's windows and noise seeds), beside the untrained point, lever A and
-    bf16 (`levers70b.QUALITY`), as ratios to bf16 and to the untrained point, paired window by window. The codes an
-    arm's quality runs loaded must be the ones its training run exported (by sha256).
+    bf16 (`levers70b.QUALITY`), as ratios to bf16, to the untrained point and to the first control with quality runs
+    (the untrained head's codes loaded the same way: the untrained point again, in runs of the arms' own), paired
+    window by window. The codes an arm's or a control's quality runs loaded must be the ones its run exported (by
+    sha256).
     Credit: the book with the head's records replaced by the arm's pricing runs' (their scores only; jobs/
     70b-l0-3-trained.txt), each of those matrices credited min(1, least / 1.05) on the variant its map serves, under
     the exact rule and the generous one (the least of the exact and generous routes), the rest by the recommended
@@ -140,31 +142,43 @@ def head_table(args, spec: dict, model: str) -> dict:
     def windows_of(d, smap, spec_):
         return {s: d.get((smap, spec_, s), {}) for s in ("wikitext2", "fineweb_val")}
 
+    def quality_of(name, entry) -> dict:
+        if not entry.get("quality"):
+            return {}
+        exported = result(name)["codes"]["sha256"]
+        paths = [args.res / n / "out" / n / "result.json" for n in entry["quality"]]
+        for p in paths:
+            loaded = json.loads(p.read_text())["loaded_codes"]["sha256"]
+            assert loaded == exported, f"{p} loaded codes {loaded}, {name} exported {exported}"
+        d, more = Lo.load(paths)
+        notes.extend(more)
+        served = {k[:2] for k in d}
+        assert len(served) == 1, f"{name}: its quality runs serve {served}"
+        return windows_of(d, *served.pop())
+
+    def runs_of(entry) -> str:
+        return "; ".join(x for x in (entry["run"], entry.get("quality") and f"quality {', '.join(entry['quality'].values())}",
+                                     entry["pricing"] and f"pricing {', '.join(p[0] for p in entry['pricing'])}") if x)
+
     arm_point, arm_a = Le.ARMS["recommended (e2:F)"], Le.ARMS["A: layers 0-3 bf16"]
     bf16, point = windows_of(data, "bf16", "bf16"), windows_of(data, *arm_point[:2])
     lever = windows_of(data, *arm_a[:2])
     rows = [("untrained point", point, credit_of(), ", ".join(Le.QUALITY[n] for n in arm_point[2]))]
     out = {"model": model, "notes": notes, "controls": {}, "arms": {}}
+    control = None
     for name, ctl in spec.get("controls", {}).items():
-        out["controls"][name] = {"run": ctl["run"], "pricing": ctl["pricing"], "credit": credit_of(ctl["pricing"])}
-        rows.append((f"{name}: the untrained head as exported (control)", None, out["controls"][name]["credit"],
-                     f"{ctl['run']}; pricing {', '.join(p[0] for p in ctl['pricing'])}"))
+        q = quality_of(name, ctl)
+        control = control or q
+        out["controls"][name] = {"run": ctl["run"], "quality_runs": ctl.get("quality"), "pricing": ctl["pricing"],
+                                 "credit": credit_of(ctl["pricing"]) if ctl["pricing"] else None}
+        rows.append((f"{name}: the untrained head as exported (control)", q, out["controls"][name]["credit"], runs_of(ctl)))
     for name, arm in spec["arms"].items():
         train = result(name)
-        paths = [args.res / n / "out" / n / "result.json" for n in arm["quality"]]
-        for p in paths:
-            loaded = json.loads(p.read_text())["loaded_codes"]["sha256"]
-            assert loaded == train["codes"]["sha256"], f"{p} loaded codes {loaded}, {name} exported {train['codes']}"
-        d, more = Lo.load(paths)
-        notes += more
-        served = {k[:2] for k in d}
-        assert len(served) <= 1, f"{name}: its quality runs serve {served}"
-        q = windows_of(d, *served.pop()) if served else {}
+        q = quality_of(name, arm)
         tr = train.get("train", {})
         out["arms"][name] = {
-            "run": arm["run"], "quality_runs": arm["quality"], "pricing": arm["pricing"],
+            "run": arm["run"], "quality_runs": arm.get("quality"), "pricing": arm["pricing"],
             "credit": credit_of(arm["pricing"]) if arm["pricing"] else None,
-            "vs_bf16": ratios(q, bf16, sets), "vs_point": ratios(q, point, sets),
             "config": {k: train["config"].get(k) for k in ("layers", "each_layer", "lora", "lr", "batch", "seq", "tokens",
                                                            "recal", "serve")},
             "steps": train["steps"], "train_seconds": tr.get("seconds"), "curve": tr.get("curve"),
@@ -172,13 +186,13 @@ def head_table(args, spec: dict, model: str) -> dict:
                                   for s in e if s != "modes"}
                               for m, e in [(train["config"]["serve"], ev)] + list(ev.get("modes", {}).items())}
                        for when, ev in (("before", train["eval_before"]), ("after", train["eval_after"]))}}
-        rows.append((f"{name}: layers 0 to {spec['head'] - 1} trained", q, out["arms"][name]["credit"],
-                     f"{arm['run']}; quality {', '.join(arm['quality'].values())}; "
-                     f"pricing {', '.join(p[0] for p in arm['pricing'])}"))
+        rows.append((f"{name}: layers 0 to {spec['head'] - 1} trained", q, out["arms"][name]["credit"], runs_of(arm)))
     rows.append(("lever A: layers 0 to 3 served bf16", lever, credit_of(choose=Le.without_head),
                  ", ".join(Le.QUALITY[n] for n in arm_a[2])))
     out["rows"] = [{"arm": label, "vs_bf16": ratios(q, bf16, sets) if q else None,
-                    "vs_point": ratios(q, point, sets) if q and q is not point else None, "credit": c, "runs": runs}
+                    "vs_point": ratios(q, point, sets) if q and q is not point else None,
+                    "vs_control": ratios(q, control, sets) if q and control and q is not control and q is not lever
+                    else None, "credit": c, "runs": runs}
                    for label, q, c, runs in rows]
 
     print(f"| {model} | " + " | ".join(lbl for lbl, _s, _n in sets) + " | credited, exact | credited, generous | runs |")
@@ -187,16 +201,19 @@ def head_table(args, spec: dict, model: str) -> dict:
         cr = ["–", "–"] if r["credit"] is None else [f"{100 * r['credit'][k]['share']:.3f}%" for k in rules]
         cells = [fmt(r["vs_bf16"][lbl]) if r["vs_bf16"] else "–" for lbl, _s, _n in sets]
         print(f"| {r['arm']} | " + " | ".join(cells) + f" | {cr[0]} | {cr[1]} | {r['runs']} |")
-    print("\nAgainst the untrained point, paired window by window, and the share of lever A's gain (of its mean NLL "
-          "difference):\n")
-    print("| arm | " + " | ".join(lbl for lbl, _s, _n in sets) + " |")
-    print("|---" * (len(sets) + 1) + "|")
     a = out["rows"][-1]["vs_point"]
-    for r in out["rows"]:
-        if r["vs_point"]:
-            cells = [fmt(v) + (f" ({100 * v['dnll'] / a[lbl]['dnll']:.0f}% of A's)" if v and a[lbl] and r is not
-                               out["rows"][-1] else "") for lbl, v in r["vs_point"].items()]
-            print(f"| {r['arm']} | " + " | ".join(cells) + " |")
+    for key, title in (("vs_point", "the untrained point"), ("vs_control", "the control's own quality runs")):
+        if not any(r[key] for r in out["rows"]):
+            continue
+        print(f"\nAgainst {title}, paired window by window, and the share of lever A's gain over the untrained point "
+              "(of its mean NLL difference):\n")
+        print("| arm | " + " | ".join(lbl for lbl, _s, _n in sets) + " |")
+        print("|---" * (len(sets) + 1) + "|")
+        for r in out["rows"]:
+            if r[key]:
+                cells = [fmt(v) + (f" ({100 * v['dnll'] / a[lbl]['dnll']:.0f}% of A's)" if v and a[lbl] and r is not
+                                   out["rows"][-1] else "") for lbl, v in r[key].items()]
+                print(f"| {r['arm']} | " + " | ".join(cells) + " |")
     books = [(r["arm"].split(":")[0], r["credit"]) for r in out["rows"][:-1] if r["credit"]]
     print(f"\nThe head's credited matrices, least over the leaf (credit) under each rule; under the line is below "
           f"{T.LINE}:\n")
