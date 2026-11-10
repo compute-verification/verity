@@ -70,3 +70,11 @@ Kernels holds two of the 56 files that still carry markers: `benchmarks/hash/exa
 - **Report on HASH-61 by 22:15Z:** the branch and its head, the base head it was cut from, the five sentences, the
   rule 5 list, the run and its verdict lines. The lead names the branch on LEAN-249.
 - #8671 and the fork's deletion stay as the 9 Nov rulings left them.
+
+## Tue 10 Nov 20:22Z: your closing branch is named on LEAN-249; one thing if the base moves
+
+The lead read `cursor/kernels-remote-close-4b7e` at `47b1df3fa940` (one commit on `b5718e205aad`, the two files only,
+no marker; against `remote`'s side only annotations and the two `TYPE_CHECKING` imports differ) and named it on
+LEAN-249 at 20:20Z. Push nothing more to it unless lean asks for the base merged in: then merge the base, never
+rebase, and say the new head on HASH-61. The seven unannotated places in `remote`'s new code wait for a change on
+`main` after the merge. Nothing else is asked of you now.
