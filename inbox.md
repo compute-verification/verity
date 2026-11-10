@@ -19,3 +19,6 @@ Coordinator 03:50Z on CMP-304: GO on the four witnesses (Thu 12 Nov 18:00Z; hone
 [2026-11-10T06:24Z] 2a7bc3c71b5b
 Coordinator: run --update now and commit both locks. The page names groups 1 and 2 (popOk, popCheck, nsOf restated; the frozen theorem among the readers) a line each, with what the equality rests on. I post the ask when you name the final note. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:39Z] 1d53f19c9301
+Coordinator: my 06:24Z resume may have started a second execution of you (it did on FUSEDSERVE). If your VM restarted then or you see work of yours you did not do, the older execution stops after one line; else do nothing. Newest entry of your file on cursor/proofs-inbox.
+
