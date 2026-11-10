@@ -46,26 +46,12 @@ open Accounting Accounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
-<<<<<<< ours
 /-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the monitoring period and
 in every window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P`
 chained passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side
 sources that ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one
-pooled draw of `d` of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and
+pooled sample of `d` of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and
 `d_w ≤ 1`: if
-||||||| base
-/-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the horizon and in every
-window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P` chained
-passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side sources that
-ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one pooled draw of `d`
-of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and `d_w ≤ 1`: if
-=======
-/-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the horizon and in every
-window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P` chained
-passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side sources that
-ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one pooled sample of `d`
-of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and `d_w ≤ 1`: if
->>>>>>> theirs
 completions are as hard as `WorkHardness b rounds c_root cost` says and every pass's completions fit the squaring
 ceiling `F` (`SquaringCeiling cost F`), then the probability that every opening of every window passes while either the
 session's tier reads fall short of `(1 − γ̄)` of its `n·P·N·b` bits,
@@ -85,34 +71,16 @@ The terms of `γ` are fractions of a pass's `N·b` bits (`Rate.Deployed`): `μ_c
 pass can complete within its ceiling, and `μ_λ = λ/(N·b)` the compression slack.
 
 **The reading.** Every way to a receipt's block other than reading it from a tier in the pass is one term: holding it
-<<<<<<< ours
-on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the draw's
+on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the sample's
 shortfall is `d̄` over the monitoring period and `d_w` in each window. The prover is one resource: nothing here says
 which device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their
 sum's capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
-||||||| base
-on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the draw's
-shortfall is `d̄` over the horizon and `d_w` in each window. The prover is one resource: nothing here says which
-device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their sum's
-capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
-=======
-on chip, taking it over the link, completing it (whole or in part), or the slack the compression leaves; the sample's
-shortfall is `d̄` over the horizon and `d_w` in each window. The prover is one resource: nothing here says which
-device, machine or party reads, completes or holds a word. Reads are counted over the tiers, so `R·T` is their sum's
-capacity; the term `G` is the grinding the Fiat–Shamir seed allows (`fiat-shamir`).
->>>>>>> theirs
 
 **The proof** (`Accounting.SecurityProofs.RemoteSessionConservation`): each pass device is simulated by an interactive
 device of `RatePaidNamedRO`'s class whose side sources also answer the completed bits, so its link carries
 `L + b·F/(rounds·c_root)` (`WorkHardness` and `SquaringCeiling`), with the same tier reads, receipts and oracle-free
 side sources and nothing rebuilt; `RatePaidNamedRO` bounds each pass at each candidate root (a union over the `G`
-<<<<<<< ours
-candidates, `GrindChain`), the pooled draws are `RateSessionDraw`'s causal rounds, and the two readings are its
-||||||| base
-candidates, `GrindChain`), the pooled draws are `RateSessionDraw`'s causal horizon, and the two readings are its
-=======
-candidates, `GrindChain`), the pooled samples are `RateSessionSample`'s causal horizon, and the two readings are its
->>>>>>> theirs
+candidates, `GrindChain`), the pooled samples are `RateSessionSample`'s causal rounds, and the two readings are its
 `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋`.
 
 Frozen (no-function, hash): a bound in the random-oracle model over a session of abstract chip programs, which no Lean
