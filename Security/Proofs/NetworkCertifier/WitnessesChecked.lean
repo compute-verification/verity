@@ -56,17 +56,6 @@ open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Arg Compiled)
 open Claims.Witness.SamplingGeneric (leakL)
 
-/-- **A check every run passes misses with probability `0`**, at every compiled sampled verifier and statement, on any
-runs. -/
-theorem checkedWitness_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Msg → Msg) (D : Compiled Coin A)
-    (runs : Claims.Sampling.AuditStatement → Claims.Sampling.Partition → Claims.Sampling.Wit → Set (ℕ → Bool))
-    (x : Msg) : CheckedWitness H D runs (fun _ _ => True) (fun _ => 0) x := by
-  intro Ω _ _ P
-  unfold PrCheckMiss
-  refine le_of_eq ((Pr_congr fun r => iff_false_intro ?_).trans Pr_false)
-  simp
-
 /-- **`SampledLeakChecked`'s acceptance conclusion fails at the accepting verifier** `leakL`, at one step at `δ = 0`,
 with no input registered or checked, at the check every run passes: at the statement `[]`, in scope
 (`leakL_scopeAcc`) with the check's miss `0` (`checkedWitness_true`), its silent prover's bound fails, since no witness
