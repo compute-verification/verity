@@ -13,15 +13,15 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../flock"
+path = ".."
 
 [[require]]
 name = "core_protocol"
-path = "../../protocols/interface"
+path = "../interface"
 
 [[require]]
 name = "verity_difftest"
-path = "../../difftest/lean"
+path = "../../../core/difftest/lean"
 
 [[lean_lib]]
 name = "Firewall"

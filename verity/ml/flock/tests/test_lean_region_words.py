@@ -17,7 +17,7 @@ import pytest
 
 from verity.circuits.codec import canonical_json
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit@e51e2b86+seed-injection"
 GEMM = "art:3104c2f9/gemm-k1024/stage"

@@ -20,7 +20,7 @@ path = ".."
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/core/service/flock"
+path = "../../verity/flock/verifier"
 
 [[require]]
 name = "certifier_program"
@@ -33,7 +33,7 @@ path = "../../verity/core/primitives/randomness"
 # V*'s circuits as core code (`VStar`), which the bridge (`Proofs.Flock.VBridge.OfVStar`) is stated over
 [[require]]
 name = "core_vstar"
-path = "../../verity/core/service/vstar"
+path = "../../verity/flock/verifier/vstar"
 
 # Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event

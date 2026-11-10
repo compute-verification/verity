@@ -1,4 +1,4 @@
-"""PoUW's check of one audit execution phase as a core protocol (`verity/core/protocols/interface`): the Python
+"""PoUW's check of one audit execution phase as a core protocol (`verity/flock/verifier/interface`): the Python
 reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served execution phase's verifier
 (`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
 

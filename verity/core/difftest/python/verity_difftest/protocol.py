@@ -1,5 +1,5 @@
 """The core protocol interface's framing in Python, for a `ProtocolPort`'s reference: `Core.Protocol.case` and
-`Core.Protocol.answer` (`verity/core/protocols/interface`, `CoreProtocol/Cli.lean` and `Protocol.lean`), with
+`Core.Protocol.answer` (`verity/flock/verifier/interface`, `CoreProtocol/Cli.lean` and `Protocol.lean`), with
 the protocol's own decoders and check passed in.
 
 `answer` follows the Lean order, which decides the outcome's `commitment`: a malformed case (not an object, a field missing,

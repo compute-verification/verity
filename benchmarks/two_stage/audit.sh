@@ -19,7 +19,7 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 
 # under FLOCK_CHALLENGER=1 each session's challenger is audited in Lean too (the difftest's challenger pieces)
 SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
-{ (cd verity/core/service/flock && lake build flock-verify flock-firewall) \
+{ (cd verity/flock/verifier && lake build flock-verify flock-firewall) \
     && (cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
@@ -28,7 +28,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/floc
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/flock/verifier/.lake/build/bin/flock-verify
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm

@@ -39,7 +39,7 @@ TREE = {
     "verity/ml/flock/check_build.sh": "set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n",
     "verity/ml/flock/live/src/lib.rs": "fn a() {}\n",
     "verity/ml/flock/verifier/ci.py": "print('agree')\n",
-    "verity/core/service/flock/lakefile.toml": 'name = "flock_verifier"\n',
+    "verity/flock/verifier/lakefile.toml": 'name = "flock_verifier"\n',
 }
 
 

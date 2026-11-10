@@ -28,7 +28,7 @@ spot = [
 # C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
 flock = [
     "verity/ml/flock",
-    "verity/core/service/flock",
+    "verity/flock/verifier",
     "Security/Proofs/Properties/Flock{,.lean}",
     "Security/*/Flock{,.lean}",
     "Security/Definitions/Assumptions/Flock.lean",
@@ -44,10 +44,10 @@ pouw = [
 ]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [
-    "verity/core/service/firewall",
+    "verity/flock/verifier/firewall",
     "Security/*/Flock/Claims/{ZK,Recursion}{,.lean}",
     "Security/**/RecGeneric*",
-    "verity/core/service/vstar",
+    "verity/flock/verifier/vstar",
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
 # certifier's package still holds

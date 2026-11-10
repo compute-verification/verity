@@ -14,11 +14,11 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"
-path = "../../protocols/interface"
+path = "../../../flock/verifier/interface"
 
 [[require]]
 name = "flock_verifier"
-path = "../flock"
+path = "../../../flock/verifier"
 
 # The proof system's challenger signs its record with LMS (`Spot.ChallengerRecord`).
 [[require]]

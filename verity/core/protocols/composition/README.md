@@ -1,7 +1,7 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
 Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
-hold them, each on Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
+hold them, each on Flock's verifier and the core interface (`../../../flock/verifier/interface`) by path, onsite and remote also on their
 subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id subprotocols`, the
@@ -119,7 +119,7 @@ products are one:
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
 network certification name one record a window, in their evidence and their period commitment, so they join the check
-when each window's record names the registration log's head (`Core.Registration`, `../interface`), which then is the one
+when each window's record names the registration log's head (`Core.Registration`, `../../../flock/verifier/interface`), which then is the one
 every subprotocol names.
 
 A tie (`Tie`, `Tie.lean`) is the values each named subprotocol reads off its own case (its commitment's bytes, or its

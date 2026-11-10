@@ -2299,7 +2299,7 @@ source = { virtual = "verity/definitions/evaluate" }
 [[package]]
 name = "verity-core-firewall"
 version = "0.1.0"
-source = { virtual = "verity/core/service/firewall" }
+source = { virtual = "verity/flock/verifier/firewall" }
 dependencies = [
     { name = "hypothesis" },
     { name = "verity-difftest" },

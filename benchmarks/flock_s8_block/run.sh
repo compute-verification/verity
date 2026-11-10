@@ -18,7 +18,7 @@
 #               (the GPU's busy time, not its utilization counter's)
 #   5. cpu      per statement of CPU_STATEMENTS (and without --zk, CPU_PLAIN_STATEMENTS), the same session set without --gpu
 #               (the CPU prover), no lease
-#   6. lean     Lean's flock-verify (verity/core/service/flock, built into FLOCK_WORK keyed by its sources) on every session
+#   6. lean     Lean's flock-verify (verity/flock/verifier, built into FLOCK_WORK keyed by its sources) on every session
 #               steps 4 and 5 kept of `served` and `served-plain`, on the verifier's cores: `verify --zk` of served's --zk sets,
 #               and `verify` of served-plain's plain sets as the plain-leaves statement on its full sample; per session its verdict,
 #               wall and peak memory in out/lean (hm96 leaves without --zk are outside Lean's plain scope, so not verified)
@@ -208,12 +208,12 @@ fi
 LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
-  LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+  LSHA=$(cd verity/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
   LV=$FW/lean-$LSHA/flock-verify
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
-    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/core/service/flock/. $FW/lean-src/ \
+    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/flock/verifier/. $FW/lean-src/ \
       && (cd $FW/lean-src && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
       && mkdir -p $(dirname $LV) && cp $FW/lean-src/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi

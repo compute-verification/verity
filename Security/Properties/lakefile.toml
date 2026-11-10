@@ -48,7 +48,7 @@ path = "../../verity/core/devices/memory_challenger/lean"
 
 [[require]]
 name = "core_firewall"
-path = "../../verity/core/service/firewall"
+path = "../../verity/flock/verifier/firewall"
 
 [[require]]
 name = "network_check"
@@ -80,7 +80,7 @@ path = "../../verity/core/protocols/onsite"
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/core/service/flock"
+path = "../../verity/flock/verifier"
 
 [[lean_lib]]
 name = "Properties"

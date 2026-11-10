@@ -5,7 +5,7 @@ description: >
   scratch probes with #print axioms, exact?, trace_state; a slow proof), records, the fast path and check.py,
   stating a guarantee (counted extractors, what proved means), assumptions as named Props, listing, freezing and
   moving guarantees in lean-audit.json, a property's shape, upstream.py watches, parallel Lean lanes, and the standing
-  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
+  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/flock/verifier, Security
   and its Proofs and Properties, a protocol's lean/), when a Lean build or proof is slow or runs out of memory, editing
   a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---

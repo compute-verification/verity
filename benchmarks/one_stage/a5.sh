@@ -31,7 +31,7 @@ uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/syn
 PY=$REPO/.venv/bin/python
 
 # Lean's flock-verify, in the background while M0 builds (its own .lake in this clone)
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}
@@ -39,7 +39,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/floc
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 (cd verity/core/service/spot && lake build sampled-proofs-verifier sampled-proofs-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 # every member's server on a challenger of its own (`a0.session`); its coins and its audit are the build above

@@ -10,7 +10,7 @@ is what the Lean is checked against; after, the Python is held to the Lean.
 - `lean/` is the Lake package `verity_difftest`, lib `Difftest`: `Difftest.serve` answers requests `{"fn", "input"}` one
   JSON line at a time with `{"output"}`, `{"reject"}`, or `{"error"}` for a protocol fault (an unknown `fn`, a bad
   request, an output with no canonical form). Output is canonical JSON, written by Flock's `Flock.canon` (required by path
-  from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive. `annot-difftest`
+  from `verity/flock/verifier`). `difftest-example` is the port the harness's own tests drive. `annot-difftest`
   (`AnnotDifftest.lean`) serves Flock's annotation check, `Flock.Annot`, and its per-gate reference, for the tests that
   hold `verity.circuits.query_ast` to them; `verity_difftest.annot` is its Python side (`port`, `server`, `instance`,
   and `INPUTS`, the files a calling suite declares), and `tests/test_annot.py` holds it to `query_ast` on small Programs.
@@ -25,7 +25,7 @@ is what the Lean is checked against; after, the Python is held to the Lean.
   reject unless waived). A failure is a `Mismatch` naming the minimal input and the seed that finds it again. Runs are
   derandomized, with no example database and no deadline.
 - Protocol mode drives a protocol's own `serve` executable, the interface's `Protocol.serve`
-  (`verity/core/protocols/interface/README.md`): a `ProtocolPort` sends each case line and compares the
+  (`verity/flock/verifier/interface/README.md`): a `ProtocolPort` sends each case line and compares the
   outcome's `verdict`, `commitment`, `public` and `profile` exactly and its `reason` not at all, through the same server,
   comparison and shrinking as `Port`. `verity_difftest.protocol` is the interface's framing in Python (`answer`, `unhex`,
   `canonical_json`, `nat`), so a reference writes only its protocol's decoders and check. A run fails as vacuous unless

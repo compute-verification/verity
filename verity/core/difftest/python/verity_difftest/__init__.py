@@ -8,7 +8,7 @@ and a Hypothesis strategy of inputs, invalid ones included. There are two kinds,
   give the same output as canonical JSON (`canonical`: compact, keys sorted, integers only), or both reject (reject parity:
   the reasons need not match).
 * `ProtocolPort`: a core protocol's executable in `serve` mode (`Core.Protocol.main`, the interface of
-  `verity/core/protocols/interface`), one case `{"commitment", "evidence", "params"}` per line and one outcome
+  `verity/flock/verifier/interface`), one case `{"commitment", "evidence", "params"}` per line and one outcome
   per case. Lean and Python must agree on `verdict`, `commitment`, `public`, `profile` and `protocol` exactly; `reason` is
   not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 

@@ -8,7 +8,7 @@
 # $OUT gets table_root.jsonl (one row per phase: calls, ns a call, calls a second, ms, peak RSS) and build.log.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
-F=$PWD/verity/core/service/flock
+F=$PWD/verity/flock/verifier
 P=$PWD/verity/core/service/spot
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT

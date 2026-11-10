@@ -8,7 +8,7 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../../../service/flock"
+path = "../../../../flock/verifier"
 
 # The period's check reads a scan's layout off its description as NCI's check does (`NciCheck.Desc`'s layout checks).
 [[require]]
@@ -19,7 +19,7 @@ path = "../nci/lean"
 # certificates with the LMS port.
 [[require]]
 name = "core_protocol"
-path = "../../interface"
+path = "../../../../flock/verifier/interface"
 
 [[require]]
 name = "certifier_program"

@@ -39,8 +39,8 @@ for c in $(ls "$W/live"); do
   echo "built upstream $c ($bin)"
 done
 
-(cd "$SRC/verity/core/service/flock" && lake build)
-LEAN=$SRC/verity/core/service/flock/.lake/build/bin/flock-verify
+(cd "$SRC/verity/flock/verifier" && lake build)
+LEAN=$SRC/verity/flock/verifier/.lake/build/bin/flock-verify
 
 SETS=()
 [ -n "${CI_SETS:-}" ] && SETS=(--sets "$CI_SETS")

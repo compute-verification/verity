@@ -18,12 +18,12 @@ untraced = [
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/flock/verifier/interface",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/protocols/bandwidth",
           "verity/core/protocols/record.py", "verity/core/protocols/reporting.py",
           "verity/core/devices/__init__.py",
-          "verity/core/service/flock", "verity/core/primitives/identity", "verity/core/primitives/randomness",
+          "verity/flock/verifier", "verity/core/primitives/identity", "verity/core/primitives/randomness",
           "verity/core/primitives/lms", "verity/core/difftest", "verity/core/devices/memory_challenger",
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
