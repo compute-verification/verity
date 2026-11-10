@@ -92,7 +92,8 @@ Hardware figures are data and an input to the protocols.
 - The auditor brings a data sheet for each GPU or host model.
 - The developer registers its hardware: its hosts, devices, memory and links, and the figures it states for each model.
 - Each protocol that accounts for hardware takes the registered hardware as an argument and declares which part it
-  accounts for: PoUW the devices, PoUS the memory, the network certifier and the bandwidth audits the links.
+  accounts for: PoUW the devices, PoUS the memory held, PoUB the rate at which that memory is read, and the network
+  certifier the links.
 - Remote and onsite refuse a run in which something registered is left unaccounted, within the protocol's parameters.
 
 ## What is written in what
