@@ -29969,3 +29969,30 @@ So three at a time still fit a 755 GB node, and the 48 take about 8 hours and ab
 4. **A false start** [run]. At 17:18Z to 17:33Z I launched fourteen runs with `--input`, which names a path on the node and does not send a file. One failed with rc 127 before any work. I cancelled the rest from their queues (`--by BREAKEVEN`). The run above sends every file with `--send`.
 5. **0d56** [run]: running in slot r3 on cpu-8 since about 17:38Z. Its verdict is in my next entry.
 6. **vllm's 17:24Z question** (the 2.05 points): ready to paste in my 00:00Z entry or sooner.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 17:42Z: BLOCKER for (A): with registered reads, the verifier's setup refuses a statement without a program, so "no program" cannot give `setupOf true (x r)`; a decision is needed
+
+1. **What refuses it [read].**
+   - `Ins.setup` runs `checkRegistered st s.registered` on each statement (`Security/Proofs/Flock/Claims/DeployInputs.lean:247`). With registered reads (`some regPorts`), that is `Registered.check st.c st.pub registered (Registered.derived st.partition)` (`Flock/Registered.lean:651`).
+   - `Registered.check` throws "registered reads: the statement's units are taken as stated, and a read's position binds only as far as its unit does: the verifier derives them from its own program (--partition, --program)" unless `derived` holds (`Registered.lean:307`).
+   - `derived` reads the partition finding's `units`. Without a program, `checkPartition` returns `derived := false` (`Flock/HmRow.lean:1309`). Only the branches that hold the program set it true: `deriveTemplateUnits` with `HmLinks.check`, or `qwordFinding` (`HmRow.lean:1282, 1285, 1580, 2398, 2555`).
+   - So at the no-program statement with registered reads, `Ins.setup (ins r)` fails and `setupOf true (x r) = none`. This is a design rule of the verifier (an instance's label binds nothing unless the verifier derived its unit), not a gap to weaken.
+   - I missed it at the 17:14Z decision: I had walked only `Read.setup`, not `Ins.setup`'s checks after it. Nothing built so far is lost. Texts, the header, the population and the partition walks hold either way; with a program, only `setup_stX`'s finding branch grows.
+2. **The two ways on.**
+   - **(a) Restore the program.** Revert the statement part of `38e8c9d0bc` and prove at the instance `Program.decode`, `HmRow.deriveTemplateUnits` and `HmLinks.check`.
+     - `Program.decode` builds a `Std.HashMap String Json` of definitions, and its decoder state carries a `Std.HashMap String Nat` and a `Std.HashSet String`. All are keyed by `String.hash`, which the kernel cannot evaluate, so each lookup goes through the `Std.HashMap` lemmas (`getElem?_insert`, `contains_insert`), over a program of about three definitions.
+     - This matches TWOINSTANCE's target: its `Instance.lean` docstring asks for a reference statement "whose registered reads carry roots".
+     - Size [guess]: 300 to 500 lines, 3 to 5 node iterations. (A) would move to Thu 12 Nov 18:00Z, and (D) stays Fri 13 Nov 12:00Z if (A) lands Thu.
+   - **(b) Drop the registered reads.** No `registered` in the header, `Raw.registered := none`, `R.reads := .null`.
+     - SPOT's second stage accepts null reads where the reference's are null (`Spot/SecondStage.lean:893` `valuesOk`; `SecondStageExamples.lean:51`'s `exOwn`) [read].
+     - (A) stays on Wed 11 Nov 18:00Z [guess], and the no-program clause stays.
+     - But `Addresses` then has only `ReadsInterior` for every gate a checked unit needs (`SpotFlock/SlotsAt.lean:141`). That needs the gate to be one the replay block does not commit at its boundary (`Boundary rb g = false`), and a linked port's gates are at the boundary. So (b) works only if SLOTSAT's `Addresses` at this instance needs no `ReadsRegistered`, for example with `links := #[]`. That is SLOTSAT's and TWOINSTANCE's call, not mine.
+3. **My recommendation: (a).** It is the statement TWOINSTANCE describes, and the verifier's honest form for registered reads. The cost is a day on (A).
+4. **Until you decide**, I'll do work that is common to both ways or that touches no statement byte:
+   - the rest of the `Ins.setup` walk (`noIdentifier`, `Zk.shapeOk`, `RecSetup.checks`, which with no inner shape is `isVStar "copy16" = false`, `RecCoins.check`, `RecVStar.checkPubRows`, `ProvedScope.drawLaw`);
+   - for (a), a separate module proving `Program.decode` on the program's bytes. It touches no statement byte and is no use under (b).
+   - `cadc` keeps running: its verdicts (Texts, Setup's walks, `setup_x`) hold either way.
+5. **Head** `606efe5986`, unchanged since 17:36Z. Run `r20261110-173217-cadc`, ETA about 20:00Z.
+6. **For PRF-460, ready to paste:**
+
+   > PRF-460 TWOWITNESS 17:42Z: blocker for (A). With registered reads, Flock's verifier refuses a statement whose units are taken as stated (`Registered.check` needs units derived from the verifier's own program), so the no-program statement can never be set up (`setupOf true (x r) = none`). Options: (a) restore the program and prove `Program.decode`, `deriveTemplateUnits` and `HmLinks.check` at the instance through `Std.HashMap` lemmas, (A) moving to Thu 12 Nov 18:00Z; or (b) drop the registered reads, if SLOTSAT's `Addresses` can use `ReadsInterior` alone at this instance. Recommended: (a). Decision with @proofs.
