@@ -25,6 +25,13 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - Never list command lines (`ps`, `pgrep -af`): the exec daemon's argv holds tokens. Use `pgrep -f`.
 - Nested code in Markdown you write is fenced with `~~~`.
 
+## Agents, today
+
+- **top's hold (16:18Z): 88 agents run; none is launched or resumed until top posts a count under 60.** A worker
+  with work to do now stays. **A worker that only waits ends its turn**, note written and pushed, saying what it
+  waits on (a run's id and end time, the layout on `main`, an owner's answer): a waiting turn holds one of the 100.
+  The lead resumes you when what you wait on arrives and the count allows. Runs you queued keep running without you.
+
 ## The queue, today (Tue 10 Nov)
 
 - **Changed at 16:09Z (top, TOP-394 16:09Z): the cut is five hours earlier.** The loop builds no new candidate since
