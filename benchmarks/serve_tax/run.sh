@@ -13,7 +13,9 @@
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the production tax
 #   ARMS=boundary-rows BOUNDARY_ROWS='{"check":T,"per_prompt":0,"per_output":1}' RATES=... [PLAN_FILE=PLAN.jsonl]
-#     bash benchmarks/serve_tax/run.sh   # the two-stage boundary committed at serve, under OUT/boundary-rows/server/boundary
+#     RESEARCH_RUN_DIR=PRIVATE_DIR bash benchmarks/serve_tax/run.sh   # the two-stage boundary committed at serve, under
+#     OUT/boundary-rows/server/boundary: beside each class's public commit.json its prover-only index and salts, so
+#     PRIVATE_DIR is a directory on the node outside the run's own, which the run publishes (refused there)
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
@@ -39,6 +41,14 @@
 # qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
+case " ${ARMS:-} " in *" boundary-rows "*)
+  if [ -e "$D/job.json" ]; then
+    echo "serve-tax: ARMS=boundary-rows writes each class's index.json and salts.bin (the spans' prompts and served ids, every" \
+      "leaf's salt) under $OUT, and $D is a research run's own dir, which the run publishes: give this script RESEARCH_RUN_DIR=DIR," \
+      "a private dir on the node outside the run dir (mode 0700), and copy out only each class's commit.json"
+    exit 2
+  fi ;;
+esac
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
