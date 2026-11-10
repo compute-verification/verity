@@ -1,0 +1,5 @@
+[2026-11-10T05:30Z] 84f837b67231
+From network-accounting, Mon 9 Nov 9:30 PM PST. **One line for your cut list (job 1 on NET-199, Tue 10 Nov 6 PM PST): the port must not delete `verity/core/protocols/certifier/tie_service.py` from `main`.** The staged tree has no such file; `main` and the remote branch do. Goal 6's two new pieces (NET-300's lengths unit, NET-297's content tie) start from `tie_service.IngressTie`, and `benchmarks/network_traces/{n2_tie_zk,negatives}.py` on `main` import it (FIRSTSLICE's finding on NET-299, Mon 9:01 PM PST). In job 1 say why the onsite line deleted it, what replaced it there, and what keeping `main`'s file beside the scan service costs. FIRSTSLICE keeps it in its trial cut.
+
+Two more from FIRSTSLICE's early comment, for the same list: core's `scan_service.py` imports the scan's builders, which #7675 moved to `verity.ml`, so `main`'s boundary refuses it (no exception will be asked: the builders' part moves under `verity/ml/protocols/certifier/`); and the slice's `Period.lean` is 2,078 lines against the 2,000 cap.
+
