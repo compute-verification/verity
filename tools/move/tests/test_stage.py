@@ -185,6 +185,28 @@ def test_a_path_map_that_acknowledges_a_split_reference_stages(tmp_path, monkeyp
     assert _show(repo, "staged", "gamma/z.py") == "Z = 1"
 
 
+def test_through_refusals_keeps_what_isnt_certified_and_goes_on_past_a_map_that_fails(tmp_path, monkeypatch, capsys):
+    """A move that lands on its own full check is staged whole: the commit `move_check.py` refuses is kept and the next
+    map runs on it, a map whose script fails makes no commit, and the certificate says which is which. The exit is 1."""
+    refuses = ('import json, sys\nprint(json.dumps({"certified": False, "refusals": [{"path": "a.py", "reason": "not a move"}]}))'
+               '\nprint("move-check: refused", file=sys.stderr)\nsys.exit(1)\n')
+    lands_twice = PATHS.replace('"alpha/" = "beta/"', '"user.py" = "notes.md"').replace('"alpha" = "beta"\n', "")
+    files = {**TREE, "tools/move/zorble_map.toml": WORDS, "tools/move/bad_map.toml": lands_twice,
+             "tools/move/alpha_map.toml": PATHS}
+    repo, base = _repo(tmp_path, files, {ST.MOVE_CHECK: refuses})
+    cert = tmp_path / "cert.json"
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "tools/move/bad_map.toml", "tools/move/alpha_map.toml",
+                  "--base", base, "--no-lock", "--through-refusals", "--branch", "staged", "--certificate", str(cert)) == 1
+    out = capsys.readouterr().out
+    assert "tools/move/bad_map.toml: no commit" in out and "tools/move/zorble_map.toml: 1 paths move_check.py refuses" in out
+    doc = json.loads(cert.read_text())
+    one, two, three = doc["moves"]
+    assert (one["certified"], two["commit"], three["certified"]) == (False, None, False)
+    assert "two files would land at one path" in two["refused"] and three["parent"] == one["commit"]
+    assert doc["head"] == three["commit"] == git(repo, "rev-parse", "staged")
+    assert _show(repo, "staged", "notes.md") == "A quux is `zorble`." and _show(repo, "staged", "beta/x.py").startswith("def f")
+
+
 def test_a_map_that_renames_nothing_is_refused(tmp_path, monkeypatch, capsys):
     repo, base = _repo(tmp_path, {**TREE, "tools/move/none_map.toml": WORDS.replace("zorble", "frobnitz")})
     assert _stage(monkeypatch, repo, "tools/move/none_map.toml", "--base", base) == 1
