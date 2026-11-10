@@ -106,6 +106,10 @@ FUSED = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8ReadGemm_v1", "MoeExpertFp8GemmW_v1
 SLOTS = {"MoeRouterSigmoidBias_v1": "MoeRouterSigmoidBiasSlots_v1"}
 #: the family of the per-expert cut's table reads
 READ = "EmbeddingRead_v1"
+#: DSA's long rows' history reads cut into reads of the request's history table at the layer (`history_rows`), by the row
+#: family: its writer's family, whose units' outputs are the table's rows.  A row of TOPK reads is TOPK ``READ`` units at
+#: V = the table's capacity (`verity.ml.commitments.history.CAPACITY`) and the row's H, the ``history`` layout
+HISTORY = {"DsaHistoryReads_v1": "DsaLatentRow_v1"}
 #: a member's layout by the family of its template's word; any other template is the row itself
 LAYOUTS = {"RoPEHead_v1": "rope", "GemmCoordinate_v1": "gemm", "ScaledMmS8Coordinate_v1": "s8", READ: "read",
            **dict.fromkeys(EXPERTS.values(), "expert"), **dict.fromkeys(FUSED.values(), "fused"),
@@ -122,10 +126,11 @@ class Template:
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
     family, ``"chain"`` for a ``CHAINS`` block or end family, ``"stage"`` for a ``STAGES`` stage family, ``"expert"``,
     ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, fused blocks, table reads and router slots
-    (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``); else ``"row"``).
+    (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a ``HISTORY`` row's history reads (`history_read`); else
+    ``"row"``).
     ``packed``: a row, coordinate, slice, part, K-chunk, split, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
-    bytes. A read's and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
+    bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
     committed as Flock's bit rows."""
     id: str
     fn: Any
@@ -184,9 +189,9 @@ def template(t: str) -> Template:
               else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
               else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
-              else LAYOUTS.get(spec_base(word), "row"))
+              else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
     packed = None
-    if widths != {16} and layout not in ("s8", "read", "fused"):
+    if widths != {16} and layout not in ("s8", "read", "fused", "history"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
         if layout not in ("row", "coord", "slice", "part", "kchunk", "split", "chain", "stage", "expert", "slots") or any(
@@ -197,6 +202,16 @@ def template(t: str) -> Template:
         packed = tuple(next(iter(e)) for e in elems)
     hit = _TEMPLATES[t] = Template(t, fn, word, layout, packed)
     return hit
+
+
+def history_read(word: str) -> bool:
+    """Whether ``word`` is a ``HISTORY`` read: ``READ`` at V = a history table's capacity, which no expert table has (a template
+    is its Definition, so another read at that V would be the same template, which `history_rows.Plan` refuses unless its rows
+    are ``HISTORY``'s)."""
+    from verity.ml.commitments.history import CAPACITY
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    return spec_base(word) == READ and int(spec_statics(word).get("V", 0)) == CAPACITY
 
 
 def cols_refused(word: str) -> str | None:
@@ -360,6 +375,12 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             hit += ((descriptor_id(read(E, 2 * K // G)), -(-N // G)),)
         if (fam := SLOTS.get(spec_base(spec))) is not None and (c := _bind(spec, fam)) is not None:
             hit += ((descriptor_id(c), 1),)
+        if spec_base(spec) in HISTORY:
+            from verity.ml.commitments.gates.embedding import read
+            from verity.ml.commitments.history import CAPACITY
+
+            S = spec_statics(spec)
+            hit += ((descriptor_id(read(CAPACITY, int(S["H"]))), int(S["TOPK"])),)
     _UNITS[spec] = hit
     return hit
 

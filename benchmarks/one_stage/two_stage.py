@@ -92,8 +92,9 @@ class Rule:
 
 
 def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
-    names = [*BR.PORTS, *(n for n, _ in rule.interior)]
-    values = (tuple(S.Value(p, BR.SCHEMA, "serve") for p in BR.PORTS)
+    served = layout.schemas()
+    names = [*served, *(n for n, _ in rule.interior)]
+    values = (tuple(S.Value(p, s, "serve") for p, s in served.items())
               + tuple(S.Value(n, s, "interior") for n, s in rule.interior))
     public = (S.Public("population", "structure", "the class's spans N; then the sampled spans' proof blocks Q n_rho"),
               S.Public("window", "structure", "provenance: the serve's run, the window, the class, the check, the index's leaf"),

@@ -139,9 +139,10 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/engine/__init__.py", "integrations/vllm/verity_vllm/engine/served_seed.py",
           "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
-          # boundary_rows defines TemplateInlined_v1, which its sidecar binds
+          # boundary_rows defines TemplateInlined_v1, which its sidecar binds; boundary_rows imports boundary_tables
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
           "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
+          "integrations/vllm/verity_vllm/pipeline/boundary_tables.py",
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/spot/__init__.py",
           "verity/core/protocols/certifier/cache_step.py", "verity/core/protocols/certifier/cache_step.circuit-check.py",

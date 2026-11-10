@@ -11,6 +11,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -19,7 +20,8 @@ from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.spot import challenger as Ch, service as S
 from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity_vllm.pipeline import boundary_rows as BR
+from verity.ml.commitments import history as HT
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -119,6 +121,26 @@ def test_the_second_stages_coins_follow_the_whole_first_stage():
     assert staged(1) == b"\x03"
     with pytest.raises(Ch.CoinError, match="no live coins"):
         staged.commit(b"\x00" * 64)
+
+
+def test_a_class_with_history_tables_declares_and_registers_them_beside_its_values():
+    """A class whose spans' history tables are committed (`Layout.layers`): its Spec declares each table a served value
+    of the history table's row schema after ``b.ingress`` and ``b.egress``, and its first stage registers their roots,
+    from ``commit.json`` alone, before the coins commit."""
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    layout = BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=(0, 1), capacity=8)
+    tables = {}
+    for t in layout.tables:
+        h = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
+        h.append(np.zeros((6, BT.WORDS), dtype=np.uint16))
+        tables[t] = h.root
+    pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables=tables).public()))
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
+    served = [(v.name, v.schema) for v in got.stream.spec.values if v.phase == "serve"]
+    assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
+    assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
+    assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
+    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
 
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():

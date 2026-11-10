@@ -1,0 +1,330 @@
+"""History tables (`Spot.HistoryTable`) against `verity.ml.commitments.history`: a table's domain, placeholder and root
+at a capacity (`history_root`), the registered root held to it (`history_check`), and each position's source from the
+program's runs (`history_order`), on valid and broken inputs at capacities up to 64, and once at the pinned capacity,
+`2^17`. The named cases hold what the guarantee reads off the check: a rank past the table's length opens as the public
+placeholder, and the root binds the rows' order and the capacity."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+import shutil
+from pathlib import Path
+
+import pytest
+from hypothesis import strategies as st
+
+import verity_difftest as D
+from verity.ml.commitments import history as H
+
+PACKAGE = Path(__file__).resolve().parents[1]
+PIECES = "sampled-proofs-difftest"
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+#: `Flock.unhex`'s domain: pairs of lowercase hex digits
+HEX = re.compile(r"(?:[0-9a-f]{2})*")
+NAMES = st.sampled_from(["", "k_hist", "layer.3/keys", "é"])
+CAPS = st.sampled_from([2, 4, 8, 16, 32, 64])
+
+
+def _bc(seed: int, i: int) -> bytes:
+    return b"".join(hashlib.sha512(f"{seed}/{i}/{h}".encode()).digest() for h in range(2))
+
+
+def _nat(x, what: str) -> int:
+    if not (type(x) is int and x >= 0):
+        raise D.Reject(f"{what} is not a natural number")
+    return x
+
+
+def _str(x, what: str) -> str:
+    if type(x) is not str:
+        raise D.Reject(f"{what} is not a string")
+    return x
+
+
+def _hexes(xs, what: str) -> list[bytes]:
+    if not isinstance(xs, list):
+        raise D.Reject(f"{what} is not a list")
+    if not all(type(x) is str and HEX.fullmatch(x) for x in xs):
+        raise D.Reject(f"{what}: not lowercase hex")
+    return [bytes.fromhex(x) for x in xs]
+
+
+def _table(j) -> tuple[int, str, str, int, list[bytes]]:
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    return (_nat(j.get("capacity"), "capacity"), _str(j.get("program"), "program"), _str(j.get("table"), "table"),
+            _nat(j.get("words"), "words"), _hexes(j.get("bcs"), "bcs"))
+
+
+def reference_root(j):
+    cap, program, table, words, bcs = _table(j)
+    if not H.cap_ok(cap) or not H.words_ok(words) or cap < len(bcs) or any(len(b) != H.BC_BYTES for b in bcs):
+        raise D.Reject("checkAt's refusals")
+    dom, ph = H.domain(program, table, words, cap), H.placeholder(words)
+    return {"domain": dom.domain_id.hex(), "placeholder": ph.hex(), "root": H.root(dom, bcs, ph).hex()}
+
+
+def reference_check(j):
+    if not isinstance(j, dict) or type(j.get("registered")) is not str:
+        raise D.Reject("registered is not a hex string")
+    (registered,) = _hexes([j["registered"]], "registered")
+    cap, program, table, words, bcs = _table(j)
+    try:
+        H.check(program, table, words, bcs, registered, cap)
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    return {"ok": True}
+
+
+def reference_order(j):
+    if not isinstance(j, dict) or not isinstance(j.get("runs"), list):
+        raise D.Reject("runs is not a list")
+    held = j.get("held")
+    if not isinstance(held, dict) or not all(type(n) is int and n >= 0 for n in held.values()):
+        raise D.Reject("held is not an object of row counts")
+    length, writer, out, units = (_nat(j.get("length"), "length"), _str(j.get("writer"), "writer"),
+                                  _str(j.get("out"), "out"), _nat(j.get("units"), "units"))
+    try:
+        srcs = H.order(j["runs"], length, writer, out, units, held)
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    return {"sources": [{"unit": s[1]} if s[0] == "unit" else {"held": s[1], "row": s[2]} for s in srcs]}
+
+
+def _hex_of(bcs: list[bytes]) -> list[str]:
+    return [b.hex() for b in bcs]
+
+
+@st.composite
+def tables(draw, broken: bool = False):
+    cap = draw(CAPS)
+    seed, n = draw(st.integers(0, 2 ** 32)), draw(st.integers(0, cap))
+    j = {"capacity": cap, "program": draw(NAMES), "table": draw(NAMES), "words": draw(st.integers(1, 1200)),
+         "bcs": _hex_of([_bc(seed, i) for i in range(n)])}
+    if not broken:
+        return j
+    how = draw(st.integers(0, 10))
+    if how == 0:
+        j["capacity"] = draw(st.sampled_from([0, 1, 3, 6, 12, 48, 100, -4, True, "8"]))
+    elif how == 1:
+        j["words"] = draw(st.sampled_from([0, -1, 1 << 60, "2", None]))
+    elif how == 2:
+        j["bcs"] = _hex_of([_bc(seed, i) for i in range(cap + draw(st.integers(1, 3)))])
+    elif how == 3:
+        j["bcs"] = [*j["bcs"], _bc(seed, n)[:draw(st.sampled_from([0, 64, 127]))].hex()]
+    elif how == 4:
+        j["bcs"] = [*j["bcs"], (_bc(seed, n) + b"\0").hex()]
+    elif how == 5:
+        j["bcs"] = [*j["bcs"], _bc(seed, n).hex().upper()]
+    elif how == 6:
+        j["bcs"] = [*j["bcs"], _bc(seed, n).hex()[1:]]
+    elif how == 7:
+        j["bcs"] = [*j["bcs"], 7]
+    elif how == 8:
+        j["bcs"] = {"0": _bc(seed, 0).hex()}
+    elif how == 9:
+        j[draw(st.sampled_from(["program", "table"]))] = draw(st.sampled_from([None, 3, ["x"]]))
+    else:
+        del j[draw(st.sampled_from(sorted(j)))]
+    return j
+
+
+@st.composite
+def checks(draw, broken: bool = False):
+    j = draw(tables(broken=broken and draw(st.booleans())))
+    try:
+        root = reference_root(j)["root"]
+    except D.Reject:
+        root = "00" * H.DIGEST_BYTES
+    how = draw(st.integers(0, 6)) if broken else 0
+    if how == 1:
+        i = draw(st.integers(0, len(root) - 1))
+        root = root[:i] + ("1" if root[i] == "0" else "0") + root[i + 1:]
+    elif how == 2:
+        root = root[:-2]
+    elif how == 3:
+        root = root.upper()
+    elif how == 4:
+        j = dict(j, capacity=2 * j["capacity"]) if type(j.get("capacity")) is int else j
+    elif how == 5 and isinstance(j.get("bcs"), list) and j["bcs"]:
+        j = dict(j, bcs=j["bcs"][:-1])
+    elif how == 6:
+        root = draw(st.sampled_from([None, 5, ["00"]]))
+    return {**j, "registered": root}
+
+
+def _span(radix, step, units, draw) -> int:
+    low = sum(min(0, s * (r - 1)) for r, s in zip(radix, step))
+    high = sum(max(0, s * (r - 1)) for r, s in zip(radix, step))
+    if units - 1 - high < -low:
+        return draw(st.integers(-2, units + 2))
+    return draw(st.integers(-low, units - 1 - high))
+
+
+@st.composite
+def orders(draw, broken: bool = False):
+    units = draw(st.integers(1, 40))
+    held = {v: draw(st.integers(0, 30)) for v in draw(st.lists(st.sampled_from(["E", "F"]), unique=True, max_size=2))}
+    runs, at = [], 0
+    for _ in range(draw(st.integers(0, 5))):
+        if any(held.values()) and draw(st.booleans()):
+            v = draw(st.sampled_from(sorted(k for k, n in held.items() if n)))
+            row = draw(st.integers(0, held[v] - 1))
+            count = draw(st.integers(1, held[v] - row))
+            runs.append({"start": at, "count": count, "held": v, "row": row})
+        else:
+            k = draw(st.integers(0, 3))
+            radix = [draw(st.integers(1, 4)) for _ in range(k)]
+            step = [draw(st.integers(-3, 3)) for _ in range(k)]
+            count = math.prod(radix)
+            runs.append({"start": at, "count": count, "writer": "W", "out": "o", "radix": radix,
+                         "base": _span(radix, step, units, draw), "step": step})
+        at += count
+    runs = draw(st.permutations(runs))
+    j = {"runs": list(runs), "length": at, "writer": "W", "out": "o", "units": units, "held": held}
+    if not broken:
+        return j
+    how = draw(st.integers(0, 14))
+    unit_runs = [r for r in j["runs"] if "writer" in r]
+    held_runs = [r for r in j["runs"] if "held" in r]
+    if how == 0:
+        j["length"] += draw(st.sampled_from([-1, 1]))
+    elif how == 1 and j["runs"]:
+        r = draw(st.sampled_from(j["runs"]))
+        r["start"] += draw(st.sampled_from([-1, 1]))
+    elif how == 2:
+        j["runs"].append({"start": at, "count": 0, "held": "E", "row": 0})
+    elif how == 3 and unit_runs:
+        draw(st.sampled_from(unit_runs))[draw(st.sampled_from(["writer", "out"]))] = "X"
+    elif how == 4 and unit_runs:
+        draw(st.sampled_from(unit_runs))["base"] += draw(st.sampled_from([-units, units]))
+    elif how == 5 and unit_runs:
+        r = draw(st.sampled_from(unit_runs))
+        r["radix"] = [*r["radix"], 0]
+        r["step"] = [*r["step"], 1]
+    elif how == 6 and unit_runs:
+        r = draw(st.sampled_from(unit_runs))
+        r["step"] = [*r["step"], 1]
+    elif how == 7 and held_runs:
+        r = draw(st.sampled_from(held_runs))
+        r["row"] = held[r["held"]]
+    elif how == 8 and held_runs:
+        draw(st.sampled_from(held_runs))["held"] = "G"
+    elif how == 9 and j["runs"]:
+        draw(st.sampled_from(j["runs"]))["extra"] = 1
+    elif how == 10 and j["runs"]:
+        draw(st.sampled_from(j["runs"]))["count"] = draw(st.sampled_from([True, -1, "1"]))
+    elif how == 11:
+        j["held"] = draw(st.sampled_from([[], {"E": -1}, {"E": "3"}]))
+    elif how == 12:
+        j["runs"] = draw(st.sampled_from([{}, None, [3]]))
+    elif how == 13 and unit_runs:
+        r = draw(st.sampled_from(unit_runs))
+        r["radix"] = [-1, *r["radix"]]
+        r["step"] = [0, *r["step"]]
+    else:
+        j["units"] = draw(st.sampled_from([-1, None, 0]))
+    return j
+
+
+ROOT = D.Port(PIECES, "history_root", reference_root, st.one_of(*[tables() for _ in range(4)], tables(broken=True)),
+              package=PACKAGE, of_record="lean")
+CHECK = D.Port(PIECES, "history_check", reference_check,
+               st.one_of(*[checks() for _ in range(2)], checks(broken=True)), package=PACKAGE, of_record="lean")
+ORDER = D.Port(PIECES, "history_order", reference_order, st.one_of(*[orders() for _ in range(3)], orders(broken=True)),
+               package=PACKAGE, of_record="lean")
+
+pieces = D.server_fixture(ROOT)
+
+
+@pytest.mark.parametrize("port, examples", [(ROOT, 300), (CHECK, 300), (ORDER, 1500)],
+                         ids=["history_root", "history_check", "history_order"])
+def test_a_history_piece_agrees(pieces, port, examples):
+    stats = D.run(port, examples=examples, server=pieces)
+    assert stats.outputs > examples // 2 and stats.rejects > 0, stats
+
+
+def _call(pieces, fn: str, j):
+    kind, out = pieces.call(fn, j)
+    assert kind == "output", (fn, kind, out)
+    return json.loads(out)
+
+
+def _base(n: int = 5, cap: int = 16, words: int = 64) -> dict:
+    return {"capacity": cap, "program": "p", "table": "k_hist", "words": words,
+            "bcs": _hex_of([_bc(1, i) for i in range(n)])}
+
+
+def test_a_rank_past_the_length_opens_as_the_placeholder(pieces):
+    """The root over `n` rows is the root over those rows and the placeholder at every rank up to the capacity, so a read
+    past the length opens only as the zero row under the zero salt, which anyone computes."""
+    j = _base()
+    got = _call(pieces, "history_root", j)
+    assert got["placeholder"] == H.placeholder(j["words"]).hex()
+    padded = dict(j, bcs=[*j["bcs"], *[got["placeholder"]] * (j["capacity"] - len(j["bcs"]))])
+    assert _call(pieces, "history_root", padded) == got == reference_root(j)
+
+
+def test_the_root_binds_the_rows_order(pieces):
+    j = _base()
+    root = _call(pieces, "history_root", j)["root"]
+    assert _call(pieces, "history_check", dict(j, registered=root)) == {"ok": True}
+    swapped = dict(j, bcs=[j["bcs"][1], j["bcs"][0], *j["bcs"][2:]], registered=root)
+    assert pieces.call("history_check", swapped)[0] == "reject"
+    with pytest.raises(D.Reject):
+        reference_check(swapped)
+
+
+def test_the_root_binds_the_capacity_and_the_names(pieces):
+    j = _base()
+    root = _call(pieces, "history_root", j)["root"]
+    for change in ({"capacity": 32}, {"table": "v_hist"}, {"program": "q"}, {"words": 32}):
+        k = dict(j, **change, registered=root)
+        assert pieces.call("history_check", k)[0] == "reject", change
+        with pytest.raises(D.Reject):
+            reference_check(k)
+
+
+def test_the_pinned_capacity(pieces):
+    """One table at `CAPACITY`, the capacity every table's tree has, whatever its length."""
+    j = _base(n=3, cap=H.CAPACITY)
+    got = _call(pieces, "history_root", j)
+    assert got == reference_root(j)
+    assert _call(pieces, "history_check", dict(j, registered=got["root"])) == {"ok": True}
+
+
+def _gather(**change) -> dict:
+    """Six positions from writer `W`'s units `2 + 3 d_0 - d_1`, `d_0` the slow digit of radix 2 and `d_1` of radix 3."""
+    run = {"start": 0, "count": 6, "writer": "W", "out": "o", "radix": [2, 3], "base": 2, "step": [3, -1]}
+    return {"runs": [dict(run, **change)], "length": 6, "writer": "W", "out": "o", "units": 8, "held": {}}
+
+
+@pytest.mark.parametrize("name, j, want", [
+    ("a gather of two digits", _gather(), [2, 1, 0, 5, 4, 3]),
+    ("an earlier window's rows, then the writer's", {
+        "runs": [{"start": 2, "count": 2, "writer": "W", "out": "o", "radix": [2], "base": 5, "step": [1]},
+                 {"start": 0, "count": 2, "held": "E", "row": 3}],
+        "length": 4, "writer": "W", "out": "o", "units": 8, "held": {"E": 5}},
+     [("E", 3), ("E", 4), 5, 6]),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_named_orders(pieces, name, j, want):
+    want_srcs = [{"unit": w} if isinstance(w, int) else {"held": w[0], "row": w[1]} for w in want]
+    assert _call(pieces, "history_order", j) == reference_order(j) == {"sources": want_srcs}
+
+
+@pytest.mark.parametrize("name, j", [
+    ("a writer unit below 0", _gather(base=1)),
+    ("a writer unit past the template", _gather(base=5)),
+    ("another writer", _gather(writer="X")),
+    ("a radix that covers other positions", _gather(radix=[2, 2], step=[2, -1])),
+    ("rows past the held value", {"runs": [{"start": 0, "count": 3, "held": "E", "row": 3}], "length": 3,
+                                  "writer": "W", "out": "o", "units": 8, "held": {"E": 5}}),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_refused_orders(pieces, name, j):
+    assert pieces.call("history_order", j)[0] == "reject"
+    with pytest.raises(D.Reject):
+        reference_order(j)
