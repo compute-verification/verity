@@ -671,7 +671,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   a noise instance has at most one reader. So each coin bit feeds one noise of one instance, no receipt key shares a noise
   bit's coin, and no noise has two copies or is shared across rows, matmuls, batch members or scan steps. A coin only
   receipt folds read may key any number of them. With coin flow this gives the
-  view independence of `Accounting.Guarantees.CoinFlow` (`Security/`): every value outside a noise's forward cone is a
+  view independence of `Accounting.Guarantees.CoinFlow` (`security/`): every value outside a noise's forward cone is a
   function of the coins it does not read. Also refused (seeds): an input leaf of origin `coin` that a seed reads is read by
   a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
   coin, each at positions of its own, so each (coin, position) seeds one proof block; that distinct position leaves hold distinct
