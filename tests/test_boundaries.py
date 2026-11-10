@@ -1227,7 +1227,7 @@ def _trusted_loads(loads: Iterable[Load], listing: Listing) -> dict[str, tuple[d
     out = {}
     for d in sorted(own.keys() | loaders.keys()):
         files = own.get(d, [])
-        inside = lambda f: at(f) == d and _distribution(f, listing) is None  # noqa: E731, B023
+        inside = lambda f: at(f) == d and _distribution(f, listing) is None  # noqa: E731
         direct: dict[str, Load] = {}
         for x in (x for f in files for x in by[f]):
             if not inside(x.loaded):
