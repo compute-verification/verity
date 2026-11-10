@@ -836,13 +836,15 @@ MARKED = {NEW: "marker", OLD: "old-marker"}
      (OLDER, f"top's hold at {OLD[:12]} (no reason) is newer", False)),
     ({OLD: [("top", "hold", "T1", "x"), ("rev", "land", "T2")]}, "no land verdict", "lane-1", True,
      (OLD, f"held by top (x) at {OLD[:12]}", False)),
+    ({OLDER: [("top", "hold", "T1", "x"), ("rev", "land", "T2")]}, "no land verdict", "lane-1", True,
+     (OLDER, f"held by top (x) at {OLDER[:12]}", False)),
     ({OLD: [("rev", "land", "T2"), ("rev", "hold", "T1", "x")]}, "no land verdict", "lane-1", True, (OLD, "only merges", True)),
     ({OLD: [("rev", "land", "T1")]}, "no land verdict", "ci", True, (OLD, "@ci is among its owners, so its verdict wouldn't count",
                                                                      False)),
     ({OLDER: [("rev", "land", "T1")], OLD: [("rev2", "land", "T2")]}, "no land verdict", "lane-1", True,
      (OLD, "only merges", True)),
 ], ids=["carries", "no-carry", "owners-only", "held-here", "newer-hold", "owners-hold", "tie-hold", "standing-hold",
-        "reviewers-newest", "ci-owned", "newest-land"])
+        "standing-hold-older", "reviewers-newest", "ci-owned", "newest-land"])
 def test_the_verdict_carry_takes_the_newest_land_at_an_older_head_but_for_a_hold_or_an_owners_own(world, labels, why, owner,
                                                                                                  carries, got):
     """`Landing._carried_from`: of each reviewer's newest verdict at each older head, a hold by anyone or a land by none of the
@@ -925,10 +927,11 @@ def test_an_auto_plan_is_planned_in_the_background_in_a_directory_of_its_own_and
     ("0", {"kind": "check-shard-plan/v1", "n": "2"}, (None, "`check.py --shard-plan` exited 0: planned")),
     ("0", {"kind": "check-shard-plan/v0", "n": 2}, (None, "`check.py --shard-plan` exited 0: planned")),
     ("0", "not json", (None, "`check.py --shard-plan` exited 0: JSONDecodeError: Expecting value: line 1 column 1 (char 0)")),
+    ("0", "", (None, "`check.py --shard-plan` exited 0: JSONDecodeError: Expecting value: line 1 column 1 (char 0)")),
     ("1", None, (None, "`check.py --shard-plan` exited 1: planned")),
     (None, None, (None, None)),
     ("gone", None, (None, "its process is gone with no exit written (a restart of the pod)")),
-], ids=["one-shard", "no-shards", "n-not-int", "other-kind", "not-json", "failed", "running", "gone"])
+], ids=["one-shard", "no-shards", "n-not-int", "other-kind", "not-json", "empty", "failed", "running", "gone"])
 def test_planned_takes_a_plan_of_a_shard_or_more_once_its_job_exited_0_and_says_why_there_is_none(tmp_path, rc, plan, got):
     """`planned`: the plan its directory's `check-shard-plan.json` holds (check.py's `AUTO_PLAN`, the name each shard's run
     sends it under) once its job exited 0 and it is a `check-shard-plan/v1` of at least one shard; else why there is none,

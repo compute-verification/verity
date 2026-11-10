@@ -368,8 +368,9 @@ def test_an_auto_after_landing_run_with_no_plan_runs_unsharded_and_says_so(world
     if ends == "failed":
         planner.answer = (None, "`check.py --shard-plan` exited 2: no store")
     else:
+        h.clock += 60
         h.tick()
-        assert len(h.posted) == 1, "it waits for the plan"
+        assert len(h.posted) == 1, "it waits for a plan a minute old"
         h.clock += PLAN_WAIT_S + 1
     h.tick()
     [(_, steps, kw)] = h.posted[1:]

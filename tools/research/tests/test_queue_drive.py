@@ -40,9 +40,10 @@ def world(tmp_path):
     return World(tmp_path)
 
 
-def test_a_driver_is_a_landing_on_drive_tomls_machines_and_warn_steps(world):
-    d = Driver(world.queue(), on="m1,m2", warn_steps=("ratchet-gate",))
-    assert (d.on, d.warn_steps) == ("m1,m2", ("ratchet-gate",))
+def test_a_driver_is_a_landing_on_drive_tomls_machines_and_warn_steps_and_its_label_readers(world):
+    reviews, ready_by = (lambda pr, head: []), (lambda pr, head: None)
+    d = Driver(world.queue(), on="m1,m2", warn_steps=("ratchet-gate",), reviews=reviews, ready_by=ready_by)
+    assert (d.on, d.warn_steps) == ("m1,m2", ("ratchet-gate",)) and d.reviews is reviews and d.ready_by is ready_by
 
 
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
