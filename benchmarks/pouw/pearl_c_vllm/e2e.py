@@ -731,7 +731,7 @@ class Coins:
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        from verity.core.protocols.sampled_proofs.challenger import served_claim
+        from verity.core.protocols.spot.challenger import served_claim
         entropy = verifier.coins if entropy is None else entropy
         served_claim(entropy)
         self.challenger, self.opened = Challenger(epoch, entropy), {}

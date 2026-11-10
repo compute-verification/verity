@@ -210,7 +210,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",
-              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
+              "verity/core/protocols/spot", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
               "verity/core/primitives/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "verity-network-e2e",
               "benchmarks/live_verifier", "verity-network-traces", "verity-vllm")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)

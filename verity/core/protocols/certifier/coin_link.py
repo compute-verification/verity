@@ -2,7 +2,7 @@
 path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
 own grids.
 
-The challenger (`sampled_proofs.remote`, served by `benchmarks/live_challenger/serve.py`) and this link run on one auditor
+The challenger (`spot.remote`, served by `benchmarks/live_challenger/serve.py`) and this link run on one auditor
 host (`trusted-host`), the device that runs the server's network certifier. The link takes each connection from the
 prover's side (the prover's client, on the server), opens one to the challenger for it, and carries `remote`'s frames
 both ways, one connection at a time, in the challenger's order:
@@ -49,8 +49,8 @@ from functools import cached_property
 from typing import Any
 
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.core.protocols.sampled_proofs.remote import HEADER, MAX_HEAD
+from verity.core.protocols.spot.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
+from verity.core.protocols.spot.remote import HEADER, MAX_HEAD
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 
 PARAMETERS_TAG = "verity-network-coin-link/parameters/v1"

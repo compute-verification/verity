@@ -2443,7 +2443,7 @@
   "Definitions.Accounting.Guarantees.Bandwidth",
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
-  "Definitions.SampledProofs",
+  "Definitions.Spot",
   "Definitions.WeightSecurity",
   "Definitions.WeightSecurity.Assumptions",
   "Definitions.WeightSecurity.Guarantees",
@@ -2504,8 +2504,8 @@
   "PouwCommit.Py",
   "PouwCommit.Coins",
   "PouwCommit.Draws",
-  "SampledProofs",
-  "Properties.SampledProofs.Draw",
+  "Spot",
+  "Properties.Spot.Draw",
   "Proofs.Pouw.OnsiteFreed"
  ],
  "claims": {
@@ -3943,8 +3943,8 @@
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
   },
-  "Definitions.SampledProofs": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.SampledProofs"],
+  "Definitions.Spot": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Spot"],
    "except": [],
    "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
@@ -16107,7 +16107,7 @@
    "Accounting.SecurityProofs.RateSketchTable": "completeness: like Accounting.SecurityProofs.RateSketchHonest, a device (a LayoutDevice of Security/Definitions/Accounting/RateAuditSketchLayout.lean, whose memory holds any function of the store) accepted at every signs, oracle and data, here one that reads N * d bits from a table of card Sig * N * d bits for any digest of at most 2^d values, below Accounting.SecurityProofs.RateAuditSketch's floor: a counterexample outside the verbatim class (rate-sketch-verbatim), not a property of a function",
    "Accounting.SecurityProofs.RateTensorSketchTable": "completeness: Accounting.SecurityProofs.RateSketchTable at the tensor-core sketch (Accounting.RateSketch.sketch, 32-byte sectors, k_s INT32 words), reading N * 32 * k_s bits at any number of rows k_s: a counterexample outside the verbatim class, not a property of a function",
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
-   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: sampled proofs at the recursive configuration (SampledProofsRecursive at RecVerdict, sampled proofs' case at V*'s compiled check, verity/sampled-proofs/recursive/v1, dense form only); (i), a probability statement (Verity.Game.prob, not under shape.events) whose event is the composed verdict and then sampled proofs' claim failing on the extracted transcript, takes beside the decoders' list-decoding spec (decOK) the strategy's recursive session (SessionIn), the draw's and the extraction's hypotheses (hK₀, hdraw, hX, hread, hcoll) and live-verifier (LiveCoins), none a premise; it fits once the session and those hypotheses are derived from the vocabulary or restated as premises, and Verity.Game.prob is listed under shape.events. Its knowledge-soundness term (Dep.ksAt) is t'·2^-λ at λ₂ = 135.7 (route 2C, read off the accepted run at the deployed caps), and at a statement at the deployment's tables (Dep.OneTable) the least of it and route 2C's split bound κ + t'·ε at κ = 2^-167.7 and ε = 2^-174.95 (RecDeploy.kappa_eps_oneTable_cap, at the run's call caps); the bound record's λ (Claims.Recursion.lam), which no theorem evaluates at the deployment, is one (i) doesn't use.",
+   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: sampled proofs at the recursive configuration (SpotRecursive at RecVerdict, sampled proofs' case at V*'s compiled check, verity/sampled-proofs/recursive/v1, dense form only); (i), a probability statement (Verity.Game.prob, not under shape.events) whose event is the composed verdict and then sampled proofs' claim failing on the extracted transcript, takes beside the decoders' list-decoding spec (decOK) the strategy's recursive session (SessionIn), the draw's and the extraction's hypotheses (hK₀, hdraw, hX, hread, hcoll) and live-verifier (LiveCoins), none a premise; it fits once the session and those hypotheses are derived from the vocabulary or restated as premises, and Verity.Game.prob is listed under shape.events. Its knowledge-soundness term (Dep.ksAt) is t'·2^-λ at λ₂ = 135.7 (route 2C, read off the accepted run at the deployed caps), and at a statement at the deployment's tables (Dep.OneTable) the least of it and route 2C's split bound κ + t'·ε at κ = 2^-167.7 and ε = 2^-174.95 (RecDeploy.kappa_eps_oneTable_cap, at the run's call caps); the bound record's λ (Claims.Recursion.lam), which no theorem evaluates at the deployment, is one (i) doesn't use.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",

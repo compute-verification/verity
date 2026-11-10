@@ -38,8 +38,8 @@ from verity.core.deploy import config as K
 from verity.core.deploy.config import Component, Workload
 from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.pous import wipe_parties as WP
-from verity.core.protocols.sampled_proofs import parties as SP
-from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
+from verity.core.protocols.spot import parties as SP
+from verity.core.protocols.spot.one_stage.draw import parse_law
 from verity.core.wire import Refused
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -233,7 +233,7 @@ def _serve(cfg, params, bound):
 _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY"}
 
 
-def _sampled_proofs_challenger(cfg, params, bound):
+def _spot_challenger(cfg, params, bound):
     """The live challenger's bindings; with no gate bound the sample's coins are a local development session's, which
     served_verdicts.sh takes only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
@@ -281,7 +281,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "
                        "the draw on the live challenger when its gate is bound, else on a local development session's "
                        "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP),
-                       hooks=_sampled_proofs_challenger),
+                       hooks=_spot_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
                         "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
                         "block record", scripts=(VERDICTS_SCRIPT,)),

@@ -31,7 +31,7 @@ The trusted input, beside the instance, is what the service holds, never the pro
 * `params`: the verifier's own copy of its program function's parameters, `[[name, type], ...]` as a body's params are
   written. The descriptor names no parameters (`verity/ml/circuits/PROTOCOL.md` §5.1: the root starts with each
   parameter's input nodes, in parameter order), so these say which parameter each θ node holds a part of: they must
-  lower onto the root's input nodes exactly (`ownersOf`), as `SampledProofs.Registered.params` requires.
+  lower onto the root's input nodes exactly (`ownersOf`), as `Spot.Registered.params` requires.
 
 ## The binding
 
@@ -108,7 +108,7 @@ def lastWith (j : Json) (f k v : String) : Option Json :=
 canon(record))` with its own format, v1 or v2, as the tag), as lowercase hex. -/
 def digest (rec : Json) : Except String String := Flock.WindowRecord.digestHex rec
 
-/-! ## The parameters, lowered onto the input nodes (§5.1, as `SampledProofs.Registered.lower`) -/
+/-! ## The parameters, lowered onto the input nodes (§5.1, as `Spot.Registered.lower`) -/
 
 private theorem lt_array (n : Nat) (e : Ty) : sizeOf e < sizeOf (Ty.array n e) := by simp; omega
 

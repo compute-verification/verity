@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled
-public import SampledProofs.ChallengerSession
+public import Spot.ChallengerSession
 public import Std.Tactic.Do
 
 /-!
@@ -27,7 +27,7 @@ namespace Verity.Sampled
 
 open Lean (Json)
 open Std.Do
-open SampledProofs.Challenger
+open Spot.Challenger
 
 /-! ## Reading the verifier's monadic functions -/
 
@@ -86,7 +86,7 @@ theorem opt_spec {α : Type} (x : Option α) : ⦃⌜True⌝⦄ x ⦃⇓? _ => �
 
 theorem specOf_spec (j : Json) : ⦃⌜True⌝⦄ specOf j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem toOption_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x.toOption ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
-theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ SampledProofs.nat? j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
+theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ Spot.nat? j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem findIdx_spec {α : Type} (p : α → Bool) (l : List α) : ⦃⌜True⌝⦄ l.findIdx? p ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem findIdxA_spec {α : Type} (p : α → Bool) (l : Array α) : ⦃⌜True⌝⦄ l.findIdx? p ⦃⇓? _ => ⌜True⌝⦄ :=
   opt_spec _
@@ -117,12 +117,12 @@ theorem treeRelease_frame {records : List Json} {ts ts' : List (String × Flock.
 
 /-! ## The read with v2's own tests -/
 
-/-- The streams a coin tree's spec names, as `SampledProofs.Challenger.coinTreesOf` reads them: none where it names no
+/-- The streams a coin tree's spec names, as `Spot.Challenger.coinTreesOf` reads them: none where it names no
 list. -/
 def specStreams (spec : Json) : Array Json :=
-  match SampledProofs.getD spec "streams" with | .arr ss => ss | _ => #[]
+  match Spot.getD spec "streams" with | .arr ss => ss | _ => #[]
 
-/-- **A coin tree's line's release, read with the tests `SampledProofs.Challenger.coinTreesOf` makes**, after the trees
+/-- **A coin tree's line's release, read with the tests `Spot.Challenger.coinTreesOf` makes**, after the trees
 `ts` read so far, each its root and its spec as its line gives them: where the line's `event` is `TREE_EVENT` by
 `coinTreesOf`'s comparison (`jsonStrIs`), its hello after its nonce, with its root's and key's bits; else a round
 opened, of the `i`-th tree read and the `s`-th of its spec's streams, the first one `jsonStrIs` finds equal to the
@@ -130,24 +130,24 @@ line's, as `coinTreesOf`'s `any` tests them, after the bytes it answers, with it
 tree gives them, else none; `none` where the line doesn't read as either. -/
 def treeStep (records : List Json) (ts : List (String × Json)) (d : Json) :
     Option (Verity.Release × List (String × Json)) :=
-  if SampledProofs.jsonStrIs (SampledProofs.getD d "event") TREE_EVENT then do
-    let .str key := SampledProofs.getD d "key" | none
-    let .str nonce := SampledProofs.getD d "nonce" | none
-    let .str root := SampledProofs.getD d "root" | none
-    let spec ← specOf (SampledProofs.getD d "spec")
+  if Spot.jsonStrIs (Spot.getD d "event") TREE_EVENT then do
+    let .str key := Spot.getD d "key" | none
+    let .str nonce := Spot.getD d "nonce" | none
+    let .str root := Spot.getD d "root" | none
+    let spec ← specOf (Spot.getD d "spec")
     let ν ← (Flock.unhex nonce).toOption
     let r ← (Flock.unhex root).toOption
     let κ ← (Flock.unhex key).toOption
-    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, SampledProofs.getD d "spec")])
+    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, Spot.getD d "spec")])
   else do
-    let .str root := SampledProofs.getD d "tree" | none
-    let .str stream := SampledProofs.getD d "stream" | none
-    let .str aft := SampledProofs.getD d "after" | none
-    let k ← SampledProofs.nat? (SampledProofs.getD d "round")
-    let n ← SampledProofs.nat? (SampledProofs.getD d "n")
+    let .str root := Spot.getD d "tree" | none
+    let .str stream := Spot.getD d "stream" | none
+    let .str aft := Spot.getD d "after" | none
+    let k ← Spot.nat? (Spot.getD d "round")
+    let n ← Spot.nat? (Spot.getD d "n")
     let i ← ts.findIdx? (·.1 == root)
     let (_, spec) ← ts[i]?
-    let s ← (specStreams spec).findIdx? (SampledProofs.jsonStrIs · stream)
+    let s ← (specStreams spec).findIdx? (Spot.jsonStrIs · stream)
     let b ← (Flock.unhex aft).toOption
     let coins := match records.find? (recordTree · == root) with
       | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
@@ -177,7 +177,7 @@ def readTail (label : String) (after : ByteArray) (records : List Json) :
         else pure (⟨.fresh lab, root, []⟩ :: (← readTail label after records ls ts none ξ))
 
 /-- **The releases the release log's lines show, read with v2's own tests**: its head's coin tree where the head is a
-coin tree's line (`SampledProofs.Challenger.coinTreesOf` reads the head's line too), then the lines after it
+coin tree's line (`Spot.Challenger.coinTreesOf` reads the head's line too), then the lines after it
 (`readTail`). -/
 def readLog (label : String) (after : ByteArray) (records : List Json) (ξ : ByteArray) :
     List String → Option (List Verity.Release)
@@ -188,25 +188,25 @@ def readLog (label : String) (after : ByteArray) (records : List Json) (ξ : Byt
       pure (r :: (← readTail label after records ls ts none ξ))
     else readTail label after records ls [] none ξ
 
-/-- A session's record on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld` reads it: one that doesn't parse is
+/-- A session's record on the blobs `bs`, as `Spot.OneStageZk.treesHeld` reads it: one that doesn't parse is
 `null`; `none` where no blob holds it or it isn't UTF-8. -/
-def recordOn (bs : _root_.Core.Blobs) (r : _root_.SampledProofs.OneStageZk.RunFiles) : Option Json := do
+def recordOn (bs : _root_.Core.Blobs) (r : _root_.Spot.OneStageZk.RunFiles) : Option Json := do
   let b ← (bs.get r.record s!"session {r.name}'s record").toOption
   let t ← String.fromUTF8? b
   pure ((Flock.JsonParse.parse t).toOption.getD Json.null)
 
-/-- The records of the sessions v2's evidence `e` names, on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld`
+/-- The records of the sessions v2's evidence `e` names, on the blobs `bs`, as `Spot.OneStageZk.treesHeld`
 reads them (`recordOn`). -/
-def recordsOn (bs : _root_.Core.Blobs) (e : _root_.SampledProofs.OneStageZk.Evidence) : Option (List Json) :=
+def recordsOn (bs : _root_.Core.Blobs) (e : _root_.Spot.OneStageZk.Evidence) : Option (List Json) :=
   e.sessions.toList.mapM (recordOn bs)
 
 /-- **The device's log as v2's check reads it, with v2's own tests**: `coinsRead`'s read, with each coin tree's line
-read by the tests `SampledProofs.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
-sessions' records as `SampledProofs.OneStageZk.treesHeld` reads them (`recordsOn`). -/
+read by the tests `Spot.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
+sessions' records as `Spot.OneStageZk.treesHeld` reads them (`recordsOn`). -/
 def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let (p, c, e) ← (caseOf s).toOption
   let (_, label) ← p.base.challenger
-  let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
+  let ξ ← (_root_.Spot.OneStageZk.coinsOf p c e).toOption
   let lines ← (linesOf e).toOption
   readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
 

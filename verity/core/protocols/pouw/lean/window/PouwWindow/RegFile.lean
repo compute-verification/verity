@@ -3,8 +3,8 @@ module
 public import PouwWindow.OwnPorts
 public import PouwWindow.FullDraw
 public import Flock.KnownRead
-public import SampledProofs.Produced
-public import SampledProofs.Record
+public import Spot.Produced
+public import Spot.Record
 
 /-!
 # A sampled H1 leaf's registered files, from the registration
@@ -15,7 +15,7 @@ accepted produced record alone:
 * `roots?`: each value's registered port (`leaf_lanes.verifier_entries`). A registered value's (`a`, `b`, `zy`,
   `receipt`) is its entry in the registration's `registered` (the first of its value) at that entry's root. The
   partials' is the verifier's own entry (`produced.entry`: `lanes` rows of `words` 16-bit words, under the domain
-  `SampledProofs.Produced.domain` binds to the registration's program and digest) at the root of the produced record's
+  `Spot.Produced.domain` binds to the registration's program and digest) at the root of the produced record's
   `partials`. Every value's rows are `schema`'s.
 * `want?`: statement `k`'s data ports at those roots and the unit's placement `place` (`ownOf`: each value's table and
   base row), where the verifier holds every table they read.
@@ -65,7 +65,7 @@ def roots? (registration produced : Json) (lanes words : Nat) (schema : String) 
     Except String (List (String × Flock.Registered.Port)) := do
   let program ← Flock.J.str registration "program" "the registration"
   let digest ← Flock.WindowRecord.digestHex registration
-  let dom ← SampledProofs.Produced.domain program PARTIALS words lanes 16 digest
+  let dom ← Spot.Produced.domain program PARTIALS words lanes 16 digest
   let some p := (← Flock.J.arr produced "produced" "the produced record").find? fun e =>
       (e.getObjValAs? String "value").toOption == some PARTIALS
     | throw s!"the produced record has no {PARTIALS}"

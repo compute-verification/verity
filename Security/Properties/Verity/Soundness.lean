@@ -15,7 +15,7 @@ collision (`Vocab.error`).
 
 `SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
 with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
-(`Vocab.SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+(`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote's composite of record
 (`Core.Remote.V1.protocol`, `verity/remote/v1`), from its three (sampled proofs, PoUW, which at remote is Pearl+'s run
 verdict and its claim in MACs at the credit its check published, and the inference-only policy). They are proved by
@@ -54,7 +54,7 @@ fewer than `Q` bits read, more than `K` bits through the network certifiers, or 
 its survivor threshold) is at most the seven errors at that strategy summed. -/
 def Soundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SampledProofsSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
+    V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
       V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
 /-- **Soundness at remote's verifier: `SoundnessOf` at `verity/remote/v1`.** If sampled proofs, PoUW
@@ -66,6 +66,6 @@ errors at that strategy summed. Discharging `V.PouwSound .remote` reads Pearl+'s
 `CoinBytesGiveUniformTickets`, unproved); that is the Pearl+ target's proof, not this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SampledProofsSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
+    V.SpotSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
 
 end Verity

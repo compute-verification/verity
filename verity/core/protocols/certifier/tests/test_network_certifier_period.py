@@ -15,8 +15,8 @@ import pytest
 from verity.core.protocols.certifier import service as SVC
 from verity.core.protocols.certifier.certificate import CertifiedRecord
 from verity.core.protocols.certifier.service import PERIOD_DRAW, PERIOD_DRAWN
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.coins import OwnRandomness
 
 from test_network_certifier_service import SALTS, Run, lean  # noqa: F401  (lean: the stand-in Lean, autouse)
 

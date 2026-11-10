@@ -4,7 +4,7 @@
 
 The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs
-(`sampled_proofs.one_stage`).
+(`spot.one_stage`).
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the

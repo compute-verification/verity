@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Challenger
-public import Proofs.Properties.SampledProofs
+public import Proofs.Properties.Spot
 public import VStarRecursive
 
 /-!
@@ -18,14 +18,14 @@ public import VStarRecursive
   coins did (`Properties.Challenger.oneStage_check_of_accept`).
 
 The verdict of record says accepted exactly when every part's verdict does (`verdictJson_accepted`), and one-stage's check
-accepts only verdicts that say accepted (`Properties.SampledProofs.acceptMeans`, `VerdictsAccept`), so no part's verdict
+accepts only verdicts that say accepted (`Properties.Spot.acceptMeans`, `VerdictsAccept`), so no part's verdict
 is a refusal. Nothing here reads the model.
 -/
 
 @[expose] public section
 
 open Lean (Json)
-open SampledProofs
+open Spot
 
 namespace Verity.Recursive.Compiled
 
@@ -153,7 +153,7 @@ theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} 
       have hv := VStar.Recursive.heldVerdicts_ok hv
       have hacc := _root_.Properties.Challenger.oneStage_check_of_accept (p := p.base) (c := c)
         (e := { e.base with verdicts := vs }) hacc
-      obtain ⟨law, d, n, -, -, -, hva, -⟩ := _root_.Properties.SampledProofs.acceptMeans _ _ _ _ _ hacc
+      obtain ⟨law, d, n, -, -, -, hva, -⟩ := _root_.Properties.Spot.acceptMeans _ _ _ _ _ hacc
       obtain ⟨hd, parts, hpv, why, units, programSha, hvs⟩ := verdicts_shape hv
       have hok : parts.all (·.2.toBool) = true := by
         have hmem : (s!"flock-verify/{session}", VStar.Recursive.verdictJson (parts.all (·.2.toBool)) session why

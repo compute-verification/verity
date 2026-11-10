@@ -59,17 +59,17 @@ from inputs import CARDS, I, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
-from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
+from verity.core.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
+from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
+from verity.core.protocols.spot.one_stage.draw import work_k, work_table  # noqa: E402
 <<<<<<< HEAD
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.spot.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
 ||||||| merged common ancestors
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
 =======
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
 >>>>>>> 705be2b532
                                                            frontier, ln_upper, row_ands)

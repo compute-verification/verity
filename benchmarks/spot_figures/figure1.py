@@ -52,7 +52,7 @@ from pathlib import Path
 import cards as spot_cards
 from glm53_partition import _k
 from verity.core.protocols.pous.wipe_monitoring import PERIODS
-from verity.core.protocols.sampled_proofs.optimize import Grain, ReplayGrain, grain_costs, leak_count, loc_bits
+from verity.core.protocols.spot.optimize import Grain, ReplayGrain, grain_costs, leak_count, loc_bits
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]

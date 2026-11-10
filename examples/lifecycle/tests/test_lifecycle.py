@@ -171,7 +171,7 @@ def test_rejected(protocol: str, cheat: str) -> None:
 
 
 @pytest.mark.parametrize("cheat", ["unreported", "io-mismatch"])
-def test_onsite_io_cheats_pass_sampled_proofs(cheat: str) -> None:
+def test_onsite_io_cheats_pass_spot(cheat: str) -> None:
     """The committed values are consistent; only the certifier's view of the system's I/O catches the lie."""
     line = outcome("onsite", cheat)["lines"][1]
     assert line["answers"][IDS["sampled-proofs"]]["verdict"] == "accept"

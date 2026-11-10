@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.ExecStrataOf
 /-!
 # The deployed sample at the registration's strata
 
-`SampledKSLiveV5` samples with the deployed sample (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on the
+`SampledKSLiveV5` samples with the deployed sample (`Spot.Draw.drawUnits`, `Flock.Draw.drawWith` on the
 challenger's coins read in order as one stream) under a Flock law over the registration's strata, and its `δ` is that
 sampling design's own `P_a`. This file holds what the statement reads and how the sample meets it:
 
@@ -71,7 +71,7 @@ open scoped ENNReal
 
 /-- **Strata at `ns`**: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, and their sizes are `ns`. -/
 def StrataOn (St : List Flock.Draw.Stratum) (ns : List ℕ) : Prop :=
-  St.flatMap (fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList) = List.range ns.sum ∧
+  St.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range ns.sum ∧
     St.map (·.size) = ns
 
 /-- **A sampling design at the strata `ns` that samples `kd` units**: `subset kd`, or `stratified K` or `work K` over strata at `ns`
@@ -94,10 +94,10 @@ def NotBernoulli (law : Flock.Draw.Law) : Prop := ∀ a b, law ≠ .bernoulli a 
 and each stratum's `k` is the rule's. -/
 theorem pa_stratified {K : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ} (hsz : St.toList.map (·.size) = ns)
     (hk : ∀ s ∈ St.toList, s.k = Flock.Draw.stratumK K s.size ns.sum) (B : Finset ℕ) :
-    (Properties.SampledProofs.oneStageOf (.stratified K St)).Pa ns B =
+    (Properties.Spot.oneStageOf (.stratified K St)).Pa ns B =
       Claims.Sampling.strataPa (St.toList.map fun s => (s.size, s.k)) 0 B := by
   subst hsz
-  simp only [Properties.SampledProofs.oneStageOf, Claims.Sampling.OneStage.Pa, List.map_map]
+  simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, List.map_map]
   congr 1
   refine List.map_congr_left fun s hs => ?_
   rw [Function.comp_apply, hk s hs]
@@ -108,14 +108,14 @@ each stratum's `k` is the work rule's. -/
 theorem pa_work {K : ℕ} {ws : Array Flock.Draw.WorkStratum} {ns : List ℕ}
     (hsz : (ws.toList.map (·.toStratum)).map (·.size) = ns)
     (hk : ∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) (B : Finset ℕ) :
-    (Properties.SampledProofs.oneStageOf (.work K ws)).Pa ns B =
+    (Properties.Spot.oneStageOf (.work K ws)).Pa ns B =
       Claims.Sampling.strataPa ((ws.map (·.toStratum)).toList.map fun s => (s.size, s.k)) 0 B := by
   subst hsz
   have hW : ((((ws.toList.map (·.toStratum)).map (·.size)).zip (ws.toList.map (·.work))).map
       (fun p => p.1 * p.2)).sum = Flock.Draw.totalWork ws := by
-    rw [Properties.SampledProofs.SecurityProofs.totalWork_eq, List.map_map, List.zip_map', List.map_map]
+    rw [Properties.Spot.SecurityProofs.totalWork_eq, List.map_map, List.zip_map', List.map_map]
     rfl
-  simp only [Properties.SampledProofs.oneStageOf, Claims.Sampling.OneStage.Pa]
+  simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa]
   rw [hW, Array.toList_map, List.map_map, List.map_map, List.zip_map', List.zip_map', List.map_map]
   congr 1
   refine List.map_congr_left fun s hs => ?_
@@ -130,11 +130,11 @@ theorem stratumK_le {K n N : ℕ} (hK : K ≤ N) (hn : 1 ≤ n) (hnN : n ≤ N) 
 
 /-- **Such a sampling design misses nothing with probability `1`**: each stratum samples at most its size. -/
 theorem pa_empty_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : LawOn law ns kd) :
-    (Properties.SampledProofs.oneStageOf law).Pa ns ∅ = 1 := by
+    (Properties.Spot.oneStageOf law).Pa ns ∅ = 1 := by
   cases law with
   | subset k =>
     obtain ⟨rfl, hk⟩ := h
-    simp only [Properties.SampledProofs.oneStageOf, Claims.Sampling.OneStage.Pa, Finset.card_empty, Nat.sub_zero]
+    simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, Finset.card_empty, Nat.sub_zero]
     exact div_self (Nat.cast_ne_zero.2 (Nat.choose_pos hk).ne')
   | bernoulli a b => exact h.elim
   | stratified K St =>
@@ -159,8 +159,8 @@ theorem pa_empty_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h :
 /-- `UnitDraw.ofJson`'s range test is membership in the ranges' slots. -/
 theorem any_iff_mem_expand (rs : Array (ℕ × ℕ)) (u : ℕ) :
     (rs.any fun x => decide (x.1 ≤ u) && decide (u < x.2)) = true ↔
-      u ∈ Properties.SampledProofs.SecurityProofs.expand rs.toList := by
-  simp only [Array.any_eq_true', Properties.SampledProofs.SecurityProofs.expand, List.mem_flatMap,
+      u ∈ Properties.Spot.SecurityProofs.expand rs.toList := by
+  simp only [Array.any_eq_true', Properties.Spot.SecurityProofs.expand, List.mem_flatMap,
     Array.mem_toList_iff, List.mem_range'_1, Bool.and_eq_true, decide_eq_true_eq]
   constructor
   · rintro ⟨x, hx, h1, h2⟩; exact ⟨x, hx, h1, by omega⟩
@@ -198,14 +198,14 @@ theorem sum_count_strata {α : Type} (E : α → List ℕ) :
 /-- `strata_bound` at strata whose ranges are the slots `0, …, n − 1` in order: the sample misses the slots `U` themselves. -/
 theorem strata_bound_on (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
     (hSt : (∃ k, law = .stratified k St) ∨ ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) (n : ℕ)
-    (hon : St.toList.flatMap (fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList) = List.range n)
+    (hon : St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n)
     (U : Finset ℕ) (hU : U ⊆ Finset.range n) (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        SampledProofs.Draw.drawUnits law n (Properties.SampledProofs.bytesOf src) = .ok (units, read) ∧
+        Spot.Draw.drawUnits law n (Properties.Spot.bytesOf src) = .ok (units, read) ∧
           ∀ u ∈ U, u ∉ units) ≤
       Claims.Sampling.strataPa (St.toList.map fun s => (s.size, s.k)) 0 U := by
   refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
-    (Properties.SampledProofs.SecurityProofs.strata_bound law St hSt n U L)
+    (Properties.Spot.SecurityProofs.strata_bound law St hSt n U L)
   have hv' : v < (List.range n).length := by rw [List.length_range]; exact Finset.mem_range.1 (hU hv)
   rw [hon, List.getD_eq_getElem _ _ hv', List.getElem_range]
   exact hm v hv
@@ -214,14 +214,14 @@ theorem strata_bound_on (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
 theorem drawUnits_miss_le {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (hlaw : LawOn law ns kd) (hns : ns.sum = n)
     (U : Finset ℕ) (hU : U ⊆ Finset.range n) (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-        SampledProofs.Draw.drawUnits law n (Properties.SampledProofs.bytesOf src) = .ok (units, read) ∧
+        Spot.Draw.drawUnits law n (Properties.Spot.bytesOf src) = .ok (units, read) ∧
           ∀ u ∈ U, u ∉ units) ≤
-      (Properties.SampledProofs.oneStageOf law).Pa ns U := by
+      (Properties.Spot.oneStageOf law).Pa ns U := by
   cases law with
   | subset k =>
     obtain ⟨rfl, hk⟩ := hlaw
-    refine ((Properties.SampledProofs.SecurityProofs.one_bound n U hU L).1 _ (by rw [← hns]; exact hk)).trans_eq ?_
-    simp only [Properties.SampledProofs.oneStageOf, Claims.Sampling.OneStage.Pa, hns]
+    refine ((Properties.Spot.SecurityProofs.one_bound n U hU L).1 _ (by rw [← hns]; exact hk)).trans_eq ?_
+    simp only [Properties.Spot.oneStageOf, Claims.Sampling.OneStage.Pa, hns]
   | bernoulli a b => exact hlaw.elim
   | stratified K St =>
     obtain ⟨⟨hon, hsz⟩, -, -, hk, -⟩ := hlaw
@@ -234,12 +234,12 @@ theorem drawUnits_miss_le {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (h
     rw [Array.toList_map, ← hns]
     exact hon
 
-/-- **The deployed sample as a sampling design**: `SampledProofs.Draw.drawUnits` under `law` over `[0, pop)` on the source `t`'s bytes,
+/-- **The deployed sample as a sampling design**: `Spot.Draw.drawUnits` under `law` over `[0, pop)` on the source `t`'s bytes,
 read in order as one stream; a sample that runs out of them samples every unit. -/
 def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ} (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256)
     (law : Flock.Draw.Law) (pop : ℕ) : Audit.Law n where
   Ω := Ω
-  draw ω := match SampledProofs.Draw.drawUnits law pop (Properties.SampledProofs.bytesOf (t ω 0)) with
+  draw ω := match Spot.Draw.drawUnits law pop (Properties.Spot.bytesOf (t ω 0)) with
     | .ok r => univ.filter fun u => u.val ∈ r.1
     | .error _ => univ
 
@@ -249,7 +249,7 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {law : Flock.Draw.Law}
     {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd) (hns : ns.sum = n) (W : Finset (Fin n)) :
     (execSel (n := n) t law n).escape W ≤
-      ENNReal.ofReal ((Properties.SampledProofs.oneStageOf law).Pa ns (W.map Fin.valEmbedding)) := by
+      ENNReal.ofReal ((Properties.Spot.oneStageOf law).Pa ns (W.map Fin.valEmbedding)) := by
   classical
   rcases W.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · rw [Finset.map_empty, pa_empty_of_lawOn hlaw, ENNReal.ofReal_one]
@@ -258,12 +258,12 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     obtain ⟨v, -, rfl⟩ := Finset.mem_map.1 hu
     exact Finset.mem_range.2 v.isLt
   let E : (i : Fin 1) → (Fin (L i) → Fin 256) → Prop := fun _ g => ∃ units read,
-    SampledProofs.Draw.drawUnits law n (Properties.SampledProofs.bytesOf g) = .ok (units, read) ∧
+    Spot.Draw.drawUnits law n (Properties.Spot.bytesOf g) = .ok (units, read) ∧
       ∀ u ∈ W.map Fin.valEmbedding, u ∉ units
   have hfin : prCoin (E 0) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (Audit.DrawExec.prCoin_le_one _)
   calc (execSel (n := n) t law n).escape W ≤ prCoin (fun ω => E 0 (t ω 0)) := by
         refine prCoin_mono fun ω hd => ?_
-        change Disjoint (match SampledProofs.Draw.drawUnits law n (Properties.SampledProofs.bytesOf (t ω 0)) with
+        change Disjoint (match Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (t ω 0)) with
           | .ok r => univ.filter fun u => u.val ∈ r.1
           | .error _ => univ) W at hd
         split at hd
@@ -286,10 +286,10 @@ theorem lawOn_all (ns : List ℕ) : LawOn (.subset ns.sum) ns ns.sum := ⟨rfl, 
 /-- **Under `All` the deployed sample holds every unit**: a sample of `subset n` over `[0, n)` that ends is the image of
 `[0, n)` under a permutation that keeps it (`subset_spec`), so all of `[0, n)`, whatever the bytes. -/
 theorem drawUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
-    (h : SampledProofs.Draw.drawUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
-  have hs : Properties.SampledProofs.SecurityProofs.SeqMiss
+    (h : Spot.Draw.drawUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
+  have hs : Properties.Spot.SecurityProofs.SeqMiss
       [⟨2 * n * Flock.Draw.width n + 64, Flock.Draw.subset n n, fun D => ∀ x ∈ D, x ∈ r.1⟩] src 0 :=
-    Properties.SampledProofs.SecurityProofs.drawUnits_seq (.subset n) n src r.1 r.2 h
+    Properties.Spot.SecurityProofs.drawUnits_seq (.subset n) n src r.1 r.2 h
   obtain ⟨j, D, ⟨-, -, hD, -⟩, hm, -⟩ := hs
   change Flock.Draw.subset n n _ = some D at hD
   change ∀ x ∈ D, x ∈ r.1 at hm
@@ -306,7 +306,7 @@ theorem drawUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
 /-- **Under `All` the verifier samples every unit, for any coins**: `execSel` at `subset n` over the `n` units. -/
 theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) : (execSel (n := n) t (.subset n) n).draw ω = univ := by
-  change (match SampledProofs.Draw.drawUnits (.subset n) n (Properties.SampledProofs.bytesOf (t ω 0)) with
+  change (match Spot.Draw.drawUnits (.subset n) n (Properties.Spot.bytesOf (t ω 0)) with
     | .ok r => univ.filter fun u : Fin n => u.val ∈ r.1
     | .error _ => univ) = univ
   split
@@ -316,8 +316,8 @@ theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 
 
 /-- A unit in one of a stratum's ranges is in its slots. -/
 theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ rs) {u : ℕ} (h1 : r.1 ≤ u) (h2 : u < r.2) :
-    u ∈ Properties.SampledProofs.SecurityProofs.expand rs := by
-  simp only [Properties.SampledProofs.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
+    u ∈ Properties.Spot.SecurityProofs.expand rs := by
+  simp only [Properties.Spot.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
   exact ⟨r, hr, h1, by omega⟩
 
 /-- **A sampling design whose sample files hold `kd` units** (`lawSized_size`): `subset kd`, or a stratified or work sampling design whose
@@ -327,11 +327,11 @@ def LawSized (law : Flock.Draw.Law) (kd : ℕ) : Prop :=
   | .subset k => k = kd
   | .bernoulli _ _ => False
   | .stratified _ St =>
-    (St.toList.flatMap fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
+    (St.toList.flatMap fun s => Properties.Spot.SecurityProofs.expand s.units.toList).Nodup ∧
       (St.toList.map (·.k)).sum = kd
   | .work _ ws =>
     ((ws.toList.map (·.toStratum)).flatMap fun s =>
-        Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
+        Properties.Spot.SecurityProofs.expand s.units.toList).Nodup ∧
       (ws.toList.map (·.k)).sum = kd
 
 /-- A sampling design on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
@@ -367,7 +367,7 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
     obtain ⟨hnd, hsum⟩ := hlaw
     have hch := (Audit.StrataExec.strataProblem_none (Audit.StrataExec.ofJson_stratified hD rfl).1).2.2.2
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList,
-        u ∈ St.toList.flatMap fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList := by
+        u ∈ St.toList.flatMap fun s => Properties.Spot.SecurityProofs.expand s.units.toList := by
       intro u hu
       obtain ⟨r, hr, h1, h2⟩ := Audit.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
       have hr' := (Audit.StrataExec.qsort_perm _ _).subset hr
@@ -375,7 +375,7 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       obtain ⟨s, hs, hrs⟩ := List.mem_flatMap.1 hr'
       exact List.mem_flatMap.2 ⟨s, hs, mem_expand_of_mem hrs h1 h2⟩
     have hc : ∀ s ∈ St.toList, ((Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.filter fun u =>
-        decide (u ∈ Properties.SampledProofs.SecurityProofs.expand s.units.toList)).length = s.k := by
+        decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length = s.k := by
       intro s hs
       have h := Discharge.ZkLink.ofJson_count hD rfl s (Array.mem_toList_iff.1 hs)
       rw [← Array.foldl_toList, Discharge.ZkLink.foldl_count_filter, zero_add] at h
@@ -385,12 +385,12 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       rw [Bool.eq_iff_iff, decide_eq_true_iff]
       exact (any_iff_mem_expand s.units u).symm
     have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
-      Properties.SampledProofs.SecurityProofs.expand s.units.toList) St.toList
+      Properties.Spot.SecurityProofs.expand s.units.toList) St.toList
       (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList hnd hin
     calc (Discharge.ZkLink.drawOf (.stratified K St) n S).units.size
         = (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.length := Array.length_toList.symm
       _ = (St.toList.map fun s => ((Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.filter fun u =>
-            decide (u ∈ Properties.SampledProofs.SecurityProofs.expand s.units.toList)).length).sum := hcount.symm
+            decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length).sum := hcount.symm
       _ = (St.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
   | work K ws =>
@@ -398,7 +398,7 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
     have hch := Audit.StrataExec.workProblem_chain (Audit.StrataExec.ofJson_work hD rfl)
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList,
         u ∈ (ws.toList.map (·.toStratum)).flatMap fun s =>
-          Properties.SampledProofs.SecurityProofs.expand s.units.toList := by
+          Properties.Spot.SecurityProofs.expand s.units.toList := by
       intro u hu
       obtain ⟨r, hr, h1, h2⟩ := Audit.StrataExec.chain_covers hch u (Nat.zero_le u) (hlt u hu)
       have hr' := (Audit.StrataExec.qsort_perm _ _).subset hr
@@ -406,7 +406,7 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       obtain ⟨w, hw, hrw⟩ := List.mem_flatMap.1 hr'
       exact List.mem_flatMap.2 ⟨w.toStratum, List.mem_map_of_mem hw, mem_expand_of_mem hrw h1 h2⟩
     have hc : ∀ s ∈ ws.toList, ((Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.filter fun u =>
-        decide (u ∈ Properties.SampledProofs.SecurityProofs.expand s.units.toList)).length = s.k := by
+        decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length = s.k := by
       intro s hs
       have h := Discharge.ZkLink.ofJson_count_work hD rfl s (Array.mem_toList_iff.1 hs)
       rw [← Array.foldl_toList, Discharge.ZkLink.foldl_count_filter, zero_add] at h
@@ -416,15 +416,15 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       rw [Bool.eq_iff_iff, decide_eq_true_iff]
       exact (any_iff_mem_expand s.units u).symm
     have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
-      Properties.SampledProofs.SecurityProofs.expand s.units.toList) (ws.toList.map (·.toStratum))
+      Properties.Spot.SecurityProofs.expand s.units.toList) (ws.toList.map (·.toStratum))
       (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList hnd hin
     calc (Discharge.ZkLink.drawOf (.work K ws) n S).units.size
         = (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.length := Array.length_toList.symm
       _ = ((ws.toList.map (·.toStratum)).map fun s => ((Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.filter
-            fun u => decide (u ∈ Properties.SampledProofs.SecurityProofs.expand s.units.toList)).length).sum :=
+            fun u => decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length).sum :=
           hcount.symm
       _ = (ws.toList.map fun s => ((Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.filter fun u =>
-            decide (u ∈ Properties.SampledProofs.SecurityProofs.expand s.units.toList)).length).sum := by
+            decide (u ∈ Properties.Spot.SecurityProofs.expand s.units.toList)).length).sum := by
           rw [List.map_map]
           rfl
       _ = (ws.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)

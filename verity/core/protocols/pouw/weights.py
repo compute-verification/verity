@@ -39,7 +39,7 @@ from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.core.protocols.pouw.protocol import fold_roots
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import merkle_depth

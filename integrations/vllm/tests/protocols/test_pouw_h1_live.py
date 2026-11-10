@@ -14,7 +14,7 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
 from verity.core.protocols.pouw.circuit import live_reads as LR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import live as LV  # noqa: E402

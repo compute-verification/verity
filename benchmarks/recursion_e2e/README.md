@@ -66,7 +66,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   fails unless every part was released at its time. With `--env TREE_FROM=local` the challenger runs beside the inner
   step, every inner coin is its coin tree's, and `rec_inner.py tree-held` holds the inner session to its signed release log
   (`out/inner/tree-held.json`, by `rec_live.tree_held_reason`, the Python mirror of the check the recursive audit reads,
-  `SampledProofs.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
+  `Spot.Challenger.innerTreesReason`). The result's `release` and the table's release-side section give each
   part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
   needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
 - **The figures** (`figures.py`, the result's `figures` and the table's last section): the session's cost, its

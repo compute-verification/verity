@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.RelativeSecurity
 public import Properties.Pouw.Strata
-public import Properties.SampledProofs.Draw
+public import Properties.Spot.Draw
 
 /-!
 # The ε a served window's credit reports (`PouwCheck.Credit.established`, `PouwWindow.epsAt`)
@@ -45,11 +45,11 @@ namespace Properties.Pouw.Credit
 open Properties.Pouw.Strata (unitWork)
 
 /-- The units the work sample over `strata` samples from the streams `g`, one per stratum (`PouwCheck.workUnits`'s
-`Flock.Draw.stratified`, stratum `i`'s stream `g i`'s bytes, as `Properties.SampledProofs.bytesOf` reads them); none
+`Flock.Draw.stratified`, stratum `i`'s stream `g i`'s bytes, as `Properties.Spot.bytesOf` reads them); none
 where a stream runs out. -/
 def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → Fin strata[i].need → Fin 256) :
     Option (Array ℕ) :=
-  Flock.Draw.stratified strata (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i))
+  Flock.Draw.stratified strata (Array.ofFn fun i => Properties.Spot.bytesOf (g i))
 
 /-- The credited calls' served work: each call of `layout` in `got` at its served rows `served` is m_s·(n/C) live
 positions of C·K MACs each (`PouwCheck.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
@@ -104,7 +104,7 @@ until it closed, so its commitment came after the prover's sample root. -/
 def DrawWithheld : Prop :=
   ∀ key ledger pins main salt calls served commit rounds draw got,
     PouwCheck.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
-      ∃ r, PouwCheck.get draw "root" = .str r ∧ SampledProofs.Challenger.withheldOn ledger r = true
+      ∃ r, PouwCheck.get draw "root" = .str r ∧ Spot.Challenger.withheldOn ledger r = true
 
 /-- **The grouped sample at `K ≥ K′` misses a set of blocks of work `ε·C` with probability at most `δ`**: the work sampling design
 samples leaves (`drawnOn`, as in `WorkDrawMisses`), and each sampled leaf `u` is proved as its group, every block `b` with

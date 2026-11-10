@@ -8,7 +8,7 @@ public import Proofs.Properties.Nci.BaselineSteps
 public import Proofs.Properties.Nci
 public import Proofs.Properties.Nci.Agrees
 public import Proofs.Nci.FitWitness
-public import Proofs.Properties.SampledProofs
+public import Proofs.Properties.Spot
 public import Proofs.Nci.CompliesCK
 public import Proofs.Core.Expand
 public import Std.Data.TreeMap.Raw.Lemmas
@@ -172,7 +172,7 @@ theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).
 /-- Sampled proofs' commitment and digest are the one-stage registration record's, on any blobs. -/
 theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
-      Properties.Composition.digestOf SampledProofs.OneStage.protocol b := rfl
+      Properties.Composition.digestOf Spot.OneStage.protocol b := rfl
 
 /-- What the policy's check accepts: a record naming the declared circuit, and a verdict of compliance of the check of
 record. -/
@@ -265,39 +265,39 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
 
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
 verifier. -/
-theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
-    {ξ : Option ByteArray} {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public}
-    {prof : Integrity} (h : SampledProofs.OneStage.checkAt p c ξ e = .accept pub prof) :
-    Properties.SampledProofs.R2 c.record p.verifier := by
-  unfold SampledProofs.OneStage.checkAt at h
+theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
+    {ξ : Option ByteArray} {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public}
+    {prof : Integrity} (h : Spot.OneStage.checkAt p c ξ e = .accept pub prof) :
+    Properties.Spot.R2 c.record p.verifier := by
+  unfold Spot.OneStage.checkAt at h
   split at h
   · cases h
-  · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
+  · obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
     exact hreg.2.1
 
 <<<<<<< ours
 /-- What one-stage v1's check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
-theorem stage_registered_check {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+theorem stage_registered_check {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
 ||||||| base
 /-- What the one-stage audit's acceptance gives: its record keeps R2 against the audit's own verifier. -/
-theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+theorem stage_registered {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
 =======
 /-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
-theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+theorem stage_registered {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
 >>>>>>> theirs
-    {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStage.check p c e = .accept pub prof) :
-    Properties.SampledProofs.R2 c.record p.verifier := by
-  obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
+    {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Integrity}
+    (h : Spot.OneStage.check p c e = .accept pub prof) :
+    Properties.Spot.R2 c.record p.verifier := by
+  obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
   exact hreg.2.1
 
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
 verifier. -/
-theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
-    {ξ : Option ByteArray} {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public}
-    {prof : Integrity} (h : SampledProofs.OneStage.checkAt p c ξ e = .accept pub prof) :
-    Properties.SampledProofs.R2 c.record p.verifier := by
-  unfold SampledProofs.OneStage.checkAt at h
+theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
+    {ξ : Option ByteArray} {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public}
+    {prof : Integrity} (h : Spot.OneStage.checkAt p c ξ e = .accept pub prof) :
+    Properties.Spot.R2 c.record p.verifier := by
+  unfold Spot.OneStage.checkAt at h
   split at h
 <<<<<<< ours
   · cases h
@@ -305,19 +305,19 @@ theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProo
 
 /-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
 run of the verifier computed. -/
-theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment} {ξ : ByteArray}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ r : SampledProofs.OneStageZk.Run,
-      SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
-  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
+    {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
+    (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ r : Spot.OneStageZk.Run,
+      Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
+  unfold Spot.OneStageZk.checkBlobsAt at h
   split at h
   · cases h
   split at h
   · cases h
   · rename_i r _
     refine ⟨r, ?_⟩
-    generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
+    generalize Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
     cases o with
     | accept pub' prof' =>
       cases hr : r.all <;> cases hf : p.form.perMember <;> simp [hr, hf] at h
@@ -328,28 +328,28 @@ theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.One
 
 /-- One-stage v2 accepts only where v1's check accepts at the coins it read, on the verdicts its own run of the
 verifier computed, so its record keeps R2 against the v1 part of its params' verifier. -/
-theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
-    Properties.SampledProofs.R2 c.record p.base.verifier := by
-  unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
+theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
+    (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    Properties.Spot.R2 c.record p.base.verifier := by
+  unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · obtain ⟨_, hr⟩ := stage_zk_at h
     exact stage_registered_at hr
   · cases h
 
 /-- One-stage v2's check at any coins never accepts in the per-member form (`OneStageZk.MULTI_REFUSED`). -/
-theorem stage_zk_at_one_statement {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {ξ : ByteArray} {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public}
-    {prof : Integrity} (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+theorem stage_zk_at_one_statement {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public}
+    {prof : Integrity} (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     p.form.perMember = false := by
-  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  unfold Spot.OneStageZk.checkBlobsAt at h
   split at h
   · cases h
   split at h
   · cases h
   · rename_i r _
-    generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h
+    generalize Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h
     cases o with
     | accept pub' prof' =>
       cases hf : p.form.perMember
@@ -360,18 +360,18 @@ theorem stage_zk_at_one_statement {p : SampledProofs.OneStageZk.Params} {c : Sam
 
 /-- One-stage v2 never accepts in the per-member form: no guarantee in the lock yet covers a sample over several
 members' statements under one sample. -/
-theorem stage_zk_one_statement {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) : p.form.perMember = false := by
-  unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
+theorem stage_zk_one_statement {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
+    (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) : p.form.perMember = false := by
+  unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · exact stage_zk_at_one_statement h
 ||||||| base
-  · unfold SampledProofs.OneStage.checkAt at h
+  · unfold Spot.OneStage.checkAt at h
     beta_reduce at h
     split at h
     · cases h
-    · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
+    · obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
       exact hreg.2.1
 =======
   · exact stage_registered_at h
@@ -381,10 +381,10 @@ theorem stage_zk_one_statement {p : SampledProofs.OneStageZk.Params} {c : Sample
 <<<<<<< ours
 /-- The recursive audit accepts only where one-stage v1's check accepts on the inner statement's params, with the
 verdicts V*'s compiled check computes. -/
-theorem recursive_check {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+theorem recursive_check {q : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
-    ∃ e₀, SampledProofs.OneStage.check q.base c e₀ = .accept pub prof := by
+    ∃ e₀, Spot.OneStage.check q.base c e₀ = .accept pub prof := by
   unfold VStar.Recursive.checkBlobs at h
   split at h
   · cases h
@@ -396,18 +396,18 @@ theorem recursive_check {q : VStar.Recursive.Params} {c : SampledProofs.OneStage
 =======
 /-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
 run of the verifier computed. -/
-theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment} {ξ : ByteArray}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ r : SampledProofs.OneStageZk.Run,
-      SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
-  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
+    {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
+    (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ r : Spot.OneStageZk.Run,
+      Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
+  unfold Spot.OneStageZk.checkBlobsAt at h
   dsimp only at h
   split at h
   · cases h
   · rename_i r _
     refine ⟨r, ?_⟩
-    generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
+    generalize Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
     cases o with
     | accept pub' prof' =>
       cases hr : r.all <;> simp [hr] at h
@@ -418,11 +418,11 @@ theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.One
 
 /-- One-stage v2 accepts only where v1's check accepts at the coins it read, on the verdicts its own run of the
 verifier computed, so its record keeps R2 against the v1 part of its params' verifier. -/
-theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
-    (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
-    Properties.SampledProofs.R2 c.record p.base.verifier := by
-  unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
+theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
+    (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    Properties.Spot.R2 c.record p.base.verifier := by
+  unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · obtain ⟨_, hr⟩ := stage_zk_at h
     exact stage_registered_at hr
@@ -430,10 +430,10 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
 
 /-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
 V*'s compiled check computes. -/
-theorem recursive_live {q : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+theorem recursive_live {q : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : VStar.Recursive.checkBlobs q c e bs = .accept pub prof) :
-    ∃ e₀, SampledProofs.OneStage.checkLive q.base c e₀ = .accept pub prof := by
+    ∃ e₀, Spot.OneStage.checkLive q.base c e₀ = .accept pub prof := by
   unfold VStar.Recursive.checkBlobs at h
   split at h
   · cases h
@@ -571,13 +571,13 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
   obtain ⟨p, c, e, hp', hc, -, pub, prof, hchk⟩ := h
   have hp'' : (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok p := by
     rw [hp]; exact hp'
-  have hc' : SampledProofs.OneStage.commitmentOf k.commitment = .ok c := hc
+  have hc' : Spot.OneStage.commitmentOf k.commitment = .ok c := hc
 <<<<<<< ours
   have hchk' : VStar.Recursive.Sampled.checkBlobs p c e bs = .accept pub prof := hchk
   clear hp' hchk
   rcases p with p | q <;> rcases e with e | e
   · exact Or.inl ⟨p, c, hp'', hc',
-      stage_zk_registered (show SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
+      stage_zk_registered (show Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · obtain ⟨e₀, he₀⟩ := recursive_check
@@ -586,7 +586,7 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
 ||||||| base
-  have hchk' : SampledProofs.OneStage.checkLive p c e = .accept pub prof := hchk
+  have hchk' : Spot.OneStage.checkLive p c e = .accept pub prof := hchk
   exact ⟨p, c, by rw [hp]; exact hp'', hc', stage_registered hchk'⟩
 
 /-- What remote's acceptance gives: the three cases in order, one digest for the policy's and the one-stage audit's
@@ -595,7 +595,7 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
   clear hp' hchk
   rcases p with p | q <;> rcases e with e | e
   · exact Or.inl ⟨p, c, hp'', hc',
-      stage_zk_registered (show SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
+      stage_zk_registered (show Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof from hchk')⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · obtain ⟨e₀, he₀⟩ := recursive_live
@@ -612,7 +612,7 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
       (eI : NciCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
       Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
       (∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = NciCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
       (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI ∧
       NciCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
       (∃ pub' prof', NciCheck.Protocol.check pI cI eI = .accept pub' prof') ∧ StageHeld kS := by

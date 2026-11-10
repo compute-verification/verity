@@ -2334,7 +2334,7 @@ requires-dist = [
 [[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
-source = { virtual = "verity/core/service/sampled_proofs" }
+source = { virtual = "verity/core/service/spot" }
 dependencies = [
     { name = "hypothesis" },
 ]

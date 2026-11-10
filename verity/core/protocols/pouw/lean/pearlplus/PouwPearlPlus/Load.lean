@@ -30,7 +30,7 @@ and `tile`.
 namespace PouwCheck.PearlPlus
 
 open Lean PouwCommit
-open SampledProofs.Challenger (LiveCommitment LiveOpening)
+open Spot.Challenger (LiveCommitment LiveOpening)
 
 def MANIFEST_SCHEMA : String := Domains.VLLM_PEARL_C_RUN
 def MANIFEST_RECORDED : String := Domains.VLLM_PEARL_C_RUN_V1

@@ -65,8 +65,8 @@ public import CoreComposition.Tie
 public import NciCheck.Protocol
 public import PouwCheck.Period
 public import PouwPearlPlus.Protocol
-public import SampledProofs.OneStage
-public import SampledProofs.OneStageZk
+public import Spot.OneStage
+public import Spot.OneStageZk
 public import VStarRecursive.Sampled
 meta import CoreComposition.Blobs
 meta import CoreComposition.Cases
@@ -74,8 +74,8 @@ meta import CoreComposition.Tie
 meta import NciCheck.Protocol
 meta import PouwCheck.Period
 meta import PouwPearlPlus.Protocol
-meta import SampledProofs.OneStage
-meta import SampledProofs.OneStageZk
+meta import Spot.OneStage
+meta import Spot.OneStageZk
 meta import VStarRecursive.Sampled
 
 @[expose] public section
@@ -142,10 +142,10 @@ private def allRefused : Answer := answer (components.map refused)
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/v1 is not a component of this composition"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
-    refused SampledProofs.OneStage.protocol]).reason ==
+    refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
-    refused SampledProofs.OneStageZk.protocol]).reason ==
+    refused Spot.OneStageZk.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 
 /-- A registration record every record reader decodes, a window's Commit record among them. -/

@@ -7,8 +7,8 @@ public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 # The registration's population is the game's units, in order (`Bridge.PopMatches`)
 
 `Bridge.PopMatches desc q n`, a decidable check on the files, as `Bridge.RowsOk` is: the descriptor bytes `desc` parse
-(`SampledProofs.Program.parse`), the layout the deployed verifier evaluates on them under the registration's query `q`
-(`SampledProofs.Slots.layout`, which reads the query as JSON, `Reg.query`) is defined, and its population, the layout's
+(`Spot.Program.parse`), the layout the deployed verifier evaluates on them under the registration's query `q`
+(`Spot.Slots.layout`, which reads the query as JSON, `Reg.query`) is defined, and its population, the layout's
 first class, is `n` proof blocks with slot `u` unit `u`. It says nothing of the units' gates: that slot `u`'s gates are
 unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, which is not yet stated.
 
@@ -30,18 +30,18 @@ unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, which is
 
 namespace Flock.Bridge
 
-open Properties.SampledProofs
+open Properties.Spot
 
 /-- **A layout's population**: its first class's proof blocks, in slot order. -/
-def popOf (l : SampledProofs.Slots.SlotOrder) : List SampledProofs.Slots.ProofBlock :=
+def popOf (l : Spot.Slots.SlotOrder) : List Spot.Slots.ProofBlock :=
   ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
 /-- `PopMatches`'s check. -/
 def popCheck (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
-  match SampledProofs.Program.parse ⟨desc.toArray⟩ with
+  match Spot.Program.parse ⟨desc.toArray⟩ with
   | .error _ => false
   | .ok p =>
-    match SampledProofs.Slots.layout p q with
+    match Spot.Slots.layout p q with
     | .error _ => false
     | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
@@ -53,8 +53,8 @@ instance instDecidablePopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) :
   inferInstanceAs (Decidable (_ = true))
 
 theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
-    PopMatches desc q n ↔ ∃ p l, SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p ∧
-      SampledProofs.Slots.layout p q = .ok l ∧ (popOf l).map (·.unit) = (List.range n).map some := by
+    PopMatches desc q n ↔ ∃ p l, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
+      Spot.Slots.layout p q = .ok l ∧ (popOf l).map (·.unit) = (List.range n).map some := by
   unfold PopMatches popCheck
   constructor
   · intro h
@@ -67,16 +67,16 @@ theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
         exact ⟨p, l, hp, hl, of_decide_eq_true h⟩
   · rintro ⟨p, l, hp, hl, h⟩
     rw [hp]
-    show (match SampledProofs.Slots.layout p q with
+    show (match Spot.Slots.layout p q with
       | .error _ => false
       | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)) = true
     rw [hl]
     exact decide_eq_true h
 
 /-- The population's units at the layout `PopMatches` reads. -/
-theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
-    {l : SampledProofs.Slots.SlotOrder} (h : PopMatches desc q n)
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l) :
+theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     (popOf l).map (·.unit) = (List.range n).map some := by
   obtain ⟨p', l', hp', hl', hu⟩ := popMatches_iff.1 h
   rw [hp] at hp'
@@ -86,9 +86,9 @@ theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledPr
   exact hu
 
 /-- **N = n at the layout**: at `PopMatches`, the population has `n` slots. -/
-theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
-    {l : SampledProofs.Slots.SlotOrder} (h : PopMatches desc q n)
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l) :
+theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     (popOf l).length = n := by
   have := congrArg List.length (popOf_units h hp hl)
   simpa only [List.length_map, List.length_range] using this
@@ -96,25 +96,25 @@ theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledPro
 /-- **The registration's strata**: the sizes of the strata of the population, the first class of the layout the deployed
 verifier evaluates on `desc` under the query `q`, in slot order; none where the parse or the layout fails. -/
 def nsOf (desc : Claims.Msg) (q : Lean.Json) : List ℕ :=
-  match SampledProofs.Program.parse ⟨desc.toArray⟩ with
+  match Spot.Program.parse ⟨desc.toArray⟩ with
   | .error _ => []
   | .ok p =>
-    match SampledProofs.Slots.layout p q with
+    match Spot.Slots.layout p q with
     | .error _ => []
     | .ok l => (l.classes.toList.headD #[]).toList.map Array.size
 
-theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : SampledProofs.Program} {l : SampledProofs.Slots.Layout}
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l) :
+theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.Layout}
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     nsOf desc q = (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold nsOf
   rw [hp]
-  show (match SampledProofs.Slots.layout p q with
+  show (match Spot.Slots.layout p q with
     | .error _ => []
     | .ok l => (l.classes.toList.headD #[]).toList.map Array.size) = _
   rw [hl]
 
 /-- A layout's strata sizes sum to its population's slots. -/
-theorem sum_strata_popOf (l : SampledProofs.Slots.Layout) :
+theorem sum_strata_popOf (l : Spot.Slots.Layout) :
     ((l.classes.toList.headD #[]).toList.map Array.size).sum = (popOf l).length := by
   simp only [popOf, List.length_flatten, List.map_map]
   congr 1
@@ -125,9 +125,9 @@ theorem nsOf_sum {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches d
   rw [nsOf_eq hp hl, sum_strata_popOf, popOf_size h hp hl]
 
 /-- **Slot `u` is unit `u`**: at `PopMatches`, the population's proof block at slot `u` is the population's unit `u`. -/
-theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
-    {l : SampledProofs.Slots.SlotOrder} (h : PopMatches desc q n)
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l)
+theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
     (u : ℕ) (hu : u < (popOf l).length) : ((popOf l)[u]'hu).unit = some u := by
   have hu' : u < ((popOf l).map (·.unit)).length := by rw [List.length_map]; exact hu
   have := List.getElem_of_eq (popOf_units h hp hl) hu'
@@ -137,7 +137,7 @@ theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledPro
 def popCount (Pt : Claims.Sampling.Partition) : ℕ := (Pt.classes.headD []).flatten.length
 
 /-- The claims' partition of a layout has the layout's population as its population. -/
-theorem popCount_slotPartition (l : SampledProofs.Slots.SlotOrder) : popCount (slotPartition l) = (popOf l).length := by
+theorem popCount_slotPartition (l : Spot.Slots.SlotOrder) : popCount (slotPartition l) = (popOf l).length := by
   rcases l with ⟨⟨cl⟩⟩
   cases cl with
   | nil => rfl
@@ -152,9 +152,9 @@ theorem popCount_partOf_eq {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : Flo
 
 /-- **N = n**: at `PopMatches`, the claims' partition of the deployed layout has as many population slots as the
 game's partition `partOf P κ ns` has population slots, at strata that sum to `n`. -/
-theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
-    {l : SampledProofs.Slots.SlotOrder} (h : PopMatches desc q n)
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l)
+theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
     {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) :
     popCount (slotPartition l) = popCount (partOf P κ ns) := by

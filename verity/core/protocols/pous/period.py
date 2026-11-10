@@ -414,7 +414,7 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
 
 
 LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
-"""The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
+"""The schemas of the auditor's ledger entries (`spot.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
 _ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]
 
@@ -428,7 +428,7 @@ def _json(data: str | bytes) -> Any:
 
 
 def _entry(line: Any) -> dict | None:
-    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
+    """`line` as an entry of the auditor's ledger (`spot.challenger.ledger_text`'s form), else None."""
     if type(line) is not str or not line.startswith('{"body":'):
         return None
     e = _json(line)

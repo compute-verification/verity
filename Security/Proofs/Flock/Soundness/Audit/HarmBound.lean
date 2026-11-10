@@ -24,7 +24,7 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly wi
   bound at `τ`, so its value `∑ s g_s x_s` is a harm bound. The greedy fill, strata taken whole in decreasing
   `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
   `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
-  (`verity.core.protocols.sampled_proofs.optimize`).
+  (`verity.core.protocols.spot.optimize`).
 * `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
   `workOf σ w B`.
 * `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration

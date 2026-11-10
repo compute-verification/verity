@@ -1953,7 +1953,7 @@ def checked_heads(repo: Path, tip: str, idx) -> list[tuple[str, str]]:
 def main_line(repo: Path, tip: str, idx) -> list[str]:
     """The checked train heads newest first (`checked_heads` reversed): the commits on `tip`'s first-parent line whose own
     `check` passed and landed them, less a reverted train's. `research queue checked-heads --out` writes these, one a
-    line, to the verifier's main-line file (`sampled_proofs.remote.main_lines`) for a deployment that wants
+    line, to the verifier's main-line file (`spot.remote.main_lines`) for a deployment that wants
     `pouw.credit`'s line to be the checked heads rather than the raw `git rev-list --first-parent origin/main` infra
     writes by default; the two differ only by a reverted train's commits and the in-flight commits whose check hasn't
     landed them."""

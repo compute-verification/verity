@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.Trees
 # The record the log readers read is the record v2 verified
 
 v2 reads a session's record twice: `Flock.Zk.verify` decodes it (`Flock.Record.decode`), and
-`SampledProofs.OneStageZk.treesHeld` holds it to the challenger's trees. Both parse it through `Flock.JsonParse.parse`,
+`Spot.OneStageZk.treesHeld` holds it to the challenger's trees. Both parse it through `Flock.JsonParse.parse`,
 which is total, so a proof reads one parsed record out of both. The log readers read the sessions' records as
 `treesHeld` does (`Verity.Sampled.recordsOn`, which `logRead` reads, and `Verity.Sampled.recordsOf`, which `coinsRead`
 reads): where v2 verified a session's record, each reads exactly that record's parse (`sent_records`), the value the
@@ -26,8 +26,8 @@ theorem mapM_single_some {α β : Type} {f : α → Option β} {a : α} {b : β}
   rfl
 
 /-- The session's record v2 reads (`sessionRecord`), of evidence naming one session, is that session's blob as text. -/
-theorem sessionRecord_blob {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {rs : _root_.SampledProofs.OneStageZk.RunFiles} {record : String} (he : e.sessions = #[rs])
+theorem sessionRecord_blob {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {rs : _root_.Spot.OneStageZk.RunFiles} {record : String} (he : e.sessions = #[rs])
     (hr : sessionRecord e bs = some record) :
     ∃ b, bs.get rs.record s!"session {rs.name}'s record" = .ok b ∧ String.fromUTF8? b = some record := by
   unfold sessionRecord at hr
@@ -39,8 +39,8 @@ theorem sessionRecord_blob {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : 
 
 /-- **`recordsOn` reads the session's record's parse**: of evidence naming one session whose record parses to `J`
 through `Flock.JsonParse.parse`, the records `recordsOn` reads are `[J]`. -/
-theorem recordsOn_single {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {rs : _root_.SampledProofs.OneStageZk.RunFiles} {record : String} {J : Json} (he : e.sessions = #[rs])
+theorem recordsOn_single {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {rs : _root_.Spot.OneStageZk.RunFiles} {record : String} {J : Json} (he : e.sessions = #[rs])
     (hr : sessionRecord e bs = some record) (hJ : Flock.JsonParse.parse record = .ok J) :
     recordsOn bs e = some [J] := by
   obtain ⟨b, hb, hu⟩ := sessionRecord_blob he hr
@@ -57,8 +57,8 @@ theorem recordsOn_single {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _r
 
 /-- **`recordsOf` reads the session's record's parse**: of evidence naming one session whose record on the blobs sent
 parses to `J` through `Flock.JsonParse.parse`, the records `recordsOf` reads are `[J]`. -/
-theorem recordsOf_single {s : Verity.Sent} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    {rs : _root_.SampledProofs.OneStageZk.RunFiles} {record : String} {J : Json} (he : e.sessions = #[rs])
+theorem recordsOf_single {s : Verity.Sent} {e : _root_.Spot.OneStageZk.Evidence}
+    {rs : _root_.Spot.OneStageZk.RunFiles} {record : String} {J : Json} (he : e.sessions = #[rs])
     (hr : sessionRecord e (_root_.Core.Blobs.ofArray s.blobs) = some record)
     (hJ : Flock.JsonParse.parse record = .ok J) : recordsOf s e = some [J] := by
   obtain ⟨b, hb, hu⟩ := sessionRecord_blob he hr
@@ -76,7 +76,7 @@ theorem recordsOf_single {s : Verity.Sent} {e : _root_.SampledProofs.OneStageZk.
 
 /-- **A record v2 verified parses** through `Flock.JsonParse.parse`: `Flock.Zk.verify` accepts only a record that
 `Flock.Record.decode` decodes, and that parses it first. -/
-theorem verified_parse {p : _root_.SampledProofs.OneStageZk.Params} {e : _root_.SampledProofs.OneStageZk.Evidence}
+theorem verified_parse {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
     ∃ J, Flock.JsonParse.parse record = .ok J := by
@@ -89,8 +89,8 @@ theorem verified_parse {p : _root_.SampledProofs.OneStageZk.Params} {e : _root_.
 (`V2Verified`, which `sent_verified` gives where v2's case accepts), the record parses through `Flock.JsonParse.parse`,
 the parser `Flock.Record.decode` reads it through, to some `J`, and both readers of the sessions' records read exactly
 `[J]`: `recordsOn`, as `treesHeld` and `logRead` read them, and `recordsOf`, as `coinsRead` reads them. -/
-theorem sent_records {s : Verity.Sent} {p : _root_.SampledProofs.OneStageZk.Params}
-    {e : _root_.SampledProofs.OneStageZk.Evidence} {record : String} {spec : Flock.SessionSpec}
+theorem sent_records {s : Verity.Sent} {p : _root_.Spot.OneStageZk.Params}
+    {e : _root_.Spot.OneStageZk.Evidence} {record : String} {spec : Flock.SessionSpec}
     {tabs : Array Flock.Setup} {rest : Json × Json} {proofs : Array ByteArray}
     (h : V2Verified p e (_root_.Core.Blobs.ofArray s.blobs) record spec tabs rest proofs) :
     ∃ J, Flock.JsonParse.parse record = .ok J ∧ recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some [J] ∧

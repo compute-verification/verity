@@ -1,4 +1,4 @@
-"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
+"""a5's case for the audit on the proofs themselves, `Spot.OneStageZk`'s: v1's case with the evidence's verdicts
 <<<<<<< HEAD
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest (per member, every
 member's units, circuit digest and registered file), and blobs the paths of those files and the pinned tables; and the
@@ -27,7 +27,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF  # noqa: E402
+from verity.core.protocols.spot.one_stage import proofs as PF  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
 REPLAY = importlib.util.module_from_spec(_spec)
@@ -195,7 +195,7 @@ def write(out: Path, v2) -> None:
                   session_roots={}, served=[], v2=v2)
 
 
-def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_sampled_proofs_no_case(tmp_path, stub_case):
+def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_spot_no_case(tmp_path, stub_case):
     write(tmp_path, "v2 verifies --zk sessions; this audit's are plain")
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
     assert not (tmp_path / "case-v2.json").exists()
@@ -225,7 +225,7 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
     assert (p["parameters"], p["row_schemas"]) == ([["v", {"bits": 32}]], {"v": "row-seg/v1"})
 ||||||| merged common ancestors
 =======
-def test_sampled_proofs_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
+def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
     """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
@@ -272,7 +272,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
     """`a5.link_points` records the registration's refusal of a law no draw of which ends (`link_points.NEVER_ENDS`),
     which `coins.law_problem` refuses first for every law it reads: past it, `subset:41` over 40 units is refused for
     every member."""
-    from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
+    from verity.core.protocols.spot.one_stage import link_points as LP
 
     monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}

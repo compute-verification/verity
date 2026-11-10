@@ -21,7 +21,7 @@ by its unit (Replace), PoUW's own Program and not the served one.
   receipt folds take keys: seed_j and σ_R), and its noise from the seed; nothing else reads the salt. The
   salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
   u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
-  one-stage verifier fills itself, so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s
+  one-stage verifier fills itself, so the prover chooses none of them (`spot.one_stage.registered`'s
   `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
   port's, an AROW row table's included, and the registered weights', which the verifier holds to the root it pinned
   before the salt, `one_stage.registration.check`'s `pinned`), `pouw.positions` after every unit of the log's earlier records
@@ -1060,7 +1060,7 @@ class Tiles:
     def positions(self, base: int = 0) -> list[int]:
         """`pouw.positions`' values: unit u's is ``base + u``. A salt seeds each (salt, position) once, so a verifier that runs
         the Program more than once under one salt gives each run its own range (``base``); the one-stage verifier's is
-        every unit of the log's earlier records (`sampled_proofs.one_stage.registered.log_base`)."""
+        every unit of the log's earlier records (`spot.one_stage.registered.log_base`)."""
         if base < 0 or base + len(self.units) > 1 << 64:
             raise ValueError(f"positions {base} .. {base + len(self.units) - 1} are no u64s")
         return [base + u.slot for u in self.units]
@@ -1075,7 +1075,7 @@ class Tiles:
     def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
         """The leaves of `pouw.salt` (the execution phase's 64-byte salt, a certified execution phase's), `pouw.positions` and `pouw.roots`
         (a pair per seed group), the arguments after the served ones: the rows the one-stage verifier fills
-        (`sampled_proofs.one_stage.registered.supplied_rows`) from the execution phase's salt, the log's ``base`` and the roots
+        (`spot.one_stage.registered.supplied_rows`) from the execution phase's salt, the log's ``base`` and the roots
         the record names."""
         _check_salt(salt)
         _check_roots(roots, len(self.groups))

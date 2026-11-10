@@ -18,7 +18,7 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 
 STATEMENTS = Path(__file__).resolve().parents[4] / "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py"

@@ -33,13 +33,13 @@ One distribution, one module per concern. Import from the module that owns an ob
 | `verity.core.protocols.profile` | `IntegrityProfile`: what an accepted audit established (the exhaustive facts, a verifier's sampling design over named levels of a partition hierarchy, and δ). |
 <<<<<<< HEAD
 | `verity.core.protocols.registration` | The registration log, the Python of `Core.Registration`: one append-only log of the Site's site entries (`verity.core.site.Entry`: its sheets, locations and links) and information entries (θ's registered values by committed root, the builder B), chained by `previous` and named by its SHA-512 head; its check, the Site's for a site entry, and each component's view of it. |
-| `verity.core.protocols.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`), sampled from the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.sampled_proofs`. |
+| `verity.core.protocols.spot` | Sampled proofs as the one-stage audit (`one_stage`), sampled from the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.spot`. |
 ||||||| merged common ancestors
 | `verity.core.protocols.registration` | The registration log, the Python of `Core.Registration`: one append-only log of hardware entries (the site's cards, locations and links) and information entries (θ's registered values by committed root, the builder B), chained by `previous` and named by its SHA-512 head; its check, refusal by refusal, and each component's view of it. |
-| `verity.core.protocols.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`), sampled from the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.sampled_proofs`. |
+| `verity.core.protocols.spot` | Sampled proofs as the one-stage audit (`one_stage`), sampled from the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.spot`. |
 =======
 | `verity.core.protocols.registration` | The registration log, the Python of `Core.Registration`: one append-only log of hardware entries (the site's cards, locations and links) and information entries (θ's registered values by committed root, the registered compiler B), chained by `previous` and named by its SHA-512 head; its check, refusal by refusal, and each subprotocol's view of it. |
-| `verity.core.protocols.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`), sampled with the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.sampled_proofs`. |
+| `verity.core.protocols.spot` | Sampled proofs as the one-stage audit (`one_stage`), sampled with the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.spot`. |
 >>>>>>> 705be2b532
 | `verity.core.protocols.pouw` | Proof of useful work: the `PoUWScheme` interface, its commitments and epoch (`audit`) and the named schemes (`schemes.get`), each with pinned vectors. |
 | `verity.core.protocols.record` | `Core.Record`: a record entry, one signed and chained message of a run's transcript, `{body, kind, prev, schema, seq, session, sig}`; the auditor's ledger is written and read through it. |

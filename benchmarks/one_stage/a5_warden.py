@@ -84,7 +84,7 @@ from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.grid import BlockGrid  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402

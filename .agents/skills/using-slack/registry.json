@@ -118,7 +118,7 @@
         "Security/Proofs/Core/",
         "Security/Definitions/Core/",
         "verity/",
-        "verity/core/protocols/sampled_proofs/",
+        "verity/core/protocols/spot/",
         "benchmarks/one_stage/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
@@ -130,7 +130,7 @@
         "benchmarks/flock_s8_block/",
         "benchmarks/sampling_plan/",
         "benchmarks/spot_figures/",
-        "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
+        "integrations/vllm/verity_vllm/protocols/spot.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
         "verity/core/protocols/interface/"

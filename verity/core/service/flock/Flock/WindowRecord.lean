@@ -10,7 +10,7 @@ A one-stage window record (format `verity/registration/v1` or `verity/registrati
 `SHA-512(format ‖ 0 ‖ canon(record))`, its own format the tag. This is that digest's one definition, in Flock's
 verifier so that every reader reaches it without a new requirement: PoUW's check (`PouwCheck.Registration.digest`),
 the network check (`NetworkCheck.Period.answered`), sampled proofs' registration and audit record
-(`SampledProofs.Registration`, `SampledProofs.Record`) and Flock's recursive setup (`RecVStar.registration`) read it
+(`Spot.Registration`, `Spot.Record`) and Flock's recursive setup (`RecVStar.registration`) read it
 here. Python's `registration.digest` is its mirror on records whose numbers are integers, where `canon` writes
 Python's `canonical_json`.
 -/

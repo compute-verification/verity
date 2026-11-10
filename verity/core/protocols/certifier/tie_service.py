@@ -78,11 +78,11 @@ from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_
 from verity.core.protocols.certifier import service as SVC, warden_rows as WR
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, produced, proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as R
-from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
-from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import partition as P, produced, proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G, registration as R
+from verity.core.protocols.spot.one_stage.proofs import Finding
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 
 SPEC = "verity-network-certifier/ingress-tie-spec/v1"
 STATEMENT = "verity-network-certifier/ingress-tie-statement/v1"

@@ -16,8 +16,8 @@ import pytest
 import demo_a as D
 from verity.core.protocols.pouw.window import k_prime
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
-from verity.core.protocols.sampled_proofs.consumers import location_bits
-from verity.core.protocols.sampled_proofs.optimize import Objective, certify
+from verity.core.protocols.spot.consumers import location_bits
+from verity.core.protocols.spot.optimize import Objective, certify
 from verity.ml.windows.interface import K_MAX
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)

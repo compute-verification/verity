@@ -3,14 +3,14 @@ module
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Claims.Sampling.Select.Design
-public import SampledProofs.OneStage
+public import Spot.OneStage
 import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-!
 # The sampling design the audit samples under (`Bridge.drawnLaw`)
 
-The deployed sample (`SampledProofs.OneStage.drawnFrom`) samples under the sampling design the registration's law object expands to
+The deployed sample (`Spot.OneStage.drawnFrom`) samples under the sampling design the registration's law object expands to
 over its strata (`Draw.deriveLaw` over `Partition.strata`), else the sampling design `flockLaw` parses from the sampling design object.
 `drawnLaw desc q lj tb n` is that sampling design, from the registration's descriptor bytes `desc`, query `q`, law object `lj` and
 work table `tb`, at the population `n`:
@@ -33,15 +33,15 @@ work table `tb`, at the population `n`:
 
 namespace Flock.Bridge
 
-open Properties.SampledProofs
+open Properties.Spot
 
 /-- **The sampling design the audit samples under**: the registration's law object `lj` expanded over the strata of the descriptor
 `desc` under the query `q` (`Draw.deriveLaw`, with the work table `tb`), else the sampling design `flockLaw` parses from it at the
 population `n`, as `OneStage.drawnFrom` samples (`drawnFrom_drawnLaw`). -/
 def drawnLaw (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Except String Flock.Draw.Law := do
-  let p ← SampledProofs.Program.parse ⟨desc.toArray⟩
-  let derived ← SampledProofs.Draw.deriveLaw p q lj tb
-  let parsed ← SampledProofs.Draw.flockLaw (SecurityProofs.lawObj lj derived) n
+  let p ← Spot.Program.parse ⟨desc.toArray⟩
+  let derived ← Spot.Draw.deriveLaw p q lj tb
+  let parsed ← Spot.Draw.flockLaw (SecurityProofs.lawObj lj derived) n
   pure (derived.getD parsed)
 
 /-- **The units a sampling design samples**: a subset sampling design's `k`, a stratified or work sampling design's strata's `k`s summed; none for a Bernoulli
@@ -55,17 +55,17 @@ def lawK : Flock.Draw.Law → ℕ
 /-- **The deployed sample is `drawUnits` under `drawnLaw`**: at a verifier whose program the descriptor `desc` parses to,
 under the sampling design object `Draw.derive` writes from its own, `drawnFrom` samples under the sampling design `drawnLaw` reads off its query,
 law object and work table. -/
-theorem drawnFrom_drawnLaw {desc : Claims.Msg} {v : SampledProofs.Registration.Verifier} {lo : Lean.Json}
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : SampledProofs.Draw.derive v.program v.query v.law v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
-    SampledProofs.OneStage.drawnFrom v lo n src =
-      (drawnLaw desc v.query v.law v.workTable n >>= fun law => SampledProofs.Draw.drawUnits law n src) := by
-  unfold SampledProofs.Draw.derive at hlo
+theorem drawnFrom_drawnLaw {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
+    (hlo : Spot.Draw.derive v.program v.query v.law v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
+    Spot.OneStage.drawnFrom v lo n src =
+      (drawnLaw desc v.query v.law v.workTable n >>= fun law => Spot.Draw.drawUnits law n src) := by
+  unfold Spot.Draw.derive at hlo
   obtain ⟨derived, hd, hlo⟩ := SecurityProofs.bind_eq_ok.1 hlo
   obtain rfl : SecurityProofs.lawObj v.law derived = lo := Except.ok.inj hlo
-  unfold SampledProofs.OneStage.drawnFrom drawnLaw
+  unfold Spot.OneStage.drawnFrom drawnLaw
   rw [hp, SecurityProofs.bind_ok, hd, SecurityProofs.bind_ok, SecurityProofs.bind_ok]
-  cases SampledProofs.Draw.flockLaw (SecurityProofs.lawObj v.law derived) n <;> rfl
+  cases Spot.Draw.flockLaw (SecurityProofs.lawObj v.law derived) n <;> rfl
 
 /-- **The verifier samples `kd` units under `law`**: `law` is the sampling design it samples under from the registration's descriptor
 `desc`, query `q`, law object `lj` and work table `tb` at the population `n` (`drawnLaw`), and `kd` the units it samples
@@ -78,9 +78,9 @@ def DrawsUnder (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n
 `flockLaw` parses from the sampling design object `Draw.derive` writes. -/
 theorem drawnLaw_ok {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
     (h : drawnLaw desc q lj tb n = .ok law) :
-    ∃ p derived parsed, SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p ∧
-      SampledProofs.Draw.deriveLaw p q lj tb = .ok derived ∧
-      SampledProofs.Draw.flockLaw (SecurityProofs.lawObj lj derived) n = .ok parsed ∧ law = derived.getD parsed := by
+    ∃ p derived parsed, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
+      Spot.Draw.deriveLaw p q lj tb = .ok derived ∧
+      Spot.Draw.flockLaw (SecurityProofs.lawObj lj derived) n = .ok parsed ∧ law = derived.getD parsed := by
   unfold drawnLaw at h
   obtain ⟨p, hp, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨derived, hd, h⟩ := SecurityProofs.bind_eq_ok.1 h
@@ -92,7 +92,7 @@ theorem drawnLaw_ok {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Jso
 theorem drawnLaw_cases {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
     (h : drawnLaw desc q lj tb n = .ok law) :
     (∃ k, law = .subset k ∧ k ≤ n) ∨ (∃ a b, law = .bernoulli a b) ∨
-      ∃ p S k, SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p ∧ SampledProofs.Partition.strata p q = .ok S ∧
+      ∃ p S k, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Partition.strata p q = .ok S ∧
         (Flock.Draw.derive k S = .ok law ∨ ∃ tab, Flock.Draw.deriveWork k S tab = .ok law) := by
   obtain ⟨p, derived, parsed, hp, hd, hpar, rfl⟩ := drawnLaw_ok h
   rcases SecurityProofs.deriveLaw_cases p q lj tb derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, law', hS, rfl, hlaw⟩
@@ -107,26 +107,26 @@ theorem drawnLaw_cases {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.
     · exact Or.inr ⟨tab, hwork⟩
 
 /-- The registration's strata are the evaluated query's ranges, by template (`Partition.strata`). -/
-theorem strata_evaluate {p : SampledProofs.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
-    (hS : SampledProofs.Partition.strata p q = .ok S) :
-    ∃ rs, SampledProofs.Partition.evaluate p q = .ok rs ∧
+theorem strata_evaluate {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
+    (hS : Spot.Partition.strata p q = .ok S) :
+    ∃ rs, Spot.Partition.evaluate p q = .ok rs ∧
       S = Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) := by
-  unfold SampledProofs.Partition.strata at hS
+  unfold Spot.Partition.strata at hS
   obtain ⟨rs, he, h⟩ := SecurityProofs.bind_eq_ok.1 hS
   exact ⟨rs, he, (Except.ok.inj h).symm⟩
 
 /-- **The registration's strata each hold a unit**: `TemplateQuery.evaluate` refuses a template with no instance
 (`strataOf_pos`, `partition_covered`). -/
-theorem strata_pos {p : SampledProofs.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
-    (hS : SampledProofs.Partition.strata p q = .ok S) :
+theorem strata_pos {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
+    (hS : Spot.Partition.strata p q = .ok S) :
     ∀ s ∈ S.toList, 1 ≤ (SecurityProofs.expand s.2.toList).length := by
   obtain ⟨rs, he, rfl⟩ := strata_evaluate hS
   exact SecurityProofs.strataOf_pos _ (SecurityProofs.partition_covered p q rs he)
 
 /-- **The registration's strata's slots hold each unit once**: they are the evaluated ranges, which tile the population
 (`strataOf_perm`, `partition_evaluate_tiles`). -/
-theorem strata_nodup {p : SampledProofs.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
-    (hS : SampledProofs.Partition.strata p q = .ok S) :
+theorem strata_nodup {p : Spot.Program} {q : Lean.Json} {S : Array (String × Array (ℕ × ℕ))}
+    (hS : Spot.Partition.strata p q = .ok S) :
     (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList).Nodup := by
   obtain ⟨rs, he, rfl⟩ := strata_evaluate hS
   exact (SecurityProofs.strataOf_perm _ _ (SecurityProofs.partition_evaluate_tiles p q rs he)).nodup_iff.2
@@ -142,9 +142,9 @@ theorem flatMap_expand_eq {α : Type} {f : α → Array (ℕ × ℕ)} {l : List 
 /-- **At `PopMatches`, the registration's strata are its population**: where `desc` parses to `p`, whose strata under
 the query `q` are `S` (`Partition.strata`), `nsOf` is their sizes and their slots, stratum by stratum, are the units
 `0, …, n − 1`, since the layout `PopMatches` reads lays each stratum's units in order (`layout_ok`, `laysOut_units`). -/
-theorem popMatches_strata {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
+theorem popMatches_strata {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {S : Array (String × Array (ℕ × ℕ))} (hpop : PopMatches desc q n)
-    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hS : SampledProofs.Partition.strata p q = .ok S) :
+    (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hS : Spot.Partition.strata p q = .ok S) :
     nsOf desc q = (S.toList.map fun s => (SecurityProofs.expand s.2.toList).length) ∧
       (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList) = List.range n := by
   obtain ⟨p', l, hp', hl, hu⟩ := popMatches_iff.1 hpop

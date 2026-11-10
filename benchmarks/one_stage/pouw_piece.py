@@ -57,7 +57,7 @@ from composite import line, outcome, write_private
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import period_check as PC
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID

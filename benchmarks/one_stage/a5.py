@@ -186,9 +186,9 @@ from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E40
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
-from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
 from verity.ml.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.ml.windows import wiring as WI  # noqa: E402
 
@@ -661,7 +661,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to."""
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
 
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -1049,23 +1049,23 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
                partition: dict | None = None, tied: dict | None = None) -> None:
-    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
 <<<<<<< HEAD
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and
     the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the
-    audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there is
+    audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there is
     none in ``out/case-v2-error.txt``."""
 ||||||| merged common ancestors
     verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and
     the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the
-    audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there is
+    audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there is
     none in ``out/case-v2-error.txt``."""
 =======
     verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and the current
     Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the audit on the
-    proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, and that case in sampled
+    proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, and that case in sampled
     proofs' one-stage form (`case_with_form`), which onsite's and remote's evidence carries for sampled proofs, in
     ``out/case-sampled.json``; or why there is neither in ``out/case-v2-error.txt``. Sampled proofs refuses one-stage
     v1's case, so an audit with no v2 case has no sampled proofs case."""
@@ -1098,7 +1098,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 <<<<<<< HEAD
 def case_v2(case: dict, sessions: Sequence[str], *, proofs: dict, statements: Sequence[tuple[str | None, Any]],
             tables: Sequence[Path], interfaces: Sequence[Path] = ()) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (`v2_proof`'s), the evidence with
+    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (`v2_proof`'s), the evidence with
     its ``verdicts`` replaced by the ``statements``' files under the evidence's ``sessions`` (`proofs.evidence_v2` on the
     one statement, named None; `proofs.statements_v2` on a statement a drawn member, named by it), and ``blobs``, the
     paths of the files those name, of the window's registered circuit records ``interfaces`` that ``proofs`` names by
@@ -1107,14 +1107,14 @@ def case_v2(case: dict, sessions: Sequence[str], *, proofs: dict, statements: Se
 ||||||| merged common ancestors
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
+    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
     the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
     (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
     pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
 =======
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
+    """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
     public file's, taken when it was staged before the draw, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
@@ -1122,7 +1122,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     it refuses a windowed registration, whose ports are its members' (``<member>/<port>``)."""
 >>>>>>> 705be2b532
     import replay as RP
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
 
     if [m for m, _ in statements] == [None]:
         pr, blobs = PF.evidence_v2(statements[0][1], sessions)
@@ -1199,7 +1199,7 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     and most drawn units under the drawn law over the draws that end (one that runs out of coins fails the window:
     `draw_ran_out`), or why it refuses them all, a law no draw of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here; v2's per-member registration refuses (`Registration.check`)."""
-    from verity.core.protocols.sampled_proofs.one_stage import link_points as LP
+    from verity.core.protocols.spot.one_stage import link_points as LP
 
     ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
     try:
@@ -1229,7 +1229,7 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
 >>>>>>> 705be2b532
-    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.core.protocols.spot.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"

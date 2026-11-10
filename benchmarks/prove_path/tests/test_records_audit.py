@@ -42,7 +42,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
@@ -860,7 +860,7 @@ def _auditor():
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
     code (`benchmarks/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
-    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.spot import challenger as Ch
     from verity.ml.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -1389,7 +1389,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_law({LAW!r}), None)

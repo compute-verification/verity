@@ -116,7 +116,7 @@ flight (`errors.Refused`, `engine/class_admission.py`).
 
 ## Protocol hooks
 
-Each subprotocol that runs on the engine has one adapter in `verity_vllm/protocols/`: sampled proofs (`sampled_proofs.py`),
+Each subprotocol that runs on the engine has one adapter in `verity_vllm/protocols/`: sampled proofs (`spot.py`),
 PoUW (`pouw/`) and PoUS (`pous.py`), enabled on their own or together (`config.parse_protocols`, off by default, refused at
 TP > 1). An adapter states `NAME`, `schemes()`, `refusals(scheme, ctx)` and `install(scheme, target)` (the contract is
 `verity_vllm/protocols/interface.py`); the protocol logic stays in its `verity.core.protocols` package. At a linear layer's `quant_method.apply` PoUS wraps PoUW,

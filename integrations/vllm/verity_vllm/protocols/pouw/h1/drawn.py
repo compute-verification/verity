@@ -90,10 +90,10 @@ from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
                                                      leaf_rows, leaf_statement, operands, outputs_held, partials,

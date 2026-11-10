@@ -484,12 +484,12 @@ REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 def record_digest(rec: dict) -> str:
     """The window record's digest, `registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its
     canonical JSON."""
-    from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+    from verity.core.protocols.spot.one_stage.registration import digest
     return digest(rec)
 
 
 def lower(t) -> list[tuple[int, int]]:
-    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
+    """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`Spot.Registered.lower`)."""
     from verity.ml.circuits.types import Array, RecordType, Tuple
     ws = t.width_set()
     if len(ws) == 1:

@@ -60,7 +60,7 @@ execution phase's root, `salt.epoch_open_root` of its weights' root W and its ``
 coin alone (`window.SALT_FAMILIES`) and counts only when the ledger ends it complete, and the pass's coins, salt coin,
 salt and session are held to what the ledger and the session's files show.
 `rounds` is the rule on a live execution phase's round coins (`window.rounds_reason`, over the proof system's challenger
-`sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
+`spot.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
 opens and ends for the execution phase, under the execution phase's pinned key, run from a commit the host's pins log records on main's
 first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover
 hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and the
@@ -83,9 +83,9 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot import challenger as Ch
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, fold_roots, tagged
@@ -1502,7 +1502,7 @@ def _named(ledger: list[str], sid: str) -> dict[str, dict]:
 
 
 def _jeq(a: Any, b: Any) -> bool:
-    """`a` and `b` are one JSON value (`SampledProofs.jeq`): one canonical text, a boolean never a number."""
+    """`a` and `b` are one JSON value (`Spot.jeq`): one canonical text, a boolean never a number."""
     try:
         return _canon(a) == _canon(b)
     except Refused:

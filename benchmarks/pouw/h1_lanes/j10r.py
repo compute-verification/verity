@@ -49,10 +49,10 @@ from verity.core.protocols.pouw import weights as W  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as H  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
 
 RC = tuple(int(x) for x in os.environ.get("H1L_RC", "16x16").split("x"))
 RN.RC = RC

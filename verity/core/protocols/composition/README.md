@@ -70,9 +70,9 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
 <<<<<<< HEAD
 | sampled proofs at remote (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
-| sampled proofs at onsite (the one-stage audit, whose verdicts are the evidence's) | yes | | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| sampled proofs at onsite (the one-stage audit, whose verdicts are the evidence's) | yes | | `Spot.OneStage.protocol` (`core_spot`, `../../service/spot`) | `verity/sampled-proofs/one-stage/v1` |
 ||||||| merged common ancestors
-| sampled proofs (the one-stage audit; v2, the audit on the proofs themselves, joins once onsite and remote move to it and the composite switches) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| sampled proofs (the one-stage audit; v2, the audit on the proofs themselves, joins once onsite and remote move to it and the composite switches) | yes | yes | `Spot.OneStage.protocol` (`core_spot`, `../../service/spot`) | `verity/sampled-proofs/one-stage/v1` |
 =======
 | sampled proofs (the audit on the proofs themselves, one-stage v2's or the recursive audit's, which it reads as blobs, as the params' `form` names it; one-stage v1 refused) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
 >>>>>>> 705be2b532
@@ -163,7 +163,7 @@ Lean to:
 
 - PoUW's period: `period_check.case`, with `credit.commit_of` reading each window's Commit record for remote's tie;
 <<<<<<< HEAD
-- remote's sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and checks before the proof
+- remote's sampled proofs: its form's split (`spot`) over one-stage v2's decoders and checks before the proof
   check (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage
   difftest's `check`, on v2's audits that drew nothing at the challenger's coins, those with one break each
   (`V2_BREAKS`, among them v1's params or evidence, refused by name) and v1's audits with one or two changes under the
@@ -174,7 +174,7 @@ Lean to:
 - sampled proofs: the one-stage difftest's `answer`, `one_stage` behind the decoders `OneStage` reads, on audits that
   drew nothing and audits with one or two changes;
 =======
-- sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and checks before the proof check
+- sampled proofs: its form's split (`spot`) over one-stage v2's decoders and checks before the proof check
   (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage difftest's
   `check`, on v2's audits that drew nothing at the challenger's coins, those with one break each (`V2_BREAKS`, among
   them v1's params or evidence, refused by name) and v1's audits with one or two changes under the form `one-stage`

@@ -150,7 +150,7 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
       Flock.RecSetup.checkInner none none (pure (none, none)) = .ok () ∧
       Flock.Stmt.setupTables Flock.Tags.circuitPlainLeaves cB pB .seed 1 [] (some (Flock.norm j))
         (some o.partition) (some o.program) none (some n) none none = .ok (spec, sts) ∧
-      (∀ st ∈ sts, Flock.checkRegistered st none = .ok () ∧ SampledProofs.OneStageZk.checkIdentifier st = .ok ()) ∧
+      (∀ st ∈ sts, Flock.checkRegistered st none = .ok () ∧ Spot.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull none (some (Flock.norm j)) = .ok () ∧
       Flock.RecSetup.checks none none Flock.Tags.circuitPlainLeaves [] sts cB (some o.partition) (some o.program)
         none none none none = .ok () ∧
@@ -183,7 +183,7 @@ theorem innerOk_peel {o : VStar.Recursive.Own} {cB pB dB : ByteArray}
     obtain ⟨⟨⟩, hlaw, h⟩ := bind_ok h
     exact ⟨t, j, L, n, spec, sts, (by first | exact ht | rfl), mapError_ok hj, hL, hrows, hci, hsu,
       fun st hst => (body_ok (A := fun st => Flock.checkRegistered st none)
-        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst),
+        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst),
       hfull, hchecks, hcoins, hpub, hlaw, h⟩
 
 /-! ## The model's reading of the inner statement -/
@@ -230,7 +230,7 @@ theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n 
     (hci : Flock.RecSetup.checkInner none none (pure (none, none)) = .ok ())
     (hsu : Flock.Stmt.setupTables Flock.Tags.circuitPlainLeaves cB pB .seed 1 [] (some (Flock.norm j))
       (some o.partition) (some o.program) none (some n) none none = .ok (spec, sts))
-    (hregs : ∀ st ∈ sts, Flock.checkRegistered st none = .ok () ∧ SampledProofs.OneStageZk.checkIdentifier st = .ok ())
+    (hregs : ∀ st ∈ sts, Flock.checkRegistered st none = .ok () ∧ Spot.OneStageZk.checkIdentifier st = .ok ())
     (hfull : Flock.Registered.checkFull none (some (Flock.norm j)) = .ok ())
     (hchecks : Flock.RecSetup.checks none none Flock.Tags.circuitPlainLeaves [] sts cB (some o.partition)
       (some o.program) none none none none = .ok ())
@@ -290,8 +290,8 @@ theorem innerOk_of_held {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} 
 
 /-- **`Refusals.innerOk`: where the compiled component accepts and `x` names its inputs, Flock's own checks pass on
 the inner statement** (`InnerOkAt`). -/
-theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x) :
     InnerOkAt x := by
   intro w' hw'
@@ -306,8 +306,8 @@ theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.On
 /-- **The parts' statement has no plain SHA-512 leaves** where the compiled component accepts a
 session with a part: that part's verdict passed `need (!tags0.plainLeaves)`. `plainLeaves` compares `Json` (a
 `partial` `BEq`), so no computation settles it. -/
-theorem plain_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem plain_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (h0 : 0 < e.proofs.parts.size) :
     ∀ t, Flock.Tags.find? VStar.Recursive.STATEMENT = some t → t.plainLeaves = false := by
   intro t ht
@@ -573,8 +573,8 @@ theorem statementFits_lt {h : VStar.Recursive.InnerHeld} {o : VStar.Recursive.Ow
 on the blobs, `x` with each part's public file is under `2 ^ 64` bytes at every part `nS x` counts: the component refuses
 a statement of `2 ^ 56` bytes or more (`statementFits`, which bounds `x`: `x_len_le`) and a public file of as many
 (`fits`). -/
-theorem pub_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem pub_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     {x : Claims.Msg} (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) (hn : Names p e bs x)
     {P : ℕ → ByteArray} {what : String}
     (hP : ∀ s q, e.proofs.parts[s]? = some q → bs.get q.pub what = .ok (P s)) :
@@ -596,8 +596,8 @@ theorem pub_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage
 
 /-- **`Refusals.record`**: the inner session's record on the blobs is under `2 ^ 64` bytes where the compiled
 component accepts. -/
-theorem record_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem record_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) {R : ByteArray} {what : String}
     (hR : bs.get e.proofs.record what = .ok R) : R.size < 2 ^ 64 := by
   obtain ⟨h, _, hh, -⟩ := parts_of_accepts hacc
@@ -608,8 +608,8 @@ theorem record_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneSt
 
 /-- **`Refusals.transcript`**: the challenger's live-coin part's transcript on the blobs is under `2 ^ 64` bytes where the compiled
 component accepts. -/
-theorem transcript_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem transcript_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) {T : ByteArray} {what : String}
     (hT : bs.get e.proofs.transcript what = .ok T) : T.size < 2 ^ 64 := by
   obtain ⟨h, _, hh, -⟩ := parts_of_accepts hacc
@@ -620,8 +620,8 @@ theorem transcript_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.O
 
 /-- **`Refusals.rows`**: V\*'s staged rows on the blobs are under `2 ^ 64` bytes where the compiled component
 accepts. -/
-theorem rows_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+theorem rows_of_compiled {p : VStar.Recursive.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
     (hacc : VStar.Recursive.checkBlobs p c e bs = .accept pub prof) {W : ByteArray} {what : String}
     (hW : bs.get e.proofs.rows what = .ok W) : W.size < 2 ^ 64 := by
   obtain ⟨h, _, hh, -⟩ := parts_of_accepts hacc

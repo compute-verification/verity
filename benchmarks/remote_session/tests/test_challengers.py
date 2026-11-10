@@ -42,7 +42,7 @@ from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.core.protocols.spot.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)

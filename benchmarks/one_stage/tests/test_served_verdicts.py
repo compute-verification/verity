@@ -81,7 +81,7 @@ import pytest
 from verity.core import site as SITE
 from verity.core.protocols import registration as RL
 from verity.core.protocols.pous import wipe_period as W
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registration as REG
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -447,7 +447,7 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
+def test_the_spot_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
@@ -604,7 +604,7 @@ def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
 
-def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
+def test_spot_alone_composes_to_a_pending_block_record(tmp_path):
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {}
@@ -700,7 +700,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
-    row = S.sampled_proofs_row(tmp_path)
+    row = S.spot_row(tmp_path)
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
@@ -721,7 +721,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
     with its issue, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
     wipe.mkdir(parents=True)
     if case == "refused":
@@ -780,7 +780,7 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
     for comp in COMPONENTS:
         (d := pieces / comp).mkdir(parents=True)
@@ -835,7 +835,7 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
-def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
+def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
@@ -848,7 +848,7 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     itself."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
     env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
@@ -987,14 +987,14 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
     {"summary.json": "{}", "window/audit.json": json.dumps({"accepted": False, "checks": {"proved": {"ok": False}}})},
     {"summary.json": None},
 ])
-def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomputed_here_unchanged(
+def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
     """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
     hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
@@ -1037,7 +1037,7 @@ def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomp
     ("no-blob", "error", "blob(s) that aren't files"),
     ("no-line", "error", "answered no line"),
 ])
-def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
+def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
         tmp_path, monkeypatch, capsys, change, verdict, said):
     """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
     saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
@@ -1063,7 +1063,7 @@ def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_tak
 =======
     same pieces composed for onsite reject on the wipe's answer."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
     env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
@@ -1567,8 +1567,8 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
     after it is checked, and a key other than the pin's, no gate, key pin or line, a run that names no session or has no
     pass with calls, and a gate that refuses the fetch each reject, naming why."""
     from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.sampled_proofs import challenger as Ch
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import challenger as Ch
+    from verity.core.protocols.spot import remote
 
     files = {remote.KEY: json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}), remote.RELEASES: '{"event": "root"}\n',
              remote.CLOSE: "{}"}
@@ -1728,7 +1728,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     published, Pearl+'s verdict tied to W, the window's registration R chained after W and its audit tied to W, and the
     Lean verdict on the same run. Returns the pieces dir, the sampled
     proofs dir, the compose's key pin and lane."""
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import remote
 
     served, verified = _pearlplus_run()
     draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
@@ -1801,9 +1801,9 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     Pearl+'s answer with the Lean's work, and remote's record composes accept with W_cert that work."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["protocol"], row["verdict"], row["commitment"], row["delta"]) == (S.PEARLPLUS_PROTOCOL, "accept",
                                                                                   "c1" * 64, "1/100")
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
@@ -1834,7 +1834,7 @@ def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_
     reads Pearl+'s tie from. Without ``--window-tie`` it reads the step units' and composes pending, naming the chain."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, tied, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (steps := tmp_path / "steps" / S.WINDOW_REGISTRATION).parent.mkdir(parents=True)
     steps.write_text(json.dumps({"format": REG.FORMAT_V2, "previous": None, "registered": []}))
@@ -1900,7 +1900,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     document, its ``why`` the development verdict and the condition, in `pearlplus_of_record`'s order, so remote's record
     composes pending and names it."""
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
     assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
     _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",
@@ -1952,7 +1952,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_pa
     coin after C with the record's source that coin; a node's draw is checked by none of it. Each failure names why, and
     the piece rejects on it."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.spot import challenger as Ch
 
     other = _draw(seed=8)
     signed = {"other commitment": other["commitment"]}.get(case, DRAW["commitment"])
@@ -2543,7 +2543,7 @@ else:
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
         w = json.load(open(tail[1]))
         if "--pearl-passes" in a:
-            from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+            from verity.core.protocols.spot.one_stage import registration as REG
             r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else REG.digest(w)}}
         else:
             r = {{"format": "toy", "after": w}}
@@ -2596,7 +2596,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
-              tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
+              tree / "verity" / "core" / "service" / "spot", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)

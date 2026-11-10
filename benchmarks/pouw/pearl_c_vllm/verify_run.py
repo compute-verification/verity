@@ -128,8 +128,8 @@ from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes.pearl_c import K_MIN, TILE
 from verity.core.protocols.pouw.window import LIVE_SCHEME
-from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
+from verity.core.protocols.spot.challenger import LiveCommitment
+from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.ml.randomness import derive
 from verity_vllm.protocols.pouw import pearl_c as PD

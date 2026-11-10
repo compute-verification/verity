@@ -59,8 +59,8 @@ name = "network_check"
 path = "../../verity/core/protocols/network/lean"
 
 [[require]]
-name = "core_sampled_proofs"
-path = "../../verity/core/service/sampled_proofs"
+name = "core_spot"
+path = "../../verity/core/service/spot"
 
 [[require]]
 name = "verity_evaluate"
@@ -100,8 +100,8 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.Component", "Properties.Attest", "Properties.NetworkCertifier.Check",
   "Properties.NetworkCertifier.Check.LinkWindow", "Properties.NetworkCertifier.DeviceOutput", "Properties.NetworkCertifier.DeviceOutput.Runs",
   "Properties.Hash.Identity", "Properties.Annot", "Properties.Nci.Desc", "Properties.Nci.Desc.Verdict",
-  "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count", "Properties.SampledProofs",
-  "Properties.SampledProofs.Draw", "Properties.SampledProofs.Halt", "Properties.SampledProofs.Second",
+  "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count", "Properties.Spot",
+  "Properties.Spot.Draw", "Properties.Spot.Halt", "Properties.Spot.Second",
   "Properties.Core.Evaluate", "Properties.NetworkCertifier.Records", "Properties.NetworkPeriod", "Properties.Core.Period",
   "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
   "Properties.Accounting.Remote",
