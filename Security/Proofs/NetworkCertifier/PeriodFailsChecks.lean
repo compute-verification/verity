@@ -67,12 +67,12 @@ against `T = 1`. `PeriodLeakCharged_nontrivial` is that count alone.
 
 **The premises together** (`PeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
 connection, where `PeriodLeakChecked_honest` has `PeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
-one (`kraftWeights_halves`). The period has no connection, so the lemma shows that the premises hold together at the
-toy code and nothing about a failure: no run it covers has one.
+one (`kraftWeights_halves`). The lemma shows that the premises hold together and nothing more: the period has no
+window and no connection, so it shows nothing about a failure, a window's check or a run that passes.
 
-`posL` rejects every run, so neither lemma at it is an honest run: each shows what the count does where the premises
-hold. The toy has no checked input and one window, so none shows anything about a checked input or about the
-windows before a window.
+`posL` rejects every run, so no lemma at it is about a run that passes: each shows what the count does where the
+premises hold. Its period has no checked input and one window, so none shows anything about a checked input or about
+the windows before a window.
 -/
 
 @[expose] public section
@@ -264,7 +264,8 @@ set_option synthInstance.maxSize 1024 in
 /-- **`PeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
 `PeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
 finite set, and the weights `2^-(j+1)` on the number of failures, which sum to at most one (`kraftWeights_halves`).
-The period has no connection, so no run it covers has a failure. -/
+The premises hold together there, and the lemma shows nothing more: the period has no window and no connection, so
+nothing about a failure, a window's check or a run that passes. -/
 theorem PeriodLeakCharged_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
