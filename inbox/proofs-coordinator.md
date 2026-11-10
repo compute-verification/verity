@@ -31476,3 +31476,40 @@ Follows my 19:05Z entry, which named the record. [run] unless marked.
 - Still open from that entry: whether you want a records run of each PR merged with today's `main` before the mark.
 
 I end my turn here if `ce6e` is still running at 19:29Z. Notes: `20261110T1912Z-checkpoint-weightsec`.
+
+## FLOCKPKG, Tue 10 Nov 19:25Z: PRF-514 first push: `ee7b90e600` on `cursor/proofs-flockpkg-1539` (the base cut, not yet built; its build is `r20261110-192230-3272`)
+
+Read your 19:18Z. This is the ring you asked for: lean may read the lakefiles and locks below. Nothing here is built yet, and the existing locks are not yet edited.
+
+**The branch**: `cursor/proofs-flockpkg-1539` at `ee7b90e600`, on `main` `e7b03e4a6c89`, two commits (I ran `git diff --name-status e7b03e4a6c89..HEAD` for every count here):
+
+- `4f44157cbc`: 19 renames, each file byte for byte (`git show --stat -M`: 19 files, R100, 0 lines): the 17 modules to the three packages, and difftest's `FirewallHonestDifftest{,Main}.lean` to `verity/core/service/firewall/`.
+- `ee7b90e600`: the packages, the forwarders, the import lines, the lakefiles and the manifests. 106 files against `main` in all. Under `Security/`: `Properties/lake-manifest.json` and `Proofs/lake-manifest.json`, nothing else.
+
+**New lakefiles and locks** (each directory also has `lean-toolchain`, `lake-manifest.json`, `.gitignore`):
+
+| package | directory | library | requires | modules | lines |
+|---|---|---|---|---|---|
+| `core_base` | `verity/core/primitives/base/` | `Base` | nothing | `Bytes`, `Canon`, `Field`, `Hash`, `JsonParse`, `Sizes`, and the new `Pow2` | 2,909 |
+| `core_circuits` | `verity/core/primitives/circuits/` | `Circuits` | `core_base` | `Annot`, `AnnotExpand`, `Evaluated`, `Extract`, `Gate`, `Partition`, `Program`, `Qword`, `Steps` | 3,385 |
+| `core_commitments` | `verity/core/primitives/commitments/` | `Commitments` | `core_base` | `Draw`, `FV3` | 775 |
+
+- Lakefiles: `defaultTargets` the library, `autoImplicit = false`, `backward.proofsInPublic = true`, as Flock's.
+- Locks: each is `{"format": 1, "roots": ["<Root>"], "guarantees": {}}`. No `layers`, no `meaning`, no `verifier` section: a new package's lock states no policy; giving them `layers` is a choice for you and lean.
+- Names and places are placeholders (your 19:18Z, 3): each is one line of the move script's `PKG` table.
+
+**Changed lakefiles** (9): Flock's (three `[[require]]`), the seven's (`flock_verifier` out, the base packages in), difftest's and `core_firewall`'s (the honest worker's port moves: library `FirewallHonestDifftest`, executable `firewall-honest-difftest`).
+
+**Changed manifests** (28, and 3 new): path entries only. No fetched entry changes, so no dependency bundle's key does (`lean_audit.deps_key` skips `path` entries; I read it). I wrote them with a model of `lake update`'s order, which reproduces 29 of `main`'s 32 manifests byte for byte and the other three up to order; the build tells whether Lake takes them.
+
+**What each of the seven requires now**: evaluate `core_base`, `core_circuits`; identity `core_base`; lms `core_base`; randomness `core_base`, `core_commitments`; requirement neither (it imported no Flock module); attest `core_commitments`; difftest `core_base`, `core_circuits`. `verity_difftest`, `core_randomness` and `lms` stay where they were required.
+
+**Not in this push, next**:
+
+- the existing locks: `meaning` and `reads_exempt` gain the three roots in `Security/` and `Security/Properties/` and Flock's; the seven's `layers.imports` name the base modules; the honest port's rows move from difftest's lock to `core_firewall`'s. Then `--update --moved` on a node, with `MOVES.json` on the branch.
+- the forwarder test (a forwarder is `module`, one `public import`, a comment). `Flock.FV3`'s forwarder has two imports today (`Commitments.FV3` and `Flock.Net`, so its 17 importers see what they saw). Six modules see `Flock.Net` only through it (`Flock.Test.FV3`, `NetworkCheck.LinkWindow`, four under `Security/`), and by a token scan none names a declaration of `Net`, `Comp` or `Scan`. I cut it to one import in its own commit; if one of the six fails to build, that commit is reverted and the test names the exception.
+- suite inputs, pins, test rows, tooling paths, docs; the two libraries and the boundary test.
+
+**Run**: `r20261110-192230-3272` on vy-nebius-cpu-11 (16 CPUs asked, 240 min cap), launched 19:22Z: a cold `lake build` of the three packages, the seven, Flock's package (libraries, executables, then its lock's test roots) and the 19 other code packages, each with its verdict and seconds. It was told a start in about 11 min. `Security/Properties` and `Security/Proofs` go in a later run, with the locks.
+
+M6 on its own branch after the base cut builds, as you say; nothing is marked or opened from here.
