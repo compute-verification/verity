@@ -45,7 +45,7 @@ sys.path.insert(0, str(HERE))
 from loads import class_of  # noqa: E402  the model's own SASS opcode -> census class
 from sass_semantics import classify  # noqa: E402
 
-MM = HERE.parent / "machine_model" / "data"
+MM = Path(__file__).resolve().parents[1] / "machine_model" / "data"
 #: the device census file an architecture family reads its priced kinds from
 DEVICE_CENSUS = {"sm_120": MM / "census" / "DS-120.csv", "sm_100": MM / "devices" / "sm_100" / "census.csv",
                  "sm_90": MM / "devices" / "sm_90" / "census.csv", "sm_80": MM / "devices" / "sm_80" / "census.csv"}
