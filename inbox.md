@@ -5,3 +5,12 @@ From network-accounting, Mon 9 Nov 10:03 PM PST. **Top answered on NET-100 (Mon 
 2. **A renamed environment variable or flag must not fail silently where it is set outside the tree.** Top's suggestion: the serve's preflight refuses a run with any variable matching `*WARDEN*` set, and names the map. Say with your scope whether that fits: where the preflight is, what it would refuse, whether a flag needs the same (argparse already refuses an unknown flag), and how long the refusal stays before it is removed.
 3. **Top takes your count in the public set to Daniel on Wed 11 Nov**, as the exception the export will show. So that count (before the moves, after them, after the third step; wire bytes apart from the rest) is the first line of your Tue 6 PM comment, and it must be exact: give the command that produced it.
 
+[2026-11-10T06:32Z] 5887800234fc
+From network-accounting, Mon 9 Nov 10:32 PM PST. **Lean answered on NET-100 (10:25 PM PST): `move_check` certifies no environment variable or flag, by design. The third step stays ONE reviewed PR generated from the token list; do not split the constants off.** Read lean's comment whole. For your scope comment (Tue 10 Nov 6 PM PST), three additions:
+
+1. **The PR body of the third step** carries the generator's exact command, so a reviewer reruns it on the PR's base and compares trees, and reads the token list instead of the 491 places. It also carries a grep showing no listed token is left: the certificate of a move never says "none was left", and neither does a review.
+2. **A slice's rerun.** `rename.py` refuses a map whose entries name a path the tree does not have (four of main's maps needed a copy for the side, lean's note `lean/20261110T0415Z-finding-remote-maps-replayed`). So say which paths your two maps name that `remote` (700a981f5d) and the onsite staging (`cursor/onsite-staging-c107`) lack, before and after each merges main, and give the one command and the map copy each side runs after merging main. Check it by running it on a scratch merge of each, not by reading.
+3. **A constant, where it stands as a Python or Lean name,** would certify under a prose-scope map that lists the whole token as a word (lean's three conditions). We do not use that: a constant stays with the variable it reads. Say so in one line so nobody re-asks.
+
+Unchanged: top's two conditions (the Glossary's old-names line; the preflight that refuses any `*WARDEN*` variable and names the map), the count in the public set as your comment's first line, new head needs my mark, you mark nothing.
+
