@@ -707,6 +707,10 @@ def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_t
         "tpot:80", "--percentile-metrics"]
     # its engine's context is its own, so it is served in a run of its own
     assert S.context_of(S.parse_loads("prefix"), None) == 131072
+    # and at its own concurrency: with more in flight a repeat would arrive before the prompt it repeats is computed
+    assert S.parse_loads("prefix") == {"prefix": (1,)}
+    with pytest.raises(SystemExit, match="'prefix=2': prefix's requests are sent as planned, at concurrency 1"):
+        S.parse_loads("prefix=2")
     with pytest.raises(SystemExit, match="prefix is served in a run of its own"):
         S.parse_loads("chat,prefix")
 
@@ -1349,7 +1353,12 @@ def test_the_row_under_the_number_is_the_cost_on_a_repeated_prefix_with_no_targe
         S.cost_report(arms)
     arms = cost_arms()
     del arms[3]["planned"]
-    with pytest.raises(SystemExit, match="compiled and no-prefix-cache served load prefix from different plans, or a"):
+    with pytest.raises(SystemExit, match="compiled and no-prefix-cache served load prefix from different plans, or "
+                                         "no-prefix-cache's directory names none"):
+        S.cost_report(arms)
+    arms = cost_arms()
+    del arms[0]["planned"]
+    with pytest.raises(SystemExit, match="compiled's directory that served load prefix names no plan"):
         S.cost_report(arms)
     # a row of another plan than the four requests is not labelled scaled down, and its share is its own
     other = {"prefix": {"requests": 4, "prompt_tokens": 1000000, "repeated_tokens": 250000, "sha256": "7" * 64}}

@@ -757,8 +757,9 @@ class Load:
 
 
 #: two prompts near a 131,072-token context limit, each sent once and then again with another ending: the second of
-#: each pair shares all but its last tokens with the first, in whole blocks. Scaled down from a plan of 651 requests
-#: in which these four are the only ones that repeat a prefix: the same two repeats, among nothing else
+#: each pair shares all but its last tokens with the first, in whole blocks. A row of these four alone is scaled down
+#: (`prefix_row`): half of their prompt tokens repeat, which is this load's share and no serve's, where such pairs
+#: arrive among requests that repeat nothing
 PAIRS = (Planned(0.0, 130808, 256), Planned(0.0, 130807, 256, after=0, blocks=2043),
          Planned(0.0, 129016, 256), Planned(0.0, 129016, 256, after=2, blocks=2015))
 
@@ -895,6 +896,10 @@ def parse_loads(text: str) -> dict[str, tuple[int, ...]]:
         out[name] = tuple(int(x) for x in rungs.split("+")) if rungs else LOADS[name].rungs
         if not out[name] or min(out[name]) < 1:
             raise SystemExit(f"--loads: {part!r}: each rung is a concurrency of 1 or more")
+        if LOADS[name].plan and out[name] != LOADS[name].rungs:
+            raise SystemExit(f"--loads: {part!r}: {name}'s requests are sent as planned, at concurrency "
+                             f"{'+'.join(map(str, LOADS[name].rungs))}, where each request that repeats a prefix "
+                             f"follows the one it repeats: name it without rungs")
     if not out:
         raise SystemExit("--loads: NAME[=RUNG+RUNG...],... names no load")
     beside = [n for n in out if not LOADS[n].number]
@@ -1795,15 +1800,17 @@ def prefix_row(by: dict[str, dict], reference: str, arm: str) -> dict | None:
         return None
     rung = first["rung"]
     plan = (ref.get("planned") or {}).get(PREFIX)
+    if plan is None:
+        raise SystemExit(f"cost: {reference}'s directory that served load {PREFIX} names no plan (meta.json: planned)")
 
     def over(name: str) -> dict | None:
         x = by.get(name)
         c = serving_cost(ref, x, PREFIX, rung) if x else None
         if c is None:
             return None
-        if plan is None or (x.get("planned") or {}).get(PREFIX) != plan:
-            raise SystemExit(f"cost: {reference} and {name} served load {PREFIX} from different plans, or a directory "
-                             "of theirs names none (meta.json: planned)")
+        if (x.get("planned") or {}).get(PREFIX) != plan:
+            raise SystemExit(f"cost: {reference} and {name} served load {PREFIX} from different plans, or {name}'s "
+                             "directory names none (meta.json: planned)")
         a, b = ({r["rep"]: r for r in bench_rungs(y, PREFIX)[rung]} for y in (ref, x))
         reps = sorted(set(a) & set(b))
 
@@ -1973,8 +1980,9 @@ def prefix_text(row: dict) -> list[str]:
         return (f"the time to the first token {_c(x['ttft'])} longer, the 99th-percentile gap between tokens "
                 f"{_c(x['itl_p99'])} longer")
 
+    flight = "one request" if row["rung"] == 1 else f"{row['rung']} requests"
     lines = [f"  {row['label']}{', scaled down' if row['scaled_down'] else ''}, {row['what']}; no target, and it judges "
-             f"nothing: {_c(row)} over {_reps(row['reps'])}, one request in flight, where the cost is {a['arm']}'s "
+             f"nothing: {_c(row)} over {_reps(row['reps'])}, {flight} in flight, where the cost is {a['arm']}'s "
              f"output tokens a second over {b['arm']}'s, less one: {a['arm']} {a['output_tok_per_s']:,.1f} output "
              f"tokens/s, {b['arm']} {b['output_tok_per_s']:,.1f}",
              f"    {p['requests']:,} requests, {p['repeated_share']:.2f}% of their prompt tokens planned to repeat; the "
