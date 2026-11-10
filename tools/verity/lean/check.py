@@ -5787,10 +5787,12 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
 
 def reported(rep: dict) -> dict:
     """``rep`` with `failure_codes` (and `settled_codes` beside `settled`): each failure's code (`Failure`), in its order,
-    null for a bare string."""
+    null for a bare string; and with `failure_entries`, the entry each failure is about, null for one about none."""
     for key, codes in (("failures", "failure_codes"), ("settled", "settled_codes")):
         if key in rep:
             rep[codes] = [code_of(f) for f in rep[key]]
+    if "failures" in rep:
+        rep["failure_entries"] = [getattr(f, "entry", None) for f in rep["failures"]]
     return rep
 
 

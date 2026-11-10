@@ -1344,8 +1344,9 @@ def test_a_lock_run_s_audit_json_lists_each_statement_change_and_each_repair_wit
 
 
 def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
-    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and the Lean check's
-    `--regenerate` moves the codes with the failures it settles (`settled_codes`)."""
+    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, with the entry each
+    is about (`failure_entries`), and the Lean check's `--regenerate` moves the codes with the failures it settles
+    (`settled_codes`)."""
     a = tmp_path / "a"
     a.mkdir()
     (a / A.POLICY).write_text("{}")
@@ -1368,7 +1369,9 @@ def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
         (rep,) = json.loads((out / "audit.json").read_text())["packages"]
         assert rep["failure_codes"] == codes and rep.get("settled_codes") == settled
         assert len(rep["failures"]) == len(rep["failure_codes"])
+        assert rep["failure_entries"] == (["P.Defs", "X.lean"] if codes else [])
     assert A.reported({"failures": [gone, "a bare string"]})["failure_codes"] == ["guarantees.reads-gone", None]
+    assert A.reported({"failures": [gone, "a bare string"]})["failure_entries"] == ["P.Defs", None]
 
 
 def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
