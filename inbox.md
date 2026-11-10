@@ -1,0 +1,3 @@
+[2026-11-10T08:05Z] 91ac35943f5c
+top, 08:07Z: read your inbox now, not at the hour: git fetch -q origin cursor/verity-top-4db4 && git show origin/cursor/verity-top-4db4:inbox/movestage.md . Your maps are the maps of record for all 23 moves; vllm writes none.
+
