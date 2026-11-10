@@ -12,10 +12,14 @@ What another file states is read from it, not restated in a layer (`sourced`; a 
 refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`; the
 bits an incorrect proof block injects are the widest public size class of a block's outputs (`BLOCK_OUTPUT_BITS`); the
 per-window δ is core's (`profile.WINDOW_DELTA`); and the incorrect-outputs row reports at core's reporting δs. From the
-census (`benchmarks/census`): the reference datacenter's machines (`DATACENTER_FLEETS`) and the world's active
-parameters. From the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's
-`K`, its range, and `Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations'
-(`ranges`; a file that gives such a key a range is refused).
+inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's `K`, its range, and
+`Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations' (`ranges`; a file
+that gives such a key a range is refused).
+
+The census's numbers are the exception, by the rule that `verity` takes the census's numbers as parameters and never
+reads it: nothing in this package reads the census. The layers state them, each naming the census entry it is (the
+reference datacenter's machines, `DATACENTER_FLEETS`; the world's active parameters; the session policy's `Γ` at the
+world's model), and the tests hold each equal to the census.
 
 A table becomes an object through its layer's `build`, which takes its fields by name (`Registry.fields`). Every
 parameter of every layer is then one key, so a sweep is `registry.override({key: value})` and a rebuild, whatever the
@@ -35,12 +39,8 @@ from verity.core.protocols import profile, reporting
 from verity.ml.circuits import partition_v2
 
 DATA = Path(__file__).resolve().parent.parent / "data"
-BENCHMARKS = DATA.parent.parent
-#: the census's deployments (the reference datacenter) and adversaries (the world's inference), and the inference-only
-#: policy's calibrations
-DEPLOYMENTS = BENCHMARKS / "census" / "deployments.json"
-ADVERSARY = BENCHMARKS / "census" / "adversary.json"
-CALIBRATIONS = BENCHMARKS / "nci" / "calibrations.json"
+#: the inference-only policy's calibrations, in the directory beside this package's
+CALIBRATIONS = Path(__file__).resolve().parents[2] / "nci" / "calibrations.json"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
 
@@ -49,10 +49,11 @@ PERIODS = dict(reporting.PERIODS)
 #: the keys that hold the output bits an accepted incorrect proof block injects: a block's outputs fit its Definition's
 #: public size class, so the widest class (`partition_v2.UNIT_CLASS_MAX`), over the classes down to the smallest
 BLOCK_OUTPUT_BITS = ("regime.remote-sampled.step_bits", "incorrect.step_bits")
-#: the census's reference datacenter and the fleets that are it, a machine a location
+#: the census entries whose numbers the layers state, for the tests that hold them equal: the reference datacenter and
+#: the fleets that are it, a machine a location; and the adversary, the world's inference, with the registry's model it
+#: serves
 DATACENTER = "dc-12500-machines-600s"
 DATACENTER_FLEETS = ("reference-h200", "reference-h100", "reference-b200")
-#: the census's adversary, the world's inference, and the registry's model it serves
 WORLD = "world-inference-2027"
 WORLD_MODEL = "deepseek-v4-pro"
 #: the calibration the policy of its name takes `K` and `Γ` from; the session policy, the reference datacenter's at the
@@ -171,13 +172,13 @@ class Registry:
 
 
 def entry(path: Path, name: str) -> dict:
-    """The entry `name` of a JSON list of entries by `id` (the census's files, the calibrations)."""
+    """The entry `name` of a JSON list of entries by `id` (the calibrations)."""
     return next(e for e in json.loads(path.read_text()) if e["id"] == name)
 
 
 def sourced() -> list[Param]:
     """The parameters another file states, read from it: no file under `data/` restates one (`Registry.load` refuses a
-    key set twice)."""
+    key set twice). The census's numbers are not among them (module docstring)."""
     periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.core.protocols.reporting PERIODS",
                      status="declared") for name, s in PERIODS.items()]
     widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
@@ -185,7 +186,7 @@ def sourced() -> list[Param]:
                   source="verity.ml.circuits.partition_v2 UNIT_CLASS_MAX: a proof block's outputs fit its Definition's "
                          "public size class, and an incorrect block injects the widest; low: UNIT_CLASSES' smallest",
                   status="derived") for key in BLOCK_OUTPUT_BITS]
-    return periods + bits + _deltas() + _policies() + _census()
+    return periods + bits + _deltas() + _policies()
 
 
 def _deltas() -> list[Param]:
@@ -218,30 +219,15 @@ def _k_range() -> tuple[float, float]:
 
 
 def _policies() -> list[Param]:
-    cal, world = entry(CALIBRATIONS, CALIBRATION), entry(ADVERSARY, WORLD)
+    cal = entry(CALIBRATIONS, CALIBRATION)
     low, high = _k_range()
     where = f"benchmarks/nci/calibrations.json {CALIBRATION}"
-    session = cal["K"] / cal["b_tok"] * world["flop_per_active_param_per_token"] * world["active_params"]
     return [
         Param(f"policy.{CALIBRATION}.gamma", cal["Gamma"], "FLOP", status="declared",
               source=f"{where} Gamma: 1M tokens x 2 x 32B active"),
         Param(f"policy.{CALIBRATION}.k", cal["K"], "bit", low, high,
               f"{where} K (2.5 MB); low: {K_RANGE[0]}; high: {K_RANGE[1]}", "declared"),
-        Param(f"policy.{SESSION}.gamma", session, "FLOP", status="derived",
-              source=f"a 1M-token session ({where}'s K at its b_tok bits a token) at benchmarks/census/adversary.json "
-                     f"{WORLD}'s FLOP per active parameter per token and active parameters"),
     ]
-
-
-def _census() -> list[Param]:
-    dc, world = entry(DEPLOYMENTS, DATACENTER), entry(ADVERSARY, WORLD)
-    fleets = [Param(f"fleet.{fleet}.count", dc["machines"], "location", status="assumed",
-                    source=f"benchmarks/census/deployments.json {DATACENTER} machines, {dc['gpus_per_machine']} GPUs "
-                           "each: a 100k-GPU frontier cluster") for fleet in DATACENTER_FLEETS]
-    active = Param(f"model.{WORLD_MODEL}.n_active", world["active_params"], "param", status="ruled",
-                   source=f"benchmarks/census/adversary.json {WORLD} active_params (ruled: the reference datacenter, "
-                          "49B active)")
-    return [*fleets, active]
 
 
 def _flatten(table: Mapping[str, Any], prefix: str = "") -> Iterable[tuple[str, Param]]:
