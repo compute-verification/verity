@@ -99,8 +99,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`,
-  or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
+- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
+  (a module or a list of them: `Security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
+  code, which the spec can't import), or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
   reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` digests every in-repo premise and
@@ -152,20 +153,10 @@ Their history is in the decisions log.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
-<<<<<<< 99c8914848
-  bounded by what the run carries. No assumed advantage bounds, except PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`) and SHA-512 as a PRF, `Hash.Assumptions.Sha512Prf`, whose advantage
-  `ε(t, Q)` is a parameter each bound that takes it adds per test (PoUS's `PeriodHeldSha512`), all listed in the lock.
-  An input condition is a verifier refusal, not a hypothesis.
-||||||| merged common ancestors
-  bounded by what the run carries. No assumed advantage bounds, except PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`), listed in the lock. An input condition is a verifier refusal, not a
-  hypothesis.
-=======
   bounded by what the run carries. No assumed advantage bounds but PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`, in the lock) and the sampled audits' per-finder bound below. An input
-  condition is a verifier refusal, not a hypothesis.
->>>>>>> 7af4d24fca3e
+  (`StraightLineExtraction`, `SeedExtractedAt`), SHA-512 as a PRF, `Hash.Assumptions.Sha512Prf`, whose advantage
+  `ε(t, Q)` is a parameter each bound that takes it adds per test (PoUS's `PeriodHeldSha512`), all in the lock, and
+  the sampled audits' per-finder bound below. An input condition is a verifier refusal, not a hypothesis.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision

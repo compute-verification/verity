@@ -8,8 +8,7 @@ public import Definitions.Nci.Threads
 
 The dampener's statements (`Nci.Guarantees.DampenerThreaded`, `DampenerRemote`, `DampenerRemotePeriod`) take the
 model's accounting of where counted multiplications run, and the shape of the servers' windows, as premises over
-numbers. These name them. None is about the world: each is how the model counts, or what the inference-only policy's
-verdicts give (`RunsThrottled`).
+numbers. These name them. None is about the world: each is how the model counts.
 -/
 
 @[expose] public section
@@ -30,8 +29,7 @@ def WindowsHold {r : RegisteredCircuit} (T : Threading r) (Mr n : ℕ) (α F H L
   b_a * ((Mr : ℝ) + T.M.card) ≤
     n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e)
 
-/-- **The parts fit in the monitored compute**: `∑ x_i ≤ C`, for PoUW's windows' capacities or the declared runs'
-sizes. -/
+/-- **The parts fit in the monitored compute**: `∑ x_i ≤ C`, for PoUW's windows' capacities. -/
 def WithinCompute {ι : Type} [Fintype ι] (x : ι → ℝ) (C : ℝ) : Prop :=
   ∑ i, x i ≤ C
 
@@ -54,14 +52,5 @@ def ResidualAtMost (Mr : ℕ) (κ C εW W wc skipped : ℝ) : Prop :=
 /-- **Incorrect proof blocks inject at most the cheating share** `χ`: `M_χ ≤ χ κ (C + U) / 2`. -/
 def CheatingAtMost (Mx : ℕ) (κ χ C U : ℝ) : Prop :=
   (Mx : ℝ) ≤ κ * χ * (C + U) / 2
-
-/-- **Each declared run is throttled**: run `i` (declaration `d_i`, its reference circuit threaded by `Th_i`) meets
-`NciCheck.Properties.Throttled`'s conclusion `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, at `Λ_i = Th_i.bound k b_w dd e ≤ Λ`.
-It is what a verdict of compliance of the check of record gives a declaration it lays out
-(`NciCheck.Properties.DescThrottles`), and the bridge from those verdicts to the deployment's runs is not stated. -/
-def RunsThrottled {R : Type} {r : R → RegisteredCircuit} (d : R → RegisteredCircuit) (Th : (i : R) → Threading (r i)) (c : ℕ)
-    (k b_w b_a : ℝ) (dd e : ℕ) (Λ : ℝ) : Prop :=
-  (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) ∧
-    ∀ i, (Th i).bound k b_w dd e ≤ Λ
 
 end Nci.Assumptions

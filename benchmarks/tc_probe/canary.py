@@ -33,7 +33,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
@@ -42,8 +42,10 @@ if str(HERE) not in sys.path:  # `python benchmarks/tc_probe/tc_probe.py` puts H
     sys.path.insert(0, str(HERE))
 
 import tc_probe as P  # noqa: E402
-
 from trust import REGRESSION_TILES, _load_discrepancies, subjects  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 CANARY_SEED = 20260922
 CANARY_N_RANDOM = 64      # families() n_random for the canary samples: every family then has >= CANARY_TILES tiles
@@ -206,7 +208,9 @@ def compare(D: np.ndarray, results: list[tuple[np.ndarray, np.ndarray]], model_n
 
 
 def run_canary(probe: "P.Probe", ins: P.Instruction, plan: CanaryPlan, out: Path, procs: int, repo: Path | str | None = None,
-               tiles_fn=None, eval_fn=None, replay_fn=None) -> dict:
+               tiles_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None,
+               eval_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], list[tuple[np.ndarray, np.ndarray]]] | None = None,
+               replay_fn: Callable[[Path], dict] | None = None) -> dict:
     """The device half: run every canary tile and replay, compare against the instruction's models, write ``canary_tiles.npz``.
     ``tiles_fn(A, Bt, C) -> D``, ``eval_fn(A, Bt, C) -> [(words, errs) per model]`` and ``replay_fn(path) -> replay dict`` default
     to the probe, the model pool and ``replay_golden`` (injectable so the bookkeeping is testable without a GPU).

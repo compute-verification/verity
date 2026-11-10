@@ -21,8 +21,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   a string; or `{value: {"port"}}`, a window's history: that port of the previous record, the log's last, whose digest
   the verifier takes from the log, `Registration.lastDigest`), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
-  expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
-  other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
+  expects registered, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in and commits a supplied value's rows
+  in (`Supplied.root`), refused in any other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
   identity it registered the prover under (lowercase hex of whole bytes), refused in any other form; and it may add
   `challenger`, `{"key", "label"}`: the auditor's challenger the sample's coins come from (its LMS key,
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
@@ -40,6 +40,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
   an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
   and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
+  and it may add `history`, `{"digests", "held", "registered", "tables"}`: the history tables its program reads, which
+  need `leaf_layer`, each table's root computed from its writers' public bodies the leaf layer binds and held to the root
+  the window registers for it (`HistoryTable.rootsOf`), and a supplied value's source `{"history": "H/root"}` or
+  `{"history": "H/domain"}` then the bytes of the root or domain id it computed for table `H` (`HistoryTable.resolve`),
+  refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -72,6 +77,7 @@ public import Spot.Registration
 public import Spot.Record
 public import Spot.ChallengerDraw
 public import Spot.Select
+public import Spot.HistoryTable
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -232,6 +238,7 @@ def paramsParsed (j : Json) : V Params := do
     else keys
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
+  let keys := if (field? j "history").isSome then keys.push "history" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -270,6 +277,14 @@ def paramsParsed (j : Json) : V Params := do
     | pj => some <$> poolOf pj registered given (field? j "row_schemas")
   let (suppliedJ, outputsJ, schemasJ) := poolValues pool (Flock.hexOf program.sha512) log (field? j "supplied")
     (field? j "outputs") (field? j "row_schemas")
+  let suppliedJ ← match field? j "history" with
+    | none => pure suppliedJ
+    | some h => do
+      exactly h #["digests", "held", "registered", "tables"] "the history tables"
+      let some leaf := leafLayer
+        | throw "history tables are read from members' public bodies the leaf layer binds: the verifier names no leaf_layer"
+      let roots ← HistoryTable.rootsOf leaf h
+      suppliedJ.mapM (HistoryTable.resolve roots)
   let supplied ← match suppliedJ with
     | none => pure #[]
     | some s => do
@@ -308,8 +323,8 @@ def paramsParsed (j : Json) : V Params := do
     | some (.obj kvs) => do
       if registered.isEmpty then throw "row formats are registered values' formats: the verifier expects none registered"
       kvs.toArray.mapM fun (v, s) => match s with
-        | .str s => if registered.any (·.1 == v) && !supplied.any (·.1 == v) && Registered.SCHEMAS.contains s then
-            pure (v, s) else throw s!"row format of {v}: not a registered value it doesn't fill, in one of {Registered.SCHEMAS}"
+        | .str s => if registered.any (·.1 == v) && Registered.SCHEMAS.contains s then
+            pure (v, s) else throw s!"row format of {v}: not a registered value's, in one of {Registered.SCHEMAS}"
         | _ => throw s!"row format of {v}: not a string"
     | some _ => throw "row formats are not an object"
   let binding ← match field? j "binding" with

@@ -13,16 +13,27 @@ Definition yet, so their references are `ScalarReference`s over the `verity.ml.c
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 import numpy as np
 
 from verity.ml.circuits.evaluation import ScalarReference, register_kernel
-from verity.ml.circuits.types import Array, Value
-
-from verity.ml.circuits.silicon.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, BlockScaledAlignAdd, GroupSum
+from verity.ml.circuits.silicon.models import (
+    ADA_E4M3_M16N8K32,
+    BLACKWELL_SM120_MXF4,
+    BLACKWELL_SM120_NVF4,
+    BlockScaledAlignAdd,
+    GroupSum,
+)
 from verity.ml.circuits.silicon.term import FORMATS
 from verity.ml.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
+from verity.ml.circuits.types import Array, Value
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from verity.ml.circuits.silicon.term import Format
+    from verity.ml.circuits.types import Type
 
 __all__ = [
     "HOPPER_E4M3_DOT",
@@ -145,7 +156,8 @@ def f32_to_bf16_rn_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
 
 # ---- GroupSum on every encoding -------------------------------------------------------------------------------------
 
-def _operands(fmt, w: np.ndarray):
+def _operands(fmt: Format,
+              w: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Per word: (nan, inf, zero, sign, significand, biased exponent) under `fmt`'s encoding rules."""
     w = w.astype(_I64)
     e = (w >> fmt.man_bits) & ((1 << fmt.exp_bits) - 1)
@@ -228,7 +240,7 @@ _FP32_SUBNORMAL_EXPONENT = -149
 _NONE = -(1 << 40)
 
 
-def _scale_batch(scale: str, code: np.ndarray):
+def _scale_batch(scale: str, code: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(mantissa, exponent, invalid) of block-scale bytes (`models._scale_dyadic`)."""
     c = code.astype(_I64)
     if scale == "ue8m0":
@@ -321,7 +333,7 @@ def chain_batch(step: Callable[..., tuple[np.ndarray, Any]], k: int, n_steps: in
 def dot_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     """The `DotBf16_v2{K, DOT}` kernel for the ``DOT`` step objects in ``steps`` (matched by identity, never by id)."""
 
-    def kernel(x: np.ndarray, w: np.ndarray, *, K: int, DOT: Any):
+    def kernel(x: np.ndarray, w: np.ndarray, *, K: int, DOT: Any) -> Any:
         model = steps.get(DOT)
         if model is None:
             return NotImplemented
@@ -334,7 +346,7 @@ def gemm_coordinate_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     """`GemmCoordinate_v2{K, DOT}`: the dot, then `cvt.rn.bf16.f32`."""
     dot = dot_kernel(steps)
 
-    def kernel(x: np.ndarray, w: np.ndarray, *, K: int, DOT: Any):
+    def kernel(x: np.ndarray, w: np.ndarray, *, K: int, DOT: Any) -> Any:
         res = dot(x, w, K=K, DOT=DOT)
         if res is NotImplemented:
             return res
@@ -347,7 +359,7 @@ def block_scaled_coordinate_kernel(steps: Mapping[Any, tuple[BlockScaledAlignAdd
     """`GemmCoordinateNvf4_v1` / `GemmCoordinateMxf4_v1{K, DOT}` for the ``DOT`` steps in ``steps`` (by identity; each with its
     model and total step kernel): K/64 steps from `+0`, then `cvt.rn.bf16.f32`."""
 
-    def kernel(x: np.ndarray, w: np.ndarray, sx: np.ndarray, sw: np.ndarray, *, K: int, DOT: Any):
+    def kernel(x: np.ndarray, w: np.ndarray, sx: np.ndarray, sw: np.ndarray, *, K: int, DOT: Any) -> Any:
         entry = steps.get(DOT)
         if entry is None:
             return NotImplemented
@@ -364,7 +376,7 @@ def gemm_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     """`Gemm_v2{K, N, DOT}`: ``x (B, K)``, ``w (B, N, K)`` -> ``(B, N)``, one coordinate per output."""
     coord = gemm_coordinate_kernel(steps)
 
-    def kernel(x: np.ndarray, w: np.ndarray, *, K: int, N: int, DOT: Any):
+    def kernel(x: np.ndarray, w: np.ndarray, *, K: int, N: int, DOT: Any) -> Any:
         b = x.shape[0]
         xs = np.broadcast_to(x[:, None, :], (b, N, K)).reshape(b * N, K)
         res = coord(xs, w.reshape(b * N, K), K=K, DOT=DOT)
@@ -379,8 +391,8 @@ def gemm_coordinate_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., A
     """`GemmCoordinatePad_v1{T, K, DOT}`: the coordinate on ``x`` and ``w`` (B, T), each padded with K - T +0 words."""
     coord = gemm_coordinate_kernel(steps)
 
-    def kernel(x: np.ndarray, w: np.ndarray, *, T: int, K: int, DOT: Any):
-        def pad(a):
+    def kernel(x: np.ndarray, w: np.ndarray, *, T: int, K: int, DOT: Any) -> Any:
+        def pad(a: np.ndarray) -> np.ndarray:
             return np.pad(a, ((0, 0), (0, K - T)))
         return coord(pad(x), pad(w), K=K, DOT=DOT)
 
@@ -392,7 +404,7 @@ def pv_row_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     ``p`` and ``(v_0[d], ..., v_{T-1}[d])``."""
     coord = gemm_coordinate_kernel(steps)
 
-    def kernel(p: np.ndarray, *vs: np.ndarray, T: int, K: int, D: int, DOT: Any):
+    def kernel(p: np.ndarray, *vs: np.ndarray, T: int, K: int, D: int, DOT: Any) -> Any:
         b = p.shape[0]
         xs = np.zeros((b, D, K), p.dtype)
         xs[:, :, :T] = p[:, None, :]
@@ -411,7 +423,7 @@ def pv_row_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     unsigned u16 word, ``(B,)``)."""
     row = pv_row_kernel(steps)
 
-    def kernel(p: np.ndarray, *rest: np.ndarray, T: int, K: int, D: int, DOT: Any):
+    def kernel(p: np.ndarray, *rest: np.ndarray, T: int, K: int, D: int, DOT: Any) -> Any:
         *vs, n = rest
         keep = np.arange(T)[None, :] < (np.asarray(n).astype(np.int64) & 0xFFFF)[:, None]
         return row(np.where(keep, p, 0).astype(p.dtype), *(np.where(keep[:, t, None], v, 0).astype(v.dtype)
@@ -422,7 +434,7 @@ def pv_row_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
 
 # ---- instance sampling for self_check ------------------------------------------------------------------------------------
 
-def _words(rng: np.random.Generator, fmt, shape: tuple[int, ...], specials: tuple[int, ...], p_special: np.ndarray,
+def _words(rng: np.random.Generator, fmt: Format, shape: tuple[int, ...], specials: tuple[int, ...], p_special: np.ndarray,
            regime: np.ndarray, spread: int = 6) -> np.ndarray:
     """Operand words with exponents clustered around a per-instance centre (so products align, cancel and overflow),
     a uniform word one time in eight, and ``specials`` with probability ``p_special`` (per input).  The centre is
@@ -463,7 +475,8 @@ def _acc_words(rng: np.random.Generator, n: int, regime: np.ndarray) -> np.ndarr
 _FP8_SPECIALS = {"e4m3": (0x00, 0x80, 0x7F, 0xFF, 0x7E, 0x01), "e5m2": (0x00, 0x80, 0x7C, 0xFC, 0x7D, 0xFF, 0x7B, 0x01)}
 
 
-def sample_tc(rng: np.random.Generator, n: int, params, *, fp8: str = "e4m3", **statics: Any) -> list[np.ndarray]:
+def sample_tc(rng: np.random.Generator, n: int, params: Sequence[Type], *, fp8: str = "e4m3",
+              **statics: Any) -> list[np.ndarray]:
     """Instances for the tensor-core kernels, by parameter width: 32 an accumulator, 16 BF16, 8 `fp8` operands.  A quarter
     of the instances carry special operand words; an eighth are exact cancellations (the second half of ``a`` negates the
     first, ``b`` repeats)."""
@@ -489,20 +502,20 @@ def sample_tc(rng: np.random.Generator, n: int, params, *, fp8: str = "e4m3", **
     return out
 
 
-def sample_pv_row_pad(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
+def sample_pv_row_pad(rng: np.random.Generator, n: int, params: Sequence[Type], **statics: Any) -> list[np.ndarray]:
     """`sample_tc` for p and the key rows, and a key count n: mostly 0..T + 1, an eighth uniform u16 words."""
     T = params[0].n
     counts = np.where(rng.random(n) < 0.125, rng.integers(0, 1 << 16, n), rng.integers(0, T + 2, n)).astype(np.uint16)
     return [*sample_tc(rng, n, params[:-1], **statics), counts]
 
 
-def sample_tc_e5m2(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
+def sample_tc_e5m2(rng: np.random.Generator, n: int, params: Sequence[Type], **statics: Any) -> list[np.ndarray]:
     """`sample_tc` with E5M2 operands."""
     return sample_tc(rng, n, params, fp8="e5m2", **statics)
 
 
-def _sample_block_scaled(model: BlockScaledAlignAdd):
-    def sample(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
+def _sample_block_scaled(model: BlockScaledAlignAdd) -> Callable[..., list[np.ndarray]]:
+    def sample(rng: np.random.Generator, n: int, params: Sequence[Type], **statics: Any) -> list[np.ndarray]:
         k, ns = params[-4].n, params[-2].n
         codes = []
         for _ in range(2):
@@ -532,7 +545,7 @@ def _sample_block_scaled(model: BlockScaledAlignAdd):
 _E4M3, _E2M1, _SCALE = Value(8), Value(4), Value(8)
 
 
-def _e4m3_dot(x, w, *, K):
+def _e4m3_dot(x: Sequence[int], w: Sequence[int], *, K: int) -> int:
     acc = 0
     for s in range(0, K, 32):
         acc = tc_dot_total_e4m3(HOPPER_E4M3_WGMMA_K32, acc, x[s:s + 32], w[s:s + 32])
@@ -549,7 +562,7 @@ HOPPER_E4M3_DOT = ScalarReference(
     doc="the FP32 accumulator of one GEMM coordinate: K/32 ascending E4M3 steps from +0 (vLLM's DotE4m3_v1{K})")
 
 
-def _ada_e4m3_dot(x, w, *, K):
+def _ada_e4m3_dot(x: Sequence[int], w: Sequence[int], *, K: int) -> int:
     acc = 0
     for s in range(0, K, 32):
         acc = ADA_E4M3_M16N8K32.step(acc, x[s:s + 32], w[s:s + 32])

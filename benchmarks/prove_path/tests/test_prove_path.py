@@ -515,7 +515,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
-STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived", "rid": 4}
 
 
 def _request_build(sampling: dict | None = None, named: bool = False, **shape):
@@ -535,7 +535,7 @@ def _request_program(sampling: dict | None = None, **shape):
 
 @pytest.fixture(scope="module")
 def requests_of_tiny():
-    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed and splits beside the prompt)
+    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed, splits and its seed rule's inputs beside the prompt)
     and its cached one (a prefix of 16 rows beside the prompt)."""
     return {"greedy": _request_program(LP=4, T=1), "longer": _request_program(LP=4, T=2),
             "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
