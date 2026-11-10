@@ -33737,3 +33737,73 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
 **Runs since 21:17Z:** `32de` cancelled when its duplicate `acf7` took a slot. `8eb9` replaced by `f0ae`, which ended. `95cd`, a duplicate of `c67f`, cancelled when `c67f` took its slot at 21:32Z. `9e08` cancelled before a slot, superseded by `54a6`.
 
 Next entry when `54a6` ends, or by 23:00Z.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 22:06Z: #8730 holds `main`'s tip at `4a045b9c9f`, a clean merge of `2b869ed35db5`. Its records run (`r20261110-215702-c92e`) and quick tier (`r20261110-215702-514b`) wait for a slot on vy-nebius-cpu-7: start about 22:35Z, records about 23:15Z, quick tier about 00:10Z (01:05Z at the latest). #8730's body is corrected in its "Why" line; #8731's body holds. The reference stager waits for step (3)
+
+All times are from `date -u`. [run] means I ran it, [read] that I read it, [guess] neither.
+
+**1. #8730's merge** [run]
+
+- I fetched `origin/main` at `2b869ed35db5d0efdb844a5f684e6fecbe658114` and merged it into `cursor/proofs-interior-names-562b` at `59aed632543c`, with no conflict.
+  - No lock file was merged: the branch changes none.
+- The merge commit is `4a045b9c9f3a64d09f5a739ea5ed5c27c7316e83`. I pushed it as a fast-forward (`59aed63254..4a045b9c9f`), with no force.
+- Its diff against `main`'s tip is the change's four files, 131 insertions and 33 deletions: `second_stage.py`, `SecondStage.lean`, `SecondStageExamples.lean` and `test_difftest.py`.
+- What `main` changed that the change's checks could read [run: `git diff --stat 5482988e3496 2b869ed35db5 -- verity/core Security tools/verity/lean tools/verity/check`]:
+  - under `Security/`, `DrawOkJson.lean`, `Proofs/Properties/Verity/Sampled/Deployed.lean` and the two locks;
+  - under `verity/core/`, only `protocols/certifier/README.md`;
+  - nothing under either spot package or the check tools.
+
+**2. The runs, both at `4a045b9c9f`, `--on auto`, detached** [run: launched 21:57Z]
+
+- **Records run, `r20261110-215702-c92e`:** `lean_changed.py --records verity/core/service/spot --update`, which covers Spot and its requirers (`Security`, `Security/Properties` and `Security/Proofs`). It runs with `--mem-gb 32 --max-min 120 --cwd clone --declared-output 'lean-audit/*'`, the same form as #8731's records run.
+- **Quick tier, `r20261110-215702-514b`:** `suites.py --changed 2b869ed35db5d0efdb844a5f684e6fecbe658114 --quick`, writing `$OUT/suites.json` and `$OUT/logs`, with `--cpus 8 --mem-gb 32 --max-min 150`. `suites.py` installs the workspace itself on a fresh tree (`SYNC`, `suites.py:412`) [read].
+- **Where:** both spilled to vy-nebius-cpu-7's research pool, because vy-nebius-2's ssh timed out [read: the launcher's stdout].
+  - The launcher said: "should start in about 38 min ... 5 waiting ahead". So they start about 22:35Z [read].
+  - At 22:05Z both were `waiting` for a slot [run: `research status RUN --on vy-nebius-cpu-7`].
+- **ETA for the records run:** about 23:15Z. The last records run over these packages, `r20261110-175006-9296`, took 36 minutes [read: `research inspect`; the ETA is a guess].
+- **ETA for the quick tier:** about 00:10Z, and 01:05Z at the latest (its cap) [guess].
+  - It selects about 60 suites: 62 lines from `suites.py --list --changed 2b869ed35db5` [run: read-only, here]. vllm's suite and the CLI's take all of `verity` as inputs.
+  - `r20261110-170747-e457`, a selection of the same size run without `--quick`, hit its 7,200-second cap [read: `research inspect`]. This one runs `--quick` with 9,000 seconds.
+  - If it hits the cap anyway, I rerun the suites with no verdict, by name, at the same head.
+- **When they end:**
+  - If a record is regenerated, I name it and why before I commit it.
+  - A changed statement or premise stops and comes to you.
+  - Otherwise you get the line "#8730 ready to mark at" a full SHA, with each run's verdict.
+
+**3. #8730's body: one line was wrong, and I corrected it with `research queue edit 8730 --body-file`** [run: `gh pr view` shows the new body; read: its `updatedAt`, 21:59:47Z]
+
+- **The "Why" line** said round 2 read the interior's value in place of round 1's. That holds only in `readOk`'s linked branch, which reads `registeredEntry own.interior v` first (`SecondStage.lean:827`). For any other port, round 1's won: `registeredEntry own.boundary v <|> registeredEntry own.interior v` (844) [read]. The body now names both rules.
+- **"which no suite builds"** now carries its evidence [read].
+  - `Spot.lean:26` imports `SecondStageExamples`.
+  - The three suites passed at `dbb7fb10c1`, where that file failed to parse (`r20261110-202601-ecf8`). So none of them elaborates it.
+- **The "Not run" and Status lines** now name the merged head and the two runs.
+- **Every other line holds at the head** [read]:
+  - `namesOk` and its order (`SecondStage.lean:1026`–`1044`); `names_ok` (`second_stage.py:1122`–`1139`);
+  - `BX` and `BOUT` (`test_difftest.py:328`), `_read_linked` and `kept` (4404–4417), and the new test (6429);
+  - the `#guard`s at a shared `w2` and at the boundary's port `bx`;
+  - `SpotKSTwo`'s and `SpotExfilTwo`'s `open` lists, both naming `SpotFlock.Addresses`;
+  - `Guarantees.lean:24`–`25` ("a value one proof block writes and another reads in two trees");
+  - the toy's `T.write(..., registered=it.registered)` with no `entries` (`benchmarks/two_stage/audit.py:368`–`369`).
+  - Under `verity_vllm`, `entries=` appears only as a keyword to `unsupported(...)` in `dsv4_cache.py:68`, which is new on `main`, and as `alias_entries=`. Neither is a registration.
+
+**4. #8731's body: no line is wrong** [read; run: `git` and `gh`]
+
+- **The change:** the seven files and six hashes are the whole change.
+  - I checked this with the diff against #8448's head minus `main`'s `c3ae3eaaf0b7..e7b03e4a6c89`. The merge bases are `c3ae3eaaf0b7` (#8448) and `e7b03e4a6c89` (N2).
+  - After `7e2a3dcd01f7` the head adds only the six hashes: a record digest, `Spot.OneStage.Params` and `paramsParsed` in each lock.
+- **The names exist:**
+  - `Run.interiorSteps` (`Run.lean:199`), `Run.tablesServed` (190), `Pieces.tablesServed` (816), `HistoryTable.rootsOf` (415), `Record.byPort` (59), `OneStage.Params`' `tables` (99);
+  - `service.tables_served` (`service.py:905`, used at 2086), the difftest piece (`test_history_difftest.py:249`–`260`), and the stream test (`test_interior_table.py:225`).
+- **The guarantee claims:** no lock names `interiorSteps` or `tablesServed`, and `FORM = False` is at `second_stage.py:76`.
+- **The runs:** `ba58` is rc 1 at `82c9c9e53c5e`, `9296` rc 0 at `82c9c9e53c5e`, and `45ff` rc 0 at `7e2a3dcd01f7`.
+- **`serving_rows.py`** is 805 lines at `82c9c9e53c5e` and 794 at #8448's head `1113b8a6675c`.
+- **One thing the body doesn't say:** #8448's base is `cursor/vllm-twostage-int4-496a`, not `main` [run: `gh pr view 8448`]. So #8731 also waits on the PR under #8448.
+
+**5. The reference stager waits for step (3)** [guess: my judgment]
+
+- Its one caller is the toy it was cut from. Step (3) is its first run on the window it was written for, vllm's long row.
+- If one of that window's 56 templates splits into chunks, the stager's chunk refusal is the first thing it hits, and handling chunks changes the stager.
+- Step (3) waits on PRF-477 naming vllm's head.
+- If you'd rather it open now, it first needs `main`'s tip merged and `benchmarks/two_stage` rerun at that head. Its only run, `r20261110-191831-9c10`, was at `78e491e98b`, cut from `5482988e34` [read: my 19:18Z entry].
+
+**6. The Wed 12:00Z scoping entry** was posted at 21:39Z (`a900721bcf`), so nothing collides [run].
