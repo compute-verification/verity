@@ -36,7 +36,6 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.certifier.active import DATA, PAD, VirtualClock
-from verity.core.protocols.certifier.warden import END, FAIL, Warden, WardenParams, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -45,6 +44,8 @@ import channel  # noqa: E402
 import parties  # noqa: E402
 import run as bench  # noqa: E402
 
+DEVICE, Certifier, Parameters = parties.device()
+END, FAIL, cells, read_cell = DEVICE.END, DEVICE.FAIL, DEVICE.cells, DEVICE.read_cell
 TAU = 0.1
 SEED = bytes(range(32))
 
@@ -149,7 +150,7 @@ def test_write_and_burst_are_in_time_for_the_next_interval_and_differ_only_by_th
     for attack in ("write", "burst"):
         plan = parties.Plan(attack, TAU, paced)
         for t in range(3, 200):
-            bit, u = parties.draw(SEED, t)
+            bit, u = parties.coin(SEED, t)
             times = plan.writes(t, bit, u)
             assert times == sorted(times) and plan.carries(t) == t + 1
             assert times[-1] < (t + 1) * TAU - TAU / 8, "the next interval's bytes are there before its boundary"
@@ -172,9 +173,9 @@ def test_delay_writes_an_interval_at_its_boundary_or_half_an_interval_late():
 
 
 def test_the_bits_are_the_seeds_and_the_bytes_the_same_whatever_the_bit():
-    draws = [parties.draw(SEED, t) for t in range(400)]
-    assert draws == [parties.draw(SEED, t) for t in range(400)] and {b for b, _ in draws} == {0, 1}
-    assert all(0 <= u < 1 for _, u in draws) and 150 < sum(b for b, _ in draws) < 250
+    coins = [parties.coin(SEED, t) for t in range(400)]
+    assert coins == [parties.coin(SEED, t) for t in range(400)] and {b for b, _ in coins} == {0, 1}
+    assert all(0 <= u < 1 for _, u in coins) and 150 < sum(b for b, _ in coins) < 250
     plan = parties.Plan("burst", TAU, 0.05)
     for t, bit, writes in parties.schedule(plan, SEED, 5, 64, 247):
         assert b"".join(data for _, data in writes) == bytes([(t + 1) & 0xFF]) * 247
@@ -200,7 +201,7 @@ def _case(tmp_path: Path, cfg: dict, arrival, *, first: int = 12, shift: int = 0
     for t, bit, writes in parties.schedule(plan, SEED, first, cfg["intervals"], cfg["unit"]):
         rows.append([t, bit, 12.5])
         when[t] = arrival(t, writes)
-    ahead = cfg["delay"] if cfg["certifier"] == "warden" else 0
+    ahead = cfg["delay"] if cfg["certifier"] == "network" else 0
     span = range(first - ahead + shift, first + cfg["intervals"])
     read = clock or (lambda x: cfg["origin"] + x)
     arrived = {t: when.get(t, plan.release(t) + 1e-4) for t in span}
@@ -269,7 +270,7 @@ def test_the_guard_from_another_hosts_clock(tmp_path):
     ignored = bench.score(_case(tmp_path / "ignored", relay | {"ignore": True}, passed_on, clock=far))
     assert planted["client"]["bits"] >= bench.PLANTED_MIN and ignored["client"]["bits"] <= bench.IGNORED_MAX
     assert planted["problems"] == ignored["problems"] == [] and planted["remote"]
-    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0}
     plan = parties.plan_of(cfg)
     coins = {t: bit for t, bit, _ in parties.schedule(plan, SEED, 12, cfg["intervals"], cfg["unit"])}
     moved = bench.score(_case(tmp_path / "moved", cfg, clock=far,
@@ -283,7 +284,7 @@ def test_a_release_at_a_fixed_time_shows_neither_attack(tmp_path):
     the server wrote. Over seeds 0–199 `bits` is at most 0.0235, on one host and from another's clock."""
     rng = random.Random(2)
     for attack in ("write", "burst"):
-        cfg = CFG | {"certifier": "warden", "attack": attack, "ignore": False, "paced_ms": 50.0}
+        cfg = CFG | {"certifier": "network", "attack": attack, "ignore": False, "paced_ms": 50.0}
         plan = parties.plan_of(cfg)
         for clock in (None, lambda x: 7.0 + x * (1 - 30e-6)):
             scored = bench.score(_case(tmp_path / f"{attack}-{clock is None}", cfg,
@@ -293,7 +294,7 @@ def test_a_release_at_a_fixed_time_shows_neither_attack(tmp_path):
 
 
 def test_what_makes_a_case_no_measurement_is_named(tmp_path):
-    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0}
     plan = parties.plan_of(cfg)
 
     def on_time(t, writes):
@@ -321,7 +322,7 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     rng = random.Random(6)
     cases = []
     for attack, shift in (("write", 1.349e-4), ("burst", 0.0)):
-        cfg = CFG | {"certifier": "warden", "attack": attack, "ignore": False, "paced_ms": 50.0}
+        cfg = CFG | {"certifier": "network", "attack": attack, "ignore": False, "paced_ms": 50.0}
         plan = parties.plan_of(cfg)
         coins = {t: bit for t, bit, _ in parties.schedule(plan, SEED, 12, cfg["intervals"], cfg["unit"])}
         for k in range(2):
@@ -340,7 +341,7 @@ def test_the_number_is_the_most_any_attack_showed_and_the_ceiling_every_attacks_
     assert bench.verdict(cases) is None
     # the guard's cases and a control are rows of their own, after the attacks, and no part of the number
     relay = CFG | {"certifier": "relay", "attack": "delay", "ignore": False}
-    control = CFG | {"certifier": "warden", "attack": "write", "ignore": True, "paced_ms": 50.0}
+    control = CFG | {"certifier": "network", "attack": "write", "ignore": True, "paced_ms": 50.0}
     more = [bench.score(_case(tmp_path / "planted", relay, lambda t, writes: writes[-1][0] + _path(rng))),
             bench.score(_case(tmp_path / "ignored", relay | {"ignore": True},
                               lambda t, writes: writes[-1][0] + _path(rng))),
@@ -407,7 +408,7 @@ def test_the_kernels_stamp_reads_a_bit_the_observers_wake_up_blurs(tmp_path):
     and the observer's own clock reads them a wake-up of 60 µs ± 40 µs later. The kernel's column reads the bit
     and the observer's own does not, on one host and from another's clock, and the number is the kernel's column's."""
     rng = random.Random(8)
-    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0}
     plan = parties.plan_of(cfg)
     coins = {t: bit for t, bit, _ in parties.schedule(plan, SEED, 12, cfg["intervals"], cfg["unit"])}
     wake = _blurred(rng)
@@ -464,7 +465,7 @@ def test_the_guard_holds_on_both_stamps(tmp_path):
 
 
 def test_an_interval_without_a_stamp_a_moved_wall_clock_and_merged_stamps_are_told(tmp_path):
-    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0}
+    cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0}
     plan = parties.plan_of(cfg)
 
     def on_time(t, writes):
@@ -487,6 +488,8 @@ def test_an_interval_without_a_stamp_a_moved_wall_clock_and_merged_stamps_are_to
     refused = bench.score(refused)
     assert (refused["kernel"], refused["unstamped"], refused["problems"]) == (None, "no such option", [])
     assert whole["unstamped"] is None and refused["client"]["bits"] is not None
+    with pytest.raises(SystemExit, match="its certifier is 'another', none of relay, network"):
+        bench.score(_case(tmp_path / "another", cfg | {"certifier": "another"}, on_time))
     moved = bench.score(_case(tmp_path / "moved", cfg, on_time, stamp=before, moved=-250_000))
     assert moved["problems"] == ["the observer's wall clock moved 250 µs against its monotonic clock over the case, "
                                  "and the kernel's stamps are the wall clock's"]
@@ -506,7 +509,7 @@ def test_an_observer_on_another_host_leaves_its_file_by_the_cases_name(tmp_path)
     (seen / "one.json").write_text("{}")
     assert bench._observed(case, seen / "one.json") == seen / "one.json"
     # and the score names both hosts and both runs
-    cfg = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0, "observer": "spin",
+    cfg = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0, "observer": "spin",
                  "host": "a", "run": "r-a"}
     plan = parties.plan_of(cfg)
     there = _case(case, cfg, lambda t, writes: plan.release(t) + 3e-4)
@@ -583,7 +586,7 @@ def test_the_launch_gate_is_one_intervals_cycle_from_the_release_time(tmp_path):
     relay = bench.config(args, attack="delay", observer="plain", certifier="relay")
     assert (relay["paced_ms"], relay["aim_ms"], relay["launch"]) == (0.0, 0.0, None)
     # the device's queues, as `tc -s -j qdisc show` gives them once the case has run
-    gated = CFG | {"certifier": "warden", "attack": "write", "ignore": False, "paced_ms": 50.0, "aim_ms": 70.0,
+    gated = CFG | {"certifier": "network", "attack": "write", "ignore": False, "paced_ms": 50.0, "aim_ms": 70.0,
                    "launch": launch}
     plan = parties.plan_of(gated)
     for name, queues, problems in (
@@ -638,13 +641,13 @@ class _Wire:
         return 0
 
 
-async def _certify(attack: str, intervals: int) -> tuple[Warden, list[tuple[int, int, int]], int, dict[int, int]]:
+async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[int, int, int]], int, dict[int, int]]:
     """The network certifier on a clock the test moves, at the benchmark's schedule, one client, and the server's
     plan: each write reaches the certifier before the first tick at or after its time. Returns the certifier, the
     client's cells as (tick, kind, last byte), the first interval the server wrote for and its bits."""
-    cfg = CFG | {"certifier": "warden", "attack": attack, "ignore": False, "intervals": intervals}
+    cfg = CFG | {"certifier": "network", "attack": attack, "ignore": False, "intervals": intervals}
     plan, tau, total = parties.plan_of(cfg), cfg["interval_ms"] / 1000, cfg["delay"] + intervals + 16
-    params = WardenParams(cell_bytes=cfg["cell_bytes"], slots=cfg["slots"], bucket_ms=cfg["interval_ms"],
+    params = Parameters(cell_bytes=cfg["cell_bytes"], slots=cfg["slots"], bucket_ms=cfg["interval_ms"],
                           delay=cfg["delay"], lanes=2, queue=4, window=cfg["window"], ingress_cells=4,
                           ingress_buckets=8, egress_cells=cfg["slots"] * total, egress="bytes")
     assert params.payload * params.slots == cfg["unit"] == bench.SCHEDULE["cell_bytes"] - parties.HEADER_BYTES
@@ -652,15 +655,15 @@ async def _certify(attack: str, intervals: int) -> tuple[Warden, list[tuple[int,
     upstream: list[_Wire] = []
 
     async def connect():
-        upstream.append(_Wire(lambda: warden.ticks))
+        upstream.append(_Wire(lambda: certifier.ticks))
         return upstream[0].reader, upstream[0]
 
-    warden = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
-    running = asyncio.create_task(warden.run())
-    client = _Wire(lambda: warden.ticks, cells(parties.HELLO, params.cell_bytes))
+    certifier = Certifier(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    running = asyncio.create_task(certifier.run())
+    client = _Wire(lambda: certifier.ticks, cells(parties.HELLO, params.cell_bytes))
     client.reader.feed_eof()
-    handling = asyncio.create_task(warden.handle(client.reader, client))
-    await warden.until(lambda w: w.ordinals == 1)
+    handling = asyncio.create_task(certifier.handle(client.reader, client))
+    await certifier.until(lambda w: w.ordinals == 1)
     pending, first, coins, ended = [], None, {}, False
     for t in range(total):
         if upstream and first is None and upstream[0].writes:
@@ -675,24 +678,24 @@ async def _certify(attack: str, intervals: int) -> tuple[Warden, list[tuple[int,
         if first is not None and not pending and not ended:
             ended = True
             upstream[0].reader.feed_eof()
-        await warden.until(lambda w: all(
+        await certifier.until(lambda w: all(
             c.ingress_ended and c.server is not None and (upstream[0].closed or (
                 c.bytes_out == upstream[0].fed and c.egress_ended == ended)) for c in w.active))
         clock.advance(t * tau)
-        await warden.until(lambda w, t=t: w.ticks > t)
-        if not warden.active and first is not None:
+        await certifier.until(lambda w, t=t: w.ticks > t)
+        if not certifier.active and first is not None:
             break
     running.cancel()
     await asyncio.gather(running, handling, return_exceptions=True)
     seen = [(tick, read_cell(data[i:i + params.cell_bytes], params.cell_bytes)[0], data[i + params.cell_bytes - 1])
             for tick, data in client.writes for i in range(0, len(data), params.cell_bytes)]
-    return warden, seen, first, coins
+    return certifier, seen, first, coins
 
 
 @pytest.mark.parametrize("attack", ["write", "burst"])
 def test_the_network_certifier_releases_each_interval_in_its_own_whatever_the_bits(attack):
-    warden, seen, first, coins = asyncio.run(_certify(attack, 96))
-    (log,) = warden.log
+    certifier, seen, first, coins = asyncio.run(_certify(attack, 96))
+    (log,) = certifier.log
     assert log["failed"] is None and log["admitted"] + bench.SCHEDULE["delay"] == first
     assert [kind for _, kind, _ in seen] == [PAD] * bench.SCHEDULE["delay"] + [DATA] * 96 + [END]
     assert [tick for tick, _, _ in seen] == list(range(log["admitted"], log["admitted"] + len(seen)))
@@ -704,8 +707,8 @@ def test_the_network_certifier_releases_each_interval_in_its_own_whatever_the_bi
 
 
 def test_the_network_certifier_fails_a_delayed_interval_closed():
-    warden, seen, first, coins = asyncio.run(_certify("delay", 96))
+    certifier, seen, first, coins = asyncio.run(_certify("delay", 96))
     late = min(t for t, bit in coins.items() if bit)
-    (log,) = warden.log
+    (log,) = certifier.log
     assert log["failed"] == "late" and log["ended"] == late and log["failed_at"] == late - first
     assert seen[-1][:2] == (late, FAIL) and [k for _, k, _ in seen].count(FAIL) == 1

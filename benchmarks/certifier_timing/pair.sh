@@ -33,11 +33,11 @@ for part in ${PARTS:-guard attacks control}; do
     attacks)
         for attack in ${ATTACKS:-write burst}; do
             for observer in ${OBSERVERS:-spin plain}; do
-                cases+=("$attack-$observer warden $attack $intervals $observer")
+                cases+=("$attack-$observer network $attack $intervals $observer")
             done
         done
         ;;
-    control) cases+=("control-spin warden write $intervals spin --ignore") ;;
+    control) cases+=("control-spin network write $intervals spin --ignore") ;;
     *)
         echo "pair.sh: PARTS are of guard, attacks, control: not $part" >&2
         exit 2

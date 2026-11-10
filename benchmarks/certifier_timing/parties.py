@@ -4,11 +4,11 @@ clock; the observer is on that host too, over loopback, or on another, where it 
     python parties.py server|certifier|observer|waker|awake CONFIG.json [KEY=VALUE ...]
 
 - **The server** is the adversary. It samples a seed of its own, and interval t's bit and lead are SHA-512's of the
-  seed and t (`draw`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
+  seed and t (`coin`). It acts only through when and how it writes its own bytes: `Plan.writes` is every time it
   writes at, a function of the bit, the lead and the public schedule. The bytes it writes are the same whatever the
   bit, `unit` bytes an interval.
-- **The certifier** is the device under test: the network certifier (`warden.Warden`, of whatever tree is first on
-  the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces nothing and passes
+- **The certifier** is the device under test: the network certifier (`device`: the class device.json names, of
+  whatever tree is first on the import path), on its loop (`paced_ms` 0) or with its pacer, or `relay`, a stand-in that paces nothing and passes
   each side's bytes on as they come, which is where a planted channel is put.
 - **The observer** is the client side. It reads the certifier's bytes a `chunk` at most a read and timestamps the
   first byte of each interval's `chunk` twice: on its own clock once the read returns, waiting in the kernel for it
@@ -30,13 +30,13 @@ offset, or with a launch gate (`run.py --launch`) the gate's opening:
   at the quiet time, midway between R_t and the next interval's boundary. Both are in time for the next interval.
 - `burst`: with bit 1 the next interval's bytes in `burst` writes spread from `lead_ms` before R_t to an eighth of
   that after it; with bit 0 as `write`.
-With `ignore` the server draws its bits and writes as for bit 0 whatever they are: the control.
+With `ignore` the server flips its bits and writes as for bit 0 whatever they are: the control.
 
 The server takes the admission bucket s of a network certifier's connection from when its request arrives, the
 boundary after the one it was admitted at (`admit_lag`), and writes bucket s + D's bytes at once; a request that
 comes before the origin it takes as the first interval's. Interval t's bytes
 are all the byte t mod 256, so `run.py` checks which interval each of the observer's chunks is, and on one host its
-first arrival's time as well. Nothing here but `certifier` imports `verity`.
+first arrival's time as well. Nothing here but the certifier's process imports `verity`.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ import asyncio
 import dataclasses
 import gc
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -58,7 +59,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ATTACKS = ("delay", "write", "burst")
-CERTIFIERS = ("relay", "warden")
+CERTIFIERS = ("relay", "network")
+#: the device under test by name: its module, its certifier's class and its parameters' class (`device`)
+DEVICE = json.loads(Path(__file__).with_name("device.json").read_text())
 LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
@@ -121,7 +124,7 @@ class Plan:
         return [self.release(t) - self.lead_s + (k + 1) * self.lead_s * 1.125 / self.burst for k in range(self.burst)]
 
 
-def draw(seed: bytes, t: int) -> tuple[int, float]:
+def coin(seed: bytes, t: int) -> tuple[int, float]:
     """Interval t's bit and u in [0, 1)."""
     h = hashlib.sha512(seed + t.to_bytes(8, "big")).digest()
     return h[0] & 1, int.from_bytes(h[1:5], "big") / 2 ** 32
@@ -131,7 +134,7 @@ def schedule(plan: Plan, seed: bytes, first: int, intervals: int, unit: int):
     """The server's writes from interval `first` on, for `intervals` bits: (t, its bit, [(when after the origin, the
     bytes)]), `unit` bytes a bit, the same whatever the bit, split evenly over its writes."""
     for t in range(first, first + intervals):
-        bit, u = draw(seed, t)
+        bit, u = coin(seed, t)
         times = plan.writes(t, bit, u)
         data, m = bytes([plan.carries(t) & 0xFF]) * unit, len(times)
         yield t, bit, [(when, data[unit * k // m:unit * (k + 1) // m]) for k, when in enumerate(times)]
@@ -141,7 +144,14 @@ def first_interval(cfg: dict, arrived: int) -> int:
     """The first interval the server writes for, on a connection whose request reached it in interval `arrived`: a
     network certifier's releases the request `admit_lag` boundaries after admission and the first of the server's
     bytes `delay` after it; the relay's two intervals on."""
-    return arrived - cfg["admit_lag"] + cfg["delay"] if cfg["certifier"] == "warden" else arrived + 2
+    return arrived - cfg["admit_lag"] + cfg["delay"] if cfg["certifier"] == "network" else arrived + 2
+
+
+def device() -> tuple:
+    """The device under test, of whatever tree is first on the import path: the module `DEVICE` names, whose `cells`
+    frames a client's bytes, its certifier's class and its parameters' class."""
+    module = importlib.import_module(DEVICE["module"])
+    return module, getattr(module, DEVICE["certifier"]), getattr(module, DEVICE["parameters"])
 
 
 def plan_of(cfg: dict) -> Plan:
@@ -210,7 +220,7 @@ def server(cfg: dict) -> dict:
                     continue
                 at = max(0, math.floor((time.monotonic() - origin) / tau))
                 first = first_interval(cfg, at)
-                if cfg["certifier"] == "warden":
+                if cfg["certifier"] == "network":
                     conn.sendall(bytes([first & 0xFF]) * unit)
                 connections.append({"arrived": at, "first": first})
                 for t, bit, writes in schedule(plan, seed, first, cfg["intervals"] - len(rows), unit):
@@ -443,7 +453,7 @@ async def relay(cfg: dict) -> dict:
     return {"certifier": "relay", "cpus": cpus}
 
 
-async def warden(cfg: dict) -> dict:
+async def network(cfg: dict) -> dict:
     """The network certifier of the tree on the import path, relaying any bytes, one lane for the observer and one
     spare; its records are dropped as they close. It runs for the intervals of one connection and, before them, the
     `wait_s` an observer on another host may take to come (`listen`), the one connection it then takes. With
@@ -452,15 +462,17 @@ async def warden(cfg: dict) -> dict:
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
     from verity.core.protocols.certifier.active import HEADER
-    from verity.core.protocols.certifier.warden import Warden, WardenParams, cells
+
+    module, Certifier, Parameters = device()
+    cells = module.cells
 
     plan = plan_of(cfg)
     if HEADER.size != HEADER_BYTES:
         raise SystemExit(f"this tree's cells have a {HEADER.size}-byte header, not {HEADER_BYTES}")
     held = cfg["delay"] + cfg["intervals"] + 16
     total = held + math.ceil(cfg.get("wait_s", 0.0) * 1000 / cfg["interval_ms"])
-    fields = {f.name for f in dataclasses.fields(WardenParams)}
-    params = WardenParams(**{
+    fields = {f.name for f in dataclasses.fields(Parameters)}
+    params = Parameters(**{
         "cell_bytes": cfg["cell_bytes"], "slots": cfg["slots"], "bucket_ms": cfg["interval_ms"], "delay": cfg["delay"],
         "lanes": 2, "queue": 4, "window": cfg["window"], "ingress_cells": 4, "ingress_buckets": 8,
         "egress_cells": cfg["slots"] * held} | ({"egress": "bytes"} if "egress" in fields else {}))
@@ -477,8 +489,8 @@ async def warden(cfg: dict) -> dict:
     def drop(record, grid) -> None:
         pass
 
-    w = Warden(params, connect, origin=cfg["origin"], windows=-(-total // cfg["window"]), publish=drop, withhold=drop,
-               paced=cfg["paced_ms"] / 1000 if cfg["paced_ms"] else None)
+    w = Certifier(params, connect, origin=cfg["origin"], windows=-(-total // cfg["window"]), publish=drop,
+                  withhold=drop, paced=cfg["paced_ms"] / 1000 if cfg["paced_ms"] else None)
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if cfg.get("listen"):
@@ -518,7 +530,7 @@ async def warden(cfg: dict) -> dict:
             gating.cancel()
     if not run.cancelled():
         run.result()
-    return {"certifier": "warden", "cpus": cpus, "pacer_cpus": pacer_cpus, "params": dataclasses.asdict(params),
+    return {"certifier": "network", "cpus": cpus, "pacer_cpus": pacer_cpus, "params": dataclasses.asdict(params),
             "slack_ms": w.slack * 1000, "ticks": w.ticks, "refused": w.refused, "connections": w.log,
             "tick_late_us": [round(x * 1e6, 1) for x in w.lateness],
             "releases": {"columns": ["bucket", "arrived_us", "start_us", "end_us", "written"],
@@ -538,7 +550,7 @@ def main(argv: list[str]) -> int:
     elif role == "awake":
         doc = awake(cfg)
     elif role == "certifier":
-        doc = asyncio.run(relay(cfg) if cfg["certifier"] == "relay" else warden(cfg))
+        doc = asyncio.run(relay(cfg) if cfg["certifier"] == "relay" else network(cfg))
     else:
         raise SystemExit(f"a party is server, certifier, observer, waker or awake, not {role!r}")
     Path(cfg["out"], f"{role}.json").write_text(json.dumps(doc))

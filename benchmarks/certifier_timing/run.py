@@ -5,9 +5,9 @@
                                           [--pin] [--gate-ms BEFORE,AFTER] [--waker-ms MS] [--awake]
                                           [--interval-ms 100] [--out DIR]
     verity bench certifier_timing guard   [--intervals 600] [--interval-ms 100] [--out DIR]
-    verity bench certifier_timing serve   --listen ADDR --port PORT [--attack write] [--certifier warden] [--ignore]
+    verity bench certifier_timing serve   --listen ADDR --port PORT [--attack write] [--certifier network] [--ignore]
                                           [--wait-s 600] [--launch DEV,AFTER,OPEN[,MODE]] [run's flags] --out DIR
-    verity bench certifier_timing observe HOST:PORT [--certifier warden] [--observer spin] [--intervals 3000]
+    verity bench certifier_timing observe HOST:PORT [--certifier network] [--observer spin] [--intervals 3000]
                                           [--wait-s 600] [--tree DIR] --out DIR
     verity bench certifier_timing score   DIR... [--observer FILE|DIR]
     verity bench certifier_timing table   RESULT.json...
@@ -29,7 +29,7 @@ or the certifier failed a connection: the number is then of nothing.
 
 The candidates a run can turn on beside the certifier, none of them a change to it: `--pin` gives the certifier's loop,
 its pacer, the server and the observer a core each of the run's; `--gate-ms` keeps the certifier from reading the
-server around each release (`parties.warden`); `--waker-ms` keeps the host's network path in use (`parties.waker`);
+server around each release (`parties.network`); `--waker-ms` keeps the host's network path in use (`parties.waker`);
 `--awake` keeps every one of the run's cores from halting (`parties.awake`).
 
 `guard` is the check that the measurement sees a channel: against a certifier that paces nothing (`relay`), a server
@@ -54,7 +54,7 @@ holds the gate (`LAUNCH_MODES`): `gate`, the kernel's timer on the host's monoto
 whole schedule offloaded (its clock, which the host keeps to TAI); `txtime`, the kernel stamps each packet with its
 gate's opening and an ETF queue holds it till `ETF_DELTA_NS` before then, in software; `txtime-nic`, the same with
 the NIC launching each packet at its stamp. A socket's own `SO_TXTIME` plays no part: TCP sets no packet's time from
-it. `--launch` takes CAP_NET_ADMIN, `tc`, `sch_taprio` (and `sch_etf`) and a device with two transmit queues; it
+it. `--launch` takes the right to administer the host's network, `tc`, `sch_taprio` (and `sch_etf`) and a device with two transmit queues; it
 keeps the device's queue counts in launch.json, and a case whose gated queue carried fewer packets than it has
 intervals is no measurement.
 
@@ -127,7 +127,7 @@ def _commit() -> str | None:
     return SHARED.RESEARCH_SOURCE_SHA or _git(HERE)
 
 
-def config(args: argparse.Namespace, *, attack: str, observer: str, certifier: str = "warden", ignore: bool = False,
+def config(args: argparse.Namespace, *, attack: str, observer: str, certifier: str = "network", ignore: bool = False,
            intervals: int | None = None) -> dict:
     """One case's public configuration, without its origin. The relay takes none of the candidates. Under a launch
     gate the server aims at when the gate lets the bytes go: its opening, or under `txtime` `ETF_DELTA_NS` before."""
@@ -187,7 +187,7 @@ def _launch(cfg: dict) -> list[str]:
         if done.returncode:
             subprocess.run(remove, capture_output=True)
             raise RuntimeError(f"--launch: `{' '.join(command)}` failed ({done.stderr.strip()}): it takes "
-                               f"CAP_NET_ADMIN, sch_taprio (and sch_etf) and a device with two transmit queues")
+                               f"the right to administer the network, sch_taprio (and sch_etf) and a device with two transmit queues")
     return remove
 
 
@@ -267,7 +267,7 @@ def samples(cfg: dict, server: dict, observer: dict, kernel: bool = False) -> tu
     plan, tau = plan_of(cfg), cfg["interval_ms"] / 1000
     coins = {t: bit for t, bit, _ in server["rows"]}
     firsts = [c["first"] for c in server["connections"] if "first" in c]
-    ahead = cfg["delay"] if cfg["certifier"] == "warden" else 0
+    ahead = cfg["delay"] if cfg["certifier"] == "network" else 0
     remote, labels = observer.get("remote", False), observer.get("labels")
     origin = None if remote else round(cfg["origin"] * 1e9)
     rows, fits, stamps, bare = {}, [], [], 0
@@ -318,16 +318,20 @@ def stamped(cfg: dict, server: dict, observer: dict) -> tuple[dict | None, list[
 def score(case: Path, observed: Path | None = None) -> dict:
     """One recorded case (a directory `live` left; `observed`: its observer.json, where another host wrote it): its
     configuration, `channel.measure` of the observer's arrivals on its own clock (`client`), by the kernel's stamps
-    (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the certifier's own times (`sender`: a paced one's write ends, else its ticks'
-    lateness), and what makes it no measurement (`problems`)."""
+    (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the certifier's own times (`sender`:
+    a paced one's write ends, else its ticks' lateness), and what makes it no measurement (`problems`). A record
+    whose certifier is none of `CERTIFIERS` is another benchmark's, and is refused."""
     cfg, server, certifier = (json.loads((case / f"{n}.json").read_text()) for n in ("config", "server", "certifier"))
+    if cfg["certifier"] not in CERTIFIERS:
+        raise SystemExit(f"{case}: its certifier is {cfg['certifier']!r}, none of {', '.join(CERTIFIERS)}: score it "
+                         f"with the benchmark that recorded it")
     observer = json.loads((observed or case / "observer.json").read_text())
     pairs, problems = samples(cfg, server, observer)
     kernel, unfit = stamped(cfg, server, observer)
     problems += unfit
     coins = {t: bit for t, bit, _ in server["rows"]}
     sender = late_releases = gated = None
-    if cfg["certifier"] == "warden":
+    if cfg["certifier"] == "network":
         if cfg["paced_ms"]:
             times = {r[0]: r[3] / 1e6 for r in certifier["releases"]["rows"]}
             late_releases = sum(r[2] > LATE_US for r in certifier["releases"]["rows"])
@@ -489,9 +493,10 @@ def _hello(certifier: str, tree: Path) -> tuple[str, int]:
     is, the network certifier in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
-    code = ("import sys; from verity.core.protocols.certifier.warden import cells; "
+    code = ("import importlib, sys; cells = importlib.import_module(sys.argv[3]).cells; "
             "print(cells(bytes.fromhex(sys.argv[1]), int(sys.argv[2])).hex())")
-    done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"])],
+    done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"]),
+                           parties.DEVICE["module"]],
                           env=os.environ | {"PYTHONPATH": str(tree)}, capture_output=True, text=True, check=True)
     return done.stdout.strip(), SCHEDULE["cell_bytes"] * SCHEDULE["slots"]
 
@@ -543,12 +548,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, required=True)
     p.add_argument("--wait-s", type=float, default=600.0, help="how long the certifier waits for the observer")
     p.add_argument("--attack", default="write", choices=ATTACKS)
-    p.add_argument("--certifier", default="warden", choices=CERTIFIERS)
+    p.add_argument("--certifier", default="network", choices=CERTIFIERS)
     p.add_argument("--ignore", action="store_true", help="the server writes as for bit 0 whatever its bits")
     p.add_argument("--launch", type=_launch_arg, metavar="DEV,AFTER,OPEN[,MODE]")
     p = sub.add_parser("observe")
     p.add_argument("at", metavar="HOST:PORT")
-    p.add_argument("--certifier", default="warden", choices=CERTIFIERS)
+    p.add_argument("--certifier", default="network", choices=CERTIFIERS)
     p.add_argument("--observer", default="spin", choices=OBSERVERS)
     p.add_argument("--intervals", type=int, default=3000)
     p.add_argument("--interval-ms", type=int, default=100)
@@ -592,7 +597,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--pin takes four cores: the certifier's loop, its pacer, the server and the observer")
     if args.command == "serve":
         cfg = config(args, attack=args.attack, observer="another host's", certifier=args.certifier, ignore=args.ignore)
-        if args.attack == "delay" and args.certifier == "warden":
+        if args.attack == "delay" and args.certifier == "network":
             ap.error("the network certifier fails a delayed interval closed: --attack delay goes with --certifier relay")
         if cfg["launch"] and not args.paced_ms + cfg["launch"]["after_ms"] + cfg["launch"]["open_ms"] < args.interval_ms:
             ap.error("--launch: the gate opens and shuts inside the interval its release time is in")

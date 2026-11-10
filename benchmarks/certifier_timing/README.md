@@ -11,8 +11,8 @@ A run has three parties, each a process (`parties.py`):
 
 - **The server** is the adversary. It picks a uniform bit for each interval and acts only through when and how it
   writes its own bytes for this interval and the next. The bytes are the same whatever the bit.
-- **The certifier** is the device under test: `verity.core.protocols.certifier.warden.Warden` of this checkout or of
-  another (`--tree`), writing each interval on its loop (`--paced-ms 0`) or through its pacer.
+- **The certifier** is the device under test: the network certifier (the class `device.json` names) of this
+  checkout or of another (`--tree`), writing each interval on its loop (`--paced-ms 0`) or through its pacer.
 - **The observer** is the client side. It timestamps the first byte of each interval twice: on its own clock once
   its read returns, waiting in the kernel for it (`plain`) or polling without waiting (`spin`), and with the stamp
   the kernel gave the bytes as it took them off the network. It never has the server's bits.
@@ -139,7 +139,7 @@ host's always, and the server aims at the gate. MODE says who holds the gate:
 | `txtime` | the kernel's ETF queue, at the stamp the schedule gave each packet | `sch_taprio`, `sch_etf` |
 | `txtime-nic` | the NIC, launching each packet at its stamp | a NIC with launch time, its clock kept to TAI |
 
-Every mode takes CAP_NET_ADMIN, `tc` and a device with two transmit queues. A case whose gated queue carried fewer
+Every mode takes the right to administer the host's network (root's, for `tc qdisc`), `tc` and a device with two transmit queues. A case whose gated queue carried fewer
 packets than the case has intervals, or dropped any, is no measurement (`launch.json`, the device's queue counts).
 
 ## Two hosts
