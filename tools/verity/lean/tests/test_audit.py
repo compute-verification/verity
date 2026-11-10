@@ -2939,6 +2939,31 @@ def test_a_why_on_the_entry_of_a_premise_a_statement_takes_fails_until_a_person_
         ("open.taken", "P.Sound")], "the record of a guarantee that only reads a premise another takes stays as it is"
 
 
+def test_once_a_statement_takes_a_prop_whose_entry_rests_on_a_read_its_readers_no_longer_list_it_as_open():
+    """A `Prop` an `open` entry holds on a read, which a statement then takes as a premise.  The check fails on the `why`,
+    which only a person removes, and on each record whose `premises` change: the guarantee that takes the `Prop` lists it
+    under `premises.open`, and one that only reads it no longer does (it is under `premises.reads` where an assumptions
+    module declares it).  An update settles the records and still fails on the `why`; the entry stays `open` without it."""
+    none = {"assumptions": [], "domain": [], "open": [], "reads": []}
+    for module in ("P.Net.Assumptions", "P.Defs"):
+        now = holding(module)
+        pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
+        taker = now["pins"]["P.u"] | {"premises": [{"binder": "s", "head": "P.Held", "module": module}]}
+        then = {**now, "pins": {**now["pins"], "P.u": taker},
+                "graph": {"P.Defs": {"imports": ["Init"], "olean": "/r/P/.lake/build/lib/lean/P/Defs.olean"}}}
+        fails = A.judge(pol, then, FILES)[0]
+        assert [(x.code, x.entry) for x in fails] == [
+            ("open.taken", "P.Held"), ("guarantees.premises-changed", "P.t"), ("guarantees.premises-changed", "P.u")]
+        assert A.regenerated(pol, then, FILES, fails) is None, "the `why` takes a person"
+        again, written = A.judge(pol, then, FILES, update=True)
+        assert [x.code for x in again] == ["open.taken"] and written["open"] == pol["open"]
+        assert written["guarantees"]["P.t"]["premises"] == none | {
+            "assumptions": ["P.Hyp"], "reads": ["P.Held"] if module == "P.Net.Assumptions" else []}
+        assert written["guarantees"]["P.u"]["premises"] == none | {"open": ["P.Held"]}
+        fixed = written | {"open": {"P.Held": {k: v for k, v in written["open"]["P.Held"].items() if k != "why"}}}
+        assert A.judge(fixed, then, FILES)[0] == [], "the `why` removed"
+
+
 def test_an_entry_without_a_why_for_a_prop_no_statement_takes_fails_and_an_update_drops_it():
     """The second wrong case: a `Prop` a statement only reads, listed with no `why`.  It fails as before, a record
     difference an update settles by dropping the entry, and its message names both fixes, under `domain` and
