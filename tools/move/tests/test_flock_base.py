@@ -22,6 +22,7 @@ TREE = {
     "verity/core/primitives/base/Base/Hash.lean": "module\n\nnamespace Flock\nprivate def round := 1\nend Flock\n",
     "verity/core/primitives/base/Base/Pow2.lean": "module\n\ndef pow := 1\n",
     "Security/Proofs/P.lean": "import Flock.Hash\n\nopen private round from Flock.Hash\nopen private record from Flock.Record\n",
+    "Security/Proofs/Q.lean": "open private round Round.busy natJ?\n  from Flock.Hash\n\ndef from_ := 1\n",
 }
 
 
@@ -44,9 +45,12 @@ def test_the_moved_modules_are_read_from_the_lakefiles(tmp_path):
 
 def test_private_names_the_module_a_declaration_moved_to_and_no_other(tmp_path):
     root = tree(tmp_path)
-    assert B.private(root) == [("Security/Proofs/P.lean", "Flock.Hash", "Base.Hash")]
+    assert B.private(root) == [("Security/Proofs/P.lean", "Flock.Hash", "Base.Hash"),
+                               ("Security/Proofs/Q.lean", "Flock.Hash", "Base.Hash")]
     assert (root / "Security/Proofs/P.lean").read_text() == (
         "import Flock.Hash\n\nopen private round from Base.Hash\nopen private record from Flock.Record\n")
+    assert (root / "Security/Proofs/Q.lean").read_text() == (
+        "open private round Round.busy natJ?\n  from Base.Hash\n\ndef from_ := 1\n")
     assert B.private(root) == []
 
 

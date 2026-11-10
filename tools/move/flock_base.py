@@ -30,7 +30,9 @@ OLD = "Flock"
 #: the base packages' modules that never were modules of Flock's package
 NEW = {"Pow2"}
 IMPORT = re.compile(r"^((?:(?:public|private|meta)[ \t]+)*import[ \t]+(?:all[ \t]+)?)" + OLD + r"\.(\w+)[ \t]*$", re.M)
-PRIVATE = re.compile(r"^(open[ \t]+private[ \t]+[^\n]*?[ \t]from[ \t]+)" + OLD + r"\.(\w+)[ \t]*$", re.M)
+#: between two words of one command: blanks, or a break onto an indented line
+GAP = r"(?:[ \t]+|[ \t]*\n[ \t]+)"
+PRIVATE = re.compile(r"^(open[ \t]+private(?:" + GAP + r"(?!from\b)\S+)*" + GAP + r"from[ \t]+)" + OLD + r"\.(\w+)[ \t]*$", re.M)
 
 
 def git(root: Path, *args: str) -> str:
