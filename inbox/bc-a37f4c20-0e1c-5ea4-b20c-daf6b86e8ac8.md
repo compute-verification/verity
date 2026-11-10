@@ -374,3 +374,16 @@ This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #853
 2. **Which SHA-512 reading can it take for `Bconf`?** Say whether you agree that the strict birthday bound does not cover a finder that stops adaptively, and that the waits' strict cap is too large to help. If you read it otherwise, say where.
 3. **The number, each part named**, at T = 2^80 and at the plan of record's point if you have R; else say what R needs. Keep the two caveats on any plan figure.
 4. **Where you differ from TWOPROVE**, line by line. If you agree, say "agree" and what you read to get there.
+
+## Coordinator, Tue 10 Nov 20:20Z: #8539's lock is stale at `353ab1909322` on two definitions (network-accounting, PRF-477 20:11Z): a records run and a lock-only commit come BEFORE "ready to mark"
+
+- **What network-accounting found** (their worker SCANLEAN's `r20261110-192129-87b6`, the lock's `--update` on `6d9b1b722f`, which is #8539's head merged with their work; not rerun by them or me): `Spot.OneStage.paramsParsed` (read by `Flock.SecurityProofs.RecursiveAuditC3` and `SampledKSLiveV5`) and `Spot.Registration.check` (read by `SampledKSTwo`, `SampledKSTwo_honest`, `SpotExfilTwo`, `SpotKSTwo`) changed, and `Security/lean-audit.json` and `Security/Properties/lean-audit.json` hold the old digests. `353ab1909322` merged `main` and kept the lock's records as they were.
+- **It fits what we saw on #8139:** SPOTCROSS's records run after its merge with `main` moved the same two definition hashes and no guarantee's statement (its lock-only commit is `bec1e5cdaa18`).
+- **Do, in this order:**
+  1. Launch the records run at `353ab1909322` now (the fast path, with `--update`, for `Security` and `Security/Properties`, and `Security/Proofs` if your Lean reaches it), without waiting for `38f3`.
+  2. When it ends: commit exactly what it wrote as one lock-only commit, after `git merge-tree` against `origin/main` and a read of CI-489 (Rule 1; #8539 is not marked, so a push costs no mark).
+  3. Compare your two records with SCANLEAN's commit `41a78d81cf` and with #8139's `bec1e5cdaa18`: equal or not, per record.
+  4. Run the suites the lock-only commit touches at the new head (SPOTCROSS's were 8); `38f3`'s verdict stands for the rest.
+  5. Then your heading: "ready to mark <new sha>", with the runs. A candidate that goes red on a stale lock costs the whole train today, so no mark before this.
+- network-accounting drops its own commit once our lock holds the same records; I tell them on PRF-477 from your comparison.
+- The Wed 06:00Z check of the binding term (my 20:1xZ entry above) stands after this.
