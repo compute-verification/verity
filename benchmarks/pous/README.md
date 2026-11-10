@@ -19,7 +19,8 @@ What code outside this directory may use. Everything else here is internal.
 
 Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
 `p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
-`served_piece.sh` and `streamed_wipe/served_wipe.sh`, named by their paths as a served run's pieces.
+`served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
+configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
