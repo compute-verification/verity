@@ -46,8 +46,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
+from verity.windows import interface as IF
+from verity.windows import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, template
@@ -343,7 +343,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
-    from verity.core.protocols.spot.one_stage import registered as G
+    from verity.spot.verifier.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
     out: dict[str, Any] = {}
@@ -434,7 +434,7 @@ class Reader:
     def pair(self, x: Row) -> dict[str, Any]:
         """Pair row ``x``'s operands: its activation, scales, routed weight, expert, that expert's weight and scale rows and the
         row's served words, which the twin of the row on them must be."""
-        from verity.ml.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+        from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
         from verity_vllm.query.program_view import spec_statics
 
         rid, _pi, r, d = x

@@ -10,10 +10,10 @@ import pytest
 from verity_vllm.engine import served_seed
 from verity_vllm.program.frontend import seed_rule as SR
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.definitions.registry import boolean_io_shell as BX
-from verity.ml.definitions.registry import io_shell as X
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.definitions.registry import boolean_io_shell as BX
+from verity.definitions.registry import io_shell as X
 
 
 def _col(xs) -> np.ndarray:
@@ -79,7 +79,7 @@ def test_the_word_check_accepts_the_rules_seed_alone():
     and its id) and of a seeded one (its body's) passes, and fails with any one of its 64 bits flipped (`SeedCheck_v1`) or with
     the other request's seed: `SeedCheck_v2`, the check the Program returns, agrees on the sampler's i64 word at its ends' bits, so
     a Program's sampler passes it with one seed alone."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     coin, uid = bytes(range(SR.COIN)), "r001"
     rule = [(None, served_seed.derived(coin, uid)), (12345, 12345)]
@@ -106,9 +106,9 @@ def test_the_wrappers_inputs_are_the_programs_parameters_and_the_check_refuses_a
     """The traced request wrapper's example inputs (`inputs`, bool tensors) type as the predicted Program's `params` at the
     policy's RID, every request-local group the workload Program and the batch rule hold its request's own; a row whose ids
     share no length has no RID, and a policy without one and a seed or inputs of other types are refused by name."""
-    from verity.ml.circuits.defs import Builder
-    from verity.ml.circuits.refs import Affine, Coll
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import Builder
+    from verity.circuits.refs import Affine, Coll
+    from verity.circuits.types import Array, Value
     from verity_vllm.program import workload as W
     from verity_vllm.program.frontend.value_types import type_of_tensor
     from verity_vllm.program.predict import batch

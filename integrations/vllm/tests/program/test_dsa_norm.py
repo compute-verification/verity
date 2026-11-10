@@ -13,17 +13,17 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import dsa_norm_rows as NR
-from verity.ml.definitions.numerics import rows as RK
-from verity.ml.definitions.registry import boolean_dsa_norm as BN
-from verity.ml.definitions.registry import boolean_rope as BR
-from verity.ml.definitions.registry import dsa_norm as DN
-from verity.ml.definitions.registry import prims as P
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.boolean import trace as TR
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import dsa_norm_rows as NR
+from verity.definitions.numerics import rows as RK
+from verity.definitions.registry import boolean_dsa_norm as BN
+from verity.definitions.registry import boolean_rope as BR
+from verity.definitions.registry import dsa_norm as DN
+from verity.definitions.registry import prims as P
 from tests.program.test_dsa import _butterfly, _fadd
 from tests.program.test_fp8_moe import _bf16, _ffma, _fmul
 

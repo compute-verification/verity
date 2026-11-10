@@ -6,7 +6,7 @@ public import CircuitRequirement
 /-!
 # The requirement's code: each function is the definition it computes
 
-`CircuitRequirement` (`verity/core/primitives/requirement/`, package `core_requirement`) is code, so it requires nothing
+`CircuitRequirement` (`verity/definitions/requirement/`, package `core_requirement`) is code, so it requires nothing
 of `Security/`: on one instance it computes `Accounting.Requirement`'s definitions, a set as a list. These are those
 equalities, each a `Prop` stated against the code's function and the definition it computes, on the wiring, execution,
 layout, store and placement the instance denotes (`wiring`, `execution`, `layout`, `store`, `placement`), and

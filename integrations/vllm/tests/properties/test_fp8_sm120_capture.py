@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 from tests.properties import fp8_sm120_capture_gpu as X
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import fp8_moe_rows as MR
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fp8_moe_rows as MR
 from verity_vllm.properties.record import digest_of
 
 K, N = 256, 200
@@ -80,7 +80,7 @@ def test_the_hopper_step_models_are_the_registered_twins() -> None:
 
 
 def test_the_vectorised_blackwell_step_is_the_registered_primitive() -> None:
-    from verity.ml.circuits.ops import prims
+    from verity.definitions.ops import prims
 
     rng = np.random.default_rng(4)
     n = 96

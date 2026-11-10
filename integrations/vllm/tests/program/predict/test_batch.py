@@ -12,10 +12,10 @@ from itertools import accumulate
 
 import pytest
 
-from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Tuple, Value
+from verity.protocols.certifier.verifier import advice as I1
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Tuple, Value
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
 from verity_vllm.program.frontend.seed_rule import rid_of
 from verity_vllm.program.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
@@ -68,8 +68,8 @@ def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_po
     import numpy as np
 
     from verity_vllm.pipeline.topp_split_probe import gen_random
-    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for
-    from verity.ml.definitions.registry.topp_split import topp_keep_row
+    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+    from verity.definitions.registry.topp_split import topp_keep_row
 
     nsm, V = RTX["num_sms"], 4096
     S_reg = registered_splits(nsm)
@@ -405,10 +405,10 @@ def test_workload_labels_by_provenance():
 def test_compile_steps_passes_its_own_rule():
     """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p; an unseeded request's seed,
     derived from its id and the window's seed salt, is the one it compiles to alone."""
-    from verity.ml.definitions.registry.topp_geometry import registered_splits
+    from verity.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
-    I1 = pytest.importorskip("verity.core.protocols.certifier.advice")
+    I1 = pytest.importorskip("verity.protocols.certifier.verifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}
     reg = steps.Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTX)), default_seed=7)
     greedy = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3}

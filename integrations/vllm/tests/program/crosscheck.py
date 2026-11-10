@@ -1,5 +1,5 @@
 """Cross-check: the registered composites, evaluated gate by gate by the reference evaluator, against the validated
-C++/CPU numerics models (`verity.ml.definitions.numerics`) on random and adversarial inputs.
+C++/CPU numerics models (`verity.definitions.numerics`) on random and adversarial inputs.
 
 This is conformance evidence for the *definitions* (the circuit body reproduces the frozen model, which is
 bit-exact against production); correspondence against captured production values is the
@@ -13,17 +13,17 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_call
-from verity.ml.circuits.layout import FunctionCall
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array, RecordType
-from verity.ml.definitions.registry import b1, prims as P
-from verity.ml.definitions.registry.b1 import B1_CONFIG as C
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_call
+from verity.circuits.layout import FunctionCall
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array, RecordType
+from verity.definitions.registry import b1, prims as P
+from verity.definitions.registry.b1 import B1_CONFIG as C
 
 
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.circuits.defs import CompositeDefinition
 
 _STANDALONE = CompositeDefinition("Standalone", 1, ("FN",), lambda S: S.FN.signature(),
                                   lambda B, S, *args: B.call(S.FN, *args),
@@ -53,7 +53,7 @@ def _u16(v: list[int]) -> np.ndarray:
 
 
 def check_rmsnorm(rng, rows=4, N=1536, eps=1e-6):
-    from verity.ml.definitions.numerics import rms_relation, rms_triton_model
+    from verity.definitions.numerics import rms_relation, rms_triton_model
     prog, call = _standalone(bind(b1.RMSNormTriton, N=N, EPS=eps))
     tabs = rms_relation.tables("triton")
     mism = 0
@@ -67,7 +67,7 @@ def check_rmsnorm(rng, rows=4, N=1536, eps=1e-6):
 
 
 def check_gemm_coordinate(rng, n=64, K=1536):
-    from verity.ml.definitions.numerics import mma
+    from verity.definitions.numerics import mma
     prog, call = _standalone(bind(b1.GemmCoordinate, K=K))
     mism = 0
     for _ in range(n):
@@ -81,7 +81,7 @@ def check_gemm_coordinate(rng, n=64, K=1536):
 
 
 def check_attention_head(rng, Ts=(1, 5, 64, 65, 130, 200), D=128):
-    from verity.ml.definitions.numerics import fa2_relation
+    from verity.definitions.numerics import fa2_relation
     res = []
     for T in Ts:
         prog, call = _standalone(bind(b1.AttentionHead, T=T, D=D))
