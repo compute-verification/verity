@@ -34,6 +34,6 @@ def test_the_files_deploy_toml_installs_run_the_hourly_lean_prune(tmp_path):
         os.utime(records / name / ".lock", (1, ord(name)))
     r = subprocess.run([sys.executable, "-S", str(lib / argv[1][len(LIB):]), "--prune", "--cache", str(tmp_path / "cache" / "lean-audit")],
                        capture_output=True, text=True, cwd=tmp_path,
-                       env={"PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path), "LEAN_SLOTS": str(tmp_path / "no-slots")})
+                       env={"HOME": str(tmp_path), "LEAN_SLOTS": str(tmp_path / "no-slots")})
     assert r.returncode == 0, r.stderr
     assert "1 from lean-records" in r.stdout and sorted(p.name for p in records.iterdir()) == ["b", "c", "d"], r.stdout
