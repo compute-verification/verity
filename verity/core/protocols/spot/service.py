@@ -971,9 +971,10 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs), and its window's seed salt
+    #: supplied, pinned, schemas, window_root, held, outputs), its window's seed salt and its history tables
     copies: tuple[Any, ...] = ()
     seed_salt: str | None = None
+    history: Mapping[str, Any] | None = None
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
@@ -982,11 +983,12 @@ class _Entry:
     outcome: Outcome | None = None
     session: Session | None = None
     #: under a two-stage design: the interior registration, its population program and what `register_interiors`
-    #: handed R1-R7 (as `copies`), then the second stage's sample and the coins it read
+    #: handed R1-R7 (as `copies`, `seed_salt` and `history`), then the second stage's sample and the coins it read
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
     interior_seed_salt: str | None = None
+    interior_history: Mapping[str, Any] | None = None
     second: Draw | None = None
     second_read: bytes | None = None
 
@@ -1845,7 +1847,8 @@ class Stream:
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None,
-                 outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                 outputs: Mapping[str, Mapping[str, str]] | None = None,
+                 history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1854,7 +1857,7 @@ class Stream:
         the check's query, the selection rule's sampling
         design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held` and `outputs`, as `registration.check` takes them). Then the receipt. Under
+        `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them). Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1901,7 +1904,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1931,7 +1934,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs), seed_salt))
+                                     window_root, held, outputs), seed_salt, history))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2012,7 +2015,8 @@ class Stream:
                            registered: Mapping[str, int] | None = None, supplied: Mapping[str, Any] | None = None,
                            pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                            window_root: str | None = None, held: Sequence[str] | None = None,
-                           outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                           outputs: Mapping[str, Mapping[str, str]] | None = None,
+                           history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior registration, once, after the first stage `draw` and before its second
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
@@ -2021,8 +2025,8 @@ class Stream:
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        It names no links or wires: the verifier derives them from the replay block's Definition
-        (`second_stage.replay_links`, `second_stage.replay_wires`).
+        It names no links, wires or rows: the verifier derives them from the replay block's Definition
+        (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2041,7 +2045,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 got.update(program=program, earlier=earlier)
@@ -2060,7 +2064,7 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
-        e.interior_seed_salt = seed_salt
+        e.interior_seed_salt, e.interior_history = seed_salt, history
         return reg
 
     def interior_program(self, q: int) -> Program:
@@ -2343,7 +2347,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given, seed_salt=e.seed_salt)
+                      value_outputs=given, seed_salt=e.seed_salt, history=e.history)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2356,8 +2360,9 @@ class Stream:
                    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
-        interior program's strata make, the design's links and wires, which it derives from the replay block's
-        Definition (`second_stage.replay_links`, `second_stage.replay_wires`), the reads the verdicts report, what they
+        interior program's strata make, the design's links and wires and their rows, which it derives from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
+        reads the verdicts report, what they
         name of each session they accepted
         (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
         template, `template_circuits`), and the registration's
@@ -2384,7 +2389,8 @@ class Stream:
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
-                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)))
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
@@ -2406,10 +2412,10 @@ class Stream:
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
-                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt,
+                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
-                                "seed_salt": e.interior_seed_salt,
+                                "seed_salt": e.interior_seed_salt, "history": e.interior_history,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
