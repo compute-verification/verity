@@ -28,8 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import layout as L
 from moved import Moved
 
-#: what may follow a directory's name in a path below it: globs and shell or template variables as well as names
-REST = r"(?:/[\w.\-*?\[\]{},$]*)*"
+#: what may follow a directory's name in a path below it: names, globs, brace lists and shell or template variables
+REST = r"(?:/(?:[\w.\-*?$]|\{[^{}\s]*\}|\[[^\[\]\s]*\])*)*"
 
 
 def check(m: Moved) -> dict:
@@ -45,7 +45,7 @@ def check(m: Moved) -> dict:
                 continue
             for n, line in enumerate(text.splitlines(), 1):
                 for x in pat.finditer(line):
-                    first = x.group(2).strip("/").split("/")[0]
+                    first = x.group(2).strip("/").split("/")[0].rstrip(".")        # a sentence's full stop is not the name's
                     below = f"{x.group(1)}/{first}"
                     if first and (below in m.old_dirs or below in m.tracked):
                         continue                        # a path to something inside it: that thing's own reference
