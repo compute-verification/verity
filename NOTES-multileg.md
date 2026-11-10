@@ -41,16 +41,18 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
     V.SpotSound k
 ```
 
-**Status of this form.** At `388586f624` the statement carries one more hypothesis, `hε` (over every member's stops
-the openings' gaps and empty classes are at most the hiding term), and is off `linkEmpty`/`roundEmpty`; that form
-is built and probed (the Runs table). The form above, without `hε` and off the count-aware events, is committed from
-`a8013ac42d` (`Window/Charge.lean`) and is **not yet built**: its try and its records run are queued (Runs). Until
-they pass, the proved statement is the one with `hε`.
+**Status of this form.** Built and probed at `a8013ac42d` (run `r20261110-163654-4fe7`: `Window/Charge.lean` and
+`Window/Leg.lean` build, `Window/Assembled.lean` elaborates, its 3 theorems on the three standard axioms). The
+earlier form at `388586f624` carried one more hypothesis, `hε` (over every member's stops the openings' gaps and
+empty classes are at most the hiding term), off `linkEmpty`/`roundEmpty`; `Window/Charge.lean` proves that term's
+bound off the count-aware events at every strategy, so `hε` is gone.
 
 `V.SpotSound k` is the same target the one-member leg meets (`Vocab.SpotSound`): at every parameters, files,
 commitment and strategy, the plays v2's sampled verdict accepts while the claim fails are at most `V.error`, which is
 conditional on the vocabulary's finder premises. So the conclusion plugs into `Verity.Soundness` where the one-member
-`spotSound` does.
+`spotSound` does: at `k = .remote` it is the first hypothesis of `remote_soundness_of_subprotocols`
+(`RemoteSoundness`), as `spotSound_of_targets` is in `remote_soundness_of_targets`. No theorem states that
+application yet; it belongs with the window instance (open item 4).
 
 How it is put together, each layer proved once:
 
@@ -167,6 +169,13 @@ replace them.
 | `r20261110-162404-7405` | `Window/Logged.lean` | `388586f624` | 0 | 6 theorems, standard axioms |
 | `r20261110-162404-e1be` | `Window/Leg.lean` | `388586f624` | 0 | 3 theorems, standard axioms |
 | `r20261110-162404-5413` | `Window/Assembled.lean` | `388586f624` (the form with the stops' term as a premise) | 0 | 3 theorems, standard axioms |
+| `r20261110-163654-4fe7` | `Window/Assembled.lean` | the tree of `a8013ac42d` (`Window/Charge.lean`, no `hε`) | 0 | 3 theorems, standard axioms; `Charge` and `Leg` built as its imports |
+
+## The base moved
+
+`cursor/soundness-remote-deployed-8fb2` gained commits after this branch forked from it (the Bridge's `domOf` and
+`dupId`, `Sampled.lean`, `Sampled/OpensAt.lean`, the Security and Security/Properties locks). They are not merged
+here; the restack takes them.
 
 ## Branch name
 
