@@ -34269,3 +34269,69 @@ All times are from `date -u`. [run] means I ran it, [read] that I read it, [gues
 - ETA from my 22:06Z entry [guess]: records about 23:15Z, quick tier about 00:10Z, 01:05Z at the latest.
 
 **Next:** the try's verdict; then the records run, the quick tier and the PR. Then route 3's R3.1, the named `OneWait` and `deployZkAt K0`, and S1 beside `StrictBirthday`.
+
+## HOUSEKEEP, Tue 10 Nov 23:14Z: the 22 layout rows on the signed tree: 14 written, 6 right as copied, 2 dropped, 4 new; posted on TOP-398 at 23:10Z, which rang no one
+
+**Done, and one thing for you: ring @top.** My comment is on TOP-398 (23:10:43Z, id `84d823a4-084f-4b47-9e00-8e65abf6eb05`). The tool refused `--as proofs` beside `--worker` ("--worker goes with `comment` alone, never with --as"), so it went with `--worker HOUSEKEEP` alone, and the tool then said a worker's comment rings no one. top has not been rung by it.
+
+**Where:** the notes at `d37a827d88`, `lanes/proofs/layout/hand-lines.toml`: 49 `[[line]]` and 1 `[[insert]]`, 18 marked `tree = "signed"`. `lanes/proofs/layout/signed-rows.md` (at `0892cc2472`) has each row's evidence and both numberings.
+
+**What I checked on.** "Third head" is the mover's tree for the map at `a611d18804ac`, made in a scratch clone. "A" is `cursor/top-layout-staged-e15c` at `50f940c4f285`. The same scratch move on `f4d2ff2f8fc9` gives the tree of A's move commit, `c78ddc2a9ea7`, so the scratch move is the stager's move [run]. The map moved while I worked: its head of 23:05Z is `fea5e8c8a511` (the protocols' own suite goes to `verity/protocols/tests/`). I ran the same checks on it after posting: all 50 rows match one line each there, the exporters, the manifest and `Randomness.lean` have the same bytes as on the third head, and with the rows applied the 21 recorded inputs match [run]. **The comment on TOP-398 does not say this; it is worth one line to @top.**
+
+**The 22, by REPORT.md's number**
+
+| N | verdict | why | how |
+|---|---|---|---|
+| 1 | right as copied | `want` puts the toy verifier at `verity/protocols/flock/verifier`, where the moved `suites.py` looks | [read] |
+| 2 | right as copied | the same test | [read] |
+| 3 | right as copied | the same test | [read] |
+| 4 | right as copied | `lake` runs in that directory | [read] |
+| 5 | right as copied | the message names that directory | [read] |
+| 7 | dropped | SPOT's `generate.sh` is six directories deep, as on `main`, so main's six `../` reach the root | [run] |
+| 10 | written | the key's `find` names four directories; top's copy named two and missed the firewall and the interface | [read] |
+| 11 | written | the firewall's build copy, laid out as the lakefiles require | [run] |
+| 12 | written | the same copy; its `after` names the firewall under the recursion layer, so it matches on the third head and not on A | [run] |
+| 13 | written | the same copy | [run] |
+| 14 | written | the same copy; every `require` path of the four packages resolves inside it; nothing was built | [run] |
+| 28 | written | `"verity/protocols/$x/verifier"`, where `remote` and `onsite` build | [read] |
+| 29 | written | the toy tree's four packages at their signed places | [read] |
+| 31 | right as copied | both pin files open at `parents[3] / where` | [run] |
+| 37 | written, new digest `5716832e6f67...` | the exporter `RandomnessVectors.lean` prints its own path | [run] |
+| 39 | written, not dropped | the key is `Randomness.lean`'s path, which moves to `verity/commitments/randomness/`; the digest stays main's | [run] |
+| 40 | dropped | `PlanDraw.lean` keeps its path and its bytes, so main's line stands | [run] |
+| 41 | written, new digest `3c09da0b9dd0...` | `Security/Proofs/lake-manifest.json`; the move rewrites 27 lines of it | [run] |
+| 44 | written | the exporter `ExfiltrationVectors.lean`, path and digest as in top's copy | [run] |
+| 45 | written | the manifest, as 41 | [run] |
+| 46 | written | the exporter `ExfiltrationTwoVectors.lean`, path and digest as in top's copy | [run] |
+| 47 | written | the manifest, as 41 | [run] |
+
+**Where your brief and the files differ**
+- The three exporters are rows 37, 44 and 46, not 41, 45 and 47. The third head leaves their bytes as A has them: the same three digests on both [run].
+- Rows 41, 45 and 47 are `Security/Proofs/lake-manifest.json`. The third head does change it: two of its lines name the firewall and V*'s command package. A's tree has `9257ce0bf5a5...`; the third head has `3c09da0b9dd0...` [run].
+- Of the five Lean digests you expected dropped, one is (40). 37, 44 and 46 are the exporters, which the move still rewrites. 39's bytes stay, but its key is the file's path and the path moves. The tests open each key as a path from the root [read].
+- At A's tip the three fixtures fail their own check: four recorded files are not there, and the manifest's recorded digest is the morning's `bfe0bab37d6a...`, which is neither tree's [run]. Our rows cure both on the third head.
+
+**The 4 new rows**, each marked `tree = "signed"`. They are beyond the 22: delete one from the file to strike it.
+
+| file | why | how |
+|---|---|---|
+| `verity/protocols/flock/prover/tests/lean/generate.sh` | five `../` stop at `verity/`; six | [run] |
+| `verity/protocols/flock/prover/tests/lean/generate_inner_claims.sh` | the same line | [run] |
+| `verity/protocols/flock/prover/python/verity_flock/challengers.py` | `SH.parents[4]` is `verity/`; `parents[5]` is the root | [run] |
+| `benchmarks/verifier_cost/flock_served.sh` | line 87 builds where line 86 archives | [read] |
+
+The first two are the commands `pins.py` holds for `randomness_lean.json` and `inner_claims.json` [read].
+
+**The whole file** [run]
+- `repath.py`, with the morning's staging, into a scratch directory: proofs 50 rows; 7 as they are, 19 rewritten, 6 for our hand (1 to 5 and 31), 18 marked signed, 0 left out. `DROP.txt` holds no `proofs:` entry. I wrote nothing under `lanes/top/`: top runs it again to take our rows.
+- All 50 rows of that copy match one line each on the third head. On A's move commit 48 of the 49 lines match; the other is row 12.
+- Applied to a copy of the third head's tree: 49 lines and 1 insert in 20 files. The three fixtures' 21 recorded inputs equal their files' SHA-256. `bash -n`, Python's parser and `json.load` pass on the 20 files.
+- The mover's notes that name our directories: `verity/core` in `test_served_verdicts.py` is row 30; the anchor in `replay_bundle.py` reaches `benchmarks/torch_gpu/commit_slots`, which stays [read]. Each of the 31 relative paths it rewrote out of a directory of ours reaches a file from a directory above the file that names it [run]; I did not read each in its place.
+
+**Not done**
+- No test and no Lean build ran on the signed tree. The firewall's copy (11 to 14) is resolved, not built.
+- The other lanes' 46 climbing lines in my list were not judged.
+
+**What the rows rest on**
+- The manifest's digest is of the mover's bytes on the map I name above. If a later head moves a Lean package's directory, rows 41, 45 and 47 need the digest again: `sha256sum Security/Proofs/lake-manifest.json` on the move commit. `tools/fixture_digests.py REPO REV` on the staging's hand-lines commit says in one line a fixture whether every recorded input matches.
+- In our file now, REPORT.md's 8 to 39 are rows 7 to 38, its 41 to 47 are rows 39 to 45, and the new rows are 46 to 49.
