@@ -68,11 +68,11 @@ from functools import lru_cache, reduce
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.types import Array
 from verity.ml.commitments.gates import sha512 as SG
 from verity.core.protocols.certifier import arith_encode as AE, charge_chain as CC
 from verity.core.protocols.certifier.arith_encode import CW, K_MAX, MAX_TOTAL, RUNS, Tally

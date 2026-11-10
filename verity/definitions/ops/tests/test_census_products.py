@@ -15,16 +15,16 @@ import sys
 import verity.definitions.ops as OPS
 import verity.definitions.ops.gemm  # registers the steps
 import verity.definitions.ops.boolean.s8  # noqa: F401  (binds the u8 x s8 step)
-from verity.ml.circuits.boolean.trace import word_of
+from verity.circuits.boolean.trace import word_of
 from verity.definitions.circuits.census import COUNTERS, FAMILY_COUNTS, PRECISION, PRODUCTS, RULED, SILICON, census
-from verity.ml.circuits.codec import descriptor_id, encode_program
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits.codec import descriptor_id, encode_program
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import s8 as S8
 from verity.definitions.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program
+from verity.circuits.program import Program
 
 DOT = re.compile(r"Dot(\d+)_v\d+$")
 
@@ -80,8 +80,8 @@ import verity.definitions.ops.prims
 for m in sys.argv[2:]:
     __import__(m)
 from verity.definitions.circuits.census import COUNTERS, census
-from verity.ml.circuits.codec import decode_program
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.codec import decode_program
+from verity.circuits.defs import REGISTRY
 try:
     totals = census(decode_program(json.load(open(sys.argv[1])), REGISTRY))["totals"]
     print(json.dumps({k: totals[k] for k in COUNTERS}))
@@ -147,8 +147,8 @@ import verity.definitions.ops.prims
 for m in sys.argv[2:]:
     __import__(m)
 from verity.definitions.circuits.census import census
-from verity.ml.circuits.codec import decode_program
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.codec import decode_program
+from verity.circuits.defs import REGISTRY
 try:
     print(json.dumps(census(decode_program(json.load(open(sys.argv[1])), REGISTRY), boolean=True)["totals"]["work"]))
 except ValueError as e:

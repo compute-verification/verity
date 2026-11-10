@@ -124,12 +124,12 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Requirement, Store
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 __all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "PlanShard", "U16", "layout_words", "map_inputs", "map_value_leaves",
            "map_words", "memory_map", "memory_map_rows", "pass_words", "plan_inputs", "plan_match", "plan_rows", "plan_shard",

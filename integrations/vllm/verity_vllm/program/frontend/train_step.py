@@ -32,12 +32,12 @@ from typing import Callable
 import torch
 from torch.func import functional_call, grad_and_value
 
-from verity.ml.circuits import parts
-from verity.ml.circuits.boundary import gate_width, in_gates
+from verity.circuits import parts
+from verity.circuits.boundary import gate_width, in_gates
 from verity.definitions.circuits.census import census
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.query_ast import GateSet
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.program import Program, is_input
+from verity.circuits.query_ast import GateSet
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport

@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import struct
 
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import primitive
+from verity.circuits.types import Array, Value
 from verity.definitions.ops import prims as _prims
 from verity.definitions.ops.sqrt import PouwF32SqrtRn  # noqa: F401  (Pearl-C4's root, registered in ops)
 from verity.definitions.ops.ncp import PouwI32ToF32Rn, i32_to_f32_rn  # noqa: F401  (ncp-v2's dequantization, registered in ops)

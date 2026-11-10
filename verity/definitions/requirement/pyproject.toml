@@ -14,7 +14,7 @@ untraced = ["tests/test_census_and_memory_map.py", "tests/test_requirement_difft
 # circuits, SPOT's service (`pipeline.serving_rows` resolves a rate law by it), the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
 # files of Flock's verifier (`Flock.Canon` and what it imports, and the package's configuration), both required by
 # path.
-inputs = ["verity/ml/circuits", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/__init__.py", "verity/settings.py",
+inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/__init__.py", "verity/settings.py",
           "verity/errors.py", "verity/ml/__init__.py", "verity/core/difftest", "verity/definitions",
           "verity/core/protocols/record.py",
           "integrations/vllm/verity_vllm",

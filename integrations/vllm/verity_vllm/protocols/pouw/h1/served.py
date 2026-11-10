@@ -103,8 +103,8 @@ from verity.core.protocols.pouw import weights as Wt
 from verity.ml.protocols.pouw.circuit import h1tile as HT
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.spot.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV

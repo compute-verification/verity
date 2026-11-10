@@ -16,7 +16,7 @@ from functools import cache
 
 import numpy as np
 
-from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.circuits.defs import PrimitiveDefinition
 from verity.definitions.ops.scalar import BIT, BitAnd, BitNot, BitOr, F32, F32Eq, F32Fabs, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.definitions.ops.fp32 import F32Add, F32Fma, F32Mul
 from verity.definitions.ops.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz, MufuSqrtFtz

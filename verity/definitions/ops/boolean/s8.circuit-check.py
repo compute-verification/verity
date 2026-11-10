@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """The u8 x s8 step on bits, the family on bits over `ops.boolean.gemm`'s s8 step (the plain arm at K = 64 and the
     egemm-shaped edited arm: T every 32, two fresh tail words), the plain arm's matmul over N = 3 rows, and the limb splits on
     bits at the bindings `ops.s8`'s sidecar checks, with their four steps."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops import s8 as S8
     from verity.definitions.ops.boolean import gemm as BG
     from verity.definitions.ops.boolean import s8 as BS8

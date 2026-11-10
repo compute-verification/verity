@@ -12,9 +12,9 @@ from dataclasses import replace
 
 import pytest
 
-from verity.ml.circuits import boolean as BL, codec
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.program import Program
+from verity.circuits import boolean as BL, codec
+from verity.circuits.defs import bind
+from verity.circuits.program import Program
 from verity.core.protocols.certifier import head_check as HC, service as SVC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)

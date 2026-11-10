@@ -156,7 +156,7 @@
   "verity/definitions/ops/rows/__init__.py",
   "verity/definitions/ops/s8.circuit-check.py",
   "verity/definitions/ops/s8/__init__.py",
-  "verity/ml/circuits/population.circuit-check.py",
+  "verity/circuits/population.circuit-check.py",
   "verity/ml/circuits/population/__init__.py",
   "verity/definitions/circuits/requirement_units.circuit-check.py",
   "verity/ml/circuits/requirement_units/__init__.py",

@@ -61,10 +61,10 @@ from __future__ import annotations
 
 import functools
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite, primitive
+from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
 from verity.definitions.ops.prims import const
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array, Value
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16, SelectI32
 

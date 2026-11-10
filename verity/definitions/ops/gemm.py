@@ -59,11 +59,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from verity.definitions.circuits.census import FAMILY_COUNTS, serves_none
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.ports import In, Ports
-from verity.ml.circuits.refs import Coll, broadcast, concat
+from verity.circuits.defs import bind, composite
+from verity.circuits.ports import In, Ports
+from verity.circuits.refs import Coll, broadcast, concat
 from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma, exact_k_limit
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 
 from . import fp32 as F
 from . import prims as P
@@ -362,7 +362,7 @@ GEMM_SM90_S8: dict = s8_gemm(HOPPER_SM90_S8_K32)
 
 
 def _register_kernels() -> None:
-    from verity.ml.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation import register_kernel
 
     from verity.definitions.kernels import tc as K
     from verity.definitions.silicon.models import (AMPERE_BF16_M16N8K16, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_MXF4,

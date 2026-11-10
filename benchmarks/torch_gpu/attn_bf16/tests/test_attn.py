@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as G
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -5,7 +5,7 @@ from typing import Any
 
 
 def _core_roots() -> list[Any]:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.kv_cache import KvCacheAppendE4m3
 
     return [bind(KvCacheAppendE4m3)]

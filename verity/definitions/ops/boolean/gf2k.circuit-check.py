@@ -8,7 +8,7 @@ from typing import Any
 def _gf2k_roots() -> list[Any]:
     """GF(2^128) arithmetic (`verity.definitions.ops.boolean.gf2k`): Gf128Mul and Gf256Mul are static-free; GfScale at L = 2, and GfResiduals
     on two residuals over 129 + 2 elements whose operands use every term kind (an element, a transposed block, a sum)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gf2k as G
 
     S = {"nw": 129, "nv": 2, "ops": [[["w", 0]], [["wt", 1, 3], ["v", 0]]],

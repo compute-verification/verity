@@ -15,13 +15,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate, evaluate_words
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
+from verity.circuits.evaluation import evaluate, evaluate_words
+from verity.circuits import boolean as BL
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import prims as MP
@@ -82,7 +82,7 @@ def test_the_table_reads_the_boolean_definitions_word_links():
 
 
 def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_statics_entry(monkeypatch):
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean.trace import word_of
 
     sig = lambda t: lambda S: ((("x", Array(S.N, t)),), Array(S.N, t))  # noqa: E731
     word = CompositeDefinition("Twice", 1, ("N",), sig(F32), lambda B, S, x: B.batch(W.F32AddFtz, x, x, axes=(0, 0)), register=False)
@@ -153,7 +153,7 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import DeriveReport
 

@@ -21,8 +21,8 @@ import math
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import TRITON_EXPERTS, MoEFusedExpertsFp8
 from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8, served_gate_spec

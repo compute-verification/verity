@@ -21,8 +21,8 @@ from fractions import Fraction
 
 import numpy as np
 
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Value
+from verity.circuits.defs import primitive
+from verity.circuits.types import Value
 
 from .scalar import F32_NAN_PTX
 

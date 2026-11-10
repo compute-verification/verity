@@ -59,7 +59,7 @@ sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
 import run as L  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
 from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
@@ -88,7 +88,7 @@ def _window(path: str):
     the template at K, as a served window's verifier derives it."""
     from verity.core.protocols.pouw import credit as CR
     from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
     layout, why = CR.layout_of(raw)

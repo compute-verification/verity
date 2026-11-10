@@ -57,8 +57,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.program import Program
 from verity.definitions.ops.boolean.gf2k import mul
 
 from . import circuit as FC

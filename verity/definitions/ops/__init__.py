@@ -4,7 +4,7 @@ Each module registers a family of primitives or of composites over them, and its
 word arithmetic as Boolean circuits, among them the next version of each of these Definitions on bits.
 
 The step semantics these evaluate through are `verity.definitions.silicon`'s, and their numpy batch forms are
-`verity.definitions.kernels.tc`'s, registered with `verity.ml.circuits.evaluation` and self-checked against `verity.definitions.silicon`.
+`verity.definitions.kernels.tc`'s, registered with `verity.circuits.evaluation` and self-checked against `verity.definitions.silicon`.
 """
 from __future__ import annotations
 

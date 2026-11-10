@@ -16,9 +16,9 @@ import pytest
 from verity.core.protocols.remote_bandwidth import audit as AU
 from verity.core.protocols.remote_bandwidth import codec as CO
 from verity.core.protocols.remote_bandwidth import receipts as RC
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 from verity.ml.commitments import Commitment, CommitmentDomain, Opening, verify_opening
 from verity.ml.commitments.gates import block_check as BC
 from verity.ml.commitments.indexed import RangeIndexedDomain

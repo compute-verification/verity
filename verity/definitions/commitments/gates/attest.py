@@ -33,9 +33,9 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.commitments.merkle import RANGE_U64_MESSAGE_BYTES, range_u64_domain_message
 from verity.ml.crypto import lms as R
 

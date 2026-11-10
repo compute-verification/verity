@@ -40,7 +40,7 @@ tuned H200 configs.  A phase that raises records its error and fails the verdict
              bf16 subnormals, cancellations whose result depends on the order), twice, every word against `MoeSum_v1`, and every
              model in `moe_sum_alternatives` (descending order, a pairwise tree, the first slot's start, a bf16 accumulator, FTZ,
              NaN payloads kept, truncation) refuted.
-  reference  on a sample of the coordinates and rows of every link, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`)
+  reference  on a sample of the coordinates and rows of every link, the plain-integer reference (`verity.circuits.evaluation.evaluate`)
              of `MoeExpertFp8BlockCoordinate(W)_v3{...,DOT}`, `Fp8GroupQuantUe8m0_v1`, `SiluMul_v2` and `MoeSumCoordinate_v1`, which
              the twins must equal.
   ptx        every `fused_moe_kernel` compiled in the run's Triton cache, by the e4m3 `tt.dot` of its TTIR and its warps: a wgmma tile's
@@ -680,8 +680,8 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics and DOT against the kernel's words (and every
     competing MMAv2 model on a probe's w13 launch), the input quant (w13) or the activation and its quant (w2) on what the kernel
     read, and the reference on a sample."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.definitions.numerics.act_rows import silu_mul_expf_rows
     from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row, ue8m0_group_quant_rows
     from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
@@ -756,8 +756,8 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
 def compare_sum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one `moe_sum`: `MoeSum_v1{TOPK,H}`'s twin against the kernel's words (and every competing sum on the
     planted rows), and `MoeSumCoordinate_v1` on a sample of the columns and every planted one."""
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
     from verity.definitions.numerics.rows import moe_sum
     from verity.definitions.registry import moe as MOE_R
 
@@ -838,8 +838,8 @@ def bind_check(statics: set[tuple[int, int, int, bool, str]]) -> dict[str, Any]:
     """The Programs bind at every GLM-5.3 shape: each expert launch the run made, (K, N, KB, SWAP, DOT id), as
     `MoeExpertFp8BlockGemm(W)_v3` (w13 when K is the hidden size, else w2) and as `fp8_moe_experts`' `MoeExpertFp8Gemm(W)_v1{E=256}`
     with the weight-scale rows each reads; each quant, activation and the sum at the run's sizes."""
-    from verity.ml.circuits.evaluation.batch import type_shape
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.evaluation.batch import type_shape
+    from verity.circuits.defs import bind
     from verity.definitions.registry import act as ACT
     from verity.definitions.registry import deepgemm as DG
     from verity.definitions.registry import fp8_moe as MO

@@ -209,7 +209,7 @@ def shape_cases():
 
 
 def _canon(r):
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
     return canonical_json(r)
 
 

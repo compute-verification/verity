@@ -39,8 +39,8 @@ import json
 from pathlib import Path
 
 from verity.definitions.circuits.census import silicon_step
-from verity.ml.circuits.defs import PrimitiveDefinition, primitive
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import PrimitiveDefinition, primitive
+from verity.circuits.types import Array, Value
 
 from verity.definitions.silicon import cast
 from verity.definitions.silicon import models as _tc_models
@@ -320,7 +320,7 @@ def const(w: int, bits: int) -> PrimitiveDefinition:
     if isinstance(bits, bool) or not isinstance(bits, int) or not 0 <= bits < 1 << w:
         raise ValueError(f"a {w}-bit constant is in [0, 2^{w}), not {bits!r}")
     if w == 1:
-        from verity.ml.circuits.boolean import constant
+        from verity.circuits.boolean import constant
 
         return constant(bits)
     key = (w, bits)
@@ -337,7 +337,7 @@ ZERO32 = const(32, 0)
 
 
 def _register_lazy_families() -> None:
-    from verity.ml.circuits.codec import register_lazy_family
+    from verity.circuits.codec import register_lazy_family
 
     register_lazy_family(CONST_ID, lambda m: const(int(m[1]), int(m[2], 16)))
 
@@ -346,7 +346,7 @@ _register_lazy_families()
 
 
 def _register_kernels() -> None:
-    from verity.ml.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation import register_kernel
 
     from verity.definitions.kernels import tc as K
 

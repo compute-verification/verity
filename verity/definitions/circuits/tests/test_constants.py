@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import codec
+from verity.circuits import codec
 from verity.definitions.circuits import constants as K
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.boolean import is_boolean
-from verity.ml.circuits.evaluation import evaluate_region
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits import partition_object as PO
+from verity.circuits.boolean import is_boolean
+from verity.circuits.evaluation import evaluate_region
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import I32Add
 

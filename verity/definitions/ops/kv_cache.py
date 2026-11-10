@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from verity.ml.circuits.defs import composite
+from verity.circuits.defs import composite
 
 from . import fp32 as F
 from . import prims as P

@@ -7,8 +7,8 @@ from __future__ import annotations
 import pytest
 
 from verity.definitions.circuits import constants as K
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
 from verity.definitions.circuits import operations as O
 from verity.definitions.registry import b1, boolean_dsv4_moe as BD, dense, dsv4_moe as D, hopper
 from verity.definitions.registry import int8_exact as X

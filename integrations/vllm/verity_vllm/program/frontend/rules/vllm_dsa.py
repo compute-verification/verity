@@ -35,8 +35,8 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import torch
 
-from verity.ml.circuits.refs import Coll, PartLog, Refs, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, PartLog, Refs, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape

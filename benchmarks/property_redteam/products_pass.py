@@ -31,8 +31,8 @@ import json
 from typing import Any, Sequence
 
 from verity.definitions.circuits import stacking as P
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import is_input
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import is_input
 
 #: (Definition, statics, which parameters depend on a run input): the served shapes measured, Llama-3.1-8B's head dim
 SHAPES: tuple[tuple[str, dict, tuple[bool, ...]], ...] = (

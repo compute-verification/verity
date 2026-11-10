@@ -1,4 +1,4 @@
-"""`verity.definitions.ops.boolean.cast` and `verity.ml.circuits.boolean.gather`: the Boolean bf16 widening agrees with `Bf16ToF32_v1` on every bf16
+"""`verity.definitions.ops.boolean.cast` and `verity.circuits.boolean.gather`: the Boolean bf16 widening agrees with `Bf16ToF32_v1` on every bf16
 and is pinned by gate count and program digest; the f32 -> bf16 rounding (`gemm.F2fpBf16_v2`) agrees with `F2fpBf16_v1` on every
 f32 word of its special chunks, and on all 2^32 when ``VERITY_ML_BOOLEAN_EXHAUSTIVE`` is on, and `F32ToBf16Rn_v2` agrees with
 `F32ToBf16Rn_v1` on those chunks; the multiplexer tree selects
@@ -12,20 +12,20 @@ import numpy as np
 import pytest
 
 from verity import settings
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.types import Array
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.program import Program, is_input
+from verity.circuits.types import Array
 from verity.definitions.ops import prims as P
 from verity.definitions.ops.boolean import cast as BC
 from verity.definitions.ops.boolean import gemm as BG
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit, const_bits
-from verity.ml.circuits.boolean.gather import gather
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit, const_bits
+from verity.circuits.boolean.gather import gather
 
 WIDEN = bind(BC.Bf16ToF32)
 ONE_CALL = CompositeDefinition("TestOneCall", 1, ("FN",), lambda S: S.FN.signature(), lambda B, S, *args: B.call(S.FN, *args),

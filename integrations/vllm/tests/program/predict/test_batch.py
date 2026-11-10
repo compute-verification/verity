@@ -13,9 +13,9 @@ from itertools import accumulate
 import pytest
 
 from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Tuple, Value
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Tuple, Value
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
 from verity_vllm.program.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
 from verity_vllm.program.predict.build import Unexpressible

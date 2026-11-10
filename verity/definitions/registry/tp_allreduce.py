@@ -104,10 +104,10 @@ from typing import NamedTuple
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite
+from verity.circuits.defs import bind, composite
 from verity.definitions.ops.prims import ZERO32, const
-from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.refs import array_of, coll_concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16

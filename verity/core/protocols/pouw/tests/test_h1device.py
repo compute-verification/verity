@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.silicon.instructions import INSTRUCTIONS
 

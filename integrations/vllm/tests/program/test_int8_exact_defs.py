@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 import torch
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity_vllm.engine import int8_attention as IA
 from verity_vllm.engine import int8_exact as E
 from verity.definitions.registry import int8_exact as X
@@ -271,7 +271,7 @@ def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
     the Lean evaluator decodes for every read of at most 16 index bits): every byte gives v1's word.
     `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
     from verity.definitions.circuits import operations as O
-    from verity.ml.circuits.program import Program
+    from verity.circuits.program import Program
     from verity.definitions.registry import tables as T
 
     table = X.exp2_lut127_words()

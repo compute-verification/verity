@@ -14,7 +14,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.evaluation.batch import type_dtype
+from verity.circuits.evaluation.batch import type_dtype
 from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
 from verity.definitions.kernels.tc import group_sum_total_batch
 from verity.definitions.numerics.derived_rows import add_rn, f2fp_bf16, mul_rn
@@ -225,7 +225,7 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...], Any
 
 def check_targets(family: str) -> list:
     """The small specialisations `family`'s self-check binds: three experts, two tile columns, two and four k tiles (TK 128, 64)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     return [bind(ROWS[family][2], E=3, K=256, N=16, TK=tk, TN=8, GRID=5, DOT=MM.DOT) for tk in MM.TKS]
 
 

@@ -91,13 +91,13 @@ import hashlib
 import struct
 from typing import Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import ONE, ZERO, OR, and_reduce, const_bits, maj, mux, or_reduce
-from verity.ml.circuits.boolean.trace import part as _part
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import ONE, ZERO, OR, and_reduce, const_bits, maj, mux, or_reduce
+from verity.circuits.boolean.trace import part as _part
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Coll
+from verity.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, sha512_row_v2_digest, sha512_row_v2_prefix
 
 from .frame_v3 import opens_at, read_at

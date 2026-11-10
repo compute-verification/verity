@@ -16,9 +16,9 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import definition_digest, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import definition_digest, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
 from verity.definitions.circuits import library as L
 from verity.definitions.ops import mufu as M
 

@@ -11,7 +11,7 @@ def _core_roots() -> list[Any]:
     * a 16,384-wide row without the ReLU (an RMSNorm's or attention's output): its amax, and the two chunks of 8,192;
     * the MLP's 65,536-wide hidden row, relu'd: in four 32 KiB rows, its amax over them and the four chunks of 16,384; in 256-byte
       rows, three chunks' amaxes, the row's from the last chunk and those three (16,387 values), and the eight chunks of 8,192."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops import quant as Q
 
     return ([bind(Q.QuantRowS8, N=128, RELU=relu) for relu in (True, False)] + [bind(Q.QuantRowS8, N=512, RELU=True)]

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.circuits.codec import canonical_json, encode_program
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"

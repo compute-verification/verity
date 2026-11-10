@@ -12,15 +12,15 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.types import Array
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import scalar as S
 from verity.definitions.ops.boolean import scalar as BSC
-from verity.ml.circuits.boolean import trace as TR
+from verity.circuits.boolean import trace as TR
 from verity.definitions.silicon.cast import E2M1_UP
 
 from _boolean_checks import assert_live_ands, assert_pinned

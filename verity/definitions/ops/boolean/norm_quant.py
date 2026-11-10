@@ -24,8 +24,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import bind, composite
+from verity.circuits.types import Array
 
 from . import quant as BQ
 from . import rmsnorm as RN

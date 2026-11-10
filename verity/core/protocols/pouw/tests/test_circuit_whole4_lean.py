@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import Program
-from verity.ml.circuits.codec import program_digest
+from verity.circuits import Program
+from verity.circuits.codec import program_digest
 
 pc4 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc4", reason="the Program is `verity.ml.protocols.pouw.circuit.pc4`'s")
 

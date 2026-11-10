@@ -26,10 +26,10 @@ Registered functions (both `_v1`):
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
+from verity.circuits.defs import bind, composite
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import F32Eq, F32Fabs, F32Fmaxf
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.moe import NvExpf
 from verity.definitions.registry.prims import BF16, F32

@@ -18,8 +18,8 @@ import numpy as np
 import torch
 
 from verity.definitions.ops.prims import const
-from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule

@@ -17,14 +17,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
+from verity.circuits import boolean as BL
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import prims as MP
 from verity.definitions.ops import scalar as S
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 from verity.definitions import boolean as BB
 from verity.definitions.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
 from verity.definitions.registry import prims as P, ref_prims as R, tp_allreduce as TA

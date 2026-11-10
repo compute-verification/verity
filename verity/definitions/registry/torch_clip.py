@@ -51,16 +51,16 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops.boolean.elementwise import specialized
 from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.definitions.silicon import fp
-from verity.ml.circuits.types import Array, Tuple, Type
+from verity.circuits.types import Array, Tuple, Type
 
 from . import boolean_dense as BDN
 from . import host_f64 as H

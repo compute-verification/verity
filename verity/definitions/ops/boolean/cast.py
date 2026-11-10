@@ -9,13 +9,13 @@ Traced from `fp.bf16_to_f32`: no gates, its result's low 16 bits the constant 0 
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 
 from .. import prims as P
 from verity.definitions.silicon import fp
 from verity.definitions.silicon.cast import BF16_NAN_SOFTWARE
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 
 __all__ = ["Bf16ToF32", "F32ToBf16Rn"]
 

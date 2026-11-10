@@ -21,11 +21,11 @@ one small circuit a word rather than one trace.
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux, or_reduce
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.defs import bind
 from verity.definitions.silicon import fp
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.types import Array, Tuple
 
 from .. import quant as Q
 from .elementwise import specialized

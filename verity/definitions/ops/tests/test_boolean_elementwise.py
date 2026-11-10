@@ -14,16 +14,16 @@ import numpy as np
 import pytest
 
 from verity import settings
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.types import Array
 from verity.definitions.ops import fp32 as W
 from verity.definitions.kernels import tc as K
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import const_bits
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import const_bits
 
 from _boolean_checks import assert_live_ands, assert_pinned
 

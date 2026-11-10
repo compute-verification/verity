@@ -281,7 +281,7 @@ SAMPLES = {
 def _targets(defs: dict, family: str) -> list:
     """The specialisations the self-check binds: the kernels' columns, norms and groups at the served widths, the composites
     at D = 32."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     eps = 1e-6
     statics = {

@@ -38,12 +38,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits.defs import bind, composite
+from verity.circuits.defs import bind, composite
 from verity.definitions.ops.fp32 import F32AddV2
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.ml.circuits.refs import Coll, Strided, array_of, broadcast, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import Coll, Strided, array_of, broadcast, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 from .dsa import I32Sub, U32And
 from .flashmla import U32Ge

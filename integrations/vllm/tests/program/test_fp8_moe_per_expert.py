@@ -30,10 +30,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP

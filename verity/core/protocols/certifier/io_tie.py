@@ -70,9 +70,9 @@ import struct
 from dataclasses import dataclass
 from typing import Any, NamedTuple, Sequence
 
-from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.circuits.boolean.forms import ONE, ZERO, and_reduce
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
 from verity.ml.commitments.indexed import RangeIndexedDomain

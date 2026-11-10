@@ -11,13 +11,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate, evaluate_batch
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.definitions.ops import prims as CP
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.types import Array, Value
 from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import boolean_int8 as BI8
 from verity.definitions.registry import int8_exact as IE

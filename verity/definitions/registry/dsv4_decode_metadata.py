@@ -71,11 +71,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import bind, composite
+from verity.circuits.defs import bind, composite
 from verity.definitions.ops.prims import const
 from verity.definitions.ops.scalar import BIT, BitNot, BitOr, I32Add, I32Le, SelectI32
-from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.numerics import dsv4_decode_metadata_twin
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsv4_indexer as IX

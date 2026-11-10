@@ -12,17 +12,17 @@ import pytest
 
 import test_ports as TP
 from test_ir_liveness import Add16, Add32, Coord, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
-from verity.ml.circuits import boolean as BL
+from verity.circuits import boolean as BL
 from verity.definitions.circuits import census as CE
-from verity.ml.circuits import intervals as IV, ports, refs as RF
+from verity.circuits import intervals as IV, ports, refs as RF
 from verity.definitions.circuits.census import NoBooleanWork, census, seal, silicon_step, step_ends
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.codec import canonical_json, descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, array_of, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.layout import resolve
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 V8, V16, V32, V64 = Value(8), Value(16), Value(32), Value(64)
 A4 = Array(4, V16)

@@ -361,7 +361,7 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
     carry no bits and no product reads them as data, so a weight's MACs stay linear maps."""
     from verity.definitions.circuits import stacking as P
     from verity.definitions.circuits.census import census, step_of
-    from verity.ml.circuits.program import RUN, input_id, is_input
+    from verity.circuits.program import RUN, input_id, is_input
 
     if str(REDTEAM) not in sys.path:
         sys.path.insert(0, str(REDTEAM))

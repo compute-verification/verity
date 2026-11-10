@@ -1,7 +1,7 @@
 # The descriptor v1 evaluator in Lean
 
-`verity.ml.circuits.evaluation.reference.evaluate` on a Program, as executable Lean: the Lake package `verity_evaluate`
-(lib `Evaluate`, exe `verity-evaluate`). It decodes a descriptor v1 Program ([format](../../ml/circuits/PROTOCOL.md)),
+`verity.circuits.evaluation.reference.evaluate` on a Program, as executable Lean: the Lake package `verity_evaluate`
+(lib `Evaluate`, exe `verity-evaluate`). It decodes a descriptor v1 Program ([format](../../circuits/PROTOCOL.md)),
 binds the run inputs, evaluates every gate in canonical order and returns the root's outputs, or refuses. The Program is read
 through Flock's verifier (`Flock.Program`, required by path from `verity/core/service/flock`), which evaluates no primitive;
 this package adds the primitives. It is code, so it requires nothing of `Security/`.

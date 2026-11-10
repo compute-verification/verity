@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.program import Program
+from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.defs import bind
+from verity.circuits.program import Program
 from verity.definitions.registry import b1
 from verity_vllm.program.frontend import conformance as CF
 from verity.definitions.registry import prims as P

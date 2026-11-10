@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
 from verity.definitions.registry import stop_rule as X
 from verity.definitions.registry.prims import BIT, I32
 

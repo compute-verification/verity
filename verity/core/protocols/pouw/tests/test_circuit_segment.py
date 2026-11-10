@@ -12,11 +12,11 @@ import pytest
 
 from verity.ml.protocols.pouw.circuit import segment as SG
 from verity.definitions.circuits.census import COUNTERS, PRODUCTS, census
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
 
 M32 = SG.M32
 KS, S = 4, 2

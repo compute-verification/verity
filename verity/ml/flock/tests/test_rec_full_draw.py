@@ -71,7 +71,7 @@ def test_the_full_draw_is_the_lean_verifiers_own_at_k_the_population(tmp_path):
     """`verify --stratified N` derives the sampling design from its own program and partition object and samples by it: at K = N every
     stratum samples all its units, whatever the coins, so its sample is `full_draw`'s, byte for byte once canonical."""
     from verity.core.protocols.spot.one_stage import partition as P
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.circuits.codec import canonical_json, encode_program
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     for i, (prog, q) in enumerate(_programs()):

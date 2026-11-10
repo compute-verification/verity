@@ -13,7 +13,7 @@ def _boolean_roots() -> list[Any]:
     and its cap among them; a larger one repeats them. A block's payload is `BLOCK_BITS` wide at any binding, so the
     memory-map unit's whole lowering (about 100,000 ANDs) is over the default budget: its correspondence and pin are checked
     with ``--lower-max-ands 120000``."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.circuits.requirement_units import MemoryMapStep, PlanMatch, PlanShard
 
     return [bind(PlanMatch, P=4, NR=16, V=16, G=2, TB=8, RPB=2), bind(PlanShard, S=32, GAPS=2),

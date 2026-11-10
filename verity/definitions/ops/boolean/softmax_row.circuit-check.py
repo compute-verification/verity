@@ -11,7 +11,7 @@ def _boolean_roots() -> list[Any]:
     T = 32); the padded proof block at T = 32, M3's one attention statement for every key count; the head's whole attention at
     the frozen shape's statics (T = K = 32, D = 64), the ``pv`` fusion's proof block; and the masked softmax at N = 4,
     small enough to pin."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     from verity.definitions.ops.boolean import softmax_row as SR
 

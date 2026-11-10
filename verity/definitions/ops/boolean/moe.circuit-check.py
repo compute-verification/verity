@@ -8,7 +8,7 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """The select over 3, 128 and 256 experts, the coordinates on both steps over 3 experts at K = 32 and over Qwen3-30B-A3B's
     128 at K = 16, and the GEMMs over 3 experts at K = 16, N = 3."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     from verity.definitions.ops.boolean import moe as BM
 

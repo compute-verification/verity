@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array, Value
 from verity.ml.commitments import history as HT
 from verity.ml.commitments.gates.rowleaf import digest_bits
 from verity.core.protocols.spot.one_stage import partition as P, registered as G, registration as R, verifier as V

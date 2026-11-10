@@ -8,9 +8,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops import argmax as A
 from verity.definitions.ops.boolean import argmax as BA
 

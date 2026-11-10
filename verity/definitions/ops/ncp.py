@@ -7,8 +7,8 @@ ids, signatures, conformance status and bodies), which re-exports them from here
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind, primitive
-from verity.ml.circuits.types import Value
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind, primitive
+from verity.circuits.types import Value
 
 import verity.definitions.ops.fp32  # registers F32Mul_v2, Bf16Add_v1
 import verity.definitions.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)

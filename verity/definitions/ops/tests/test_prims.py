@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY
 from verity.definitions.ops import prims as P
 from verity.definitions.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word, f32_to_e4m3_sat_word
 from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, tc_dot
@@ -385,7 +385,7 @@ def test_the_e4m3_widening_is_exact_on_every_finite_byte() -> None:
 
 
 def test_const_primitives_are_memoised_and_decodable() -> None:
-    from verity.ml.circuits.codec import _lookup_primitive
+    from verity.circuits.codec import _lookup_primitive
 
     c = P.const(32, 0x3F800000)
     assert c is P.const(32, 0x3F800000)

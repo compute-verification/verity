@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.ml.circuits.boolean.forms import ONE, ZERO, L, NOT, OR, add, and_reduce, const_bits, lzc, multiply, mux, or_reduce, sub
+from verity.circuits.boolean.forms import ONE, ZERO, L, NOT, OR, add, and_reduce, const_bits, lzc, multiply, mux, or_reduce, sub
 
 F32_QNAN = 0x7FC00000
 #: every NaN result of the ``_v2`` FP32 primitives (`verity.definitions.ops.scalar.F32_NAN_PTX`)

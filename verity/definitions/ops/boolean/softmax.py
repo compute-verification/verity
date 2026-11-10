@@ -5,7 +5,7 @@ operations around them read tables and stay in Flock's `tail_pieces`.
 from __future__ import annotations
 
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import NOT, ONE, OR, and_reduce, const_bits, mux, or_reduce, sub
 
 #: numpy float32's NaN of an invalid operation
 DEFAULT_NAN = 0xFFC00000

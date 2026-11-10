@@ -1,6 +1,6 @@
 """The silicon models are the plain-integer specification the Rust guest, the Lean vectors and the probes are checked against,
 so ``verity.definitions.silicon`` stays stdlib-only: no numpy, and of ``verity`` only its errors and the linear-form builder
-(``verity.ml.circuits.boolean.forms``) the formats' Boolean gadgets are written in.  And the catalog keeps the rule it
+(``verity.circuits.boolean.forms``) the formats' Boolean gadgets are written in.  And the catalog keeps the rule it
 had as core: no module of it but a circuit-check sidecar imports the checker."""
 
 from __future__ import annotations
@@ -9,9 +9,9 @@ import ast
 import sys
 from pathlib import Path
 
-CATALOG = (Path(__file__).resolve().parents[3] / "ml" / "circuits")
+CATALOG = (Path(__file__).resolve().parents[3] / "circuits")
 SILICON = CATALOG / "silicon"
-FROM_VERITY = ("verity.errors", "verity.ml.circuits.boolean.forms")
+FROM_VERITY = ("verity.errors", "verity.circuits.boolean.forms")
 #: the checker, which the catalog's modules import no more than core's do (`tests/test_boundaries.py`); its
 #: ``*.circuit-check.py`` sidecars, circuit-check's bindings of its Definitions, may (`circuit_check.sidecars`)
 CHECKER = "circuit_check"

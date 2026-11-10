@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, OR, and_reduce
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, OR, and_reduce
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.definitions.registry import boolean_dsv4_indices as BI
 from verity.definitions.registry import stop_rule as X
 

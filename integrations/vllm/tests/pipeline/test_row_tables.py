@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R

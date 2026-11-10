@@ -66,9 +66,9 @@ exactly; ``alpha = 1`` makes ``-f * alpha`` the ``-f`` of `silu_and_mul`.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
 from verity.definitions.ops.sqrt import PouwF32SqrtRn
 from verity.definitions.registry import act, b1

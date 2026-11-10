@@ -178,7 +178,7 @@ class Meter:
 
 
 def instrument(m: Meter) -> None:
-    from verity.ml.circuits import codec, defs
+    from verity.circuits import codec, defs
 
     # before the integration's modules bind it by name: each streamed digest is a phase, GP-01's (under compile_steps) and
     # each request Program's (under request_program)

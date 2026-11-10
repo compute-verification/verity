@@ -17,8 +17,8 @@ from typing import Any, Callable, Mapping
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import ScalarReference, register_kernel
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.evaluation import ScalarReference, register_kernel
+from verity.circuits.types import Array, Value
 
 from verity.definitions.silicon.models import ADA_E4M3_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, BlockScaledAlignAdd, GroupSum
 from verity.definitions.silicon.term import FORMATS

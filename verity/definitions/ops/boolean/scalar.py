@@ -39,8 +39,8 @@ from __future__ import annotations
 import functools
 import operator
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.types import Array
+from verity.circuits import boolean as BL
+from verity.circuits.types import Array
 
 from .. import prims as P
 from .. import scalar as S
@@ -49,9 +49,9 @@ from verity.definitions.silicon import fp
 from .cast import Bf16ToF32
 from .elementwise import F32Add, F32Div, F32Fma, F32Mul
 from .int8 import f32_rint, f32_to_s8_rzi
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .softmax import _eq_const, _is_nan, f32_gt
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 
 __all__ = ["BitAnd", "BitNot", "BitOr", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32BitsShl23", "F32Div", "F32Eq",
            "F32Fabs", "F32Fma", "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Mul", "F32Neg", "F32Sat", "F32ToE2m1Sat", "F32ToE4m3Sat",

@@ -9,9 +9,9 @@ import hashlib
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import warden as W

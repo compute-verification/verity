@@ -35,15 +35,15 @@ with a subnormal flushed to its signed zero and an add's FTZ result unflushed. N
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import OR, or_reduce
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import OR, or_reduce
+from verity.circuits.defs import bind
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.ops.boolean.softmax import ftz
-from verity.ml.circuits.refs import array_of, coll_concat
+from verity.circuits.refs import array_of, coll_concat
 from verity.definitions.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.definitions.registry import tp_allreduce as TA
 from verity.definitions.registry import tp_allreduce_nodes as TN
 

@@ -90,7 +90,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.commitments import hm96

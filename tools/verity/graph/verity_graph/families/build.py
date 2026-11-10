@@ -4,7 +4,7 @@
 - `lean-build:verity/core/service/flock`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
 - `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
-  check's conformance with `verity.ml.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
+  check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
 - `lean-agreement:verity/ml/flock/verifier`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
@@ -157,7 +157,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                 "inputs": package(root, files), "outputs": [{"name": e, "path": f"{bin_}/{e}"} for e in exes]})
     if "flock-verify" in exes and UNIT_CUT in files:
         out.append({"id": f"lean-unit-cut:{UNIT_CUT}", "kind": "lean-unit-cut", "env": "py",
-                    "about": "the Lean partition check's codes against verity.ml.circuits.partition's on random cuts",
+                    "about": "the Lean partition check's codes against verity.circuits.partition's on random cuts",
                     "vars": {"verify": f"{bin_}/flock-verify"}, "inputs": unit_cut_inputs(root, files),
                     "reads": [{"task": build, "output": "flock-verify"}],
                     "outputs": [{"name": "result", "path": "lean-unit-cut/result.json"}],

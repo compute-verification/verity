@@ -14,9 +14,9 @@ from pathlib import Path
 import pytest
 
 from verity.definitions.circuits.boolean import memcheck as MC
-from verity.ml.circuits.boolean.gf128 import mul
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.boolean.gf128 import mul
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.bits import evaluate_bits
 
 Access, Entry = MC.Access, MC.Entry
 POOL = json.loads((Path(__file__).with_name("fixtures") / "memcheck_pool.json").read_text())

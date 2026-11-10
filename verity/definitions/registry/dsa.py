@@ -64,9 +64,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32, const
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 from verity.definitions.evidence import EVIDENCE

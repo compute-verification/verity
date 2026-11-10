@@ -8,8 +8,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation.bits import evaluate_bits, evaluate_words
-from verity.ml.circuits.boolean.forms import Circuit
+from verity.circuits.evaluation.bits import evaluate_bits, evaluate_words
+from verity.circuits.boolean.forms import Circuit
 from verity.ml.protocols.pouw.circuit import boolean as B
 from verity.ml.protocols.pouw.circuit import words as W
 
@@ -50,8 +50,8 @@ def _wide(d, ref, cols, widths):
 def test_each_names_its_word_primitive_and_is_boolean():
     """Each is the next version of its word primitive and names it; each but `PouwSqCeil_v2` and the windows (traced in
     their own, slow tests) is Boolean through its body."""
-    from verity.ml.circuits.boolean import is_boolean
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean import is_boolean
+    from verity.circuits.boolean.trace import word_of
 
     for d, w in ((B.PouwF32SqrtRn, W.PouwF32SqrtRn), (B.PouwETilde, W.PouwETilde), (B.PouwBf16Neg, W.PouwBf16Neg),
                  (B.PouwSqAcc, W.PouwSqAcc), (B.PouwSqCeil, W.PouwSqCeil), (B.PouwSqGe, W.PouwSqGe),
@@ -65,7 +65,7 @@ def test_each_names_its_word_primitive_and_is_boolean():
 @pytest.mark.slow
 def test_the_windows_are_boolean():
     """Each window's body, its builder traced and emitted (4 to 7 s each), is Boolean."""
-    from verity.ml.circuits.boolean import is_boolean
+    from verity.circuits.boolean import is_boolean
 
     assert is_boolean(B.PouwBlackwellE4m3Window.bind()) and is_boolean(B.PouwHopperE4m3Window.bind())
 
@@ -81,7 +81,7 @@ def test_building_a_tile_check_registers_them():
                                                 W.PouwSqGe, W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window,
                                                 W.PouwWindowWord, W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead)
                                                + tuple(w for _d, w in KECCAK)]
-    code = ("import sys, verity.ml.protocols.pouw.circuit.pc8\nfrom verity.ml.circuits.defs import REGISTRY\n"
+    code = ("import sys, verity.ml.protocols.pouw.circuit.pc8\nfrom verity.circuits.defs import REGISTRY\n"
             f"missing = [i for i in {ids!r} if i not in REGISTRY]\nsys.exit(','.join(missing) if missing else 0)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
@@ -209,7 +209,7 @@ def test_sq_ceil_at_its_rounding_boundaries():
         t = R.choice([-(-q * n // 64), q * n // 64, R.getrandbits(R.randrange(0, 577))])
         ts.append(t & M576)
         ns.append(n)
-    from verity.ml.circuits.boolean import is_boolean
+    from verity.circuits.boolean import is_boolean
 
     assert is_boolean(B.PouwSqCeil.bind())
     _wide(B.PouwSqCeil, W.PouwSqCeil, [ts, ns], [576, 32])
@@ -240,7 +240,7 @@ def test_rotations_by_every_amount():
 def test_a_constant_rotation_is_wiring():
     """Every rotation `hashes` builds has a constant amount, and on one the rotator folds to wiring: no AND is built, and each
     output bit is the input bit the rotation moves there."""
-    from verity.ml.circuits.boolean.forms import Circuit, const_bits
+    from verity.circuits.boolean.forms import Circuit, const_bits
 
     for s in list(range(64)) + [64, 65, M32]:
         C = Circuit(cse=True)
@@ -258,7 +258,7 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
     without the commits χ's XOR terms compound round over round, and the 12 rounds' AND operands grow to thousands of bits
     each."""
     from verity.ml.crypto.turboshake import turboshake128
-    from verity.ml.circuits.boolean.forms import ONE, Circuit, const_bits
+    from verity.circuits.boolean.forms import ONE, Circuit, const_bits
 
     from verity.ml.protocols.pouw.circuit import hashes as H
 
@@ -306,7 +306,7 @@ def test_the_keccak_words_compose_to_turboshake128(monkeypatch):
 def test_chi_commits_its_output_in_forms_and_traces_no_gate_for_it():
     """In `forms` (Flock's pieces run ``.build``) each χ output bit is a committed bit of its own, one row more than its AND
     (64 for a half-lane); the Definition's gates are its 32 Ands, and its pin counts those."""
-    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.forms import Circuit
 
     C = Circuit()
     a, b, c = (C.input(n, 32) for n in "abc")

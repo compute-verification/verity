@@ -248,7 +248,7 @@ def test_while_circuit_check_is_red_a_pr_touching_its_inputs_waits_and_an_unrela
     assert h.postland()["red"]["step circuit-check"]["culprit"] is None
     world.gh.put(2, world.change({"verity/definitions/circuits/library.py": "X = 2\n"}))
     world.gh.put(3, world.change({"b.txt": "3\n"}))
-    world.gh.put(4, world.change({"verity/ml/circuits/README.md": "4\n", "verity/ml/circuits/tests/test_x.py": "4\n"}))
+    world.gh.put(4, world.change({"verity/circuits/README.md": "4\n", "verity/ml/circuits/tests/test_x.py": "4\n"}))
     for n in (2, 3, 4):
         h.review(n)
     assert h.tick().startswith("landed #4"), world.logs

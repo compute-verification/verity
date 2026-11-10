@@ -54,13 +54,13 @@ import struct
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
+from verity.circuits.defs import bind, composite, primitive
 from verity.definitions.ops import gemm as GEMM
 from verity.definitions.ops import prims as CP
 from verity.definitions.ops import s8 as S8
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import tables as T
@@ -298,7 +298,7 @@ def Int8RowQuantV5(B, S, x):
 
 def scaled_mm(K: int, N: int):
     """`ScaledMmS8_v1{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.definitions.ops.gemm`): one quantized token row against the N
-    weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.ml.circuits.cut.separable`)."""
+    weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.circuits.cut.separable`)."""
     return bind(GEMM.ScaledMmS8, K=K, N=N, **GEMM.GEMM_SM120_S8)
 
 

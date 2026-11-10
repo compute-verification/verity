@@ -81,8 +81,8 @@ def survey(gm_ex, model, batch, opt, rules, label: str) -> tuple[dict, StepSurve
 
 
 def boolean_prices(prims: dict) -> dict[str, dict]:
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.evaluation.bits import compile as compile_bits
+    from verity.circuits.codec import descriptor_id
     from verity.definitions.boolean import NoBooleanVersion, boolean_version
 
     out = {}

@@ -23,10 +23,10 @@ from functools import cache
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce, shl_window, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import mufu as BM
 from verity.definitions.ops.boolean import scalar as BSC
 from verity.definitions.registry import boolean_sparse_mla as BSM

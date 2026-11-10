@@ -12,14 +12,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.ops import quant as Q
 from verity.definitions.ops.boolean import norm_quant as NQ
 from verity.definitions.ops.boolean import quant as BQ
 from verity.definitions.ops.boolean import rmsnorm as RN
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 
 FROZEN = {"S": 128, "G": 2, "N": 16384, "EPS": 1e-5}
 #: signed zeros, the smallest and largest subnormals, 1.0, the largest finite, infinities and NaNs, each of either sign

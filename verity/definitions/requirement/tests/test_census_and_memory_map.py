@@ -47,7 +47,7 @@ from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import Replay
 from verity.definitions.circuits import requirement as R
 from verity.definitions.circuits.census import census, step_ends, step_of
-from verity.ml.circuits.program import REGISTRATION, Program, is_input
+from verity.circuits.program import REGISTRATION, Program, is_input
 
 server = D.server_fixture(PORT)
 

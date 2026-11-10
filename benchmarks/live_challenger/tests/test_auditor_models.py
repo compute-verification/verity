@@ -16,7 +16,7 @@ import pytest
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
-from verity.ml.circuits import codec
+from verity.circuits import codec
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

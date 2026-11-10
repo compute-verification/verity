@@ -27,7 +27,7 @@ from verity.definitions.ops import fp32, mufu, prims
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.circuits.defs import PrimitiveDefinition
 
 F32_SPECIALS = [0x00000000, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001, 0x7F800001, 0x00000001, 0x80000001,
                 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x3F800000, 0xBF800000, 0x3F800001, 0x4B000000, 0x42FE0000]

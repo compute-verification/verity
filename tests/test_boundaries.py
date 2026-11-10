@@ -21,9 +21,9 @@ have import roots of their own, and only the rule that ml never imports core rea
 file under ``verity/``, tests included, reads another distribution at run time: its package data or a module named in a
 string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
-numpy is a core dependency (architecture decision: `verity.ml.circuits.evaluation` batches over numpy arrays).  The
+numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
-the probes are checked against: the rest of `verity.ml.circuits` (the tensor-core step in `verity.definitions.silicon`
+the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.definitions.silicon`
 among them).  `verity.ml.randomness` is exact stdlib arithmetic too.
 """
 
@@ -150,7 +150,7 @@ ML_IMPORTS_CORE = {
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
-                                             "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
+                                             "(`verity/circuits/population.py`, `verity/ml/commitments/registered.py`), "
                                              "core imports them from there, and this entry then covers only rec_live's coin "
                                              "server, which takes the inner session's coin tree from the challenger's device "
                                              "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "
@@ -282,7 +282,7 @@ BENCHMARKS_IMPORTERS = {
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
-    "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
+    "_build_unchecked": ("verity/circuits/partition_v2.py",
                          "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
@@ -942,10 +942,10 @@ def test_only_tests_call_a_function_past_a_guard() -> None:
 def test_a_use_past_a_guard_is_found() -> None:
     """The check above isn't vacuous: an import, an attribute call and a ``getattr`` string are each a use, and the
     definition is not."""
-    src = ("from verity.ml.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
+    src = ("from verity.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
-    assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
+    assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
 def test_core_never_names_a_prover_only_module() -> None:

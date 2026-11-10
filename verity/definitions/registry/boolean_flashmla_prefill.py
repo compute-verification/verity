@@ -15,9 +15,9 @@ reads are decoded once.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, sub
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
+from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, sub
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.registry import boolean_flashmla as BF

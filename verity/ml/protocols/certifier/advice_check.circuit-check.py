@@ -10,7 +10,7 @@ def _network_advice_roots() -> list[Any]:
     composes every part at its smallest in about 20 s; and its five parts at L = 240, which holds the tests' fixture,
     each within the whole-Definition lowering budget the proof blocks exceed, so each part's Flock lowering is checked
     and pinned. The proof block at L = 240 takes about 150 s, so it stays out of `check`."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.certifier.advice_check import PARTS, unit
 
     return [unit(40), *(bind(d, L=240) for d in PARTS)]

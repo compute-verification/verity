@@ -63,10 +63,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.codec import canonical_json, definitions, descriptor_id
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.refs import Affine, Concat, Explicit
-from verity.ml.circuits.types import Array, RecordType, Tuple
+from verity.circuits.codec import canonical_json, definitions, descriptor_id
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.refs import Affine, Concat, Explicit
+from verity.circuits.types import Array, RecordType, Tuple
 from verity.ml.commitments.window import window_binding
 
 from .one_stage.verdict import Verdict, _Collect

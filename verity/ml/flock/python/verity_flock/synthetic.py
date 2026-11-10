@@ -2,7 +2,7 @@
 
 The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; sample ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
-``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A sample is admitted when its outputs are inside the
+``verity.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A sample is admitted when its outputs are inside the
 subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted sample
 (``index.json`` ``sub.draw``), so a larger set extends a smaller one of the same key: the first ``n`` instances are the same.
 The set is written in the captured sets' layout (``input_sets``, schema ``input-set/v1``) under ``<out>/sets/<name>/``, its

@@ -17,12 +17,12 @@ import pytest
 
 from verity.definitions.circuits import stacking as P
 from verity.definitions.circuits.census import census
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.definitions.ops import fp32, prims, scalar
 from verity.definitions.ops import s8 as S8
-from verity.ml.circuits.program import Program, input_id
-from verity.ml.circuits.refs import array_of, tuple_of
-from verity.ml.circuits.types import Array, Tuple as TupleT, Value
+from verity.circuits.program import Program, input_id
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple as TupleT, Value
 
 ROWS = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 S8T, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)

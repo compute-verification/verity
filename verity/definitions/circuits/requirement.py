@@ -62,8 +62,8 @@ from itertools import accumulate, chain
 from typing import Mapping, Sequence
 
 from .census import SCHEMA as CENSUS, step_of as census_step
-from verity.ml.circuits.layout import resolve
-from verity.ml.circuits.program import REGISTRATION, Program, is_input
+from verity.circuits.layout import resolve
+from verity.circuits.program import REGISTRATION, Program, is_input
 
 #: the deployed store's block: 4,096 bytes
 BLOCK_BITS = 4096 * 8

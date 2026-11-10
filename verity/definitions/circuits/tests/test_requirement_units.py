@@ -16,8 +16,8 @@ import pytest
 
 from verity.definitions.circuits import requirement as R
 from verity.definitions.circuits import requirement_units as RU
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
 
 STEPS = 4
 MAP = SimpleNamespace(K=2, C=2, V=16, E=2, M=8, N=16, SLOTS=2, T=STEPS)

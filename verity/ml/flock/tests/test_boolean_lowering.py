@@ -9,19 +9,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.circuits import boolean as BL
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation.bits import evaluate_bits
 from verity.definitions.ops import gemm as G
 from verity.definitions.kernels import tc as K
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import scalar as S
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import scalar as BSC
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.ml.commitments.gates import embedding as EM
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit

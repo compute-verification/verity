@@ -11,7 +11,7 @@ decides the statements behind `DescAgrees` on each Program (`NciCheck.DescFuzz`'
 at millions of Programs, is the lane's (`verity/core/protocols/network/nci/fuzz/`); this is a seeded sample of it at a size
 the audit runs on every change to the package.
 
-`random` writes descriptor v1 JSON directly, not through `verity.ml.circuits`' Builder, so that every reference form the
+`random` writes descriptor v1 JSON directly, not through `verity.circuits`' Builder, so that every reference form the
 decoder reads appears (affine, strided with negative and zero strides, explicit, concat, alias) and so that shapes the
 Builder never emits do too: scans of no iteration and of one, batches mapped over an inner axis or over none, composites
 with no nodes, parameters read by no gate and threaded through returns, returns repeating or reversing gates, nested
@@ -48,12 +48,12 @@ import random
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import verity.ml.circuits
-from verity.ml.circuits import codec
-from verity.ml.circuits import program as ir
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Affine, Coll, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+import verity.circuits
+from verity.circuits import codec
+from verity.circuits import program as ir
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.refs import Affine, Coll, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
 
@@ -951,12 +951,12 @@ def count() -> int:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.ml.circuits builds the shared vectors")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.circuits builds the shared vectors")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
-    here = Path(verity.ml.circuits.__file__).resolve()
+    here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.ml.circuits comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
     write(a.out)
 
 

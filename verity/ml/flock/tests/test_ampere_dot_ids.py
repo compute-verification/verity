@@ -8,7 +8,7 @@ import json
 import random
 from pathlib import Path
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind
+from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import prims as P
 from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16

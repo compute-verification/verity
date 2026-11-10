@@ -12,7 +12,7 @@ from test_queue import World, _git
 
 #: drive.toml's `lowrisk_excludes`
 EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-            "verity/core/", "verity/ml/circuits/", "verity/definitions/kernels/", "verity/ml/commitments/", "verity/ml/crypto/",
+            "verity/core/", "verity/circuits/", "verity/definitions/kernels/", "verity/ml/commitments/", "verity/ml/crypto/",
             "verity/ml/randomness/")
 TAG = "(low-risk lane: no Lean, lock or soundness-path change)"
 

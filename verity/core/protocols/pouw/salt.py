@@ -38,7 +38,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from verity.ml.circuits import ports as _ports
+from verity.circuits import ports as _ports
 from verity.ml.commitments import domains
 from verity.ml.commitments.scheme import DIGEST_BYTES
 

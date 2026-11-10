@@ -24,9 +24,9 @@ import pytest
 import circuit_fixtures as CF
 import pearl_c_vectors as V
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.program import Program
+from verity.circuits.evaluation import evaluate
+from verity.circuits import partition_object as PO
+from verity.circuits.program import Program
 from verity.definitions.silicon import fp32
 from verity.ml.randomness import derive
 from verity.ml.protocols.pouw.circuit import cap, pc8, plan

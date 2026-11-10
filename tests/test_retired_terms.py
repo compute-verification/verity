@@ -105,7 +105,7 @@ DOC_TERMS = {
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
     "M0": "Flock's circuit prover",
-    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
+    "IR, Verity IR": "circuit or Program (`verity.circuits`)",
     "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",

@@ -506,7 +506,7 @@ def _sample_decode(rng, n, params, *, NH, SPLITS, NW, DN, DR, QT, BN, DOT, SCALE
 def _targets(defs: dict, family: str) -> list:
     """The specialisations the self-check binds: small statics, every arm of SPLITS and PARTIAL, and the combine at 3, 33 and 127
     splits (one, two and four partials on a lane; 127 is the most any batch gives a request)."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
 
     d, dot, s = defs, HopperBF16WgmmaDot16, 32 ** -0.5
     decode = dict(NH=2, DN=16, DR=16, QT=16, BN=16, DOT=dot, SCALE=s)

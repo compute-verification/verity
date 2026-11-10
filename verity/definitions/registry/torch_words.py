@@ -31,8 +31,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import primitive
-from verity.ml.circuits.types import Value
+from verity.circuits.defs import primitive
+from verity.circuits.types import Value
 
 __all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64And", "I64Le", "I64Shl", "I64Shr", "I64ToF32Rn",
            "I64ToU8", "OrderKeyF32", "SelectI64", "U8ToI64", "TORCH_WORDS", "f32_rn_of_int"]

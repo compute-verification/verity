@@ -205,7 +205,7 @@ ROWS: dict[str, tuple[Callable, tuple[str, ...]]] = {
 
 
 def check_targets(family: str = FAMILY) -> list:
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops import gemm
     from verity.definitions.registry import int8_exact as X
     return {

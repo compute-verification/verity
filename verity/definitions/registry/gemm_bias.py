@@ -11,8 +11,8 @@ then the same `Bf16Add`, bit-equal to `BiasAdd_v1(Gemm_v2(x, W), b)`.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import bind, composite
+from verity.circuits.types import Array
 from verity.definitions.ops.gemm import GemmCoordinate as GemmCoordinateV2
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P

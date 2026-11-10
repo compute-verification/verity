@@ -155,7 +155,7 @@ class Writer:
         return f"uv run python tools/verity/check/pins.py --write {self.path}"
 
 
-CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "verity/ml/circuits/tests/", "integrations/vllm/tests/program/"
+CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "verity/circuits/tests/", "integrations/vllm/tests/program/"
 WRITERS = (
     *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
         ("boolean_vectors.json", "test_boolean.py"),

@@ -35,15 +35,15 @@ than rank 0).  `bf16_gemm_check.dispatch_sm90` holds the tables, beside the nump
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.trace import word_of
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import prims as P
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.ml.circuits.refs import Coll, broadcast
+from verity.circuits.refs import Coll, broadcast
 from verity.definitions.silicon import fp
-from verity.ml.circuits.types import Array
+from verity.circuits.types import Array
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import cublas_bf16 as CB
 

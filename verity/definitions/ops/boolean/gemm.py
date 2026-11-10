@@ -61,11 +61,11 @@ serves none of its products, as its word view (`census.serves_none`).
 """
 from __future__ import annotations
 
-from verity.ml.circuits import boolean as BL
+from verity.circuits import boolean as BL
 from verity.definitions.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
-from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import Coll, broadcast, concat
-from verity.ml.circuits.types import Array
+from verity.circuits.defs import bind, composite
+from verity.circuits.refs import Coll, broadcast, concat
+from verity.circuits.types import Array
 
 from .. import gemm as G
 from .. import prims as P
@@ -74,7 +74,7 @@ from . import scalar as SC
 from verity.definitions.silicon import fp, fp4
 from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, step_s8_bits
 from verity.definitions.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
-from verity.ml.circuits.boolean.trace import definition, word_of
+from verity.circuits.boolean.trace import definition, word_of
 
 __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64",
            "BlackwellS8ImmaDot32", "DotBf16", "F2fpBf16",

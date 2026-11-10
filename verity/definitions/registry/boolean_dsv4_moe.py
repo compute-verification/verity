@@ -53,16 +53,16 @@ from __future__ import annotations
 
 from functools import cache
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.defs import bind
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.ops.boolean import mufu as BM
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import (NOT, ONE, OR, ZERO, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce,
+from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce,
                                               shl_window, sub)
-from verity.ml.circuits.boolean.trace import definition
+from verity.circuits.boolean.trace import definition
 from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
 from verity.definitions.registry import boolean_silu as BSL
 from verity.definitions.registry import dsv4_moe as D

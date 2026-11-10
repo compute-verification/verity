@@ -27,9 +27,9 @@ import random
 import struct
 import sys
 
-from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
-from verity.ml.circuits.evaluation.reference import ScalarReference, evaluate
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import REGISTRY, PrimitiveDefinition
+from verity.circuits.evaluation.reference import ScalarReference, evaluate
+from verity.circuits.types import Array, Value
 from verity.definitions.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
                                                  BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
                                                  S32_MIN, s32_value)

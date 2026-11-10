@@ -1,6 +1,6 @@
 """Suite-wide isolation guard: no test may leave a loaded `verity` module swapped for another copy.
 
-A re-executed `verity.ml.circuits.defs` is a second module with its own empty REGISTRY; every registry module first imported against it registers
+A re-executed `verity.circuits.defs` is a second module with its own empty REGISTRY; every registry module first imported against it registers
 into that orphan for the rest of the process, so the failure surfaces in whichever later file shares the worker, never in the test that
 caused it.  The guard fails the causing test by name and puts the original modules back.
 
@@ -17,7 +17,7 @@ from verity_vllm.engine import env as _engine_env
 
 _engine_env.pin({k: _engine_env.ENGINE[k] for k in _engine_env.FIXED})
 
-import verity.ml.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
+import verity.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
 
 
 _MISSING = object()
@@ -37,7 +37,7 @@ def _core(name: str) -> bool:
 
 def _verity_modules() -> dict[str, tuple[object, object, object]]:
     """{name: (module, parent package, the parent's attribute of that name)} -- the attribute is snapshotted, not assumed to be the
-    module: a package may re-export a function under its submodule's name (`verity.ml.circuits.query`)."""
+    module: a package may re-export a function under its submodule's name (`verity.circuits.query`)."""
     snap = {}
     for n, m in list(sys.modules.items()):
         if m is None or not _core(n):
@@ -62,5 +62,5 @@ def _verity_modules_not_swapped():
                 setattr(pkg, child, attr)
     if swapped:
         pytest.fail(f"test left loaded verity module(s) swapped for another copy (sys.modules or package attribute): {sorted(swapped)}; "
-                    f"a re-executed verity.ml.circuits.defs carries its own REGISTRY and orphans every registry module imported against it",
+                    f"a re-executed verity.circuits.defs carries its own REGISTRY and orphans every registry module imported against it",
                     pytrace=False)

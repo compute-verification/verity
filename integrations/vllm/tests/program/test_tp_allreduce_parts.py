@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.definitions import boolean as BB
 from verity.definitions.registry import tp_allreduce as TA
 from verity.definitions.registry import tp_allreduce_check as K

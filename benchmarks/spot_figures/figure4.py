@@ -20,7 +20,7 @@ from pathlib import Path
 
 import figure1 as f1
 from verity.core.protocols.spot.optimize import Grain, leak_count
-from verity.ml.circuits.partition_v2 import UNIT_CLASSES
+from verity.circuits.partition_v2 import UNIT_CLASSES
 
 SCHEMA = "spot-figure4/v1"
 #: the evasion threshold the post's sampling argument is stated at

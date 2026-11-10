@@ -1,5 +1,5 @@
 """`verity.definitions.word`'s cut, the copy circuit-check's partition verdict reads, held to core's reference
-(`verity.ml.circuits.cut`) on a spread of small Definitions: `Graph` is `CallGraph` field by field, `partition` gives
+(`verity.circuits.cut`) on a spread of small Definitions: `Graph` is `CallGraph` field by field, `partition` gives
 `cut_word`'s owner per gate, kind per unit and head per gate, and `cut_verdict` with `units`' width rule gives `check_cut`'s
 verdict, detail for detail, on the cut and on cuts broken every way the verdict names."""
 from __future__ import annotations
@@ -10,8 +10,8 @@ from functools import cache
 import numpy as np
 import pytest
 
-from verity.ml.circuits import cut
-from verity.ml.circuits.defs import bind
+from verity.circuits import cut
+from verity.circuits.defs import bind
 from verity.definitions import word as W
 from verity.definitions.call_scope import specialization
 
@@ -37,9 +37,9 @@ def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
 
 def _twice():
     """The same F32Add computed twice, each copy read by its own output: a value computed in two units."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Array, Tuple
     from verity.definitions.registry import prims as P
 
     def body(B, S, x):
@@ -51,9 +51,9 @@ def _twice():
 
 def _dead_input():
     """A parameter read only by wiring nothing reads (committed, unread), beside one returned through wiring."""
-    from verity.ml.circuits.defs import CompositeDefinition
-    from verity.ml.circuits.refs import tuple_of
-    from verity.ml.circuits.types import Array, Tuple
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.refs import tuple_of
+    from verity.circuits.types import Array, Tuple
     from verity.definitions.registry import prims as P
 
     def body(B, S, x, y):

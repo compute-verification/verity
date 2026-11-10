@@ -2,8 +2,8 @@
 names, a specialized one (`boolean_fp8_moe.MoeExpertFp8ReadGemm(W)_v1`'s ``READ``) included."""
 from __future__ import annotations
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops.boolean import gemm as BG
 from verity.ml.commitments.gates import embedding as EMB
 from verity.definitions.call_scope import spec_base, spec_statics, specialization

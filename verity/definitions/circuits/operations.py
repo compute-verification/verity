@@ -3,7 +3,7 @@
 An operation's own definition is gates (the floating-point formats' constants, the round
 constants of SHA-512 and Keccak-f, and every measured MUFU table in `verity.definitions.circuits.library`: exp2, rcp, sqrt, rsq, tanh and lg2), and
 everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.definitions.circuits.constants`).
-`verity.ml.circuits` names no operations, so the list is here and the guard passes it in:
+`verity.circuits` names no operations, so the list is here and the guard passes it in:
 
     program_data(root) = verity.definitions.circuits.constants.program_data(root, is_operation, is_library_table)
 
@@ -31,8 +31,8 @@ import hashlib
 from typing import Any, Iterator
 
 from verity.definitions.circuits import constants as K
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
 
 from . import library
 

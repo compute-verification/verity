@@ -1,9 +1,9 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
-The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
+The circuit is a `verity.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
 proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
-Definitions (`verity/ml/circuits/PROTOCOL.md`):
+Definitions (`verity/circuits/PROTOCOL.md`):
 
     linear = bind(Gemm, K=32, N=32, **GEMM_AMPERE)     # ops.boolean.gemm: x[32] @ W[32, 32]^T on the BF16 step, on bits
     def body(B, S, x, w1, w2):
@@ -28,7 +28,7 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
   work. It times the work and is never credited;
 - a node's *ANDs* (`ands`), what is credited: the census's Boolean work, Lean's `Circuit.andSize`.
 
-`evaluate` computes the census values, each Call through `verity.ml.circuits.evaluation.evaluate_batch` (a kernel where
+`evaluate` computes the census values, each Call through `verity.circuits.evaluation.evaluate_batch` (a kernel where
 one is registered, a Boolean Definition's word Definition's among them; bit-sliced otherwise); `register` commits the
 registered inputs before any run, bound to the occupancy profiles the developer may choose from (`profile_digest`), and
 `commit` gives the hiding commitment a run's values sit under: the census values,
@@ -47,17 +47,17 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols import registration
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import types as T
+from verity.circuits import boolean as BL
+from verity.circuits import types as T
 from verity.definitions.circuits.census import PRECISION, PRODUCTS, census, family
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.cut import WIRING
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.evaluation import evaluate as reference
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.batch import type_dtype
-from verity.ml.circuits.layout import FunctionCall, resolve
-from verity.ml.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
+from verity.circuits.codec import program_digest
+from verity.circuits.cut import WIRING
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.evaluation import evaluate as reference
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.batch import type_dtype
+from verity.circuits.layout import FunctionCall, resolve
+from verity.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
 from verity.ml.commitments import advice
 
 

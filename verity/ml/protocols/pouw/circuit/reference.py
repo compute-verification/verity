@@ -10,7 +10,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Sequence
 
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY
 
 from ..schemes.ncp import assemble, checked_route_u
 from . import ncp2

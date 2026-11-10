@@ -28,8 +28,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.definitions.circuits import stacking as P
 from verity.definitions.circuits.census import census, family, step_ends
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import is_input
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import is_input
 
 def charged(t: P.Tally) -> tuple[Counter, Counter]:
     """A tally's units by class, and its refused gates by ``code:primitive``."""
@@ -189,7 +189,7 @@ def components(rows: Mapping[str, dict], *, token: str, sample: Iterable[str], a
 
 def load(path: Path) -> Any:
     """A Build's descriptor (``.json`` or ``.json.gz``) decoded through vLLM's registry."""
-    from verity.ml.circuits.codec import decode_program
+    from verity.circuits.codec import decode_program
     from verity.definitions.registry.catalog import load as registry
 
     reg, errors = registry()

@@ -28,12 +28,12 @@ from functools import cache
 
 import numpy as np
 
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.definitions.ops.fp32 import F32AddFtz
 from verity.definitions.ops.prims import Bf16ToF32
 from verity.definitions.ops.scalar import BF16, F32, I32
-from verity.ml.circuits.refs import Coll, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.refs import Coll, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import topp_keep_builder as K
 from verity.definitions.registry.dead_free import live_replay
 from verity.definitions.registry.sampling import GumbelNoiseLane, GumbelStreamKey

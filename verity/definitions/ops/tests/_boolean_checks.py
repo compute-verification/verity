@@ -6,14 +6,14 @@ import json
 
 import numpy as np
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.circuits.defs import REGISTRY
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.defs import REGISTRY
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
 
 
 def assert_pinned(target, pins: dict) -> None:

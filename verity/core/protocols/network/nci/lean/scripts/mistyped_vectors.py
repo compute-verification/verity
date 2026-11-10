@@ -1,5 +1,5 @@
 """Declarations whose references name leaves of other widths than their types give them (`E_REINTERPRET`,
-`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests and Flock's
+`verity/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests and Flock's
 (`verity/ml/flock/tests/test_lean_verifier.py`).
 
 The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), and so does Flock's decoder, which
@@ -274,7 +274,7 @@ FIRST_SEED = 10 ** 6
 
 def _sources(body: dict, k: int, types: list) -> list[tuple[str, int, int]]:
     """(space, index, leaves) of the collections a reference of node `k` (the return: `k` past the last node) may name."""
-    from verity.ml.circuits.types import type_from_json
+    from verity.circuits.types import type_from_json
     out = [("p", i, type_from_json(t).leaves) for i, (_, t) in enumerate(body["params"])]
     out += [("n", i, type_from_json(types[nd["out"]]).leaves) for i, nd in enumerate(body["nodes"][:k])]
     return [s for s in out if s[2] > 0]

@@ -6,7 +6,7 @@ its own settings name); a verifier never does, and nothing in `verity.core` name
 it (the Definition's name, version and bindings), looks the circuit up in the directory `use` named before it runs the builder,
 and writes the circuit it traced there. An entry is named by the SHA-512 of that key with the parameter and return types, ``cse``,
 Python's and numpy's versions, and a digest of the code that could change the gates (`code_digest`): every Python and JSON file
-of `verity` but tests, every file of `verity.ml.circuits` but its tests, Markdown and TOML (so its tables), and the builder's
+of `verity` but tests, every file of `verity.circuits` but its tests, Markdown and TOML (so its tables), and the builder's
 source file when it is elsewhere. So an edit anywhere in `verity` makes every entry a miss. What the digest can't see (a builder
 outside `verity` that calls a helper from another module there, a monkeypatched builder) can make an entry stale; a stale or
 tampered entry gives other gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't
@@ -29,10 +29,10 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-import verity.ml.circuits as _circuits
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.codec import _static_json, canonical_json
-from verity.ml.circuits.types import Type
+import verity.circuits as _circuits
+from verity.circuits.boolean import trace as TR
+from verity.circuits.codec import _static_json, canonical_json
+from verity.circuits.types import Type
 
 MAGIC = b"verity-trace-cache v1\n"
 _KIND = {k: i for i, k in enumerate(TR._KINDS)}

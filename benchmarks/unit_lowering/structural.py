@@ -126,7 +126,7 @@ def window(U, k: int, r: int, c: int):
 
 
 def _descriptor(program) -> bytes:
-    from verity.ml.circuits import codec
+    from verity.circuits import codec
     return codec.canonical_json({x: v for x, v in codec.encode_program(program).items() if x != "annotations"})
 
 

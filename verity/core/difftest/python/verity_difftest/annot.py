@@ -1,6 +1,6 @@
 """The annotation check's port: Flock's `Flock.Annot` behind `Difftest.serve` (`lean/AnnotDifftest.lean`, the Lake
 executable `annot-difftest` of this distribution's `lean/` package), for the tests that hold the Python mirror
-(`verity.ml.circuits.query_ast` and `query_codec`) to it.
+(`verity.circuits.query_ast` and `query_codec`) to it.
 
 Its functions (`FNS`) take `{"program": descriptor text, "annotation": {"query", "tables"}, "meaning": {...}}`:
 

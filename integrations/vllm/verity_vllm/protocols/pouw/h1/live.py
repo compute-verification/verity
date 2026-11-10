@@ -40,8 +40,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw import live_reads as LR
 from verity.core.protocols.spot.one_stage import registered as G
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
 
 from verity_vllm.protocols.pouw.h1 import prover as PV

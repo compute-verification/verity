@@ -25,9 +25,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from verity.ml.circuits.defs import Builder
-from verity.ml.circuits.refs import Coll, Refs, concat, strided_view
-from verity.ml.circuits.types import Type
+from verity.circuits.defs import Builder
+from verity.circuits.refs import Coll, Refs, concat, strided_view
+from verity.circuits.types import Type
 
 from . import dsa
 from .common import Unexpressible, _arr, _Peers, served_class

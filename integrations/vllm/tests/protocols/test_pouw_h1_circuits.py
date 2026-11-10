@@ -18,7 +18,7 @@ pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import credit as CR
 from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.ml.circuits import partition_object as PO
+from verity.circuits import partition_object as PO
 from verity_vllm.protocols.pouw.h1 import served as SV
 
 from tests.protocols import challenger_host as CH

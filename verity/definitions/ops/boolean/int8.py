@@ -18,7 +18,7 @@ first operand's when both are, and the default NaN 0xFFF8000000000000 for 0 * in
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, shr, sub
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, shr, sub
 from verity.definitions.silicon import fp
 
 __all__ = ["f32_mul_wide", "f32_rint", "f32_to_s8_rzi", "f64_mul", "f64_to_u32_rni_sat", "lut_index", "s8_to_f32"]

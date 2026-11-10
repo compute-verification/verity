@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE))
 import frontier as F  # noqa: E402
 import units as U  # noqa: E402
 from verity.definitions.circuits import stacking as P  # noqa: E402
-from verity.ml.circuits.defs import REGISTRY, bind  # noqa: E402
+from verity.circuits.defs import REGISTRY, bind  # noqa: E402
 
 
 def registry() -> Any:

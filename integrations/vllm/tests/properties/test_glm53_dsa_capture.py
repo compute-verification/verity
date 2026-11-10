@@ -16,8 +16,8 @@ import pytest
 import torch
 
 from tests.properties import glm53_dsa_capture_gpu as X
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import dsa

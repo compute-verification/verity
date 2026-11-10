@@ -18,12 +18,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from test_pouw_rows import POUW_TESTS, STAGED_TILES, V
-from verity.ml.circuits import evaluation as EV
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.boolean.forms import add
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.types import Array, Value
+from verity.circuits import evaluation as EV
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import add
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array, Value
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
@@ -162,8 +162,8 @@ def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_th
     class is the unbound stager's; a round staged as another input set, on the one circuit, binds other frame domains; and
     only a bound stager's round takes indices."""
     from verity.core.protocols.spot.one_stage import partition as P
-    from verity.ml.circuits.codec import descriptor_id, program_digest
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import descriptor_id, program_digest
+    from verity.circuits.program import Program
 
     args, rows, _kw = _toy(0)
     program = P.mixed_population_program([(TOY, 3), (TOY, 5)])

@@ -52,10 +52,10 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from verity.definitions.circuits.census import FAMILY_COUNTS
-from verity.ml.circuits.defs import CompositeDefinition, bind, composite, primitive
-from verity.ml.circuits.refs import Coll, concat
+from verity.circuits.defs import CompositeDefinition, bind, composite, primitive
+from verity.circuits.refs import Coll, concat
 from verity.definitions.silicon.integer import S32_MAX, S32_MIN, s32_value, s32_word
-from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Array, RecordType, Type, Value
 
 from . import prims as P
 

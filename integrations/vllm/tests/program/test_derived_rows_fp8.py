@@ -13,7 +13,7 @@ import pytest
 if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
-from verity.ml.circuits import Program, bind
+from verity.circuits import Program, bind
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.registry import fp8 as F
 

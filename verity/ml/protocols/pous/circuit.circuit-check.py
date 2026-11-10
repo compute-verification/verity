@@ -9,7 +9,7 @@ def _pous_roots() -> list[Any]:
     """P2's modular squaring (`verity.ml.protocols.pous.circuit`) at W = 128 with P2's C0 = 21,065: its square
     takes a Toom-3 level (above `TOOM`), then Karatsuba (above `SCHOOL`), then schoolbook, so it reaches every piece; the
     package's tests check it against Python's integers at P2's width and pin its gate counts there."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.ml.protocols.pous.circuit import PousModSquare
 
     return [

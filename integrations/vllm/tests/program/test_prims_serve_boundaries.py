@@ -21,7 +21,7 @@ OTHER_FAMILIES = {"dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_chec
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.ml.circuits"
+CATALOG = "verity.circuits"
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays

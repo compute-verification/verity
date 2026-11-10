@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.evaluation import evaluate_batch, kernels
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.evaluation import evaluate_batch, kernels
 from verity.definitions.registry import sampling as SA
 from verity.definitions.registry import sampling_rows as SR
 from verity.definitions.registry import topp_keep_builder as K

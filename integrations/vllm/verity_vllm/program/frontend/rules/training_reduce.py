@@ -19,8 +19,8 @@ import math
 import torch
 
 from verity.definitions.ops.sqrt import PouwF32SqrtRn
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import prims as P

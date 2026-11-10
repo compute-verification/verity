@@ -20,7 +20,7 @@ over x[t] and W[e][n, :], and `acc.to(bf16)` (the w13 launch) or `acc * topk_wei
 launch, MUL_ROUTED_WEIGHT). `DOT` is the k16 step (`gemm.GEMM_HOPPER`'s `HopperBF16WgmmaDot16_v1` for wgmma and for Triton's
 mma.sync on sm_90 and sm_120, `gemm.GEMM_AMPERE`'s on sm_80/sm_89). These are the functions of the vLLM registry's
 `MoeExpertCoordinate(W)_v2` and `MoeExpertGemm(W)_v2` (held equal in `verity_vllm`'s tests), defined here so the Boolean
-forms (`ops.boolean.moe`, the next version of each) have a word view inside `verity.ml.circuits`.
+forms (`ops.boolean.moe`, the next version of each) have a word view inside `verity.circuits`.
 
 The store ids the pair GEMMs' conformance cites are `EVIDENCE_IDS` (`moe_evidence.json`), keyed by Definition id and then
 by role, which the conformance names in backticks.
@@ -33,9 +33,9 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.circuits.defs import PrimitiveDefinition, bind, composite
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array, Type, Value
+from verity.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array, Type, Value
 
 from . import fp32 as F
 from . import gemm as G
@@ -189,8 +189,8 @@ def _sample(gemm: bool, routed: bool):
 
 
 def _register() -> None:
-    from verity.ml.circuits.codec import register_lazy_family
-    from verity.ml.circuits.evaluation import register_kernel
+    from verity.circuits.codec import register_lazy_family
+    from verity.circuits.evaluation import register_kernel
     from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16
     from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
     from verity.definitions.kernels import tc as KT

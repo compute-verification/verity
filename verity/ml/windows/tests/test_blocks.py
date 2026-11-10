@@ -13,8 +13,8 @@ from dataclasses import replace
 import pytest
 import test_interface as TI
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.ml.windows import interface as I, rows as CS

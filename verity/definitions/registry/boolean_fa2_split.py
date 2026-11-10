@@ -13,11 +13,11 @@ as `AttentionHead_v8` is.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import attention as BA
 from verity.definitions.ops.boolean import gemm as BG
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array
 from verity.definitions.registry import boolean_attention as BAT
 from verity.definitions.registry import boolean_sparse_mla_split as BSS
 from verity.definitions.registry import fa2_split as W

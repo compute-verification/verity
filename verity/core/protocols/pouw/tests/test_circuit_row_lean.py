@@ -13,9 +13,9 @@ import struct
 
 import pytest
 
-from verity.ml.circuits import Program
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.cut import WIRING, CallGraph, call_scope
+from verity.circuits import Program
+from verity.circuits.codec import program_digest
+from verity.circuits.cut import WIRING, CallGraph, call_scope
 
 pc8 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc8", reason="the row templates are `verity.ml.protocols.pouw.circuit.pc8`'s")
 pc4 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc4", reason="the row templates are `verity.ml.protocols.pouw.circuit.pc4`'s")

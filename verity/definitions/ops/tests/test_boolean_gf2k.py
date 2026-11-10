@@ -8,8 +8,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.defs import bind
 from verity.definitions.ops.boolean import gf2k as G
 
 from _boolean_checks import assert_pinned

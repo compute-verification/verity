@@ -64,13 +64,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import composite
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.boolean.trace import definition
+from verity.circuits.defs import composite
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, OR, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import NOT, OR, and_reduce, const_bits, mux, or_reduce, sub
 from verity.definitions.ops.boolean.elementwise import specialized
 from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
 from verity.definitions.registry import host_f64 as H

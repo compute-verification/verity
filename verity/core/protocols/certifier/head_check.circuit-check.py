@@ -13,7 +13,7 @@ def _network_roots() -> list[Any]:
     rehearsal's size classes, a 6-byte link name ("served") at T = 60 with and without a profile; and the active
     warden's link ("warden") at its schedule's T = 32, which has no profile (`service.WardenProfile`), so their gates
     name a pinned circuit digest and a proof of their unit is accepted."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.core.protocols.certifier.head_check import NetworkHeadCounts, unit
 
     return [

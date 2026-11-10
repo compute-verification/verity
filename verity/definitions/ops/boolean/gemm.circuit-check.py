@@ -13,7 +13,7 @@ def _boolean_roots() -> list[Any]:
     K = 64, the scaled coordinate on two rows an operand at K = 64 (and with the residual add in its epilogue), and the
     scaled s8 linear at K = 64, N = 3.  The coordinate at K = 64 and the GEMM at K = 32, N = 3 again on
     `HopperBF16WgmmaDot16_v3`, which no served Program binds (``opt_in``), so no word Call's binding reaches it."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
 
     return [
@@ -45,9 +45,9 @@ def _boolean_roots() -> list[Any]:
 def _population_roots() -> list[Any]:
     """`TemplateInstances_v1` of the scaled s8 coordinate (K = 64, sm_120) at N = 2, a served s8 linear's window program, and
     `TemplatePopulations_v1` of the s8 accumulator and that coordinate at counts 1 and 2."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
-    from verity.ml.circuits.population import (
+    from verity.circuits.population import (
         mixed_population_program,
         population_program,
     )

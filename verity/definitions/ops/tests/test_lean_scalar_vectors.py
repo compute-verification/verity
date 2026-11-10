@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import prims as P
 from verity.definitions.ops import scalar as S
 from verity.definitions.silicon.cast import E2M1_UP

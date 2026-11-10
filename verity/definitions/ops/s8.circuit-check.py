@@ -7,7 +7,7 @@ from typing import Any
 def _core_roots() -> list[Any]:
     """The plain arm on both steps at K = 64, the egemm-shaped edited arm (T every 32, two fresh tail words) as a coordinate and
     over N = 3 rows, an incoming accumulator, and both limb splits at their widest intervals."""
-    from verity.ml.circuits.defs import bind
+    from verity.circuits.defs import bind
     from verity.definitions.ops import prims as P
     from verity.definitions.ops import s8 as S8
 

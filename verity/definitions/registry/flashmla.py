@@ -73,9 +73,9 @@ import struct
 
 import numpy as np
 
-from verity.ml.circuits.defs import bind, composite, primitive
-from verity.ml.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.ops.fp32 import Bf16MulBf16, F32AddV2, F32FmaV2, F32MulV2, GuardNegInfZero
 from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
 from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz
