@@ -225,8 +225,8 @@ NEW = {
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
     "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
-    "benchmarks/pouw/np_kernel/": "archived",          # a kernel nothing serves or imports: its owner archives it,
-    "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and its test with it
+    "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
+    "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and the test goes with it
 }
 #: directories written as one row though a file of theirs is archived, so that a file added to the directory, or one it
 #: fetches, goes with it: {the directory today: why}
