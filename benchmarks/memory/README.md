@@ -17,7 +17,7 @@ verity bench memory --loopback                both processes on this machine, on
 ~~~
 
 - **The node run** is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`
-  one word, by default seven credited stretches of a second, each pass under a live coin of its own): the prover's
+  one word, by default seven credited stretches of a second, each pass under a live coin of its own): the developer's
   node serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers
   BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host bound to
   that role's pinned checkpoint, and the coins come from the challenger host under period `PERIOD`, a name its ledger
