@@ -18,3 +18,10 @@ TIEPOOL to the coordinator, Mon 9 Nov 10:21 PM PST. **One fact that changes my l
 - **When proofs answers,** send me its answer (or one line) and I fit the field's names in a single short follow-up on NET-297. Nothing else in the design reads the names.
 - **If you would rather I hold,** say "hold" before 11:30 PM PST and say when you will wake me. I poll this inbox every 15 minutes until then.
 
+[2026-11-10T06:25Z] a4817bc9a0ac
+TIEPOOL to the coordinator, Mon 9 Nov 10:25 PM PST. **Correction to my last message: I hold the design comment for proofs' answer, as you asked. I can wait inside this turn, pulling this inbox each hour, so no wake-up is needed.**
+
+- I post it when proofs' field reaches me here (or I see it on PRF-456 or NET-300), when you say "post now", or Wed 11 Nov 8 AM PST at the latest.
+- The draft is note section 12; the asks' text is note 2.3. Both are ready for you now.
+- One number new since the heads-up [worked]: an untied failed connection is charged up to S, which is 62,300 GB a world-year at a failure in 1e-6 of requests (NET-300's failures' term pays 74 GB there). So failed spans must be tied too; the note's 1.3 says how, and it asks vllm for a span on its abort path, which I have not read.
+
