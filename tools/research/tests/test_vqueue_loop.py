@@ -21,7 +21,7 @@ from research.executor import GRAPH_V2, Executor, FileTransport
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Rerun, Retry,
                              Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
-from test_queue import World as Origin, _git
+from test_queue import FakeGitHub, World as Origin, _git
 
 T0 = 1_900_000_000.0
 #: the env's spec files in each listed graph
@@ -93,7 +93,7 @@ class Env:
         monkeypatch.setattr(L, "gating", lambda repo, sha: list(self.gates))
         self.graph2.list_graph(f"ready:{self.main()}", {"schema": GRAPH_V2, "commit": self.main(), "tasks": []})
 
-    def loop(self, decide, clone: str = "clone", **kw) -> Loop:
+    def loop(self, decide, clone: str = "clone", world: type[World] = Fake, **kw) -> Loop:
         path = self.tmp / clone
         if not path.exists():
             _git(self.tmp, "clone", "-q", str(self.o.origin), str(path))
@@ -101,7 +101,7 @@ class Env:
                    marked_by=self.labels.marked_by, marked_at=self.labels.marked_at, prefetch=self.labels.prefetch,
                    land_into="main")
         q.branch = "main"
-        w = Fake(q, self.labels, Executor(self.graph2), post=lambda text, to=(): self.posts.append(text) or True,
+        w = world(q, self.labels, Executor(self.graph2), post=lambda text, to=(): self.posts.append(text) or True,
                  now=lambda: self.clock)
         w.withdrawn, w.cancelled = self.withdrawn, self.cancelled
         return Loop(w, self.log, decide=decide, now=lambda: self.clock, out=self.out.append, **kw)
@@ -2404,13 +2404,356 @@ def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_be
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(o in said for o in ("--gate {graph2,check}", "--shards", "--on", "(default 3)")), said
+    assert all(o in said for o in ("--gate {graph2,check,statuses}", "--shards", "--on", "(default 3)", "--status NAME",
+                                   "--head-statuses")), said
     loop = Loop(None, tmp_path / "log")
-    assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check")) and vqueue_slim.CHECK == L.CHECK_GATE
+    assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check", "statuses"))
+    assert vqueue_slim.CHECK == L.CHECK_GATE
     assert L.main(["--gate", "check", "--no-slim", "--shadow", "--once"]) == 1
     assert "neither --no-slim nor --shards below 1" in capsys.readouterr().err
-    with pytest.raises(ValueError, match="a gate is one of graph2, check"):
+    with pytest.raises(ValueError, match="a gate is one of graph2, check, statuses"):
         Loop(None, tmp_path / "log", gate="check")
+
+
+#: the statuses a candidate needs where its statuses gate, as a service that deploys each pushed commit names its two
+WEB, DOCS = "Deploy – web", "Deploy – docs"
+INFRA_REPO = "compute-verification/infra"
+
+
+class Hub(FakeGitHub):
+    """The GitHub of a repository that isn't verity: a PR's head is a branch of its own, a commit's statuses and check runs
+    are what a test sets, a read named in ``refused`` fails, and a close is kept in ``closed`` and takes the PR off the open
+    ones."""
+
+    repo = INFRA_REPO
+
+    def __init__(self, origin: Path):
+        super().__init__(origin)
+        self.said: dict[str, dict[str, dict]] = {}
+        self.runs: dict[str, dict[str, dict]] = {}
+        self.closed: list[tuple[int, str]] = []
+        self.refused: set[str] = set()
+
+    def put(self, n: int, head: str, **kw) -> None:
+        super().put(n, head, **kw)
+        self.prs[n] = replace(self.prs[n], head_repo=self.repo, branch=f"pr-{n}")
+
+    def status(self, sha: str, context: str, state: str, description: str = "", url: str = "") -> None:
+        self.said.setdefault(sha, {})[context] = {"context": context, "state": state, "description": description,
+                                                  "target_url": url}
+
+    def run(self, sha: str, name: str, conclusion: str | None, title: str = "", url: str = "") -> None:
+        self.runs.setdefault(sha, {})[name] = {"name": name, "status": "completed" if conclusion else "in_progress",
+                                               "conclusion": conclusion, "output": {"title": title}, "details_url": url}
+
+    def statuses(self, sha: str) -> list[dict]:
+        if "statuses" in self.refused:
+            raise Q.QueueError("gh api: HTTP 403: Resource not accessible by integration")
+        return list(self.said.get(sha, {}).values())
+
+    def check_runs(self, sha: str) -> list[dict]:
+        if "check_runs" in self.refused:
+            raise Q.QueueError("gh api: HTTP 403: Resource not accessible by integration")
+        return list(self.runs.get(sha, {}).values())
+
+    def close(self, n: int, comment: str) -> None:
+        self.closed.append((n, comment))
+        del self.prs[n]
+
+
+class Bare(Fake):
+    """The world of a repository judged on its statuses: whatever is graph2's, a run's beside a check or drive's after a
+    landing raises."""
+
+    def _none(self, *a, **k):
+        raise AssertionError("the statuses gate ran one of verity's own steps")
+
+    verdict = enqueue = cancel = rerun = counts = graph2_verdict = _graph2 = on_main = driver = slim_driver = cancel_runs = _none
+
+
+@pytest.fixture
+def hub(env, monkeypatch) -> Env:
+    """``env`` as a repository whose check is GitHub's (`Hub`): its `main` holds no queue rules and no drive.toml, and
+    drive's steps after a landing raise."""
+    _git(env.o.dev, "push", "-q", "origin", f"{env.o.change({'ci/queue.toml': None})}:refs/heads/main")
+    env.o.gh = Hub(env.o.origin)
+    env.labels = Labels(env.o.gh)
+    for step in ("caught_up", "_sweep_after"):
+        monkeypatch.setattr(M, step, Bare._none)
+    return env
+
+
+def _gated(hub: Env, decide=vqueue.decide, **kw) -> Loop:
+    """A loop on ``hub`` whose candidates the statuses `WEB` and `DOCS` gate, under the policy itself, in a world where
+    verity's own steps raise (`Bare`), as the loop's rings about graph2 do."""
+    loop = hub.loop(decide, world=Bare, gate="statuses", **{"statuses": (WEB, DOCS), **kw})
+    loop._flaky = loop._bases = loop._disputes = loop._compare = loop.world._none
+    return loop
+
+
+def test_a_candidate_passes_on_every_named_status_fails_on_any_that_failed_and_is_pending_otherwise(hub):
+    """A name is a commit status's context or a check run's name.  `success` alone passes; a status `failure` or `error` and
+    a check run concluded `failure`, `cancelled`, `timed_out` or `action_required` fail, each named with its description and
+    URL; anything else, an absent one included, is pending, and a status no `--status` names counts for nothing."""
+    w, gh = _gated(hub).world, hub.o.gh
+    ok, ran = ("status", "success"), ("run", "success")
+    cases = [((ok, ok), PASS, [], []), ((ok, ran), PASS, [], []), ((ran, ran), PASS, [], []),
+             ((ok, None), PENDING, [], [f"{DOCS} (absent)"]),
+             ((None, None), PENDING, [], [f"{WEB} (absent)", f"{DOCS} (absent)"]),
+             ((ok, ("status", "pending")), PENDING, [], [f"{DOCS} (pending)"]),
+             *(((ran, ("run", c)), PENDING, [], [f"{DOCS} (pending)"]) for c in (None, "neutral", "skipped", "stale")),
+             *(((ok, ("status", s)), FAIL, [DOCS], []) for s in ("failure", "error")),
+             *(((ok, ("run", c)), FAIL, [DOCS], []) for c in ("failure", "cancelled", "timed_out", "action_required")),
+             ((("status", "failure"), None), FAIL, [WEB], [f"{DOCS} (absent)"]),
+             ((("status", "error"), ("run", "timed_out")), FAIL, [WEB, DOCS], [])]
+    for i, (said, state, failed, waits) in enumerate(cases):
+        sha = f"{i:040x}"
+        gh.status(sha, "another", "failure")
+        gh.run(sha, "another run", "failure")
+        for name, one in zip((WEB, DOCS), said):
+            if one is not None:
+                (gh.status if one[0] == "status" else gh.run)(sha, name, one[1], f"it said {one[1]}", f"https://deploy/{i}")
+        got, unread = w.statuses(sha)
+        v, waiting = L.status_verdict(sha, (WEB, DOCS), got)
+        assert (v.state, [f.task for f in v.failed], waiting, unread) == (state, [f"status {n}" for n in failed], waits, []), i
+        assert v.ended == bool(failed and not waits) and v.infra == ()
+        for f, n in zip(v.failed, failed):
+            assert (f.key, f.inputs, f.base_key) == (f"{sha}:{n}", frozenset({"**"}), None)
+            assert f.detail.startswith("it said ") and f.detail.endswith(f": https://deploy/{i}")
+    gh.status(sha := "f" * 40, WEB, "success")                  # a name both a status and a check run: each reading counts
+    gh.status(sha, DOCS, "success")
+    gh.run(sha, DOCS, "failure", "the build broke", "https://runs/1")
+    v, _ = L.status_verdict(sha, (WEB, DOCS), w.statuses(sha)[0])
+    assert v.state == FAIL and [f.detail for f in v.failed] == ["the build broke: https://runs/1"]
+
+
+def test_under_the_statuses_gate_a_candidate_that_passed_fast_forwards_main_its_prs_are_closed_and_nothing_of_verity_s_runs(hub):
+    main, gh = hub.main(), hub.o.gh
+    heads = [hub.put(1, {"a.txt": "1\n"}), hub.put(2, {"b.txt": "2\n"})]
+    gh.put(3, hub.o.change({"c.txt": "3\n"}), ready=False)
+    loop = _gated(hub, state=(state := hub.tmp / "vqueue" / "state.json"))
+    assert loop.world.tasks is None and loop.world.graph2 == () and loop.world.frozen_file is None
+    (built,) = loop.tick()
+    sha = built["sha"]
+    assert (built["action"], built["members"], built["heads"], built["base"], built["enqueued"]) == (
+        "build", [1, 2], heads, main, True)
+    assert hub.queued() == {branch(sha): sha} and hub.graph2.enqueued() == []       # its push is what asks for its statuses
+    assert loop.tick() == [] and hub.out[-1].endswith(f"{sha[:12]} pending: waiting for {WEB} (absent), {DOCS} (absent)")
+    gh.status(sha, WEB, "success", "Deployment has completed", "https://deploy/web")
+    gh.status(sha, "another", "failure")
+    assert loop.tick() == [] and hub.main() == main and hub.out[-1].endswith(f"waiting for {DOCS} (absent)")
+    assert json.loads(state.read_text())["candidates"][sha]["statuses"] == {
+        WEB: [[PASS, "Deployment has completed", "https://deploy/web"]]}
+    gh.run(sha, DOCS, "success")
+    advance, after, drop = loop.tick()
+    assert (advance["action"], advance["sha"], hub.main()) == ("advance", sha, sha)
+    assert hub.lines()[1]["statuses"] == {WEB: [[PASS, "Deployment has completed", "https://deploy/web"]],
+                                          DOCS: [[PASS, "success", ""]]}
+    assert (after["action"], after["closed"], after["done"]) == ("on_main", [1, 2], True) and "told" not in after
+    assert gh.closed == [(n, f"Landed in `main` at {sha[:12]} by the verified queue.") for n in (1, 2)] and set(gh.prs) == {3}
+    assert (drop["action"], drop["cancel"], drop["outcome"]["state"]) == ("drop", "no check of the loop's", PASS)
+    assert hub.queued() == {} and loop.tick() == [] and hub.posts == [] and hub.withdrawn == [] and hub.cancelled == []
+    assert hub.graph2.enqueued() == [] and _acts(hub.lines()) == ["build", "advance", "on_main", "drop"]
+
+
+def test_under_the_statuses_gate_closing_the_landed_prs_is_retried_until_done_and_closes_no_pr_main_doesnt_hold(hub):
+    main, gh = hub.main(), hub.o.gh
+    hub.put(1, {"a.txt": "1\n"})
+    gh.put(2, hub.o.change({"b.txt": "2\n"}), ready=False)
+    gh.put(3, main, ready=False)                                # `main` itself, as a PR into another branch: never landed
+    gh.prs[3] = replace(gh.prs[3], branch="main", base="release")
+    loop = _gated(hub)
+    sha = loop.tick()[0]["sha"]
+    gh.status(sha, WEB, "success")
+    gh.status(sha, DOCS, "success")
+    close, gh.close = gh.close, lambda n, comment: (_ for _ in ()).throw(Q.QueueError("gh pr close: HTTP 502"))
+    _, after, _ = loop.tick()
+    assert (after["action"], after["done"]) == ("on_main", False) and "#1: gh pr close: HTTP 502" in after["error"]
+    assert hub.main() == sha and gh.closed == []
+    gh.close = close
+    (after,) = loop.tick()
+    assert (after["action"], after["closed"], after["done"]) == ("on_main", [1], True) and [n for n, _ in gh.closed] == [1]
+    assert loop.tick() == [] and set(gh.prs) == {2, 3}
+
+
+def test_under_the_statuses_gate_a_failed_status_ejects_a_lone_member_telling_its_owner_which_and_bisects_several(hub):
+    main, gh = hub.main(), hub.o.gh
+    head = hub.put(1, {"a.txt": "1\n"})
+    loop = _gated(hub)
+    sha = loop.tick()[0]["sha"]
+    gh.status(sha, WEB, "failure", "Deployment has failed", "https://deploy/web/1")
+    eject, drop = loop.tick()                                   # at once: the other status hasn't said, and needn't
+    assert (eject["action"], eject["number"], eject["done"]) == ("eject", 1, True) and hub.withdrawn == [(1, head)]
+    assert eject["failed"] == [{"task": f"status {WEB}", "key": f"{sha}:{WEB}",
+                                "detail": "Deployment has failed: https://deploy/web/1"}]
+    (told,) = hub.posts
+    assert told.startswith(f"@ci vqueue on {INFRA_REPO}: #1 at {head[:12]} is ejected from the verified queue: status {WEB} "
+                           "failed")
+    assert f"Failed: status {WEB} on {sha[:12]}: Deployment has failed: https://deploy/web/1. Fix it and mark" in told
+    assert "research data labels" not in told and drop["action"] == "drop" and hub.queued() == {} and hub.main() == main
+    hub.put(2, {"b.txt": "2\n"})
+    hub.put(3, {"c.txt": "3\n"})
+    (built,) = loop.tick()
+    assert built["members"] == [2, 3]
+    gh.run(built["sha"], DOCS, "timed_out", "", "https://runs/7")
+    drop, half = loop.tick()
+    assert (drop["action"], drop["outcome"]["state"], drop["outcome"]["suspects"]) == ("drop", FAIL, [2, 3])
+    assert (half["action"], half["members"]) == ("build", [2]) and len(hub.posts) == 1 and len(hub.withdrawn) == 1
+    assert hub.main() == main and hub.graph2.enqueued() == []
+
+
+def test_under_the_statuses_gate_a_failed_status_ejects_a_lone_member_that_changes_no_file_with_nothing_run_again(hub):
+    """The policy asks for a rerun of a lone member's failure its files don't meet, and a head with no file of its own
+    meets none: a status isn't run again, so the rerun is logged as absent and the failure stands."""
+    main, gh = hub.main(), hub.o.gh
+    empty = _git(hub.o.dev, "commit-tree", f"{main}^{{tree}}", "-p", main, "-m", "no file changes")
+    _git(hub.o.dev, "push", "-q", "origin", f"{empty}:refs/dev/{empty}")
+    gh.put(1, empty)
+    loop = _gated(hub)
+    sha = loop.tick()[0]["sha"]
+    gh.status(sha, DOCS, "error", "Build error", "https://deploy/docs/1")
+    (rerun,) = loop.tick()
+    assert (rerun["action"], rerun["absent"], rerun["done"], rerun["keys"]) == ("rerun", True, False, [f"{sha}:{DOCS}"])
+    eject, drop = loop.tick()
+    assert (eject["action"], eject["number"], drop["action"]) == ("eject", 1, "drop") and hub.withdrawn == [(1, empty)]
+    assert f"status {DOCS} on {sha[:12]}: Build error: https://deploy/docs/1" in hub.posts[0] and hub.main() == main
+
+
+def test_under_the_statuses_gate_a_candidate_pending_past_pending_s_is_retried_once_as_a_try_alone_and_then_infra_is_rung(hub):
+    hub.put(1, {"a.txt": "1\n"})
+    loop = _gated(hub, pending_s=3600)
+    sha = loop.tick()[0]["sha"]
+    hub.clock += 3600
+    assert loop.tick() == []
+    hub.clock += 1
+    (retry,) = loop.tick()
+    assert (retry["action"], retry["sha"], retry["enqueued"], retry["done"]) == ("retry", sha, True, True)
+    assert "nothing asks again" in retry["why"] and loop.tick() == []
+    hub.clock += 3600
+    (ring,) = loop.tick()
+    assert ring["action"] == "ring" and ring["posted"] and loop.tick() == []
+    (text,) = hub.posts
+    assert text.startswith(f"@infra vqueue on {INFRA_REPO}: the verified queue's candidate queue/{sha[:12]} (#1) is pending: ")
+    assert text.endswith(f"It is waiting for {WEB} (absent), {DOCS} (absent), and nothing asks for a status again")
+    assert hub.queued() == {branch(sha): sha} and hub.graph2.enqueued() == [] and hub.withdrawn == []
+
+
+def test_under_the_statuses_gate_a_read_that_fails_leaves_its_names_pending_and_a_name_the_other_answers_needs_none_of_it(hub):
+    main, gh = hub.main(), hub.o.gh
+    hub.put(1, {"a.txt": "1\n"})
+    loop = _gated(hub)
+    sha = loop.tick()[0]["sha"]
+    gh.refused = {"check_runs"}
+    gh.status(sha, WEB, "success")
+    gh.run(sha, DOCS, "success")
+    assert loop.tick() == [] and hub.main() == main
+    assert f"waiting for {DOCS} (absent); {sha[:12]}'s check runs can't be read (gh api: HTTP 403" in hub.out[-1]
+    gh.refused = {"check_runs", "statuses"}
+    assert loop.tick() == [] and f"{sha[:12]}'s commit statuses can't be read" in hub.out[-1]
+    gh.refused = {"check_runs"}
+    gh.status(sha, DOCS, "success")
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and hub.main() == sha
+
+
+def test_with_head_statuses_a_name_the_candidate_lacks_is_read_on_its_lone_member_s_head_while_it_has_that_head_s_tree(hub):
+    main, gh = hub.main(), hub.o.gh
+    heads = [hub.put(1, {"a.txt": "1\n"}), hub.put(2, {"b.txt": "2\n"})]
+
+    def passed(head: str) -> None:
+        gh.status(head, WEB, "success")
+        gh.status(head, DOCS, "success")
+
+    def gated(**kw) -> Loop:
+        return _gated(hub, depth=1, **{"batch": 1, "head_statuses": True, **kw})
+
+    passed(heads[0]), passed(heads[1])
+    sha = gated(head_statuses=False).tick()[0]["sha"]
+    assert gated(head_statuses=False).tick() == [] and hub.main() == main      # unasked, a head's statuses are no candidate's
+    gh.status(sha, DOCS, "pending")                             # the candidate's own reading of a name is the one that counts
+    assert gated().tick() == [] and hub.main() == main
+    gh.status(sha, DOCS, "success")
+    advance, _, _, built = gated().tick()
+    assert advance["statuses"] == {WEB: [(PASS, "", "")], DOCS: [(PASS, "", "")]} and hub.main() == sha
+    assert any(s.endswith(f"{sha[:12]} pass: {WEB} read on its member's head {heads[0][:12]}, whose tree it has") for s in hub.out)
+    assert built["members"] == [2] and built["base"] == sha     # #2 merged onto a `main` its head doesn't hold: another tree
+    assert gated().tick() == [] and hub.out[-1].endswith(
+        f"waiting for {WEB} (absent), {DOCS} (absent); its member's head {heads[1][:12]} has another tree, so that head's "
+        "statuses aren't its own: they are once the head holds `main`")
+    gh.status(built["sha"], WEB, "failure")
+    assert _acts(gated().tick()) == ["eject", "drop"] and hub.main() == sha
+    passed(third := hub.put(3, {"c.txt": "3\n"}))                # #4 makes #3's change again: both merged have #3's tree
+    again = _git(hub.o.dev, "commit-tree", f"{third}^{{tree}}", "-p", sha, "-m", "the same change again")
+    _git(hub.o.dev, "push", "-q", "origin", f"{again}:refs/dev/{again}")
+    gh.put(4, again)
+    (wide,) = gated(batch=2).tick()
+    assert wide["members"] == [3, 4] and len({_git(hub.o.origin, "rev-parse", f"{c}^{{tree}}") for c in (wide["sha"], third)}) == 1
+    assert gated(batch=2).tick() == [] and hub.main() == sha     # two members: no one head's statuses are the candidate's
+
+
+def test_the_statuses_gate_admits_a_pr_on_a_plain_ready_label_and_a_land_by_neither_its_owner_nor_its_marker(hub, monkeypatch,
+                                                                                                           capsys):
+    """The command itself on a repository with no queue rules, no drive.toml and no priority file: a mark is the label
+    `research data label pr:N@SHA ready true --by LANE` writes, with no preflight and no verdict record, and a land counts
+    by a handle that is neither the PR's `Lane` nor its mark's author."""
+    from research.store.cli import cmd_label
+
+    main, gh, root = hub.main(), hub.o.gh, hub.tmp / "labels"
+    (cfg := hub.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{hub.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(Q, "GitHub", {INFRA_REPO: gh}.__getitem__)          # the repository --remote names, no other
+    monkeypatch.setattr(Q, "remote_and_repo", lambda remote, repo, cwd: (str(hub.o.origin), INFRA_REPO))
+    _git(hub.tmp, "clone", "-q", str(hub.o.origin), str(clone := hub.tmp / "infra"))
+
+    def label(n: int, key: str, value: str, by: str) -> None:
+        assert cmd_label([f"pr:{n}@{gh.prs[n].head}", key, value, "--by", by, "--store", str(root)]) == 0
+
+    def tick() -> list[dict]:
+        seen = len(hub.lines())
+        assert L.main(["--gate", "statuses", "--status", WEB, "--status", DOCS, "--repo", str(clone), "--store", str(root),
+                       "--log", str(hub.log), "--batch", "1", "--once"]) == 0, capsys.readouterr().err
+        return hub.lines()[seen:]
+
+    for n in (1, 2, 3, 4, 5):
+        gh.put(n, hub.o.change({f"f{n}.txt": f"{n}\n"}), body="A change.\n\nLane web\nRefs INF-1\n", ready=False)
+    for n, by in ((1, "web"), (2, "web"), (3, "ops"), (4, "web")):
+        label(n, "ready", "true", by)
+    for n, by in ((1, "docs"), (2, "web"), (3, "ops"), (5, "docs")):
+        label(n, "reviewed", "land", by)
+    (built,) = tick()                                           # #2: its owner's land; #3: its marker's; #4: none; #5: no mark
+    assert (built["action"], built["members"], built["priority"]) == ("build", [1], 3)
+    assert (hub.log.parent / "state.json").is_file() and (hub.log.parent / "vqueue.lock").is_file()   # beside its log
+    for name in (WEB, DOCS):
+        gh.status(built["sha"], name, "success")
+    assert _acts(tick()) == ["advance", "on_main", "drop"] and hub.main() == built["sha"] != main
+    assert [n for n, _ in gh.closed] == [1] and tick() == []
+    label(2, "reviewed", "land", "docs")
+    label(5, "ready", "true", "ops")
+    assert [r["members"] for r in tick() if r["action"] == "build"] == [[2]]
+
+
+def test_the_command_refuses_the_statuses_gate_without_a_status_or_with_verity_s_own_flags_and_a_status_with_another_gate(
+        hub, capsys, tmp_path):
+    log = ["--log", str(tmp_path / "v" / "decisions.jsonl")]
+    for argv, why in (
+            (["--gate", "statuses", *log], "--gate statuses: it needs --status NAME, once or more"),
+            (["--gate", "statuses", "--status", WEB], "--gate statuses: it needs --log"),
+            *((["--gate", "statuses", "--status", WEB, *log, *flag], f"runs none of verity's own check, so not with {flag[0]}")
+              for flag in (["--graph2", "graph2"], ["--frozen", "frozen"], ["--shards", "2"], ["--on", "n1"], ["--no-slim"],
+                           ["--tree-ejects"])),
+            (["--status", WEB, "--shadow"], "which only --gate statuses reads, not --gate graph2"),
+            (["--gate", "check", "--head-statuses"], "which only --gate statuses reads, not --gate check"),
+            (["--gate", "statuses", "--status", WEB, *log, "--dry-run", "--repo", str(hub.o.dev), "--remote",
+              f"https://github.com/{INFRA_REPO}"], f"--remote https://github.com/{INFRA_REPO} is another repository than the "
+                                                    f"origin of {hub.o.dev}")):
+        assert L.main([*argv, "--once"]) == 1, argv
+        assert why in capsys.readouterr().err, argv
+    assert not (tmp_path / "v").exists()
+    for kw, why in ((dict(gate="statuses"), "gate `statuses` with 0 status"),
+                    (dict(gate="statuses", statuses=(WEB,), slim=vqueue_slim), "runs nothing beside them"),
+                    (dict(statuses=(WEB,)), "only `statuses` reads GitHub's statuses"),
+                    (dict(gate="check", slim=vqueue_slim, head_statuses=True), "only `statuses` reads GitHub's statuses")):
+        with pytest.raises(ValueError, match=why):
+            Loop(None, tmp_path / "log", **kw)
 
 
 def _under(tasks: dict[str, dict], i: str, seen: set[str]) -> list[str]:

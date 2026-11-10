@@ -687,6 +687,40 @@ class GitHub:
             return None
         return r.stdout.strip() or None if r.returncode == 0 else None
 
+    def statuses(self, sha: str) -> list[dict]:
+        """Commit ``sha``'s statuses, the newest of each context (the combined status: `GET /repos/{o}/{r}/commits/{sha}/status`),
+        every page."""
+        return self._listed(f"repos/{self.repo}/commits/{sha}/status", "statuses")
+
+    def check_runs(self, sha: str) -> list[dict]:
+        """Commit ``sha``'s check runs, the newest of each name in each suite (`GET /repos/{o}/{r}/commits/{sha}/check-runs`),
+        every page."""
+        return self._listed(f"repos/{self.repo}/commits/{sha}/check-runs", "check_runs")
+
+    def _listed(self, path: str, key: str) -> list[dict]:
+        """The objects under ``key`` of each page of ``path``'s answer, until a page isn't full.  QueueError when a page can't
+        be read, holds no such list, or `GH_PAGES` full pages don't end it: a list cut short would read a status as absent."""
+        out: list[dict] = []
+        for n in range(1, GH_PAGES + 1):
+            try:
+                r = subprocess.run(["gh", "api", f"{path}?per_page={GH_PER_PAGE}&page={n}"], capture_output=True, text=True,
+                                   timeout=GH_TIMEOUT_S)
+            except subprocess.TimeoutExpired:
+                raise QueueError(f"gh api {path}: no answer in {GH_TIMEOUT_S} s") from None
+            if r.returncode:
+                raise QueueError(f"gh api {path}: {(r.stderr or r.stdout).strip()[-300:]}")
+            try:
+                doc = json.loads(r.stdout)
+            except ValueError:
+                raise QueueError(f"gh api {path}: its answer isn't JSON: {r.stdout.strip()[-200:]}") from None
+            page = doc.get(key) if isinstance(doc, dict) else None
+            if not isinstance(page, list):
+                raise QueueError(f"gh api {path}: its answer holds no `{key}` list: {r.stdout.strip()[-200:]}")
+            out += [d for d in page if isinstance(d, dict)]
+            if len(page) < GH_PER_PAGE:
+                return out
+        raise QueueError(f"gh api {path}: more than {GH_PAGES * GH_PER_PAGE} {key}, of which none past them is read")
+
     def close(self, number: int, comment: str) -> None:
         """Close PR ``number`` with ``comment`` (drive's stale and unlandable rules: `research.stale`, `drive.Driver._unlandable`),
         as `gh` is authenticated here: drive's App."""
