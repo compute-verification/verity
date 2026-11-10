@@ -2707,11 +2707,11 @@ def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatev
 
 
 @pytest.mark.parametrize("graph2", ["fail", "pass"])
-def test_under_gate_check_a_drop_cancels_no_graph2_check_and_one_that_ends_after_its_candidate_landed_is_compared_once(
+def test_under_gate_check_a_drop_keeps_graph2_s_check_to_compare_it_once_it_ends_and_cancels_one_with_nothing_to_compare(
         env, monkeypatch, graph2):
     """In shadow graph2's check runs to its verdict: a candidate whose check passed lands while graph2's still runs, and
     once graph2's own verdict says it ended the two are compared in one line, after the drop; a candidate dropped before
-    its own check ended has nothing to compare, and its graph2 check isn't cancelled either."""
+    its own check ended has nothing to compare, so its graph2 check is cancelled."""
     env.put(1, {"a.txt": "1\n"})
     loop, runs = _check(env, monkeypatch)
     script = env.graph2_script(loop, {"state": "pending", "pending": 1})
@@ -2738,7 +2738,35 @@ def test_under_gate_check_a_drop_cancels_no_graph2_check_and_one_that_ends_after
     env.o.gh.ready.discard((2, two))                             # its ready mark withdrawn: dropped while its check runs
     (drop,) = loop.tick()
     assert (drop["action"], drop["sha"], "compare" in drop) == ("drop", built["sha"], False)
-    assert drop["cancel"] == "none: graph2, in shadow, runs to its verdict" and not Path(f"{script}.cancel").exists()
+    assert drop["cancel"] == "cancelled" and Path(f"{script}.cancel").read_text() == f"ready:{built['sha']}\n"
+
+
+def test_under_gate_check_a_drop_that_would_keep_a_third_graph2_check_cancels_the_oldest_kept_one(env, monkeypatch):
+    """Three candidates land, one after another, while their graph2 checks still run: the third's drop cancels the first's
+    check (`KEPT_MAX` is 2) and logs it, whose comparison is then owed no more, and the other two are compared as they end."""
+    loop, runs = _check(env, monkeypatch)
+    script = env.graph2_script(loop, {"state": "pending", "pending": 1})
+    landed = []
+    for k in (1, 2, 3):
+        env.put(k, {f"{k}.txt": f"{k}\n"})
+        sha = next(r["sha"] for r in loop.tick() if r["action"] == "build")
+        if k == 1:
+            runs.end(env.main())                                 # later, the check of `main` is the last to land
+        runs.end(sha)
+        logged = loop.tick()
+        assert _acts(logged)[-1] == "drop" and env.main() == sha and logged[-1]["compare"] == {"check": PASS, "said": PASS}
+        landed.append(logged[-1])
+    assert L.KEPT_MAX == 2 and [("kept_cancelled" in d) for d in landed] == [False, False, True]
+    first, second, third = (d["sha"] for d in landed)
+    assert landed[2]["kept_cancelled"] == {first: "cancelled"} and Path(f"{script}.cancel").read_text() == f"ready:{first}\n"
+    assert (f"research queue vqueue: tick 6: {first[:12]}'s graph2 check, kept after its drop, cancelled: at most 2 are "
+            f"kept, and {third[:12]}'s is the newest") in env.out
+    for k, sha in enumerate((first, second, third), 1):
+        keys = env.listed(sha, {"pytest:a": [f"{k}.txt"]})
+        env.result(keys["pytest:a"], "pytest:a", PASS)
+        Path(f"{script}.verdict.ready:{sha}").write_text(json.dumps({"state": PASS}))
+    compared = [r for r in loop.tick() if r["action"] == "compare"]
+    assert sorted(r["sha"] for r in compared) == sorted([second, third]) and all(r["dropped"] for r in compared)
 
 
 def test_under_gate_check_a_step_one_shard_fails_fails_the_candidate_though_another_shard_and_graph2_passed_it(env, monkeypatch):

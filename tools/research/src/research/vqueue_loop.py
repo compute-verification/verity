@@ -73,7 +73,8 @@ as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: 
 plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  graph2's check is enqueued, read and
-retried with the check, in shadow, and never cancelled: a drop leaves it to run to its verdict.  Its verdict
+retried with the check, in shadow: a drop leaves it to run to its verdict where it has a check's reading to be compared
+with, at most `KEPT_MAX` at once, the oldest cancelled past them, and cancels it otherwise.  Its verdict
 (`Judged.shadow`) holds, ejects and advances nothing, no candidate is held or rung for a task the loop and graph2 dispute or
 a base graph2 hasn't listed, and once it and the check have both ended they are compared in one logged line, `agree` or
 `disagree` with the tasks graph2 failed or erred on and the steps the check failed (`Loop._compare`); a candidate whose
@@ -90,9 +91,9 @@ as its own one no line names that is the same build made before, as a tick cut o
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
 (`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
-Drop cancels the check (graph2's `cancel`, where it has one and gates) and the run beside it while that runs (one still
-launching once it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its
-inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
+Drop cancels the check (graph2's `cancel`, where it has one, unless it is kept to be compared) and the run beside it while
+that runs (one still launching once it printed its run ids, a later tick), deletes the branch and logs its outcome, with its
+base and its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
 (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and where their logs are.
 Retry enqueues again (graph2 lists a check whose listing failed, reruns what ended in infra errors once its own verdict is
 infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is another (a task still runs,
@@ -172,6 +173,9 @@ WINDOW_S = 48 * 3600
 #: what gates a candidate (`--gate`): graph2's check with the run beside it, or drive's after-landing check alone, as `SHARDS`
 #: shards unless `--shards` says another; the second is also the ``gate`` of that check's record (`vqueue_slim.CHECK`)
 GATES = GRAPH2_GATE, CHECK_GATE = "graph2", "check"
+#: where the check gates, the most graph2 checks of dropped candidates left running to be compared (`Loop._drop`): graph2's
+#: slots run them beside the live candidates', so one more cancels the oldest
+KEPT_MAX = 2
 SHARDS = 3
 INTERVAL_S = 60
 #: the most members a candidate holds, candidates stacked at once and members of a candidate whose Lean change compiles (a
@@ -348,12 +352,15 @@ class Past:
         return {r["sha"]: r for r in self.of("drop") if isinstance(r.get("beside_launching"), dict) and r["sha"] not in settled}
 
     def uncompared(self) -> dict[str, dict]:
-        """The drops that left graph2's check running to be compared once it ends (`compare`), by sha, but those a comparison
-        logged since has settled."""
+        """The drops that left graph2's check running to be compared once it ends (`compare`), by sha, oldest first, but those
+        a comparison logged since has settled and those a later drop cancelled (`kept_cancelled`)."""
         out: dict[str, dict] = {}
         for r in self.lines:
-            if r.get("action") == "drop" and isinstance(r.get("compare"), dict) and r.get("sha"):
-                out[r["sha"]] = r
+            if r.get("action") == "drop":
+                for sha in r.get("kept_cancelled") or ():
+                    out.pop(sha, None)
+                if isinstance(r.get("compare"), dict) and r.get("sha"):
+                    out[r["sha"]] = r
             elif r.get("action") == "compare":
                 out.pop(r.get("sha"), None)
         return out
@@ -1641,6 +1648,9 @@ class Tick:
     #: where the check gates, each dropped candidate whose graph2 check ended since its drop and awaits its comparison
     #: (`Past.uncompared`): {sha: (its drop's line, graph2's verdict as read)}
     kept: dict[str, tuple[dict, Judged]] = field(default_factory=dict)
+    #: where the check gates, the dropped candidates whose graph2 check still runs to be compared, oldest first: this tick's
+    #: drops add to it and take from it (`Loop._drop`, `KEPT_MAX`)
+    alive: list[str] = field(default_factory=list)
 
 
 class Loop:
@@ -1710,9 +1720,11 @@ class Loop:
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha)))
-            kept = {} if self.gate != CHECK_GATE else {
-                sha: (r, w.verdict(sha, r.get("base") or "", past.since(sha), past.since(r.get("base") or "")))
-                for sha, r in past.uncompared().items() if sha not in mine and w.ended(sha)}
+            owed = {} if self.gate != CHECK_GATE else {sha: r for sha, r in past.uncompared().items() if sha not in mine}
+            ended = {sha for sha in owed if w.ended(sha)}
+            kept = {sha: (r, w.verdict(sha, r.get("base") or "", past.since(sha), past.since(r.get("base") or "")))
+                    for sha, r in owed.items() if sha in ended}
+            alive = [sha for sha in owed if sha not in ended]
         finally:
             w._theirs = w._listed = None
         on = {c.sha: c.base for c in cands}
@@ -1729,7 +1741,8 @@ class Loop:
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)))
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding, kept=kept)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding, kept=kept,
+                    alive=alive)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -2066,12 +2079,21 @@ class Loop:
         branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids yet: its record is
         logged (`beside_launching`), and `_launched` cancels it once it has them; an auto plan still being made is given up
         (`vqueue_slim.abandon`), so no shard of it launches.  Where the check gates (`CHECK_GATE`), graph2's check, in
-        shadow, isn't cancelled but runs to its verdict, and one still running beside a check that passed or failed is
-        compared once it ends (`compare`: the check's reading and what it failed, `Loop._compare`)."""
+        shadow, still running beside a check that passed or failed isn't cancelled but runs to its verdict, to be compared
+        once it ends (`compare`: the check's reading and what it failed, `Loop._compare`); one with nothing to compare is
+        cancelled.  At most `KEPT_MAX` run so: one more cancels the oldest (`kept_cancelled`), whose comparison is owed no
+        more."""
         w, j = self.world, t.judged.get(c.sha)
-        cancel = w.cancel(c.sha) if self.gate == GRAPH2_GATE else "none: graph2, in shadow, runs to its verdict"
         later = (self.gate == CHECK_GATE and j is not None and j.shadow is not None and not _ended(j.shadow)
                  and vqueue._reading(c.verdict) in (PASS, FAIL))
+        cancel = "none: graph2, in shadow, runs to its verdict" if later else w.cancel(c.sha)
+        over = t.alive[:max(0, len(t.alive) + 1 - KEPT_MAX)] if later else []
+        if later:
+            t.alive[:] = [*t.alive[len(over):], c.sha]
+        stopped = {sha: w.cancel(sha) for sha in over}
+        for sha, how in stopped.items():
+            self.out(f"research queue vqueue: tick {t.n}: {sha[:12]}'s graph2 check, kept after its drop, {how}: at most "
+                     f"{KEPT_MAX} are kept, and {c.sha[:12]}'s is the newest")
         rec = (j.record or {}) if j is not None and j.slim is not None and j.slim.state == PENDING else {}
         if "plan" in rec:
             self.slim.abandon(rec)
@@ -2081,6 +2103,7 @@ class Loop:
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
                            failed=c.verdict.failed, cancel=cancel, done=True,
                            **({"compare": {"check": vqueue._reading(c.verdict), "said": _said_as(c.verdict)}} if later else {}),
+                           **({"kept_cancelled": stopped} if stopped else {}),
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
                            **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}))
 
@@ -2564,8 +2587,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--gate", choices=GATES, default=GRAPH2_GATE,
                     help=f"what gates a candidate: `{GRAPH2_GATE}` (the default), its graph2 check with the run beside it; "
                          f"`{CHECK_GATE}`, drive's after-landing check of it, every step as --shards shards, with graph2's "
-                         "check in shadow: read, never cancelled, compared with the check's verdict in one logged line once "
-                         "both end, a drop's after it, and deciding nothing")
+                         "check in shadow: read, compared with the check's verdict in one logged line once both end, a "
+                         f"drop's after it (at most {KEPT_MAX} kept so, the oldest cancelled past them), and deciding nothing")
     ap.add_argument("--shards", type=_shards, default=SHARDS,
                     help=f"with --gate {CHECK_GATE}, the shards each check runs as, one launch each: an N ci.toml has a shard "
                          f"plan for, or auto:N, N shards of an auto plan of the candidate's tree made before they launch, "
