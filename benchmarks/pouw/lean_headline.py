@@ -1,6 +1,6 @@
 """`lean_headline`: the families' headline instances as exact Lean data, the files their headline guarantees read.
 
-    python benchmarks/pouw/lean_headline.py           write Security/Definitions/Accounting/Headline/Sm*.lean
+    python benchmarks/pouw/lean_headline.py           write security/Definitions/Accounting/Headline/Sm*.lean
     python benchmarks/pouw/lean_headline.py --check   exit 1 when a committed file is not what it would write
 
 A family's data-sheet instance (`Accounting.TS.Headline.SmNN`, read by `Accounting.Guarantees.TS.SmNNSheetHeadline`):
@@ -44,7 +44,7 @@ from verity_machine_model.model import device
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-OUT = ROOT / "Security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
+OUT = ROOT / "security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
 OUT_M = OUT.with_name("Sm120Measured.lean")
 
 Q = Fraction(1, 2)                 # A6's floors: two words a lane, so q = q_T = ½ and b_T = 0 (SheetScalarRouteHalf)

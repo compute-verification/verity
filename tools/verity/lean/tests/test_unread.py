@@ -63,14 +63,14 @@ def test_the_longest_chain_and_the_imports_once_modules_go():
 
 
 def test_a_cited_path_names_the_modules_it_ends_written_out_or_built_from_literals():
-    files = {"Proofs.Core.Prims.Vectors": "Security/Proofs/Core/Prims/Vectors.lean",
-             "Proofs.Core.TC.Vectors": "Security/Proofs/Core/TC/Vectors.lean", "Root": "Root.lean"}
+    files = {"Proofs.Core.Prims.Vectors": "security/Proofs/Core/Prims/Vectors.lean",
+             "Proofs.Core.TC.Vectors": "security/Proofs/Core/TC/Vectors.lean", "Root": "Root.lean"}
     modules = {k: m for m, f in files.items() for k in (m, f, m.replace(".", "/") + ".lean")}
     named = U.path_namer(modules)
-    text = ('FILES = (LEAN / "Prims" / "Vectors.lean", Path(ROOT, "Security", "Proofs/Core/TC", "Vectors.lean"))\n'
+    text = ('FILES = (LEAN / "Prims" / "Vectors.lean", Path(ROOT, "security", "Proofs/Core/TC", "Vectors.lean"))\n'
             'ANY = here / "Vectors.lean"\nTOP = "../Root.lean"\n')
     paths = U.lean_paths(text)
-    assert {"Prims/Vectors.lean", "Security/Proofs/Core/TC/Vectors.lean"} <= set(paths)
+    assert {"Prims/Vectors.lean", "security/Proofs/Core/TC/Vectors.lean"} <= set(paths)
     assert set().union(*map(named, paths)) == {"Proofs.Core.Prims.Vectors", "Proofs.Core.TC.Vectors", "Root"}
     assert named("Vectors.lean") == set() and named("/abs/x/Security/Proofs/Core/TC/Vectors.lean") == {"Proofs.Core.TC.Vectors"}
     assert all((U.ROOT / f).is_file() for f in U.NOT_READERS), "NOT_READERS names this tool's files where they are"
@@ -182,14 +182,14 @@ def test_a_lock_s_texts_and_the_document_they_name_seed_and_a_module_of_checks_o
     read."""
     root = tmp_path / "unread"
     shutil.copytree(FIXTURE, root, ignore=shutil.ignore_patterns(".lake"))
-    (root / "Security" / "PROTOCOL.md").write_text("The helper is `Core.unusedHelper`.\n")
-    files = [f for f in U.tracked(FIXTURE) if f != "tools/checks.py"] + ["Security/PROTOCOL.md"]
+    (root / "security" / "PROTOCOL.md").write_text("The helper is `Core.unusedHelper`.\n")
+    files = [f for f in U.tracked(FIXTURE) if f != "tools/checks.py"] + ["security/PROTOCOL.md"]
     tree = U.Tree(root, files)
-    tree.locks["Security"]["guarantees"]["Core.Guarantees.Spec"]["why"] = (
+    tree.locks["security"]["guarantees"]["Core.Guarantees.Spec"]["why"] = (
         "its witness is 'Dead.lonely', Proofs.Flock.Spare states the rest, and PROTOCOL.md says why")
     rep = U.analyse(tree, U.Facts(FACTS), full=False)
     mods = rep["modules"]
-    assert rep["lock_docs"] == {"Security/PROTOCOL.md": ["Security/lean-audit.json"]}
+    assert rep["lock_docs"] == {"security/PROTOCOL.md": ["security/lean-audit.json"]}
     assert {m: mods[m]["status"] for m in ("Definitions.Dead", "Proofs.Flock.Spare", "Definitions.Checks")} == {
         "Definitions.Dead": "read", "Proofs.Flock.Spare": "read", "Definitions.Checks": "checks"}
     assert [n for n, _, _ in mods["Definitions.Dead"]["unread_declarations"]] == ["Dead.lonely_pos"]
@@ -229,7 +229,7 @@ def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_cap
     (tmp_path / "new.json").write_text(U.caps_text(tight))
     assert U.main([*cli, "--update-caps"]) == 1 and U.load_caps(tmp_path / "new.json") == tight
     with pytest.raises(ValueError, match="not a lean-unread-caps/v1 file"):
-        U.load_caps(FACTS.parent / "unread" / "Security" / "lean-audit.json")
+        U.load_caps(FACTS.parent / "unread" / "security" / "lean-audit.json")
 
 
 def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():
@@ -246,9 +246,9 @@ def test_the_kept_facts_are_what_unread_lean_writes_on_the_fixture(tmp_path):
     root = tmp_path / "unread"
     shutil.copytree(FIXTURE, root, ignore=shutil.ignore_patterns(".lake"))
     tree = U.Tree(root, U.tracked(root))
-    U.build(tree, "Security/Proofs", setup=False)
+    U.build(tree, "security/Proofs", setup=False)
     out = tmp_path / "out"
     out.mkdir()
-    fresh = U.write_facts(tree, "Security/Proofs", out)
+    fresh = U.write_facts(tree, "security/Proofs", out)
     check_report(U.analyse(tree, U.Facts(fresh)))
     assert fresh.read_text() == FACTS.read_text(), f"the kept facts are stale: {REGENERATE}"
