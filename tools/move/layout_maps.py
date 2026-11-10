@@ -178,6 +178,11 @@ EXCEPT = [
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
+    ("verity/core/primitives/circuits/", "verity/circuits/lean/",
+     "the circuit format's Lake package: the rule drops its directory's name and puts its lakefile, manifest and lock in "
+     "`verity/circuits/`, the root of the Python package; the Lean takes `lean/`, as each protocol's Lean is its `lean/`"),
+    ("verity/core/primitives/commitments/", "verity/commitments/lean/",
+     "the commitments' Lake package: as the circuit format's, the rule puts it in the root of `verity/commitments/`"),
 ]
 #: an EXCEPT row whose files go with another move than their component's: {the row's path today: the move}
 EXCEPT_MOVE = {
@@ -238,6 +243,16 @@ NEW = {
     "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
     "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
     "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and the test goes with it
+    "verity/core/service/flock/FlockRec.lean": "core:recursion-lean",   # the recursion's library: it imports `Flock.Rec*`
+    "verity/core/service/flock/FlockZkServer.lean": "core:zk-server",   # the ZK server's library: `Flock.Firewall` and under
+    "verity/ml/flock/tests/test_lean_layers.py": "ml:flock-lean-verifier-tests",
+    "verity/ml/flock/pod/lake_closure.py": "ml:flock-pod-scripts",
+    "verity/ml/flock/tests/test_lake_closure.py": "ml:flock-pod-scripts",
+    # the Lake packages Flock's requires by path: bytes, hashes and parsing, in a directory of its own under the circuit
+    # language (`verity/circuits/base/`), which the commitments may load; the format's decoder; frame-v3 and the draw
+    "verity/core/primitives/base/": "ml:circuit-format",
+    "verity/core/primitives/circuits/": "ml:circuit-format",
+    "verity/core/primitives/commitments/": "ml:commitment-schemes",
 }
 #: directories written as one row though a file of theirs is archived, so that a file added to the directory, or one it
 #: fetches, goes with it: {the directory today: why}
