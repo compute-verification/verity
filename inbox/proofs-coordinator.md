@@ -32213,3 +32213,20 @@ With `setupOf_x` (InsSetup; D's `setup` field follows from it) and `hiddenOf_x` 
 > The number is set by the committed traces' binding, not by Flock (\(\kappa_s \le 2^{-202.98}\)). The lock reads \(B_{conf}\)'s finder, which reruns the prover through the extraction's waits, only at ecr/sha-512 (`Claims.ExpectedCR`). At it the two binding terms are \(2N\sqrt{2T(1+R)/2^{256}} \ge 2^{-42.8}\) at \(T = 2^{80}\), with \(N \ge 2^{43.7}\) gates, which is over \(2^{-53.4}\) an audit. Meeting \(2^{-61.0}\) needs a tail bound on the waits, so that the strict birthday bound applies near the finder's expected cost, and then R, the extraction's expected reruns, inside its budget at the plan's point. Neither is proved or computed.
 
 **Runs:** none.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 20:06Z: r20261110-195244-97c4 stopped in setup_stX at a tuple match the walker never evaluated; fixed in Fwd at ff8c126681, r20261110-200448-6bdc retries the chain, ETA about 21:15Z
+
+- **Head** `ff8c126681` on `cursor/proofs-twowitness-0d28`, pushed. Nothing landed, no file moved; the freeze check prints nothing [run].
+- **97c4's verdict** (at `eaf5ecbf45`, exit 1 after 164 s) [run]:
+  - `Decode` passed: c8ec's `bodyBad_one` is fixed by the two `import all`s (Init.Data.Stream, Init.Data.Array.Subarray).
+  - In `Setup`, the walks `load_pubX`, `checkPartition_X`, `deriveTemplateUnits_X` and `linksCheck_X` passed, so 3020's two stops are fixed.
+  - `setup_stX` stopped at `Stmt.setupHidden`'s `if let (.ok (.stratified k strata), some obj, some prog) := ((ofJson d).map (·.law), partition, program)`: "fwd: the match does not reduce". The other two errors (`setupTables_X`, an unknown `setup_stX`) follow from it.
+- **Why** [read]: the walker evaluates a match's discriminant only when it is not a constructor application, and this one is a tuple. Concrete's statement passes the same match only because its partition and program are `none`; ours are `some`, so the draw's law must be evaluated.
+- **The fix** (`Fwd.lean`, compiled as a standalone copy here) [run]: when `reduceMatcher?` fails, the match step evaluates the `Except`-typed fields of each constructor-application discriminant (`evalFields`, through `evalVal`, which already evaluates `(ofJson drawJ).map (·.law)` at `setupTables`' three earlier matches) and retries once. A walk that passed before never reaches it, so Concrete's walks are unchanged [read]; the run retries `Nontrivial` to show it.
+- **Running**: `r20261110-200448-6bdc` on cpu-12, `--try` of `InstanceStmt/Scope.lean` (its dependencies: Concrete's chain, then Decode, Setup, SetupAt, InsSetup) and then `EndToEndRegistered/Nontrivial.lean`. `Fwd` changed, so Concrete's chain rebuilds first, about 30 minutes as in b385. ETA about 21:15Z [guess].
+- **What (A) still needs, in order**:
+  1. the rest of `setup_stX`'s walk past this match: template units, links, regions, hello (rules in place, not yet reached);
+  2. `setupTables_X`, then `SetupAt`, `InsSetup`'s `setup_X` and `Scope`'s facts, each on its first full run;
+  3. drop `checkPartition_X`'s `trace`, then a records run and `--siblings`.
+- **Still open**: the `Ref.scope` question in my 19:54Z entry.
+- **Dates**: (A) Thu 12 Nov 18:00Z still looks reachable [guess]; I'll say by Wed 18:00Z in a heading if not. (D) Fri 13 Nov 12:00Z.
