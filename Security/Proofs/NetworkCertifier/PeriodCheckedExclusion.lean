@@ -66,9 +66,12 @@ not hold, at a server that is never late: the client reads the secret off the ce
 write the same record (`adm_obs`), so no reader takes the record to both views under a parameter that allows both
 schedules (`adm_not_readsBy`), and both secrets are counted against `#Θ · windowsCount = 1` (`pos_count`).
 
-**The premises together.** At the same window, with the secret whether the server's end is late under the one schedule
-`oneSched`, the record reads back under the registered parameter (`RecordFormat.readsBy_comp`) and
-`PeriodLeakChecked`'s premises hold together (`PeriodLeakChecked_placed`): a monitoring period with a placed window
+**The premises together.** At the same window, under the one schedule `oneSched` and a server that is not late, the
+record reads back under the registered parameter (`RecordFormat.readsBy_comp`), the network certifier registers its
+observations at the operator whose move is the unset bit, the window meets `WindowGoodChecked`, and
+`PeriodLeakChecked`'s premises hold together (`PeriodLeakChecked_placed_honest`). It is at one secret: the toy circuit
+has no free input, so its count is 1, and an operator fixed before the secrets registers one ingress. `posL` rejects
+every run, so the lemma shows that the premises hold together at a placed window, not that the deployed verifier
 meets them. The toy has no checked input, so neither lemma shows anything about a checked input.
 -/
 
@@ -322,10 +325,11 @@ theorem bit_dec (z : Bool) : failedAt0 (certifierCode oneSched (bitArr z) ()) = 
   rw [bit_code]
   cases z <;> rfl
 
-theorem bit_channel :
-    PeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) {()} (Set.univ : Set Bool) (fun _ => oneSched) id
-      (fun v => failedAt0 (v ())) fun p => (recordingCode bitFmt p.1 (bitArr p.2)).1 :=
-  ⟨fun _ _ => ⟨rfl, (), Set.mem_singleton (), rfl⟩, fun z _ => bit_dec z⟩
+/-- The window's record at the bit: the step `posObs z`. -/
+theorem bit_obs (z : Bool) : (recordingCode bitFmt oneSched (bitArr z)).2 = fun _ => [posObs z] := by
+  funext i
+  show [posObs (failedAt0 (certifierCode oneSched (bitArr z) ()))] = [posObs z]
+  rw [bit_dec]
 
 /-! ## The record must read back under the registered parameter -/
 
@@ -411,18 +415,35 @@ theorem PeriodLeakChecked_readsBy_exclusion :
 
 /-! ## The premises at a placed window -/
 
-/-- **`PeriodLeakChecked`'s premises hold together at a monitoring period of one placed window.** At `posL`, the format
-`bitFmt` and the one schedule `oneSched`, with the secret whether the server's end is late: `Compiled.KS`, the
-commitment's binding, the window's placement (`WindowsPlaced`), its check's pinning at no checked input
-(`CheckedUnique`), the read-back under the one registered parameter (`RecordFormat.ReadsBy`) and the channel of the two
-secrets (`PeriodChannelReg`). -/
-theorem PeriodLeakChecked_placed :
+/-- **`PeriodLeakChecked`'s premises hold together at a monitoring period of one placed window that meets its good
+event.** At `posL`, the format `bitFmt`, the one schedule `oneSched` and the one secret of a server that is not late:
+`Compiled.KS`, the commitment's binding, the window's placement (`WindowsPlaced`), its check's pinning at no checked
+input (`CheckedUnique`), `TrustedHost` at a host that runs the network certifier's code, the read-back under the one
+registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`PeriodChannelReg`); the network certifier
+registers the window's observations at the operator whose move is the unset bit (`CertifierRegisters`); and the window
+meets its good event (`WindowGoodChecked`), at the check every run passes. -/
+theorem PeriodLeakChecked_placed_honest :
     (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
+      Verity.Assumptions.TrustedHost ()
+        (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
+        (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧
-      PeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) {()} (Set.univ : Set Bool) (fun _ => oneSched) id
-        (fun v => failedAt0 (v ())) fun p => (recordingCode bitFmt p.1 (bitArr p.2)).1 :=
-  ⟨posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, bitFmt.readsBy_comp fun _ => oneSched, bit_channel⟩
+      PeriodChannelReg bitFmt (fun (_ : Unit) s => s = oneSched) {()} ({false} : Set Bool) (fun _ => oneSched) id
+        (fun v => failedAt0 (v ())) (fun p => (recordingCode bitFmt p.1 (bitArr p.2)).1) ∧
+      (∀ (i : Fin 1) (s : AuditStatement), (posL Bool).parse (posX false) = some s →
+        CertifierRegisters id (posL Bool).commit notLay 1 (fun _ _ => [false]) s (posTops s)
+          ((recordingCode bitFmt oneSched (bitArr false)).2 i)) ∧
+      ∀ i : Fin 1, WindowGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
+        (fun _ _ => True ∧ True) 1 (posStmt false) (fun _ => false) posTops (posX false) ⟨[]⟩
+        ((recordingCode bitFmt oneSched (bitArr false)).2 i) := by
+  have ho : ∀ i : Fin 1, (recordingCode bitFmt oneSched (bitArr false)).2 i = [posObs false] :=
+    fun i => congrFun (bit_obs false) i
+  refine ⟨posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl,
+    bitFmt.readsBy_comp fun _ => oneSched, ⟨fun _ _ => ⟨rfl, (), Set.mem_singleton (), rfl⟩, fun z _ => bit_dec z⟩,
+    fun i s hs => ?_, fun i => (ho i) ▸ pos_good id false _⟩
+  obtain rfl : posStmt false = s := Option.some.inj ((pos_parse (Coin := Bool) false).symm.trans hs)
+  exact (ho i) ▸ pos_registers id false (fun _ _ => [false]) rfl
 
 end NetTiming.Witness

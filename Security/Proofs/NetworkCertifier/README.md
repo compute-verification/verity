@@ -159,10 +159,10 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
                                          of the row poolOpen names (digest_open_of_leakAt), so CarriedRoots holds
                                          (rootsOfChecked)
 PeriodCheckedChecks.lean  PeriodLeakChecked held to the trace's run is false (freeL_traceRun_insufficient,
-                          periodLeakChecked_traceRun_fails); its nontrivial lemma, and its honest lemma at the toy
-                          code over a period of no windows
-PeriodCheckedExclusion.lean  at a placed window its count fails without RecordFormat.ReadsBy
-                          (PeriodLeakChecked_readsBy_exclusion)
+                          periodLeakChecked_traceRun_fails); its nontrivial lemma; its honest lemma at the toy
+                          code, a period of no windows
+PeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (PeriodLeakChecked_readsBy_exclusion);
+                its premises hold (PeriodLeakChecked_placed_honest)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -387,7 +387,7 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
 - **The period's bound with checked inputs** (`PeriodChecked.lean`):
   `PeriodLeakChecked` is `PeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
-  windows'; without the read-back it fails (`PeriodCheckedExclusion.lean`). Its check is held to the run at the
+  windows'; without it the count fails (`PeriodCheckedExclusion.lean`). Its check is held to the run at the
   network certifier's rows (`certifierRun`): held to the trace's run the statement is false
   (`PeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace holds the registration's values at the
   registered inputs. `PeriodLeakAccepted` is its instance at no checked input.
