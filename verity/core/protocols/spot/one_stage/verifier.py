@@ -61,7 +61,7 @@ CORE = Path(__file__).resolve().parents[3]
 PACKAGE = CORE.parents[1] / "verity/core/service/spot"
 EXE = "sampled-proofs-verifier"
 BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
-#: The δ the Lean's registration parameters carry, which R1-R7 never read.
+#: The δ the Lean's registration parameters carry, which R1-R8 never read.
 REGISTRATION_DELTA = "1/2"
 
 

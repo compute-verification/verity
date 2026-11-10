@@ -164,8 +164,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
-  `verity/core/service/spot`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
-  (`check`), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
+  `verity/core/service/spot`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
+  (`check`; R8, the fan-out and the run Inputs two proof blocks read, is Python's alone so far), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
@@ -177,7 +177,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   partitions. It is the `Stream`'s sample of record: `Stream.select` hands it the bytes of the challenger's coins the
   Python sample read, and refuses the sample (`disagree`) unless the Lean samples the same object from exactly those bytes.
   The Lean also runs a registration whole, from the registration through the verdict (`Spot/Run.lean`,
-  `verifier.run`): the public-items rule, R1-R7, the receipt, the sample from those bytes and its checks, the hold on
+  `verifier.run`): the public-items rule, R1-R8, the receipt, the sample from those bytes and its checks, the hold on
   the verdicts and the audit record. `Stream.outcome` holds each outcome on a sample from the coins to it, and an outcome the two don't make alike
   is a reject whose audit record fails `run`. `Spot/Slots.lean` puts that sample in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the

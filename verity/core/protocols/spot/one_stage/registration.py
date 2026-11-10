@@ -219,7 +219,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           held: Sequence[str] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None) -> Verdict:
-    """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
+    """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
