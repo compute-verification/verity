@@ -72,6 +72,11 @@ theorem startsWith_toList (s pat : String) : s.startsWith pat = pat.toList.isPre
 theorem eq_ok_of_toOption {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
   cases e <;> simp_all [Except.toOption]
 
+theorem exists_ok_of_isOk {ε α : Type} {e : Except ε α} (h : e.isOk = true) : ∃ a, e = .ok a := by
+  cases e with
+  | error => simp [Except.isOk, Except.toBool] at h
+  | ok a => exact ⟨a, rfl⟩
+
 /-! ## The registration evaluated -/
 
 deriving instance DecidableEq for Flock.TemplateQuery.TRange
@@ -92,7 +97,7 @@ theorem valid_batch :
     Spot.Partition.valid (Spot.Partition.build (Flock.hexOf Batch.program.sha512) Batch.query) = true := by
   unfold Spot.Partition.valid Spot.Partition.build Flock.HmRow.checkPartitionObject Flock.HmRow.isSha512Hex
     Flock.TemplateQuery.templatesOf Spot.keys? Spot.sortStrings
-  simp only [qsort_fuel, String.all_bool_eq]
+  simp (config := { iota := false }) only [qsort_fuel, String.all_bool_eq]
   decide +kernel
 
 theorem templateQuery_batch :
@@ -109,8 +114,8 @@ theorem evaluate_batch : Spot.Partition.evaluate Batch.program Batch.query = .ok
   unfold Spot.Partition.build Spot.keys? Spot.sortStrings Flock.TemplateQuery.templatesOf
     Flock.TemplateQuery.evaluate Flock.TemplateQuery.isInput Flock.Program.isInputId Flock.Program.inputId?
     Flock.Program.widthAfter? Spot.Partition.checkTemplates Spot.Partition.templateBits
-  simp only [qsort_fuel, widths_fuel 4, startsWith_toList, Std.Legacy.Range.forIn_eq_forIn_range',
-    Std.Legacy.Range.forIn'_eq_forIn'_range']
+  simp (config := { iota := false }) only [qsort_fuel, widths_fuel 4, startsWith_toList,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn'_eq_forIn'_range']
   decide +kernel
 
 theorem layout_batch : ∃ l, Slots.fileLayout default Batch.program Batch.query = .ok l ∧
@@ -140,16 +145,22 @@ theorem missBound_batch : missBound .all default Batch.program Batch.query none 
   have hw : window 0 4 ({0} : Finset ℕ) ≠ ∅ := Finset.ne_empty_of_mem (a := 0) (by simp [window])
   simp only [missBound, hl, slotDesign_batch, Design.Pa, hcl, classesPa, hlen, OneStage.Pa, hw, ↓reduceIte, zero_mul]
 
+theorem select_batch : (Select.select .all Batch.program Batch.query none none ByteArray.empty).isOk = true := by
+  unfold Select.select Spot.Partition.units
+  simp only [evaluate_batch]
+  unfold Select.Rule.lawOver Draw.deriveLaw Draw.checkDraw Draw.checkDrawFull Draw.sameLaw Draw.lawOf
+    Spot.Draw.lawKeys keys? sortStrings jeq
+  simp (config := { zeta := false }) only [canon_fuel 16, qsort_fuel]
+  decide +kernel
+
 /-! ## The witnesses -/
 
 theorem drawMisses_honest :
     (Slots.select .all default Batch.program Batch.query none none ByteArray.empty).isOk = true := by
-  unfold Slots.select Slots.fileLayout Spot.Partition.strata Select.select Spot.Partition.units
-  simp only [evaluate_batch]
-  unfold Select.Rule.lawOver Draw.deriveLaw Draw.checkDraw Draw.checkDrawFull Draw.sameLaw Draw.lawOf
-    Spot.Draw.lawKeys keys? sortStrings jeq
-  simp only [canon_fuel 16, qsort_fuel]
-  decide +kernel
+  obtain ⟨l, hl, -⟩ := layout_batch
+  obtain ⟨⟨_, _, _⟩, hs⟩ := exists_ok_of_isOk select_batch
+  rw [Slots.select, hl, hs]
+  rfl
 
 theorem drawMisses_nontrivial : ¬ Claims.Pr (fun src : Fin 0 → Fin 256 =>
       (acceptAllSelect .all default Batch.program Batch.query none none (bytesOf src)).isOk = true ∧
