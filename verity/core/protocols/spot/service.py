@@ -2410,7 +2410,7 @@ class Stream:
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
                      rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
-        rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
+        rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
         accepted = rec["accepted"] and boundary["accepted"]

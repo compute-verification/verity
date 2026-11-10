@@ -50,6 +50,7 @@
   "Proofs.Properties.Spot.Wires",
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
+  "Proofs.Properties.Spot.Tables",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",
