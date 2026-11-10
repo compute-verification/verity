@@ -39,7 +39,8 @@ commits go to the object store, and the scratch worktree is removed. Each branch
 id), `up-to-date`, `conflicted` (the step and the files), `no-row` (the branch holds tracked files under a path the move's
 map retires, and no row moves them: each file, and the fix, a row for it in the rows file the branch commits beside the
 map, `NAME.rows.toml`, which `layout.py` reads after the map and deletes, so no result holds one), `script-failed` (the
-script's exit code and the tail of its output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
+script's exit code and the tail of its output), `locks-stale` (the last merge's only conflicts were Lean locks,
+`lean-audit.json`: the result takes `--onto`'s,
 and its owner regenerates them with `check.py --update`; `--push-to` pushes it; a pinned `TRUSTED.sha256` in
 conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when

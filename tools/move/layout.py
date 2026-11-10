@@ -117,10 +117,11 @@ def git(root: Path, *args: str, check: bool = True) -> str:
 
 
 class NoRow(SystemExit):
-    """Tracked files under a path the map retires that no row moves (`files`)."""
+    """Tracked files under a path the map retires that no row moves (`files`, every one; the message a caller that lets
+    it through exits with names the first of them)."""
 
     def __init__(self, files: list[str]):
-        super().__init__("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(files))
+        super().__init__("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(files[:50]))
         self.files = files
 
 
