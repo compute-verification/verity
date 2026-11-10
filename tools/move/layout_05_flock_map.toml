@@ -1,0 +1,210 @@
+# The layout move of Flock's tests, bench drivers, pod scripts and agreement, to `verity/flock`: what
+# `tools/move/layout.py --map tools/move/layout_05_flock_map.toml` moves and rewrites. 145 files in 5 components, in
+# 100 rows.
+# A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
+# path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
+# ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
+# row a file. Nothing is edited, split or deleted.
+# Rows that depart from that rule:
+# - `verity/ml/flock/verifier/` to `verity/flock/agreement/`: the agreement with upstream's verifier: the plain rule
+#   puts its scripts in `verity/flock/verifier/`, the root of the Lean verifier's Lake package, and its README on
+#   that package's README.
+# The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
+# its place among them is free. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/core/service/sigma/" = "verity/flock/sigma/"
+"verity/ml/flock/pod/00-setup-cpu.sh" = "verity/flock/pod/00-setup-cpu.sh"
+"verity/ml/flock/pod/10-link.sh" = "verity/flock/pod/10-link.sh"
+"verity/ml/flock/pod/20-gpu-link.sh" = "verity/flock/pod/20-gpu-link.sh"
+"verity/ml/flock/pod/20-pure.sh" = "verity/flock/pod/20-pure.sh"
+"verity/ml/flock/pod/30-cell.sh" = "verity/flock/pod/30-cell.sh"
+"verity/ml/flock/pod/31-replay.sh" = "verity/flock/pod/31-replay.sh"
+"verity/ml/flock/pod/33-ir-cell.sh" = "verity/flock/pod/33-ir-cell.sh"
+"verity/ml/flock/pod/50-preflight.sh" = "verity/flock/pod/50-preflight.sh"
+"verity/ml/flock/pod/60-circuit.sh" = "verity/flock/pod/60-circuit.sh"
+"verity/ml/flock/pod/61-circuit-cell.sh" = "verity/flock/pod/61-circuit-cell.sh"
+"verity/ml/flock/pod/70-class-sweep.sh" = "verity/flock/pod/70-class-sweep.sh"
+"verity/ml/flock/pod/71-gemm-slowdown.sh" = "verity/flock/pod/71-gemm-slowdown.sh"
+"verity/ml/flock/pod/74-gemm-hill.sh" = "verity/flock/pod/74-gemm-hill.sh"
+"verity/ml/flock/pod/76-read-gadget.sh" = "verity/flock/pod/76-read-gadget.sh"
+"verity/ml/flock/pod/80-rec-inner.sh" = "verity/flock/pod/80-rec-inner.sh"
+"verity/ml/flock/pod/85-rec-reprice.sh" = "verity/flock/pod/85-rec-reprice.sh"
+"verity/ml/flock/pod/86-zk-cpu-steps.sh" = "verity/flock/pod/86-zk-cpu-steps.sh"
+"verity/ml/flock/pod/87-rec-c3-open.sh" = "verity/flock/pod/87-rec-c3-open.sh"
+"verity/ml/flock/pod/88-rec-c3-inner.sh" = "verity/flock/pod/88-rec-c3-inner.sh"
+"verity/ml/flock/pod/89-served-registered.sh" = "verity/flock/pod/89-served-registered.sh"
+"verity/ml/flock/pod/90-tmpl-unit.sh" = "verity/flock/pod/90-tmpl-unit.sh"
+"verity/ml/flock/pod/91-plain-hidden-tables.sh" = "verity/flock/pod/91-plain-hidden-tables.sh"
+"verity/ml/flock/pod/91-plain-hidden.sh" = "verity/flock/pod/91-plain-hidden.sh"
+"verity/ml/flock/pod/92-zk-sessions.sh" = "verity/flock/pod/92-zk-sessions.sh"
+"verity/ml/flock/pod/93-rec-honest-session.sh" = "verity/flock/pod/93-rec-honest-session.sh"
+"verity/ml/flock/pod/93-zk-tree-from.sh" = "verity/flock/pod/93-zk-tree-from.sh"
+"verity/ml/flock/pod/catalog.py" = "verity/flock/pod/catalog.py"
+"verity/ml/flock/pod/cpu-slices.sh" = "verity/flock/pod/cpu-slices.sh"
+"verity/ml/flock/pod/cuda-13.3.sh" = "verity/flock/pod/cuda-13.3.sh"
+"verity/ml/flock/pod/export_unit.py" = "verity/flock/pod/export_unit.py"
+"verity/ml/flock/pod/gemm-coordinates-4k.defs.json" = "verity/flock/pod/gemm-coordinates-4k.defs.json"
+"verity/ml/flock/pod/gemm-coordinates-8k.defs.json" = "verity/flock/pod/gemm-coordinates-8k.defs.json"
+"verity/ml/flock/pod/gemm-coordinates.defs.json" = "verity/flock/pod/gemm-coordinates.defs.json"
+"verity/ml/flock/pod/gemm_fp.py" = "verity/flock/pod/gemm_fp.py"
+"verity/ml/flock/pod/gemm_hill.py" = "verity/flock/pod/gemm_hill.py"
+"verity/ml/flock/pod/gemm_slowdown.py" = "verity/flock/pod/gemm_slowdown.py"
+"verity/ml/flock/pod/lean_verdicts.py" = "verity/flock/pod/lean_verdicts.py"
+"verity/ml/flock/pod/read_gadget.py" = "verity/flock/pod/read_gadget.py"
+"verity/ml/flock/pod/rec-env.sh" = "verity/flock/pod/rec-env.sh"
+"verity/ml/flock/tests/fixtures/f1-gate-transcript/" = "verity/flock/tests/fixtures/f1-gate-transcript/"
+"verity/ml/flock/tests/fixtures/inner_claims.json" = "verity/flock/tests/fixtures/inner_claims.json"
+"verity/ml/flock/tests/fixtures/randomness_lean.json" = "verity/flock/tests/fixtures/randomness_lean.json"
+"verity/ml/flock/tests/fixtures/served_reads.json" = "verity/flock/tests/fixtures/served_reads.json"
+"verity/ml/flock/tests/lean/" = "verity/flock/tests/lean/"
+"verity/ml/flock/tests/plain_hidden.py" = "verity/flock/tests/plain_hidden.py"
+"verity/ml/flock/tests/served_registered.py" = "verity/flock/tests/served_registered.py"
+"verity/ml/flock/tests/stratified_agree.py" = "verity/flock/tests/stratified_agree.py"
+"verity/ml/flock/tests/test_audit_profile.py" = "verity/flock/tests/test_audit_profile.py"
+"verity/ml/flock/tests/test_backend_bench.py" = "verity/flock/tests/test_backend_bench.py"
+"verity/ml/flock/tests/test_challenger_audit.py" = "verity/flock/tests/test_challenger_audit.py"
+"verity/ml/flock/tests/test_ci_fetch.py" = "verity/flock/tests/test_ci_fetch.py"
+"verity/ml/flock/tests/test_class_sweep.py" = "verity/flock/tests/test_class_sweep.py"
+"verity/ml/flock/tests/test_coin_schedule.py" = "verity/flock/tests/test_coin_schedule.py"
+"verity/ml/flock/tests/test_gemm_hill.py" = "verity/flock/tests/test_gemm_hill.py"
+"verity/ml/flock/tests/test_honest_reqs.py" = "verity/flock/tests/test_honest_reqs.py"
+"verity/ml/flock/tests/test_honest_session.py" = "verity/flock/tests/test_honest_session.py"
+"verity/ml/flock/tests/test_ir_lowering_bench.py" = "verity/flock/tests/test_ir_lowering_bench.py"
+"verity/ml/flock/tests/test_lean_coin_open.py" = "verity/flock/tests/test_lean_coin_open.py"
+"verity/ml/flock/tests/test_lean_coin_tree.py" = "verity/flock/tests/test_lean_coin_tree.py"
+"verity/ml/flock/tests/test_lean_draw_laws.py" = "verity/flock/tests/test_lean_draw_laws.py"
+"verity/ml/flock/tests/test_lean_forged_proofs.py" = "verity/flock/tests/test_lean_forged_proofs.py"
+"verity/ml/flock/tests/test_lean_hello.py" = "verity/flock/tests/test_lean_hello.py"
+"verity/ml/flock/tests/test_lean_hidden_outputs.py" = "verity/flock/tests/test_lean_hidden_outputs.py"
+"verity/ml/flock/tests/test_lean_identifier.py" = "verity/flock/tests/test_lean_identifier.py"
+"verity/ml/flock/tests/test_lean_ks_form.py" = "verity/flock/tests/test_lean_ks_form.py"
+"verity/ml/flock/tests/test_lean_out_group_slot.py" = "verity/flock/tests/test_lean_out_group_slot.py"
+"verity/ml/flock/tests/test_lean_plain_hidden_tables.py" = "verity/flock/tests/test_lean_plain_hidden_tables.py"
+"verity/ml/flock/tests/test_lean_plain_leaves.py" = "verity/flock/tests/test_lean_plain_leaves.py"
+"verity/ml/flock/tests/test_lean_plain_tree.py" = "verity/flock/tests/test_lean_plain_tree.py"
+"verity/ml/flock/tests/test_lean_public_inputs.py" = "verity/flock/tests/test_lean_public_inputs.py"
+"verity/ml/flock/tests/test_lean_rec_cap_guards.py" = "verity/flock/tests/test_lean_rec_cap_guards.py"
+"verity/ml/flock/tests/test_lean_rec_coins.py" = "verity/flock/tests/test_lean_rec_coins.py"
+"verity/ml/flock/tests/test_lean_rec_compose.py" = "verity/flock/tests/test_lean_rec_compose.py"
+"verity/ml/flock/tests/test_lean_rec_inner_streams.py" = "verity/flock/tests/test_lean_rec_inner_streams.py"
+"verity/ml/flock/tests/test_lean_rec_links_verify.py" = "verity/flock/tests/test_lean_rec_links_verify.py"
+"verity/ml/flock/tests/test_lean_rec_record.py" = "verity/flock/tests/test_lean_rec_record.py"
+"verity/ml/flock/tests/test_lean_rec_sparse.py" = "verity/flock/tests/test_lean_rec_sparse.py"
+"verity/ml/flock/tests/test_lean_record_checks.py" = "verity/flock/tests/test_lean_record_checks.py"
+"verity/ml/flock/tests/test_lean_region_words.py" = "verity/flock/tests/test_lean_region_words.py"
+"verity/ml/flock/tests/test_lean_registered_bit_rows.py" = "verity/flock/tests/test_lean_registered_bit_rows.py"
+"verity/ml/flock/tests/test_lean_registered_reads.py" = "verity/flock/tests/test_lean_registered_reads.py"
+"verity/ml/flock/tests/test_lean_salts.py" = "verity/flock/tests/test_lean_salts.py"
+"verity/ml/flock/tests/test_lean_served_registered.py" = "verity/flock/tests/test_lean_served_registered.py"
+"verity/ml/flock/tests/test_lean_session.py" = "verity/flock/tests/test_lean_session.py"
+"verity/ml/flock/tests/test_lean_session_tables.py" = "verity/flock/tests/test_lean_session_tables.py"
+"verity/ml/flock/tests/test_lean_shared_reads.py" = "verity/flock/tests/test_lean_shared_reads.py"
+"verity/ml/flock/tests/test_lean_typed_reads.py" = "verity/flock/tests/test_lean_typed_reads.py"
+"verity/ml/flock/tests/test_lean_typed_statement.py" = "verity/flock/tests/test_lean_typed_statement.py"
+"verity/ml/flock/tests/test_lean_typed_template.py" = "verity/flock/tests/test_lean_typed_template.py"
+"verity/ml/flock/tests/test_lean_verifier.py" = "verity/flock/tests/test_lean_verifier.py"
+"verity/ml/flock/tests/test_lean_width_refusals.py" = "verity/flock/tests/test_lean_width_refusals.py"
+"verity/ml/flock/tests/test_lean_witness.py" = "verity/flock/tests/test_lean_witness.py"
+"verity/ml/flock/tests/test_pod_lean_verdicts.py" = "verity/flock/tests/test_pod_lean_verdicts.py"
+"verity/ml/flock/tests/test_randomness_spec.py" = "verity/flock/tests/test_randomness_spec.py"
+"verity/ml/flock/tests/test_registered_rows.py" = "verity/flock/tests/test_registered_rows.py"
+"verity/ml/flock/tests/test_security_inputs.py" = "verity/flock/tests/test_security_inputs.py"
+"verity/ml/flock/tests/test_vectors_coverage.py" = "verity/flock/tests/test_vectors_coverage.py"
+"verity/ml/flock/tool.py" = "verity/flock/tool.py"
+"verity/ml/flock/verifier/" = "verity/flock/agreement/"
+
+[tokens]
+# directories this move shares with other moves, as a reference to one reads after it
+"verity/ml/flock/pod/" = "verity/flock/pod/"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), and files whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
+           "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
+           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
+           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
+           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.core.service.sigma" = "verity.flock.sigma"
+"verity.ml.flock.pod.catalog" = "verity.flock.pod.catalog"
+"verity.ml.flock.pod.export_unit" = "verity.flock.pod.export_unit"
+"verity.ml.flock.pod.gemm_fp" = "verity.flock.pod.gemm_fp"
+"verity.ml.flock.pod.gemm_hill" = "verity.flock.pod.gemm_hill"
+"verity.ml.flock.pod.gemm_slowdown" = "verity.flock.pod.gemm_slowdown"
+"verity.ml.flock.pod.lean_verdicts" = "verity.flock.pod.lean_verdicts"
+"verity.ml.flock.pod.read_gadget" = "verity.flock.pod.read_gadget"
+"verity.ml.flock.tests.lean" = "verity.flock.tests.lean"
+"verity.ml.flock.tests.plain_hidden" = "verity.flock.tests.plain_hidden"
+"verity.ml.flock.tests.served_registered" = "verity.flock.tests.served_registered"
+"verity.ml.flock.tests.stratified_agree" = "verity.flock.tests.stratified_agree"
+"verity.ml.flock.tests.test_audit_profile" = "verity.flock.tests.test_audit_profile"
+"verity.ml.flock.tests.test_backend_bench" = "verity.flock.tests.test_backend_bench"
+"verity.ml.flock.tests.test_challenger_audit" = "verity.flock.tests.test_challenger_audit"
+"verity.ml.flock.tests.test_ci_fetch" = "verity.flock.tests.test_ci_fetch"
+"verity.ml.flock.tests.test_class_sweep" = "verity.flock.tests.test_class_sweep"
+"verity.ml.flock.tests.test_coin_schedule" = "verity.flock.tests.test_coin_schedule"
+"verity.ml.flock.tests.test_gemm_hill" = "verity.flock.tests.test_gemm_hill"
+"verity.ml.flock.tests.test_honest_reqs" = "verity.flock.tests.test_honest_reqs"
+"verity.ml.flock.tests.test_honest_session" = "verity.flock.tests.test_honest_session"
+"verity.ml.flock.tests.test_ir_lowering_bench" = "verity.flock.tests.test_ir_lowering_bench"
+"verity.ml.flock.tests.test_lean_coin_open" = "verity.flock.tests.test_lean_coin_open"
+"verity.ml.flock.tests.test_lean_coin_tree" = "verity.flock.tests.test_lean_coin_tree"
+"verity.ml.flock.tests.test_lean_draw_laws" = "verity.flock.tests.test_lean_draw_laws"
+"verity.ml.flock.tests.test_lean_forged_proofs" = "verity.flock.tests.test_lean_forged_proofs"
+"verity.ml.flock.tests.test_lean_hello" = "verity.flock.tests.test_lean_hello"
+"verity.ml.flock.tests.test_lean_hidden_outputs" = "verity.flock.tests.test_lean_hidden_outputs"
+"verity.ml.flock.tests.test_lean_identifier" = "verity.flock.tests.test_lean_identifier"
+"verity.ml.flock.tests.test_lean_ks_form" = "verity.flock.tests.test_lean_ks_form"
+"verity.ml.flock.tests.test_lean_out_group_slot" = "verity.flock.tests.test_lean_out_group_slot"
+"verity.ml.flock.tests.test_lean_plain_hidden_tables" = "verity.flock.tests.test_lean_plain_hidden_tables"
+"verity.ml.flock.tests.test_lean_plain_leaves" = "verity.flock.tests.test_lean_plain_leaves"
+"verity.ml.flock.tests.test_lean_plain_tree" = "verity.flock.tests.test_lean_plain_tree"
+"verity.ml.flock.tests.test_lean_public_inputs" = "verity.flock.tests.test_lean_public_inputs"
+"verity.ml.flock.tests.test_lean_rec_cap_guards" = "verity.flock.tests.test_lean_rec_cap_guards"
+"verity.ml.flock.tests.test_lean_rec_coins" = "verity.flock.tests.test_lean_rec_coins"
+"verity.ml.flock.tests.test_lean_rec_compose" = "verity.flock.tests.test_lean_rec_compose"
+"verity.ml.flock.tests.test_lean_rec_inner_streams" = "verity.flock.tests.test_lean_rec_inner_streams"
+"verity.ml.flock.tests.test_lean_rec_links_verify" = "verity.flock.tests.test_lean_rec_links_verify"
+"verity.ml.flock.tests.test_lean_rec_record" = "verity.flock.tests.test_lean_rec_record"
+"verity.ml.flock.tests.test_lean_rec_sparse" = "verity.flock.tests.test_lean_rec_sparse"
+"verity.ml.flock.tests.test_lean_record_checks" = "verity.flock.tests.test_lean_record_checks"
+"verity.ml.flock.tests.test_lean_region_words" = "verity.flock.tests.test_lean_region_words"
+"verity.ml.flock.tests.test_lean_registered_bit_rows" = "verity.flock.tests.test_lean_registered_bit_rows"
+"verity.ml.flock.tests.test_lean_registered_reads" = "verity.flock.tests.test_lean_registered_reads"
+"verity.ml.flock.tests.test_lean_salts" = "verity.flock.tests.test_lean_salts"
+"verity.ml.flock.tests.test_lean_served_registered" = "verity.flock.tests.test_lean_served_registered"
+"verity.ml.flock.tests.test_lean_session" = "verity.flock.tests.test_lean_session"
+"verity.ml.flock.tests.test_lean_session_tables" = "verity.flock.tests.test_lean_session_tables"
+"verity.ml.flock.tests.test_lean_shared_reads" = "verity.flock.tests.test_lean_shared_reads"
+"verity.ml.flock.tests.test_lean_typed_reads" = "verity.flock.tests.test_lean_typed_reads"
+"verity.ml.flock.tests.test_lean_typed_statement" = "verity.flock.tests.test_lean_typed_statement"
+"verity.ml.flock.tests.test_lean_typed_template" = "verity.flock.tests.test_lean_typed_template"
+"verity.ml.flock.tests.test_lean_verifier" = "verity.flock.tests.test_lean_verifier"
+"verity.ml.flock.tests.test_lean_width_refusals" = "verity.flock.tests.test_lean_width_refusals"
+"verity.ml.flock.tests.test_lean_witness" = "verity.flock.tests.test_lean_witness"
+"verity.ml.flock.tests.test_pod_lean_verdicts" = "verity.flock.tests.test_pod_lean_verdicts"
+"verity.ml.flock.tests.test_randomness_spec" = "verity.flock.tests.test_randomness_spec"
+"verity.ml.flock.tests.test_registered_rows" = "verity.flock.tests.test_registered_rows"
+"verity.ml.flock.tests.test_security_inputs" = "verity.flock.tests.test_security_inputs"
+"verity.ml.flock.tests.test_vectors_coverage" = "verity.flock.tests.test_vectors_coverage"
+"verity.ml.flock.tool" = "verity.flock.tool"
+"verity.ml.flock.verifier" = "verity.flock.agreement"

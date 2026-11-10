@@ -1,0 +1,194 @@
+# The layout move of network certification, to `verity/protocols/certifier`: what `tools/move/layout.py --map
+# tools/move/layout_09_certifier_map.toml` moves and rewrites. 290 files in 10 components, in 90 rows.
+# A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
+# path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
+# ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
+# row a file. Nothing is edited, split or deleted.
+# Rows that depart from that rule:
+# - `verity/core/protocols/certifier/lean/` to `verity/protocols/certifier/device/program/`: the certifier program's
+#   Lake package: the plain rule puts it on `device/lean/`, where the certifier device's Lake package goes (two
+#   lakefiles, manifests, locks and toolchains on one path).
+# The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
+# its place among them is free. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/network_traces/block_certifier.py" = "verity/protocols/certifier/verifier/network_traces/block_certifier.py"
+"benchmarks/network_traces/certifier_piece.py" = "verity/protocols/certifier/device/network_traces/certifier_piece.py"
+"benchmarks/network_traces/certifier_serve.py" = "verity/protocols/certifier/device/network_traces/certifier_serve.py"
+"benchmarks/network_traces/chain_record.py" = "verity/protocols/certifier/verifier/network_traces/chain_record.py"
+"benchmarks/network_traces/chain_record.sh" = "verity/protocols/certifier/verifier/network_traces/chain_record.sh"
+"benchmarks/network_traces/leak_bounds.py" = "verity/protocols/certifier/verifier/network_traces/leak_bounds.py"
+"benchmarks/network_traces/load_relay.py" = "verity/protocols/certifier/device/network_traces/load_relay.py"
+"benchmarks/network_traces/scan_period.py" = "verity/protocols/certifier/verifier/network_traces/scan_period.py"
+"benchmarks/network_traces/scan_period.sh" = "verity/protocols/certifier/verifier/network_traces/scan_period.sh"
+"benchmarks/network_traces/tests/test_block_certifier.py" = "verity/protocols/certifier/verifier/network_traces/tests/test_block_certifier.py"
+"benchmarks/network_traces/tests/test_certifier_piece.py" = "verity/protocols/certifier/device/network_traces/tests/test_certifier_piece.py"
+"benchmarks/network_traces/tests/test_certifier_serve.py" = "verity/protocols/certifier/device/network_traces/tests/test_certifier_serve.py"
+"benchmarks/network_traces/tests/test_chain_record.py" = "verity/protocols/certifier/verifier/network_traces/tests/test_chain_record.py"
+"benchmarks/network_traces/tests/test_client_certificates.py" = "verity/protocols/certifier/device/network_traces/tests/test_client_certificates.py"
+"benchmarks/network_traces/tests/test_leak_bounds.py" = "verity/protocols/certifier/verifier/network_traces/tests/test_leak_bounds.py"
+"benchmarks/network_traces/tests/test_load_relay.py" = "verity/protocols/certifier/device/network_traces/tests/test_load_relay.py"
+"benchmarks/network_traces/tests/test_warden_chain.py" = "verity/protocols/certifier/verifier/network_traces/tests/test_warden_chain.py"
+"benchmarks/network_traces/tests/test_warden_serve.py" = "verity/protocols/certifier/device/network_traces/tests/test_warden_serve.py"
+"benchmarks/network_traces/tests/test_warden_serve_phase10.py" = "verity/protocols/certifier/device/network_traces/tests/test_warden_serve_phase10.py"
+"benchmarks/network_traces/tests/test_wipe_egress.py" = "verity/protocols/certifier/verifier/network_traces/tests/test_wipe_egress.py"
+"benchmarks/network_traces/tests/test_wipe_gate.py" = "verity/protocols/certifier/verifier/network_traces/tests/test_wipe_gate.py"
+"benchmarks/network_traces/warden_chain.py" = "verity/protocols/certifier/verifier/network_traces/warden_chain.py"
+"benchmarks/network_traces/warden_serve.py" = "verity/protocols/certifier/device/network_traces/warden_serve.py"
+"benchmarks/network_traces/wipe_egress.py" = "verity/protocols/certifier/verifier/network_traces/wipe_egress.py"
+"benchmarks/network_traces/wipe_gate.sh" = "verity/protocols/certifier/verifier/network_traces/wipe_gate.sh"
+"verity/core/devices/certifier/" = "verity/protocols/certifier/device/"
+"verity/core/protocols/certifier/PROTOCOL.md" = "verity/protocols/certifier/verifier/PROTOCOL.md"
+"verity/core/protocols/certifier/README.md" = "verity/protocols/certifier/verifier/README.md"
+"verity/core/protocols/certifier/__init__.py" = "verity/protocols/certifier/verifier/__init__.py"
+"verity/core/protocols/certifier/active.py" = "verity/protocols/certifier/verifier/active.py"
+"verity/core/protocols/certifier/advice.py" = "verity/protocols/certifier/verifier/advice.py"
+"verity/core/protocols/certifier/arith_encode.circuit-check.json" = "verity/protocols/certifier/verifier/arith_encode.circuit-check.json"
+"verity/core/protocols/certifier/arith_encode.circuit-check.py" = "verity/protocols/certifier/verifier/arith_encode.circuit-check.py"
+"verity/core/protocols/certifier/arith_encode.py" = "verity/protocols/certifier/verifier/arith_encode.py"
+"verity/core/protocols/certifier/audit.py" = "verity/protocols/certifier/verifier/audit.py"
+"verity/core/protocols/certifier/blocks.py" = "verity/protocols/certifier/verifier/blocks.py"
+"verity/core/protocols/certifier/boundary.py" = "verity/protocols/certifier/verifier/boundary.py"
+"verity/core/protocols/certifier/cache_step.circuit-check.json" = "verity/protocols/certifier/verifier/cache_step.circuit-check.json"
+"verity/core/protocols/certifier/cache_step.circuit-check.py" = "verity/protocols/certifier/verifier/cache_step.circuit-check.py"
+"verity/core/protocols/certifier/cache_step.py" = "verity/protocols/certifier/verifier/cache_step.py"
+"verity/core/protocols/certifier/calibration.py" = "verity/protocols/certifier/verifier/calibration.py"
+"verity/core/protocols/certifier/capacity.py" = "verity/protocols/certifier/verifier/capacity.py"
+"verity/core/protocols/certifier/certificate.py" = "verity/protocols/certifier/verifier/certificate.py"
+"verity/core/protocols/certifier/charge_chain.circuit-check.json" = "verity/protocols/certifier/verifier/charge_chain.circuit-check.json"
+"verity/core/protocols/certifier/charge_chain.circuit-check.py" = "verity/protocols/certifier/verifier/charge_chain.circuit-check.py"
+"verity/core/protocols/certifier/charge_chain.py" = "verity/protocols/certifier/verifier/charge_chain.py"
+"verity/core/protocols/certifier/coin_link.py" = "verity/protocols/certifier/verifier/coin_link.py"
+"verity/core/protocols/certifier/commitment.py" = "verity/protocols/certifier/verifier/commitment.py"
+"verity/core/protocols/certifier/compile_slice.circuit-check.json" = "verity/protocols/certifier/verifier/compile_slice.circuit-check.json"
+"verity/core/protocols/certifier/compile_slice.circuit-check.py" = "verity/protocols/certifier/verifier/compile_slice.circuit-check.py"
+"verity/core/protocols/certifier/compile_slice.py" = "verity/protocols/certifier/verifier/compile_slice.py"
+"verity/core/protocols/certifier/grid.py" = "verity/protocols/certifier/verifier/grid.py"
+"verity/core/protocols/certifier/head_check.circuit-check.json" = "verity/protocols/certifier/verifier/head_check.circuit-check.json"
+"verity/core/protocols/certifier/head_check.circuit-check.py" = "verity/protocols/certifier/verifier/head_check.circuit-check.py"
+"verity/core/protocols/certifier/head_check.py" = "verity/protocols/certifier/verifier/head_check.py"
+"verity/core/protocols/certifier/io_request.circuit-check.json" = "verity/protocols/certifier/verifier/io_request.circuit-check.json"
+"verity/core/protocols/certifier/io_request.circuit-check.py" = "verity/protocols/certifier/verifier/io_request.circuit-check.py"
+"verity/core/protocols/certifier/io_request.py" = "verity/protocols/certifier/verifier/io_request.py"
+"verity/core/protocols/certifier/io_tie.circuit-check.json" = "verity/protocols/certifier/verifier/io_tie.circuit-check.json"
+"verity/core/protocols/certifier/io_tie.circuit-check.py" = "verity/protocols/certifier/verifier/io_tie.circuit-check.py"
+"verity/core/protocols/certifier/io_tie.py" = "verity/protocols/certifier/verifier/io_tie.py"
+"verity/core/protocols/certifier/lean/" = "verity/protocols/certifier/device/program/"
+"verity/core/protocols/certifier/lean_audit.py" = "verity/protocols/certifier/verifier/lean_audit.py"
+"verity/core/protocols/certifier/online.py" = "verity/protocols/certifier/verifier/online.py"
+"verity/core/protocols/certifier/out_commit.py" = "verity/protocols/certifier/verifier/out_commit.py"
+"verity/core/protocols/certifier/pacer.py" = "verity/protocols/certifier/verifier/pacer.py"
+"verity/core/protocols/certifier/protocol/" = "verity/protocols/certifier/verifier/protocol/"
+"verity/core/protocols/certifier/pyproject.toml" = "verity/protocols/certifier/verifier/pyproject.toml"
+"verity/core/protocols/certifier/release.py" = "verity/protocols/certifier/verifier/release.py"
+"verity/core/protocols/certifier/replay_chain.circuit-check.json" = "verity/protocols/certifier/verifier/replay_chain.circuit-check.json"
+"verity/core/protocols/certifier/replay_chain.circuit-check.py" = "verity/protocols/certifier/verifier/replay_chain.circuit-check.py"
+"verity/core/protocols/certifier/replay_chain.py" = "verity/protocols/certifier/verifier/replay_chain.py"
+"verity/core/protocols/certifier/replay_step.circuit-check.json" = "verity/protocols/certifier/verifier/replay_step.circuit-check.json"
+"verity/core/protocols/certifier/replay_step.circuit-check.py" = "verity/protocols/certifier/verifier/replay_step.circuit-check.py"
+"verity/core/protocols/certifier/replay_step.py" = "verity/protocols/certifier/verifier/replay_step.py"
+"verity/core/protocols/certifier/schedule.py" = "verity/protocols/certifier/verifier/schedule.py"
+"verity/core/protocols/certifier/served.circuit-check.json" = "verity/protocols/certifier/verifier/served.circuit-check.json"
+"verity/core/protocols/certifier/served.circuit-check.py" = "verity/protocols/certifier/verifier/served.circuit-check.py"
+"verity/core/protocols/certifier/served.py" = "verity/protocols/certifier/verifier/served.py"
+"verity/core/protocols/certifier/served_rows.py" = "verity/protocols/certifier/verifier/served_rows.py"
+"verity/core/protocols/certifier/service.py" = "verity/protocols/certifier/verifier/service.py"
+"verity/core/protocols/certifier/tests/" = "verity/protocols/certifier/verifier/tests/"
+"verity/core/protocols/certifier/tie_service.py" = "verity/protocols/certifier/verifier/tie_service.py"
+"verity/core/protocols/certifier/transfer_rows.py" = "verity/protocols/certifier/verifier/transfer_rows.py"
+"verity/core/protocols/certifier/warden.py" = "verity/protocols/certifier/verifier/warden.py"
+"verity/core/protocols/certifier/warden_rows.py" = "verity/protocols/certifier/verifier/warden_rows.py"
+"verity/core/protocols/network/lean/" = "verity/protocols/certifier/verifier/lean/"
+"verity/core/protocols/network/pyproject.toml" = "verity/protocols/certifier/verifier/network/pyproject.toml"
+"verity/core/protocols/network/tests/" = "verity/protocols/certifier/verifier/network/tests/"
+"verity/ml/protocols/certifier/" = "verity/protocols/certifier/prover/"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), and files whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz",
+           "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/lake-manifest.json.lock",
+           "uv.lock", "tools/move/**", "archive/**", "benchmarks/numerical/reports/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "verity/definitions/silicon/captures/**", "verity/definitions/silicon/hawkeye/**", "integrations/vllm/manifests/**", "integrations/vllm/workloads/**",
+           "integrations/vllm/data/**", "integrations/vllm/verity_vllm/pins/**", "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json", "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py", "benchmarks/network_e2e/tests/data/**", "benchmarks/hash/dither/j10b_ref.py",
+           "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py", "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json", "integrations/vllm/manifests/definitions.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.network_traces.block_certifier" = "verity.protocols.certifier.verifier.network_traces.block_certifier"
+"benchmarks.network_traces.certifier_piece" = "verity.protocols.certifier.device.network_traces.certifier_piece"
+"benchmarks.network_traces.certifier_serve" = "verity.protocols.certifier.device.network_traces.certifier_serve"
+"benchmarks.network_traces.chain_record" = "verity.protocols.certifier.verifier.network_traces.chain_record"
+"benchmarks.network_traces.leak_bounds" = "verity.protocols.certifier.verifier.network_traces.leak_bounds"
+"benchmarks.network_traces.load_relay" = "verity.protocols.certifier.device.network_traces.load_relay"
+"benchmarks.network_traces.scan_period" = "verity.protocols.certifier.verifier.network_traces.scan_period"
+"benchmarks.network_traces.tests.test_block_certifier" = "verity.protocols.certifier.verifier.network_traces.tests.test_block_certifier"
+"benchmarks.network_traces.tests.test_certifier_piece" = "verity.protocols.certifier.device.network_traces.tests.test_certifier_piece"
+"benchmarks.network_traces.tests.test_certifier_serve" = "verity.protocols.certifier.device.network_traces.tests.test_certifier_serve"
+"benchmarks.network_traces.tests.test_chain_record" = "verity.protocols.certifier.verifier.network_traces.tests.test_chain_record"
+"benchmarks.network_traces.tests.test_client_certificates" = "verity.protocols.certifier.device.network_traces.tests.test_client_certificates"
+"benchmarks.network_traces.tests.test_leak_bounds" = "verity.protocols.certifier.verifier.network_traces.tests.test_leak_bounds"
+"benchmarks.network_traces.tests.test_load_relay" = "verity.protocols.certifier.device.network_traces.tests.test_load_relay"
+"benchmarks.network_traces.tests.test_warden_chain" = "verity.protocols.certifier.verifier.network_traces.tests.test_warden_chain"
+"benchmarks.network_traces.tests.test_warden_serve" = "verity.protocols.certifier.device.network_traces.tests.test_warden_serve"
+"benchmarks.network_traces.tests.test_warden_serve_phase10" = "verity.protocols.certifier.device.network_traces.tests.test_warden_serve_phase10"
+"benchmarks.network_traces.tests.test_wipe_egress" = "verity.protocols.certifier.verifier.network_traces.tests.test_wipe_egress"
+"benchmarks.network_traces.tests.test_wipe_gate" = "verity.protocols.certifier.verifier.network_traces.tests.test_wipe_gate"
+"benchmarks.network_traces.warden_chain" = "verity.protocols.certifier.verifier.network_traces.warden_chain"
+"benchmarks.network_traces.warden_serve" = "verity.protocols.certifier.device.network_traces.warden_serve"
+"benchmarks.network_traces.wipe_egress" = "verity.protocols.certifier.verifier.network_traces.wipe_egress"
+"verity.core.devices.certifier" = "verity.protocols.certifier.device"
+"verity.core.protocols.certifier" = "verity.protocols.certifier.verifier"
+"verity.core.protocols.certifier.active" = "verity.protocols.certifier.verifier.active"
+"verity.core.protocols.certifier.advice" = "verity.protocols.certifier.verifier.advice"
+"verity.core.protocols.certifier.arith_encode" = "verity.protocols.certifier.verifier.arith_encode"
+"verity.core.protocols.certifier.audit" = "verity.protocols.certifier.verifier.audit"
+"verity.core.protocols.certifier.blocks" = "verity.protocols.certifier.verifier.blocks"
+"verity.core.protocols.certifier.boundary" = "verity.protocols.certifier.verifier.boundary"
+"verity.core.protocols.certifier.cache_step" = "verity.protocols.certifier.verifier.cache_step"
+"verity.core.protocols.certifier.calibration" = "verity.protocols.certifier.verifier.calibration"
+"verity.core.protocols.certifier.capacity" = "verity.protocols.certifier.verifier.capacity"
+"verity.core.protocols.certifier.certificate" = "verity.protocols.certifier.verifier.certificate"
+"verity.core.protocols.certifier.charge_chain" = "verity.protocols.certifier.verifier.charge_chain"
+"verity.core.protocols.certifier.coin_link" = "verity.protocols.certifier.verifier.coin_link"
+"verity.core.protocols.certifier.commitment" = "verity.protocols.certifier.verifier.commitment"
+"verity.core.protocols.certifier.compile_slice" = "verity.protocols.certifier.verifier.compile_slice"
+"verity.core.protocols.certifier.grid" = "verity.protocols.certifier.verifier.grid"
+"verity.core.protocols.certifier.head_check" = "verity.protocols.certifier.verifier.head_check"
+"verity.core.protocols.certifier.io_request" = "verity.protocols.certifier.verifier.io_request"
+"verity.core.protocols.certifier.io_tie" = "verity.protocols.certifier.verifier.io_tie"
+"verity.core.protocols.certifier.lean" = "verity.protocols.certifier.device.program"
+"verity.core.protocols.certifier.lean_audit" = "verity.protocols.certifier.verifier.lean_audit"
+"verity.core.protocols.certifier.online" = "verity.protocols.certifier.verifier.online"
+"verity.core.protocols.certifier.out_commit" = "verity.protocols.certifier.verifier.out_commit"
+"verity.core.protocols.certifier.pacer" = "verity.protocols.certifier.verifier.pacer"
+"verity.core.protocols.certifier.protocol" = "verity.protocols.certifier.verifier.protocol"
+"verity.core.protocols.certifier.release" = "verity.protocols.certifier.verifier.release"
+"verity.core.protocols.certifier.replay_chain" = "verity.protocols.certifier.verifier.replay_chain"
+"verity.core.protocols.certifier.replay_step" = "verity.protocols.certifier.verifier.replay_step"
+"verity.core.protocols.certifier.schedule" = "verity.protocols.certifier.verifier.schedule"
+"verity.core.protocols.certifier.served" = "verity.protocols.certifier.verifier.served"
+"verity.core.protocols.certifier.served_rows" = "verity.protocols.certifier.verifier.served_rows"
+"verity.core.protocols.certifier.service" = "verity.protocols.certifier.verifier.service"
+"verity.core.protocols.certifier.tests" = "verity.protocols.certifier.verifier.tests"
+"verity.core.protocols.certifier.tie_service" = "verity.protocols.certifier.verifier.tie_service"
+"verity.core.protocols.certifier.transfer_rows" = "verity.protocols.certifier.verifier.transfer_rows"
+"verity.core.protocols.certifier.warden" = "verity.protocols.certifier.verifier.warden"
+"verity.core.protocols.certifier.warden_rows" = "verity.protocols.certifier.verifier.warden_rows"
+"verity.core.protocols.network.lean" = "verity.protocols.certifier.verifier.lean"
+"verity.core.protocols.network.tests" = "verity.protocols.certifier.verifier.network.tests"
+"verity.ml.protocols.certifier" = "verity.protocols.certifier.prover"
