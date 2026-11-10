@@ -604,9 +604,11 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_verify_refuses_an_archived_circuit_that_does_not_hash_to_its_key(tmp_path):
     """`verify --archive` hashes the circuit file beside its parse and waits for the hash before any session: a copy that
     doesn't hash to its key is refused as an input (exit 2), with no verdict, and a copy that does goes on to setup."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     store = tmp_path / "archive" / "sha512"
     store.mkdir(parents=True)
 
