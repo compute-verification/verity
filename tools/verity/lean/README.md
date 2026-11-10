@@ -235,7 +235,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,
   the Linear `issue` that discharges it and its `due` date, by hand: an unlisted one fails, naming the entry to write,
   and only `open_seed` ({module prefix or owner: {issue, due[, owner]}}, consumed) lets `--update` add one. A premise is a closed hypothesis, or one a statement takes whose head the repository builds
-  (`Facts.lean`'s `premises`); a `Prop` a statement only reads is in neither, held by its `reads` record. A new named
+  (`Facts.lean`'s `premises`); a `Prop` a statement only reads is in neither, held by its `reads` record, unless its `open`
+  entry gives a `why`, one line by hand naming the statement that holds it (a conjunct of its event): `--update` keeps
+  it, and each guarantee that reads it lists it under `premises.open`. A `why` on a premise a statement takes fails. A new named
   assumption fails until `--update` adds it with its guarantees' owner. An alias of listed premises is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of
   `∀` and `→` and reducible unfolding, only listed premises or such aliases (`Facts.lean`'s `unfolds`; what it takes may
   mention only listed ones). Its parts are held to the lock in its place, and a closed one's are the guarantee's. One
@@ -276,7 +278,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 - An unowned lock: one that lists a guarantee or a premise and holds no `owner`, `issue` or `due` in an entry of
   `guarantees`, `assumptions`, `domain` or `open`, and none of `default_owner`, `open_default_issue` and `open_seed`.
   It is the lock of a tree with no lanes, and the check reads it from the lock's content; no flag makes a lock unowned.
-  No entry owes an owner, an `open` entry is its `digest` alone (a premise the lock doesn't list still fails),
+  No entry owes an owner, an `open` entry is its `digest` (and its `why`) alone (a premise the lock doesn't list still fails),
   `--update` writes no owner, and `--bookkeeping warn` repairs nothing in it. Its `AUDIT` line ends with `unowned`, and
   its report holds `"unowned": true`. One lane field makes a lock owned and held to every rule, and a run given
   `--owner` reads an unowned lock as owned: `--update --owner @lane` owns its entries, as in a new package's lock, and

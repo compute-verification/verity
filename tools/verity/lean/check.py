@@ -112,8 +112,9 @@ ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumption
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 #: an open premise's `issue` (the Linear issue that discharges it) and `due`
 OPEN_ISSUE, OPEN_DUE = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+"), re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-#: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes, and the
-#: definitions of an assumptions module it reads without taking them
+#: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes and
+#: those resting on a read that it reads (`on_read`), and the other definitions of an assumptions module it reads without
+#: taking them
 PREMISE_KINDS = ("assumptions", "domain", "open", "reads")
 
 
@@ -3180,7 +3181,7 @@ def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict |
     return [r["line"] for r in bookkeeping_repairs(fails, lock, ticket, was)]
 
 
-#: the premises of a guarantee's record its trust gap counts: the named assumptions and the open premises it takes. A domain
+#: the premises of a guarantee's record its trust gap counts: the named assumptions and the open premises it lists. A domain
 #: hypothesis is part of what the guarantee says, and one that is another listed guarantee's statement (its entry's
 #: `cites`) brings in that guarantee's premises
 GAP_KINDS = ("assumptions", "open")
@@ -3598,8 +3599,8 @@ def unowned_lock(policy: dict) -> bool:
     """Whether ``policy`` is an unowned lock: it lists a guarantee or a premise and holds none of a lane's bookkeeping
     (`LANE_FIELDS`, `LANE_SECTIONS`), as the lock of a tree with no lanes does.  It is read from the lock's content, so a
     lock with one such field is owned and held to every rule.  On an unowned lock no entry owes an owner, an `open` entry
-    is its digest alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an issue or a date into it.  A
-    run given `--owner` reads the lock as owned, and owns it (`judge`)."""
+    is its digest (and its `why`, `on_read`) alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an
+    issue or a date into it.  A run given `--owner` reads the lock as owned, and owns it (`judge`)."""
     entries = [r for s in LANE_ENTRIES if isinstance(sec := policy.get(s), dict) for r in sec.values()]
     return bool(entries) and not any(k in policy for k in LANE_SECTIONS) and not any(
         f in r for r in entries if isinstance(r, dict) for f in LANE_FIELDS)
