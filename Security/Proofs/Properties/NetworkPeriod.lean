@@ -17,7 +17,8 @@ audit runs another. That the check accepts a period with a held tied audit is th
 Lean).
 `RowsStateHeld` reads the accepted public off the check: on acceptance every phase has no finding, so each is its
 scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
-and each link-window's term is its scan's free inputs and those charges (`tiedFree`).
+and each link-window's term is its scan's free inputs and, by its scan's draw, the scan's slot entries
+(`terms_whole`) or those charges (`tiedFree`, `terms_part`).
 
 On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
@@ -82,15 +83,44 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
+/-- A scan's term's bits, by its draw: the scan's free inputs, with its slot entries where every unit is proved and
+else its tied audits' free inputs and the entry bits their wrong units can set, and the ceilings of its other
+factors. -/
+theorem terms_bits (scan : Scan) (f : Facts) (tied faulty jitter : ℕ) :
+    (scan.terms f tied faulty jitter).bits =
+      (scan.free + if f.whole then scan.entries else tied) + (if f.whole then 0 else faulty) +
+        clog2 (atMost f.units f.wrong) + f.wrong * max scan.ingress scan.egress + clog2 (jitter ^ scan.steps) := by
+  simp only [AuditTerms.bits, Scan.terms]
+  split <;> omega
+
+/-- A window's factors, its faulty sets `A` and jitter `J` each at most 2 to a ceiling, are at most 2 to the sum of
+their exponents. -/
+theorem factors_le {a e s b j A J : ℕ} (hA : A ≤ 2 ^ s) (hJ : J ≤ 2 ^ j) :
+    2 ^ a * A * 2 ^ b * J * 2 ^ e ≤ 2 ^ (a + e + s + b + j) :=
+  calc 2 ^ a * A * 2 ^ b * J * 2 ^ e ≤ 2 ^ a * 2 ^ s * 2 ^ b * 2 ^ j * 2 ^ e :=
+        Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl hA) le_rfl) hJ) le_rfl
+    _ = 2 ^ (a + s + b + j + e) := by simp only [pow_add]
+    _ ≤ 2 ^ (a + e + s + b + j) := Nat.pow_le_pow_right (by decide) (by omega)
+
 theorem rowsKBoundsCount : RowsKBoundsCount := by
   intro facts scan jitter windows m n caps w tied faulty charged
   rw [K_ofFn, pow_add, pow_add, mul_assoc]
   refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
   refine Finset.prod_le_prod fun i _ => ?_
-  simp only [AuditTerms.bits, Scan.terms, pow_add]
-  exact Nat.mul_le_mul
-    (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)) le_rfl
+  simp only [terms_bits]
+  exact factors_le (le_two_pow_clog2 _) (le_two_pow_clog2 _)
+
+/-- A scan's term where every unit of the scan is proved: its free inputs are the scan's and it charges the scan's
+slot entries. -/
+theorem terms_whole {scan : Scan} {f : Facts} (tied faulty jitter : ℕ) (h : f.whole = true) :
+    (scan.terms f tied faulty jitter).free = scan.free ∧ (scan.terms f tied faulty jitter).entries = scan.entries := by
+  simp [Scan.terms, h]
+
+/-- A scan's term where the scan is sampled in part: its free inputs are the scan's and its tied audits'. -/
+theorem terms_part {scan : Scan} {f : Facts} (tied faulty jitter : ℕ) (h : f.whole = false) :
+    (scan.terms f tied faulty jitter).free = scan.free + tied := by
+  simp [Scan.terms, h]
 
 /-! ## The rows form's scan reads a compute audit's slot entries -/
 
@@ -551,10 +581,12 @@ theorem rowsStateHeld : RowsStateHeld := by
         some ((f, tiedFree p c.audits c.windows reg), reg) :=
       (Array.getElem?_zip_eq_some (z := ((f, tiedFree p c.audits c.windows reg), reg))).mpr ⟨hscan, hreg⟩
     have hu : (rowsPublic p c (auditChecks p c e) scan (W.filterMap fun x => x.toOption.join)).units[i]? =
-        some (scan.terms f (tiedFree p c.audits c.windows reg) (faultyEntries p c (auditChecks p c e) scan reg)
+        some (scan.terms f (tiedFree p c.audits c.windows reg)
+          (faultyEntries p (partOf c (W.filterMap fun x => x.toOption.join)) (auditChecks p c e) scan reg)
           p.jitter) := by
       simp only [rowsPublic, rowsTerms, Array.getElem?_map, hz, Option.map_some]
-    exact ⟨_, hu, rfl⟩
+    exact ⟨_, hu, fun hw => terms_whole (scan := scan) (f := f) _ _ _ hw,
+      fun hw => terms_part (scan := scan) (f := f) (tiedFree p c.audits c.windows reg) _ _ hw⟩
 
 /-- **`RowsStateHeld`'s honest lemma**: the check accepts a rows-form period of no phase, and an audit whose
 `SCAN_STATE` is its one phase's scan's state, at its root and domain (`stateReg "s"`, `stateWindow`), is held there and
@@ -567,17 +599,23 @@ theorem rowsStateHeld_honest :
     tiedFree heldParams #[stateReg "s"] #[stateWindow] stateWindow = heldAudit.stateFree :=
   ⟨rowsCircuitHeld_honest.1, by decide +kernel, by decide +kernel⟩
 
+/-- `heldPublic`'s term is of a scan sampled in part. -/
+theorem heldPublic_part : ∀ t ∈ heldPublic.units[0]?, t.facts.whole = false ∧ t.free = 4 := by
+  intro t ht
+  simp [heldPublic] at ht
+  subst ht
+  exact ⟨by decide +kernel, rfl⟩
+
 /-- **`RowsStateHeld`'s nontrivial lemma**: `RowsStateHeldAt` fails at a rows-form period of one phase whose tied
-audit's `SCAN_STATE` is at another root than its scan's state (`stateReg "t"`), under a public whose term charges that
-audit its `stateFree`, 4 of its 9 free inputs, which a check that accepts everything could publish. -/
+audit's `SCAN_STATE` is at another root than its scan's state (`stateReg "t"`), under a public whose term, of a scan
+sampled in part, charges that audit its `stateFree`, 4 of its 9 free inputs, which a check that accepts everything
+could publish. -/
 theorem rowsStateHeld_nontrivial :
     ¬ RowsStateHeldAt heldParams ⟨#[stateReg "t"], #[stateWindow], .empty⟩ heldPublic := by
   intro h
-  obtain ⟨t, ht, hfree⟩ := h slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 stateWindow rfl
-  have h4 : t.free = 4 := by
-    simp [heldPublic] at ht
-    subst ht
-    rfl
+  obtain ⟨t, ht, -, hfree⟩ := h slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 stateWindow rfl
+  obtain ⟨hpart, h4⟩ := heldPublic_part t ht
+  have hfree := hfree hpart
   rw [h4] at hfree
   exact absurd hfree (by decide +kernel)
 
