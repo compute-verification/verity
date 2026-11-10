@@ -1013,7 +1013,10 @@
   "CoreProtocol.Site",
   "Definitions.Flock.Audit",
   "Definitions.Flock.Game",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Definitions.Flock",
+  "Definitions.Assumptions.Flock",
+  "Properties.Challenger"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
