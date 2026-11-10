@@ -1,6 +1,6 @@
 # The inference-only policy's names that no move renames: what `tools/move/rename.py --map
-# tools/move/inference_only_ids_map.toml` renames, on a tree `inference_only_map.toml`'s move has run on (its files are
-# named where that move puts them). `move_check.py` certifies a word that renames a path, a module or a Lean declaration;
+# tools/move/inference_only_ids_map.toml` renames, on a tree the moves of `inference_only_map.toml` and
+# `inference_only_check_map.toml` have run on (its files are named where those moves put them). `move_check.py` certifies a word that renames a path, a module or a Lean declaration;
 # these rename an executable, a constant or a lock's reason, so the change they make is an ordinary one, reviewed as such.
 # - `nci-` becomes `inference-only-` where it starts a name in kebab case: the check's executables (`nci-check`, the six
 #   difftests') and `nci-phases`, in the lakefiles, the scripts that build and run them, and every mention.
@@ -37,7 +37,7 @@ words = { "nci-" = "inference-only-" }
 
 # The check's lock: its `runs` reasons (`rename.py` leaves a lock's records to `check.py --update --moved`).
 [[words_in]]
-files = ["verity/protocols/inference_only/verifier/inference_only/lean/lean-audit.json"]
+files = ["verity/protocols/inference_only/verifier/lean/lean-audit.json"]
 words = { "NciCheck" = "InferenceOnlyCheck", "Nci.Complies'" = "InferenceOnly.Complies'", "nci_reference" = "inference_only_reference", "Baseline" = "Theta" }
 
 [rewrite]

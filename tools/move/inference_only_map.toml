@@ -4,7 +4,8 @@
 # - `Nci` becomes `InferenceOnly`: the Lean area (`security/{Definitions,Properties,Proofs,Proofs/Properties}/Nci`), its
 #   namespace and modules, and every name it is one part of, so `NciCheck`, the policy's check and its Lake library,
 #   becomes `InferenceOnlyCheck`.
-# - `nci` becomes `inference_only`: `verity/protocols/inference_only/verifier/nci/` and each module, file and identifier that
+# - `nci` becomes `inference_only`: the check's directory, `verity/protocols/inference_only/verifier/nci/`, which
+#   `inference_only_check_map.toml` then flattens into `verifier/`, and each module, file and identifier that
 #   spells it (`nci_check`, the check's Lake package, `nci_reference`, `nci_glm`, `nci_cost`, `nci_phases`, `test_nci_*`).
 # What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
 # declaration, and these rename none):
@@ -15,7 +16,7 @@
 # - A lock's `runs` entry's `why`, which `move_check.py` holds to its moved paths: the check's six, each opening with its
 #   count ([keep]).
 # - `verity/protocols/inference_only/nci/`, where it is and under its name ([keep_paths], [keep]), with the names that follow it: its own
-#   `nci`, its row `nci/` of `benchmarks/README.md`'s table ([keep_in]), and in `verity/protocols/inference_only/rho/` the family kind `nci`,
+#   `nci` ([keep_in]), and in `verity/protocols/inference_only/rho/` the family kind `nci`,
 #   `nci:<id>`, the `nci.*` keys and `families.Nci`, which name that library ([keep_in], [keep]).
 # - The ids, until a format version ([keep]): the schema `verity/nci-glm/v1` and the stub ids, which end in a version,
 #   and the cited draft `draft:nci-search`.
@@ -59,7 +60,6 @@ strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
 
 [keep_in]
 "verity/protocols/inference_only/nci/**" = ["nci"]
-"benchmarks/README.md" = ["nci"]
 "verity/protocols/inference_only/rho/**" = ["nci"]
 "verity/protocols/inference_only/rho/rho/families.py" = ["Nci"]
 "verity/protocols/inference_only/rho/tests/test_families.py" = ["Nci"]
