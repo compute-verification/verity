@@ -135,10 +135,14 @@ PARAMS = ("scores", "n", "c", "i", "root", "domain", "row", "salt", "path")
 def test_the_served_rows_links_are_87_of_nine_values() -> None:
     """At the served statics, two instances a block: 40 units read their block of the scores and n, the chunks ``c``, the
     slots ``i``, and the reads the table's root and domain and their own row, salt and path. Nothing is built: the
-    links are stated from the statics."""
+    links are stated from the statics, and the window's 56 members take each at a row of theirs (`interior_links.placed`)."""
     t = LR.served()
     links = LR.links(t, 2)
     assert len(links) == 2 * 40 + 2 + 5
+    ms, cells = LR.window(t, 2)
+    assert (len(ms), sum(cells)) == (56, 2 * 4213)
+    placed = IL.placed(ms, cells, 3, links)
+    assert len(placed) == 87 and all(len(at) == 3 * cells[k] for _x, k, at in placed)
     assert IL.span_values(links) == (
         ("scores", 16, (32768, 16)), ("n", 2, (2, 16)), ("c", 128, IL.INDEX), ("i", 64, IL.INDEX), ("root", 2, IL.DIGEST),
         ("domain", 2, IL.DIGEST), ("row", 4096, (576, 16)), ("salt", 4096, (96, 16)), ("path", 4096, (544, 16)))
