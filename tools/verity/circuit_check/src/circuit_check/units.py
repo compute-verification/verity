@@ -415,8 +415,7 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
         found = sorted(CC._dir(cache, e.key).glob("*.json"))
     for p in found:
         try:
-            with CC.internal():
-                rec = json.loads(p.read_text())
+            rec = CC.read(p)
             if rec.get("key") != e.key:
                 continue
             reads = rec["reads"]
@@ -1031,9 +1030,10 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
 
 
 def held(cache: Path, entries: list[Entry]) -> int:
-    """The bytes ``entries``' records and the catalog's roots record take in ``cache``: what a run from a copy of it copies."""
+    """The bytes ``entries``' records and the catalog's roots record take in ``cache``, with the read records they share
+    (`cache.held`): what a run from a copy of it copies."""
     with CC.internal():
-        return sum(p.stat().st_size for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
+        return CC.held(p for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
 
 
 def made_entries() -> list[Entry]:
