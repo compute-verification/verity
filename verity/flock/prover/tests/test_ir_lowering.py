@@ -17,7 +17,7 @@ from verity_flock import ir_lower as IL
 P = pytest.importorskip("verity.definitions.registry.prims")
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
-from verity.ml.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
+from verity.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
 
 SLICES = Path(__file__).resolve().parents[0] / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")

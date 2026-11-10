@@ -22,7 +22,7 @@ from verity.definitions.ops.scalar import SelectF32  # noqa: E402
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from synthetic_sets import synthetic_set  # noqa: E402
-from verity.ml.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
+from verity.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
 from verity.definitions.registry import ref_prims as RP  # noqa: E402
 from verity.definitions.registry import sampling as SM  # noqa: E402
 

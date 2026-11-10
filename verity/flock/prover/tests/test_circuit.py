@@ -14,7 +14,7 @@ from verity_flock.gf2 import Circuit, const_bits
 
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from synthetic_sets import synthetic_set  # noqa: E402
-from verity.ml.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
+from verity.flock.python.verity_flock.input_sets import InputSet  # noqa: E402
 
 
 def _set(sid: str, n: int, tmp_path):
@@ -360,7 +360,7 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[2]
     words = {k: v for k, v in FC.LEAF_SCHEME.items() if k in ("id", "inner", "salt_source", "key")}
     lean = r'\("(\w+)", (?:s )?"([^"]*)"\)'
     rust = _body(flock / "live" / "src" / "circuit.rs", "pub fn leaf_scheme()")
@@ -380,7 +380,7 @@ def test_the_zk_hooks_name_the_provers_randomness():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[2]
     lean = _body(service / "flock" / "Flock" / "Zk.lean", "def hooks")
     os_words = dict(re.findall(r'let (\w+) := if os then "([^"]*)" else', lean))
     assert set(os_words) == {"pads", "draws"}, os_words

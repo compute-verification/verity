@@ -550,7 +550,7 @@ def test_a_real_provers_session_passes_the_lean_firewall_as_run_does(built):
     of its shape, relayed through ``flock-firewall live``: it finishes, and its live-coin part record is `Flock.Firewall.run`'s
     at the salts the live session drew. The cases above are synthetic; this is the unmodified prover's own rounds."""
     assert (FLAT / "records-cpu" / "honest.json").is_file(), (
-        f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
+        f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((FLAT / "records-cpu" / "honest.json").read_text())["record"]
     hello = json.loads(rec["hello"])
     del hello["coins"]

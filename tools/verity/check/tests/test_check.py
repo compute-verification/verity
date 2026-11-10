@@ -54,7 +54,7 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     assert CHECK.rust_toolchain(), "check_build.sh pins its toolchain: an agent VM's default (1.83) can't build upstream"
     flock = tmp_path / "verity" / "flock" / "prover"
     files = {"verity/flock/prover/check_build.sh": "set -e\n", "verity/flock/prover/flock-sha512-b684b12.patch": "p",
-             "verity/flock/prover/live/src/lib.rs": "fn a() {}", "verity/ml/flock/verifier/ci.py": "", "verity/flock/prover/README.md": ""}
+             "verity/flock/prover/live/src/lib.rs": "fn a() {}", "verity/flock/upstream_agreement/verifier/ci.py": "", "verity/flock/prover/README.md": ""}
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
@@ -103,7 +103,7 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
     (v / "lean").mkdir(parents=True)
     (v / "lean" / "lakefile.toml").write_text("")
     (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
-    shutil.copy(ROOT / "verity" / "ml" / "flock" / "verifier" / "agree.py", v / "agree.py")
+    shutil.copy(ROOT / "verity" / "flock" / "upstream_agreement" / "verifier" / "agree.py", v / "agree.py")
     (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": [{
         "pr83": "abc", "lean_statement": "verity/flock-circuit@abc", "statement": {"circuit": "art:0123/c.txt", "public": "art:0123/pub.bin"},
         "sessions": [{"dir": "art:0456/honest", "expect": {"accepted": True, "why": ""}}]}]}}))
@@ -243,7 +243,7 @@ def test_the_real_preflight_replays_a_stored_session_per_binary_it_can():
     """Sets 0-5 store honest sessions: four of the eight pinned binaries replay one; the build flags are the same for all."""
     import json
 
-    sets = json.loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]
+    sets = json.loads((ROOT / "verity" / "flock" / "upstream_agreement" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]
     assert len({s["pr83"] for s in sets if s.get("sessions") and "tables" not in s["statement"]}) >= 4
 
 
@@ -255,9 +255,9 @@ def test_the_rule_the_gate_reads(monkeypatch):
                                                            "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/flock/verifier/VStar/In.lean", "verity/flock/verifier/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
-    pin = __import__("json").loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "upstream.json").read_text())
+    pin = __import__("json").loads((ROOT / "verity" / "flock" / "upstream_agreement" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
-        (ROOT / "verity" / "ml" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
+        (ROOT / "verity" / "flock" / "upstream_agreement" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
 
 
 def test_the_recorded_check_takes_cpu_only_torch():
@@ -827,9 +827,9 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/flock/prover/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/flock/prover/README.md", "AGENTS.md"]
+    docs = ["verity/flock/prover/live/PROTOCOL.md", "verity/flock/upstream_agreement/verifier/README.md", "verity/flock/prover/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/flock/prover/"]
+    assert rule_touches(rule, [*docs, "verity/flock/upstream_agreement/verifier/ci.py"]) == ["verity/flock/prover/"]
     assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/flock/prover/"]      # only the two names are left out
     for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
         reads = [line for line in (ROOT / "verity" / "ml" / "flock" / "verifier" / f).read_text().splitlines()
@@ -874,8 +874,8 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     closure = CHECK.agreement_closure(files)
     policy, other = "verity/flock/verifier/lean-audit.json", "verity/flock/verifier/Flock/lean-audit.json"
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
-    assert "verity/ml/flock/verifier/ci.py" in closure and "verity/flock/verifier/FlockVerify.lean" in closure
-    assert "verity/ml/flock/verifier/upstream.json" in closure
+    assert "verity/flock/upstream_agreement/verifier/ci.py" in closure and "verity/flock/verifier/FlockVerify.lean" in closure
+    assert "verity/flock/upstream_agreement/verifier/upstream.json" in closure
     assert not [f for f in closure if f.startswith("Security/")]
     assert [f for f in files if f.startswith("Security/Proofs/Flock/")]
     nested = ["verity/flock/verifier/lakefile.toml", "verity/flock/verifier/nested/lakefile.toml",

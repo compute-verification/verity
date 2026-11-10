@@ -32,7 +32,7 @@ inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "v
           "verity/core/protocols/pouw", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
           "verity/spot/verifier/protocols/profile.py", "verity/spot/verifier/python",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",
-          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/ml/flock/python", "verity/windows",
+          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/flock/python", "verity/windows",
           "verity/errors.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/spot/verifier/lakefile.toml", "verity/spot/verifier/lake-manifest.json",

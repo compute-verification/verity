@@ -919,10 +919,10 @@
     "verity/definitions",
     "verity/ml/definitions/word/__init__.py",
     "verity/flock/prover",
-    "verity/ml/flock/python",
-    "verity/ml/flock/python/ast",
-    "verity/ml/flock/python/ast.py",
-    "verity/ml/flock/python/ast/__init__.py",
+    "verity/flock/python",
+    "verity/flock/python/ast",
+    "verity/flock/python/ast.py",
+    "verity/flock/python/ast/__init__.py",
     "verity/flock/prover/python/verity_flock",
     "verity/definitions/private_circuits",
     "verity/ml/protocols",
@@ -1187,9 +1187,9 @@
     "verity/flock/prover/python/verity_flock/type_trace.py"
    ],
    "probes": [
-    "verity/ml/flock/python/verity_flock/boolean_export/__init__.py",
-    "verity/ml/flock/python/verity_flock/circuit_types/__init__.py",
-    "verity/ml/flock/python/verity_flock/type_trace/__init__.py"
+    "verity/flock/python/verity_flock/boolean_export/__init__.py",
+    "verity/flock/python/verity_flock/circuit_types/__init__.py",
+    "verity/flock/python/verity_flock/type_trace/__init__.py"
    ]
   },
   {
@@ -1971,39 +1971,39 @@
     "verity/ml/definitions/numerics/fa3_model/__init__.py",
     "verity/definitions/registry/sampling_twins.py",
     "verity/definitions/registry/tp_allreduce_check.py",
-    "verity/ml/flock/python/contextvars",
-    "verity/ml/flock/python/contextvars.py",
-    "verity/ml/flock/python/contextvars/__init__.py",
-    "verity/ml/flock/python/cuda",
-    "verity/ml/flock/python/cuda.py",
-    "verity/ml/flock/python/cuda/__init__.py",
-    "verity/ml/flock/python/monkeytype",
-    "verity/ml/flock/python/monkeytype.py",
-    "verity/ml/flock/python/monkeytype/__init__.py",
-    "verity/ml/flock/python/opt_einsum",
-    "verity/ml/flock/python/opt_einsum.py",
-    "verity/ml/flock/python/opt_einsum/__init__.py",
-    "verity/ml/flock/python/pydot",
-    "verity/ml/flock/python/pydot.py",
-    "verity/ml/flock/python/pydot/__init__.py",
-    "verity/ml/flock/python/pynvml",
-    "verity/ml/flock/python/pynvml.py",
-    "verity/ml/flock/python/pynvml/__init__.py",
-    "verity/ml/flock/python/torch",
-    "verity/ml/flock/python/torch.py",
-    "verity/ml/flock/python/torch/__init__.py",
-    "verity/ml/flock/python/torchcomms",
-    "verity/ml/flock/python/torchcomms.py",
-    "verity/ml/flock/python/torchcomms/__init__.py",
-    "verity/ml/flock/python/tqdm",
-    "verity/ml/flock/python/tqdm.py",
-    "verity/ml/flock/python/tqdm/__init__.py",
-    "verity/ml/flock/python/vllm",
-    "verity/ml/flock/python/vllm.py",
-    "verity/ml/flock/python/vllm/__init__.py",
-    "verity/ml/flock/python/warnings",
-    "verity/ml/flock/python/warnings.py",
-    "verity/ml/flock/python/warnings/__init__.py",
+    "verity/flock/python/contextvars",
+    "verity/flock/python/contextvars.py",
+    "verity/flock/python/contextvars/__init__.py",
+    "verity/flock/python/cuda",
+    "verity/flock/python/cuda.py",
+    "verity/flock/python/cuda/__init__.py",
+    "verity/flock/python/monkeytype",
+    "verity/flock/python/monkeytype.py",
+    "verity/flock/python/monkeytype/__init__.py",
+    "verity/flock/python/opt_einsum",
+    "verity/flock/python/opt_einsum.py",
+    "verity/flock/python/opt_einsum/__init__.py",
+    "verity/flock/python/pydot",
+    "verity/flock/python/pydot.py",
+    "verity/flock/python/pydot/__init__.py",
+    "verity/flock/python/pynvml",
+    "verity/flock/python/pynvml.py",
+    "verity/flock/python/pynvml/__init__.py",
+    "verity/flock/python/torch",
+    "verity/flock/python/torch.py",
+    "verity/flock/python/torch/__init__.py",
+    "verity/flock/python/torchcomms",
+    "verity/flock/python/torchcomms.py",
+    "verity/flock/python/torchcomms/__init__.py",
+    "verity/flock/python/tqdm",
+    "verity/flock/python/tqdm.py",
+    "verity/flock/python/tqdm/__init__.py",
+    "verity/flock/python/vllm",
+    "verity/flock/python/vllm.py",
+    "verity/flock/python/vllm/__init__.py",
+    "verity/flock/python/warnings",
+    "verity/flock/python/warnings.py",
+    "verity/flock/python/warnings/__init__.py",
     "verity/definitions/kernels",
     "verity/definitions/private_circuits/__init__.py",
     "verity/ml/protocols/certifier/compile_slice_v2.py",
@@ -3158,7 +3158,7 @@
     "verity/flock/prover/python/verity_flock/templates"
    ],
    "probes": [
-    "verity/ml/flock/python/verity_flock/ir_frame/__init__.py",
+    "verity/flock/python/verity_flock/ir_frame/__init__.py",
     "verity/flock/prover/python/verity_flock/templates/rmsnorm_fused_cuda_vec8/__init__.py",
     "verity/flock/prover/python/verity_flock/templates/rmsnorm_triton/__init__.py"
    ]
@@ -3619,9 +3619,9 @@
     "verity/difftest/python/_winapi",
     "verity/difftest/python/_winapi.py",
     "verity/difftest/python/_winapi/__init__.py",
-    "verity/ml/flock/python/_winapi",
-    "verity/ml/flock/python/_winapi.py",
-    "verity/ml/flock/python/_winapi/__init__.py"
+    "verity/flock/python/_winapi",
+    "verity/flock/python/_winapi.py",
+    "verity/flock/python/_winapi/__init__.py"
    ]
   },
   {
@@ -4986,7 +4986,7 @@
     "verity/flock/prover/python/verity_flock/topp_word.py"
    ],
    "probes": [
-    "verity/ml/flock/python/verity_flock/topp_word/__init__.py"
+    "verity/flock/python/verity_flock/topp_word/__init__.py"
    ]
   },
   {
@@ -5313,7 +5313,7 @@
   {
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/definitions/RecSha512Compress_v1.json",
-    "verity/ml/flock/python/verity_flock/rec_open.circuit-check.json"
+    "verity/flock/python/verity_flock/rec_open.circuit-check.json"
    ]
   },
   {
@@ -5421,13 +5421,13 @@
     "verity/difftest/python/random",
     "verity/difftest/python/random.py",
     "verity/difftest/python/random/__init__.py",
-    "verity/ml/flock/python/io",
-    "verity/ml/flock/python/io.py",
-    "verity/ml/flock/python/io/__init__.py",
-    "verity/ml/flock/python/random",
-    "verity/ml/flock/python/random.py",
-    "verity/ml/flock/python/random/__init__.py",
-    "verity/ml/flock/python/verity_flock/unit/__init__.py"
+    "verity/flock/python/io",
+    "verity/flock/python/io.py",
+    "verity/flock/python/io/__init__.py",
+    "verity/flock/python/random",
+    "verity/flock/python/random.py",
+    "verity/flock/python/random/__init__.py",
+    "verity/flock/python/verity_flock/unit/__init__.py"
    ]
   },
   {
@@ -5486,10 +5486,10 @@
     "verity/commitments/frame_v3/WordLeaf",
     "verity/commitments/frame_v3/WordLeaf.py",
     "verity/commitments/frame_v3/WordLeaf/__init__.py",
-    "verity/ml/flock/python/blake3",
-    "verity/ml/flock/python/blake3.py",
-    "verity/ml/flock/python/blake3/__init__.py",
-    "verity/ml/flock/python/verity_flock/ir_sampling/__init__.py"
+    "verity/flock/python/blake3",
+    "verity/flock/python/blake3.py",
+    "verity/flock/python/blake3/__init__.py",
+    "verity/flock/python/verity_flock/ir_sampling/__init__.py"
    ]
   },
   {

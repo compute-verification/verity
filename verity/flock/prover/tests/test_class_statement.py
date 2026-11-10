@@ -71,7 +71,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
 
 
 def _gemm_fp():
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[3] / "ml" / "flock" / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[2] / "pod" / "gemm_fp.py")
     gemm_fp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gemm_fp)
     return gemm_fp
@@ -402,7 +402,7 @@ def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list]:
 def _gemm_fp():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[3] / "ml" / "flock" / "pod" / "gemm_fp.py")
+    spec = importlib.util.spec_from_file_location("gemm_fp", Path(__file__).parents[2] / "pod" / "gemm_fp.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -622,7 +622,7 @@ def test_the_selftest_swaps_the_tail_that_circuit_stage_forged(monkeypatch, tmp_
     pytest.importorskip("verity_numerical")
     from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity.ml.flock.python.verity_flock.input_sets import InputSet
+    from verity.flock.python.verity_flock.input_sets import InputSet
 
     s = InputSet.open(generate(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
     low = FC.lowering_for_set(s)

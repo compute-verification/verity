@@ -215,7 +215,7 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     model = _model(pipe.model)
     rng = random.Random(seed)
     if pipe.fmt is U.E2M1:
-        from verity.ml.flock.python.verity_flock.unit_fp4_check import cases
+        from verity.flock.python.verity_flock.unit_fp4_check import cases
         bad = 0
         for c, x, w, sx, sw in cases(rng, n):
             got, _, ok = evaluate(relation, x, w, c, sx, sw)

@@ -19,7 +19,7 @@ from verity_flock import circuit_types as CT
 from verity_flock import derive as D
 from verity_flock import layouts as LY
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "verifier"))
 from test_circuit_types import _adder, _full_adder  # noqa: E402

@@ -34,7 +34,7 @@ def staged(tmp_path_factory):
     """The plain-leaves circuit, the instances' x rows, the description row and another of the class's width."""
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity.ml.flock.python.verity_flock.input_sets import InputSet
+    from verity.flock.python.verity_flock.input_sets import InputSet
 
     d = tmp_path_factory.mktemp("inner-registered")
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20261009, d / "set")["path"])

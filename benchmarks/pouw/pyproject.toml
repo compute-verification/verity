@@ -69,7 +69,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/protocols/certifier",
           "verity/core/protocols/certifier",
           "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
-          "verity/definitions/kernels", "verity/commitments/randomness", "verity/ml/flock/python", "verity/windows",
+          "verity/definitions/kernels", "verity/commitments/randomness", "verity/flock/python", "verity/windows",
           "verity/hardware",
           "verity/configuration/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",

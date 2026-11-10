@@ -6,7 +6,7 @@ verifier's record has h in a round of its own after z_partial's coinless one on 
 the fixture, `fixtures/inner_claims.json`, split as public comb + h). The stacked table's stream, as candidate 3's
 opening-only prover sends it (``flock-circuit stacked``), is held to `rec_live.schedule_for`'s, and the relay runs each
 rep's sparse phase (`rec_sparse.prove`) on the challenger's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
-full fold (``InnerFold.lean --hide``) is the pod's (``../../ml/flock/pod/88-rec-c3-inner.sh``, `check_fold`)."""
+full fold (``InnerFold.lean --hide``) is the pod's (``../pod/88-rec-c3-inner.sh``, `check_fold`)."""
 from __future__ import annotations
 
 import json
@@ -38,7 +38,7 @@ from verity_flock import rec_sparse as SP
 from verity_flock import rec_vstage as S
 from verity_flock import rec_vstar as V
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 STATEMENT = {"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3}
@@ -192,7 +192,7 @@ def served(tmp_path_factory):
     """`rec_session.serve` on loopback, its challenger returning the fixture's recorded coins in the order the prover's
     rounds drew them (z_partial's coinless round samples none), and the fake prover's answers."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
-        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
+        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
     pending = bytearray(b"".join(RL.f128_bytes(int(c, 16)) for c in
                                  [x for p in rec["link"]["points"] for x in p] +

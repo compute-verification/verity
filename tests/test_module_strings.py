@@ -249,4 +249,4 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     assert {(registry, "attr", "tools.verity.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
             ("integrations/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
             ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
-            ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity.ml.flock.python.verity_flock.register")} <= seen
+            ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity.flock.python.verity_flock.register")} <= seen

@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity_flock import challengers as CH
-from verity.ml.flock.python.verity_flock import circuit_bench as CB
+from verity.flock.python.verity_flock import circuit_bench as CB
 
 
 class _Proc:

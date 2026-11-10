@@ -115,7 +115,7 @@ fn key_words(role: u8) -> [u32; 8] {
 }
 
 // ------------------------------------------------------------------------------------------------------------
-// The instance file (verity.ml.flock.python.verity_flock.instances) and the frame-v3 statement commitments
+// The instance file (verity.flock.python.verity_flock.instances) and the frame-v3 statement commitments
 // ------------------------------------------------------------------------------------------------------------
 
 #[derive(Clone)]

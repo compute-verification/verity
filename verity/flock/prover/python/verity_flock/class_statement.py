@@ -62,7 +62,7 @@ from verity.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
 from . import challengers as CH
 from . import circuit as FC
-from verity.ml.flock.python.verity_flock import class_sweep
+from verity.flock.python.verity_flock import class_sweep
 from . import gf2
 from . import ir_lower as IL
 from . import partition_units as PU

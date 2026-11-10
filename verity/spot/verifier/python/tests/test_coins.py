@@ -67,7 +67,7 @@ def _subset_on(k, n, src):
 
 def _draw_on(law, n, src):
     """The Lean verifier's `Flock.Draw.drawOn`: subset and bernoulli on the one stream; stratified and work on consecutive
-    segments, stratum s's the next 2 k_s width(n_s) + 64 bytes (`verity/ml/flock/tests/stratified_agree.py`)."""
+    segments, stratum s's the next 2 k_s width(n_s) + 64 bytes (`verity/flock/tests/stratified_agree.py`)."""
     if law["law"] == "subset":
         return _subset_on(law["k"], n, src)
     if law["law"] == "bernoulli":

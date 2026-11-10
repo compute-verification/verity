@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 from verity_numerical.bench import generate as G
-from verity.ml.flock.python.verity_flock import synthetic as SY
-from verity.ml.flock.python.verity_flock import input_sets as IS
+from verity.flock.python.verity_flock import synthetic as SY
+from verity.flock.python.verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 
 DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "flock" / "prover" / "tests" / "data" / "captured-101"

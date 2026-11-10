@@ -21,7 +21,7 @@ pytest.importorskip("verity.definitions.registry.prims")
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 
-sys.path.insert(0, str((Path(__file__).parent.parent.parent.parent / "ml" / "flock" / "tests")))
+sys.path.insert(0, str((Path(__file__).parent.parent.parent / "tests")))
 
 
 def _low(template, **params):
@@ -63,7 +63,7 @@ def test_a_flat_class_carries_types_not_rows(template, params):
 
 def _set(sub, n, tmp_path):
     from synthetic_sets import synthetic_set
-    from verity.ml.flock.python.verity_flock.input_sets import InputSet
+    from verity.flock.python.verity_flock.input_sets import InputSet
 
     return InputSet.open(synthetic_set(sub, n, 20260926, tmp_path)["path"])
 

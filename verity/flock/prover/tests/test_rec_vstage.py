@@ -3,7 +3,7 @@ proxy (each round's salted tops, ``c_k`` and coins for the verifier; its tops, r
 verifier's side from the public record alone (the table's shape, the fold points, every round's value rebuilt from its two
 ``c_k``, the openings' coefficients) against the Lean verifier's values (`fixtures/inner_claims.json`); the prover's running
 sums giving the algebra exactly the consistency sums of the openings, so both reps hold; and each forgery (a message, a running
-sum, the comb) failing the relation that reads it. Staging the circuits is the pod's (``../../ml/flock/pod/85-rec-reprice.sh STEP=vstage``);
+sum, the comb) failing the relation that reads it. Staging the circuits is the pod's (``../pod/85-rec-reprice.sh STEP=vstage``);
 staging with one salts file registers one chain; the slow test
 patches a small statement's ``inst.bin`` as the forged message does. ``VERITY_FLOCK_INNER_FOLD=1`` also runs `InnerFold.lean`
 interpreted (about 15 minutes) and holds its comb and extra claims to InnerClaims' dump."""
@@ -27,7 +27,7 @@ from verity_flock import rec_residuals as RR
 from verity_flock import rec_vstage as S
 from verity_flock import rec_vstar as V
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 LEAN = HERE.parents[3] / "verity/flock/verifier"
@@ -71,7 +71,7 @@ def inner(tmp_path_factory) -> Path:
     the recorded coins, as `rec_live.Proxy.write` lays it out. The session ran on seeded coins: its Hello is replayed without
     the coin scheme."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
-        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
+        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
     g, pending = random.Random(5), bytearray()
 

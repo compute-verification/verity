@@ -85,7 +85,7 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
   rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/flock/verifier" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
-    && cp "$SRC/verity/ml/flock/tests/lean/TmplUnit.lean" "$D.tmp/" \
+    && cp "$SRC/verity/flock/tests/lean/TmplUnit.lean" "$D.tmp/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$D.tmp/lakefile.toml" \
     && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
@@ -166,7 +166,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
     rc=$?
     log "  selftest $c exit $rc: $(grep -E '^NEG' "$O/selftest-$c.out" | cut -c1-200)"
   done
-  "$PY" "$SRC/verity/ml/flock/verifier/selftest_records.py" "$D/rec" "$D/st" > /dev/null
+  "$PY" "$SRC/verity/flock/upstream_agreement/verifier/selftest_records.py" "$D/rec" "$D/st" > /dev/null
 }
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
@@ -231,7 +231,7 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py verity/ml/flock/python verity verity/circuits verity/definitions/kernels \
+    benchmarks/pouw/hidden_zk/hash_scratch.py verity/flock/python verity verity/circuits verity/definitions/kernels \
     verity/core)
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"

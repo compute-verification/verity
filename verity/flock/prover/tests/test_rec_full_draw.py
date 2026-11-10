@@ -17,7 +17,7 @@ from verity_flock import rec_live as RL
 
 import test_rec_live as T
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 LEAN = HERE.parents[3] / "verity/flock/verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 

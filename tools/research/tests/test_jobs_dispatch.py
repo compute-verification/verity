@@ -614,7 +614,7 @@ def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monke
 
 def _flock_repo(tmp_path: Path, rustflags: str, pattern: str | None = None) -> Path:
     repo = tmp_path / "flock"
-    files = {"verity/ml/flock/verifier/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
+    files = {"verity/flock/upstream_agreement/verifier/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
              "verity/ml/flock/src.rs": "fn main() {}", "verity/flock/prover/README.md": "flock", "docs.md": "docs",
              "tools/verity/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["verity/flock/prover/", "!README.md"]})\n'}
     if pattern is not None:

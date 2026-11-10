@@ -31,7 +31,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
-from verity.ml.flock.python.verity_flock.input_sets import InputSet
+from verity.flock.python.verity_flock.input_sets import InputSet
 from verity.spot.device import challenger as Ch, coins as CC
 from verity.spot.verifier.python.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 

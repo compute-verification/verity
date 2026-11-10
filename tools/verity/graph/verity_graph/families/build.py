@@ -3,7 +3,7 @@
 
 - `lean-build:verity/flock/verifier`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
-- `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
+- `lean-unit-cut:verity/flock/upstream_agreement/verifier/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
   reads no data), its output the script's result.json.
 - `lean-agreement:verity/ml/flock/verifier`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust

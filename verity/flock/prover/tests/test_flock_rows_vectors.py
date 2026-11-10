@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VECTORS = HERE / "derive_vectors.json"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),

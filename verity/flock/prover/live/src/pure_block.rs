@@ -313,7 +313,7 @@ impl UnitNet {
     }
 }
 
-/// The instance file (`flock-pure-instances/v1`, `verity.ml.flock.python.verity_flock.instances`), read-only.
+/// The instance file (`flock-pure-instances/v1`, `verity.flock.python.verity_flock.instances`), read-only.
 #[derive(Clone)]
 pub struct Instances {
     pub header: serde_json::Value,

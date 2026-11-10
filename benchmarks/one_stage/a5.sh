@@ -35,7 +35,7 @@ PY=$REPO/.venv/bin/python
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
@@ -74,7 +74,7 @@ mkdir -p $O/window && cp $WIN/{registration,window,partition,index}.json $WIN/m*
 # the verifier's lowering: a synthetic input set of the template (its values are never read)
 $PY -m verity_numerical.bench.generate --subcircuit ${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16} --n 4 --seed 1 --out $W/sets > $O/sets.log 2>&1 || exit 9
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
 $PY benchmarks/one_stage/a5.py --bundle $BUNDLE --row-dir $ROWD --partition $PART --window $WIN \
   --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --out $W/a5 2>&1 | tee $O/a5.log | cut -c1-4000

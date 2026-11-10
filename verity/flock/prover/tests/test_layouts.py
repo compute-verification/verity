@@ -15,7 +15,7 @@ from verity_flock import circuit_types as CT
 from verity_flock import gf2
 from verity_flock import layouts as LY
 
-sys.path.insert(0, str((Path(__file__).parent.parent.parent.parent / "ml" / "flock" / "tests")))
+sys.path.insert(0, str((Path(__file__).parent.parent.parent / "tests")))
 from test_circuit_types import _adder, _full_adder  # noqa: E402
 
 rng = random.Random(5)

@@ -404,7 +404,7 @@ def test_the_schedule_of_a_statements_shape_is_the_one_a_real_session_keeps():
     session (the fetched fixture `test_rec_algebra` reads), round for round: coins, tops' node counts, level-0 copies, message rows. That
     session sampled committed coins, so its Hello also names them; the inner session's, on live OS coins, does not."""
     assert (FLAT / "records-cpu" / "honest.json").is_file(), (
-        f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
+        f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((FLAT / "records-cpu" / "honest.json").read_text())["record"]
     want = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
     hello = json.loads(rec["hello"])

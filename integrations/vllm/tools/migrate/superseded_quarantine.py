@@ -168,8 +168,8 @@ def redirects(dest: str) -> tuple[tuple[str, str, str], ...]:
          "rep = lint(Path(QC.__file__).resolve().parents[1])"),
     )) + (
         # the shipped PYTHONPATH's roots follow the root's dependencies, which now include the experimental member
-        ("tools/research/tests/test_pythonpath.py", '"verity/ml/flock/python", "tools/verity/circuit_check/src"]',
-         f'"verity/ml/flock/python", "tools/verity/circuit_check/src",\n              "{dest}"]'),
+        ("tools/research/tests/test_pythonpath.py", '"verity/flock/python", "tools/verity/circuit_check/src"]',
+         f'"verity/flock/python", "tools/verity/circuit_check/src",\n              "{dest}"]'),
     )
 
 

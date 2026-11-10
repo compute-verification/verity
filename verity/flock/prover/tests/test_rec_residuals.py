@@ -18,7 +18,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_live as RL
 from verity_flock import rec_residuals as RR
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 BIN = HERE.parents[3] / "verity/flock/verifier" / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
@@ -114,7 +114,7 @@ def test_the_definition_computes_the_reference():
 @pytest.fixture(scope="module")
 def reps():
     assert (SET / "stage" / "circuit.txt").is_file(), (
-        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
+        f"{SET} is not fetched: `uv run research data fetch-fixtures verity/flock/tests/fixtures/hidden-outputs`")
     record = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
     out = []
     for r, d in enumerate(INNER["reps"]):

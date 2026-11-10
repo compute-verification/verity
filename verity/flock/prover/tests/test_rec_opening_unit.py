@@ -15,7 +15,7 @@ import pytest
 from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent / "ml" / "flock" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "tests")
 LEAN = HERE.parents[3] / "verity/flock/verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-opening"
 
