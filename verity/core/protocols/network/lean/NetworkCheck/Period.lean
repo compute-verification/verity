@@ -219,8 +219,10 @@ What it doesn't check: the proof's public row against the certificates' digests 
 verifier checks inside the answer (`LinkWindows.verify`, with Flock's Lean verifier on the `--zk` proof);
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration, which one-stage's
-verifier checks inside the answer, and each connection's cap against its lane (the parameters' `cells`; the
-network certifier holds a lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own,
+verifier checks inside the answer, each connection's cap against its lane (the parameters' `cells`; the
+network certifier holds a lane to `egress_cells`), and that the scan's answer carries every Input its registration
+check let through (`tiedInputWired` reads the names the answer's public outputs hold, and takes one with no
+`rests_on_period_check` to name none); and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
 
 **The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the

@@ -129,12 +129,14 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 
 /-- **The rows form accepts no link-window whose scan's answer names a tied Input the check does not wire.**
 One-stage's registration check refuses a run Input that several proof blocks read, unless its verifier names the Input
-tied: a later check then ties its rows to the registrations that computed them, and the answer's public outputs name
-each Input it let through (`rests_on_period_check`). If the check accepts a period in the rows form, each
-link-window's scan's answer names none, or the scan's `prog` alone (`tiedInputWired`), and that link-window's
-`scan/prog` entry is wired to a compute audit's slot entries (`wired`, as `RowsProgWired` says): every tied Input an
-accepted scan names is the one this check ties. It is a statement about the published name: that the name `prog` is
-the Input the entry `scan/prog` registers is one-stage's registration check's, and is not said here. -/
+tied: a later check then ties its rows to the registrations that computed them, and its registration verdict names
+each Input it let through (`rests_on_period_check`), a list the scan's answer carries in its public outputs. If the
+check accepts a period in the rows form, each link-window's scan's answer names none, or the scan's `prog` alone
+(`tiedInputWired`), and that link-window's `scan/prog` entry is wired to a compute audit's slot entries (`wired`, as
+`RowsProgWired` says): every tied Input an accepted scan's answer names is the one this check ties. It is a statement
+about the names the answer carries. That the answer carries every Input the registration check let through, and that
+the name `prog` is the Input the entry `scan/prog` registers, which is one-stage's registration check's, are not said
+here. -/
 def RowsTiedInputWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
