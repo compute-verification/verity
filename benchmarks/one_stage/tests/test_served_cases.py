@@ -15,8 +15,8 @@ name the window's tables as values ahead of its templates', and a Program that i
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
 templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
 one whose verdict refused, and names the record's digest either way; the inference-only case is accepted by the policy's
-Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
-check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
+Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (the check's profile at no budget,
+`budgets`), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
 names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
 does sampled proofs' Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
@@ -25,7 +25,14 @@ unregistered input, an evidence key, the record repeated in the log) or by the p
 or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
 case that isn't the audit's, which refuses sampled proofs' too), and an answer that isn't the window's record's is
 written nowhere, its refusal saying the
-answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
+answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200).
+
+The policy's α and Γ are the ones the auditor's gate signed before the serve (`signed_piece`): those of the open the
+serve's session joined, read from the gate's ledger in PoUW's piece under the verifier's pinned challenger key, as
+signed, with the registration the open names the first record of the case's log. The session is the one Pearl+'s
+case's passes name, and no option names it or the period (`--from-division` and a session's option are usage errors);
+each other ledger, key, registration or session is refused, an open that signed no policy leaves the run's own α and Γ,
+and the case says whose policy they are."""
 
 from __future__ import annotations
 
@@ -42,6 +49,7 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import weights as PW
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
@@ -52,6 +60,7 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
+from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -192,9 +201,14 @@ def run(capsys, *argv) -> tuple[int, list[dict], list[dict], str]:
     return rc, cases, refused, out
 
 
+#: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check
+#: reports the case's own division
+UNBOUNDED = (2**64, 2**64)
+
+
 def budgets(v1: dict, exe: Path, scratch: Path) -> tuple[int, int]:
     """The one inference block's gates and fresh-input bits: the Lean check's profile on the case at no budget."""
-    got, _ = SC.lean_answer(exe, SC.inference_only_case(v1, *SC.UNBOUNDED), scratch)
+    got, _ = SC.lean_answer(exe, SC.inference_only_case(v1, *UNBOUNDED), scratch)
     assert got["verdict"] == "accept" and len(got["profile"]["blocks"]) == 1, got
     return tuple(got["profile"]["blocks"][0])
 
@@ -316,13 +330,17 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
     assert (rc, refused) == (0, []), out
     assert cases == [{"dir": str(private / "sampled-proofs-v1"), "protocol": V1, "verdict": "accept"},
                      {"dir": str(private / "sampled-proofs"), "protocol": SAMPLED, "verdict": "accept"},
-                     {"dir": str(private / "inference-only"), "protocol": INF, "verdict": "accept"},
+                     {"dir": str(private / "inference-only"), "policy": SC.UNSIGNED, "protocol": INF,
+                      "verdict": "accept"},
                      {"dir": str(private / "sampled-proofs-v2"), "protocol": SC.V2, "verdict": "accept"}]
+    assert json.loads((private / "inference-only" / "policy.json").read_text()) == {
+        "alpha": [3, 2], "gamma": 100, "whose": SC.UNSIGNED}
     v2_case = json.loads((audit / "window" / "case-v2.json").read_text())
     for c in cases:
         cd = Path(c["dir"])
         assert stat.S_IMODE(cd.stat().st_mode) == 0o700
-        assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in cd.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
+        assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in cd.iterdir()} == {
+            "case.json": 0o600, "answer.json": 0o600} | ({"policy.json": 0o600} if c["protocol"] == INF else {})
         got = json.loads((cd / "case.json").read_text())
         assert got["commitment"] == v1["commitment"]
         assert json.loads((cd / "answer.json").read_text())["commitment"] == d
@@ -489,7 +507,8 @@ def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp
     ("other-program", "the record names another Program than v1's params"),
     ("previous-no-log", "pass the deployment's log (--log)"),
     ("log-unchained", "the log and the record don't chain"),
-    ("no-alpha-gamma", "α and Γ are the policy's, not the run's: pass --alpha and --gamma"),
+    ("no-alpha-gamma", "α and Γ are the policy's, not the run's: pass the piece holding the gate's ledger, where the "
+                       "gate signed them"),
     ("gamma-bool", "Γ is a natural"),
 ])
 def test_the_producer_refuses_an_inference_only_case_that_would_not_be_the_windows(tmp_path, capsys, change, reason):
@@ -516,55 +535,214 @@ def test_the_producer_refuses_an_inference_only_case_that_would_not_be_the_windo
     assert not (tmp_path / "private" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
 
-@pytest.mark.parametrize("profile, verdict, reason", [
-    ({"blocks": [[10, 3], [6, 4]], "gates": 16}, "accept", None),
-    (None, "reject", "the case's own division doesn't pass the check at no budget: stand-in"),
-    (None, "accept", "the check's profile isn't a nonempty list"),
-    ({"blocks": [[0, 1]], "gates": 0}, "accept", "the check's profile isn't a nonempty list"),
-])
-def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, capsys, profile, verdict, reason):
-    """With ``--from-division``, Γ is the largest block's gates and α the most fresh-input bits a gate of any block, from
-    the check's profile at no budget. The CASE line publishes neither (on a one-block window they'd be its block's gates
-    and fresh-input bits): they stay in the case's private ``policy.json``, beside where they come from. A rejection
-    there, or a profile with no blocks or a block of no gates, is refused before the case is checked."""
+#: The auditor's challenger key of `signed_piece`'s ledgers (sixteen leaves, one an entry), and a key the lane made
+GATE_KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
+LANE_KEY = lms.keygen(lms.Params(64, 4, 4), bytes([8]) * 64)
+GATE_SHA = hashlib.sha512(lms.public_key(GATE_KEY)).hexdigest()
+#: The lane's sessions in `signed_piece`'s ledger: one reserved in its earlier period, one between its periods, the
+#: serve's, reserved in the period open at the serve, and one the ledger doesn't hold
+OLD, EARLY, SERVED, NOWHERE = (f"s20261020T{t}Z-{x}" for t, x in (("110500", "a001"), ("115000", "aa01"),
+                                                                 ("120500", "ab12"), ("130000", "ffff")))
+
+
+def signed_piece(root: Path, first: str, *, private: lms.PrivateKey = GATE_KEY, **changes) -> list[str]:
+    """PoUW's piece directory as the compose holds it: the gate's ledger as its ``ledger`` verb gave it
+    (``root/ledger.jsonl``), each entry signed under ``private`` at its next leaf, and each session's tree with the
+    challenger's ``key.json`` (``root/session/<id>/out``). The lane opened period ``p-old``, reserved `OLD` in it and
+    closed it, reserved `EARLY`, opened period ``p-0`` and reserved `SERVED`. Each open signs the lane's own
+    inference-only policy with the registration ``first``: ``p-old``'s α = 1/1 and Γ = 5, ``p-0``'s α = 6/4 and
+    Γ = 100; ``changes`` replace fields of ``p-0``'s body (None drops one). What `served_cases.py` reads the policy
+    with: the piece and the pin `GATE_KEY`'s."""
+    public = lms.public_key(private)
+    sha = hashlib.sha512(public).hexdigest()
+    reserve = {"by": "vllm", "peer": "10.0.0.2", "scheme": "verity/test/coins/v1", "epoch": 0,
+               "families": [["pouw/salt", 1]], "minutes": 30}
+    lanes = {"period": "p-0", "lane": "vllm", "by": "vllm", "cap": 4, "circuit": "cd" * 64, "pinned": "ab" * 20,
+             "key_sha512": sha, "opened_utc": "2026-10-20T12:00:00Z", "policy": INF, "alpha": [6, 4], "gamma": 100,
+             "registration": first}
+    opened = {**lanes, **changes}
+    at = lambda start, end: {**reserve, "started_utc": f"2026-10-20T{start}:00Z",  # noqa: E731
+                             "expires_utc": f"2026-10-20T{end}:00Z"}
+    old = {**lanes, **{k: v for k, v in changes.items() if k == "key_sha512"}, "period": "p-old", "alpha": [1, 1],
+           "gamma": 5, "opened_utc": "2026-10-20T11:00:00Z"}
+    closed = {"period": "p-old", "lane": "vllm", "by": "vllm", "complete": False, "closed_utc": "2026-10-20T11:30:00Z",
+              "windows": [{"root": None, "session": OLD, "complete": False}]}
+    entries = [("period-open", None, old), ("reserve", OLD, at("11:05", "11:35")), ("period-close", None, closed),
+               ("reserve", EARLY, at("11:50", "12:20")),
+               ("period-open", None, {k: v for k, v in opened.items() if v is not None}),
+               ("reserve", SERVED, at("12:05", "12:35"))]
+    root.mkdir(parents=True, exist_ok=True)
+    lms.LeafState.create(root / "key.lms", public, private.params.H)
+    lines: list[str] = []
+    with lms.LeafState(root / "key.lms", public, private.params.H) as state:
+        for kind, session, body in entries:
+            lines.append(Ch.ledger_line(lines, kind, session, body, public[:16],
+                                        lambda m: lms.sign(private, state, m).encode()))
+    (root / "ledger.jsonl").write_text("".join(x + "\n" for x in lines))
+    for sid in (OLD, EARLY, SERVED):
+        (root / "session" / sid / "out").mkdir(parents=True, exist_ok=True)
+        (root / "session" / sid / "out" / "key.json").write_text(
+            json.dumps(Ch.ChallengerKey(private.params.W, private.params.H, public).to_json()))
+    return ["--policy-piece", root, "--key-sha512", GATE_SHA]
+
+
+def signed_run(capsys, root: Path, policy: list, sessions: tuple[str, ...] | None = (SERVED,), *more):
+    """`run` on the toy's audit with the policy's options ``policy`` (`signed_piece`'s) and Pearl+'s case's parts whose
+    passes with calls name ``sessions`` (None: no parts), so its cases are v1's, sampled proofs', the inference-only
+    case and Pearl+'s."""
     program, query = toy()
     v1 = v1_case(program, query)
-    d = digest_of(v1)
-    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
-                                  "--from-division", *stand_ins(tmp_path, v1, reg=answer(INF, d, verdict)
-                                                                | {"profile": profile}))
-    if reason is None:
-        assert rc == 0 and refused == [], out
-        assert [sorted(c) for c in cases] == [["dir", "protocol", "verdict"]] * 3
-        assert SC.FROM_DIVISION not in out
-        d = tmp_path / "private" / "inference-only"
-        params = json.loads((d / "case.json").read_text())["params"]
-        assert (params["alpha"], params["gamma"]) == ([2, 3], 10)
-        assert json.loads((d / "policy.json").read_text()) == {"alpha": [2, 3], "gamma": 10, "read": SC.FROM_DIVISION}
-        assert stat.S_IMODE((d / "policy.json").stat().st_mode) == 0o600
-    else:
-        assert rc == 1 and [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
-        assert not (tmp_path / "private" / "inference-only").exists()
+    parts = [] if sessions is None else ["--pearlplus", pearlplus_parts(root / "serve", sessions=sessions)[0]]
+    return run(capsys, "--audit", audit_dir(root, v1), "--private", root / "private", *policy, *parts, *more,
+               *stand_ins(root, v1))
 
 
-@lean
-def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys, inference_only_exe, toy_v1):
-    """The real check at no budget, then at what it read off: Γ the one block's gates and α its input bits a gate, at
-    which the case is accepted."""
-    gates, bits = budgets(toy_v1, inference_only_exe, tmp_path / "s")
-    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, toy_v1), "--private", tmp_path / "private",
-                                  "--from-division", "--inference-only-exe", inference_only_exe,
-                                  "--v1-exe", stand_in(tmp_path, "v1", answer(V1, digest_of(toy_v1))),
-                                  "--sampled-exe", stand_in(tmp_path, "sampled", answer(SAMPLED, digest_of(toy_v1))))
+FIRST = digest_of(v1_case(*toy()))
+
+
+@pytest.mark.parametrize("changes, session, signed, whose", [
+    ({}, SERVED, ([6, 4], 100, "p-0"), SC.LANES),
+    ({"policy_name": "llama-1b"}, SERVED, ([6, 4], 100, "p-0"), SC.AUDITORS),
+    ({"by": "vy-admin"}, SERVED, ([6, 4], 100, "p-0"), SC.AUDITORS),
+    ({"by": "vy-admin"}, OLD, ([1, 1], 5, "p-old"), SC.LANES),
+])
+def test_alpha_and_gamma_are_the_ones_the_gate_signed_in_the_open_the_serves_session_joined(tmp_path, capsys, changes,
+                                                                                         session, signed, whose):
+    """The case's α and Γ are those of the open the serve's session joined, as signed (α's pair unreduced), read from
+    the gate's ledger in PoUW's piece under the pinned key, where the open names the first record of the case's log.
+    The session is the one Pearl+'s case's passes with calls name, so a session of the lane's earlier period reads
+    that period's open and no other. The CASE line says whose policy they are, the auditor's only where the open names
+    a registered policy or is vy-admin's own; a run's own --alpha and --gamma beside a signed policy are not read; and
+    nothing printed holds α or Γ, which stay in the private ``policy.json`` beside where they come from."""
+    alpha, gamma, period = signed
+    rc, cases, refused, out = signed_run(capsys, tmp_path, signed_piece(tmp_path / "pouw", FIRST, **changes),
+                                         (session,), "--alpha", "1/2", "--gamma", 7)
     assert rc == 0 and refused == [], out
-    f = Fraction(bits, gates)
-    assert [(sorted(c), c["verdict"]) for c in cases if c["protocol"] == INF] == [(["dir", "protocol", "verdict"],
-                                                                                    "accept")]
+    assert [c.get("policy") for c in cases] == [None, None, whose, None]
     d = tmp_path / "private" / "inference-only"
     params = json.loads((d / "case.json").read_text())["params"]
-    assert (params["alpha"], params["gamma"]) == ([f.numerator, f.denominator], gates)
-    assert json.loads((d / "policy.json").read_text()) == {"alpha": [f.numerator, f.denominator], "gamma": gates,
-                                                           "read": SC.FROM_DIVISION}
+    assert (params["alpha"], params["gamma"]) == (alpha, gamma)
+    said = changes if period == "p-0" else {}
+    assert json.loads((d / "policy.json").read_text()) == {
+        "alpha": alpha, "by": said.get("by", "vllm"), "gamma": gamma, "period": period, "policy": INF,
+        "policy_name": said.get("policy_name"), "registration": FIRST, "session": session, "whose": whose}
+    assert stat.S_IMODE((d / "policy.json").stat().st_mode) == 0o600
+    assert str(alpha) not in out and str(gamma) not in out.replace(str(tmp_path), "")
+
+
+def test_an_open_that_signed_no_policy_leaves_the_runs_own_alpha_and_gamma_signed_by_no_one(tmp_path, capsys):
+    """Where the open the serve's session joined signs none of the policy's four fields, the gate signed no policy for
+    the serve: the case is at the run's own --alpha and --gamma and says nobody signed them, and without them there is
+    no case."""
+    none = {"policy": None, "alpha": None, "gamma": None, "registration": None}
+    rc, cases, refused, out = signed_run(capsys, tmp_path / "given", signed_piece(tmp_path / "given" / "pouw", FIRST,
+                                                                                  **none),
+                                         (SERVED,), "--alpha", "1/2", "--gamma", 7)
+    assert rc == 0 and [c.get("policy") for c in cases] == [None, None, SC.UNSIGNED, None], out
+    d = tmp_path / "given" / "private" / "inference-only"
+    assert json.loads((d / "policy.json").read_text()) == {"alpha": [1, 2], "gamma": 7, "whose": SC.UNSIGNED}
+    rc, cases, refused, out = signed_run(capsys, tmp_path / "none", signed_piece(tmp_path / "none" / "pouw", FIRST,
+                                                                                 **none))
+    assert rc == 1 and [r["protocol"] for r in refused] == [INF], out
+    assert ("the period the serve's session joined was opened with no policy signed, and the run gives no --alpha and "
+            "--gamma of its own") in refused[0]["reason"]
+
+
+def test_the_signed_registration_is_the_first_record_of_the_cases_log(tmp_path, capsys):
+    """On a serve tied to Pearl+ the case's log starts at the serve's first registration record, before Pearl+'s W, so
+    the open that signed that record's digest is read, and one that signed W's or the window's own record R's, neither
+    the log's first, is refused."""
+    first = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
+             "previous": None}
+    w = h1_registration(R.digest(first))
+    v1 = tied_v1_case(w)
+    serve = tmp_path / "serve"
+    audit_dir(serve / "v3c-w0-4-32-4", v1)
+    (serve / SC.DEPLOYMENT).write_text(json.dumps(first, sort_keys=True))
+    pearlplus_parts(serve, w, sessions=(SERVED,))
+    for name, signed, ok in (("first", R.digest(first), True), ("w", R.digest(w), False), ("r", digest_of(v1), False)):
+        policy = signed_piece(tmp_path / name, signed)
+        rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / name / "private", *policy,
+                                      *stand_ins(tmp_path, v1))
+        got = {c["protocol"]: c for c in cases}
+        assert (INF in got) is ok and (rc == 0) is ok, out
+        if ok:
+            assert json.loads((tmp_path / name / "private" / "inference-only" / "case.json").read_text())[
+                "params"]["log"] == [first, w]
+        else:
+            assert [r["protocol"] for r in refused] == [INF]
+            assert "θ is read from the registration the gate signed before the serve" in refused[0]["reason"]
+
+
+def _lanes(**changes):
+    """A ledger the lane signed under a key of its own, in the piece beside the gate's ``key.json``."""
+    def change(root: Path, first: str) -> list[str]:
+        signed_piece(root / "lane", first, private=LANE_KEY, **changes)
+        argv = signed_piece(root, first)
+        shutil.copy(root / "lane" / "ledger.jsonl", root / "ledger.jsonl")
+        return argv
+    return change
+
+
+def _edited(root: Path, first: str) -> list[str]:
+    argv = signed_piece(root, first)
+    ledger = root / "ledger.jsonl"
+    ledger.write_text(ledger.read_text().replace('"gamma":100', '"gamma":900'))
+    return argv
+
+
+def _held(session: str):
+    """A piece that also holds a tree, with the gate's key, of a session the ledger doesn't."""
+    def change(root: Path, first: str) -> list[str]:
+        argv = signed_piece(root, first)
+        shutil.copytree(root / "session" / SERVED, root / "session" / session)
+        return argv
+    return change
+
+
+def _no_ledger(root: Path, first: str) -> list[str]:
+    argv = signed_piece(root, first)
+    (root / "ledger.jsonl").unlink()
+    return argv
+
+
+@pytest.mark.parametrize("make, sessions, reason", [
+    (lambda root, first: signed_piece(root, first, private=LANE_KEY), (SERVED,), "not the auditor's pinned"),
+    (_lanes(), (SERVED,), "the gate's ledger is refused under the pinned challenger key: the auditor's ledger entry 0 "
+                          "is signed under challenger key"),
+    (_lanes(key_sha512=GATE_SHA), (SERVED,), "the gate's ledger is refused under the pinned challenger key"),
+    (_edited, (SERVED,), "the gate's ledger is refused under the pinned challenger key"),
+    (_no_ledger, (SERVED,), "the gate's ledger is refused under the pinned challenger key"),
+    (signed_piece, (EARLY,), f"the serve's session {EARLY} joined no period, so no open signed a policy before it"),
+    (signed_piece, (NOWHERE,), "no challenger key at"),
+    (_held(NOWHERE), (NOWHERE,), f"the gate's ledger holds no reserve of the serve's session {NOWHERE}"),
+    (signed_piece, (SERVED, OLD), "Pearl+'s case's passes name 2 salt sessions, not one"),
+    (signed_piece, (), "Pearl+'s case's passes name 0 salt sessions, not one"),
+    (signed_piece, None, "there are no parts of that case"),
+    (lambda root, first: signed_piece(root, "77" * 64), (SERVED,), "the case's log starts at"),
+    (lambda root, first: signed_piece(root, first, registration=None), (SERVED,),
+     "period p-0's open signs policy, alpha, gamma and no registration: an inference-only policy is signed whole"),
+    (lambda root, first: signed_piece(root, first, policy="verity/inference-only/v1"), (SERVED,),
+     "another protocol's form"),
+    (lambda root, first: signed_piece(root, first, alpha=[6, 0]), (SERVED,),
+     "α is a pair of naturals [N, D] with D at least 1"),
+    (lambda root, first: signed_piece(root, first, alpha="3/2"), (SERVED,), "signs no α [N, D] and natural Γ"),
+    (lambda root, first: signed_piece(root, first, gamma=True), (SERVED,), "signs no α [N, D] and natural Γ"),
+    (lambda root, first: signed_piece(root, first)[:2], (SERVED,), "--key-sha512 is not given"),
+])
+def test_a_policy_the_gate_did_not_sign_for_this_serve_before_it_is_refused(tmp_path, capsys, make, sessions, reason):
+    """No inference-only case is written, whatever --alpha and --gamma the run gives, with the others still written,
+    when the policy isn't the pinned gate's, signed for this deployment before this serve: a key the lane made; a
+    ledger the lane signed under its own key, naming it or the gate's; a ledger edited after it was signed, or none; a
+    session reserved outside every period, one the piece holds no tree of, or one the ledger doesn't reserve; passes
+    naming two sessions, none, or no parts to name one; an open naming another registration than the case's log starts
+    at; an open that signs the policy in part, another protocol's form, or an α or Γ of no form; and no key pin."""
+    rc, cases, refused, out = signed_run(capsys, tmp_path, make(tmp_path / "pouw", FIRST), sessions,
+                                         "--alpha", "1/2", "--gamma", 7)
+    others = [V1, SAMPLED, *([] if sessions is None else [SC.PEARL_PLUS])]
+    assert rc == 1 and [c["protocol"] for c in cases] == others, out
+    assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
+    assert not (tmp_path / "private" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
 
 def test_the_parameters_are_the_population_programs_and_no_other_programs():
@@ -698,7 +876,8 @@ def test_under_h1s_tie_every_case_commits_to_the_record_h1_named(tmp_path, capsy
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
                                   *stand_ins(tmp_path, v1))
     assert (rc, refused) == (0, []), out
-    assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"} for id, d_ in (
+    assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"}
+                     | ({"policy": SC.UNSIGNED} if id == INF else {}) for id, d_ in (
         (V1, "sampled-proofs-v1"), (SAMPLED, "sampled-proofs"), (INF, "inference-only"), (SC.PERIOD, "pouw-period"))]
     piece, got = serve / SC.PERIOD_PIECE, private / "pouw-period"
     assert stat.S_IMODE(got.stat().st_mode) == 0o700
@@ -750,11 +929,12 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     assert not (serve / "private" / "pouw-period").exists()
 
 
-def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
+def pearlplus_parts(serve: Path, w: dict | None = None, sessions: tuple[str, ...] = ()) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
     manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
     dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
-    the Lean verdict of record's verdict, tiles drawn and work, in the grid form with the exact work beside it."""
+    the Lean verdict of record's verdict, tiles drawn and work, in the grid form with the exact work beside it. Each
+    of ``sessions`` adds a pass with a call, its manifest naming that session as the one its salt is from."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"
@@ -763,7 +943,9 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
                         "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
                                    "draw": {"from": "challenger"}}},
-             "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
+             "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"},
+                           *({"hm96_salt_key": "5a" * 32, "run": "r", "matmuls": [{"call": 0}],
+                              "session": {"session": sid, "seq": 3}} for sid in sessions)],
              "window": {"dropped": [0], "rounds": [1],
                         "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
@@ -982,7 +1164,7 @@ def test_the_lean_check_accepts_the_policy_case_on_the_tied_record(tmp_path, inf
     R's chain breaks, and it rejects."""
     w = h1_registration()
     v1 = tied_v1_case(w)
-    case = SC.inference_only_case(v1, *SC.UNBOUNDED, [w])
+    case = SC.inference_only_case(v1, *UNBOUNDED, [w])
     got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
     assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), "accept"), got
     assert got["profile"]["blocks"] == [list(budgets(toy_v1, inference_only_exe, tmp_path / "s"))], got
@@ -993,8 +1175,8 @@ def test_the_lean_check_accepts_the_policy_case_on_the_tied_record(tmp_path, inf
 
 @pytest.mark.parametrize("argv", [
     ["--private", "p"],
-    ["--audit", "a", "--private", "p", "--from-division", "--alpha", "1"],
-    ["--audit", "a", "--private", "p", "--from-division", "--gamma", "1"],
+    ["--audit", "a", "--private", "p", "--from-division"],
+    ["--audit", "a", "--private", "p", "--policy-piece", "d", "--policy-session", "s"],
     ["--audit", "a", "--private", "p", "--alpha", "1", "--gamma", "1", "--v2-exe", "x"],
 ])
 def test_a_usage_error_exits_64(capsys, argv):
@@ -1016,8 +1198,8 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, inference_only_exe):
     """The 4,32,4 class's window circuit (TINY on the H200: about 85 s and 3 GB to build) as the served window's audit
     holds it, its population program over the class's templates: the inference-only case `inference_only_case` makes from
-    it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
-    (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests
+    it decodes in the policy's Lean check, which accepts it at its own division's budgets (`budgets`: Γ its one block's
+    gates, α its input bits a gate) and rejects it a gate under. The toy tests
     can't catch what only the served shapes have: the class's own Definitions
     (heads cut by key block, scans, registered reads) through `nci_reference.root_nodes` and the Lean decoder, the
     description's walk bound, and the size of a served Program's text through the CLI's files."""
@@ -1030,10 +1212,8 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
                             provable=False)
     program, query = circuit.program()
     v1 = v1_case(program, query)
-    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")
-    bits = alpha * gates
-    assert bits.denominator == 1, (alpha, gates)
-    bits = bits.numerator
+    gates, bits = budgets(v1, inference_only_exe, tmp_path / "s")
+    alpha = Fraction(bits, gates)
     for gamma, verdict in ((gates, "accept"), (gates - 1, "reject")):
         got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma), tmp_path / "s")
         assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), verdict), got

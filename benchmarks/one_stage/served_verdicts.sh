@@ -1158,7 +1158,8 @@ with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}")
 EOF
-) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case reads them off its own division:" \
+) || { say "INFERENCE-ONLY LIMITS: none written, so the composite writes no inference-only case unless the gate" \
+           "signed its policy:" \
            "$(echo "$out" | tail -1 | cut -c1-300)"; return 0; }
   say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and" \
       "$(signed_limits && echo "signed by the lane's period at its open, where PEARLPLUS-PERIOD says so" \
