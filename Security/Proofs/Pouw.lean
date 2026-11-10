@@ -205,6 +205,9 @@ public import Proofs.Pouw.Window
 public import Proofs.Pouw.Witness
 public import Proofs.Pouw.Lemmas.Game
 public import Proofs.Pouw.Writes
+public import Proofs.Pouw.Dimension.H100DenseProofs
+public import Proofs.Pouw.Dimension.H100FragProofs
+public import Proofs.Pouw.TileBound.WinogradStrassen
 
 /-!
 # PoUW's proofs

@@ -39,6 +39,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Cost
 public import Proofs.Flock.Claims.Recursion.Cost
 public import Proofs.Flock.Claims.Recursion.Transport
+public import Proofs.Flock.Claims.Recursion.Finders
 
 /-!
 # The recursion: KS

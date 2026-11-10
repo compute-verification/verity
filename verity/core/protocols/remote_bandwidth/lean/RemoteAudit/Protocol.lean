@@ -26,42 +26,20 @@ the difftest's `session` reads (`Difftest.sessionFn`):
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
-<<<<<<< ours
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
   session's parameters and g.
-||||||| base
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
-  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
-=======
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
-  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
->>>>>>> theirs
 
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
-<<<<<<< ours
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledDraw`; its PRF
+openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
 advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
-commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Component.LineHeldAtComponent`
+commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
 proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the draws a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the reads the session's openings certify. When the pooled bound refuses the windows,
 `q_bytes` and `eps` are 0 and the profile says why.
-||||||| base
-draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
-`Accounting.Guarantees.Remote.PooledDraw`; its PRF advantages are a named assumption, not a number, and it has no
-hiding term, since the prover is sent the coin commitment only at the session's end). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
-session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
-why.
-=======
-draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
-`Accounting.Guarantees.Remote.PooledSample`; its PRF advantages are a named assumption, not a number, and it has no
-hiding term, since the prover is sent the coin commitment only at the session's end). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
-session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
-why.
->>>>>>> theirs
 -/
 
 @[expose] public section
@@ -143,8 +121,8 @@ structure Public where
 
 def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
 
-/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows drawn `g` a coin (`coins.openings_coins`), one
-a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.draws`. -/
+/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows sampled `g` a coin (`coins.openings_coins`), one
+a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 

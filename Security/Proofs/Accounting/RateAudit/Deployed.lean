@@ -18,13 +18,7 @@ returns the same receipts with the same tier reads, sends what the device sends,
 
 **A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
 `G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
-<<<<<<< ours
-draws are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_floor_le`), as in `Session.lean`.
-||||||| base
-draws are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
-=======
-samples are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
->>>>>>> theirs
+samples are causal over the monitoring period (`Pooled.pr_causal_le'`, `Pooled.pr_floor_le`), as in `Session.lean`.
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
@@ -462,16 +456,8 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
     rw [hη]
   simpa [e, hω, hc] using hy
 
-<<<<<<< ours
-/-- A session's draws over one store as a causal family over the monitoring period (`Rate.Causal`): any event of the
-openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn
-||||||| base
-/-- A session's draws over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
-openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn
-=======
-/-- A session's samples over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
+/-- A session's samples over one store as a causal family over the monitoring period (`Rate.Causal`): any event of the
 openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` sampled
->>>>>>> theirs
 before the session's coins. -/
 theorem pr_samples_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
@@ -526,13 +512,7 @@ theorem pr_samples_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (E
 
 /-- **A session's pooled samples over the monitoring period**: every window's openings land on correct receipts while the
 session holds at most `K`. -/
-<<<<<<< ours
-theorem pr_draws_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
-||||||| base
-theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
-=======
 theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
->>>>>>> theirs
     (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
     pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -558,27 +538,13 @@ theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store 
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-<<<<<<< ours
-/-- `pr_draws_pooled_le_map` on a uniform store. -/
-theorem pr_draws_pooled_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
-||||||| base
-/-- `pr_draws_horizon_le_map` on a uniform store. -/
-theorem pr_draws_horizon_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
-=======
 /-- `pr_samples_pooled_le_map` on a uniform store. -/
 theorem pr_samples_pooled_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
->>>>>>> theirs
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-<<<<<<< ours
-  pr_draws_pooled_le_map id A K
-||||||| base
-  pr_draws_horizon_le_map id A K
-=======
   pr_samples_pooled_le_map id A K
->>>>>>> theirs
 
 /-- **A session's pooled samples in every window**: every window's openings land on correct receipts while some window
 holds at most `K_w`. -/
@@ -614,13 +580,7 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
-<<<<<<< ours
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_pooled_le_map store A K) (pr_draws_window_le_map store A Kw)))
-||||||| base
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K) (pr_draws_window_le_map store A Kw)))
-=======
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K) (pr_samples_window_le_map store A Kw)))
->>>>>>> theirs
 
 /-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
@@ -740,16 +700,8 @@ theorem div_le_ofReal {a c : ℕ} (hc : 0 < c) {t : ℝ} (h : (a : ℝ) ≤ t * 
   rw [← ENNReal.ofReal_natCast a, ← ENNReal.ofReal_natCast c, ← ENNReal.ofReal_div_of_pos hc']
   exact ENNReal.ofReal_le_ofReal ((div_le_iff₀ hc').2 h)
 
-<<<<<<< ours
-/-- The monitoring period's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
-theorem pooled_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
-||||||| base
-/-- The monitoring period's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
-theorem horizon_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
-=======
 /-- The monitoring period's sample term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
 theorem pooled_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
->>>>>>> theirs
     ((⌊(1 - dbar) * M⌋₊ : ℝ≥0∞) / M) ^ e ≤ ENNReal.ofReal (1 - dbar) ^ e := by
   refine pow_le_pow_left₀ zero_le ?_ e
   by_cases h : 0 ≤ 1 - dbar
@@ -803,16 +755,8 @@ theorem ofReal_pow_le {x : ℝ} {m : ℕ} (hx : 0 ≤ x) (h : x ^ m ≤ 1 / 2 ^ 
   rw [e]
   exact ENNReal.ofReal_le_ofReal h
 
-<<<<<<< ours
-/-- The monitoring period's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
-theorem pooled_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
-||||||| base
-/-- The monitoring period's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
-theorem horizon_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
-=======
 /-- The monitoring period's term at the deployed sample: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
 theorem pooled_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
->>>>>>> theirs
   refine ofReal_pow_le (by norm_num) ((one_sub_pow_le 0.0015 _ (by norm_num)).trans (exp_neg_le _ ?_))
   have : (7 : ℝ) ≤ n := by exact_mod_cast hn
   push_cast

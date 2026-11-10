@@ -1,15 +1,7 @@
 /-
 The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
-<<<<<<< ours
 records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
-hierarchy (coarse to fine; the finest level is the checked one), the members drawn at each level, and δ. The JSON is
-||||||| base
-records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
-(coarse to fine; the finest level is the checked one), the members drawn at each level, and δ. The JSON is
-=======
-records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
-(coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
->>>>>>> theirs
+hierarchy (coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
 `IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.
 
 A protocol whose acceptance is not a sampling design over proof blocks (a timed storage audit, a certificate check) declares
@@ -41,28 +33,18 @@ structure Stratum where
   k : Nat
   deriving BEq, DecidableEq, Repr
 
-<<<<<<< ours
 /-- A stratum of the work sampling design: its name, size and `k`, the work of each of its members (an integer in any
-fixed unit, `0` for members that do none) and its floor, the fewest members it draws (`profile.WorkStratum`). -/
+fixed unit, `0` for members that do none) and its floor, the fewest members it samples (`profile.WorkStratum`). -/
 structure WorkStratum extends Stratum where
   work : Nat
   floor : Nat
   deriving BEq, DecidableEq, Repr
 
-/-- How a level is drawn, its sampling design: each member independently with probability `p`, exactly `k` members
-uniformly, uniform draws inside disjoint strata of the checked level, or the work design `work:k`, uniform draws inside
+/-- How a level is sampled, its sampling design: each member independently with probability `p`, exactly `k` members
+uniformly, uniform samples inside disjoint strata of the checked level, or the work design `work:k`, uniform samples inside
 strata whose `k_s` its rule sizes by work above each stratum's floor (`Flock.Draw.workK`) (`profile.Bernoulli`,
 `Subset`, `Stratified`, `Work`). The sample of a work design is a stratified one at its `k_s`. -/
 inductive SamplingDesign where
-||||||| base
-/-- How a level is drawn: each member independently with probability `p`, exactly `k` members uniformly, or uniform
-draws inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
-inductive Draw where
-=======
-/-- How a level is sampled: each member independently with probability `p`, exactly `k` members uniformly, or uniform
-samples inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
-inductive Draw where
->>>>>>> theirs
   | bernoulli (p : Ratio)
   | subset (k : Nat)
   | stratified (strata : Array Stratum)
@@ -89,7 +71,7 @@ def WorkStratum.problem (k : Nat) (strata : Array WorkStratum) : Option String :
       return some s!"stratum '{s.name}': k is not the work rule's"
   return none
 
-/-- The sampling design of C-Flock's law (`Flock.Draw.Law`) at its sizes: each stratum named by its template, its size
+/-- The sampling design of Flock's law (`Flock.Draw.Law`) at its sizes: each stratum named by its template, its size
 its ranges' total. `none` for a Bernoulli law of denominator 0. -/
 def SamplingDesign.ofFlock : Flock.Draw.Law → Option SamplingDesign
   | .subset k => some (.subset k)

@@ -43,6 +43,7 @@ public import Proofs.Flock.Claims.KS.PlainAcc
 public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 public import Proofs.Flock.Claims.Recursion.Gap
 public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion
 
 /-!
 # The compiled verifier's structural code facts

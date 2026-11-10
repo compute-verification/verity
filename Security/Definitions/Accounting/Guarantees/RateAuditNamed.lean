@@ -18,16 +18,8 @@ oracle value is that word's receipt. Two of the run's queries with one oracle va
 * `RateConservationNamedRO`: at a count `k`, `C(N, k)/2^λ` in place of `C(q, k)/2^λ`.
 * `RatePaidNamedRO`: at every count at once, `2^N/2^λ` in place of `RatePaidRO`'s `2^q/2^λ`.
 * `RateChainSampledNamedRO`: the route `Sampled` (`RateChainSampledRO`) with that error at each pass.
-<<<<<<< ours
-* `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled draw
-  (`RateSessionDraw`): over the monitoring period and in every window at once.
-||||||| base
-* `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled draw
-  (`RateSessionDraw`): over the horizon and in every window at once.
-=======
 * `RateSessionSampledNamedRO`: the route `Sampled` for a session of windows, each closed by its pooled sample
-  (`RateSessionSample`): over the horizon and in every window at once.
->>>>>>> theirs
+  (`RateSessionSample`): over the monitoring period and in every window at once.
 
 The prover is one undifferentiated resource: these conserve the words read, rebuilt or held, whichever devices or
 parties read, rebuild or hold them, with no assumption on who they are.

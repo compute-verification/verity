@@ -228,16 +228,10 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
   let keys := if (field? j "held").isSome then keys.push "held" else keys
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
-<<<<<<< ours
-  let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
-    else keys
-||||||| base
-=======
   let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
     else keys
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
->>>>>>> theirs
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -526,21 +520,15 @@ def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Op
   | .ok law => coinsReason v law c.record e.draw src
   | .error _ => none
 
-<<<<<<< ours
-/-- Whether the coins `src` run out before the draw under the verifier's law as derived ends (`drawnFrom` refused with
-`Draw.RAN_OUT`); false when the law doesn't derive or the record names no population, which `check` refuses. -/
+/-- Whether the coins `src` run out before the sample under the verifier's law as derived ends (`drawnFrom` refused with
+`Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
 def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
   let v := p.verifier
   match Draw.derive v.program v.query v.law v.workTable, nat? (getD c.record "population") with
   | .ok law, some n => match Draw.ranOutOf (drawnFrom v law n src) with | .ok b => b | .error _ => false
   | _, _ => false
 
-/-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't draw the draw
-||||||| base
-/-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't draw the draw
-=======
 /-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't sample the sample
->>>>>>> theirs
 (`coinsWhy`), then `check`. -/
 def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match ξ.bind (coinsWhy p c e) with
