@@ -13,6 +13,7 @@ public import Proofs.Flock.SampledGeneric.HidingDefs
 public import Proofs.Flock.SampledGeneric.HidingStatements
 public import Proofs.Flock.SampledGeneric.Hiding
 public import Proofs.Flock.SampledGeneric.HidingSessions
+public import Proofs.Flock.SampledGeneric.HidingWitnesses
 
 /-! The sampled audit as a compiler, generic in the proof system, in Flock's game model: its objects, its statements,
 their proofs, and Flock as an instance. Proof material, listed in no lock: the statement is the claims core's

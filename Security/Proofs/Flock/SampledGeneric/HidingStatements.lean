@@ -22,7 +22,8 @@ alone, at `ε_hide` plus `ε_b` a session.
 * `GenericSessionsZK`: sessions in turn against one verifier that carries its state are zero knowledge at the sum of
   the sessions' errors, each averaged over the honest views before it (`Zk.seq`, `Zk.seqErr`).
 * `GenericSampledSessionsZK`, `SpotFlockSessionsZK`: the audit with a session per sampled statement, generic and at
-  Flock.
+  Flock. `GenericSampledSessionsZKSum`: the generic one at a session error that reads no verifier, where the sessions'
+  errors add up.
 -/
 
 @[expose] public section
@@ -146,6 +147,24 @@ def GenericSampledSessionsZK : Prop :=
         (εh + avg fun r => Zs.seqErr ε
           ((stmts (H.commit Xt r, samp v (H.commit Xt r))).zip (wits Xt r (samp v (H.commit Xt r))))
           (v (stmts (H.commit Xt r, samp v (H.commit Xt r)))))
+
+/-- **The sampled audit's zero knowledge with a session per sampled statement, at the sum of the sessions' errors.**
+`GenericSampledSessionsZK` for a proof system whose session error `ε_b x w` reads the statement and the witness and
+no verifier: the audit's view is close to the simulator's at any fixed trace `X₀` at `ε_hide` plus the sum of the
+sample's sessions' errors, averaged over the prover's commitment coins,
+$$\varepsilon_{\rm hide}+\mathbb E_r\sum_j\varepsilon_b(x_{r,j},w_{r,j}).$$ -/
+def GenericSampledSessionsZKSum : Prop :=
+  ∀ (n : ℕ) (Tr Rnd Com Stmt Wit VS View : Type) [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
+    (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (εb : Stmt → Wit → ℝ≥0∞) (εh : ℝ≥0∞)
+    (stmts : Com × Finset (Fin n) → List Stmt) (samp : (List Stmt → List View → VS) → Com → Finset (Fin n))
+    (wits : Tr → Rnd → Finset (Fin n) → List Wit),
+    (Zs.ZKAt Rel fun x w _ => εb x w) → H.Hiding εh →
+    ∀ Xt : Tr, (∀ r S, List.Forall₂ Rel (stmts (H.commit Xt r, S)) (wits Xt r S)) →
+    ∀ (X₀ : Tr) (v : List Stmt → List View → VS),
+      Close (auditView H (zkComap Zs.seq stmts) samp wits Xt v) (auditSim H (zkComap Zs.seq stmts) samp X₀ v)
+        (εh + avg fun r =>
+          (((stmts (H.commit Xt r, samp v (H.commit Xt r))).zip (wits Xt r (samp v (H.commit Xt r)))).map
+            fun xw => εb xw.1 xw.2).sum)
 
 /-- **The sampled audit over Flock's masked sessions, a session per sampled statement, is zero knowledge.** As
 `SpotFlockZK`, with the sample's statements a list `stmts (c, S)`, each proved in its own masked session, in turn,

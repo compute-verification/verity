@@ -51,7 +51,6 @@ theorem commitSplit (x : ByteArray) (y : Salt) :
   have hm' := hm (saltBytes y)
   rw [bitL] at hm'
   rw [hm']
-  dsimp only
   simp only [Pi.add_apply, bitsOf, My_apply y ⟨t, ht'⟩, bitL]
   exact xor_ind _ _
 

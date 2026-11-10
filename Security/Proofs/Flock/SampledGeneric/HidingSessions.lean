@@ -20,7 +20,8 @@ between the two is the statistical-distance argument on the outcomes either expe
 * `Close.ex_le`: so do two close experiments. `Close.andThen`: closeness survives post-processing;
 * `Close.andThen_right`, `Close.map`, `Close.refl`: closeness under a shared first experiment, at the continuations'
   errors averaged over it; under a relabelling; of an experiment to itself;
-* `Zk.seq_close`: the hybrid. `Flock.SecurityProofs.GenericSessionsZK`, `GenericSampledSessionsZK`,
+* `Zk.seq_close`: the hybrid. `Zk.seqErr_le_sum`: its error is at most the sum of the sessions' bounds.
+  `Flock.SecurityProofs.GenericSessionsZK`, `GenericSampledSessionsZK`, `GenericSampledSessionsZKSum`,
   `SpotFlockSessionsZK`.
 -/
 
@@ -199,6 +200,24 @@ theorem Zk.seq_close {Stmt Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel :
       (hZ x w hxw (v [])).andThen _
     exact (hA.trans hB).mono (le_of_eq (add_comm _ _))
 
+/-- **The sessions' error is at most the sum of the sessions' bounds**: where a session's error is at most `ε_b x w`
+against every verifier, the average over the honest views before it is too. -/
+theorem Zk.seqErr_le_sum {Stmt Wit VS View : Type} (Zs : Zk Stmt Wit VS View) {ε : Stmt → Wit → VS → ℝ≥0∞}
+    {εb : Stmt → Wit → ℝ≥0∞} (hε : ∀ x w v, ε x w v ≤ εb x w) :
+    ∀ (l : List (Stmt × Wit)) (v : List View → VS), Zs.seqErr ε l v ≤ (l.map fun xw => εb xw.1 xw.2).sum
+  | [], _ => le_of_eq rfl
+  | xw :: l, v => by
+      show ε xw.1 xw.2 (v []) + (Zs.real xw.1 xw.2 (v [])).ex (fun a => Zs.seqErr ε l fun hs => v (a :: hs)) ≤
+        ((xw :: l).map fun xw => εb xw.1 xw.2).sum
+      rw [List.map_cons, List.sum_cons]
+      refine add_le_add (hε _ _ _) ?_
+      have h1 : Discharge.Recursion.exG (fun a => Zs.seqErr ε l fun hs => v (a :: hs)) (Zs.real xw.1 xw.2 (v [])).g
+          (Zs.real xw.1 xw.2 (v [])).s ≤
+          Discharge.Recursion.exG (fun _ => (l.map fun xw => εb xw.1 xw.2).sum) (Zs.real xw.1 xw.2 (v [])).g
+            (Zs.real xw.1 xw.2 (v [])).s :=
+        Discharge.Recursion.exG_mono (fun a => Zk.seqErr_le_sum Zs hε l fun hs => v (a :: hs)) _ _
+      exact h1.trans_eq (Discharge.Recursion.exG_const _ _ _)
+
 end FlockSoundness.SampledGeneric
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
@@ -218,6 +237,16 @@ theorem Flock.SecurityProofs.GenericSampledSessionsZK : Flock.Guarantees.Generic
     (zkComap Zs.seq stmts) (fun s ws => List.Forall₂ Rel (stmts s) ws)
     (fun s ws v => Zs.seqErr ε ((stmts s).zip ws) (v (stmts s))) εh samp wits
     ((Flock.SecurityProofs.GenericSessionsZK Stmt Wit VS View Zs Rel ε hZ).comap stmts) hH Xt hX X₀ v
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
+/-- **The sampled audit's zero knowledge with a session per sampled statement, at the sum of the sessions' errors**
+(`Flock.Guarantees.GenericSampledSessionsZKSum`): `GenericSampledSessionsZK`, with `Zk.seqErr_le_sum` at each
+commitment coin. -/
+theorem Flock.SecurityProofs.GenericSampledSessionsZKSum : Flock.Guarantees.GenericSampledSessionsZKSum := by
+  intro n Tr Rnd Com Stmt Wit VS View _ _ H Zs Rel εb εh stmts samp wits hZ hH Xt hX X₀ v
+  exact (Flock.SecurityProofs.GenericSampledSessionsZK n Tr Rnd Com Stmt Wit VS View H Zs Rel (fun x w _ => εb x w) εh
+    stmts samp wits hZ hH Xt hX X₀ v).mono
+      (add_le_add le_rfl (avg_mono fun _ => Zk.seqErr_le_sum Zs (fun _ _ _ => le_rfl) _ _))
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **The sampled audit over Flock's masked sessions, a session per sampled statement, is zero knowledge**
