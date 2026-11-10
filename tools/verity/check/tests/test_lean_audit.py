@@ -722,7 +722,8 @@ def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_und
     """The next build takes the trace of a module the cache lacks, so that it is compiled and indexed
     (`module_keys.settle`). One `put` can't index would then be compiled in every build, with everything above it: `put`
     records it under the key it compiled under, which that build reads and leaves the module to Lake. Only a module
-    the run compiled whole is recorded, and a later `put` that indexes it removes the record."""
+    the run compiled whole is recorded, with the code that refused it (`module_keys.rules`), and a later `put` that
+    indexes it removes the record."""
     pkg = _package(tmp_path)
     lib, store = pkg / ".lake/build/lib/lean", tmp_path / "store"
     setup = pkg / ".lake/build/ir/P/B.setup.json"
@@ -738,7 +739,7 @@ def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_und
     got = unstored()
     assert set(got) == {"P.B", "P"} and got["P"] == "it loads P.B, which is not indexed" and "P.A" in got["P.B"]
     assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text()) == {
-        "module": "P", "scope": "p", "why": got["P"]}
+        "module": "P", "scope": "p", "why": got["P"], "by": LA.MK.rules()}
     setup.write_text(whole)
     assert arts.put({pkg: SANDBOXED}) == 2 and unstored() == {}, "indexed now: nothing says otherwise"
     for t in lib.rglob("*.trace"):
