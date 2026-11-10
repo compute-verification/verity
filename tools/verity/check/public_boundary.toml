@@ -79,6 +79,15 @@ shared = [
     # proof imports: a public guarantee ships with its witnesses, and the lock the export writes keeps their entries
     "Security/Proofs/Core/ExpandWitnesses.lean",
 ]
+# the Lean check a reader runs on the tree's Lake packages (`check.py --all`): the checker, the Lean it runs, its setup
+# and sandbox, and the two fixture packages its controls build with the violations each must fail on. The tools beside it
+# stay private: the lock run's, the store's and the queue's, and its tests
+lean_check = [
+    "tools/verity/lean/{check,headers,module_keys,olean_graph,upstream,cache}.py",
+    "tools/verity/lean/{Facts,Replay,Graph,Unread,Upstream}.lean",
+    "tools/verity/lean/{sandbox,setup}.sh",
+    "tools/verity/lean/tests/fixtures/{control,modules,violations.json,module-violations.json}",
+]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
 # the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs, but the served window's
@@ -281,6 +290,16 @@ from = ["pouw"]
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
 # matches. A Lean lock's kept text is held closer: lane text in it, or the name of what the export leaves out, refuses the
 # export unless an entry here covers it (the lock under `paths`, the text matching `pattern`).
+[[needed]]
+why = "the task graph's key rule and its digests, which key each module the Lean check's artifact cache restores"
+paths = ["tools/verity/graph/verity_graph/contract.py"]
+
+# An edge a public file runs without: its source uses the target only where it is there, so the export ships nothing
+# broken. Each entry is one edge, `SOURCE -> TARGET`, with how the source runs without the target.
+[[optional]]
+edge = "tools/verity/lean/setup.sh -> tools/verity/lean/lean_audit.py"
+why = "the pinned dependency bundle's restore: the script runs it only where the file is, and lake fetches the dependencies elsewhere"
+
 [[residue]]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
