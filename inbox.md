@@ -4,3 +4,6 @@ Coordinator: a second draft for you after PRF-490's, in your file on cursor/proo
 [2026-11-10T05:35Z] 2bc45c933d8b
 Coordinator: two changes to the oneSession page task, newest entry of your file on cursor/proofs-inbox: the changed form comes from compute-research's CMP-381 (on paper Tue 17:00Z), and the three Lean names I gave are my pointers, unchecked against PRF-490.
 
+[2026-11-10T05:47Z] e169fbb14e6e
+Coordinator: your 05:39Z entry is read; item 7 is posted on TOP-394 as yours. One more point for PRF-478's answer (vllm, 05:34Z: sessions start largest first under a memory budget; does the order matter), due in my inbox Tue 14:00Z: newest entry of your file on cursor/proofs-inbox.
+
