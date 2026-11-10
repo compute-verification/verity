@@ -37,7 +37,9 @@ staged, is built from source. Lake looks a module up by its package and input ha
 input hash are both left out, and after the build `misrestored` names any module whose input hash is another staged
 module's, which fails the build.
 
-A module enters the index (`LakeArtifacts.put`) only from a passing run that compiled it, under the key the outputs its
+A module enters the index (`LakeArtifacts.put`) only from a run that compiled it in the sandbox, whether the run then
+passed, failed or was killed, and only when its compile ended (its trace whole, each output under the hash the trace
+names and no newer than the `.hash` beside it), under the key the outputs its
 build holds give it (`read_digests`), and only where Lake read its header as `headers.py` does (`indexable`): the
 workspace modules its `ir/<module>.setup.json` lists (`importArts`, every module it imports, transitively) are the closure
 of those read here, each built in the package `keys` found it in, and its own package is the one `keys` names. Every

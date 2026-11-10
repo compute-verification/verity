@@ -62,6 +62,7 @@ for pkg in named:
     for src in pkg.glob("*.lean"):
         (lib / (src.stem + ".olean")).write_text("built")
     reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})
+    reps[-1]["sandbox"] = True
     if missing:
         failed.append(str(pkg))
 (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
@@ -490,6 +491,47 @@ def _built(pkg: Path, mod: str, outputs: dict[str, str], imports: tuple[str, ...
         i: {"olean": str(build / "lib/lean" / f"{i.replace('.', '/')}.olean")} for i in imports}}))
 
 
+def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_on_check_py_s_word(tmp_path, monkeypatch):
+    """A module is stored for what its compile read, so a package that failed (a record, a later module) and a check.py
+    that was killed store what they compiled, as a pass does. What says the build ran in the sandbox is check.py's own:
+    its report, or, where it left none, what it wrote in the package's work directory as the build began."""
+    root = _tree(tmp_path, monkeypatch)
+    put_with = []
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: put_with.append(
+        {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
+    assert _run(tmp_path, 1)[0] == 1, "b fails: it reads a file outside its inputs"
+    assert put_with == [{"a": {"sandbox": True, "failures": []},
+                         "b": {"sandbox": True, "failures": ["reads docs/outside.txt"]}}]
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps, failed = [], []', 'reps, failed = [], []\nfor n, pkg in enumerate(named):\n'
+        '    (out / f"audit-{n}").mkdir()\n'
+        f'    (out / f"audit-{{n}}" / "{LA.BUILDING}").write_text(json.dumps({{"package": str(pkg), "sandbox": n == 0}}))\n'
+        'sys.exit(137)'))
+    assert LA.run(tmp_path / "out2", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None) == 1
+    assert put_with[1:] == [{"a": {"sandbox": True}, "b": {"sandbox": False}}], "killed: no report, so what each build began with"
+
+
+def test_what_check_py_said_of_a_build_is_its_report_or_what_it_wrote_as_the_build_began(tmp_path):
+    out, a, b = tmp_path / "out", tmp_path / "pkg" / "a", tmp_path / "pkg" / "b"
+    assert LA.built(out) == {}
+    for n, (pkg, sandbox) in enumerate(((a, True), (b, False))):
+        (out / f"audit-{n}").mkdir(parents=True)
+        (out / f"audit-{n}" / LA.BUILDING).write_text(json.dumps({"package": str(pkg), "sandbox": sandbox}))
+    began = {a: {"package": str(a), "sandbox": True}, b: {"package": str(b), "sandbox": False}}
+    assert LA.built(out) == began
+    reps = [{"package": str(a), "sandbox": True, "failures": ["sampled: a: differs"]}, {"package": str(tmp_path / "c")},
+            {"package": str(tmp_path / "d"), "sandbox": True}]
+    (out / "audit.json").write_text(json.dumps({"packages": reps}))
+    assert LA.built(out) == began | {a: reps[0], tmp_path / "d": reps[2]}, \
+        "a report replaces what the build began with; one that doesn't say `sandbox` is of a package check.py didn't build"
+    os.utime(out / "audit.json", ns=(1, 1))
+    assert LA.built(out) == began | {tmp_path / "d": reps[2]}, "a report an earlier check.py left is not this build's"
+    (out / "audit.json").write_text("{")
+    assert LA.built(out) == began
+    assert AUDIT.BUILDING == LA.BUILDING
+
+
 #: check.py's report on a build in the sandbox, the only kind `LakeArtifacts.put` indexes
 SANDBOXED = {"sandbox": True}
 
@@ -569,6 +611,66 @@ def test_only_a_module_the_run_compiled_goes_into_the_artifact_cache(tmp_path):
     (tmp_path / "s3" / "artifacts").mkdir(parents=True)
     (tmp_path / "s3" / "artifacts" / ("a" * 16 + ".olean")).write_text("other bytes under P.A's artifact's name")
     assert LA.LakeArtifacts(tmp_path / "s3").put({pkg: SANDBOXED}) == 0
+
+
+def test_a_module_whose_compile_was_stopped_stays_out_of_the_artifact_cache(tmp_path):
+    """A failed or killed run's build is indexed too, so `put` must tell a module whose compile ended from one it was
+    stopped in. Lake removes the outputs, runs `lean`, removes each `.hash`, writes them from the new outputs and writes
+    the trace last, leaving the earlier trace and `.hash` files until then: at every point before the end the trace isn't
+    whole, an output it names is missing or without its `.hash`, or an output is newer than the `.hash` beside it, which
+    names the bytes that were there before."""
+    pkg = _package(tmp_path)
+    lib, n = pkg / ".lake/build/lib/lean", 0
+
+    def put() -> int:
+        nonlocal n
+        n += 1
+        return LA.LakeArtifacts(tmp_path / f"store-{n}").put({pkg: SANDBOXED})
+
+    whole = (lib / "P/A.trace").read_text()
+    (lib / "P/A.trace").write_text(whole[:40])
+    assert put() == 0, "the trace was being written: P.A stays out, and P.B and P, which load it, after it"
+    (lib / "P/A.trace").write_text(whole)
+    olean = (lib / "P/A.olean").read_bytes()
+    (lib / "P/A.olean").unlink()
+    assert put() == 0, "`lean` had not written the output yet"
+    (lib / "P/A.olean").write_bytes(olean[:5])
+    at = (lib / "P/A.olean.hash").stat().st_mtime_ns
+    os.utime(lib / "P/A.olean", ns=(at + 1, at + 1))
+    assert put() == 0, "`lean` wrote the output, half of it, and the `.hash` is still the one of the compile before"
+    (lib / "P/A.olean.hash").unlink()
+    assert put() == 0, "the `.hash` files were removed and not yet written"
+    (lib / "P/A.olean").write_bytes(olean)
+    (lib / "P/A.olean.hash").write_text("a" * 16)
+    assert put() == 3, "whole again"
+
+
+def test_a_build_whose_sampled_recompile_differs_indexes_nothing(tmp_path):
+    """The sampled recompile found a module this build restored or kept that differs from its own compile. What was
+    compiled on top of it read those outputs, so nothing of that build goes in."""
+    pkg, said = _package(tmp_path), []
+    rep = SANDBOXED | {"failures": ["sampled: P.A: the build's P/A.olean differs from the recompile's"]}
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: rep}, log=said.append) == 0 and "(`sampled`)" in said[0]
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED | {"failures": ["records: differ"]}}) == 3
+
+
+def test_a_build_that_compiled_nothing_hashes_nothing(tmp_path, monkeypatch):
+    """Every build puts now, and most compile a handful of modules: only those and what they load are read."""
+    pkg = _package(tmp_path)
+    lib = pkg / ".lake/build/lib/lean"
+    for t in lib.rglob("*.trace"):
+        os.utime(t, (1000, 1000))
+    read = []
+    digest = LA.MK.digest
+    monkeypatch.setattr(LA.MK, "digest", lambda f: read.append(Path(f)) or digest(f))
+
+    def outputs() -> set[str]:
+        return {f.name.split(".")[0] for f in read if pkg / ".lake" in f.parents}
+
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, since=1000) == 0 and outputs() == set()
+    os.utime(lib / "P/B.trace", (1001, 1001))
+    LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, since=1000)
+    assert outputs() == {"A", "B"}, "P.B, compiled, and P.A, which it loads; not P"
 
 
 def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
@@ -752,8 +854,9 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                       log=lambda s: None, bundle=bundle) == 1
         assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
-        assert put_with[-1] == {"a": json.loads((tmp_path / f"out{n}" / "audit.json").read_text())["packages"][0]}, \
-            "the passing package, with check.py's report on it, which says whether it was built in the sandbox"
+        assert {p: (r["sandbox"], r["failures"]) for p, r in put_with[-1].items()} == {
+            "a": (True, []), "b": (True, ["reads docs/outside.txt"])}, \
+            "each package it built, with check.py's report on it, which says whether it was built in the sandbox"
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     def step():

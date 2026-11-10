@@ -60,6 +60,10 @@ ROOT = HERE.parents[2]
 #: test that drives `main` can redirect it off the checkout, which the test suite's read guard would otherwise flag
 SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
+#: what a package's work directory holds from the moment its builds are about to run: the package, and whether they run in
+#: the sandbox. A run that is killed leaves no report, and this is then what says whether the modules it compiled may go
+#: into the artifact cache (`lean_audit.built`)
+BUILDING = "building.json"
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
 #: conflict rather than merge what it can't read
@@ -336,7 +340,7 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
-#: `--artifacts`: the node's Lake artifact cache, which only a passing run writes (`lean_audit.LakeArtifacts`)
+#: `--artifacts`: the node's Lake artifact cache, which a run writes after its builds (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
@@ -5223,7 +5227,7 @@ def _open(pkg: Path, out: Path) -> tuple[dict, dict | None, Path | None]:
     if work.resolve().is_relative_to(pkg.resolve()):
         raise ValueError(f"the audit's output {work} is inside the package {pkg}")
     work.mkdir(parents=True, exist_ok=True)
-    for stale in (POLICY, "review.txt"):
+    for stale in (POLICY, "review.txt", BUILDING):
         (work / stale).unlink(missing_ok=True)
     return rep, policy, work
 
@@ -5307,6 +5311,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     pipe = None
     if build:
         rep["sandbox"] = sandboxed()
+        (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"]}))
         n = build_threads(pkg)
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "

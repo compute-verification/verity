@@ -5031,6 +5031,32 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
 
 
+def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_the_sandbox(tmp_path, monkeypatch):
+    """What a build compiled goes into the node's artifact cache only on check.py's word that it ran in the sandbox. A
+    check.py that is killed writes no report, so that word is in the package's work directory from before the first
+    build step, and an audit that never builds, or builds elsewhere than the one before it, leaves no earlier one."""
+    pkg, out = tmp_path / "p", tmp_path / "out"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    began = out / "audit-p" / A.BUILDING
+    seen = []
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: seen.append(json.loads(began.read_text())) or (1, ""))
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    for sandbox in (True, False):
+        monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+        assert A.audit(pkg, out, build=True, runs=False)["sandbox"] is sandbox
+        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox}
+    (pkg / A.POLICY).write_text("{")
+    assert A.audit(pkg, out, build=True, runs=False)["failures"] and began.exists(), "a package it never opened keeps its own"
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, ""))
+    A.audit(pkg, out, build=False, runs=False, replay=False)
+    assert not began.exists(), "this audit built nothing: what the one before it said is gone"
+
+
 def test_the_sampled_recompile_follows_the_build_and_its_failure_fails_the_audit_before_the_build_is_announced(
         tmp_path, monkeypatch):
     """It takes the modules the build steps' logs say Lake compiled, and the build's env prefix without a cache; a failure

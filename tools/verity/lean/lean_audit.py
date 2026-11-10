@@ -971,8 +971,10 @@ class LakeArtifacts:
     indexed under). An entry of another schema (`module_keys.SCHEMA`) is under a key no build computes: it is never read,
     never taken from a bundle, and goes with the least recently used (`prune`). The builds of check's audit and of a
     records run read it through a Lake cache directory of their own, which `module_keys.stage` fills with the modules
-    whose keys it indexes (`check.py --artifacts`), and never write it; after a run passes, each module its build compiled in the sandbox goes in (`put`). A
-    module version any earlier passing run on this node built is then restored whatever tree comes next, not only the one
+    whose keys it indexes (`check.py --artifacts`), and never write it; after every build of check's audit, of a records run, of `--try` and of `--build`, whatever
+    became of the run, each module the build compiled in the sandbox goes in (`put`). A module is stored for what its
+    compile read, and no verdict of a run is read from here, so a failed run's compile is worth what a passing run's is. A
+    module version any earlier run on this node compiled is then restored whatever tree comes next, not only the one
     its package's kept build (`WarmBuilds`) came from. The audit still checks every statement against the restored `.olean` files and replays
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
@@ -994,15 +996,20 @@ class LakeArtifacts:
         return f
 
     def put(self, reports: dict[Path, dict], since: float | None = None, log=print) -> int:
-        """Index each module of the builds of ``reports``' packages (each with check.py's report on it) that the build
-        compiled (a trace written after ``since``, and not one Lake restored) under its key; the number of entries new to
-        the index. Only a build whose report says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
+        """Index each module of the builds of ``reports``' packages (each with what check.py said of its build: its report,
+        or `builds`' record of a run that didn't end) that the build compiled (a trace written after ``since``, and not
+        one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
+        key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is.
+        Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
-        as its module's. A module goes in only when `module_keys.indexable`, when each output its trace names is in the
-        build with that hash (`<file>.hash`), and once every workspace module it loads is indexed, under the key the
+        as its module's. A module goes in only when `module_keys.indexable`, when its trace is whole and each output it
+        names is in the build with that hash (`<file>.hash`) and no newer than the file that says so (`_built`: Lake
+        writes the outputs, then their hashes, then the trace, so a build that was stopped leaves no module that passes),
+        and once every workspace module it loads is indexed, under the key the
         outputs the build holds of those give it (`module_keys.read_digests`); its artifacts before
         the entry naming them, one the cache holds already kept only with the same bytes. A newer build replaces the entry
-        under the same key, so the entries of a module and its imports stay one build's."""
+        under the same key, so the entries of a module and its imports stay one build's. Only what the compiled modules
+        load is read, so a build that compiled nothing costs its traces' `stat`s."""
         with self._lock():
             n = 0
             for pkg in sorted(reports):
@@ -1010,16 +1017,28 @@ class LakeArtifacts:
                     log(f"lean-audit: {pkg}: its report doesn't say it was built in the sandbox, so none of its modules go "
                         "into the artifact cache")
                     continue
+                if any(str(f).startswith("sampled:") for f in rep.get("failures") or ()):
+                    log(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
+                        "none of the modules compiled on top of it go into the artifact cache")
+                    continue
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
-                outs = MK.read_digests(keyed, {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
-                                               for a, (_, d) in b[2].items()})
+                need, todo = set(), [m for m, b in built.items() if not isinstance(b, str)]
+                while todo:
+                    if (m := todo.pop()) not in need:
+                        need.add(m)
+                        todo += MK.loads(m, keyed)
+                outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
+                                       {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
+                                        for a, (_, d) in b[2].items()})
                 indexed: set[str] = set()
                 for mod, k in keyed.items():
+                    if mod not in need:
+                        continue
                     loaded = MK.loads(mod, keyed)
                     if all(i in indexed for i in loaded) and (key := MK.key(mod, keyed, outs, loaded)) is not None \
                             and (got := self._index(mod, key, k.package.name, built[mod],
@@ -1033,20 +1052,25 @@ class LakeArtifacts:
     def _built(mod: str, keyed: dict, pkgs: list, since: float | None,
                owners: dict | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
         """(Lake's input hash, the outputs its trace names, {artifact: (its file, its digest)}) of ``mod`` as its build
-        compiled it, or why it isn't indexed: not compiled since ``since``, restored, or not `indexable` (``owners``)."""
+        compiled it, or why it isn't indexed: not compiled since ``since``, restored, not `indexable` (``owners``), or
+        not whole. Lake removes a module's outputs, runs `lean`, hashes each output into its `.hash`, and only then writes
+        the trace naming those hashes (`Module.buildLean`, `buildAction`), and it leaves the previous trace and `.hash`
+        files in place until then. So a compile that was stopped leaves a trace that isn't JSON, an output that is
+        missing, or one newer than the `.hash` beside it, which names what was there before: none is indexed."""
         build = keyed[mod].package.build()
         trace = build / "lib" / "lean" / MK.path_of(mod, ".trace")
-        if not trace.is_file():
+        try:
+            st = trace.stat()
+        except OSError:
             return "no trace"
-        st = trace.stat()
+        if since is not None and st.st_mtime <= since:
+            return "not compiled by this run"
         try:
             d = json.loads(trace.read_text())
-        except ValueError as e:
+        except (OSError, ValueError) as e:
             return f"a trace that isn't JSON: {e}"
         if not isinstance(d, dict) or d.get("synthetic"):
             return "restored, or a trace of another shape"
-        if since is not None and st.st_mtime <= since:
-            return "not compiled by this run"
         out, h = d.get("outputs"), d.get("depHash")
         if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h):
             return "a trace without its outputs or input hash"
@@ -1058,6 +1082,8 @@ class LakeArtifacts:
             hashed = f.parent / f"{f.name}.hash"
             if not f.is_file() or not hashed.is_file() or hashed.read_text().strip() != name.split(".", 1)[0]:
                 return f"{f.name} isn't in the build under {name}"
+            if f.stat().st_mtime_ns > hashed.stat().st_mtime_ns:
+                return f"{f.name} was written after {hashed.name}, which names what was there before"
             files[name] = (f, MK.digest(f))
         return (h, out, files) if files else "a trace that names no artifact"
 
@@ -1341,6 +1367,38 @@ TRANSIENT = ("could not read Username for 'https://github.com'", "Could not reso
 RETRIES = (90, 240, 480)
 
 
+#: what check.py writes in a package's work directory (`audit-<tag>/` under its `--out`) once it knows whether the package's
+#: builds run in the sandbox, before the first of them (check.py's `BUILDING`)
+BUILDING = "building.json"
+
+
+def built(out: Path) -> dict[Path, dict]:
+    """{package: what check.py said of its build} for each package the check.py with its reports under ``out`` built, or
+    began to build: its report in `audit.json`, which says `sandbox` of a package it built, else what it wrote as the build
+    began (`BUILDING`: the package, and whether its builds run in the sandbox), which is all a check.py that was killed
+    leaves, and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes
+    either. Both are check.py's own words: ``out`` is outside every directory a build in the sandbox can write."""
+    found: dict[Path, tuple[int, dict]] = {}
+
+    def said(f: Path) -> tuple[int, dict]:
+        try:
+            at, d = f.stat().st_mtime_ns, json.loads(f.read_text())
+        except (OSError, ValueError):
+            return 0, {}
+        return (at, d) if isinstance(d, dict) else (0, {})
+
+    for at, d in map(said, sorted(out.glob(f"audit-*/{BUILDING}"))):
+        if isinstance(d.get("package"), str):
+            found[Path(d["package"])] = (at, d)
+    at, doc = said(out / "audit.json")
+    reps = doc.get("packages")
+    for r in reps if isinstance(reps, list) else ():
+        if isinstance(r, dict) and isinstance(r.get("package"), str) and "sandbox" in r \
+                and at >= found.get(pkg := Path(r["package"]), (0, {}))[0]:
+            found[pkg] = (at, r)
+    return {pkg: d for pkg, (_, d) in found.items()}
+
+
 def transient(rep: dict) -> bool:
     """A package that failed only in setup or build, and only on fetching a dependency: no verdict, so it is audited again."""
     fs = rep.get("failures", [])
@@ -1352,8 +1410,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
            regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
-    difference; such a pass is never stored, since its lock changes when drive commits the record.  Each passing package's build in
-    the sandbox goes into the artifact cache (`LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
+    difference; such a pass is never stored, since its lock changes when drive commits the record.  What each package's build
+    compiled in the sandbox goes into the artifact cache whether the package passed, failed or check.py was killed
+    (`built`, `LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
     indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed (`sandboxed`) none of that
     happens and no kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
@@ -1420,8 +1479,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             ok = [p for p in audited if p in reports and not reports[p].get("failures")]
             kept = {work / p for p in ok}
             try:
-                log(f"lean-audit: {artifacts.put({work / p: reports[p] for p in ok}, since, log)} module version(s) new in "
-                    "the artifact cache")
+                mine = {at: rep for at, rep in built(out).items() if work in at.resolve().parents}
+                log(f"lean-audit: {artifacts.put(mine, since, log)} module version(s) new in the artifact cache")
                 if bundle and artifacts.added:
                     dest = artifacts.bundle_into(out)
                     log(f"lean-audit: {dest[1]} of them bundled for other nodes ({dest[0].name})")
@@ -1559,7 +1618,8 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
     most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `gather_verdicts` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules of packages whose audit passed. Empty when the store can't be
+    cancelled run's too, since its bundle holds only modules compiled in the sandbox, each under the key of what its
+    compile read (`LakeArtifacts.put`). Empty when the store can't be
     read: each node then reuses only what it built."""
     from research.store.local import LocalStore
 
