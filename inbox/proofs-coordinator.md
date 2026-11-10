@@ -21989,3 +21989,63 @@ Next entry by 02:35Z.
 - **r20261110-010243-12b1** (#8429 at `eb3785ff3e`): its build and Lean check passed (AUDIT: PASS). Its suites are running, ETA about 03:00Z. I mark #8429 when they pass.
 - **#8309 was not marked at 01:32Z.** When TWOOPENS writes its SHA, I merge it into #8444, then #8444 into #8486, and re-check both.
 - **N2:** by 12:00Z, as in my 01:10Z entry.
+
+## HOUSEKEEP, Tue 10 Nov 01:51Z: Task 3's draft is up: the Goals table and the fix script, not run, on `cursor/proofs-inbox` under `goals/`; 15 ASKs for you
+
+**Correction to my 01:22Z entry.** I said I read "on this branch" as `cursor/verity-proofs-84b5`. Wrong: your note
+is on `cursor/proofs-inbox`, and that is where the files are. Commit `add89f1730` (parent `ae634c51fe`, pushed
+01:51Z, no force):
+
+- `goals/proofs-goals-table.md`: the 24 rows, the ASKs, top's four lines and where each is fixed, what I checked.
+- `goals/proofs-goals-fix.sh`: one `research goals set` line a goal. `DRY=1 bash proofs-goals-fix.sh` prints
+  the commands. I ran no `research goals set`.
+- `goals/desc/*.md` (24, and one for a goal I only propose) and `goals/blockers/*.md` (8).
+
+**What the script changes** (page read 01:49Z: 228 goals, 24 open of ours, 18 off track; after: 16 off track, each
+with a link or a blocker text, 8 on track):
+
+- Status, four: `spot-bind-term`, `spot-checks-closed` and `spot-claims-checked` to on-track (each has a
+  holder and a dated plan from the last 24 h: PRF-466 at 00:33Z, your 01:14Z note, LEDGER's daily passes);
+  `terminology-clean` to off-track (nobody holds it; the rename has not run).
+- Dates, three: `spot-bind-term` to Fri 13 Nov (PRF-466, 00:33Z); `zero-knowledge` to Mon 30 Nov (your 01:14Z
+  note); `slice-clean` to Fri 13 Nov (PRF-387's date; marked CHECK in the table).
+- Titles, five: the four top listed, and `spot-checks-closed`, whose title carried an issue key.
+- Links: all seven of circuits' and vllm's asks in your 01:47Z note are in, and every goal id the script names
+  resolves on the page [run]. `spot-post-ready` is at 16 links, the cap: 13 open pieces of ours,
+  `circuits/glm-compile-cost-measured`, 2 done. `spot-figures` drops `proofs/spot-draft-tonight`. The four
+  on-track goals that wait to merge link `ci/fine-grained-check`.
+- Every text rewritten: two to four sentences, no worker, PR, issue, run or branch named, Pacific times.
+
+**The ASKs, in a line each** (the table has each one's sources and what the script does meanwhile):
+
+1. `slice-clean`: has top agreed to own it?
+2. `spot-numbers-lean-checked`: who states or captions the infiltration curve's formula?
+3. `spot-fused-cut-served`: on-track after G1's verdict (04:15Z)? I update the row after 04:20Z.
+4. `spot-128k-attention-proved`: is there a card for Daniel on what Thursday's result is called? vllm finds none.
+5. `spot-advice-certified`: who runs it with caching on, and when?
+6. `spot-moe-binding`: MOEBIND2's date for a change in review.
+7. `spot-proof-server-steady-state`: who holds the rerun; keep or remove the goal?
+8. `spot-two-stage-e2e`: a date for one run through both rounds; should vllm put VLLM-250 on the page?
+9. `spot-verifier-cost`: Thu 12 Nov (the page) or Fri 13 Nov (PRF-464)?
+10. `terminology-clean`: after the post, or to top?
+11. `spot-figures`: who renders them?
+12. `zk-leaks-closed`: follow its parent to Mon 30 Nov?
+13. `sampling-generic`: PRF-363 has only #7228 attached and no done-condition.
+14. `spot-two-stage-sound`: a goal of its own for Friday's non-vacuity? It is a commented line in the script.
+15. PRF-384, PRF-454, PRF-372: none sits under one of the 24 (two carry other leads' goals, one a done goal).
+
+**Checked [run]:** a Python port of the site's check (`parseGoal` and `plain.ts`, read at 01:24Z) passes all 24
+goals as the script leaves them; the skill's rules the site does not check pass; and each of the 24 lines went
+through `research goals`' own parser and edit against a stand-in route that sends nothing: 24 writes built, none
+refused. **Not checked:** a real write; that the deployed site runs the `plain.ts` I read; the figures inside the
+texts, each quoted from the note or page text its row names.
+
+**Two things to know before you run it.** The page shows a blocker text only when a goal has no link, so goals
+with links get `--no-blockers` and say where they stand in the description; `zero-knowledge` keeps its seven
+links, so its "nobody until the post is out" shows in its description, not as a blocker. And `--wait` replaces a
+goal's whole list: if a lead adds a link before 14:00Z, the script would drop it. I re-read the page before 08:00Z
+and tell you of any.
+
+Your 01:47Z caution on `research data preserved`: read; nothing I do deletes a run copy.
+
+Next: the row 5 update after G1's verdict, the two five-line rules, then NET-283's review. Next entry by 02:55Z.
