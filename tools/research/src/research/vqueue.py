@@ -17,7 +17,9 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              (`tree`) follow the tree: they are bisected like a fail, on the members whose files meet their inputs, else on
              every member, and eject a lone member.  Without it, the default, infra that persists until infra is rung is
              bisected the same way, ejecting nobody: a lone member whose check keeps erring is rung to its owner and set
-             aside behind the other PRs while any waits (`infra` outcome; set aside again, nobody is rung), else retried
+             aside behind the other PRs while any waits (`infra` outcome; set aside again, nobody is rung), else retried.
+             Infra before any run registered (`Failed.launch`) ran nothing of the tree: however often it recurs, the check
+             is enqueued again and infra rung from `rings` on, and no member is bisected out or set aside for it
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -63,6 +65,7 @@ class Failed:
     tests: frozenset[str] = frozenset()       # its failing test ids, empty when unknown
     base_tests: frozenset[str] | None = None  # the base's failing tests of the same task id: None when it passed or is unknown
     tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
+    launch: bool = False           # infra: its check registered no run, so nothing of the tree ran
 
 
 @dataclass(frozen=True)
@@ -219,7 +222,7 @@ def decide(s: Snapshot) -> list[Action]:
             ejected = _failed(c1, ready, _outcomes(s, acts), acts)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
-        elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2)):
+        elif reading == INFRA and (s.tree_ejects or c1.tries < min(s.rings, 2) or _unlaunched(c1.verdict)):
             acts.append(Retry(c1.sha))
             if c1.tries >= min(s.rings, 2):
                 acts.append(Ring(c1.sha, _ring_why(c1)))
@@ -391,6 +394,11 @@ def _reading(v: Verdict) -> str:
 def _tree(v: Verdict) -> tuple[Failed, ...]:
     """``v``'s infra errors that follow the tree: graph2 saw each on two or more nodes."""
     return tuple(f for f in v.infra if f.tree)
+
+
+def _unlaunched(v: Verdict) -> bool:
+    """Whether ``v`` erred only before any run registered (`Failed.launch`), which blames no member."""
+    return bool(v.infra) and all(f.launch for f in v.infra)
 
 
 def _passed(c: Candidate) -> Outcome:
