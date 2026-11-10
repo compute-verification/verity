@@ -112,6 +112,7 @@
   "Proofs.Properties.Verity.Sampled.Window.Assembled",
   "Proofs.Properties.Verity.Sampled.Window.Order",
   "Proofs.Properties.Verity.Sampled.Window.Writes",
+  "Proofs.Properties.Verity.Sampled.Window.Answered",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",

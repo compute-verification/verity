@@ -178,18 +178,25 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
-/-- **The play's first stop is where `StopsAt` says**, on any tape: from the empty log after `σ`'s request with every
-round live, where each round's reading picks only openings (`stopsAt_firstStop`, at any readings and tape). -/
-theorem stopsAt_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
+/-- **The play's first stop is where `StopOf` says**, on any tape: from the empty log, the close after `σ`'s request
+and what the device releases, with every round live, where each round's reading picks only openings
+(`stopOf_firstStop`, at any readings and tape). -/
+theorem stopOf_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) :
-    StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 (Pos.root (roundCuts V θ F c rd) x).toStop := by
+    StopOf rd.round rd.reveal [] (finish (V.signer θ) θ F c σ.1) (fun _ => True)
+      (Pos.root (roundCuts V θ F c rd) x).toStop := by
   have h := walk_send_cast (rv := rd.reveal) (f := finish (V.signer θ) θ F c) (a := fun _ => True) hP
     (game_eq_relK V θ F c).symm σ (roundCuts V θ F c rd) x id fun _ => Or.inl ⟨trivial, rfl⟩
   have e : (cast (congrArg Strategy (game_eq_relK V θ F c)) σ).1 = σ.1 := cast_send_fst (game_eq_relK V θ F c) σ
   rw [e] at h
-  have h' : StopOf rd.round rd.reveal [] (finish (V.signer θ) θ F c σ.1) (fun _ => True)
-      (Pos.root (roundCuts V θ F c rd) x).toStop := h
-  exact ⟨[], _, fun _ => True, fun _ => rfl, h'⟩
+  exact h
+
+/-- **The play's first stop is where `StopsAt` says**, on any tape: from the empty log after `σ`'s request with every
+round live, where each round's reading picks only openings (`stopOf_rootStop`). -/
+theorem stopsAt_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
+    (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) :
+    StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 (Pos.root (roundCuts V θ F c rd) x).toStop :=
+  ⟨[], _, fun _ => True, fun _ => rfl, stopOf_rootStop V θ F c rd σ x hP⟩
 
 /-- **The members' steps at a window, at where the walk stops**, at an invariant `I` of the widened coins, the position
 `r` the members' traces end at, a member's place and the position its session starts at: `I` holds at the play's
