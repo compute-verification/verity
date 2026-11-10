@@ -148,6 +148,19 @@ def test_the_interval_is_the_medians_order_statistics_at_the_confidence():
     assert kit.paired([1.5, 1.1, 1.4, 1.2, 1.3], [1.0] * 5, 0.5)["ci50"] == pytest.approx([0.2, 0.4])
 
 
+def test_an_arm_whose_reps_cost_nothing_has_its_interval_and_no_half_width():
+    """A median ratio of 0 has an interval like any other, and no half-width as a share of it."""
+
+    free = kit.paired([0.0] * 6, [1.0] * 6)
+    assert free == {"gamma": -1.0, "ratio": 0.0, "n": 6, "ratios": [0.0] * 6, "ci95": [-1.0, -1.0], "half_width": None}
+    # most reps free and one not: the median ratio is still 0, and the interval reaches the one that cost
+    mostly = kit.paired([0.0, 0.0, 3.0, 0.0, 0.0, 0.0], [1.0, 1.0, 2.0, 1.0, 1.0, 1.0])
+    assert (mostly["ratio"], mostly["ci95"], mostly["half_width"]) == (0.0, [-1.0, 0.5], None)
+    # one free rep among six leaves the median above 0, and its half-width a share of it
+    one = kit.paired([0.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0] * 6)
+    assert (one["ratio"], one["ci95"], one["half_width"]) == (1.0, [-1.0, 0.0], 1.0)
+
+
 def test_paired_refuses_reps_that_dont_pair_a_stock_rep_of_no_cost_and_a_confidence_out_of_range():
     for arm, stock in (([1.0], [1.0, 2.0]), ([], [])):
         with pytest.raises(ValueError, match="one for one"):
