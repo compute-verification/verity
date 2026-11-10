@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option
 from verity_vllm.program import sampling_rng as R
-from verity.ml.definitions.numerics.libdevice import F32, nv_log1pf, nv_logf
+from verity.definitions.numerics.libdevice import F32, nv_log1pf, nv_logf
 
 
 def gumbel_noise_exact(seed: int, pos: int, vocab_size: int, *, is_drafting: bool = False) -> np.ndarray:

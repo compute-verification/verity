@@ -13,20 +13,20 @@ import math
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import slice_rows as SL
-from verity.ml.definitions.registry import b1_tp2 as T2
-from verity.ml.definitions.registry import cublas_bf16 as CB
-from verity.ml.definitions.registry import dsa as DSA
-from verity.ml.definitions.registry import ll_bf16 as LL
+from verity.definitions.registry import b1_tp2 as T2
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import dsa as DSA
+from verity.definitions.registry import ll_bf16 as LL
 
 H = HopperBF16WgmmaDot16
 #: each family at small statics; the token of the embedding shard inside it (2 <= 4 < 2 + 5)

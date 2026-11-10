@@ -24,16 +24,16 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.defs import bind
 from verity_vllm.check.replay import pouw_circuit as RC
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, gemm_pins_for, observe_target_profile, vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity.ml.definitions.registry import b1, pouw_rows
-from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import b1, pouw_rows
+from verity.definitions.numerics.serve3_reference import materialize
 
 BF = torch.bfloat16
 M, K, NQ, V = 3, 64, 64, 16

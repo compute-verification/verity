@@ -8,19 +8,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.ml.definitions.registry import boolean_moe as BMOE
-from verity.ml.definitions.registry import boolean_sigma as SG
-from verity.ml.definitions.registry import boolean_tp_allreduce as BTA
-from verity.ml.definitions.registry import moe as M
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry import boolean_moe as BMOE
+from verity.definitions.registry import boolean_sigma as SG
+from verity.definitions.registry import boolean_tp_allreduce as BTA
+from verity.definitions.registry import moe as M
+from verity.definitions.registry import tp_allreduce as TA
 
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3

@@ -28,7 +28,7 @@ distinct values over the runs with the registered information at `θv`, where `m
 multiplications in `R`.
 
 It is that form with four changes, at the deployed point (`d = 2048`, E4M3 at `b_a = 4`, `S = 2·10⁷`,
-`b_w = 2.5`) and under `benchmarks/nci/kappa.py`'s minimal reference circuits:
+`b_w = 2.5`) and under `verity/protocols/inference_only/nci/kappa.py`'s minimal reference circuits:
 
 * Weights are charged per source, so a weight's fprop and dgrad copies are charged once. An NVFP4 16 × 16 2D-block
   weight block is then charged 640 bits against at most 1,269, false only for `b_w > 4.305`, the format's own
