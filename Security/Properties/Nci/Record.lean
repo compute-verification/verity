@@ -4,7 +4,7 @@ public import Properties.Nci
 public import Properties.Nci.Baseline
 public import Flock.TemplateQuery
 public import Spot.Wires
-public import NetworkCheck.Period
+public import NciCheck.DefinitionDigest
 
 /-!
 # What the record form's acceptance must mean (LEAN-238): a draft, never elaborated
@@ -40,7 +40,7 @@ open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node)
 open Flock.TemplateQuery (TRange)
 open NciCheck.Baseline (getD strAt digest)
-open NetworkCheck.Period (canonicalEntry definitionDigest slotEntryDigest)
+open NciCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
 /-! ## The interface -/
 
@@ -212,7 +212,7 @@ def Good (F : Form) (pins : List Pin) (pj record trusted : Json) (log : Array Js
     Held → Prop
   | .read p => IsTheta log run p
   | .root p => IsTheta log run p
-  | .opened p pin => IsTheta log run p ∧ pin ∈ pins ∧ slotEntryDigest pj r.tid = .ok pin.digest ∧
+  | .opened p pin => IsTheta log run p ∧ pin ∈ pins ∧ closureDigest pj r.tid = .ok pin.digest ∧
       r.port ∈ pin.opened ∧ F.heldBy pins record trusted ⟨r.tid, r.unit, pin.root, 0⟩ = some (.root p) ∧
       F.heldBy pins record trusted ⟨r.tid, r.unit, pin.domain, 0⟩ = some (.root p)
 
@@ -227,19 +227,18 @@ def Provenance (F : Form) : Prop :=
 
 /-! ## Lemma (i): the closure digest pins the decoded Definition
 
-Against today's names in `NetworkCheck.Period` (`flatParts`, `written`, `canonicalEntry`, `definitionDigest`,
-`slotEntryDigest`); NET-301 renames them into `NciCheck.DefinitionDigest`, `slotEntryDigest` to `closureDigest`. -/
+Stated on `NciCheck.DefinitionDigest`'s `canonicalEntry`, `definitionDigest` and `closureDigest`. -/
 
 /-- `j` is the descriptor the bytes `b` hold, as `Flock.Program.decode` parses them. -/
 def Descriptor (b : ByteArray) (j : Json) : Prop :=
   ∃ text, String.fromUTF8? b = some text ∧ Flock.JsonParse.parse text = .ok j
 
-/-- A descriptor's interning table `k`, as `slotEntryDigest` reads it. -/
+/-- A descriptor's interning table `k`, as `closureDigest` reads it. -/
 def tab (j : Json) (k : String) : Array Json := match j.getObjValD k with
   | .arr xs => xs
   | _ => #[]
 
-/-- A descriptor entry's nodes, as `slotEntryDigest` reads them. -/
+/-- A descriptor entry's nodes, as `closureDigest` reads them. -/
 def nodesOf (e : Json) : Array Json := match (e.getObjValD "body").getObjValD "nodes" with
   | .arr xs => xs
   | _ => #[]
@@ -281,7 +280,7 @@ all, or two byte strings the two digests hashed are different and have one SHA-5
 def DigestPins : Prop :=
   ∀ (b b' : ByteArray) (j j' : Json) (P P' : Prog) (key h : String) (k k' : ℕ),
     Flock.Program.decode b = .ok P → Flock.Program.decode b' = .ok P' → Descriptor b j → Descriptor b' j' →
-    slotEntryDigest j key = .ok h → slotEntryDigest j' key = .ok h → P.index[key]? = some k → P'.index[key]? = some k' →
+    closureDigest j key = .ok h → closureDigest j' key = .ok h → P.index[key]? = some k → P'.index[key]? = some k' →
     Same P P' k k' ∨
       ∃ x x', Hashed j key x ∧ Hashed j' key x' ∧ x ≠ x' ∧ Flock.Sha512.hash x = Flock.Sha512.hash x'
 
@@ -297,7 +296,7 @@ digest is the pin's. Then the reader of every opened port the form holds under t
 own Program, or two byte strings the two digests hashed collide. -/
 def PinnedOpens (F : Form) : Prop :=
   ∀ (Opens : Prog → ℕ → Prop) (b₀ : ByteArray) (j₀ : Json) (P₀ : Prog) (key : String) (k₀ : ℕ) (pin : Pin),
-    OfGates Opens → Flock.Program.decode b₀ = .ok P₀ → Descriptor b₀ j₀ → slotEntryDigest j₀ key = .ok pin.digest →
+    OfGates Opens → Flock.Program.decode b₀ = .ok P₀ → Descriptor b₀ j₀ → closureDigest j₀ key = .ok pin.digest →
     P₀.index[key]? = some k₀ → Opens P₀ k₀ →
     ∀ (pins : List Pin) (Γ num den : ℕ) (P : Prog) (text : String) (pj j trusted : Json) (r : Row) (p : String),
       Accepts F pins Γ num den P text j trusted → Flock.JsonParse.parse text = .ok pj → r.tid = key →
