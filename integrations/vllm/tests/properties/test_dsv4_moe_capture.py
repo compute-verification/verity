@@ -11,13 +11,13 @@ import json
 
 import numpy as np
 import pytest
-from verity.ml.circuits import library
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.definitions.numerics import dsv4_moe_twin as T
-from verity.ml.definitions.registry import dsv4_moe as D
-from verity.ml.definitions.registry import prims as P
+from verity.definitions.circuits import library
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.ops import mufu as MU
+from verity.definitions.numerics import dsv4_moe_twin as T
+from verity.definitions.registry import dsv4_moe as D
+from verity.definitions.registry import prims as P
 
 from tests.properties import dsv4_moe_capture_gpu as S
 

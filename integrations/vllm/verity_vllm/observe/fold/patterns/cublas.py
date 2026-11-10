@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
@@ -29,7 +29,7 @@ class CublasLinear:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
             return None
-        from verity.ml.definitions.registry import b1, bf16_gemm_check, cublas_bf16
+        from verity.definitions.registry import b1, bf16_gemm_check, cublas_bf16
 
         a = bound_args(node)
         x, w, bias = a.get("input", a.get("arg0")), a.get("weight", a.get("arg1")), a.get("bias", a.get("arg2"))
@@ -149,7 +149,7 @@ class MlaAbsorbBmm:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant:
             return None
-        from verity.ml.definitions.registry import cublas_bf16
+        from verity.definitions.registry import cublas_bf16
 
         a = bound_args(node)
         x, w = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1"))

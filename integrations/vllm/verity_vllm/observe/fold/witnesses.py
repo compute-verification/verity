@@ -4,8 +4,8 @@ refused, since it would shift the input layout."""
 
 from __future__ import annotations
 
-from verity.ml.circuits.refs import Affine
-from verity.ml.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.refs import Affine
+from verity.circuits.types import Array, RecordType, Type, Value
 
 from verity_vllm.observe.fold.resolver import WitnessParam
 

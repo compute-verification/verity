@@ -73,7 +73,7 @@ from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MODEL = Path(__file__).resolve().parent / "machine_model"
+MODEL = Path(__file__).resolve().parent.parent.parent / "verity" / "hardware" / "machine_model"
 
 # The readings are the machine model's data: an installed verity_machine_model from another checkout would give that
 # tree's numbers without a word, so this tree's goes first and any other refuses.
@@ -689,7 +689,7 @@ public import {imports}
 /-!
 # {fam.gpu} ({fam.key})'s {what} (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`verity/hardware/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.{reads}` reads it.
 '''

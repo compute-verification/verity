@@ -3,7 +3,7 @@
 A padded serving module represents the realized generation length as *values*: a per-event live bit derived from
 EOS detection, token slots muxed against the pad token, and every decode step's appended K/V row muxed against one
 zero gate. These rules bind the ordinary torch ops such a module uses to the `pad-serve@1` kinds exactly as
-`verity/ml/definitions/registry/serve3.py` uses them — nothing is synthesised: a guard the source does not compute is not
+`verity/definitions/registry/serve3.py` uses them — nothing is synthesised: a guard the source does not compute is not
 derived, and a mux inside a step body is derived where it is (and then is not `Serve_v3`).
 
     ones/zeros/full/scalar_tensor (numel 1, bf16 / bool)   -> Const<w>[bits]            (`ConstScalar`)
@@ -23,8 +23,8 @@ import math
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of

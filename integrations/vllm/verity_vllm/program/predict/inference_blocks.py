@@ -27,7 +27,7 @@ fresh input is the circuit's over m.
 SHA-512 of the circuit's Program, m, the entry count), then one row an entry: its template (`partition_v2.id_digest`,
 64 bytes), its first unit (8 bytes), its digit count and which digit is the slot (a byte each, then 6 zero bytes) and its
 radix (4 bytes a digit, at most `DIGITS`); every unused byte 0. `commit` pads them with zero rows to grid(R) and commits
-them with `verity.ml.commitments.advice` before any coin: hm96-sha512/row/v2 hiding leaves under fresh salts in one
+them with `verity.commitments.advice` before any coin: hm96-sha512/row/v2 hiding leaves under fresh salts in one
 frame-v3-sha512 tree, under `BINDING`.
 """
 from __future__ import annotations
@@ -35,10 +35,10 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Sequence
 
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits import partition_v2 as PV2
-from verity.ml.commitments import advice as AC
-from verity.ml.windows import interface as IF
+from verity.circuits import partition_object as PO
+from verity.circuits import partition_v2 as PV2
+from verity.commitments import advice as AC
+from verity.windows import interface as IF
 from verity_vllm.records import inference_blocks as RIB
 
 from .window_builder import WEIGHTS

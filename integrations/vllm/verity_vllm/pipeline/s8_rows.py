@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]

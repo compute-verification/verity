@@ -22,9 +22,9 @@ from typing import Any
 
 import torch
 
-from verity.ml.circuits.defs import Body, Builder
-from verity.ml.circuits.refs import Affine, Coll, runs
-from verity.ml.circuits.types import Value
+from verity.circuits.defs import Body, Builder
+from verity.circuits.refs import Affine, Coll, runs
+from verity.circuits.types import Value
 from verity_vllm.program.frontend.derive import _finish_report, _flat_definition, fx_arg_nodes
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 

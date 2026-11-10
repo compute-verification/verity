@@ -5,7 +5,7 @@ items) rows, the comparator's input, streamed to a gzip file.  The rows and the 
 
 A Boolean Program that names its word Program (`program.frontend.boolean.derived`: σ-checked node by node, so every Call, node index and
 word leaf is the word Program's) is written through that link: row k is word node k -- the word Definition its Boolean Definition
-computes (`verity.ml.circuits.boolean.trace.word_of`, checked against the word node), its operand runs over word leaves, the word
+computes (`verity.circuits.boolean.trace.word_of`, checked against the word node), its operand runs over word leaves, the word
 parameters -- with ``bits``, the Boolean Definition the Call is of.  The header says so (``ir: "boolean"``) and keeps the Boolean
 Program's digest.  Every reader of the rows (the manifest and its word check, the replay, the serving rows) reads the word
 Program's units, boundaries and committed values, whichever IR the Program is in."""
@@ -31,9 +31,9 @@ def _instance_rows(program):
 def _word_rows(program, word):
     """A Boolean Program's rows through its word link: word node k's spec, form, name and runs, with ``bits`` = Boolean node k's
     Definition.  A Boolean Definition whose word is not the Definition word node k Calls is refused by name."""
-    from verity.ml.circuits.boolean.trace import word_of
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.boolean.trace import word_of
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.defs import CompositeDefinition, bind
     from verity_vllm.program.compact import file_items_from_refs
     links: dict[str, str] = {}
     for k, (b, w) in enumerate(zip(program.fn.body.nodes, word.fn.body.nodes, strict=True)):
@@ -58,7 +58,7 @@ def _instance_sequence(program) -> list[dict]:
 def check_rows(body, n: int) -> list[list[int]]:
     """The row and output leaf `[i, lo, lo + 1]` of each of `body`'s last `n` returned leaves, in order: where the Program's checks
     output (`program.predict.common.with_checks`, the returned tuple's last member) is computed."""
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.refs import runs
     leaves: list[tuple[str, int, int]] = []
     for space, i, lo, hi in reversed(runs(body.ret)):
         take = min(hi - lo, n - len(leaves))

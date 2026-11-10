@@ -349,7 +349,7 @@ def torch_python(given: str | None, scratch: Path, out: Path) -> tuple[str | Non
 
 def night(out: Path, python: str | None, exits: dict[str, int]) -> None:
     """The steps, each step's exit code in `exits` as it ends."""
-    exits["demo"] = step("demo", [sys.executable, "-B", "-m", "datacenter.demo"], out, ROOT / "benchmarks" / "datacenter")
+    exits["demo"] = step("demo", [sys.executable, "-B", "-m", "datacenter.demo"], out, ROOT / "verity" / "composite" / "datacenter")
     for options in dict.fromkeys(o for o, _, _ in MOCKDC_RUNS.values()):
         lab = " ".join(("lab", *options))
         exits[lab] = shape(out, *options)
