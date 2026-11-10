@@ -283,16 +283,16 @@ is due 18:00Z: have no run alive on card 4 or on cores 12-23 after 18:45Z, and l
 20:00Z the card and cores are KP2's for an hour. If a run of yours would cross 18:45Z, give it an end time before it
 or do not start it, and say on HASH-105 what was not run.
 
-## Tue 10 Nov 17:42Z: HASH-105 is closed. BREAK 1 goes with the archive PR; next is HASH-107, on the lead's resume
+## Tue 10 Nov 17:39Z: HASH-105 is closed. BREAK 1 goes with the archive PR; next is HASH-107, on the lead's resume
 
-- **Closed at 17:40Z**, your table relayed to top on TOP-394 (17:38Z) before the cut. The lead read two of your
+- **Closed at 17:38Z**, your table relayed to top on TOP-394 (17:38Z) before the cut. The lead read two of your
   runs' logs (…05b7, …3ec5): they say what the table says.
 - **BREAK 1 needs no rows:** `units` is on kernels' archive list (KSLICE's HASH-104, 21 files), and its archive PR
   after the cut closes the break. The 11 rows stay in the notes, not applied, and nothing was asked of top.
 - **Flock's refused live session:** the refusal's rule is on `main` before the move
   (`verity/core/service/flock/Flock/ProvedScope.lean:318`), so it reads as standing; whether that sweep's session
   was refused before the move stays not run. Launch nothing for it.
-- **Card 4 is not yours any more** (the calendar's row, 17:41Z). Launch nothing on node A.
+- **Card 4 is not yours any more** (the calendar's row, 17:38Z). Launch nothing on node A.
 - **HASH-107:** the lead resumes you when top posts the base commit and the two commands (about 19:15Z) and top's
   count allows. Then, as the 16:09Z section says: `git merge BASE` first, then `tools/move/restack.py`, for #8521,
   #8542, #8573, #7762 and #7970; the suites each change touches at the new head, in named runs; each new head on
