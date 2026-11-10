@@ -261,10 +261,10 @@ def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_updat
     assert set(block["at"]) == set(STATED["at"]) and all(
         [r["cell_gates"] for r in b["rows"]] == [r["cell_gates"] for r in STATED["at"][k]["rows"]]
         for k, b in block["at"].items())
-    assert (block["k"], block["tokens"], block["capture"], block["capture_code"]) == (
-        STATED["k"], STATED["tokens"], products.CAPTURE, rec["training_slowdown"])
+    assert (block["k"], block["tokens"], block["capture"]) == (STATED["k"], STATED["tokens"], products.CAPTURE)
+    assert "capture_code" not in block
     steps = (2 * PER - 1) * 512 / STATED["tokens"]
-    want = F.products_of_trace(STATED | {"capture": products.CAPTURE, "capture_code": "0"}, steps)
+    want = F.products_of_trace(STATED | {"capture": products.CAPTURE}, steps)
     assert got["he"]["steps"] == steps and {k: got[k] for k in want} == want
     assert got["stand_in"] == {"structures": ["a"], "step_tokens": [512], "traced_tokens": STATED["tokens"],
                                "why": F.STAND_IN}
@@ -395,7 +395,7 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     s = G.grade(config, starts, runs, runs)
     assert s["basis"]["split"] == "search" and s["rho"]["checkpoint_step"] == 2
     assert s["rho"]["rho"] is not None and s["rho"]["rho"] >= 1, s["rho"]
-    assert s["rests_on"]["capture"] == products.CAPTURE and s["rests_on"]["capture_code"] == ran["training_slowdown"]
+    assert s["rests_on"]["capture"] == products.CAPTURE and s["rests_on"]["capture_code"] is None
     assert s["rho"]["terms"]["products"] is not None and s["rests_on"]["provenance"] is None
     assert (s["rho"]["work"] is None) == (not s["bound_of_record"]["available"])
     here = f"re-trace it at the record's commit {ran['commit']} and config.text with a CPU job, `{G.RETRACE}`"

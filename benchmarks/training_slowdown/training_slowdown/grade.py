@@ -289,7 +289,8 @@ def traced(record: dict, row: dict) -> dict:
     it in structure or tokens. Of the trace it reads `TRACE`: the capture's version, the traced step's tokens, the
     rows with their k, their P-match check and the dial's, and the read-backs `formalism.refusal` refuses on; with
     them goes the share of the traced step's product MACs an update reaches (`affected_share`), which it reads only
-    for being 0.
+    for being 0. A trace names its capture's version and not the code that took it, and a record whose trace was
+    taken again keeps its job's `training_slowdown`, so the block states no `capture_code`.
 
     Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
     the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
@@ -317,8 +318,8 @@ def traced(record: dict, row: dict) -> dict:
     def priced(b: dict) -> dict:
         return {"k": b["k"], "rows": [products.priced(r) for r in b["rows"]], "p_match": b["p_match"]}
 
-    block = priced(tr) | {"capture": tr["capture"], "capture_code": record.get("training_slowdown"),
-                          "tokens": tr["tokens"], "at": {k: priced(b) for k, b in tr["at"].items()}}
+    block = priced(tr) | {"capture": tr["capture"], "tokens": tr["tokens"],
+                          "at": {k: priced(b) for k, b in tr["at"].items()}}
     got = F.products_of_trace(block, sum(s["tokens"] for s in steps) / tr["tokens"])
     label = F.TRACED_PRODUCTS
     structures, counts = sorted({s["struct"] for s in steps}), sorted({s["tokens"] for s in steps})
