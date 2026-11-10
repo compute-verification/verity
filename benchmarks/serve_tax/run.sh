@@ -12,16 +12,24 @@
 #     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
 #     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the production tax
-#   ARMS=boundary-rows BOUNDARY_ROWS='{"check":T,"per_prompt":0,"per_output":1}' RATES=... [PLAN_FILE=PLAN.jsonl]
-#     bash benchmarks/serve_tax/run.sh   # the two-stage boundary committed at serve, under OUT/boundary-rows/server/boundary
+#   ARMS=two-stage RATES=... [PLAN_FILE=PLAN.jsonl] [PRIVATE=DIR] [BOUNDARY_ROWS='{"check":T,...}']
+#     bash benchmarks/serve_tax/run.sh   # the two-stage serve: its launch line is the arm (serve_tax.ARMS), its boundary
+#                                        # committed under OUT/two-stage/server/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
-#     [--dataset NAME=FILE] [--reps 3] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
+#     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
 # The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
 # REPS, TARGET, JSON) and any of them makes vLLM's own client the default (CLIENT=vllm-bench: `vllm bench serve`, no C4
-# shard and no plan). Its arms are by default stock, stock again and boundary-rows (which needs BOUNDARY_ROWS), with
-# --arms all one arm for each change in between; its loads chat, whose dataset file --dataset chat=FILE names (a path, or
-# the name of a file sent with --send). After the table it prints the cost of ARMS's last arm over compiled
-# (serve_tax.py cost) and writes OUT/serving_cost.{json,txt}; --json prints the JSON object last.
+# shard and no plan). Its arms are by default stock, stock again and two-stage, with --arms all one arm for each change
+# in between and the canonical top-k's own; its loads chat and long. Chat's dataset file is the node's copy of the pinned
+# one, downloaded once into HF_HOME before the GPUs are held and checked by its SHA-512 (serve_tax.py passes --fetch);
+# --dataset chat=FILE names another copy of it, and no run sends or keeps the file. After the table it prints the cost of
+# ARMS's last arm over compiled (serve_tax.py cost) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
+# load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
+# JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
+# WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
+# PRIVATE is where an arm keeps what never leaves the node (the two-stage arm's history tables and top-k counters), a
+# directory outside every run's; without it each such arm gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces
+# the object of an arm's boundary commitment (a model with no check template of its own needs it).
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
@@ -63,18 +71,17 @@ while [ $# -gt 0 ] && [ "$1" != leased ]; do
 done
 CLIENT=${CLIENT:-corpus}
 if [ "$CLIENT" = vllm-bench ]; then
-  ARMS=${ARMS:-compiled compiled-again boundary-rows}; LOADS=${LOADS:-chat}
-  [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows"
-  case " $ARMS " in *" boundary-rows "*)
-    [ -n "${BOUNDARY_ROWS:-}" ] || { echo "serve-tax: the boundary-rows arm needs BOUNDARY_ROWS, its JSON object (README.md)"; exit 2; } ;;
-  esac
+  ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}
+  [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows canonical-topk two-stage"
+  # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit window shorter than a
+  # pass: a pass then holds the commits of the requests it finishes. At a window longer than a pass they would fall
+  # between passes, where no request waits on them, and the cost would leave the commitment's work out; a short window
+  # counts a window's fixed work more often than a long one, so the cost errs high.
+  REPS=${REPS:-6}; WINDOW_S=${WINDOW_S:-30}
   export ARMS LOADS
 fi
 export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
-# a dataset file sent with --send is named by its name alone: it lies in the run's inputs/
-ds=; for f in ${DATASETS:-}; do p=${f#*=}; [ -f "$p" ] || [ ! -f "$D/inputs/$p" ] || p=$D/inputs/$p; ds="$ds ${f%%=*}=$p"; done
-[ -z "$ds" ] || export DATASETS="${ds# }"
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
@@ -138,6 +145,8 @@ fi_cache() {
 if [ "${1:-}" = leased ]; then
   t_leased=$(date +%s)
   nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm --format=csv
+  # the cards the job's figures were measured on, kept with them
+  nvidia-smi --query-gpu=name,uuid,driver_version,clocks.sm,clocks.mem --format=csv > "$OUT/gpus.csv" 2>&1 || true
   smoke=$(ls "$D"/inputs/fi_smoke.py 2>/dev/null)
   if [ -n "$smoke" ] && [ "${FLASHINFER:-0}" = 1 ]; then
     echo "== fi_smoke $(date -u +%FT%TZ)"
@@ -175,7 +184,7 @@ if [ "${1:-}" = leased ]; then
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
-      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} --out "$OUT/$arm" || rc=1
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
     echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
     last=$arm
@@ -207,9 +216,11 @@ if [ "${CAPACITY:-0}" != 1 ] && [ -z "${ARMS:-}" ]; then
   [ $replay_only = 1 ] || { echo "serve-tax: ARMS: the arms to serve, in order (or only REPLAY with REPLAY_FROM, or RESTORE with RESTORE_FROM)"; exit 2; }
   [ -z "${RESTORE_FROM:-}" ] || [ -n "${KV_DIR:-}" ] || { echo "serve-tax: RESTORE_FROM reads the edges' KV bytes in KV_DIR/<arm>: set KV_DIR"; exit 2; }
 elif [ "$CLIENT" = vllm-bench ]; then
-  # the passes each arm serves, and each load's dataset file, checked before the GPUs are held
+  # before the GPUs are held: the arms and the passes each serves checked, each load's pinned dataset file downloaded
+  # where the node has none, and its SHA-512 checked
   ds=(); for f in ${DATASETS:-}; do ds+=(--dataset "$f"); done
-  "$PY" "$here/serve_tax.py" passes --loads "$LOADS" "${ds[@]}" || exit 2
+  "$PY" "$here/serve_tax.py" passes --loads "$LOADS" "${ds[@]}" --fetch --arms "$ARMS" --model-id "$MODEL_ID" \
+    ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} || exit 2
 elif [ "${CAPACITY:-0}" != 1 ]; then
   [ -z "$PLAN_FILE" ] || cp "$PLAN_FILE" "$PLAN" || exit 2
   "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --rates "${RATES:?RATES: NAME=REQ_PER_S,...}" \
@@ -249,9 +260,12 @@ gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ]; then
+# the cost of the last arm over compiled; a job of compiled alone (a calibration of its rungs) has none. WITH: the out/
+# directories of earlier jobs on this node whose arms served another load, which joins the number
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ]; then
+  for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
-  "${cost[@]}" --out "$OUT" || rc=1
+  "${cost[@]}" --out "$OUT" --result || rc=1
   [ "${JSON:-0}" = 1 ] && "${cost[@]}" --json
 fi
 exit $rc

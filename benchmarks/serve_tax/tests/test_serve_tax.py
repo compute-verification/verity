@@ -75,12 +75,88 @@ def test_window_trace_keeps_the_header_and_the_load():
     assert [r.get("t") for r in S.in_window(tr, 4.0, 6.0)] == [None, 5.0]
 
 
-def test_plugin_site_loads_the_tick_after_this_plugin(tmp_path: Path):
-    ep = (S.plugin_site(tmp_path, tick=True) / "verity_serve_tax-0.0.dist-info" / "entry_points.txt").read_text().splitlines()
+def site_entries(d: Path, arm: str) -> list[str]:
+    return (S.plugin_site(d / arm, S.ARMS[arm]) / "verity_serve_tax-0.0.dist-info" / "entry_points.txt").read_text().splitlines()
+
+
+def test_plugin_site_declares_the_arms_plugins_the_tick_after_this_one(tmp_path: Path):
+    ep = site_entries(tmp_path, "tick")
     assert ep[0] == "[vllm.general_plugins]"
     assert ep[1].endswith("servetax_plugin:register") and ep[2].endswith("tick_plugin:register")
-    ep = (S.plugin_site(tmp_path / "plain", tick=False) / "verity_serve_tax-0.0.dist-info" / "entry_points.txt").read_text()
-    assert "tick_plugin" not in ep
+    assert site_entries(tmp_path, "record") == ep[:2] and site_entries(tmp_path, "compiled") == ep[:1]
+    # the canonical top-k's own arm loads its plugin alone; the two-stage arm loads it after this module's
+    topk = "verity_dsa_topk = dsa_topk:register"
+    assert site_entries(tmp_path, "canonical-topk") == [ep[0], topk]
+    assert site_entries(tmp_path, "two-stage") == [*ep[:2], topk]
+
+
+def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: Path):
+    """The serve's line as data: prefix caching off, the step record and the boundary commitment with the model's
+    check template and one attention layer's tables, and the canonical top-k on the path and switched on."""
+    glm, two, rows = S.MODELS["glm53"], S.ARMS["two-stage"], S.ARMS["boundary-rows"]
+    assert S.server_argv(two, glm, Path("/ck"), 8000) == S.server_argv(rows, glm, Path("/ck"), 8000)
+    assert (two.parent, two.plugin, S.ARMS["canonical-topk"].parent) == ("boundary-rows", rows.plugin, "compiled")
+    private = tmp_path / "private"
+    env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, check=glm.check, private=private)
+    assert json.loads(env[S.PLUGIN_ENV])["boundary_rows"] == {
+        "window_s": 3600.0, "check": "TokenSelect_v4{V=154880}", "inline": True, "per_prompt": 0, "per_output": 1,
+        "drained": True, "tables": {"layers": 1, "private": str(private)}}
+    assert (env["VERITY_DSA_TOPK"], env["VERITY_DSA_TOPK_LOG"]) == ("canonical", f"{private}/topk-log")
+    assert str(S.ROOT / "benchmarks/dsa_topk") in env["PYTHONPATH"].split(S.os.pathsep)
+    # the arms it is made of carry the same pieces: the boundary commitment without the tables, the top-k alone
+    cfg = json.loads(S.server_env(rows, tmp_path, tmp_path, None, 3600.0, 600.0, check=glm.check)[S.PLUGIN_ENV])
+    assert cfg["boundary_rows"] == {"window_s": 3600.0, "check": glm.check, **S.ROWS} and "tables" not in S.ROWS
+    alone = S.server_env(S.ARMS["canonical-topk"], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=private)
+    assert S.PLUGIN_ENV not in alone and alone["VERITY_DSA_TOPK"] == "canonical"
+    assert [S.keeps_private(S.ARMS[a]) for a in ("compiled", "boundary-rows", "canonical-topk", "two-stage")] == [
+        False, False, True, True]
+    with pytest.raises(SystemExit, match="--private DIR"):       # no place on the node to keep them: nothing starts
+        S.server_env(two, tmp_path, tmp_path, None, 600.0, 600.0, check=glm.check)
+    # the arm's data names its modules by path: each is a file of this tree
+    for a in S.ARMS.values():
+        for entry, path in a.general:
+            assert (S.ROOT / path / f"{entry.split('=')[1].split(':')[0].strip()}.py").is_file(), entry
+
+
+def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    seen = []
+    monkeypatch.setattr(S, "serve", lambda a, private: seen.append((private, private is None or private.is_dir())) or 0)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    out = tmp_path / "run" / "out" / "two-stage"
+    for inside in (out / "private", tmp_path / "run" / "private"):
+        with pytest.raises(SystemExit, match="which leaves the node"):
+            S.run(NS(out=str(out), private=str(inside), arm="two-stage"))
+    assert not seen and not (tmp_path / "run").exists()
+    kept = tmp_path / "kept"
+    assert S.run(NS(out=str(out), private=str(kept), arm="two-stage")) == 0
+    assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
+    # none given: a fresh directory for an arm that keeps something, gone when the arm stops; none for the others
+    assert S.run(NS(out=str(out), private=None, arm="two-stage")) == 0 == S.run(NS(out=str(out), private=None, arm="compiled"))
+    (fresh, was_there), stock = seen[1], seen[2]
+    assert was_there and not fresh.exists() and not fresh.is_relative_to(tmp_path / "run") and stock == (None, True)
+
+
+def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("VLLM_PLUGINS", "something_else")
+    env = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 600.0, 600.0)
+    assert "VLLM_PLUGINS" not in env and "VLLM_PLUGINS" not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 1.0, 1.0)
+
+
+def test_an_arms_plugins_are_loaded_once_before_its_server_starts(tmp_path: Path):
+    """vLLM serves on without a plugin whose import fails; `check_plugins` refuses before the server starts."""
+    site = tmp_path / "site"
+    (site / "mod").mkdir(parents=True)
+    (site / "mod" / "good_plugin.py").write_text("def register():\n    raise SystemExit('loaded, never called')\n")
+    good = S.replace(S.ARMS["compiled"], general=(("good = good_plugin:register", str(site / "mod")),))
+    bad = S.replace(good, general=(*good.general, ("absent = absent_plugin:register", str(site / "mod"))))
+    for arm, why in ((good, None), (bad, "absent_plugin")):
+        env = S.server_env(arm, tmp_path, S.plugin_site(site, arm), None, 600.0, 600.0)
+        if why is None:
+            S.check_plugins(env, arm)
+        else:
+            with pytest.raises(SystemExit, match=f"doesn't load in the server's environment.*{why}"):
+                S.check_plugins(env, arm)
+    S.check_plugins({}, S.ARMS["compiled"])        # a stock arm loads nothing, so nothing is run
 
 
 def test_arms_differ_only_by_their_change():
@@ -120,26 +196,37 @@ def test_the_boundary_rows_arm_holds_the_server_until_its_commits_account_for_ev
                 fh.write('{"window":1,"spans":7}\n{"window":1,"spans":1,"error":"OSError: full"}\n')
 
     got = S.await_commits(tmp_path, 16, 60.0, clock=lambda: now[0], sleep=sleep)
-    assert got == {"spans": 16, "finished": 16, "waited_s": 3.0, "complete": True}
+    assert got == {"spans": 16, "finished": 16, "waited_s": 3.0, "complete": True, "failed": 1, "tables": 0}
     later = [0.0]
     out = S.await_commits(tmp_path, 17, 5.0, clock=lambda: later[0], sleep=lambda s: later.__setitem__(0, later[0] + s))
-    assert out == {"spans": 16, "finished": 17, "waited_s": 5.0, "complete": False}
+    assert out == {"spans": 16, "finished": 17, "waited_s": 5.0, "complete": False, "failed": 1, "tables": 0}
+    # a class committed with its history tables says so on its line: the count is of what was committed, not asked
+    with sink.open("a") as fh:
+        fh.write('{"window":2,"spans":3,"tables":{"layers":[0],"capacity":131072}}\n'
+                 '{"window":2,"spans":2,"tables":{"layers":[0]},"error":"ValueError: rank 0 built no history tables"}\n')
+    assert S.await_commits(tmp_path, 21, 5.0, clock=lambda: 0.0)["tables"] == 3
 
 
 def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
     assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000) + ["--no-enable-prefix-caching"]
+    # the object is the arm's own with the model's check template; a model that names none needs one given
     for missing in (None, {}, {"per_output": 1}):
         with pytest.raises(SystemExit, match="--boundary-rows"):
             S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=missing)
+    # an object given stands in place of the arm's, whole: its keys alone, with the model's check where it names none
     rows = {"check": "t", "per_output": 1, "drained": True}
-    cfg = json.loads(S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows)[S.PLUGIN_ENV])
+    cfg = json.loads(S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows,
+                                  check="the model's")[S.PLUGIN_ENV])
     assert cfg["record"] and cfg["boundary_rows"] == {"window_s": 30.0, **rows}
+    given = S.server_env(S.ARMS["two-stage"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows={"per_output": 2},
+                         check="the model's", private=tmp_path)
+    assert json.loads(given[S.PLUGIN_ENV])["boundary_rows"] == {"window_s": 30.0, "check": "the model's", "per_output": 2}
     record = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows)
     assert "boundary_rows" not in json.loads(record[S.PLUGIN_ENV])
     sh = (S.HERE / "run.sh").read_text()
-    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"}' in sh
+    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE"}' in sh
 
 
 def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):
@@ -183,7 +270,7 @@ def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypa
 def test_only_the_batch_invariant_arms_run_vllms_batch_invariant_kernels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "1")   # a job's environment doesn't turn it on for the stock arms
     on = {a for a in S.ARMS if S.server_env(S.ARMS[a], tmp_path, tmp_path, {"bucket_us": 1, "sat_us": 1, "free_us": 1},
-                                            600.0, 600.0, boundary_rows={"check": "t"})["VLLM_BATCH_INVARIANT"] == "1"}
+                                            600.0, 600.0, boundary_rows={"check": "t"}, private=tmp_path)["VLLM_BATCH_INVARIANT"] == "1"}
     assert on == {"bi-compiled", "bi-eager"}
     assert (S.ARMS["bi-compiled"].parent, S.ARMS["bi-eager"].parent) == ("compiled", "eager")
 
@@ -524,34 +611,128 @@ def test_a_pass_of_vllms_client_holds_a_concurrency_and_counts_goodput_against_t
         "--goodput", "ttft:2000", "tpot:80", "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
         "--request-id-prefix", "chat@16-r2-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
         "--save-result", "--result-dir", str(tmp_path), "--result-filename", "result.json"]
-    # the client's tokenizer loads as the server's does, and a load with no file names none
-    moon = S.bench_argv(S.MODELS["moonlight"], Path("/ck"), 1, S.LOADS["random"], 4, tmp_path, "warm", prompts=8)
+    # the client's tokenizer loads as the server's does, and a load with no file names none; long context is the
+    # client's synthetic dataset at one long length, its goodput against the time per output token alone
+    moon = S.bench_argv(S.MODELS["moonlight"], Path("/ck"), 1, S.LOADS["long"], 4, tmp_path, "warm", prompts=8)
     assert "--trust-remote-code" in moon and "--dataset-path" not in moon
     assert moon[moon.index("--num-prompts") + 1] == "8" and moon[moon.index("--dataset-name") + 1] == "random"
+    assert moon[moon.index("--random-input-len") + 1] == "8192" and moon[moon.index("--goodput") + 1:][:2] == [
+        "tpot:80", "--percentile-metrics"]
     # the release-order arm reads request k's release number from the id the client sends
     plugin = pytest.importorskip("servetax_plugin")
     assert plugin.release_key("cmpl-chat@16-r2-7-0-0123abcd") == ("chat@16-r2", 7)
 
 
-def test_loads_are_named_with_their_rungs_and_a_file_load_needs_its_file(tmp_path: Path):
+def test_loads_are_named_with_their_rungs_and_the_engines_context_fits_them():
     assert S.parse_loads("chat") == {"chat": S.LOADS["chat"].rungs}
-    assert S.parse_loads("random=2+4, chat=12+16+24") == {"random": (2, 4), "chat": (12, 16, 24)}
+    assert S.parse_loads("long=2+4, chat=12+16+24") == {"long": (2, 4), "chat": (12, 16, 24)}
     assert (S.pass_name("chat", 16), S.load_tag("chat@16", 2, True), S.load_tag("light", 2, False)) == (
         "chat@16", "chat@16-r2", "light2")
-    for bad in ("", "sonnet", "chat=0", "chat=8+x"):
+    for bad in ("", "sonnet", "random", "chat=0", "chat=8+x"):
         with pytest.raises((SystemExit, ValueError)):
             S.parse_loads(bad)
-    f = tmp_path / "sharegpt.json"
-    f.write_text("[]")
-    loads = S.parse_loads("chat=4,random=4")
-    assert S.parse_datasets([f"chat={f}"], loads) == {"chat": str(f)}
-    with pytest.raises(SystemExit, match="--dataset chat=FILE"):
+    # chat fits every engine's context as it is; long context raises it, and a given limit it doesn't fit is refused
+    chat, both = S.parse_loads("chat"), S.parse_loads("chat,long")
+    assert (S.context_of(chat, None), S.context_of(both, None), S.context_of(both, 131072)) == (None, 16384, 131072)
+    argv = S.server_argv(S.ARMS["compiled"], S.MODELS["glm53"], Path("/ck"), 1, None, S.context_of(both, None))
+    assert S.context_of(chat, 4096) == 4096 and argv[argv.index("--max-model-len") + 1] == "16384"
+    with pytest.raises(SystemExit, match="load long's requests need a context of 16384"):
+        S.context_of(both, 8192)
+    # each long request, its output and the tokens the client's alignment may add, fits the context the load names
+    args = dict(zip(S.LOADS["long"].dataset[::2], S.LOADS["long"].dataset[1::2]))
+    assert int(args["--random-input-len"]) + int(args["--random-output-len"]) + 64 <= S.LOADS["long"].context
+
+
+@pytest.fixture
+def pinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[S.Dataset, bytes, Path]:
+    """Chat's dataset pinned to a few bytes, under a node's Hugging Face cache in ``tmp_path``: the pin, the bytes,
+    and where the node's copy lies."""
+    import hashlib
+
+    data = b'[{"id": "a", "conversations": [{"value": "hello"}, {"value": "hi there"}]}]'
+    ds = S.Dataset("org/set", "f" * 40, "set.json", len(data), hashlib.sha512(data).hexdigest())
+    monkeypatch.setitem(S.LOADS, "chat", S.replace(S.LOADS["chat"], file=ds))
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    at = tmp_path / "hf" / "hub" / "datasets--org--set" / "snapshots" / ("f" * 40) / "set.json"
+    assert ds.path() == at and ds.url() == f"https://huggingface.co/datasets/org/set/resolve/{'f' * 40}/set.json"
+    return ds, data, at
+
+
+class Body:
+    """A download's body, as `urlopen` returns it."""
+
+    def __init__(self, data: bytes) -> None:
+        import io
+
+        self.body = io.BytesIO(data)
+
+    def __enter__(self) -> Body:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def read(self, n: int) -> bytes:
+        return self.body.read(n)
+
+
+def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp_path: Path, pinned, capsys):
+    ds, data, at = pinned
+    loads = S.parse_loads("chat=4,long=4")
+    assert S.parse_datasets(None, S.parse_loads("long")) == {}          # a load of no file needs none
+    # no copy on the node: refused with the command that downloads it, and nothing is downloaded unasked
+    with pytest.raises(SystemExit, match=r"no dataset file at .*set\.json: `serve_tax.py passes --loads chat --fetch` downloads"):
+        S.parse_datasets(None, loads, open_url=lambda url: pytest.fail("downloaded unasked"))
+    # a download that is not the pinned file leaves nothing behind, in place or beside it
+    with pytest.raises(SystemExit, match=r"is not the pinned file: its SHA-512 is .* \(nothing kept\)"):
+        S.parse_datasets(None, loads, fetch_missing=True, open_url=lambda url: Body(data + b" "))
+    assert list(at.parent.iterdir()) == []
+    urls = []
+    got = S.parse_datasets(None, loads, fetch_missing=True, open_url=lambda url: urls.append(url) or Body(data))
+    assert got == {"chat": str(at)} and urls == [ds.url()] and at.read_bytes() == data
+    assert [p.name for p in at.parent.iterdir()] == ["set.json"]
+    # it is there now: read again, never downloaded again
+    assert S.parse_datasets(None, loads, fetch_missing=True, open_url=lambda url: pytest.fail("downloaded twice")) == got
+    # the node's copy changed, or another file given as a copy: refused by its SHA-512, and a given file is never replaced
+    other = tmp_path / "other.json"
+    other.write_bytes(b"[]")
+    with pytest.raises(SystemExit, match=r"other\.json is not the pinned dataset file \(org/set's set\.json at ffffffffffff\)"):
+        S.parse_datasets([f"chat={other}"], loads, fetch_missing=True, open_url=lambda url: pytest.fail("replaced a given file"))
+    with pytest.raises(SystemExit, match="no dataset file at"):
+        S.parse_datasets([f"chat={tmp_path / 'absent.json'}"], loads, fetch_missing=True,
+                         open_url=lambda url: pytest.fail("downloaded to a given path"))
+    copy = tmp_path / "copy.json"
+    copy.write_bytes(data)
+    assert S.parse_datasets([f"chat={copy}"], loads) == {"chat": str(copy)}
+    at.write_bytes(data + b"\n")
+    with pytest.raises(SystemExit, match="is not the pinned dataset file"):
         S.parse_datasets(None, loads)
-    with pytest.raises(SystemExit, match="is not a file"):
-        S.parse_datasets([f"chat={tmp_path / 'absent.json'}"], loads)
-    with pytest.raises(SystemExit, match="random: not a load of --loads that reads a file"):
-        S.parse_datasets([f"chat={f}", f"random={f}"], loads)
-    assert S.parse_datasets(None, S.parse_loads("random")) == {}
+    with pytest.raises(SystemExit, match="long: not a load of --loads that reads a file"):
+        S.parse_datasets([f"chat={copy}", f"long={copy}"], loads)
+    # the command a job runs before it holds a GPU prints the checked file; `dataset` prints its path alone
+    at.write_bytes(data)
+    capsys.readouterr()
+    assert S.main(["passes", "--loads", "chat=4+8,long", "--arms", "compiled two-stage", "--model-id", "glm53"]) == 0
+    text = capsys.readouterr().out
+    assert f"200 prompts a pass at concurrency 4, 8, from {at} (SHA-512 {ds.sha512[:16]}...)" in text
+    assert "load long: 8,192 random tokens in and 128 out" in text and "24 prompts a pass at concurrency 1, 2, 4, 8\n" in text
+    assert S.main(["dataset", "chat"]) == 0 and capsys.readouterr().out == f"{at}\n"
+    for argv, why in ((["passes", "--loads", "chat", "--arms", "compiled absent"], "absent"),
+                      (["passes", "--loads", "chat", "--arms", "tick"], "corpus client"),
+                      (["passes", "--loads", "chat", "--arms", "two-stage", "--model-id", "moonlight"], "check template"),
+                      (["passes", "--loads", "long", "--max-model-len", "4096"], "need a context of 16384"),
+                      (["dataset", "long"], None)):                # a load that reads no file is no choice of `dataset`
+        with pytest.raises(SystemExit, match=why):
+            S.main(argv)
+    # a model with no check template of its own takes the job's object
+    assert S.main(["passes", "--loads", "long", "--arms", "two-stage", "--model-id", "moonlight", "--boundary-rows",
+                   '{"check": "t"}']) == 0
+
+
+def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
+    ds = S.LOADS["chat"].file
+    assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path):
@@ -565,16 +746,16 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
         now[0] += 64.25
         return NS(returncode=0)
 
-    m = S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["random"], 8, "random@8-r1", tmp_path / "rep-1",
+    m = S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["long"], 8, "long@8-r1", tmp_path / "rep-1",
                       run=run, clock=lambda: now[0], now=lambda: 1700.0)
     assert (m["requests"], m["unfinished"], m["unserved"], m["concurrency"], m["rate"]) == (200, 3, 3, 8, None)
-    assert (m["wall_s"], m["t0_unix"], m["client"], m["tag"]) == (64.25, 1700.0, "vllm-bench", "random@8-r1")
-    assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["random"], 8, tmp_path / "rep-1", "random@8-r1")]
+    assert (m["wall_s"], m["t0_unix"], m["client"], m["tag"]) == (64.25, 1700.0, "vllm-bench", "long@8-r1")
+    assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["long"], 8, tmp_path / "rep-1", "long@8-r1")]
     assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
     assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
     for rc, why in ((1, "exited 1"), (0, "saved no result")):
         with pytest.raises(RuntimeError, match=why):
-            S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["random"], 8, "x", tmp_path / f"bad-{rc}",
+            S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["long"], 8, "x", tmp_path / f"bad-{rc}",
                           run=lambda argv, stdout, stderr, rc=rc: NS(returncode=rc), clock=lambda: 0.0, now=lambda: 0.0)
 
 
@@ -589,14 +770,14 @@ def test_a_pass_metrics_are_the_clients_own_figures():
     assert none["goodput_req_per_s"] is None and none["met"] is None and none["slo_attained"] is None
 
 
-def bench_arm(d: Path, name: str, passes: dict[str, list[dict]], model_id: str = "glm53") -> Path:
+def bench_arm(d: Path, name: str, passes: dict[str, list[dict]], model_id: str = "glm53", **meta: object) -> Path:
     """An arm's run dir as `run` leaves it under vLLM's client: each pass's reps' result.json and meta.json."""
     d = d / name
     d.mkdir(parents=True)
     (d / "meta.json").write_text(json.dumps({
         "arm": name, "parent": S.ARMS[name].parent, "what": S.ARMS[name].what, "model_id": model_id, "rates": {},
         "client": "vllm-bench", "run_id": "r-1", "commit": "c" * 40, "versions": {"vllm": "0.1+gd9105ea8"},
-        "passes": {p: {"load": p.rpartition("@")[0], "concurrency": int(p.rpartition("@")[2])} for p in passes}}))
+        "passes": {p: {"load": p.rpartition("@")[0], "concurrency": int(p.rpartition("@")[2])} for p in passes}, **meta}))
     for p, reps in passes.items():
         for i, r in enumerate(reps, 1):
             (d / p / f"rep-{i}").mkdir(parents=True)
@@ -632,24 +813,30 @@ def cost_arm(name: str, goodput: dict[int, list[float]], tok: float = 300.0, loa
             "loads": {S.pass_name(load, c): rs for c, rs in reps.items()}}
 
 
-def test_the_serving_cost_is_the_references_best_goodput_over_the_arms_less_one():
-    """Each arm's best is its own rung: the reference peaks at concurrency 16 and the arm at 8."""
-    ref = cost_arm("compiled", {8: [1.0, 1.0, 1.0], 16: [1.5, 1.6, 1.4], 32: [0.2, 0.1, 0.3]})
-    ours = cost_arm("boundary-rows", {8: [1.2, 1.25, 1.15], 16: [1.0, 0.9, 1.1]}, tok=280.0)
+def test_the_serving_cost_is_the_kits_paired_ratio_of_each_sides_best_pass():
+    """Each arm's best is its own rung: the reference peaks at concurrency 16 and the arm at 8. The cost is the median
+    over reps of the reference's goodput over the arm's in the same rep, less one."""
+    ref = cost_arm("compiled", {8: [1.0] * 6, 16: [1.5, 1.6, 1.4, 1.5, 1.55, 1.45], 32: [0.2, 0.1, 0.3, 0.2, 0.1, 0.3]})
+    ours = cost_arm("boundary-rows", {8: [1.2, 1.25, 1.15, 1.2, 1.25, 1.1], 16: [1.0, 0.9, 1.1, 1.0, 0.9, 1.1]}, tok=280.0)
     assert S.best_pass(ref, "chat")[0] == 16 and S.best_pass(ours, "chat")[0] == 8 and S.best_pass(ref, "long") is None
     c = S.serving_cost(ref, ours, "chat")
-    assert c["value"] == pytest.approx(1.5 / 1.2 - 1) and c["reps"] == 3
-    assert (c["reference"]["concurrency"], c["arm"]["concurrency"], c["arm"]["met"], c["arm"]["sent"]) == (16, 8, 360, 600)
-    ratios = [1.5 / 1.2, 1.6 / 1.25, 1.4 / 1.15]
-    mean = sum(ratios) / 3
-    half = 4.303 * (sum((x - mean) ** 2 for x in ratios) / 2) ** 0.5 / 3 ** 0.5       # t(2 degrees of freedom) · s / √n
-    assert c["ci95"] == [pytest.approx(c["value"] - half), pytest.approx(c["value"] + half)]
-    assert c["throughput"] == pytest.approx(300 / 280 - 1)
-    # the reps both have are the ones compared; one rep has no interval; a load one side didn't serve has no cost
-    short = cost_arm("boundary-rows", {8: [1.2]})
-    one = S.serving_cost(ref, short, "chat")
+    ratios = sorted(x / y for x, y in zip([1.5, 1.6, 1.4, 1.5, 1.55, 1.45], [1.2, 1.25, 1.15, 1.2, 1.25, 1.1]))
+    assert c["value"] == pytest.approx((ratios[2] + ratios[3]) / 2 - 1) == pytest.approx(0.25) and c["reps"] == 6
+    assert (c["reference"]["concurrency"], c["arm"]["concurrency"], c["arm"]["sent"]) == (16, 8, 1200)
+    # six reps are the fewest whose ratios bound their median at 95%: the interval is then their least and greatest
+    assert c["ci95"] == [pytest.approx(ratios[0] - 1), pytest.approx(ratios[5] - 1)]
+    assert c["ci95"][0] < c["value"] < c["ci95"][1] and c["throughput"] == pytest.approx(300 / 280 - 1)
+    # one slow rep moves the interval's end and not the median: the cost isn't the ratio of the sides' means
+    assert c["value"] != pytest.approx(c["reference"]["goodput_req_per_s"] / c["arm"]["goodput_req_per_s"] - 1)
+    # the reps both have are the ones compared; five have no interval; a load one side didn't serve has no cost
+    five = S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.2, 1.25, 1.15, 1.2, 1.25]}), "chat")
+    assert five["reps"] == 5 and five["value"] == pytest.approx(0.25) and "ci95" not in five
+    one = S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.2]}), "chat")
     assert one["reps"] == 1 and one["value"] == pytest.approx(1.5 / 1.2 - 1) and "ci95" not in one
-    assert S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.0]}, load="random"), "chat") is None
+    assert S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.0]}, load="long"), "chat") is None
+    # the estimator is the kit's own, read from the tree's one copy of it
+    paired = S.kit()[0].paired
+    assert paired.__module__ == "verity_bench.overhead" and paired([1 / 1.2], [1 / 1.5])["gamma"] == pytest.approx(0.25)
 
 
 def test_an_arm_that_meets_the_slo_for_no_request_has_no_finite_cost_and_misses():
@@ -660,7 +847,7 @@ def test_an_arm_that_meets_the_slo_for_no_request_has_no_finite_cost_and_misses(
     # with no goodput anywhere the arm's best pass is its fastest, and what is left to read is the tokens' ratio
     assert c["value"] is None and c["arm"]["concurrency"] == 16 and c["throughput"] == pytest.approx(0.5)
     assert S.verdict(c, 0.05) == "misses"
-    r = S.cost_report([ref, none], target=5.0)
+    r = S.cost_report([ref, none], arm="boundary-rows", target=5.0)
     assert (r["value"], r["ci95"], r["verdict"]) == (None, None, "misses")
     assert "no finite cost: boundary-rows met the latency target for 0 of 400 requests" in S.cost_text(r)
     # a load past the reference too says nothing about the arm; a rep with no goodput leaves no interval
@@ -679,87 +866,224 @@ def test_the_verdict_is_one_of_three_and_the_noise_floor_widens_the_interval():
     assert S.verdict({k: v for k, v in cost.items() if k != "ci95"}, 0.05) == "cannot tell"
 
 
-def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first():
-    def both(name: str, chat: list[float], rnd: list[float]) -> dict:
-        a = cost_arm(name, {8: chat})
-        a["loads"] |= cost_arm(name, {4: rnd}, load="random")["loads"]
-        return a
+def both(name: str, chat: list[float], long: list[float]) -> dict:
+    """An arm's metrics with chat served at concurrency 8 and long context at 4: six reps, each list twice over."""
+    a = cost_arm(name, {8: chat * 2})
+    a["loads"] |= cost_arm(name, {4: long * 2}, load="long")["loads"]
+    return a
 
-    arms = [both("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), both("compiled-again", [1.98, 2.0, 2.02], [1.0, 1.0, 1.0]),
+
+def cost_arms() -> list[dict]:
+    """Stock, stock again, and one arm for each change up to the two-stage serve's launch line."""
+    return [both("compiled", [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]), both("compiled-again", [1.98, 2.0, 2.02], [1.0, 1.0, 1.0]),
             both("record", [1.98, 1.99, 2.0], [0.99, 0.985, 0.98]), both("no-prefix-cache", [2.0, 1.99, 2.0], [1.0, 0.99, 1.0]),
-            both("boundary-rows", [1.96, 1.97, 1.98], [0.96, 0.955, 0.95])]
+            both("boundary-rows", [1.96, 1.97, 1.98], [0.96, 0.955, 0.95]),
+            both("canonical-topk", [2.0, 2.0, 1.99], [0.98, 0.975, 0.97]),
+            both("two-stage", [1.95, 1.96, 1.97], [0.94, 0.935, 0.93])]
+
+
+def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first():
+    arms = cost_arms()
     r = S.cost_report(arms)
     assert list(r)[:4] == ["value", "unit", "commit", "run"]
     assert (r["unit"], r["commit"], r["run"], r["metric"], r["better"]) == (
         "percent of stock's serving compute", "c" * 40, "r-1", "serving_cost", "lower")
-    # the random load costs more than chat, so it is the number; the model's target applies where none is given
-    assert [(c["load"], c["value"]) for c in r["loads"]] == [("chat", 1.52), ("random", 4.71)]
-    assert (r["load"], r["value"], r["target"], r["model"], r["arm"], r["reference"]) == (
-        "random", 4.71, S.MODELS["glm53"].target, "glm-5.3", "boundary-rows", "compiled")
-    assert r["ci95"][0] < r["value"] < r["ci95"][1] and r["verdict"] == "cannot tell"
-    assert r["latency_target_ms"] == {"ttft": 2000, "tpot": 80} and r["vllm"] == "0.1+gd9105ea8"
+    # long context costs more than chat, so it is the number; the model's target applies where none is given
+    assert [(c["load"], c["value"], c["verdict"]) for c in r["loads"]] == [("chat", 2.04, "meets"), ("long", 6.95, "misses")]
+    assert (r["load"], r["value"], r["target"], r["model"], r["arm"], r["reference"], r["not_run"]) == (
+        "long", 6.95, S.MODELS["glm53"].target, "glm-5.3", "two-stage", "compiled", [])
+    # the number is the largest, so it misses where one load misses, whatever the other does
+    assert r["ci95"][0] < r["value"] < r["ci95"][1] and r["verdict"] == "misses"
+    # each load's goodput counts against its own bounds: long context's first token takes seconds on any engine
+    assert [c["latency_target_ms"] for c in r["loads"]] == [{"ttft": 2000, "tpot": 80}, {"tpot": 80}]
+    assert r["latency_target_ms"] == {"tpot": 80} and r["vllm"] == "0.1+gd9105ea8"
     # stock again is the noise floor, not a change; each other arm's cost is over stock and over the arm above it
     assert r["noise_floor"] == {"arm": "compiled-again", "value": 0.0, "ci95": [0.0, 0.0]}
+    assert [c["noise_floor"] for c in r["loads"]] == [0.0, 0.0]
     rows = {x["arm"]: x for x in r["arms"]}
-    assert list(rows) == ["record", "no-prefix-cache", "boundary-rows"]
-    assert (rows["record"]["over"], rows["no-prefix-cache"]["over"], rows["boundary-rows"]["over"]) == (
-        "compiled", "compiled", "record")
+    assert list(rows) == ["record", "no-prefix-cache", "boundary-rows", "canonical-topk", "two-stage"]
+    assert [rows[a]["over"] for a in rows] == ["compiled", "compiled", "record", "compiled", "boundary-rows"]
     assert rows["record"]["value"] == rows["record"]["step"]["value"] == 1.52
     assert rows["boundary-rows"]["value"] == 4.71 and rows["boundary-rows"]["step"]["value"] == 3.14
-    # the arms from the measured one up to stock split the whole: its own step and the record's; prefix caching off is
-    # beside that chain
-    assert (rows["record"]["share"], rows["boundary-rows"]["share"], rows["no-prefix-cache"]["share"]) == (
-        pytest.approx(0.3232, abs=1e-3), pytest.approx(0.6667, abs=1e-3), None)
-    assert r["no_arm"] == list(S.NO_ARM) and json.loads(json.dumps(r)) == r
-    text = S.cost_text(r)
-    assert text.splitlines()[0] == ("serving cost, glm-5.3, boundary-rows over compiled: 4.71% "
-                                    f"[{r['ci95'][0]:.2f}%, {r['ci95'][1]:.2f}%]   target ≤ 4.34%   verdict: cannot tell")
-    assert "noise floor (compiled-again over compiled, two server lifetimes of one engine, load random): 0.00%" in text
-    assert "| boundary-rows | 4.71% " in text and "| record | 3.14% " in text and "changes with no arm" in text
+    assert rows["two-stage"]["value"] == 6.95 and rows["two-stage"]["step"]["value"] == 2.14
+    # the arms from the measured one up to stock split the whole: the record's step, the boundary commitment's and the
+    # launch line's last; prefix caching off and the canonical top-k alone are beside that chain
+    assert [rows[a]["share"] for a in rows] == [pytest.approx(0.219, abs=1e-3), None, pytest.approx(0.452, abs=1e-3), None,
+                                                pytest.approx(0.308, abs=1e-3)]
+    assert rows["canonical-topk"]["value"] == rows["canonical-topk"]["step"]["value"] == 2.56
+    assert r["no_arm"] == list(S.NO_ARM) and r["commitment"] is None and json.loads(json.dumps(r)) == r
+    lines = S.cost_text(r).splitlines()
+    assert lines[:2] == ["serving cost, glm-5.3, two-stage over compiled: 6.95% [6.38%, 7.53%]   "
+                         "target ≤ 4.34% (modelled)   verdict: misses",
+                         "  the largest of the costs of its loads (chat, long), load long's"]
+    assert (r["id"], r["target_basis"]) == ("vllm/serving-cost-glm53", "modelled")
+    text = "\n".join(lines)
+    assert "  load chat, ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset), " \
+           "TTFT ≤ 2000 ms, TPOT ≤ 80 ms: 2.04% [1.52%, 2.56%]" in text and "over 6 reps, meets; best goodput 2 req/s" in text
+    assert "  load long, 8,192 random tokens in and 128 out (vLLM's random dataset at one long length), TPOT ≤ 80 ms: " \
+           "6.95% [6.38%, 7.53%]" in text and "over 6 reps, misses; best goodput 1 req/s" in text
+    assert "noise floor (compiled-again over compiled, two server lifetimes of one engine, load long): 0.00%" in text
+    assert "| two-stage | 6.95% " in text and "| boundary-rows | 2.14% " in text and "| record | 3.14% " in text
+    assert "changes with no arm" in text and "boundary commitment:" not in text
     # a target given replaces the model's, and without stock again the output says the floor was not measured
     two = S.cost_report([arms[0], arms[-1]], target=10.0)
-    assert (two["target"], two["verdict"], two["noise_floor"]) == (10.0, "meets", None)
-    assert [(x["arm"], x["over"], x["share"]) for x in two["arms"]] == [("boundary-rows", "compiled", 1.0)]
-    assert "noise floor: not measured" in S.cost_text(two) and "target ≤ 10.00%   verdict: meets" in S.cost_text(two)
+    assert (two["target"], two["target_basis"], two["verdict"], two["noise_floor"]) == (10.0, "given", "meets", None)
+    assert [(x["arm"], x["over"], x["share"]) for x in two["arms"]] == [("two-stage", "compiled", 1.0)]
+    assert "noise floor: not measured" in S.cost_text(two) and "target ≤ 10.00% (given)   verdict: meets" in S.cost_text(two)
     assert S.cost_report([arms[0], arms[2]], arm="record", target=0.1)["verdict"] == "misses"
+
+
+def test_one_load_alone_is_named_and_never_meets_the_target_for_the_number():
+    """The number is the largest of both loads' costs: a line from one load says which, and that it is not the number
+    yet; it can miss on one load, and cannot meet."""
+    chat = [cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0, 2.0, 2.0]), ("two-stage", [1.95, 1.96, 1.97]))]
+    r = S.cost_report(chat)
+    assert (r["load"], r["value"], r["not_run"], r["verdict"]) == ("chat", 2.04, ["long"], "cannot tell")
+    assert r["loads"][0]["verdict"] == "meets"                    # chat's own cost is within the target
+    assert S.cost_text(r).splitlines()[:2] == [
+        "serving cost, glm-5.3, two-stage over compiled, load chat alone: 2.04% [1.52%, 2.56%]"
+        "   target ≤ 4.34% (modelled)   verdict: cannot tell",
+        "  not the number yet: it is the largest of the costs of its loads (chat, long), and load long has not run"]
+    long = [cost_arm(name, {4: gs * 2}, load="long")
+            for name, gs in (("compiled", [1.0, 1.0, 1.0]), ("two-stage", [0.94, 0.935, 0.93]))]
+    r = S.cost_report(long)
+    assert (r["load"], r["value"], r["not_run"], r["verdict"]) == ("long", 6.95, ["chat"], "misses")
+    assert ", load long alone: 6.95% [" in S.cost_text(r) and "and load chat has not run" in S.cost_text(r)
+    # two jobs' directories of an arm, each a load of its own, are one arm: the number is then the larger of the two,
+    # under the commit and run of the job that served its load, each load's job named
+    commits = {"spans": 600, "finished": 600, "failed": 0, "tables": 600}
+    chat[1]["boundary_commits"] = commits
+    long = [a | {"run_id": "r-2", "commit": "d" * 40, "boundary_commits": commits | {"spans": 72, "finished": 80}} for a in long]
+    r = S.cost_report([*chat, *long])
+    assert [(c["load"], c["value"], c["run"]) for c in r["loads"]] == [("chat", 2.04, "r-1"), ("long", 6.95, "r-2")]
+    assert (r["load"], r["not_run"], r["verdict"], r["run"], r["commit"]) == ("long", [], "misses", "r-2", "d" * 40)
+    assert r["commitment"] == {"finished": 680, "committed": 672, "failed": 0, "tables": 1200, "tables_asked": False,
+                               "window_s": None}
+    text = S.cost_text(r)
+    assert text.splitlines()[1] == "  the largest of the costs of its loads (chat, long), load long's"
+    assert f"load chat: commit {'c' * 40}, run r-1\nload long: commit {'d' * 40}, run r-2\nvLLM 0.1+gd9105ea8\n" in text
+    assert S.cost_report([*long, *chat])["loads"][0]["load"] == "chat"          # in the loads' order, whichever came first
+    for twice, why in (([*chat, *chat], "two directories of arm compiled both served chat: give one of them"),
+                       ([*chat, *(a | {"vllm": "0.2"} for a in long)], "two directories of arm compiled differ in vllm")):
+        with pytest.raises(SystemExit, match=why):
+            S.cost_report(twice)
+
+
+def test_the_cost_says_what_the_arms_boundary_commitment_did_and_whether_its_tables_were_built():
+    """What the arm asked for is not what its engine did: the line counts the classes whose own lines carry tables."""
+    arms = [cost_arms()[0], cost_arms()[-1]]
+    arms[1] |= {"boundary_rows": {"window_s": 30.0, "check": "t", **S.ARMS["two-stage"].rows},
+                "boundary_commits": {"spans": 4200, "finished": 4200, "failed": 0, "tables": 0, "complete": True}}
+    # the window the arm committed at is on the line: a commit only counts in a pass it falls inside
+    line = "  two-stage's boundary commitment, a window every 30 s: 4,200 of 4,200 finished requests committed, 0 failed, "
+    r = S.cost_report(arms)
+    assert r["commitment"] == {"finished": 4200, "committed": 4200, "failed": 0, "tables": 0, "tables_asked": True,
+                               "window_s": 30.0}
+    assert line + ("none with history tables: the arm asks for them and this tree's boundary commitment builds none, "
+                   "so this cost is without them\n") in S.cost_text(r)
+    arms[1]["boundary_commits"]["tables"] = 4200
+    assert line + "4,200 of them with their history tables\n" in S.cost_text(S.cost_report(arms))
+    # a commit that failed is counted as failed, and nothing is said of why no tables were built
+    arms[1]["boundary_commits"] |= {"tables": 0, "failed": 8}
+    assert ("4,192 of 4,200 finished requests committed, 8 failed, none with history tables\n"
+            in S.cost_text(S.cost_report(arms)))
+    # an arm that asks for none says only that there are none
+    arms[1] |= {"boundary_rows": {"check": "t", **S.ROWS}, "boundary_commits": {"spans": 10, "finished": 10}}
+    assert "10 of 10 finished requests committed, 0 failed, none with history tables\n" in S.cost_text(S.cost_report(arms))
 
 
 def test_the_cost_needs_both_arms_and_a_load_they_share():
     ref = cost_arm("compiled", {8: [2.0, 2.0]})
-    with pytest.raises(SystemExit, match="no directory of arm boundary-rows"):
+    with pytest.raises(SystemExit, match="no directory of arm two-stage"):
         S.cost_report([ref])
-    with pytest.raises(SystemExit, match="share no load sent by vLLM's client"):
-        S.cost_report([ref, cost_arm("boundary-rows", {8: [1.9, 1.9]}, load="random")])
-    with pytest.raises(SystemExit, match="share no load sent by vLLM's client"):       # the corpus client's fixed rates
+    with pytest.raises(SystemExit, match=r"share no load \(chat, long\) sent by vLLM's client"):
+        S.cost_report([ref, cost_arm("two-stage", {8: [1.9, 1.9]}, load="long")])
+    with pytest.raises(SystemExit, match=r"share no load \(chat, long\) sent by vLLM's client"):       # the corpus client's fixed rates
         S.cost_report([arm("compiled", None, [1000.0]) | {"model_id": "glm53"},
-                       arm("boundary-rows", "record", [900.0]) | {"model_id": "glm53"}])
+                       arm("two-stage", "boundary-rows", [900.0]) | {"model_id": "glm53"}])
 
 
 def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, capsys: pytest.CaptureFixture):
-    dirs = [bench_arm(tmp_path, "compiled", {"chat@8": [result(good=150.0), result(good=152.0), result(good=151.0)]}),
-            bench_arm(tmp_path, "boundary-rows", {"chat@8": [result(good=147.0), result(good=149.0), result(good=148.0)]})]
+    commits = {"spans": 1200, "finished": 1200, "waited_s": 2.0, "complete": True, "failed": 0, "tables": 1200}
+    dirs = [bench_arm(tmp_path, "compiled", {"chat@8": [result(good=g) for g in (150.0, 152.0, 151.0) * 2]}),
+            bench_arm(tmp_path, "two-stage", {"chat@8": [result(good=g) for g in (147.0, 149.0, 148.0) * 2]},
+                      boundary_commits=commits, boundary_rows={"check": "t", **S.ARMS["two-stage"].rows})]
     assert S.main(["cost", *map(str, dirs), "--out", str(tmp_path / "out")]) == 0
     text = capsys.readouterr().out
-    assert text.startswith("serving cost, glm-5.3, boundary-rows over compiled: 2.03% [")
+    assert text.startswith("serving cost, glm-5.3, two-stage over compiled, load chat alone: 2.03% [2.01%, 2.04%]")
+    assert "1,200 of 1,200 finished requests committed, 0 failed, 1,200 of them with their history tables\n" in text
     assert text == (tmp_path / "out" / "serving_cost.txt").read_text()
     assert S.main(["cost", *map(str, dirs), "--json", "--target", "3"]) == 0
     (line,) = capsys.readouterr().out.splitlines()
     r = json.loads(line)
-    assert (r["value"], r["target"], r["verdict"], r["load"]) == (2.03, 3.0, "meets", "chat")
+    # chat's cost is within the target, and the number's verdict waits for the load that has not run
+    assert (r["value"], r["target"], r["verdict"], r["load"], r["not_run"]) == (2.03, 3.0, "cannot tell", "chat", ["long"])
+    assert r["loads"][0]["verdict"] == "meets" and r["commitment"]["tables"] == 1200
     saved = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
-    assert saved | {"target": 3.0, "verdict": "meets"} == r
+    assert saved | {"target": 3.0, "target_basis": "given"} == r
+
+
+def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load_has_run(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+    """What a reader of results takes the number from is the run's result.json, the entry named by the metric's id: a
+    job that ran one load writes that load's cost and no such entry, so one load's cost is never read as the number."""
+    r = S.cost_report(cost_arms())
+    ok, detail, what, ms = S.result_of(r)
+    assert ok and detail == S.cost_text(r).splitlines()[0] and what["loads"] == ["chat", "long"]
+    assert [m["name"] for m in ms] == ["chat", "long", "vllm/serving-cost-glm53"]
+    chat, long, number = ms
+    about = {"unit": "percent of stock's serving compute", "target": 4.34, "target_basis": "modelled", "better": "lower"}
+    assert all(m | about == m and m["commit"] == "c" * 40 and m["run"] == "r-1" for m in ms)
+    assert (chat["value"], chat["ci95"], chat["verdict"], chat["reps"]) == (2.04, [1.52, 2.56], "meets", 6)
+    assert (number["value"], number["ci95"], number["verdict"], number["load"]) == (6.95, [6.38, 7.53], "misses", "long")
+    # the number names the loads it is the largest of, each with its cost beside it
+    assert number["inputs"] == ["chat", "long"]
+    assert [(c["load"], c["value"], c["verdict"]) for c in number["loads"]] == [("chat", 2.04, "meets"), ("long", 6.95, "misses")]
+    # one load alone: its cost, and no entry under the metric's id
+    alone = S.cost_report([cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0] * 3), ("two-stage", [1.95, 1.96, 1.97]))])
+    assert [m["name"] for m in S.result_of(alone)[3]] == ["chat"] and S.result_of(alone)[0]
+    # a cost with no finite value, or a boundary commitment that left a finished request out, is not a passed result
+    none = cost_arm("two-stage", {8: [0.0] * 6})
+    assert not S.result_of(S.cost_report([cost_arm("compiled", {8: [2.0] * 6}), none]))[0]
+    arms = [cost_arms()[0], cost_arms()[-1] | {"boundary_commits": {"spans": 90, "finished": 100, "failed": 0}}]
+    assert not S.result_of(S.cost_report(arms))[0]
+    # the command writes it through the kit's writer, in the run's directory, citing the report beside it
+    dirs = [bench_arm(tmp_path, name, {f"{load}@8": [result(good=g) for g in gs * 2] for load in ("chat", "long")})
+            for name, gs in (("compiled", (150.0, 152.0, 151.0)), ("two-stage", (147.0, 149.0, 148.0)))]
+    out = tmp_path / "run" / "out"
+    with pytest.raises(SystemExit, match="with --out DIR"):
+        S.main(["cost", *map(str, dirs), "--result"])
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    with pytest.raises(SystemExit, match="run it under research run"):
+        S.main(["cost", *map(str, dirs), "--out", str(out), "--result"])
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-9")
+    assert S.main(["cost", *map(str, dirs), "--out", str(out), "--result"]) == 0
+    saved = json.loads((tmp_path / "run" / "result.json").read_text())
+    assert (saved["schema"], saved["run_id"], saved["validation"]["status"]) == ("research/result/v0.1", "r-9", "passed")
+    assert saved["validation"]["evidence"] == saved["measurement_files"] == ["out/serving_cost.json"]
+    assert saved["validation"]["detail"] == capsys.readouterr().out.splitlines()[0]
+    assert [(m["name"], m["value"], m["unit"]) for m in saved["measurements"]] == [
+        (name, 2.03, "percent of stock's serving compute") for name in ("chat", "long", "vllm/serving-cost-glm53")]
+    assert saved["workload_fingerprint"] == {"benchmark": "serve_tax", "model": "glm-5.3", "arm": "two-stage",
+                                             "reference": "compiled", "loads": ["chat", "long"], "vllm": "0.1+gd9105ea8"}
 
 
 def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("PYTHONPATH", raising=False)
     rows = {"check": "t"}
     paths = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path / "site", {"bucket_us": 1, "sat_us": 1, "free_us": 1}, 600.0, 600.0,
-                             boundary_rows=rows)["PYTHONPATH"].split(S.os.pathsep) for a in S.ARMS}
+                             boundary_rows=rows, private=tmp_path)["PYTHONPATH"].split(S.os.pathsep) for a in S.ARMS}
     for a, arm_ in S.ARMS.items():
-        ours = [p for p in paths[a] if p in (str(tmp_path / "site"), str(S.HERE), str(S.ROOT), str(S.ROOT / "integrations/vllm"))]
-        assert bool(ours) == bool(arm_.plugin or arm_.tick), a
+        tree = [p for p in paths[a] if p in (str(S.HERE), str(S.ROOT), str(S.ROOT / "integrations/vllm"))]
+        assert bool(tree) == bool(arm_.plugin or arm_.tick), a
+        assert (str(tmp_path / "site") in paths[a]) == bool(S.entry_points(arm_)), a
+        # nothing else of this tree is on it but the directory of each other plugin the arm names
+        assert [p for p in paths[a] if p.startswith(str(S.ROOT))] == [*tree, *(str(S.ROOT / d) for _, d in arm_.general)], a
+    assert paths["compiled"] == paths["compiled-again"] == [""]
     assert S.same_engine("compiled", "compiled-again") and not S.same_engine("compiled", "no-prefix-cache")
     assert not S.same_engine("compiled", "record") and not S.same_engine("compiled", "absent")
+    assert not S.same_engine("compiled", "canonical-topk") and not S.same_engine("boundary-rows", "two-stage")
 
 
 def run_sh(*flags: str, **env: str) -> tuple[int, str]:
@@ -775,11 +1099,23 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
                                     "--target, --json)\n")
     assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
-    rc, out = run_sh("--model", "glm53")              # the default arms end in boundary-rows, which needs its object
-    assert rc == 2 and out == "serve-tax: the boundary-rows arm needs BOUNDARY_ROWS, its JSON object (README.md)\n"
-    rc, out = run_sh("--model", "glm53", "--arms", "compiled compiled-again", "--json")
-    assert rc != 0 and "run this under research run" in out        # past the flags: only the run is missing
+    # the default arms end in the two-stage serve's launch line, which is the arm's data: the job names no object
+    for flags in (("--model", "glm53"), ("--model", "glm53", "--arms", "compiled compiled-again", "--json")):
+        rc, out = run_sh(*flags)
+        assert rc != 0 and "run this under research run" in out    # past the flags: only the run is missing
     rc, out = run_sh(ARMS="compiled", RATES="light=1")             # the corpus client's form is untouched
     assert rc != 0 and "run this under research run" in out
     sh = (S.HERE / "run.sh").read_text()
     assert 'cost "${dirs[@]}" --arm "${ARMS##* }"' in sh and '--client vllm-bench --loads "$LOADS"' in sh
+    # an earlier job's arms join the cost, after this job's table is made of this job's arms alone
+    assert sh.index('table "${dirs[@]}"') < sh.index('for o in ${WITH:-}; do for d in "$o"/*/') < sh.index('cost "${dirs[@]}"')
+    assert 'ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}' in sh
+    # six reps give the cost its interval, a Commit window shorter than a pass puts the commits inside the passes, and
+    # the cost is written as the run's result
+    assert 'REPS=${REPS:-6}; WINDOW_S=${WINDOW_S:-30}' in sh and '"${cost[@]}" --out "$OUT" --result' in sh
+    # --arms all is every arm vLLM's client can drive from stock up to the launch line, each after the arm it is over
+    every = re.search(r'ARMS = all \] && ARMS="([^"]+)"', sh.replace("\"$ARMS\"", "ARMS")).group(1).split()
+    assert every[:2] == ["compiled", "compiled-again"] and every[-1] == S.OURS and set(every) <= set(S.ARMS)
+    assert all(S.ARMS[a].parent in every[:i] for i, a in enumerate(every) if S.ARMS[a].parent)
+    # before it holds a GPU the job checks its arms and downloads the pinned dataset where the node has none
+    assert 'passes --loads "$LOADS" "${ds[@]}" --fetch --arms "$ARMS" --model-id "$MODEL_ID"' in sh

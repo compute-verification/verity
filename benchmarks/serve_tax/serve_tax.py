@@ -6,11 +6,12 @@ integration's pin, on the same node, workload and SLO.
                      [--requests N] [--plan PLAN.jsonl] [--window-s S] [--kv-window-s S]
                      [--tick-ms SAT,FREE | --tick-from STEP_TRACE|RECORD_ARM_DIR] --out DIR
     serve_tax.py run --arm ARM --model-id ID --client vllm-bench --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
-                     [--checkpoint DIR] [--reps 3] --out DIR
-    serve_tax.py passes --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE]
+                     [--checkpoint DIR] [--reps 3] [--private DIR] --out DIR
+    serve_tax.py passes --loads NAME[=RUNG+RUNG...],... [--dataset NAME=FILE] [--fetch] [--arms "ARM ..." --model-id ID]
+    serve_tax.py dataset LOAD [--fetch]
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py table DIR... --out DIR [--slo-ttft-s S --slo-tpot-s S]
-    serve_tax.py cost DIR... [--arm ARM] [--reference compiled] [--target PERCENT] [--json] [--out DIR]
+    serve_tax.py cost DIR... [--arm ARM] [--reference compiled] [--target PERCENT] [--json] [--out DIR [--result]]
     serve_tax.py tick STEP_TRACE|RECORD_ARM_DIR [--load saturated]
     serve_tax.py fit ARM_DIR --budget-s S --reps N
     serve_tax.py checkpoint --model-id ID
@@ -53,9 +54,20 @@ The arms, each one engine configuration; each adds its change to the arm it name
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
-  window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``) ``--boundary-rows``'s JSON, at ``--window-s``; the server is
-  held after its loads until its windows' commits account for every finished request (`await_commits`).
+  window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
+  serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``), at ``--window-s``; the server is held after its loads
+  until its windows' commits account for every finished request (`await_commits`).
+- ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
+  rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
+- ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
+  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
+  is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
+
+An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
+its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
+its run's directory (the history tables' rows and salts, the top-k's counters) goes to ``--private`` (``{private}`` in
+its data), by default a fresh directory removed when the arm stops.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -63,13 +75,20 @@ With ``--client vllm-bench`` the loads are sent by vLLM's own benchmark client i
 one pass a load and rung: a load (`LOADS`) is one of the client's datasets, and a rung the concurrency the client holds
 (``--request-rate inf --max-concurrency RUNG``, the shape of vLLM's standing serving tests), every request greedy and
 decoding to its length (``--ignore-eos``). Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
-saved, and `metrics` and `table` take its figures as the client computed them (`bench_metrics`).
+saved, and `metrics` and `table` take its figures as the client computed them (`bench_metrics`). A load whose dataset
+is a file reads the node's one copy of it, pinned by revision and SHA-512 (`Dataset`): `passes --fetch` downloads it
+into the node's cache where it is missing, every run checks its SHA-512 and refuses a file that differs, and its
+record holds the hash and the path, never the file.
 
 `cost` prints the serving cost of one arm over a reference arm from such passes: how much more serving compute the arm
 needs for the same traffic within the SLO, the reference's best goodput over the arm's, less one, each arm's best the
-rung of a load where its goodput is largest (`serving_cost`); one cost a load, the largest the number, with its 95%
-interval over reps, its verdict against ``--target`` and every other arm's cost beside it, as text and as one JSON
-object whose first keys are value, unit, commit and run.
+rung of a load where its goodput is largest (`serving_cost`, the benchmark kit's paired ratio over reps: `kit`); one
+cost a load, the largest the number, with its 95% interval over reps, its verdict against ``--target`` and every other
+arm's cost beside it, as text and as one JSON object whose first keys are value, unit, commit and run. The loads are
+chat and long context (`LOADS`): where one of them has not run, the first line names the one that has and the number
+isn't said to meet its target. Directories of one arm from two jobs, each a load of its own, are one arm (`joined`),
+so a load served later joins the number. ``--result`` writes the run's result.json too (`result_of`): each load's cost
+a measurement, and the number one under the model's metric id once every load has run.
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
@@ -85,6 +104,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import functools
+import hashlib
 import json
 import math
 import os
@@ -93,6 +113,7 @@ import signal
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from collections.abc import Callable
@@ -120,7 +141,8 @@ class Arm:
     args: tuple[str, ...] = ()
     plugin: tuple[str, ...] = ()
     tick: bool = False
-    #: the server's environment over the job's (VLLM_BATCH_INVARIANT is "0" unless an arm sets it)
+    #: the server's environment over the job's (VLLM_BATCH_INVARIANT is "0" unless an arm sets it); `PRIVATE` in a value
+    #: is the run's private directory
     env: dict = field(default_factory=dict)
     #: the corpus's sampling (`corpus.SAMPLING`) and whether each request asks for its sampled tokens' logprobs
     sampling: str = "greedy"
@@ -131,9 +153,28 @@ class Arm:
     edges: bool = False
     edge_dump: bool = True
     edge_busy: bool = True
+    #: the other vLLM general plugins its server loads: each one's entry point and its module's directory in this tree
+    general: tuple[tuple[str, str], ...] = ()
+    #: the boundary commitment's object, for an arm whose plugin has ``boundary_rows`` (`servetax_plugin`), less its check
+    #: template, the model's (`Model.check`), and its window, the run's; `PRIVATE` as in ``env``
+    rows: dict = field(default_factory=dict)
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
+#: in an arm's data, the directory its run keeps on the node for what never leaves it (``--private``)
+PRIVATE = "{private}"
+# The two-stage serve's launch line, what its engine turns on over stock vLLM, is the next four values and the
+# ``two-stage`` arm made of them, stated here alone: a job that serves the two-stage audit serves that arm.
+#: the canonical DSA top-k: `benchmarks/dsa_topk`'s vLLM plugin on the server's path, switched on, its per-process
+#: counters kept on the node
+TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
+TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
+#: the boundary commitment's object (`verity_vllm.pipeline.boundary_rows.BoundaryWindows.of`): a replay block of one
+#: check a served id with the check template's body in place, a window closed when it drains
+ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
+#: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
+#: rows and salts kept on the node
+TABLES = {"layers": 1, "private": PRIVATE}
 ARMS = {
     "compiled": Arm(None, "stock vLLM, compiled (torch.compile, CUDA graphs)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
@@ -166,7 +207,12 @@ ARMS = {
                     plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
     "boundary-rows": Arm("record", "+ the two-stage boundary commitment at serve: each window's finished requests committed "
                          "by size class (boundary_rows), prefix caching off", ("--no-enable-prefix-caching",),
-                         plugin=("record", "boundary_rows")),
+                         plugin=("record", "boundary_rows"), rows=ROWS),
+    "canonical-topk": Arm("compiled", "+ the canonical DSA top-k (dsa_topk's plugin, VERITY_DSA_TOPK=canonical)",
+                          env=TOPK_ENV, general=TOPK),
+    "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
+                     "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
+                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
 }
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
 BODY_EXTRA: dict = {}
@@ -184,8 +230,14 @@ class Model:
     #: the SLO goodput counts against: (TTFT s, time per output token s)
     slo: tuple[float, float]
     env: dict = field(default_factory=dict)
-    #: the most serving it with our changes may cost over stock, in percent of stock's serving compute (`cost_report`)
+    #: the most serving it with our changes may cost over stock, in percent of stock's serving compute (`cost_report`),
+    #: and what that figure rests on: modelled (derived, not yet stated by its owner) or measured
     target: float | None = None
+    target_basis: str | None = None
+    #: the id its serving cost is recorded under in a run's result.json (`result_of`)
+    metric: str | None = None
+    #: the check template its boundary commitment's replay block is made of, a serving template's descriptor id
+    check: str | None = None
 
     def checkpoint(self) -> Path:
         hub = Path(SHARED.HF_HOME or "/workspace/hf") / "hub"
@@ -203,7 +255,8 @@ MODELS = {
     "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
                        ("--dtype", "bfloat16"), (2.0, 0.08)),
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=4.34),
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=4.34, target_basis="modelled",
+                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}"),
 }
 
 
@@ -238,16 +291,52 @@ def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampli
 
 # --------------------------------------------------------------------------------------------------------- the server
 
-def plugin_site(site: Path, tick: bool) -> Path:
-    """A directory whose .dist-info declares `servetax_plugin.register` and, under the tick, `tick_plugin.register` as vLLM
-    general plugins, in that order: the tick's scheduler wrapper is then outside the step trace's, so the trace sees a
-    request when the gate adds it."""
+def entry_points(arm: Arm) -> list[str]:
+    """The vLLM general plugins an arm's server loads, as entry points, in order: `servetax_plugin.register` for an arm
+    with a change of its, under the tick `tick_plugin.register` after it (the tick's scheduler wrapper is then outside
+    the step trace's, so the trace sees a request when the gate adds it), then the arm's others (`Arm.general`)."""
+    return [*(["verity_serve_tax = servetax_plugin:register"] if arm.plugin or arm.tick else []),
+            *(["verity_tick = verity_vllm.pipeline.tick_plugin:register"] if arm.tick else []),
+            *(entry for entry, _ in arm.general)]
+
+
+def plugin_site(site: Path, arm: Arm) -> Path:
+    """A directory whose .dist-info declares the arm's vLLM general plugins (`entry_points`)."""
     d = site / "verity_serve_tax-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-serve-tax\nVersion: 0.0\n")
-    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_serve_tax = servetax_plugin:register\n" +
-                                        ("verity_tick = verity_vllm.pipeline.tick_plugin:register\n" if tick else ""))
+    (d / "entry_points.txt").write_text("[vllm.general_plugins]\n" + "".join(f"{e}\n" for e in entry_points(arm)))
     return site
+
+
+def check_plugins(env: dict[str, str], arm: Arm) -> None:
+    """Each of the arm's vLLM general plugins loads in the server's interpreter and environment, checked before the
+    server starts: vLLM logs a plugin whose import fails and serves on without it, which would be stock vLLM served
+    under the arm's name."""
+    names = [e.split("=")[0].strip() for e in entry_points(arm)]
+    if not names:
+        return
+    code = ("import sys\nfrom importlib.metadata import entry_points\n"
+            "found = {e.name: e for e in entry_points(group='vllm.general_plugins')}\n"
+            "for name in sys.argv[1:]:\n    found[name].load()\n")
+    p = subprocess.run([sys.executable, "-c", code, *names], env=env, capture_output=True, text=True)
+    if p.returncode:
+        raise SystemExit(f"a vLLM general plugin of this arm ({', '.join(names)}) doesn't load in the server's "
+                         f"environment: {(p.stderr.strip().splitlines() or ['no output'])[-1]}")
+
+
+def keeps_private(arm: Arm) -> bool:
+    """Whether an arm keeps files on the node: its environment or its boundary commitment's object names `PRIVATE`."""
+    return PRIVATE in json.dumps([arm.env, arm.rows])
+
+
+def _private(x: object, private: Path | None) -> object:
+    """``x`` with `PRIVATE` in its strings replaced by the run's private directory."""
+    if isinstance(x, str):
+        return x.replace(PRIVATE, str(private))
+    if isinstance(x, dict):
+        return {k: _private(v, private) for k, v in x.items()}
+    return [_private(v, private) for v in x] if isinstance(x, (list, tuple)) else x
 
 
 def base_args(max_model_len: int | None = None) -> tuple[str, ...]:
@@ -267,21 +356,33 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
-               edges: dict | None = None, boundary_rows: dict | None = None) -> dict[str, str]:
-    """The server's environment: the job's, with the plugin site and this tree on its path only for an arm that loads a
-    plugin, so a stock arm's processes import nothing of ours."""
-    ours = [str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT)] if arm.plugin or arm.tick else []
+               edges: dict | None = None, boundary_rows: dict | None = None, check: str | None = None,
+               private: Path | None = None) -> dict[str, str]:
+    """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
+    plugin site, this tree for a change of `servetax_plugin`'s or the tick, and each other plugin's directory, so a
+    stock arm's processes import nothing of ours; ``VLLM_PLUGINS``, which would let a job's environment drop one of
+    them, is unset. An arm with ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its
+    place, with ``check`` (the model's check template) where it names none, at ``window_s``. `PRIVATE` in the arm's
+    data is ``private``."""
+    ours = [*([str(site)] if entry_points(arm) else []),
+            *([str(HERE), str(ROOT / "integrations/vllm"), str(ROOT)] if arm.plugin or arm.tick else []),
+            *(str(ROOT / path) for _, path in arm.general)]
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([*ours, *SHARED.PYTHONPATH]))
-    env.update(arm.env)
-    if "boundary_rows" in arm.plugin and not (isinstance(boundary_rows, dict) and boundary_rows.get("check")):
-        raise SystemExit("the boundary-rows arm needs --boundary-rows, a JSON object naming its check template "
-                         "(run.sh: BOUNDARY_ROWS)")
+    env.pop("VLLM_PLUGINS", None)
+    if private is None and keeps_private(arm):
+        raise SystemExit("this arm keeps files on the node, outside its run's directory: --private DIR")
+    env.update(_private(arm.env, private))
+    rows = {}
+    if "boundary_rows" in arm.plugin:
+        rows = {"window_s": window_s, **({"check": check} if check else {}), **(boundary_rows or _private(arm.rows, private))}
+        if not rows.get("check"):
+            raise SystemExit("this arm's boundary commitment needs its check template, and the model names none "
+                             "(Model.check): --boundary-rows, a JSON object with check (run.sh: BOUNDARY_ROWS)")
     if arm.plugin:
-        rows = ({"boundary_rows": {"window_s": window_s, **boundary_rows}}
-                if "boundary_rows" in arm.plugin and boundary_rows else {})
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
-                                      **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}), **rows})
+                                      **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
+                                      **({"boundary_rows": rows} if rows else {})})
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
@@ -522,25 +623,51 @@ RESULT = "result.json"
 
 
 @dataclass(frozen=True)
+class Dataset:
+    """A dataset file as the Hub holds it: its repository, the revision it is pinned at, its file there, its size and
+    its SHA-512. A node keeps one copy, in its Hugging Face cache where a checkpoint's snapshot lies too (`path`),
+    outside every run's directory."""
+    repo: str
+    revision: str
+    file: str
+    size: int
+    sha512: str
+
+    def path(self) -> Path:
+        hub = Path(SHARED.HF_HOME or "/workspace/hf") / "hub"
+        return hub / f"datasets--{self.repo.replace('/', '--')}" / "snapshots" / self.revision / self.file
+
+    def url(self) -> str:
+        return f"https://huggingface.co/datasets/{self.repo}/resolve/{self.revision}/{self.file}"
+
+
+@dataclass(frozen=True)
 class Load:
-    """A load of vLLM's own client: its dataset's flags, whether the dataset is a file (``--dataset NAME=FILE``), the
-    prompts a pass sends, the concurrencies it is served at (its rungs: the client holds that many requests in flight
-    and sends the next when one ends) and the bounds of the model's SLO its goodput counts against, by the client's
-    names."""
+    """A load of vLLM's own client: what it is, as the cost's output says it; its dataset's flags; the prompts a pass
+    sends; the concurrencies it is served at (its rungs: the client holds that many requests in flight and sends the
+    next when one ends); the context limit its requests fit, which the engines' is at least; its dataset's file, where
+    it is one; and the bounds of the model's SLO its goodput counts against, by the client's names."""
+    what: str
     dataset: tuple[str, ...]
-    file: bool
     prompts: int
     rungs: tuple[int, ...]
+    context: int
+    file: Dataset | None = None
     slo: tuple[str, ...] = ("ttft", "tpot")
 
 
 #: chat: the load of vLLM's standing serving tests, ShareGPT's first turns, each decoding its recorded answer's length
-#: (the client keeps prompts of at most 1,024 tokens, 2,048 with the output). random: the client's synthetic dataset,
-#: 1,024 random tokens in and 128 out, which needs no file.
+#: (the client keeps prompts of at most 1,024 tokens, 2,048 with the output). long: long context, the client's synthetic
+#: dataset at one long length until a plan of recorded long requests replaces it; its first token takes seconds on any
+#: engine, so its goodput counts the time per output token alone.
 LOADS = {
-    "chat": Load(("--dataset-name", "sharegpt"), True, 200, (4, 8, 12, 16, 24, 32, 48)),
-    "random": Load(("--dataset-name", "random", "--random-input-len", "1024", "--random-output-len", "128"), False, 200,
-                   (4, 8, 12, 16, 24, 32, 48)),
+    "chat": Load("ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset)",
+                 ("--dataset-name", "sharegpt"), 200, (4, 8, 12, 16, 24, 32, 48), 4096,
+                 Dataset("anon8231489123/ShareGPT_Vicuna_unfiltered", "192ab2185289094fc556ec8ce5ce1e8e587154ca",
+                         "ShareGPT_V3_unfiltered_cleaned_split.json", 672837942, "PLACEHOLDER")),
+    "long": Load("8,192 random tokens in and 128 out (vLLM's random dataset at one long length)",
+                 ("--dataset-name", "random", "--random-input-len", "8192", "--random-output-len", "128"), 24,
+                 (1, 2, 4, 8), 16384, slo=("tpot",)),
 }
 
 
@@ -553,17 +680,60 @@ def load_tag(name: str, rep: int, bench: bool) -> str:
     return f"{name}-r{rep}" if bench else f"{name}{rep}"
 
 
-def parse_datasets(given: list[str] | None, loads: dict[str, tuple[int, ...]]) -> dict[str, str]:
-    """``--dataset NAME=FILE``'s files by load: one for each of ``loads`` whose dataset is a file, and for no other."""
+def fetch(ds: Dataset, to: Path, open_url: Callable[[str], object] = urllib.request.urlopen) -> None:
+    """Download ``ds`` to ``to``: streamed to a file beside it, hashed as it is written, and moved into place only
+    where its SHA-512 is the pinned one, so no other file is ever at ``to``."""
+    to.parent.mkdir(parents=True, exist_ok=True)
+    tmp, h = to.with_name(f".{to.name}.{os.getpid()}"), hashlib.sha512()
+    try:
+        with open_url(ds.url()) as r, open(tmp, "wb") as f:
+            for chunk in iter(lambda: r.read(1 << 22), b""):
+                h.update(chunk)
+                f.write(chunk)
+        if h.hexdigest() != ds.sha512:
+            raise SystemExit(f"{ds.url()} is not the pinned file: its SHA-512 is {h.hexdigest()[:16]}..., not "
+                             f"{ds.sha512[:16]}... (nothing kept)")
+        tmp.replace(to)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def parse_datasets(given: list[str] | None, loads: dict[str, tuple[int, ...]], fetch_missing: bool = False,
+                   open_url: Callable[[str], object] = urllib.request.urlopen) -> dict[str, str]:
+    """Each of ``loads``' dataset files, for the loads that read one, checked: the node's copy of the pinned file
+    (`Dataset.path`), which ``fetch_missing`` downloads where there is none, or ``--dataset NAME=FILE``'s copy of it.
+    A file whose SHA-512 is not the pinned one is refused, so every arm and run reads the same bytes."""
     files = dict(x.split("=", 1) if "=" in x else (x, "") for x in given or ())
-    for name in loads:
-        if LOADS[name].file and not Path(files.get(name, "")).is_file():
-            raise SystemExit(f"load {name} reads its dataset from a file: --dataset {name}=FILE"
-                             + (f" ({files[name]!r} is not a file)" if files.get(name) else ""))
-    extra = sorted(n for n in files if n not in loads or not LOADS[n].file)
+    extra = sorted(n for n in files if n not in loads or LOADS[n].file is None)
     if extra:
         raise SystemExit(f"--dataset: {', '.join(extra)}: not a load of --loads that reads a file")
-    return files
+    out = {}
+    for name in loads:
+        ds = LOADS[name].file
+        if ds is None:
+            continue
+        f = Path(files.get(name) or ds.path())
+        if not f.is_file() and fetch_missing and name not in files:
+            print(f"[serve-tax] load {name}: downloading {ds.url()} to {f}", file=sys.stderr, flush=True)
+            fetch(ds, f, open_url)
+        if not f.is_file():
+            raise SystemExit(f"load {name}: no dataset file at {f}: `serve_tax.py passes --loads {name} --fetch` downloads "
+                             f"{ds.repo}'s {ds.file} at {ds.revision[:12]} there, or --dataset {name}=FILE names a copy")
+        if (got := file_digest(f, "sha512")) != ds.sha512:
+            raise SystemExit(f"load {name}: {f} is not the pinned dataset file ({ds.repo}'s {ds.file} at "
+                             f"{ds.revision[:12]}): its SHA-512 is {got[:16]}..., not {ds.sha512[:16]}...")
+        out[name] = str(f)
+    return out
+
+
+def context_of(loads: dict[str, tuple[int, ...]], given: int | None) -> int | None:
+    """The engines' context limit for vLLM's client's ``loads``: ``given`` (``--max-model-len``), refused where a
+    load's requests don't fit it; where none is given, `BASE_ARGS`'s (None), or the largest a load needs past it."""
+    name = max(loads, key=lambda n: LOADS[n].context)
+    need = LOADS[name].context
+    if given is not None and given < need:
+        raise SystemExit(f"--max-model-len {given}: load {name}'s requests need a context of {need} (run.sh: MAX_MODEL_LEN)")
+    return given if given is not None or need <= int(BASE_ARGS[BASE_ARGS.index("--max-model-len") + 1]) else need
 
 
 def parse_loads(text: str) -> dict[str, tuple[int, ...]]:
@@ -649,15 +819,23 @@ def bench_metrics(r: dict) -> dict:
 
 def await_commits(d: Path, n: int, wait_s: float, clock: Callable[[], float] = time.monotonic,
                   sleep: Callable[[float], None] = time.sleep) -> dict:
-    """Hold the server until the boundary-rows arm's sink lines in ``d`` (``boundary.PID.jsonl``, one a class, committed or
-    failed) account for ``n`` spans, the requests its loads finished, or ``wait_s`` passes: each window commits on a thread
-    of the engine core's own, and the server's stop leaves the engine core seconds."""
+    """Hold the server until the boundary commitment's sink lines in ``d`` (``boundary.PID.jsonl``, one a class, committed
+    or failed) account for ``n`` spans, the requests its loads finished, or ``wait_s`` passes: each window commits on a
+    thread of the engine core's own, and the server's stop leaves the engine core seconds. ``failed`` counts the spans
+    of the classes whose commit failed, and ``tables`` those of the classes committed with their history tables, as
+    their lines say: what the commitment did, not what the arm asked of it."""
     t0 = clock()
+
+    def spans(lines: list[dict]) -> int:
+        return sum(int(x.get("spans", 0)) for x in lines)
+
     while True:
-        got = sum(int(json.loads(x).get("spans", 0)) for f in sorted(d.glob("boundary.*.jsonl"))
-                  for x in f.read_text().splitlines() if x.strip())
+        lines = [json.loads(x) for f in sorted(d.glob("boundary.*.jsonl")) for x in f.read_text().splitlines() if x.strip()]
+        got = spans(lines)
         if got >= n or clock() - t0 >= wait_s:
-            return {"spans": got, "finished": n, "waited_s": round(clock() - t0, 1), "complete": got >= n}
+            bad = [x for x in lines if x.get("error")]
+            return {"spans": got, "finished": n, "waited_s": round(clock() - t0, 1), "complete": got >= n,
+                    "failed": spans(bad), "tables": spans([x for x in lines if x.get("tables") and not x.get("error")])}
         sleep(1.0)
 
 
@@ -687,10 +865,8 @@ def source_commit() -> str | None:
     return p.stdout.strip() if p.returncode == 0 else None
 
 
-def file_sha256(p: Path) -> str:
-    import hashlib
-
-    h = hashlib.sha256()
+def file_digest(p: Path, algorithm: str = "sha256") -> str:
+    h = hashlib.new(algorithm)
     with open(p, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 24), b""):
             h.update(chunk)
@@ -727,6 +903,28 @@ def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, 
 
 
 def run(a: argparse.Namespace) -> int:
+    """Serve one arm (`serve`), what it keeps on the node in ``--private``: where none is given and the arm keeps
+    something (`keeps_private`), a fresh directory outside the run's, removed when the arm stops."""
+    out, held = Path(a.out).resolve(), SHARED.RESEARCH_RUN_DIR
+
+    def outside(private: Path) -> Path:
+        for public in (out, *([Path(held).resolve()] if held else [])):
+            if private.is_relative_to(public):
+                raise SystemExit(f"the private directory {private} is inside {public}, which leaves the node: --private "
+                                 "DIR, outside every run's directory")
+        return private
+
+    if a.private:
+        private = outside(Path(a.private).resolve())
+        private.mkdir(mode=0o700, parents=True, exist_ok=True)
+        return serve(a, private)
+    if not keeps_private(ARMS[a.arm]):
+        return serve(a, None)
+    with tempfile.TemporaryDirectory(prefix="serve-tax-private.") as d:
+        return serve(a, outside(Path(d).resolve()))
+
+
+def serve(a: argparse.Namespace, private: Path | None) -> int:
     termed: list[int] = []
 
     def on_term(s: int, _frame: object) -> None:
@@ -748,12 +946,13 @@ def run(a: argparse.Namespace) -> int:
             raise SystemExit(f"--client {BENCH} serves --loads NAME[=RUNG+RUNG...],... ({', '.join(sorted(LOADS))})")
         loads = parse_loads(a.loads)
         datasets = parse_datasets(a.dataset, loads)
+        context = context_of(loads, a.max_model_len)
         passes = {pass_name(n, c): (n, c) for n, rungs in loads.items() for c in rungs}
         rates, plan = {}, []
     else:
         if not a.rates or not a.c4:
             raise SystemExit(f"--client {CORPUS} serves --rates NAME=REQ_PER_S,... of the --c4 shard's plan")
-        passes = {}
+        passes, context = {}, a.max_model_len
         rates = parse_rates(a.rates)
         t = time.monotonic()
         plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
@@ -762,31 +961,39 @@ def run(a: argparse.Namespace) -> int:
     tick = tick_args(a.tick_from, a.tick_ms) if arm.tick else None
     srv = out / "server"
     srv.mkdir(exist_ok=True)
-    site = plugin_site(out / ".site", arm.tick)
+    site = plugin_site(out / ".site", arm)
     port = corpus().free_port()
-    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, a.max_model_len)
+    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context)
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
+    try:
+        env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private)
+        check_plugins(env, arm)
+    except SystemExit:
+        shutil.rmtree(out / ".site", ignore_errors=True)
+        raise
     lib, no_nvml = nvml()
     if no_nvml:
         print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "general": entry_points(arm),
+            "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
+                              if "boundary_rows" in arm.plugin else None),
             "client": a.client, "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()},
-            "datasets": {n: {"file": f, "sha256": file_sha256(Path(f))} for n, f in (datasets if bench else {}).items()},
+            "datasets": {n: {"file": f, "sha512": LOADS[n].file.sha512, "repo": LOADS[n].file.repo,
+                             "revision": LOADS[n].file.revision} for n, f in (datasets if bench else {}).items()},
             "commit": source_commit(),
-            "plan_sha256": file_sha256(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
+            "plan_sha256": file_digest(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT,
-                                  env=server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows),
-                                  start_new_session=True)
+        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
     rc = 0
     try:
         wait_ready(server, port, a.startup_s)
@@ -1069,7 +1276,8 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
             "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
-            "edges": edge_summary(edges)}
+            "edges": edge_summary(edges), "boundary_rows": meta.get("boundary_rows"),
+            "boundary_commits": meta.get("boundary_commits")}
 
 
 def summary(xs: list[float]) -> dict:
@@ -1131,12 +1339,12 @@ def tax(ref: dict, arm: dict) -> dict | None:
 
 # ---------------------------------------------------------------------------------------------------- the serving cost
 
-#: the arm the serving cost is of (the served engine with every change that has an arm) and the arm it is over
-OURS, REFERENCE = "boundary-rows", "compiled"
+#: the arm the serving cost is of (the two-stage serve's launch line) and the arm it is over
+OURS, REFERENCE = "two-stage", "compiled"
 UNIT = "percent of stock's serving compute"
-#: what a served engine of ours changes that no arm here turns on, so no cost here counts it
+#: what a served engine of ours can change that the two-stage serve leaves off and no arm here turns on, so no cost
+#: here counts it
 NO_ARM = (
-    "the canonical DSA top-k (VERITY_DSA_TOPK=canonical)",
     "the engine class's served limits (engine_classes.CLASS_G_SERVED)",
     "the sparse attention kernel at one split (VERITY_SPARSE_MLA_NUM_SPLITS=1)",
     "the fixed expert alignment on the Marlin MoE path (verity_moe_align)",
@@ -1166,13 +1374,28 @@ def best_pass(arm: dict, load: str) -> tuple[int, list[dict]] | None:
     return c, rungs[c]
 
 
+def kit() -> tuple:
+    """The benchmark kit's door (`verity_bench`, benchmarks/harness): its paired ratio with the interval over its reps
+    (`overhead.paired`), and its writer of a run's result.json (`overhead_node.write_result`). Loaded where a cost is
+    computed: an arm's server and client import none of it."""
+    harness = str(ROOT / "benchmarks/harness")
+    if harness not in sys.path:
+        sys.path.insert(0, harness)
+    from verity_bench import overhead, overhead_node
+
+    return overhead, overhead_node
+
+
 def serving_cost(ref: dict, arm: dict, load: str) -> dict | None:
-    """What ``arm`` costs over ``ref`` at ``load``, a fraction: ref's best goodput over arm's, less one, each side's the
-    mean of its best pass (`best_pass`) over the reps both have: how much more serving compute the arm needs for the
-    same traffic within the SLO. Its 95% interval is the value give or take t·s/√n, s the spread over those n reps of
-    ref's goodput over arm's in the same rep; none with one rep, or where a rep of arm's met the SLO for no request.
-    Where either side's best goodput is zero the cost has no finite value (``value`` None), and ``throughput``, the same
-    ratio of output tokens a second, is what is left to read. None where a side served no pass of the load."""
+    """What ``arm`` costs over ``ref`` at ``load``, a fraction: how much more serving compute the arm needs for the same
+    traffic within the SLO. Each side is read at its best pass (`best_pass`), over the reps both have, and a rep's
+    serving compute a request within the SLO is the reciprocal of its goodput. The cost is the kit's paired ratio of
+    the two, rep by rep (`kit`): the median over reps of ref's goodput over arm's in the same rep, less one, with the
+    kit's 95% interval, the order statistics of those ratios that bound their median, which fewer than six reps can't
+    give. Where a rep of either side met the SLO for no request the reps don't pair: the value is the ratio of the
+    sides' mean goodputs, with no interval. Where either side's mean goodput is zero the cost has no finite value
+    (``value`` None), and ``throughput``, the ratio of the sides' output tokens a second, is what is left to read.
+    None where a side served no pass of the load."""
     a, b = best_pass(ref, load), best_pass(arm, load)
     if a is None or b is None:
         return None
@@ -1192,18 +1415,19 @@ def serving_cost(ref: dict, arm: dict, load: str) -> dict | None:
            "throughput": sa["output_tok_per_s"] / sb["output_tok_per_s"] - 1 if sb["output_tok_per_s"] else None}
     if sa["goodput_req_per_s"] > 0 and sb["goodput_req_per_s"] > 0:
         out["value"] = sa["goodput_req_per_s"] / sb["goodput_req_per_s"] - 1
-        if len(reps) >= 2 and all(gb):
-            s = statistics.stdev(x / y for x, y in zip(ga, gb))
-            half = T95[max(k for k in T95 if k <= len(reps) - 1)] * s / math.sqrt(len(reps))
-            out["ci95"] = [out["value"] - half, out["value"] + half]
+        if all(ga) and all(gb):
+            p = kit()[0].paired([1 / y for y in gb], [1 / x for x in ga])
+            out["value"] = p["gamma"]
+            if p["ci95"]:
+                out["ci95"] = p["ci95"]
     return out
 
 
 def verdict(cost: dict, target: float | None, floor: float = 0.0) -> str | None:
     """Whether a cost (`serving_cost`) is within ``target``, a fraction: ``meets`` where its whole interval, widened by
     ``floor`` (the noise floor) at each end, is at or under the target; ``misses`` where all of it is over, or where
-    the arm met the SLO for no request and the reference for some; else ``cannot tell`` (one rep has no interval). None
-    with no target."""
+    the arm met the SLO for no request and the reference for some; else ``cannot tell`` (fewer than six reps have no
+    interval). None with no target."""
     if target is None:
         return None
     if cost["value"] is None:
@@ -1228,29 +1452,80 @@ def _cost(c: dict | None) -> dict:
     return {"value": _pct(c["value"]) if c else None, "ci95": [_pct(x) for x in c["ci95"]] if c and "ci95" in c else None}
 
 
+def commitment(arm: dict) -> dict | None:
+    """What an arm's boundary commitment did, from its record (`await_commits`): the requests its loads finished, the
+    spans committed, those whose commit failed and those committed with their history tables, beside whether the
+    arm's object asked for tables and the window it committed at. None for an arm with no boundary commitment."""
+    b = arm.get("boundary_commits")
+    if not b:
+        return None
+    failed, rows = b.get("failed", 0), arm.get("boundary_rows") or {}
+    return {"finished": b["finished"], "committed": b["spans"] - failed, "failed": failed, "tables": b.get("tables", 0),
+            "tables_asked": bool(rows.get("tables")), "window_s": rows.get("window_s")}
+
+
+def joined(arms: list[dict]) -> dict[str, dict]:
+    """Arms' metrics by arm, the directories of one arm joined: an arm that two jobs served, each a load of its own,
+    has both loads' passes, each load with its own job's commit and run (``of``), and its boundary commitment's counts
+    are the two jobs' sums. Two directories of one arm that served the same load, where a rung's reps would be of two
+    server lifetimes, or that differ in the model, the SLO or vLLM, are refused."""
+    by: dict[str, dict] = {}
+    for a in arms:
+        of = {n: {"commit": a.get("commit"), "run": a.get("run_id")} for n in bench_loads(a)}
+        b = by.get(a["arm"])
+        if b is None:
+            by[a["arm"]] = {**a, "loads": dict(a["loads"]), "of": of}
+            continue
+        twice = sorted(set(of) & set(b["of"])) or sorted(set(a["loads"]) & set(b["loads"]))
+        differ = [k for k in ("model_id", "slo", "vllm") if a.get(k) != b.get(k)]
+        if twice or differ:
+            raise SystemExit(f"cost: two directories of arm {a['arm']} "
+                             + (f"both served {', '.join(twice)}" if twice else f"differ in {', '.join(differ)}")
+                             + ": give one of them")
+        b["loads"] |= a["loads"]
+        b["of"] |= of
+        x, y = b.get("boundary_commits"), a.get("boundary_commits")
+        if x and y:
+            b["boundary_commits"] = {k: x.get(k, 0) + y.get(k, 0) for k in ("spans", "finished", "failed", "tables")}
+        b["boundary_commits"] = b.get("boundary_commits") or y
+        b["boundary_rows"] = b.get("boundary_rows") or a.get("boundary_rows")
+    return by
+
+
 def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, target: float | None = None) -> dict:
-    """The serving cost of ``arm`` over ``reference`` from arms' metrics (`arm_metrics`), every figure in percent: one
-    cost a load both served by vLLM's client (`serving_cost`), the largest the number (a load with no finite cost is
-    the largest); its verdict against ``target`` (the model's, where none is given), the interval widened by the noise
-    floor, which is the size of the cost at that load of another arm that starts the reference's engine (`same_engine`:
-    two server lifetimes of one engine); and every other arm's cost at that load, over the reference and over the
-    nearest arm above it that ran (its parent, its parent's parent...), which for the arms from ``arm`` up to the
-    reference is its step of the whole, with its share of it."""
-    by = {a["arm"]: a for a in arms}
+    """The serving cost of ``arm`` over ``reference`` from arms' metrics (`arm_metrics`, one arm's directories joined:
+    `joined`), every figure in percent: one cost a load both served by vLLM's client (`serving_cost`), the largest the
+    number (a load with no finite cost is the largest). Each load's verdict is against ``target`` (the model's, where
+    none is given), its interval widened by the load's noise floor, which is the size of the cost there of another arm
+    that starts the reference's engine (`same_engine`: two server lifetimes of one engine). The number's verdict
+    follows from them, since it is the largest: it misses where a load misses, meets where every load of `LOADS` has
+    run and meets, and else cannot be told (``not_run`` names the loads that have not run). Beside them: what the
+    arm's boundary commitment did (`commitment`), and every other arm's cost at the number's load, over the reference
+    and over the nearest arm above it that ran (its parent, its parent's parent...), which for the arms from ``arm`` up
+    to the reference is its step of the whole, with its share of it. ``commit`` and ``run`` are those of the job that
+    served the number's load."""
+    by = joined(arms)
     for name in (reference, arm):
         if name not in by:
             raise SystemExit(f"cost: no directory of arm {name} (given: {', '.join(by) or 'none'})")
     ref, ours = by[reference], by[arm]
-    per = [c for c in (serving_cost(ref, ours, n) for n in bench_loads(ref)) if c]
+    per = [c for c in (serving_cost(ref, ours, n) for n in LOADS if n in bench_loads(ref)) if c]
     if not per:
-        raise SystemExit(f"cost: {reference} and {arm} share no load sent by vLLM's client: serve both with "
-                         f"--client {BENCH} and the same --loads")
+        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join(LOADS)}) sent by vLLM's client: serve "
+                         f"both with --client {BENCH} and the same --loads")
+    model = MODELS[ours["model_id"]]
+    target, basis = (model.target, model.target_basis) if target is None else (target, "given")
+    twin = next((x for x in by.values() if x["arm"] != reference and same_engine(x["arm"], reference)), None)
+    for c in per:
+        c["noise"] = serving_cost(ref, twin, c["load"]) if twin else None
+        floor = abs(c["noise"]["value"]) if c["noise"] and c["noise"]["value"] is not None else 0.0
+        c["verdict"] = verdict(c, None if target is None else target / 100, floor)
     worst = max(per, key=lambda c: math.inf if c["value"] is None else c["value"])
-    load, model = worst["load"], MODELS[ours["model_id"]]
-    target = model.target if target is None else target
-    noise = next((c for x in arms if x["arm"] != reference and same_engine(x["arm"], reference)
-                  for c in [serving_cost(ref, x, load)] if c), None)
-    floor = abs(noise["value"]) if noise and noise["value"] is not None else 0.0
+    load, noise = worst["load"], worst["noise"]
+    not_run = [n for n in LOADS if n not in {c["load"] for c in per}]
+    verdicts = {c["verdict"] for c in per}
+    overall = (None if target is None else "misses" if "misses" in verdicts else
+               "meets" if verdicts == {"meets"} and not not_run else "cannot tell")
 
     def above(name: str) -> str:
         p = ARMS[name].parent if name in ARMS else None
@@ -1264,7 +1539,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         x = above(x)
     rows = []
     for name in by:
-        if name == reference or (noise and name == noise["arm"]["arm"]):
+        if name == reference or (twin and name == twin["arm"]):
             continue
         over = above(name)
         step = serving_cost(by[over], by[name], load)
@@ -1274,16 +1549,28 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         rows.append({"arm": name, **_cost(serving_cost(ref, by[name], load)), "over": over, "step": _cost(step),
                      "share": share})
     slo = {"ttft": ours["slo"]["ttft_s"], "tpot": ours["slo"]["tpot_s"]}
-    return {"value": _pct(worst["value"]), "unit": UNIT, "commit": ours.get("commit"),
-            "run": ours.get("run_id"), "metric": "serving_cost", "better": "lower", "target": target,
-            "ci95": _cost(worst)["ci95"], "verdict": verdict(worst, None if target is None else target / 100, floor),
-            "model": model.served, "arm": arm, "reference": reference, "load": load, "vllm": ours.get("vllm"),
-            "reference_commit": ref.get("commit"), "reference_run": ref.get("run_id"),
-            "latency_target_ms": {k: round(slo[k] * 1e3) for k in LOADS[load].slo if k in slo},
+
+    def bounds(name: str) -> dict:
+        return {k: round(slo[k] * 1e3) for k in LOADS[name].slo if k in slo}
+
+    def job(name: str) -> dict:
+        (a, b) = (ours["of"][name], ref["of"][name])
+        return {"commit": a["commit"], "run": a["run"], "reference_commit": b["commit"], "reference_run": b["run"]}
+
+    at = job(load)
+    return {"value": _pct(worst["value"]), "unit": UNIT, "commit": at["commit"],
+            "run": at["run"], "metric": "serving_cost", "id": model.metric, "better": "lower", "target": target,
+            "target_basis": basis if target is not None else None, "ci95": _cost(worst)["ci95"], "verdict": overall,
+            "model": model.served, "arm": arm, "reference": reference, "load": load, "not_run": not_run,
+            "vllm": ours.get("vllm"), "reference_commit": at["reference_commit"], "reference_run": at["reference_run"],
+            "latency_target_ms": bounds(load),
             "noise_floor": {"arm": noise["arm"]["arm"], **_cost(noise)} if noise else None,
-            "loads": [{"load": c["load"], **_cost(c), "throughput": _pct(c["throughput"]), "reps": c["reps"],
-                       "reference": c["reference"], "arm": c["arm"]} for c in per],
-            "arms": rows, "no_arm": list(NO_ARM)}
+            "loads": [{"load": c["load"], "what": LOADS[c["load"]].what, **_cost(c), "verdict": c["verdict"],
+                       "latency_target_ms": bounds(c["load"]),
+                       "noise_floor": _cost(c["noise"])["value"] if c["noise"] else None,
+                       "throughput": _pct(c["throughput"]), "reps": c["reps"],
+                       "reference": c["reference"], "arm": c["arm"], **job(c["load"])} for c in per],
+            "commitment": commitment(ours), "arms": rows, "no_arm": list(NO_ARM)}
 
 
 def _c(c: dict | None) -> str:
@@ -1293,8 +1580,8 @@ def _c(c: dict | None) -> str:
 
 
 def cost_text(r: dict) -> str:
-    """`cost_report` as text: the number's line first, then each load's cost, the noise floor, every other arm, and
-    the changes no arm turns on."""
+    """`cost_report` as text: the number's line first, naming its load where another has not run, then each load's
+    cost, the noise floor, what the arm's boundary commitment did, every other arm, and the changes no arm turns on."""
     by = {c["load"]: c for c in r["loads"]}
     w = by[r["load"]]
     if r["value"] is None:
@@ -1302,34 +1589,88 @@ def cost_text(r: dict) -> str:
              f"its best rung, {r['reference']} for {w['reference']['met']} of {w['reference']['sent']}")
     else:
         n = _c(r)
-    target = "no target" if r["target"] is None else f"target ≤ {r['target']:.2f}%   verdict: {r['verdict']}"
-    bounds = ", ".join(f"{k.upper()} ≤ {v} ms" for k, v in r["latency_target_ms"].items())
-    lines = [f"serving cost, {r['model']}, {r['arm']} over {r['reference']}: {n}   {target}",
+    target = ("no target" if r["target"] is None else f"target ≤ {r['target']:.2f}%"
+              + (f" ({r['target_basis']})" if r["target_basis"] else "") + f"   verdict: {r['verdict']}")
+    alone = f", load {r['load']} alone" if r["not_run"] and len(r["loads"]) == 1 else ""
+    rule = f"the largest of the costs of its loads ({', '.join(LOADS)})"
+    lines = [f"serving cost, {r['model']}, {r['arm']} over {r['reference']}{alone}: {n}   {target}",
+             (f"  not the number yet: it is {rule}, and load {' and load '.join(r['not_run'])} "
+              f"{'has' if len(r['not_run']) == 1 else 'have'} not run" if r["not_run"] else
+              f"  {rule}, load {r['load']}'s"),
              f"  in {r['unit']}, lower is better: how much more serving compute {r['arm']} needs than {r['reference']} "
-             f"for the same traffic within the latency target ({bounds}); the largest of its loads' costs, at load "
-             f"{r['load']}"]
+             "for the same traffic within each load's latency target"]
     for c in r["loads"]:
         a, b = c["reference"], c["arm"]
         tok = "—" if c["throughput"] is None else f"{c['throughput']:.2f}%"
-        lines.append(f"  load {c['load']}: {_c(c)} over {c['reps']} rep{'s' if c['reps'] != 1 else ''}; best goodput "
+        bounds = ", ".join(f"{k.upper()} ≤ {v} ms" for k, v in c["latency_target_ms"].items())
+        lines.append(f"  load {c['load']}, {c['what']}, {bounds}: {_c(c)} over {c['reps']} rep{'s' if c['reps'] != 1 else ''}"
+                     + (f", {c['verdict']}" if c["verdict"] else "") + "; best goodput "
                      f"{a['goodput_req_per_s']:.4g} req/s at concurrency {a['concurrency']} ({a['arm']}), "
                      f"{b['goodput_req_per_s']:.4g} req/s at concurrency {b['concurrency']} ({b['arm']}); "
                      f"the same ratio of output tokens a second: {tok}")
     f = r["noise_floor"]
     lines.append(f"  noise floor ({f['arm']} over {r['reference']}, two server lifetimes of one engine, load {r['load']}): "
                  f"{_c(f)}" if f else
-                 f"  noise floor: not measured (no second arm of {r['reference']}'s engine): the verdict reads the "
-                 "interval over reps alone, which no difference between two server starts enters")
+                 f"  noise floor: not measured at load {r['load']} (no second arm of {r['reference']}'s engine served "
+                 "it): its verdict reads the interval over reps alone, which no difference between two server starts "
+                 "enters")
+    k = r["commitment"]
+    if k:
+        tables = (f"{k['tables']:,} of them with their history tables" if k["tables"] else
+                  "none with history tables" + (": the arm asks for them and this tree's boundary commitment builds "
+                                                "none, so this cost is without them"
+                                                if k["tables_asked"] and k["committed"] and not k["failed"] else ""))
+        every = f", a window every {k['window_s']:g} s" if k["window_s"] else ""
+        lines.append(f"  {r['arm']}'s boundary commitment{every}: {k['committed']:,} of {k['finished']:,} finished "
+                     f"requests committed, {k['failed']:,} failed, {tables}")
     if r["arms"]:
         lines += ["", f"| arm | cost over {r['reference']} | over | cost over that arm | share of the cost |",
                   "|---|---:|---|---:|---:|"]
         lines += [f"| {x['arm']} | {_c(x)} | {x['over']} | {_c(x['step'])} | "
                   f"{'—' if x['share'] is None else format(x['share'], '.0%')} |" for x in r["arms"]]
+    def job(c: dict) -> str:
+        return (f"commit {c['commit']}, run {c['run']}"
+                + ("" if (c["reference_commit"], c["reference_run"]) == (c["commit"], c["run"]) else
+                   f"; {r['reference']}: commit {c['reference_commit']}, run {c['reference_run']}"))
+
+    jobs = list(dict.fromkeys(job(c) for c in r["loads"]))
     lines += ["", "changes with no arm, which no cost here counts: " + "; ".join(r["no_arm"]) + ".",
-              f"commit {r['commit']}, run {r['run']}, vLLM {r['vllm']}"
-              + ("" if (r["reference_commit"], r["reference_run"]) == (r["commit"], r["run"]) else
-                 f"; {r['reference']}: commit {r['reference_commit']}, run {r['reference_run']}")]
+              *([f"{jobs[0]}, vLLM {r['vllm']}"] if len(jobs) == 1 else
+                [*(f"load {c['load']}: {job(c)}" for c in r["loads"]), f"vLLM {r['vllm']}"])]
     return "\n".join(lines) + "\n"
+
+
+def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
+    """A cost report (`cost_report`) as a run's result.json holds it (`write_result`): whether it stands as a
+    measurement (each load that ran has a finite cost, and the arm's boundary commitment committed every finished
+    request), its first line, what ran, and its measurements. Each load's cost is a measurement under the load's name.
+    The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
+    its target, what the target rests on, its verdict and each load's cost beside it; it names the loads as its
+    inputs. Where a load has not run there is no such entry: one load's cost is not the number."""
+    k = r["commitment"]
+    ok = all(c["value"] is not None for c in r["loads"]) and not (k and (k["failed"] or k["committed"] < k["finished"]))
+    about = {"unit": r["unit"], "target": r["target"], "target_basis": r["target_basis"], "better": r["better"]}
+
+    def entry(name: str, c: dict, **more: object) -> dict:
+        return {"name": name, "value": c["value"], **about, "commit": c["commit"], "run": c["run"], "ci95": c["ci95"],
+                "verdict": c["verdict"], **more}
+
+    out = [entry(c["load"], c, what=c["what"], reps=c["reps"]) for c in r["loads"]]
+    if r["id"] and not r["not_run"]:
+        beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "commit", "run")} for c in r["loads"]]
+        out.append(entry(r["id"], r, load=r["load"], loads=beside, inputs=[c["load"] for c in r["loads"]]))
+    what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
+            "loads": [c["load"] for c in r["loads"]], "vllm": r["vllm"]}
+    return ok, cost_text(r).splitlines()[0], what, out
+
+
+def write_result(r: dict, out: Path) -> None:
+    """The run's result.json (`result_of`), written by the kit's writer beside the report in ``out``."""
+    run_dir, run_id = SHARED.RESEARCH_RUN_DIR, SHARED.RESEARCH_RUN_ID
+    if not run_dir or not run_id:
+        raise SystemExit("cost --result writes the run's result.json: run it under research run")
+    ok, detail, what, measurements = result_of(r)
+    kit()[1].write_result(Path(run_dir), run_id, out, "serving_cost.json", ok, detail, what, measurements)
 
 
 def _f(s: dict, scale: float = 1.0, digits: int = 4) -> str:
@@ -1444,7 +1785,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
-                   help="the boundary-rows arm's object: check, per_prompt, per_output, drained, inline")
+                   help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
+                        "drained, inline, tables")
+    r.add_argument("--private", metavar="DIR",
+                   help="where the arm keeps what never leaves the node (history tables' rows and salts, the top-k's "
+                        "counters), outside every run's directory (default: a fresh directory, removed when it stops)")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)
@@ -1474,10 +1819,18 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--slo-tpot-s", type=float)
         if name == "table":
             p.add_argument("--out", type=Path)
-    ps = sub.add_parser("passes", help="the passes vLLM's client serves for --loads, their dataset files checked, "
-                                       "before any GPU is held")
+    ps = sub.add_parser("passes", help="the passes vLLM's client serves for --loads, their dataset files and the arms "
+                                       "checked, before any GPU is held")
     ps.add_argument("--loads", required=True)
     ps.add_argument("--dataset", action="append")
+    ps.add_argument("--fetch", action="store_true", help="download a pinned dataset file the node's cache doesn't hold")
+    ps.add_argument("--arms", default="", help="the arms that will serve them, each checked against --model-id")
+    ps.add_argument("--model-id", choices=sorted(MODELS))
+    ps.add_argument("--boundary-rows", type=json.loads, metavar="JSON")
+    ps.add_argument("--max-model-len", type=int)
+    ds = sub.add_parser("dataset", help="a load's pinned dataset file on this node, its SHA-512 checked: its path")
+    ds.add_argument("load", choices=sorted(n for n, x in LOADS.items() if x.file))
+    ds.add_argument("--fetch", action="store_true", help="download it where the node's cache doesn't hold it")
     co = sub.add_parser("cost", help="the serving cost of --arm over --reference from arms served by vLLM's client")
     co.add_argument("dirs", nargs="+", type=Path)
     co.add_argument("--arm", default=OURS)
@@ -1485,6 +1838,9 @@ def main(argv: list[str] | None = None) -> int:
     co.add_argument("--target", type=float, metavar="PERCENT", help="the most it may cost (default: the model's)")
     co.add_argument("--json", action="store_true", help="print the JSON object alone")
     co.add_argument("--out", type=Path, help="write serving_cost.json and serving_cost.txt there")
+    co.add_argument("--result", action="store_true",
+                    help="with --out, under research run: write the run's result.json too, the number as a measurement "
+                         "under the model's metric id")
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
@@ -1526,21 +1882,41 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "tick":
         print(json.dumps(tick_args(a.source, None, a.load)))
         return 0
+    if a.cmd == "dataset":
+        print(parse_datasets(None, {a.load: ()}, a.fetch)[a.load])
+        return 0
     if a.cmd == "passes":
         loads = parse_loads(a.loads)
-        files = parse_datasets(a.dataset, loads)
+        for name in a.arms.split():
+            arm = ARMS.get(name)
+            if arm is None:
+                raise SystemExit(f"--arms: {name!r} is not an arm ({', '.join(ARMS)})")
+            if arm.tick or arm.sampling != "greedy" or arm.logprobs:
+                raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's")
+            if ("boundary_rows" in arm.plugin and not (a.boundary_rows or {}).get("check")
+                    and not (a.model_id and MODELS[a.model_id].check)):
+                raise SystemExit(f"--arms: {name}'s boundary commitment needs a check template, and "
+                                 f"{a.model_id or 'no model'} names none (Model.check): BOUNDARY_ROWS, a JSON object "
+                                 "with check")
+        context_of(loads, a.max_model_len)
+        files = parse_datasets(a.dataset, loads, a.fetch)
         for n, rungs in loads.items():
-            print(f"[serve-tax] load {n}: {LOADS[n].prompts} prompts a pass at concurrency "
-                  f"{', '.join(map(str, rungs))}" + (f", from {files[n]}" if n in files else ""))
+            print(f"[serve-tax] load {n}: {LOADS[n].what}; {LOADS[n].prompts} prompts a pass at concurrency "
+                  f"{', '.join(map(str, rungs))}" + (f", from {files[n]} (SHA-512 {LOADS[n].file.sha512[:16]}...)"
+                                                     if n in files else ""))
         return 0
     slo = (a.slo_ttft_s, a.slo_tpot_s) if a.cmd != "cost" and a.slo_ttft_s and a.slo_tpot_s else None
     arms = [json.loads(d.read_text()) if d.is_file() else arm_metrics(d, slo) for d in a.dirs]
     if a.cmd == "cost":
         rep = cost_report(arms, a.arm, a.reference, a.target)
+        if a.result and not a.out:
+            raise SystemExit("cost --result: with --out DIR, where the report it cites is written")
         if a.out:
             a.out.mkdir(parents=True, exist_ok=True)
             (a.out / "serving_cost.json").write_text(json.dumps(rep, indent=1))
             (a.out / "serving_cost.txt").write_text(cost_text(rep))
+        if a.result:
+            write_result(rep, a.out)
         print(json.dumps(rep) if a.json else cost_text(rep), end="\n" if a.json else "")
         return 0
     if a.cmd == "metrics":
