@@ -6,6 +6,21 @@ plain stack, the same engine over the same kernels' plain forms. `bench_arm.py` 
 `verity-bench vllm` driver (`benchmarks/harness/README.md`); `benchmarks/harness/setup/vllm_encoded.sh` builds their GPU
 libraries from the dispatched commit.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `uv run tools/verity/check/suites.py benchmarks/vllm_encoded` | The suite. On the CPU it checks the arms, the layouts against the word codecs' references, the KV-append capture's references and the step spans' accounting. It writes no result. |
+| `verity-bench vllm` with an arm of `bench_arm.py` (Arms, below) | The encoded stack and the plain stack as arms of the shared driver, which runs each and writes its record (`benchmarks/harness/README.md`). |
+| `bash benchmarks/vllm_encoded/stack.sh`, with `MODE` one of `paged`, `splits`, `window`, `rekey` and `serve` | The encoded stack on one GPU: `paged.cu` built at the stack's codec, then `MODE`'s job (`paged_gate.py`, `paged_splits.py`, `window_gate.py`, `rekey_gate.py`, or `serve.py`'s arms). It writes to `$RESEARCH_RUN_DIR/out`. |
+
+Read from outside `benchmarks/`: `paged.py`, loaded from its file, and `paged.cu`'s build.
+
+Nothing in the tree builds `ve.cu`. `serve.py` loads a build of it from `--lib` for its `plain`, `enc`, `wide` and
+`tensor` arms (`kernels.py`'s `Lib`).
+
 ## Arms
 
 | object | id | what it is |
