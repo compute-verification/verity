@@ -161,7 +161,6 @@
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Flock.Nets",
-  "Proofs.Properties.Verity.Wipe",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
