@@ -30353,3 +30353,49 @@ proofs, Tue 10 Nov 9:59 AM PST (17:59Z), to vllm. **Seven answers, and a correct
 - **N2 reads your port names unchanged.** It holds each table the interior's `history` names to round 1's port of that name, at the port's last root, with that root and domain.
 - **Your challenger's names match.** It names each sampled span's table `BT.name(run, prompt, outputs, slot, layer)`, which is your port name `history/<run>/p<P>-o<O>/s<slot>/model.layers.<L>.self_attn.latent`. It then copies round 1's root (`First.history`, `two_stage.py:208–217`; `interior_links.history`, `interior_links.py:258–284`; both at #8448's head).
 - **It never reads the block id.** Which layer a read opens is `First.history`'s argument, the challenger's own. On a record with no table, N2 has nothing to check.
+
+## PRF-502 SERVEDCARD, Tue 10 Nov 18:07Z: rows 1 and 2 staged at `full` on node A, pins `4b31e7caba011398` and `be5bca5c30515dc4` (each equal on a CPU node), row 7 equals KSTEADY's `e1716a9151da13f5`; node A's row can be released now
+
+Every value below is from the runs' own `out/` (`row.tsv`, `stage.json`, `path.txt`, `ls -l` of each directory), read at 18:06Z [run].
+
+**Node A's calendar row** (proofs, 16:09Z to 23:00Z, cores 0 to 11) **can be released now.**
+- Both compositions ended, row 2's at 17:31Z and row 1's at 17:34Z, rc 0.
+- Nothing of proofs' runs on node A.
+- Only the two directories stay, in 23 GB of `/dev/shm`. We delete neither; kernels says when its runs are done with them.
+
+**Ready to post on HASH-98:**
+
+> proofs (PRF-502): rows 1 and 2 are staged on node A, CPU only on cores 0-11, at `full`, and left world-readable under `/dev/shm` for KSTEADY. They are staged from `c6cadd0e325fbaf1789d5fb199b4ac8d2f216ede` (branch `cursor/proofs-servedcard-final-c5f8`), which holds #8520's three commits over #8281's head `fdb718062ed8`, with `stage.py SPEC full OUT`.
+>
+> | Row | Block | Path | Pin |
+> |---|---|---|---|
+> | 1 | 64-key later block, `FIRST=false` | `/dev/shm/proofs-prf502-row1-4b31e7caba011398` | `4b31e7caba011398` |
+> | 2 | 64-key first block, `FIRST=true` | `/dev/shm/proofs-prf502-row2-be5bca5c30515dc4` | `be5bca5c30515dc4` |
+>
+> - Row 1's spec: `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`
+> - Row 2's spec: `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`
+>
+> | Row | ANDs | k_log (unit_log) | Blocks a statement at `full` | `ks_form_why` / `template_why` | Staging time | Peak memory | Run |
+> |---|---|---|---|---|---|---|---|
+> | 1 | 30,893,497 | 27 (25) | 256 | None / None (accepted) | 4,583 s (4,299 s building, 284 s for the 256 instances) | 202.6 GB | `r20261110-161706-314f` |
+> | 2 | 29,482,383 | 27 (25) | 256 | None / None (accepted) | 4,371 s (4,079 s building, 292 s for the 256 instances) | 194.7 GB | `r20261110-161719-42db` |
+>
+> - **What each directory holds:** `stage.json`, `circuit.txt` (12,191,652,715 and 11,667,342,102 bytes), `inst.bin` (21.0 MB and 20.2 MB, 256 instances), `pub.bin` and `pin.txt`. There is no `tables/`, because the `_v2` body doesn't read in slots.
+> - **Each pin is the same when the block is staged again on a CPU node at one instance:** row 1 in `r20261110-160449-059b` (cpu-3: 4,027 s, 202.6 GB) and row 2 in `r20261110-160359-d15e` (cpu-2: 4,648 s, 194.7 GB).
+> - **The two directories stay** in 23 GB of node A's `/dev/shm`, and we won't delete them. Tell us when your runs are done with them.
+>
+> From the same commit, one block each at N = 1 on cpu-3 (`r20261110-161845-aeed`), `stage.py "census:ID" 1 OUT`, where ID is the census of record's key in `benchmarks/sampling_plan/glm53_blocks.json`:
+>
+> | Row | Type | Pin | ANDs | k_log (unit_log) | Blocks a statement at `full` | `ks_form_why` / `template_why` | Staging time, peak memory |
+> |---|---|---|---|---|---|---|---|
+> | 6 | `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | `a5c77ff265366d54` | 6,598,428 | 25 (23) | 1,024 | None / None | 154 s, 8.1 GB |
+> | 7 | `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` | `e1716a9151da13f5`, equal to KSTEADY's | 2,197,084 | 24 (22) | 2,048 | None / None | 58 s, 2.7 GB |
+> | 12 | `BatchedGemm_v1{B=1,K=192,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` | `5b0760bf33127d6a` | 98,567 | 22 (17) | 16,384 (2 a block) | None / None | 14 s, 1.1 GB |
+> | 14 | `AllReduceMultimem_v1{WORLD=8,SIZE=96,TREES=[…],FTZ=false}`, the census's id with its full `TREES` | `f06f13772f5c750a` | 529,440 | 22 (20) | 8,192 | None / None | 21 s, 1.3 GB |
+>
+> Rows 3, 5 and 13 did not stage at that commit. What stops each, and our date, come in our next comment.
+
+**For you, not for HASH-98** [run: `aeed`'s `types/*.log`]:
+- Rows 3 and 5 stop in `census_leaves`, at "a census parameter of 32 leaves of [1] bits", after 352 s and 391 s of building.
+- Row 13 stopped earlier on cpu-3, at `read_tmpl.executable()`: "flock-read-tmpl: no such executable: build it with `lake build flock-read-tmpl`". That machine's tree had no built Lean executable. KSTEADY's run on node A got past this point and stopped at `census_leaves` like rows 3 and 5.
+- My next entries cover the `tok`-as-a-word reading, then rows 3 and 5, then row 13. The rest of benchmarks' list, rows 15 and 17 to 36, is still running in `r20261110-161919-afe0` on cpu-3. It started at 16:19Z and has done rows 28, 31 and 33 so far.
