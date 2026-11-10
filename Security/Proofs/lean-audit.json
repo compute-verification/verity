@@ -79,7 +79,7 @@
   "Proofs.Flock.Claims.Bridge.CustodyZkP",
   "Proofs.Properties.Verity.SampledCoins",
   "Proofs.Properties.Verity.Sampled.Deployed",
-  "Proofs.Properties.Accounting.Remote.ComponentWitnesses",
+  "Proofs.Properties.Accounting.Remote.SubprotocolWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
