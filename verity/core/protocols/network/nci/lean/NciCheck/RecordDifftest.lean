@@ -56,12 +56,12 @@ def rowsDiffer (what : String) (i : Nat) (lean py : Json) : List String :=
     | _, _ => lean.getObjValD "error" == py.getObjValD "error" && lean.getObjValD "error" != Json.null
   if same then [] else [s!"instance {i}: {what}: Lean {lean.compress}, Python {py.compress}"]
 
-/-- Each template's closed rows as the form reads them (`Record.Tmpl.closed`), `[template, rows]` each, or the
+/-- Each template's closed rows as the form reads them (`Record.Leaves.closed`), `[template, rows]` each, or the
 refusal of a stage as far as `own-rows`. -/
 def closedOf (inst tr : Json) : Json :=
   match Record.front inst tr with
   | .ok f =>
-    Json.arr (f.ts.map fun t => Json.arr #[Json.str t.tid, Json.arr (t.closed.map Json.str).toArray]).toArray
+    Json.arr (f.leaves.map fun l => Json.arr #[Json.str l.tid, Json.arr (l.closed.map Json.str).toArray]).toArray
   | .error code => NciCheck.refusal code
 
 /-- The wiring SPOT's reader reads from the `wires` piece's instance `j`, shown; `refused` where it refuses. -/

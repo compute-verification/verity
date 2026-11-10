@@ -318,7 +318,7 @@ class Circuit:
 
 
 def grids(c: Circuit) -> dict[str, list[tuple[int, int, int]]]:
-    """`Record.gridsOf`: per template its entries in unit order as `(first unit, units, units a slot holds in
+    """`RecordText.gridsOf`: per template its entries in unit order as `(first unit, units, units a slot holds in
     a row)`, neighbours of one row length merged."""
     out: dict[str, list[tuple[int, int, int]]] = {}
     for e in sorted(c.entries, key=lambda e: e["at"]):
@@ -430,7 +430,7 @@ def _leaf(t) -> int:
 
 
 def closed(fn) -> set[str]:
-    """Template `fn`'s closed rows (the form's `Tmpl.closed`): the parameters whose leaves are of one bit each and
+    """Template `fn`'s closed rows (the form's `Leaves.closed`): the parameters whose leaves are of one bit each and
     none of which it passes on."""
     on = ref.passed_on(fn)
     return {p for i, (p, t) in enumerate(fn.signature()[0]) if set(t.leaf_widths()) == {1} and i not in on}
