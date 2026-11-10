@@ -10,20 +10,20 @@ import pytest
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.ml.definitions.registry import b1 as B1
-from verity.ml.definitions.registry import dead_free as DF
-from verity.ml.definitions.registry import deepgemm as DG
-from verity.ml.definitions.registry import fa2_check_inf as FA2
-from verity.ml.definitions.registry import fa3_check_inf as FA3
-from verity.ml.definitions.registry import hopper as HP
+from verity.definitions.registry import b1 as B1
+from verity.definitions.registry import dead_free as DF
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import fa2_check_inf as FA2
+from verity.definitions.registry import fa3_check_inf as FA3
+from verity.definitions.registry import hopper as HP
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import mufu as MU
-from verity.ml.circuits.ops import prims as OP
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.windows import interface as IF
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops import mufu as MU
+from verity.definitions.ops import prims as OP
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.windows import interface as IF
 
 #: one plain row template, one ``COLS`` row's at its own width, and one packed with two return fields (a whole ``PARTS`` part,
 #: DeepGEMM's linear's quantisation, here on rows of its own family); each row's committed members and their element dtypes

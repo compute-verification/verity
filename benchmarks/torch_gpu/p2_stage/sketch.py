@@ -1,6 +1,6 @@
 """PoUB's receipts beside the store's load: each pass's sketch of every unit of `C*` as the decode
 reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
-§11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
+§11 of `verity/protocols/poub/verifier`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
     units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
     tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
@@ -17,7 +17,7 @@ reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth
   block's π alone (a GEMM against S_i's four block columns, the one of j mod 4 kept), which the fixture is held to
   first.
 - **y** (`receipts.cu`): a thread a unit, one SHA-512 compression from `sketch_prefix(seed)`'s midstate over
-  u64be g ‖ σ_g, with the GPU's one SHA-512 compression (`verity/ml/kernels/sha512.cuh`); `receipts_host.cpp` is its
+  u64be g ‖ σ_g, with the GPU's one SHA-512 compression (`verity/definitions/kernels/sha512.cuh`); `receipts_host.cpp` is its
   host twin.
 - **root** (`Tree`): sha512_rows' engine over the y buffer: each leaf's 16 receipts (1,024 bytes) a sha512/row/v2 row,
   its hm96-sha512 leaf under the leaf's 192-byte salt, its frame-v3-sha512 leaf in the pass's domain
@@ -45,9 +45,9 @@ import numpy as np
 import torch
 from verity_config.settings import of
 
-from verity.core.protocols.remote_bandwidth import p2
-from verity.core.protocols.remote_bandwidth import receipts as R
-from verity.ml.kernels import SHA512
+from verity.protocols.poub.verifier import p2
+from verity.protocols.poub.verifier import receipts as R
+from verity.definitions.kernels import SHA512
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent

@@ -9,9 +9,9 @@ from typing import Any, Sequence
 
 import torch
 
-from verity.ml.circuits.defs import Builder
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Type
+from verity.circuits.defs import Builder
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Type
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.minted_ops import _OPINFO
 from verity_vllm.program.frontend.strided_views import _dim_len, _expand, _norm_dim, _permute, _select, _slice, _stack

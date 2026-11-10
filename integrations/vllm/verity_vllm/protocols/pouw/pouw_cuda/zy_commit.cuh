@@ -9,7 +9,7 @@
 //   x_v2  = SHA-512(P || rec)                                   P the row/v2 prefix block (`rowleaf.sha512_row_v2_prefix`)
 //   d_j   = SHA-512(S_j || rec[1024 j : 1024 (j + 1)])          S_j segment j's prefix block, j < s = R / 1024
 //   x_seg = SHA-512(Q || d_0 || ... || d_(s-1))                 Q the row-seg/v1 prefix block
-// The prefix blocks come from the host, as `verity.ml.commitments.rowleaf` builds them. Each table's leaf u is then its
+// The prefix blocks come from the host, as `verity.commitments.rowleaf` builds them. Each table's leaf u is then its
 // hm96-sha512 leaf of its x under its salt, ChaCha20 blocks 3u .. 3u + 2 of its key at its nonce (`rowtab::chacha20_block`),
 // and that leaf's frame leaf at rank u: `row_commit.cuh`'s salt digest, mask and `finish_leaf`. The call table's tree is
 // built here a level at a time (`row_commit.cuh`'s node and pad), the registered value's by `registered_rows.cuh`'s.

@@ -1,5 +1,5 @@
-"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.ml.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
-served int8 linear call as its own Program on bits, which `verity.ml.protocols.pouw.circuit.compile` takes to H1 tile units.
+"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.protocols.pouw.prover.circuit.h1tile`) on the eager int8_exact row: each
+served int8 linear call as its own Program on bits, which `verity.protocols.pouw.prover.circuit.compile` takes to H1 tile units.
 
 * **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
   the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
@@ -77,17 +77,17 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
-from verity.ml.protocols.pouw.circuit import compile as C, h1tile as H
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.credit import CREDIT
-from verity.core.protocols.spot.challenger import CoinError
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
-from verity.ml.circuits.types import Array
+from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
+from verity.protocols.pouw.prover.circuit import compile as C, h1tile as H
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier.credit import CREDIT
+from verity.spot.device.challenger import CoinError
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
+from verity.circuits.types import Array
 
 from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,

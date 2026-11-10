@@ -14,7 +14,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.defs import bind
+from verity.circuits.defs import bind
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
@@ -36,11 +36,11 @@ from verity_vllm.observe.fold.resolver import (
     Unsupported,
 )
 from verity_vllm.observe.fold.tree import TreeNode
-from verity.ml.definitions.registry import dsa
-from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.ml.definitions.registry.dsa_norm import DsaRMSNorm
-from verity.ml.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.ml.definitions.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
+from verity.definitions.registry import dsa
+from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.definitions.registry.dsa_norm import DsaRMSNorm
+from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity.definitions.registry.sparse_mla_split import SparseMlaSplit, launch_num_splits
 
 NORM_KERNEL = "_fused_norm_rope_kernel"
 Q_KERNEL = "_fused_q_kernel"

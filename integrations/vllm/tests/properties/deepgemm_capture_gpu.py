@@ -44,7 +44,7 @@ A phase that raises records its error and fails the verdict without stopping the
              at BLOCK_K 128, `GemmType::Normal` (fp8_gemm_nt) or `GemmType::Batched` (fp8_einsum), bf16 out, the identity epilogue,
              and one of the schedule's predicted argument lists; every prediction generated; otherwise only `transpose_fp32`, which
              puts an activation's f32 scales in TMA-aligned MN-major layout.
-  reference  on a sample of the rows, the plain-integer reference (`verity.ml.circuits.evaluation.evaluate`) of
+  reference  on a sample of the rows, the plain-integer reference (`verity.circuits.evaluation.evaluate`) of
              `fp8.ScaledMmFp8BlockCoordinate_v1{K,128}` at three columns, `Fp8GroupQuantUe8m0_v1{K,128}` and
              `FlashInferFp8Quant1x128_v1{K}`, which the twins must equal; on a non-finite column, the coordinate's word must be the GPU's.
   bind       the Programs bind at every shape.
@@ -85,7 +85,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as B
-from verity.ml.definitions.numerics import deepgemm_schedule as S
+from verity.definitions.numerics import deepgemm_schedule as S
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/deepgemm-capture/v2"
@@ -432,9 +432,9 @@ def _tally(rec: dict[str, Any], want: np.ndarray, nf: np.ndarray, got: np.ndarra
 
 def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got, columns) -> None:
     """`ScaledMmFp8BlockCoordinate_v1{K,128}` at ``columns``: the twin's word where it is finite, else the GPU's."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.definitions.registry import fp8 as F
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.definitions.registry import fp8 as F
 
     fn = bind(F.ScaledMmFp8BlockCoordinate, K=K, G=GROUP)
     for n in sorted(columns):
@@ -450,11 +450,11 @@ def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got,
 def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [r0, r1) of one linear launch: DeepGEMM's branch, the quant twin against the kernel's (q, s) and the GEMM twin over them;
     FlashInfer's, the linear's twin; the references on the sampled rows."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.definitions.numerics import deepgemm_twins as T
-    from verity.ml.definitions.numerics import derived_rows as R
-    from verity.ml.definitions.registry import deepgemm as DG
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.definitions.numerics import deepgemm_twins as T
+    from verity.definitions.numerics import derived_rows as R
+    from verity.definitions.registry import deepgemm as DG
 
     a = B._load(job["paths"])
     K, N, deep, rmap = job["K"], job["N"], job["branch"] == "deepgemm", job["row_map"]
@@ -486,7 +486,7 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     """Weight-block rows [b0, b1) of one processed weight against the twin of its processing, block by block."""
-    from verity.ml.definitions.numerics import deepgemm_twins as T
+    from verity.definitions.numerics import deepgemm_twins as T
 
     a = B._load(job["paths"])
     N, b0, b1 = job["N"], *job["block_rows"]
@@ -578,7 +578,7 @@ def einsum_launches(work: Path, Ms: tuple[int, ...], seed: int) -> tuple[list[di
 def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one einsum launch: every group's words against the grouped twin over the einsum's own operands, the
     reference on the sampled tokens."""
-    from verity.ml.definitions.numerics import deepgemm_twins as T
+    from verity.definitions.numerics import deepgemm_twins as T
 
     a = B._load(job["paths"])
     H, K, N, rmap = job["H"], job["K"], job["N"], job["row_map"]
@@ -671,9 +671,9 @@ def jit(cache: Path, predicted: list[list[str]]) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at every shape, with the weight-scale rows each reads."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.batch import type_shape
-    from verity.ml.definitions.registry import deepgemm as DG
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.batch import type_shape
+    from verity.definitions.registry import deepgemm as DG
 
     out: dict[str, Any] = {}
     for shapes, _, _ in MODELS.values():

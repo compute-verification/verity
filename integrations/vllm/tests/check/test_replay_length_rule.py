@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from tests.program.predict import test_steps as ST
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.match.program_loaders import check_rows
 from verity_vllm.check.replay import checks as CK, index as IX

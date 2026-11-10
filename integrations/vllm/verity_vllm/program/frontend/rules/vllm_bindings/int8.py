@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll, array_of, concat
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
@@ -168,7 +168,7 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
         if len(bits) != h.KVH:
             refuse("shape", node, h.mp, f"{len(bits)} K scales for {h.KVH} KV heads")
         S, D, rep = h.P0 + h.T, h.D, h.NH // h.KVH
-        from verity.ml.definitions.registry.int8_exact import row_refusal
+        from verity.definitions.registry.int8_exact import row_refusal
 
         if why := row_refusal({"D": D, "S": S}):
             refuse("shape", node, h.mp, f"Int8LutAttentionRow_v1 {why}")

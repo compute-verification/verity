@@ -1,5 +1,5 @@
 """`row_tables_device`: `row_tables.step_roots` on the GPU (`row_tables_device.step_roots`) and its CPU twin, each held bit for bit to the CPU reference
-(`row_tables.step_roots`, over `verity.ml.commitments.row_table`) on random steps.  The steps cover a row's segment cases (K + 4
+(`row_tables.step_roots`, over `verity.commitments.row_table`) on random steps.  The steps cover a row's segment cases (K + 4
 a multiple of 1024 and two past one, codes whose count is not a multiple of 8), one-row and non-power-of-two tables, a one-table
 step, rows out of rank order, tables out of step order, and an engine step past 2^32 (the nonce's second word).  The twin needs a
 C++ compiler; the device tests need CUDA and nvcc, and skip elsewhere."""
@@ -10,7 +10,7 @@ from collections import deque
 import numpy as np
 import pytest
 
-from verity.ml.commitments import row_table as RT
+from verity.commitments import row_table as RT
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
 
