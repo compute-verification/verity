@@ -124,6 +124,10 @@ PeriodFails.lean  the period's leak with each failure charged (periodLeakFails, 
                                          periodLeakCharged): periodLeakChecked at each fail pattern
                                          (checked_at_pattern), summed over the patterns (exists_failPatterns,
                                          encard_failsExactly_le, encard_weighted_le)
+PeriodFailsTerms.lean  the period check's K at terms that count the fail patterns: the clock form at no
+                                         caps (clockKBoundsHeld), the rows form at the failures' term
+                                         (rowsTermsFails, rowsKBoundsFails, rowsKBoundsFailPatterns), whose number
+                                         covers failPatterns (failsAtMostCovers); the check computes neither
 Period.lean     PeriodLeakAccepted as PeriodLeakChecked's instance at no checked input
                                          (periodLeak_of_checked, periodLeak; periodLeak_fixed at operators fixed
                                          before the period)
@@ -169,6 +173,11 @@ PeriodCheckedChecks.lean  PeriodLeakChecked held to the trace's run is false (fr
                           code, a period of no windows
 PeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (PeriodLeakChecked_readsBy_exclusion);
                 premises hold together (PeriodLeakChecked_placed)
+PeriodFailsChecks.lean  at a placed window whose operator follows the fail pattern: the count without the
+                failures' factor fails and the factor is 2 (PeriodLeakFailsAtMost_factor_met); the charged
+                count fails at weights that sum to 2 (PeriodLeakCharged_nontrivial,
+                PeriodLeakCharged_kraft_exclusion); the charged form's premises at the toy code, a period of
+                no windows and no connection (PeriodLeakCharged_honest)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
