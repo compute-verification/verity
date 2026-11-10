@@ -216,8 +216,8 @@ class Charged:
     charged: float
     #: the MACs the charged blocks hold whole, at most: each its whole work, `c / mac_gates`
     charged_macs: float
-    #: the MACs the period's blocks hold, at most, the charged blocks' and `untied_macs` among them; `inf` where the
-    #: bound says nothing
+    #: the period's MACs, at most: those its blocks hold, the charged blocks' among them, and `untied_macs`; `inf`
+    #: where the bound says nothing
     macs: float
     #: the statement, `HECharged`
     statement: str
@@ -326,11 +326,11 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     * `O` is the output wires of every MAC the period's blocks hold, `O / N` a MAC, the charged blocks' among them.
 
     Which blocks are charged is not the caller's to say, so each term is taken at its most: `H` at every block that
-    can be charged, and `Q` at `|G| = blocks`, none charged. The period's MACs `M` then satisfy
-    `M ≤ untied_macs + H + macs_on(T, Q, (O / N) M, 1, b)`, which is solved for `M`, and the slowdown is the blocks'
-    gates over those MACs' gates as a plain circuit, `blocks · c / (M · size / N)`, at least 1. With no untied word it is
-    `bound`'s slowdown, whatever `w`; with every block charged it is 1; at `w = 0` every block that isn't charged
-    reads `k`.
+    can be charged, and `Q` at `|G| = blocks`, none charged. The MACs `M'` of the count then satisfy
+    `M' ≤ H + macs_on(T, Q, (O / N) M', 1, b)`, which is solved for `M'`; the period's MACs are `M = untied_macs + M'`,
+    and the slowdown is the blocks' gates over those MACs' gates as a plain circuit, `blocks · c / (M · size / N)`,
+    at least 1. With no untied word it is `bound`'s slowdown, whatever `w`; with every block charged it is 1; at
+    `w = 0` every block that isn't charged reads `k`.
 
     * `mac_gates`, the fewest gates of one of the work's MACs, the caller's to state of its work and read only
       where a block is charged. Default `size / N`, the plain circuit's gates a MAC: right where that circuit is its
@@ -373,9 +373,9 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
         extra = min(untied * a_word, blocks * (cap ** 2 / q_at(cap) - tied))
     by_q = blocks * tied + extra
     held = charged * c / mac_gates
-    # M = a + d √M, with a = untied_macs + H + T + ½ √(Q T / b) and d = ½ √(Q (O / N))
-    a, d = untied_macs + held + macs_on(total, by_q, 0.0, 1.0, b), math.sqrt(by_q * (O / N)) / 2
-    macs = ((d + math.sqrt(d * d + 4 * a)) / 2) ** 2
+    # M' = a + d √M', with a = H + T + ½ √(Q T / b) and d = ½ √(Q (O / N))
+    a, d = held + macs_on(total, by_q, 0.0, 1.0, b), math.sqrt(by_q * (O / N)) / 2
+    macs = untied_macs + ((d + math.sqrt(d * d + 4 * a)) / 2) ** 2
     return Charged(max(1.0, blocks * c * N / (macs * size)), blocks, untied, untied_macs, w, most, word, charged,
                    held, macs, HE_CHARGED, premises, k, cap, total, by_q, mac_gates, beta_w, beta_cap, b)
 

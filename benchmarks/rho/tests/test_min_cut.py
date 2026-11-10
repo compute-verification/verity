@@ -210,8 +210,8 @@ def test_the_charged_count_is_the_lean_statement_which_no_lock_lists_a_proof_of(
     q = r.beta_w * r.beta_x
     assert r.charged == 32 and r.charged_macs == 32 * C / r.mac_gates and r.mac_gates == C / MACS
     assert r.untied_macs == FEED and r.macs == pytest.approx(
-        FEED + r.charged_macs + work_he_on(r.total, r.squares_by_q * q, q, r.b, SERVED["O"] / MACS * r.macs),
-        rel=1e-12)
+        FEED + r.charged_macs + work_he_on(r.total, r.squares_by_q * q, q, r.b,
+                                           SERVED["O"] / MACS * (r.macs - FEED)), rel=1e-12)
     assert r.slowdown == pytest.approx(54_300 * C * MACS / (r.macs * C), rel=1e-12)
 
 
@@ -336,34 +336,42 @@ def test_the_charged_count_alone_at_the_served_policy():
 
 
 #: the period's rows at the served class: (blocks, nodes, the most untied words one block of a node reads, the best
-#: threshold, the blocks charged at it, the slowdown at it, the slowdown with no threshold). A node's rows are the
+#: threshold, the blocks charged at it, the slowdown at it, the slowdown with no threshold, both with (H) once, and
+#: the slowdown with no threshold and (H) at each block's own reads). A node's rows are the
 #: function at one node's untied words; a datacenter's and the world's are scaled: so many nodes, each at one node's
 #: bound and all accepted, their block counts a week's, a month's and a year's. That one block of a node reads at
 #: most half the node's untied words is these rows' statement of their record, which the function takes as `most`:
 #: a sampled tile's rows are two blocks' or more.
-PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_567.7, 3_567.7),
-          (1e4, 1, UNTIED // 2, 335_684, 0, 7_781.3, 7_781.3),
-          (54_300, 1, UNTIED // 2, 223_789, 2, 12_546.5, 11_821.6),
-          (1e6, 1, UNTIED // 2, 223_789, 2, 28_787.1, 13_422.2),
-          (25_165_824, 1, UNTIED // 2, 20_344, 32, 35_549.7, 13_525.1),
-          (1e10, 1, UNTIED // 2, 20_344, 32, 37_647.8, 13_529.4),
-          (1.651e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.0, 13_529.4),
-          (7.077e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.3, 13_529.4),
-          (8.61e16, 12_500, 1_023_318, 20_435, 410_653, 37_653.4, 13_529.4),
-          (6.191e18, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.0, 13_529.4),
-          (2.653e19, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.3, 13_529.4),
-          (3.228e20, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.4, 13_529.4))
+PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_677.1, 3_677.1, 4_107.8),
+          (1e4, 1, UNTIED // 2, 335_684, 0, 7_883.9, 7_883.9, 10_923.1),
+          (54_300, 1, UNTIED // 2, 223_789, 2, 12_564.7, 11_860.1, 24_122.5),
+          (1e6, 1, UNTIED // 2, 223_789, 2, 28_795.0, 13_424.7, 36_407.0),
+          (25_165_824, 1, UNTIED // 2, 20_344, 32, 35_550.2, 13_525.2, 37_601.8),
+          (1e10, 1, UNTIED // 2, 20_344, 32, 37_647.8, 13_529.4, 37_653.3),
+          (1.651e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.0, 13_529.4, 37_653.4),
+          (7.077e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.3, 13_529.4, 37_653.4),
+          (8.61e16, 12_500, 1_023_318, 20_435, 410_653, 37_653.4, 13_529.4, 37_653.4),
+          (6.191e18, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.0, 13_529.4, 37_653.4),
+          (2.653e19, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.3, 13_529.4, 37_653.4),
+          (3.228e20, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.4, 13_529.4, 37_653.4))
 
 
 def test_the_period_at_the_served_class_with_a_threshold_and_with_none():
-    """The two readings side by side at the served class, each row with its block count and its threshold, the MACs
-    that feed the untied words charged whole. With no threshold (H) is taken for every block where the block that
-    reads the most untied words reads, and the figure stops at 13.5 thousand however long the period. With the best
-    threshold it is the same up to ten thousand blocks, where no block is charged, and `bound`'s 38 thousand from a
-    datacenter's week, where the charged blocks are under a billionth of the blocks. The threshold that is best
-    there is the last before (H)'s second row."""
-    for blocks, nodes, most, w, over, at_w, at_none in PERIOD:
+    """The three readings side by side at the served class, each row with its block count and its threshold, the MACs
+    that feed the untied words charged whole. With no threshold and (H) once, (H) is taken for every block where the
+    block that reads the most untied words reads, and the figure stops at 13.5 thousand however long the period.
+    With the best threshold it is the same up to ten thousand blocks, where no block is charged, and `bound`'s 38
+    thousand from a datacenter's week, where the charged blocks are under a billionth of the blocks. The threshold
+    that is best there is the last before (H)'s second row. With (H) at each block's own reads no threshold is
+    needed: it is the largest of the three at every row, and no threshold adds to it below the world's rows."""
+    for blocks, nodes, most, w, over, at_w, at_none, at_rows in PERIOD:
         terms = {"blocks": blocks, "untied": nodes * UNTIED, "untied_macs": nodes * FEED, "most": most, **SERVED}
+        rows = min_cut.bound_charged(C, TIED, **terms)
+        assert rows.slowdown == pytest.approx(at_rows, abs=0.05) and rows.charged == 0 and rows.cap == TIED + 32 * most
+        assert rows.slowdown >= max(at_w, at_none) - 0.05 and "at what each block reads" in rows.rests_on
+        if nodes < 1e7:
+            assert min_cut.best_w(C, TIED, **terms) == most
+        terms["one"] = True
         assert min_cut.best_w(C, TIED, **terms) == w, blocks
         two, none = min_cut.bound_charged(C, TIED, w=w, **terms), min_cut.bound_charged(C, TIED, **terms)
         assert (two.charged, none.charged) == (over, 0), blocks
