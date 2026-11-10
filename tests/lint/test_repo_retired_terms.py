@@ -220,7 +220,9 @@ def terms() -> tuple[tuple[Term, ...], dict[str, list[Term]]]:
 
 
 def sites_of(text: str, by: dict[str, list[Term]]) -> list[tuple[int, str]]:
-    """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word."""
+    """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word.  Where two
+    terms give one site, the one spelled longer says it, then the first by spelling: the ratchet gate compares the lines of
+    two runs, so a site says the same in every run."""
     words = {w.lower() for w in set(WORDS.findall(text))}
     candidates = {t for w in words & by.keys() for t in by[w]}
     if not candidates:
@@ -228,7 +230,8 @@ def sites_of(text: str, by: dict[str, list[Term]]) -> list[tuple[int, str]]:
     low = text.lower()
     if len(low) != len(text):                           # a character whose lower case is longer: lower it alone
         low = "".join(c if len(c.lower()) != 1 else c.lower() for c in text)
-    hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)), key=lambda h: (h[0], -h[1]))
+    hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)),
+                  key=lambda h: (h[0], -h[1], -len(h[2].old), h[2].old))
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
         if s < end or kept(text, s, e):
@@ -352,6 +355,32 @@ def test_what_is_a_retired_term() -> None:
         "DrawIsCoin", "Remote.Draw.Session", "--draw", "Verity.Window"]
     assert olds("the domain verity/flock-firewall/v1 and note:x-draw-law, a session, the window") == []
     assert sites_of("a\nb C-Flock\n", by) == [(2, "'C-Flock' is retired; say Flock (GLOSSARY.md)")]
+
+
+def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
+    class Placed(Term):
+        """A term whose place in a small set is chosen: such a set gives its members in the order of their hashes."""
+
+        def __init__(self, place: int, old: str, new: str):
+            super().__init__(old, new, code=True)
+            self.place = place
+
+        def __hash__(self) -> int:
+            return self.place
+
+    def said(text: str, *rows: tuple[int, str, str]) -> list[tuple[int, str]]:
+        by: dict[str, list[Term]] = {}
+        for t in (Placed(*row) for row in rows):
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        return sites_of(text, by)
+
+    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]
+    assert said("an OldName", (1, "Old*", "the shorter row's"), (2, "*Name*", "the longer row's")) == longer
+    assert said("an OldName", (2, "Old*", "the shorter row's"), (1, "*Name*", "the longer row's")) == longer
+    first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]
+    assert said("an OldName", (1, "Old*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
+    assert said("an OldName", (2, "Old*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
