@@ -43,6 +43,19 @@ def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_on
                                                                              ("CallDynamicTool", False, "cloud")]
 
 
+def test_another_steps_event_passes_unlogged(tmp_path, event_log):
+    """A hooks.json Cursor misread (a `/*` in it stripped as a comment) ran this hook on shell commands naming Task, and each
+    logged a verdict with no tool name."""
+    reg = tmp_path / "registry.json"
+    reg.write_text(json.dumps({"handles": [{"handle": "proofs", "holder": f"the proofs coordinator ({HOLDER})"}]}))
+    event = {"hook_event_name": "beforeShellExecution", "conversation_id": HOLDER, "command": "echo Task", "cwd": "/"}
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, "AGENT_GUARD_REGISTRY": str(reg), "AGENT_GUARD_TASK_LOG": str(tmp_path / "t.jsonl")})
+    assert json.loads(out.stdout) == {"permission": "allow"} and not (tmp_path / "t.jsonl").exists()
+    (rec,) = [json.loads(ln) for ln in event_log.read_text().splitlines()]
+    assert (rec["hook"], rec["event"], rec["tool_name"]) == ("task_hook.py", "beforeShellExecution", None)
+
+
 def test_other_dynamic_tools_pass_unlogged(tmp_path):
     a = answer(tmp_path, HOLDER, {"namespace": "Linear", "toolName": "get_issue", "arguments": {"id": "INF-1"}},
                "CallDynamicTool")
