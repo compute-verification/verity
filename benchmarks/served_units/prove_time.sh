@@ -8,9 +8,10 @@
 #              time, outside any lease, into $FLOCK_WORK/data/ (kept, keyed by the staging tree)
 #   3. prove   per statement, a loopback --zk session set: a verifier process on VCPUS cores, WARM + RUNS prover sessions on the
 #              rest, as benchmarks/flock_s8_block/run.sh runs its sessions (the ZK server's send check off, FC_COINS=os),
-#              each drawing every unit (`--draw subset:N`: Lean's verifier refuses a session without a draw);
+#              each with every unit in its sample (`--draw subset:N`: Lean's verifier refuses a session without one);
 #              with PT_DEVICE=gpu every session under one `gpu-lease 1` of at most LEASE_MIN minutes, the prover with --gpu;
-#              out/DEV/NAME/start and done hold the statement's start and end (epoch seconds)
+#              out/DEV/NAME/start and done hold the statement's start and end (epoch seconds), and exit the prover's exit
+#              status: done is written once the session set ends, whatever that status, so a statement finished only on 0
 #   4. prove_time.py: out/summary.json
 # env: PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights"  PT_NS="16 64"  PT_DEVICE=gpu (or cpu)  PT_JOBS=4  WARM=1
 #      RUNS=3  VCPUS=4  LEASE_MIN=30  SM=120  PT_CARD (gpu: the leased card's, from nvidia-smi)  FLOCK_WORK (default a
@@ -112,7 +113,7 @@ gpu_sample() {
 session() {
   local nm=$(name "$1" $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
-  mkdir -p $o $O/stage/$nm; rm -rf $d/sessions $o/done; cp $d/stage.json $O/stage/$nm/; date +%s.%N > $o/start
+  mkdir -p $o $O/stage/$nm; rm -rf $d/sessions $o/done $o/exit; cp $d/stage.json $O/stage/$nm/; date +%s.%N > $o/start
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
   local N=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['n'])" $d/stage.json)
   taskset -c $VCPU $B serve --zk --draw subset:$N --listen 127.0.0.1:$PORT --out $d/sessions --instances $d/pub.bin \
@@ -124,14 +125,15 @@ session() {
   RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NSESS taskset -c $PCPU $TIMEV ${TIMEV:+$o/time-prove.txt} $PERF $B prove --zk $G \
     --verifier 127.0.0.1:$PORT --instances $d/inst.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
     2> $o/prove.err | stamp > $o/prove.tsv
-  echo "prove $nm exit ${PIPESTATUS[0]}: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"
+  local rc=${PIPESTATUS[0]}
+  echo "prove $nm exit $rc: $(grep -o '"accepted":[a-z]*' $o/prove.tsv | sort | uniq -c | tr '\n' ' ')$(grep -o '"why":"[^"]*"' $o/prove.tsv | sort -u | head -2 | tr '\n' ' ')"
   if [ -n "$PERF" ]; then
     perf report -q -i $o/perf.data --stdio --no-children --sort symbol --percent-limit 0.2 > $o/perf.txt 2> $o/perf-report.err
     rm -f $o/perf.data
   fi
   [ -n "$GS" ] && { touch $o/stop; wait $GS; }
   kill $SP; wait $SP 2>/dev/null
-  date +%s.%N > $o/done
+  echo $rc > $o/exit; date +%s.%N > $o/done
   grep -h panicked $o/prove.err | head -3
   return 0
 }

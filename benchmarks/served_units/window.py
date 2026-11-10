@@ -23,10 +23,11 @@ prove  the statements of UNITS_FILE staged under FLOCK_WORK, and under each WIN_
        gpu_lease.sh where none is installed). A statement's estimate is its seconds in WIN_SECONDS (an earlier prove's
        out/seconds.tsv); one it doesn't hold finished takes WIN_UNMEASURED_S (default 900) or its unfinished seconds there,
        whichever is more, and its unit starts first in its group. Without WIN_SECONDS the estimate is a model of the
-       circuit's size and k_log. As each statement ends, its KEEP files (its public files and every session's records;
-       WIN_KEEP_ALSO adds colon-separated globs under its directory) are copied to out/kept/NAME/. Every 2 s: a group whose GPU holds more than WIN_DEV_GIB has its prover killed (every prover, once
-       nvidia-smi goes unread for 30 s), and our processes' RSS, plus a FLOCK_WORK in RAM with its sessions, over
-       WIN_MEM_GB x 0.97 kills the largest process. Then, or as soon as the job stops (SIGTERM included), its groups are
+       circuit's size and k_log. As each statement's session set ends, its KEEP files (its public files and every session's
+       records; WIN_KEEP_ALSO adds colon-separated globs under its directory) are copied to out/kept/NAME/, with its
+       prover's exit status (out/kept/NAME/exit): a statement finished only on 0. Every 2 s: a group whose GPU holds
+       more than WIN_DEV_GIB has its prover killed (every prover, once nvidia-smi goes unread for 30 s), and our
+       processes' RSS, plus a FLOCK_WORK in RAM with its sessions, over WIN_MEM_GB x 0.97 kills the largest process. Then, or as soon as the job stops (SIGTERM included), its groups are
        killed and FLOCK_WORK is removed (its links, not what they point to), unless WIN_KEEP=1. A stopped `stage` kills its
        stagings and keeps FLOCK_WORK.
 
@@ -335,33 +336,41 @@ def stage(units: list[Unit]) -> int:
 
 
 def read_seconds(path: str) -> dict[str, tuple[float, bool]]:
-    """An earlier prove's seconds.tsv (WIN_SECONDS): each statement's seconds, and whether it finished in them."""
+    """An earlier prove's seconds.tsv (WIN_SECONDS): each statement's seconds, and whether it finished in them (its prover
+    exited 0)."""
     if not path:
         return {}
     rows = [ln.split("\t") for ln in Path(path).read_text().splitlines()[1:] if ln.strip()]
     return {r[0]: (float(r[2]), r[3] == "1") for r in rows}
 
 
-def statements_run() -> list[tuple[str, str, float, bool]]:
-    """Each statement a group started: (name, group, seconds, finished), from prove_time.sh's start and done files; an
-    unfinished one's seconds so far."""
+def statements_run() -> list[tuple[str, str, float, bool, str]]:
+    """Each statement a group started: (name, group, seconds, finished, its prover's exit status), from prove_time.sh's
+    start, done and exit files. It finished when its session set ended with the prover's exit status 0; an unfinished
+    one's seconds are those so far, or to its end (killed or failed), and its status "" while it runs."""
     rows = []
     for s in sorted(OUT.glob("gpu*/out/[cg]pu/*/start")):
-        d, done = s.parent, s.parent / "done"
+        d, done, ex = s.parent, s.parent / "done", s.parent / "exit"
         t0, t1 = s.read_text().strip(), done.read_text().strip() if done.exists() else ""
+        rc = ex.read_text().strip() if t1 and ex.exists() else ""
         if t0:
-            rows.append((d.name, d.parts[-4], (float(t1) if t1 else time.time()) - float(t0), bool(t1)))
+            rows.append((d.name, d.parts[-4], (float(t1) if t1 else time.time()) - float(t0), rc == "0", rc))
     return rows
 
 
 def keep(fw: Path, k: str, kept: set[str]) -> None:
-    """Each finished statement not yet in `kept`: its KEEP files, and WIN_KEEP_ALSO's globs, copied to $OUT/kept/NAME/."""
+    """Each statement whose session set ended, not yet in `kept`: its KEEP files, and WIN_KEEP_ALSO's globs, copied to
+    $OUT/kept/NAME/, with its prover's exit status (`exit`), so a verifier tells a killed or failed prover's sessions from
+    a finished one's."""
     globs = KEEP + tuple(filter(None, env("WIN_KEEP_ALSO").split(":")))
     for done in sorted(OUT.glob("gpu*/out/[cg]pu/*/done")):
         nm = done.parent.name
         if nm in kept:
             continue
         src, dst = fw / "data" / f"{nm}-{k}", OUT / "kept" / nm
+        dst.mkdir(parents=True, exist_ok=True)
+        if (done.parent / "exit").exists():
+            shutil.copyfile(done.parent / "exit", dst / "exit")
         for g in globs:
             for f in sorted(src.glob(g)):
                 t = dst / f.relative_to(src)
@@ -450,10 +459,11 @@ def prove(units: list[Unit]) -> int:
         try:
             keep(fw, k, kept)
             ran = statements_run()
-            (OUT / "seconds.tsv").write_text("name\tgroup\tseconds\tdone\n" +
-                                             "".join(f"{n}\t{g}\t{s:.1f}\t{int(f)}\n" for n, g, s, f in ran))
-            log(f"kept {len(kept)} statements' files in out/kept ({du(OUT / 'kept') / GB:.2f} GB); {sum(f for *_x, f in ran)} "
-                f"of {len(ran)} started statements finished (out/seconds.tsv)")
+            (OUT / "seconds.tsv").write_text("name\tgroup\tseconds\tdone\texit\n" +
+                                             "".join(f"{n}\t{g}\t{s:.1f}\t{int(f)}\t{rc}\n" for n, g, s, f, rc in ran))
+            log(f"kept {len(kept)} statements' files in out/kept ({du(OUT / 'kept') / GB:.2f} GB); {sum(r[3] for r in ran)} "
+                f"of {len(ran)} started statements finished with exit 0, {sum(bool(r[4]) and not r[3] for r in ran)} "
+                "ended otherwise (out/seconds.tsv)")
         finally:
             if env("WIN_KEEP") != "1":
                 freed = du(fw)

@@ -39,9 +39,10 @@ Files:
 - `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
   host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
   docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
-  statement it proves (`out/kept/`: the public files and every drawn session's records, not the circuit or the witness)
-  and each statement's seconds (`out/seconds.tsv`), which a later `prove` balances its GPUs by (`WIN_SECONDS`).
-  `settings.py` declares each variable it reads, with its default.
+  statement it proves (`out/kept/`: the public files, every session's records and the prover's exit status, not the
+  circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
+  which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
+  default.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   `flock-verify ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
   doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.
