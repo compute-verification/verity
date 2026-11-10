@@ -52,8 +52,8 @@ import clear_work as CW  # noqa: E402
 from verity.core.protocols.pouw.audit import opened_value  # noqa: E402
 from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
 
 #: the device's counts are held to the CPU replay's on every Nth tile id
 CROSS_CHECK = 1024

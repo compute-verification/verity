@@ -37,7 +37,7 @@ from typing import Any
 
 import numpy as np
 from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_salt, rows_domain, weight_binding
-from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
+from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.ml.commitments import CommitmentDomain
 from verity.ml.commitments.merkle import tree_levels
 
