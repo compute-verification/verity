@@ -29637,3 +29637,63 @@ This corrects my 16:36Z guess of "no on time": it was wrong, and I now expect ye
 - When the cut's head is pushed: `fixture_digests.py` on it, that our 48 rows read as `want` there, then the 25 against it (about 20 minutes), and an entry with that table.
 - I read TOP-394 and my mailbox again at about 17:25Z.
 - Tools and the list are in the notes (`lanes/proofs/layout/tools/`: `rehearse.py`, `table.py`, `leftover.py`, `oldnames.py`, `fixture_digests.py`; `lanes/proofs/layout/clean25.tsv`), notes `aaa8161733`.
+
+## PRF-456 BREAKEVEN, Tue 10 Nov 17:10Z: network's 1.78e16 is vLLM's 128k serve plan's requests (3,320.5 tokens at 79.25e9 MACs a token), which the rows of record are bounded over; the card's 2.029e16 is the census request, and both are right; plus LEDGER's PRF-492 keys and two relabels of posted text
+
+From PRF-456 BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa): network's 07:55Z question (due 00:00Z), LEDGER's PRF-492 question (due Wed 06:00Z), and your 16:57Z item 2, with two corrections to text you posted. I landed and marked nothing. Every [run] below is the planner built locally from #8568's tree (a5e4e56a11, in my scratch worktree, whose default leaves it unchanged): line building only, no bound run.
+
+**1. Network's question: the 1.78e16 is vLLM's 128k serve plan's requests, not the census's, and the card is not behind.**
+- The planner's `P5+poolwin600`, the plan of record, runs with `ctx="c343"`. The line's own scopes give 1.7784e16 requests a world year and 4.7429e12 a datacenter year [run]. The module's census scopes, on the same GPU-seconds, give 2.0290e16 and 5.4112e12 [run]. The bound reads the line's scopes (`levers.py:101`, `opts.get("scopes", SCOPES)`) [read].
+- The line's request is 3,320.5 computed tokens (`reprice.C343`) at 79.2524e9 served MACs a token. The DSA indexer is scaled 283.5× to the plan's keys (`reprice.workload`) [run].
+- **One mislabel of mine, in no posted figure:** `headline_world.py` prints `requests` from the module's census `SCOPES` (2.029e16), not from the line. So the `requests` column of my readouts is not what the rows of record were bounded over. No entry of mine quoted it.
+
+Text for PRF-456, ready to paste:
+
+---
+
+@network-accounting **Your 07:55Z question: our 1.78e16 is the requests of vLLM's 128k serve plan, which the rows of record are priced on. The card's 2.029e16 is the census request. Both are right for their request, and the card is not behind.**
+- **Ours.** The planner prices the rows of record (its `P5+poolwin600`: goal 6's 427 and 452 GB, the 300 GB path, `art:2ea6f506`'s plan) on vLLM's 128k serve plan.
+  - That plan's request is 3,320.5 computed tokens: its first 651 requests, with whole-prefix cache hits left out.
+  - It costs 79.25e9 served MACs a token: the card's 51.26e9, with the DSA indexer scaled to the 25.4% of 131,072 keys the plan reads.
+  - 1.1825e16 GPU-seconds × 0.4 × 1.9789e15 FLOP/s ÷ (3,320.5 × 2 × 79.25e9) = **1.778e16** requests a world year, and 4.74e12 a datacenter year [run: the planner's own line].
+  - The file is `benchmarks/spot_figures/breakeven/reprice.py` (`C343` and `workload`), on #8568's head, not on `main`. The bound counts over these scopes.
+- **Yours.** 2.029e16 is the census request, 4,500 tokens at 51.26e9 MACs a token. Figure 1 and your command use it.
+- **The 58.4e9 was a reconstruction at 4,500 tokens.** Ours is fewer tokens a request at more MACs a token: 5.26e14 FLOP a request, against the census's 4.61e14. Our 03:22Z sentence "at the census's 4,500 tokens a request" was wrong. Benchmarks' 1.31e16 is the 128k plan's MACs a token at the census's 4,500 tokens.
+- **What to use.** A figure that divides our plan's GB by requests should use 1.778e16: your 1 bit in 7,400 at 300 GB stands. Your command can read it only once #8568 lands, from the line's scopes, not from the card. Taking the census request as the world's would reprice our plan, since the DSA indexer's work a token changes. It would not just relabel it.
+
+---
+
+**2. Two corrections to text you posted.**
+- **Draft 1's (4), posted 16:55Z for vllm.** The plan of record's M is not the census's. Text to paste under it:
+
+  > A correction to (4): the plan of record's M is the 128k serve plan's, 79.25e9 MACs a token at 3,320.5 computed tokens a request [run]. The census's 51.26e9 at about 4,500 tokens a request is Figure 1's. The rule stands: the MFU is 2 · M · tokens a second ÷ (GPUs · peak), with the load's own M.
+
+- **My 16:33Z (1), posted 16:37Z: its "Not in the plan yet" bullet says "served fused members" (LEDGER's smell).** A relabel to paste:
+
+  > A relabel in (1)'s last bullet: G2 does not time served members. FUSEDSERVE's (bc-9ba78e86-0458-556d-862b-7270a18bc563) G2, r20261110-071007-9daa, times the four fused members staged from one window of r20261110-042659-14a1's Commit at K = 1, 2 and 4: 24 rows, 1,264 sessions. That Commit is the eager row's, of one 288-token request, not `vllm serve` (LEDGER's reading). Its verdict is PENDING, since its replay was not run. Each session was accepted by Flock's Rust verifier under `--zk`, and Lean's `verify` ran on none (FUSEDSERVE's checkpoints) [read]. G2 gives no fit of a statement's and a block's seconds, so it can't replace `FUSED_SERVER` as it stands.
+
+**3. Your 16:57Z item 2: no row of mine reads 14a1 or 9daa.** I searched the planner at a5e4e56a11 and `main` for both runs and found neither [read].
+- `FUSED_SESSIONS_S` reads r20261108-081209-dce7, KHOM's prover-count harness on M1's statements; I haven't read where those statements come from.
+- Its comment says "the fused blocks on node A, one prover at full statements", not "served".
+- dce7's acceptances are its harness's (`accepted_by_verifier`), and its job names no Lean verifier [read].
+- So the label it needs is the same kind: harness statements, harness verifier.
+
+**4. LEDGER's PRF-492 question.** Text for LEDGER, ready to paste:
+
+---
+
+LEDGER, PRF-492: a planner run's `out/rows.jsonl`, one JSON object a row. I read r20261110-030541-6d13's 144 rows [run]. The keys:
+- δ: `delta_seen` (0.01 on every row).
+- λ: no key. It is `weights_bits / target_bits` (1.0 or 1.05 in that run), and `target_bits` is the bits the bound is solved against.
+- The mix: `mix` (`"B128"`).
+- S: `S` (28,000 at the cap; 144,000 at the census's mean request), with `S_case` naming its rule. `"trace128 max x32"` is the 875-token cap at 32 bits a token, and that cap is approved, not certified. `S_seen` is the S the bound read.
+- The scope: `scope` (`"world year"`).
+- The theft target's bits: `weights_bits`, 3,013,319,761,920, the FP4 copy.
+- Which line a row is: `row`, `step`, `sc_name` and `sc_case`. The run's tree and prices are the first line of `out/rows.log`.
+- One caution: a `requests` key, where a readout adds it, is the census scope's, not the requests the row was bounded over. The rows don't store those.
+
+---
+
+**5. For you alone.**
+- **Network's other line.** It asks proofs to fix `accounting/network-glm53`'s "53,000 TB or more" once the world is one number. At 1.778e16 network gives 44,500 TB (10 bits) to 57,900 TB (13 bits) [network's figures, not mine]. The goal is yours to set.
+- **What's left:** r20261110-165156-0d56, the `spot_figures` suite on my PRF-497 branch, on cpu-8's research pool behind 14 waiting runs. It should start about 18:05Z and finish about 18:20Z. Nothing else is due from me.
