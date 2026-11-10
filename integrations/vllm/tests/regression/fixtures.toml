@@ -192,7 +192,7 @@ since = "lane/vllm-retire-v1"
 since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
 finding = "retire-v1"
 status = "accepted"
-reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the 4150 Bf16MulScalarTensor_v1 rows (a non-leaf module-body output, read across the boundary by layer 0) as VUs where the v1 rule over the unpromoted v1 manifest of record left them not evaluable: vus 651982 -> 656132, strata_n 5846 -> 5883, and the seeded draw and the window-lifetime split follow from the added strata."
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the 4150 Bf16MulScalarTensor_v1 rows (a non-leaf module-body output, read across the boundary by layer 0) as VUs where the v1 rule over the unpromoted v1 manifest of record left them not evaluable: vus 651982 -> 656132, strata_n 5846 -> 5883, and the seeded sample and the window-lifetime split follow from the added strata."
 expected = { population = { vus = 656132, strata_n = 5883, by_family = { Bf16MulScalarTensor_v1 = 4150, Embedding_v1 = 4150, Gemm_v1 = 431600, RoPE_v1 = 215800, TokenSelect_v1 = 432 } }, lifetime = { sampled = { fresh-window = 3657, recycled-window = 2226 }, values = { fresh-window = 596666, recycled-window = 59466 } }, sample = { picked = 5883, cap_effective = 5883, stratified_picked = 5883 } }
 
 # labelled decision (Draft 3 §7): a sanctioned difference from v1, consulted by the named check when its result differs from v1 (test_regression.py, LABELLED DECISIONS)
@@ -297,7 +297,7 @@ since = "lane/vllm-retire-v1"
 since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
 finding = "retire-v1"
 status = "accepted"
-reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor) where the v1 rule used the synthetic moe/L<k> path: 2416 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor) where the v1 rule used the synthetic moe/L<k> path: 2416 stratum keys renamed; every count (population, strata sizes, the sample, lifetime, phase anchors) is unchanged."
 expected = { population = { vus = 5745046, strata_n = 38748 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
 
 # labelled decision (Draft 3 §7): the one naming scheme renames this row's identities
@@ -355,7 +355,7 @@ since = "lane/vllm-retire-v1"
 since_commit = "53d20e6ce63f3e63a580eb6ad49fdddcbea520a2"
 finding = "retire-v1"
 status = "accepted"
-reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor) where the v1 rule used the synthetic moe/L<k> path: 2016 stratum keys renamed; every count (population, strata sizes, the draw, lifetime, phase anchors) is unchanged."
+reason = "record predates the v2 rule; v1 code removed; recomputed under v2 rule. The v2 query addresses the MoeSum_v1 rows at the experts module (model.layers.<k>.mlp.experts, FusedMoE.forward's returned tensor) where the v1 rule used the synthetic moe/L<k> path: 2016 stratum keys renamed; every count (population, strata sizes, the sample, lifetime, phase anchors) is unchanged."
 expected = { population = { vus = 5830562, strata_n = 33192 }, strata = { "MoeSum_v1{TOPK=8,H=2048}|r0|rank0|first-decode|model.layers.0.mlp.experts|fresh-window" = { population = 1, sampled = 1 } } }
 
 # labelled decision (Draft 3 §7): the one naming scheme renames this row's identities
