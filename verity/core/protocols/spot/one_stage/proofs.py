@@ -34,17 +34,11 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `Spot.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/proofs.py
-`verify`'s. `statements_v2` is the evidence's per-member form, one statement a drawn member, which v2 refuses until the
-guarantee for a sample over several members' statements is in the lock (`OneStageZk.MULTI_REFUSED`).
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/proofs.py
-`verify`'s.
-=======
 `verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
-`OneStageZk.tablesHeld`).
->>>>>>> e7b03e4a6c8:verity/core/protocols/spot/one_stage/proofs.py
+`OneStageZk.tablesHeld`). `statements_v2` is the evidence's per-member form, one statement a sampled member, which v2
+refuses at parse: its evidence's ``proofs`` is exactly the sessions (`OneStageZk.proofsOf`).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -520,9 +514,9 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 
 def statements_v2(statements: Sequence[tuple[str, Proof]], names: Sequence[str]) -> tuple[dict, list[Path]]:
-    """The v2 evidence's ``proofs`` in the per-member form (`OneStageZk.statementsOf`): per statement, its member's name
-    and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1 evidence's ``sessions``,
-    statement by statement); and the blobs that hold them."""
+    """The v2 evidence's ``proofs`` in the per-member form, which v2 refuses at parse (`OneStageZk.proofsOf`): per
+    statement, its member's name and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1
+    evidence's ``sessions``, statement by statement); and the blobs that hold them."""
     names, out, blobs = list(names), [], []
     for member, proof in statements:
         pr, bs = evidence_v2(proof, names[:len(proof.sessions)])
@@ -563,22 +557,6 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, public_sha512: str, registered: Mapping[str, Any] | None) -> dict:
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/proofs.py
-    auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
-    its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
-    line. `params` must name the auditor's challenger and its window (``challenger``, ``window_root``), whose signed
-    release in the evidence's ``coins`` the draw reads: v2 refuses parameters naming none. That release log must release
-    the sample, then the link, then the other rounds (`challenger.sample_link_first`), and each session's record must be
-    on a coin tree it shows the challenger sampled and opened, one tree a session and every tree a session's
-    (`challenger.sessions_tree_reason`)."""
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/proofs.py
-    auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
-    its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
-    line. `params` must name the auditor's challenger and its window (``challenger``, ``window_root``), whose signed
-    release in the evidence's ``coins`` the draw reads: v2 refuses parameters naming none. Each session's record must be
-    on a coin tree that release log shows the challenger sampled and opened, one tree a session and every tree a
-    session's (`challenger.sessions_tree_reason`)."""
-=======
     auditor's circuit and public files' digests, committed before any coin, and the verifier's registered file, the
     registration `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
     under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
@@ -590,7 +568,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     `challenger.LINK_ROOT_LEN`), the program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
     must be `record`'s (`registration.matches_public`), its ``units.indices`` the population's units in order, before
     the session is verified."""
->>>>>>> e7b03e4a6c8:verity/core/protocols/spot/one_stage/proofs.py
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
@@ -606,18 +583,8 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/one_stage/proofs.py
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "statements_v2", "units_exactly", "v2_executable", "verdicts_v2", "verify"]
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/one_stage/proofs.py
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
-=======
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
            "UNIT_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
            "circuit_lookups", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "order_why", "population_why", "printed", "printed_size", "proved_units", "reads_registered",
-           "tables_why", "template_why", "v2_executable", "verdicts_v2", "verify"]
->>>>>>> e7b03e4a6c8:verity/core/protocols/spot/one_stage/proofs.py
+           "statements_v2", "tables_why", "template_why", "units_exactly", "v2_executable", "verdicts_v2", "verify"]
