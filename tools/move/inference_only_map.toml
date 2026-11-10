@@ -45,7 +45,7 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
-            'lanes/[\w.-]+', 'draft:[\w.-]+', '\binference_only/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
+            'lanes/[\w.-]+', 'draft:[\w.-]+', '\bbenchmarks/nci\b', '\binference_only/nci\b', '(?<!\w)nci-', '(?<!/ )"nci"(?! /)',
             '"why": "[\d,]+ [^"\n]*"', '(?<=")Nci(?!Check)[A-Z]\w*']
 # GLOSSARY.md's rows of older names, the slowdown calculator's family of `verity/protocols/inference_only/nci`'s algorithms, and the period
 # check's refusal.
