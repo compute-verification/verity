@@ -210,17 +210,19 @@ def test_a_second_session_for_the_commits_root_is_refused(tmp_path, monkeypatch)
         "a second open for root" in why)
 
 
-def test_a_gate_answer_that_is_no_refusal_is_never_quoted():
-    """An open's answer holds its session's secret, so `ChallengerGate.call` names an answer it can't take (not JSON, or
-    a failed exit without a refusal) by its size or its exit alone; a refusal's own words are still quoted."""
+def test_a_refusal_quotes_no_secret_of_a_gate_answer_it_cant_read():
+    """An open's answer holds its session's secret. `ChallengerGate.call` quotes an answer it can't read as JSON without
+    its long hex runs, so neither the secret nor a part of it past the quote's cut is in the refusal; a failed exit
+    whose answer is no refusal quotes nothing of it, and a refusal's own words are still quoted."""
     secret = "5e" * 32
-    answer = json.dumps({"session": "s1", "seq": 0, "root": "00" * 64, "commitment": None, "secret": secret})
-    noisy = answer + "\nWarning: a line ssh appended"
-    for rc, text, why in ((0, noisy, f"an answer of {len(noisy)} characters that is not JSON"), (255, answer, "None"),
+    answer = json.dumps({"session": "s1", "port": 7811, "secret": secret, "root": "00" * 64, "commitment": None})
+    noisy = "Warning: a line ssh wrote first\n" + answer
+    shown = noisy.replace(secret, CC.HEX_WITHHELD).replace("00" * 64, CC.HEX_WITHHELD)
+    for rc, text, why in ((0, noisy, shown), (0, "x" * 290 + secret, "x" * 290 + CC.HEX_WITHHELD[:10]), (255, answer, "None"),
                           (3, json.dumps({"refused": "root has a session"}), "root has a session")):
         with pytest.raises(CoinError) as e:
             CC.ChallengerGate("ssh gate", run=lambda argv, got=(rc, text): got).call("open", "--session", "s1")
-        assert str(e.value) == f"the challenger gate refused open (exit {rc}): {why}" and secret not in str(e.value)
+        assert str(e.value) == f"the challenger gate refused open (exit {rc}): {why}" and secret[:16] not in str(e.value)
 
 
 def test_coins_held_in_the_commits_process_credit_nothing(tmp_path, monkeypatch):
