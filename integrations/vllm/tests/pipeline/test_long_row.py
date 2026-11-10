@@ -188,10 +188,12 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
     assert IL.span_values(links) == (
         ("scores", 6, (8, 16)), ("n", 2, (2, 16)), ("c", 2, IL.INDEX), ("i", 64, IL.INDEX), ("root", 2, IL.DIGEST),
         ("domain", 2, IL.DIGEST), ("row", 4, (1, 16)), ("salt", 4, (96, 16)), ("path", 4, (128, 16)))
-    wires, digests = SS.replay_wires(L.program, key), []
+    wires, rows, digests = SS.replay_wires(L.program, key), SS.replay_rows(L.program, key), []
+    with pytest.raises(ValueError, match="a writer of 2 units a block"):
+        IR.interior_window(ms, cells, "00", [0], wires)
     for q in (1, 2):
         values = IL.link_values(links, q)
-        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, values)
+        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, values, rows)
         assert [m.n for m in w.members] == [q * n for n in cells]
         want = P.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
         digests.append(P.program_digest(w.program))
@@ -258,15 +260,16 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     """Two sampled spans of a class of three (`spans`: one of two instances, one of one, which the interior pads to the
     block's two), each opening its own table as round 1 registered it: the reads' rows and oks are what the check returns
     on the same operands at each instance (the one place a span's units are held to the whole check), and
-    `interior_rows.interior` commits them under the replay block's wires (`second_stage.replay_wires`) and `links`: its
-    program is the stream's at two spans and it registers the block's nine parameters as round 2 names them. It refuses a
+    `interior_rows.interior` commits them under the replay block's wires and rows (`second_stage.replay_wires`,
+    `replay_rows`) and `links`: its program is the stream's at two spans, it registers the block's nine parameters as
+    round 2 names them, and a wired unit reads its own instance's writer (read j its slot j). It refuses a
     span whose wired row is not its writer's output, whose scores at one unit are not the block's another unit read, or
     whose read is not an opening of its table. On the layout the links test builds (`_laid`): nothing cheaper has the
     block's wires."""
     t, L = _laid()
     key, q0 = descriptor_id(L.replay), L.n_rho
     ms, cells = LR.window(t, q0)
-    links, wires = LR.links(t, q0, tables=True), SS.replay_wires(L.program, key)
+    links, wires, block = LR.links(t, q0, tables=True), SS.replay_wires(L.program, key), SS.replay_rows(L.program, key)
     tables = [_table(n, seed, BT.name(RUN, L.prompt, L.outputs, slot, 0), (L.prompt, L.outputs))
               for slot, n, seed in ((0, 9, 1), (2, 5, 2))]
     rows = _rows("long-row-interior", (12, 7))
@@ -285,8 +288,8 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
 
     served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
                         for x in tables]}
-    kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "tables": tables, "served": served,
-          "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
+    kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "rows": block, "tables": tables,
+          "served": served, "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
     it = IR.interior(drawn, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
     assert [(m.template, m.n) for m in w.members] == [(m.template, 2 * n) for m, n in zip(ms, cells, strict=True)]
@@ -295,6 +298,10 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     assert P.program_digest(w.program) == P.program_digest(want)
     assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]
     assert it.published == {x.value: [bc.hex() for bc in x.bcs] for x in tables}
+    reads = next(m for m in w.members if m.template == descriptor_id(t.bindings["READ"]))
+    assert w.held_leaves(reads, "tok") == tuple(range(reads.n))
+    pick = next(m for m in w.members if m.template.startswith("DsaTopKDigitPick"))
+    assert w.held_leaves(pick, pick.rows[0][0]) == (0, 1, 2, 3)
 
     ids = [s.member.template for s in drawn[0]]
 
