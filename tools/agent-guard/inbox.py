@@ -267,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     ck.add_argument("agent")
     ck.add_argument("--repo", type=Path, default=Path("."))
     sf = sub.add_parser("selftest")
-    sf.add_argument("agent", nargs="?", default=os.environ.get("CURSOR_CONVERSATION_ID", ""))
+    sf.add_argument("agent", nargs="?", default=settings.CONVERSATION_ID)
     sf.add_argument("--repo", type=Path, default=Path("."))
     a = ap.parse_args(argv)
     if a.cmd == "selftest":

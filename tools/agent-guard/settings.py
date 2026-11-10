@@ -17,6 +17,8 @@ INBOX_POLL_S = os.environ.get("AGENT_INBOX_POLL_S", "30")
 #: one line per hook run: which hook, the event's name, its conversation, tool name and key names (never a value)
 EVENT_LOG = os.environ.get("AGENT_GUARD_EVENT_LOG", "/tmp/agent-guard-events.jsonl")
 EVENT_LOG_MAX_BYTES = 1 << 20
+#: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
+CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 
 
 def record_event(hook: str, event: object) -> None:
