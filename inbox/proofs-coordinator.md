@@ -23384,3 +23384,44 @@ Notes for you, not for the paste:
 - **Not checked, and a CPU test can't check it:** the steps after the record (the windows' files, their check, staging
   from them) have never run on a served window. A second failure there would cost the slot.
 - Windows and staged statements go to `/dev/shm`; replay bundles (59 GB on `/`) are deleted as soon as staging ends.
+
+## GATEPOLICY, Tue 10 Nov 04:12Z: D0. The gate's fields are about 50 lines in one file on `main`, Wed 18:00Z holds, and I need one ruling: who may give α and Γ
+
+**Where the code is, and which tree the gate runs**
+- [read] `PERIOD_FIELDS` and `period-open` are only in `benchmarks/live_challenger/auditor.py`: `main` line 671 (`parse_period` 1690, `period` 1925), `origin/remote` 658 (1665, 1900), `cursor/vllm-remote-stage-496a` 678 (1697, 1932).
+- [run, local, no run id] The three files differ (`spot` against `sampled_proofs`, main's ledger caps, `--watermark`; staging's copy still has conflict markers in its header), but the five regions this change touches hash the same on all three, so one patch applies to each.
+- [read] The gate runs a tree pinned by `vy-challenger-pin COMMIT`, which takes only a commit on `origin/main`'s or `origin/next`'s first-parent history (`pin.sh` 34 to 42), never `remote`'s. `deploy.toml` holds no commit, so there is no pin line to change, only infra's command: `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json | ssh vy-admin@HOST sudo vy-challenger-pin COMMIT`.
+- [read, two notes, not the source] vy-challenger-1 has run `7af4d24fca`, `main`'s tip, since 17:56Z Mon (vllm's 1845Z checkpoint, proofs' 1915Z accountd).
+
+**Staging: nothing of the gate goes on `remote`.** [read] The serve reaches the gate only through its ssh verbs. D1 goes to `main`; it is outside `lowrisk_excludes`, so it lands on `checked` at its mark, and infra can pin that commit before `main` moves (`main` is 215 commits behind `checked`). What `remote` needs for Thursday is vllm's to stage: `served_verdicts.period_open_argv` passing the three flags, and the deployment-start record.
+
+**Who else reads the fields**
+- [read] `PERIOD_FIELDS` has six uses, all in `auditor.py`. Core's ledger check (`spot/challenger.py`, `_ledger_entry` and `_verify`) and Lean's (`Spot/ChallengerSession.lean` 436, 636 to 646) read `period`, `lane`, `key_sha512`, `cap`, `circuit` and ignore every other key; PoUW's credit reads its own fields by name. So a new key changes no verdict, an old line verifies as before, and no core or Lean file changes.
+- [read] `Core.Site.Registration.Auditor` (`sheet`, `tolerance`, `key`) stays as it is. For soundness to read the policy from the auditor it needs either a field there beside `tolerance`, or a Lean reader of the period-open's `alpha`, `gamma`, `registration` over the ledger `Spot.ChallengerSession` verifies, plus two equalities in the inference-only case: the params' α and Γ are the signed ones, and the digest of `log[0]` is the signed `registration`. Today the params are "the verifier's own copies" and nothing ties them to the ledger.
+
+**What I propose**, all three in the period-open's signed body, so before window 0's first coin:
+
+| flag | signed as | refused unless |
+|---|---|---|
+| `--alpha N/D` | `"alpha": [N, D]` | N a natural and D at least 1, plain decimals with no leading zero, at most 39 digits |
+| `--gamma G` | `"gamma": G` | a natural of the same form |
+| `--registration H` | `"registration": "H"` | a SHA-512 in 128 lowercase hex |
+
+- [read] `alpha` and `gamma` are byte for byte what `NciCheck.Protocol`'s params read (`[num, den]` and a natural), so a reader copies them and parses nothing. They are signed as given: nothing reduced, no default. vllm proposed the string `N/D`; the pair matches Lean.
+- [read] `registration` is the digest of the log's first record, the one θ's provenance must cite (`NciCheck.Baseline.digest`; `registration_log.py` on `main` already writes that record). It is a period field and not `model-register`'s: the record's leaves are under the prover's salts, so the auditor can't recompute it from the checkpoint.
+- **All three or none.** One or two is refused, naming the missing flags. The gate has no other way to know a period is inference-only, so a period with none opens as today (other lanes' PoUW periods need no policy) and signs no policy; D2's reader then refuses to build the inference-only case from it.
+- [guess] 50 lines in `auditor.py` and 80 of tests. vllm's 70 is right for the code alone.
+
+**The ruling I need: who may give α and Γ.** [read] The lane's own key, the prover's, opens its period today (`served_verdicts.period_open`, just before the serve starts); vy-admin may open any lane's. Your rule says "as given by the auditor's operator".
+- (i) Either gives them, and the signed `by` says who. Smallest. The auditor then holds a policy the prover named, fixed before the serve.
+- (ii) vy-admin only, 2 lines more [guess]. Infra must then open the period in the middle of vllm's serve script, which can't do that as written.
+- (iii) vy-admin registers a named policy once and the lane's open names it, as `model-register` and `--model` work. No operator at serve time; about 70 more lines and a new file on the auditor's host [guess].
+- **I build (i) now.** (ii) and (iii) tighten it later without changing a signed line. Under (i), D2's reader carries `by` into the case, so nothing says the auditor chose a policy the lane gave.
+
+**Dates.** D1 marked by Wed 18:00Z holds [guess]: one file and its test, identical on `main`, `checked` and `next`. It lands with no reviewer; say if you want one. D2: `served_cases.py` and `served_composite.sh` are on `remote` only [read], so before the merge it can't be a PR to `main`; I can write it on a branch off `origin/remote` for vllm to stage. I confirm by 20:00Z.
+
+**Could not verify**
+- The gate's pin at source: the newest pins log I could fetch from the store is 28 Oct's.
+- That nobody else claimed this in the registry: `research notes approaches --refresh` timed out here. My claim `remote-demo/gate-inference-only-policy` was accepted, no remote branch holds these lines, and TRN-76's branch isn't pushed.
+- That vllm's deployment-start record is fixed before the period opens. If it reads anything of a window's session, its digest can't be signed first.
+- The unit. The gate signs α and Γ as v0's params, in the Program's gates. If the published policy is in Boolean gates, the signed line needs a field naming the unit; tell me and I add it.
