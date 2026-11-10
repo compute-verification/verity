@@ -86,6 +86,16 @@ SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
 #: what stands for the root before a path from it: what closes a placeholder or a command (`{ROOT}/`, `<tree>/`,
 #: `$(pwd)/`), a shell variable, the home's checkout, a pod's. `tools/verity/check/move_check.py` reads a path as this does.
 ROOT_PREFIX = r"[})>]/|\$\{?\w+\}?/|~/(?:verity/)?|/workspace/"
+#: an entry of a list that is one path: a git revision before it (`HEAD:`), `/` or all below it (`/**`) after it
+ENTRY = re.compile(r"(?P<pre>(?:HEAD:)?)(?P<p>[\w\-][\w.\-]*(?:/[\w.\-]+)*)(?P<post>/\*\*|/)?")
+_STRING = r'"(?:[^"\\\n]|\\.)*"|\'[^\'\\\n]*\''
+#: a TOML or JSON array of strings that is a key's value, with the comments between them
+ARRAY = re.compile(rf"[=:]\s*(\[\s*(?:(?:#[^\n]*|(?:{_STRING})(?:\s*,)?)\s*)*\])")
+#: the shell commands whose words are a list of paths: `git rev-parse`'s objects (`HEAD:path`) and `tar`'s members. Any
+#: other command's word may be the one directory it takes (`cd`, a destination), so no list is read there.
+SH_LIST = re.compile(r"(?<![\w.\-/])(?P<cmd>git\s+rev-parse|tar)(?=[ \t])(?P<args>[^|;&()\n]*)")
+#: where `_covers` took an entry out of a list, until the list is closed up around it
+GONE = "\ue002"
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -247,6 +257,60 @@ def braces(token: str) -> list[str]:
     if not m:
         return [token]
     return [e for alt in m.group(1).split(",") for e in braces(token[:m.start()] + alt + token[m.end():])]
+
+
+def lists(path: str, text: str) -> list[tuple[str, tuple[int, int], list[tuple[int, int]]]]:
+    """The lists `text` holds whose entries may each be a path, as (what parts one entry from the next, the list's span,
+    each entry's span). In Python a list, tuple or set of nothing but string literals and `*names`; in TOML and JSON an
+    array of strings; either only as a value of its own: one that is an entry of another, or whose entries an assignment
+    binds to names one by one, is a record. In a shell script the words of a command that takes a list (`SH_LIST`:
+    `HEAD:path` after `git rev-parse`; after `tar` a word that is no option's value)."""
+    out = []
+    if path.endswith(".py"):
+        try:
+            tree = ast.parse(text)
+        except (SyntaxError, ValueError):
+            return out
+        lines, starts = text.splitlines(keepends=True), [0]
+        for line in lines:
+            starts.append(starts[-1] + len(line))
+
+        def offset(lineno: int, col: int) -> int:
+            return starts[lineno - 1] + len(lines[lineno - 1].encode("utf-8")[:col].decode("utf-8", "replace"))
+        many = (ast.List, ast.Tuple, ast.Set)
+        records = {id(e) for node in ast.walk(tree) if isinstance(node, many) for e in node.elts}
+        records |= {id(node.value) for node in ast.walk(tree)
+                    if isinstance(node, ast.Assign) and any(isinstance(t, many) for t in node.targets)}
+        for node in ast.walk(tree):
+            if not isinstance(node, many) or id(node) in records or not all(
+                    isinstance(e, ast.Starred) or isinstance(e, ast.Constant) and isinstance(e.value, str) for e in node.elts):
+                continue
+            entries = []
+            for e in node.elts:
+                if isinstance(e, ast.Constant) and e.lineno == e.end_lineno:
+                    a, b = offset(e.lineno, e.col_offset), offset(e.end_lineno, e.end_col_offset)
+                    if text[a] in "\"'" and text[a + 1:b - 1] == e.value:
+                        entries.append((a + 1, b - 1))
+            if entries:
+                out.append((", ", (offset(node.lineno, node.col_offset), offset(node.end_lineno, node.end_col_offset)), entries))
+    elif path.endswith((".toml", ".json")):
+        for m in ARRAY.finditer(text):
+            at = m.start(1)
+            out.append((", ", m.span(1), [(at + s.start() + 1, at + s.end() - 1)
+                                          for s in re.finditer(rf"#[^\n]*|{_STRING}", m[1]) if s[0][0] != "#"]))
+    elif is_shell(path, text):
+        for m in SH_LIST.finditer(text):
+            entries, before = [], ""
+            for w in re.finditer(r"\S+", m["args"]):
+                a, b = m.start("args") + w.start(), m.start("args") + w.end()
+                if b - a > 1 and text[a] == '"' == text[b - 1]:
+                    a, b = a + 1, b - 1
+                rev = text.startswith("HEAD:", a)
+                if rev if m["cmd"] != "tar" else not rev and (not before.startswith("-") or before == "-" or "=" in before):
+                    entries.append((a, b))
+                before = w[0]
+            out.append((" ", m.span("args"), entries))
+    return out
 
 
 def derived_modules(layout: Layout) -> dict[str, str]:
@@ -434,7 +498,10 @@ class Run:
         kept = self.tracked_old - {*self.dropped, *self.leftover}
         self.new_files = {dest.get(p, p) for p in kept}
         self.old_of = {dest.get(p, p): p for p in kept}
-        self.new_dirs = {d for p in self.new_files for d in _ancestors(p)}
+        self.new_of = {o: n for n, o in self.old_of.items()}
+        self.kept = sorted(kept)
+        self.holds = Counter(d for p in self.new_files for d in _ancestors(p))     # directory -> the files the moved tree has in it
+        self.new_dirs = set(self.holds)
         mods = set()
         for p in self.new_files | set(self.L.data.get("create", {})):
             if p.endswith(".py"):
@@ -543,6 +610,13 @@ class Run:
             return None
 
     def rewrite(self, path: str, old: str, text: str) -> str:
+        out, covers = self._covers(path, text)
+        out = self._rewrite(path, old, out)
+        for mark, entries in covers.items():
+            out = out.replace(mark, entries)
+        return out
+
+    def _rewrite(self, path: str, old: str, text: str) -> str:
         out = text
         if posixpath.basename(path) == ".gitignore":
             out = self._gitignore(path, out)
@@ -564,6 +638,98 @@ class Run:
     def _count(self, path: str, kind: str, n: int = 1):
         self.changes[kind] += n
         self.files_changed[path][kind] += n
+
+    # covers -------------------------------------------------------------------------------------------------------
+
+    def cover(self, olds) -> dict[str, str]:
+        """For each of the files `olds` (old paths the move keeps), the directory or file of the moved tree that stands for
+        it in their cover: the fewest directories and files that hold these files and no others. A directory stands for
+        its files when every file the moved tree has in it is one of them (an `__init__.py` the move creates counts as
+        none): the topmost such, named at its lowest level that holds them all."""
+        news = {o: self.new_of[o] for o in olds}
+        mine = Counter(d for n in news.values() for d in _ancestors(n))
+        out = {}
+        for o, n in news.items():
+            up = list(_ancestors(n))
+            top = next((d for d in reversed(up) if mine[d] == self.holds[d]), None)
+            out[o] = n if top is None else next(d for d in up if self.holds[d] == self.holds[top])
+        return out
+
+    def _parts(self, d: str) -> bool:
+        """Whether old path `d` stands for no one place after the move: a directory the map splits (a row says where it goes,
+        and not every file of it keeps its place below there) or empties (no row, and the moved tree has no file there), or
+        a file the move deletes."""
+        if d not in self.old_dirs:
+            return d in self.dropped or d in self.leftover
+        new, approx = self.L.directory(d)
+        if new is None:
+            return approx and d not in self.new_dirs
+        return any(self.new_of[f] != new + f[len(d):] for f in self._under(d))
+
+    def _covers(self, path: str, text: str) -> tuple[str, dict[str, str]]:
+        """In a list of paths (`lists`), an entry that names what stands for no one place after the move (`_parts`) becomes
+        where its files went: the directories and files of the moved tree that hold the files the list's entries held, all
+        of them together, and no others (`cover`). Each is written once, at the first such entry that held a file of it,
+        with what the entry had around its path, and one that an entry the list keeps already holds is not written. An
+        entry left with nothing to write goes, and a line left empty goes with it. A directory with another entry of the
+        list above or below it is not read so: such a list names levels. Returns the text with a mark where each rewritten
+        entry was, and what each mark stands for, so that no later rewrite reads the new paths as old ones."""
+        if not hasattr(self, "_parts_re"):
+            names = [p for p in (*self.old_dirs, *self.dropped, *self.leftover) if self._parts(p)]
+            self._parts_re = re.compile(alternation(names)) if names else None
+        if self._parts_re is None or not self._parts_re.search(text):
+            return text, {}
+        edits, marks = [], {}
+        for sep, _, spans in lists(path, text):
+            named = [(a, b, m) for a, b in spans if (m := ENTRY.fullmatch(text, a, b))
+                     and (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
+            names = {m["p"] for _, _, m in named}
+            # entries one above the other name levels, not the files below them: those are left to the other rewrites
+            todo = {p for p in names if self._parts(p) and not (p in self.old_dirs and any(
+                q.startswith(p + "/") or p.startswith(q + "/") for q in names))}
+            if not todo:
+                continue
+            files = {p: self._under(p) for p in names}
+            cover = self.cover({f for fs in files.values() for f in fs})
+            held = [self.L.path(p, p in self.old_dirs)[0] or p for p in names - todo]
+            for a, b, m in named:
+                if m["p"] not in todo:
+                    continue
+                parts = [c for c in sorted({cover[f] for f in files[m["p"]]})
+                         if not any(c == h or c.startswith(h + "/") for h in held)]
+                held += parts
+                q = text[a - 1] if text[a - 1] in "\"'" and text[b:b + 1] == text[a - 1] else ""
+                self._count(path, "list entries covered")
+                self.note("list entries written as where their files went", f"{path}: {m[0]} -> {' '.join(parts) or 'nothing'}")
+                if parts:
+                    marks[mark := f"\ue000{len(marks)}\ue001"] = (q + sep + q).join(
+                        m["pre"] + c + ((m["post"] or "") if c in self.new_dirs else "") for c in parts)
+                    edits.append((a, b, mark))
+                else:
+                    edits.append((a - len(q), b + len(q), GONE))
+        out = text
+        for a, b, s in sorted(set(edits), reverse=True):
+            out = out[:a] + s + out[b:]
+        if GONE in out:
+            if path.endswith(".json"):                  # JSON takes no comma before the bracket that closes a list
+                while (less := re.sub(rf",\s*{GONE}(?=\s*\])", "", out)) != out:
+                    out = less
+            lines = []
+            for line in out.split("\n"):
+                if GONE in line:
+                    for around in (rf"{GONE}[ \t]*,[ \t]*", rf"(?<=\S)[ \t]+{GONE}", rf"{GONE}[ \t]*"):
+                        line = re.sub(around, "", line)     # with its comma; else with the space before it; else alone
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                lines.append(line)
+            out = "\n".join(lines)
+        return out, marks
+
+    def _under(self, p: str) -> list[str]:
+        """The files the move keeps that old path `p` names: itself, or those below it."""
+        lo, hi = bisect.bisect_left(self.kept, p + "/"), bisect.bisect_left(self.kept, p + "0")
+        return self.kept[lo:hi] or [f for f in (p,) if f in self.new_of]
 
     # paths --------------------------------------------------------------------------------------------------------
 

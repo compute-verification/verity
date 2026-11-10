@@ -503,6 +503,49 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
     assert "`__init__.py` left alone in a package the move empties, deleted: 2" in p.stdout
 
 
+COVER_MAP = """[roots]
+old = { lib = "lib" }
+new = { verity = "verity" }
+
+[paths]
+"lib/commit/" = "verity/commit/"
+"lib/core/wire/" = "verity/config/wire/"
+"lib/core/proto/" = "verity/protocols/proto/"
+"lib/core/claims.py" = "verity/config/claims.py"
+
+[modules]
+"lib.commit" = "verity.commit"
+"lib.core.claims" = "verity.config.claims"
+"lib.core.proto" = "verity.protocols.proto"
+"lib.core.wire" = "verity.config.wire"
+"""
+
+
+def test_a_list_entry_naming_a_directory_the_map_empties_becomes_the_cover_of_where_its_files_went(tmp_path):
+    """`lib/core/` goes three ways and its own `__init__.py` is deleted, so no one path stands for it. In a list of paths
+    it becomes the fewest directories and files of the moved tree that hold what the list's old entries held, taken over
+    all of them: beside `lib/commit/` that is `verity/` whole, alone it is the two parts. An entry naming the deleted
+    `__init__.py` goes. What is no such list stays as it was: entries one above the other (levels), a tuple that an
+    assignment unpacks or that is a row of a table, and a word of a command that takes one directory."""
+    r, p = _run(tmp_path, {
+        "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
+        "lib/core/proto/check.py": "Y = 1\n", "lib/core/claims.py": "Z = 1\n", "lib/commit/c.py": "C = 1\n",
+        "docs/a.md": "a\n", "other/x.py": "W = 1\n",
+        "gates.toml": ('low_risk = ["docs/", "lib/core/", "lib/commit/"]\ncore = ["lib/core/"]\n'
+                       'levels = ["lib/core/", "lib/core/wire/"]\nmarks = [\n    "lib/core/__init__.py",\n    "lib/core/claims.py",\n]\n'),
+        "tools/lists.py": 'ROOTS = ("lib/core", "other")\nA, B = "lib/core", "docs"\nROWS = [("lib/core", "why")]\n',
+        "job.sh": "#!/bin/sh\ngit rev-parse HEAD:lib/core HEAD:other\ncd lib/core\n",
+    }, COVER_MAP)
+    assert p.returncode == 0, p.stderr
+    assert (r / "gates.toml").read_text() == (
+        'low_risk = ["docs/", "verity/", "verity/commit/"]\ncore = ["verity/config/", "verity/protocols/proto/"]\n'
+        'levels = ["lib/core/", "verity/config/wire/"]\nmarks = [\n    "verity/config/claims.py",\n]\n')
+    assert (r / "tools/lists.py").read_text() == (
+        'ROOTS = ("verity/config", "verity/protocols/proto", "other")\nA, B = "lib/core", "docs"\nROWS = [("lib/core", "why")]\n')
+    assert (r / "job.sh").read_text() == "#!/bin/sh\ngit rev-parse HEAD:verity/config HEAD:verity/protocols/proto HEAD:other\ncd lib/core\n"
+    assert "gates.toml: lib/core/ -> verity\n" in p.stdout and "gates.toml: lib/core/__init__.py -> nothing" in p.stdout
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
