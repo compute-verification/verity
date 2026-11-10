@@ -196,6 +196,16 @@ def test_an_engine_refuses_an_inductor_that_read_the_tiling_otherwise(monkeypatc
         env.require_inductor({})
 
 
+def test_every_process_of_the_suite_loaded_inductor_under_the_pin() -> None:
+    """The suite's `conftest.py` imports ``torch._inductor.config`` itself, under the pin, wherever torch is installed, so no test is
+    the first to import it with the pin cleared from its environment, and an engine built in any test is not refused for the tests
+    that ran before it."""
+    import importlib.util
+
+    assert ("torch._inductor.config" in sys.modules) == (importlib.util.find_spec("torch") is not None)
+    env.require_inductor({})
+
+
 @pytest.mark.parametrize("module, fn", TP_ENGINES)
 def test_every_tp_engine_checks_its_inductor_before_it_is_built(module, fn) -> None:
     import importlib

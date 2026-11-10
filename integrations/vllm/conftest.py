@@ -4,11 +4,14 @@ A re-executed `verity.ml.circuits.defs` is a second module with its own empty RE
 into that orphan for the rest of the process, so the failure surfaces in whichever later file shares the worker, never in the test that
 caused it.  The guard fails the causing test by name and puts the original modules back.
 
-Every process of the suite runs under the engine profile's fixed Inductor switches (`engine.env.FIXED`), pinned before any test
-module imports torch, as an engine's process is: torch reads them when `torch._inductor.config` is imported, so a test that builds
-engine arguments (`engine.env.require_inductor`) doesn't depend on which module imported Inductor first."""
+Every process of the suite runs under the engine profile's fixed Inductor switches (`engine.env.FIXED`), as an engine's process
+does: torch reads them once, when `torch._inductor.config` is imported, so this file pins them and imports that module itself,
+before any test.  No test is then the first to import it, whatever that test has cleared from the environment, and a test that
+builds engine arguments (`engine.env.require_inductor`) doesn't depend on which test ran before it.  A second guard fails, by
+name, a test that leaves the loaded module reading a fixed switch otherwise, and puts the pinned value back."""
 from __future__ import annotations
 
+import importlib.util
 import sys
 
 import pytest
@@ -16,6 +19,8 @@ import pytest
 from verity_vllm.engine import env as _engine_env
 
 _engine_env.pin({k: _engine_env.ENGINE[k] for k in _engine_env.FIXED})
+if importlib.util.find_spec("torch") is not None:  # torch is an extra of this package: where it is absent, nothing reads the switches
+    import torch._inductor.config  # noqa: F401
 
 import verity.ml.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
 
@@ -64,3 +69,17 @@ def _verity_modules_not_swapped():
         pytest.fail(f"test left loaded verity module(s) swapped for another copy (sys.modules or package attribute): {sorted(swapped)}; "
                     f"a re-executed verity.ml.circuits.defs carries its own REGISTRY and orphans every registry module imported against it",
                     pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def _inductor_reads_the_fixed_switches():
+    yield
+    cfg, pinned = sys.modules.get("torch._inductor.config"), dict(_engine_env.FIXED.values())
+    left = {attr: getattr(cfg, attr) for attr, want in pinned.items() if cfg is not None and getattr(cfg, attr, want) != want}
+    for attr in left:
+        setattr(cfg, attr, pinned[attr])
+    if left:
+        pytest.fail(f"test left torch._inductor.config reading {left}, where every process of the suite reads {pinned} "
+                    f"(engine.env.FIXED): it set the attribute, or unloaded the module and imported it again without the pin in its "
+                    f"environment, and every later engine build in this process would be refused (engine.env.require_inductor); undo "
+                    f"what the test changed (monkeypatch.setattr, monkeypatch.delitem)", pytrace=False)
