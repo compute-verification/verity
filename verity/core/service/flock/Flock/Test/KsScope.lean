@@ -57,20 +57,6 @@ def segOut (chunks : Nat) : Circuit :=
   (ProvedScope.scopeWhy true (segOut 1)).endsWith "one output port per output row"
 #guard !ProvedScope.scopeOkH { segOut 2 with outRowPorts := #[2] }
 
-/-- `one` with a `sha512/row/v2` input row `x` and a `sha512/row-seg/v1` output row `y` of 1,024 bits in `chunks`
-compressions, its one segment's two and none past them when well formed. -/
-def segOut (chunks : Nat) : Circuit :=
-  { one with
-    ports := #[{ name := "x", words := 64, chunks := 1, nb := 0, bits := 1024, v2 := true },
-      { name := "y", words := 64, chunks, nb := 0, bits := 1024, v2 := true, segs := some (HmRow.segShape 1024).1 }],
-    outRowPorts := #[1] }
-
-#guard ProvedScope.scopeOkH (segOut 2) && filesWhy Tags.circuit (segOut 2) default ByteArray.empty == none
-#guard !ProvedScope.scopeOkH (segOut 1) && filesWhy Tags.circuit (segOut 1) default ByteArray.empty == some SCOPE_WHY
-#guard (ProvedScope.scopeWhy true (segOut 1)).startsWith "rows that are neither" &&
-  (ProvedScope.scopeWhy true (segOut 1)).endsWith "one output port per output row"
-#guard !ProvedScope.scopeOkH { segOut 2 with outRowPorts := #[2] }
-
 /-- `one` with two input ports, `x` and `y`. -/
 def two : Circuit :=
   { one with ports := #[{ name := "x", words := 64, chunks := 1, nb := 1 }, { name := "y", words := 64, chunks := 1, nb := 1 }] }
