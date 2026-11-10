@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
+"""`verity.definitions.registry.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
 `NvLogf_v3` agrees with `NvLogf_v2`, and the log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of
 both signs, the sweeps around their branch points, and random words. The uniform and noise of a Philox word agree on its
 edges (0, all ones, the floor, the f32 rounding of large words). `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
@@ -19,19 +19,19 @@ import zlib
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.cut import separable
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.definitions.registry import gumbel_boolean as GB
-from verity.ml.definitions.registry import sampling as SM
-from verity.ml.definitions.registry import sampling_boolean as SB
-from verity.ml.definitions import word as W
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit
+from verity.definitions.registry import gumbel_boolean as GB
+from verity.definitions.registry import sampling as SM
+from verity.definitions.registry import sampling_boolean as SB
+from verity.definitions import word as W
 
 F32 = GB.F32
 
@@ -364,7 +364,7 @@ BULK = [(1, 4096), (2, 4096), (5, 2048), (63, 512), (64, 512), (65, 512), (129, 
 @pytest.mark.slow
 def test_gumbel_select_agrees_with_its_word_definition() -> None:
     """Every size in one test, so one process traces the lane. At V = 1 against the restatement (`GumbelSelectF32_v1{V=1}`'s
-    scan has no iterations, which `verity.ml.circuits.layout.resolve_gate` misreads: `test_sampling_boolean`'s word-view xfail). The
+    scan has no iterations, which `verity.circuits.layout.resolve_gate` misreads: `test_sampling_boolean`'s word-view xfail). The
     body is `gumbel_select_calls`: the stages in order (and the lane products' two constant bits), as a served Program calls
     them at its root."""
     for V, n in BULK:

@@ -12,7 +12,7 @@ import Proofs.Flock.Soundness.ListSize
 import VCVio.Prelude.Core
 
 /-!
-# Soundness of Flock's interactive protocol, as the Lean verifier (`verity/core/service/flock/`) runs it
+# Soundness of Flock's interactive protocol, as the Lean verifier (`verity/flock/verifier/`) runs it
 
 **`table_sound`.** For every prover strategy, the probability that the verifier accepts a table
 (both reps, on one committed root, with live coins) while no codeword within the level-0 radius

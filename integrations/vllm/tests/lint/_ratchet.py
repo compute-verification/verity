@@ -1,7 +1,7 @@
 """Ratchet machinery shared by the rule lints in this directory (one rule per ``test_pNN_*.py``).
 
 Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``), and the
-circuit Definitions that moved from it to ``verity/ml/definitions/`` (``LIBRARY`` and ``MOVED_OUT``: circuits' since the
+circuit Definitions that moved from it to ``verity/definitions/`` (``LIBRARY`` and ``MOVED_OUT``: circuits' since the
 move, held to the ratchets as they stood), with ``ast`` and regexes.  Nothing scanned is imported, so the lints need neither torch nor vllm
 and run in seconds.  What a scan finds is compared with a committed allowlist, ``allowlists/<name>.json``, of the
 violations that existed when the rule was introduced.
@@ -32,7 +32,7 @@ ROOT = HERE.parents[1]                     # integrations/vllm
 REPO = ROOT.parents[1]
 PKG = ROOT / "verity_vllm"
 CORE_PKG = REPO / "verity"
-DEFINITIONS = REPO / "verity" / "ml" / "definitions"
+DEFINITIONS = REPO / "verity" / "definitions"
 #: what of ``DEFINITIONS`` moved out of the integration: the modules at its top and these packages of it. Any other package
 #: of that directory is core's
 MOVED_OUT = frozenset({"numerics", "registry", "tests"})
@@ -88,7 +88,7 @@ def rel(p: Path) -> str:
 
 
 def module_name(p: Path) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/ml/definitions/tiny.py`` -> ``verity.ml.definitions.tiny``; a
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/definitions/tiny.py`` -> ``verity.definitions.tiny``; a
     package's ``__init__.py`` names the package."""
     parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":
@@ -182,7 +182,7 @@ def is_str(node: ast.AST | None) -> bool:
 
 
 class Aliases:
-    """Where the names bound by a file's imports come from: ``np`` -> ``numpy``, ``defs`` -> ``verity.ml.circuits.defs``.
+    """Where the names bound by a file's imports come from: ``np`` -> ``numpy``, ``defs`` -> ``verity.circuits.defs``.
 
     Also records ``name = importlib.import_module("pkg.mod")``, ``name = sys.modules["pkg.mod"]`` and
     ``name = __import__("pkg.mod", ...)`` with literal module names.  Scope-insensitive: one map per file.

@@ -13,8 +13,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.ml.circuits.codec import descriptor_id, program_digest
-from verity.ml.circuits.refs import runs
+from verity.circuits.codec import descriptor_id, program_digest
+from verity.circuits.refs import runs
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_export_facts, observe_target_profile
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from tests.program.test_norm_chain import BF, GemmaNorm, _bi_facts, _derive, _emitted, _evaluate
@@ -108,7 +108,7 @@ def test_once_is_bit_equal_on_edge_words():
 
 
 def test_cross_call_finds_the_repeated_adds_only_per_forward():
-    X = pytest.importorskip("verity.ml.definitions.cross_call")
+    X = pytest.importorskip("verity.definitions.cross_call")
     _m, per = _derived("per-forward")
     _m, once = _derived("once")
     r = X.check_program(_rows(per), strict=False)

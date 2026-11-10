@@ -26,12 +26,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
-from verity.ml.circuits.defs import bind as ir_bind
-from verity.ml.circuits.refs import Affine, Refs, concat
-from verity.ml.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
+from verity.circuits.defs import bind as ir_bind
+from verity.circuits.refs import Affine, Refs, concat
+from verity.circuits.refs import runs as _runs  # pure (was `..derive._runs`): this module must import without torch (capture fold M4 comparison)
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type
 from verity_vllm.program.frontend.rules.base import FamilyRule, RuleInfo
 
 Run = tuple[str, int, int, int]  # (space, idx, lo, hi)
@@ -468,7 +468,7 @@ def _module_name(ctx, field_name: str) -> str:
 # the registered families of the vLLM eager profile
 # ---------------------------------------------------------------------------------------------------------
 
-from verity.ml.definitions.registry import b1 as _b1  # noqa: E402
+from verity.definitions.registry import b1 as _b1  # noqa: E402
 
 
 def _serve_binder(flat_sd, ctx):
@@ -512,7 +512,7 @@ def _serve_v3_binder(flat_sd, ctx):
     return {"C": C, "LP": LP, "D_MAX": out_t.n - 1, "GEMM": recs["GEMM"], "ATTENTION": recs["ATTENTION"], "NORM": recs["NORM"](C)}
 
 
-from verity.ml.definitions.registry import serve3 as _serve3  # noqa: E402
+from verity.definitions.registry import serve3 as _serve3  # noqa: E402
 
 SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serve_v3_binder,
                                    "structural: verified isomorphism to Serve_v3{C3,LP,D_MAX,GEMM,ATTENTION,NORM} (the padded circuit, serve3-spec)")
@@ -520,14 +520,14 @@ SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serv
 
 def _layer_weights_with_table(C: dict) -> RecordType:
     lw = _b1.layer_weights_type(C)
-    from verity.ml.circuits.types import Value
+    from verity.circuits.types import Value
     return RecordType(*(list(lw.fields) + [("cos_sin", Array(C["MAX_POS"], Array(C["D"], Value(16))))]))
 
 
 def _decoder_layer_sig(S):
     C = S.C
     H = C["H"]
-    from verity.ml.circuits.types import Value
+    from verity.circuits.types import Value
     BF = Value(16)
     rows = Array(S.T, Array(H, BF))
     params = [("h", rows)] + ([] if S.L0 else [("res", rows)]) + [("w", _layer_weights_with_table(C))]
@@ -539,7 +539,7 @@ def _decoder_layer_body(B, S, h, *rest):
     K/V rows, LayerPost x T. Layer 0 (`L0`) takes no residual (the residual is `h`)."""
     C, T, T0 = S.C, S.T, S.T0
     res, w = (h, rest[0]) if S.L0 else (rest[0], rest[1])
-    from verity.ml.circuits.refs import Coll as _Coll, array_of as _array_of, tuple_of
+    from verity.circuits.refs import Coll as _Coll, array_of as _array_of, tuple_of
     lw = _Coll(_b1.layer_weights_type(C), w.refs.slice(0, _b1.layer_weights_type(C).leaves))
     cs = w["cos_sin"]
     pre = [B.call(ir_bind(_b1.LayerPre, C=C, L0=S.L0), h[i], res[i], lw, cs[T0 + i], name=f"t={T0 + i}/pre") for i in range(T)]

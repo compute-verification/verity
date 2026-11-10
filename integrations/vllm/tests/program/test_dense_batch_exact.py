@@ -19,16 +19,16 @@ import shutil
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate_batch, kernels
-from verity.ml.circuits.evaluation.batch import type_shape
-from verity.ml.circuits.evaluation.reference import signature_of, statics_of
-from verity.ml.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch, kernels
+from verity.circuits.evaluation.batch import type_shape
+from verity.circuits.evaluation.reference import signature_of, statics_of
+from verity.circuits.defs import bind
 from verity_vllm.acquire.sources import call_boundary_plan as CP
-from verity.ml.definitions.numerics import dense_rows as DR
-from verity.ml.definitions.numerics import derived_rows as D
-from verity.ml.definitions.numerics import kernel_registry as KR
-from verity.ml.definitions.numerics import rows
-from verity.ml.definitions.registry import b1, hopper
+from verity.definitions.numerics import dense_rows as DR
+from verity.definitions.numerics import derived_rows as D
+from verity.definitions.numerics import kernel_registry as KR
+from verity.definitions.numerics import rows
+from verity.definitions.registry import b1, hopper
 
 K = 64
 DOTS = {"AmpereBF16TcDot16_v2": b1.P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16_v1": hopper.HopperBF16WgmmaDot16}
