@@ -50,10 +50,8 @@ def option(meta: dict, name: str) -> str | None:
 
 
 def checkpoint(meta: dict) -> str | None:
-    """The checkpoint's revision: of `model` (REPO@REVISION), else the last part of the `--model` path where it is one."""
-    model = meta.get("model")
-    if isinstance(model, str) and "@" in model:
-        return model.rsplit("@", 1)[1]
+    """The revision the server loaded, by its directory's name: the last part of the `--model` path where it is one.
+    Never `model`: the serve tax writes there the revision it pins for the model id, whatever directory it serves."""
     last = (option(meta, "--model") or "").rstrip("/").rsplit("/", 1)[-1]
     return last if re.fullmatch(r"[0-9a-f]{40}", last) else None
 

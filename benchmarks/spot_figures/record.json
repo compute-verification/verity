@@ -3,7 +3,7 @@
  "switches": [
   {"n": 1, "name": "Model and checkpoint", "run": "serve", "read": "checkpoint",
    "post": "aca966e4e02791568aa6a4ced368624b3d897f42",
-   "note": "zai-org/GLM-5.3 at this revision"},
+   "note": "zai-org/GLM-5.3 at this revision, by the name of the directory the server loaded"},
   {"n": 2, "name": "Served precision", "run": "serve", "read": "precision",
    "post": "checkpoint",
    "note": "FP8, the checkpoint's own: no option of the server sets another"},

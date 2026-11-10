@@ -82,13 +82,21 @@ def test_a_changed_serve_changes_its_switch(change, switch, value):
         {k: v for k, v in before["observed"].items() if k != str(switch)}
 
 
-def test_the_checkpoint_is_read_from_the_model_path_where_no_model_is_recorded():
+def test_the_checkpoint_is_the_directory_the_server_loaded_never_the_pin_the_serve_records():
+    """The serve tax records `model` as the revision it pins for the model id whatever directory it serves, so a serve
+    of another directory keeps `model` at the post's value: only the `--model` path is read."""
     m = meta("context-131072")
+    path = m["server_argv"].index("--model") + 1
+    assert m["model"].endswith("@aca966e4e02791568aa6a4ced368624b3d897f42")
     del m["model"]
     assert record.stamp(m)["observed"]["1"] == "aca966e4e02791568aa6a4ced368624b3d897f42"
-    m["server_argv"][m["server_argv"].index("--model") + 1] = "/models/glm"
+    m["model"] = "zai-org/GLM-5.3@aca966e4e02791568aa6a4ced368624b3d897f42"
+    m["server_argv"][path] = "/models/glm"
     made = record.stamp(m)
     assert "1" not in made["observed"] and 1 in made["off"]
+    m["server_argv"][path] = "/models/glm/" + "0" * 40 + "/"
+    made = record.stamp(m)
+    assert made["observed"]["1"] == "0" * 40 and 1 in made["off"]
 
 
 def test_a_stamp_holds_no_request_count_or_time():
