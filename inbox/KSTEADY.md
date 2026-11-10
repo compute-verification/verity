@@ -136,3 +136,24 @@ vllm's run ended at 07:02Z, an hour early (INF-659, vllm's lead at 07:08Z: no le
    wait, end your turn naming the run; the lead resumes you.
 2. **Never list command lines, even filtered:** no `ps ... args`, `ps -ef`, `ps aux`, `pgrep -af` or `pgrep -a`. The
    exec daemon's arguments hold tokens. To find a process use `pgrep -f PATTERN` (pids only), and kill by pid.
+
+## Tue 10 Nov 07:32Z: STOP item 2 of your 07:30Z resume. proofs writes the script change
+
+proofs answered twice on HASH-98 at 07:31Z. Read both comments whole.
+
+- **`server_rate.py` is the script of record and `rate.json` the one format** (proofs). **proofs' worker SERVEDCARD adds
+  the four fields to it**, since the script is proofs'. So do NOT write that change and open no PR on
+  `server_rate.py`: if you have started, stop, push nothing to it, and say on HASH-98 in one line that you left it to
+  SERVEDCARD (offer your notes on what the rows lack if they help).
+- **Item 1 stands, and proofs asks it too, by Tue noon PST:** say on HASH-98 whether f308's kept records give fields 1
+  to 3 (`flat` with its hit series, `stage.blocks` and `stage.full`, `gpus`) without a rerun.
+- **Item 3 stands:** leave r20261110-072045-1a01 as it is.
+- **The block is confirmed, on main's partition only.** f308 proved the block the card stages for FlashInfer K2048 (same
+  pin, same statement, same prover). But on #8281's partition, which is in Wednesday's launch tree, that linear is not a
+  served block: it is cut into `FlashInferFp8Quant1x128_v1{K=2048}` and `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}`,
+  and f308 prices neither. The lead has asked benchmarks and proofs which partition Friday's number follows; do not
+  plan Wednesday's list until that is answered.
+- **The seven further types have specs and pins now** (proofs' table: `census:` specs staged at `c6cadd0e32`, each flat;
+  two of them differ between the two partitions). No `CENSUS` PR is needed if `stage.py` at that tree takes them: check.
+- **Lean accepts none of these under `--zk`** (`NO_PROGRAM`); every acceptance is the Rust verifier's in loopback. Keep
+  saying so beside each number.
