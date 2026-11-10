@@ -24,7 +24,7 @@ from typing import Any
 from verity.configuration.deploy import runtime
 from verity.configuration.deploy.config import Component, Workload
 from verity.configuration.deploy.manifest import Channel, Role
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.protocols.certifier.verifier.warden import WardenParams
 from verity.spot.verifier.python import parties as SP
 from verity.spot.verifier.python.one_stage.draw import parse_design
 from verity.configuration.wire import Refused

@@ -228,7 +228,7 @@ def test_the_rehearsal_runs_certifier_serve_on_the_requests_shim_and_profile_thr
     """N2's profile is the request's, planned for a request.json written before the gate took `--profile`."""
     req = {"requests": 400, "tamper": None, "profile": "planned"}
     argv = A.certifier_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
-    assert argv[1:] == [f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py", "rehearse",
+    assert argv[1:] == [f"/opt/vy-challenger/{PIN}/verity/protocols/certifier/device/network_traces/certifier_serve.py", "rehearse",
                         "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--height", "20",
                         "--requests", "400", "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned",
                         "--strategies", "honest"]
@@ -309,7 +309,7 @@ def test_with_neither_in_flight_nor_tokens_the_request_and_command_are_todays(ho
     assert "in_flight" not in request and "tokens" not in request
     assert request["temperature"] == 0.0 and request["top_p"] == 1.0 and request["height"] == 20
     argv = A.certifier_command(request, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
-    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py",
+    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/verity/protocols/certifier/device/network_traces/certifier_serve.py",
                     "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--height", "20",
                     "--requests", "400", "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned",
                     "--strategies", "honest"]
@@ -360,7 +360,7 @@ def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_pla
     request = json.loads((host.certifier / doc["run"] / "request.json").read_text())
     assert request == {k: v for k, v in doc.items() if k != "unit"}
     argv = A.certifier_command(request, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
-    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py",
+    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/verity/protocols/certifier/device/network_traces/certifier_serve.py",
                     "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--height", "20",
                     "--requests", "400", *passed, "--temperature", "0.0", "--top-p", "1.0", "--traffic", "varied", "--name", doc["run"],
                     "--strategies", "token"]

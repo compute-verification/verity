@@ -1687,7 +1687,7 @@ def _script(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+FRONT = '"$PY" verity/protocols/certifier/device/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
 
 
 IDS = "--protocol ids --id-payload 503"
@@ -1707,7 +1707,7 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
         tmp_path, load, front, takes, serve_args, line):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
-    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+    (tree / "verity" / "protocols" / "certifier" / "device" / "network_traces" / "certifier_piece.py").write_text(
         f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),

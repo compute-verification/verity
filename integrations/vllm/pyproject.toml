@@ -282,7 +282,7 @@ tests = ["tests/pipeline/test_serve_row.py"]
 paths = [
     "integrations/vllm/verity_vllm/engine",
     "integrations/vllm/verity_vllm/pipeline",
-    "verity/core/protocols/certifier",
+    "verity/protocols/certifier/verifier",
     "verity/commitments/crypto",
 ]
 
@@ -296,7 +296,7 @@ paths = ["verity/definitions/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/predict/test_window_rows.py"]
-paths = ["verity/core/protocols/certifier"]
+paths = ["verity/protocols/certifier/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_compiled_relations_warm_vml.py"]

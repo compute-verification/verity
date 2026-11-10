@@ -17,8 +17,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.certifier import blocks as BK
-from verity.ml.protocols.certifier import ingress_scan as IS
+from verity.protocols.certifier.verifier import blocks as BK
+from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.circuits.defs import bind
 from verity.definitions.registry import boolean_io_shell as BIO
 

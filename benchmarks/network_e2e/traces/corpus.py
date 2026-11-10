@@ -136,7 +136,7 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: active warden (`verity.protocols.certifier.verifier.warden`, run by `verity/protocols/certifier/device/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
 #: async greedy). Under ``--admit tick`` it is kept, so that a tick trace's network certifier has an arrival trace's
@@ -528,7 +528,7 @@ def warden_modules():
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.core.protocols.certifier import warden
+    from verity.protocols.certifier.verifier import warden
 
     import warden_serve
     return warden, warden_serve
@@ -695,7 +695,7 @@ def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: 
     windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "keys", "--dir", str(key)],
+    subprocess.run([sys.executable, str(ROOT / "verity/protocols/certifier/device/network_traces/warden_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
     flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))] + ["--watermark"] * watermark
     with open(w / "serve.log", "w") as log:
@@ -714,7 +714,7 @@ def check_warden(d: Path) -> int:
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
-        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "check", "--run",
+        return subprocess.run([sys.executable, str(ROOT / "verity/protocols/certifier/device/network_traces/warden_serve.py"), "check", "--run",
                                str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 

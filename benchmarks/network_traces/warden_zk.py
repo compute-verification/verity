@@ -67,10 +67,10 @@ import warden_serve as ws  # noqa: E402
 from verity.circuits import boolean as BL  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.types import Array  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
-from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
-from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
+from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Certificate  # noqa: E402
+from verity.protocols.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
 
 MEMBERS = {"sender": ("o0", True), "receiver": ("row", True), "unsigned": ("o0", False), "altered": ("o0", False),
            "pad": ("o0", False), "pad-named": ("o0", False), "swapped": ("o0", False)}

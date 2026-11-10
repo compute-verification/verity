@@ -61,7 +61,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.ml.protocols.certifier.window_charge import Window
+from verity.protocols.certifier.prover.window_charge import Window
 
 HERE = Path(__file__).resolve().parent
 

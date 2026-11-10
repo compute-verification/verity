@@ -1,5 +1,5 @@
 """``--admit tick`` in the corpus: the client's stand-in network certifier, and the network certifier's release headers
-and watermark as `verity.core.protocols.certifier.release` makes them, against the server's real `tick_plugin.TickFeed`;
+and watermark as `verity.protocols.certifier.verifier.release` makes them, against the server's real `tick_plugin.TickFeed`;
 which traces take the tick, τ's calibration on a trace's busy cycle, the checkpoint's stop ids, the hook's record of the
 KV pool, and what the summary keeps of a tick trace, a warden trace's releases taken from the server's feed and checked
 against the certifier's log."""
@@ -295,7 +295,7 @@ def test_the_servers_feed_reads_the_wardens_releases_and_watermark(tmp_path, mon
     corpus = mod("corpus")
     _, tp = corpus.tick_modules()
     monkeypatch.syspath_prepend(str(corpus.ROOT))
-    from verity.core.protocols.certifier import release
+    from verity.protocols.certifier.verifier import release
     feed = tmp_path / "feed.jsonl"
     monkeypatch.setenv(tp.TICK_ENV, json.dumps({"bucket_us": 100000, "sat_us": 1000, "free_us": 2000, "feed": str(feed)}))
     feed_mw, run = tp.TickFeed(app), bytes.fromhex(RUN)

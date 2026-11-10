@@ -51,7 +51,7 @@ Its guarantee is soundness, and it rests on:
   reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
   `RecordCustodyZKJ`), and it runs the Lean verifier;
 - where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-host` among
-  them, `verity/core/protocols/certifier/PROTOCOL.md`).
+  them, `verity/protocols/certifier/verifier/PROTOCOL.md`).
 
 ## Guarantee and assumptions
 

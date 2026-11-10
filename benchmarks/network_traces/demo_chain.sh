@@ -67,7 +67,7 @@ json.dump({"kind": "certifier-rehearse", "where": "off-host: a pool slot, not th
            "args": sys.argv[3:], "source": os.environ.get("RESEARCH_SOURCE_SHA")}, open(sys.argv[1], "w"), indent=1)
 EOF
 log "demo-chain: certifier_serve.py rehearse ${ARGS[*]}"
-"$PY" benchmarks/network_traces/certifier_serve.py rehearse "${ARGS[@]}" --out "$G/out" > "$OUT/rehearse.log" 2>&1
+"$PY" verity/protocols/certifier/device/network_traces/certifier_serve.py rehearse "${ARGS[@]}" --out "$G/out" > "$OUT/rehearse.log" 2>&1
 RC=$?
 tail -n 2 "$OUT/rehearse.log" | cut -c1-600 | tee -a "$OUT/job.log"
 if [ -n "$EP_PID" ]; then
@@ -98,7 +98,7 @@ EOF
 
 log "demo-chain: chain_record.sh on $RUN"
 CR_GATES=$D/gates CR_ENDPOINT=${CR_ENDPOINT:-$EP} CR_PATH=${CR_PATH:-certifier-only} CR_DEPLOYED=${CR_DEPLOYED-1} \
-  bash benchmarks/network_traces/chain_record.sh
+  bash verity/protocols/certifier/verifier/network_traces/chain_record.sh
 rc=$?
 log "demo-chain: done, rehearsal rc $RC, chain rc $rc"
 exit "$rc"

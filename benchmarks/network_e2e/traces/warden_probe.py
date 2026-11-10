@@ -1,4 +1,4 @@
-"""`python warden_probe.py ARGS...`: `benchmarks/network_traces/warden_serve.py ARGS...`, with probes the warden doesn't
+"""`python warden_probe.py ARGS...`: `verity/protocols/certifier/device/network_traces/warden_serve.py ARGS...`, with probes the warden doesn't
 keep, for telling a late tick's cause: every tick's lateness (`Warden.lateness`, which warden.json keeps only as
 quantiles), how long each tick's own work took (`Warden._tick`), when the publisher packed, signed and committed each
 record (`Publisher.keep`) and every garbage collection of the warden's process (serve turns the collector off, so any is
@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SERVE = ROOT / "benchmarks" / "network_traces" / "warden_serve.py"
+SERVE = ROOT / "verity" / "protocols" / "certifier" / "device" / "network_traces" / "warden_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
 #: in `--out`: the spawned publisher's keeps, one JSON line [monotonic start, seconds, link, window] each
@@ -162,7 +162,7 @@ def main(argv: list[str]) -> int:
     _path()
     import warden_serve
 
-    from verity.core.protocols.certifier import warden
+    from verity.protocols.certifier.verifier import warden
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)

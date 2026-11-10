@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier import calibration, grid
-from verity.core.protocols.certifier.grid import GridParams, Reason, Status
+from verity.protocols.certifier.verifier import calibration, grid
+from verity.protocols.certifier.verifier.grid import GridParams, Reason, Status
 
 HERE = Path(__file__).resolve().parents[1]
 
