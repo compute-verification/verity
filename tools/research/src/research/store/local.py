@@ -83,7 +83,8 @@ def find_repo(start: Path | None = None) -> Path | None:
         return Path(os.environ["RESEARCH_REPO"]).expanduser()
     try:
         p = (start or Path.cwd()).resolve()
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        _warn(f"no working directory ({e}): it was removed, so no repository is found from it")
         return None
     for d in (p, *p.parents):
         if (d / REPLICA_MAP).is_file():
