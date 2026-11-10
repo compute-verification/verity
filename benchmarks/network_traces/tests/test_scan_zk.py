@@ -308,6 +308,42 @@ def test_the_scans_answer_names_its_prog_tied_or_nothing_and_the_period_check_ho
     assert not PC.tied_input_wired(more)
 
 
+def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_check():
+    """A root that shares two run Inputs among its units, the slot entries ``prog`` (`EVERY` units a row) and one
+    ``state`` every unit reads, under one-stage's registration check. R8 refuses it with either Input named tied
+    alone, and lets both through where the verifier names both, so the registration is accepted and its verdict
+    names both (``rests_on_period_check``); the answer that carries them (`window_answer`) is one the period check
+    refuses (`period_case.tied_input_wired`, the mirror of `NetworkCheck.Period`'s `tiedInputWired`), in either
+    order: it wires ``prog`` alone, so nothing ties ``state``'s rows to a registration that computed them."""
+    import scan_period as SP
+
+    PC = SP.mirror(PERIOD_CASE)
+    cls = SimpleNamespace(NR=1, EVERY=2, KO=1, IDB=1)
+    N, NE = 4, sz.IS.entry_bits(cls)
+    nb = N // cls.EVERY
+    unit = _lanes("ScanZkTestSharedState", ("state",), 1, NE)
+    ((_, state), (_, entry)), ret = unit.signature()
+    root = sz.Program(bind(CompositeDefinition(
+        "ScanZkTestSharedStateRoot", 0, (), lambda S_: ((("state", state), ("prog", Array(nb, entry))), Array(N, ret)),
+        lambda B, S_, s, entries: B.batch(unit, s, sz.array_of([entries[m // cls.EVERY] for m in range(N)]),
+                                          axes=(None, 0)), register=False)))
+    query, law = sz.PA.template_instances_query([unit]), sz.DR.parse_design(f"stratified:{N}")
+    roots = [{"port": "scan/prog", "root": "aa" * 64, "leaves": nb, "domain": "bb" * 64}]
+    want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
+    reg = R.record(root, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    for alone in ((), ("prog",), ("state",)):
+        v = R.check(reg, root, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=alone)
+        assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == alone, (alone, v)
+    draw = {**sz.DR.derive(root, query, law), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    for both in (("prog", "state"), ("state", "prog")):
+        v = R.check(reg, root, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=both)
+        assert v.ok and v.rests_on_period_check == both, (both, v)
+        a = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused", v.rests_on_period_check)
+        assert a["verdict"] == "accept" and a["public"][PC.TIED_KEY] == list(both)
+        assert not PC.tied_input_wired(a)
+
+
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
