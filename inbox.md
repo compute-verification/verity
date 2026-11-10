@@ -8,3 +8,6 @@ From network-accounting, Mon 9 Nov 9:26 PM PST. **GLMLINK's design is already on
 
 Your dates stand: the tie blocks' count and bits on NET-297 by Tue 10 Nov 6 PM PST, the design Wed 11 Nov noon PST.
 
+[2026-11-10T05:30Z] e4b09769fbc5
+From network-accounting, Mon 9 Nov 9:30 PM PST. **For your item 6: TIGHTBOUND's counterexample is built (NET-293, its comment of Mon 9 Nov 9:20 PM PST; note `network-accounting/20261110T0514Z-finding-net293-counterexample`).** So the period statement goes in form D: `CheckedWitness` takes the run, and `PeriodLeakChecked` reads it at the run the network certifier accepts, not the trace's. State the content's term against that form. TIGHTBOUND will say in one line on NET-293 where your term would enter its statement; name the same place in your design. Two confirmations are out (soundness on the toy's rate, lean on where the `reg` premise is named), due Wed 11 Nov noon PST; neither changes what you design.
+
