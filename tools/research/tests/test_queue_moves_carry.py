@@ -21,7 +21,7 @@ from test_queue import World, _git
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ("tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py")
-MAP = "tools/move/demo_map.toml"
+MAP, PATHS = "tools/move/demo_map.toml", "tools/move/demo_paths_map.toml"
 A = "def f():\n    return 1\n\n\ndef g():\n    return 2\n"
 B = "import old_proto.a\n\nX = old_proto.a.f()\n\n\nZ = 1\n"
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
@@ -37,6 +37,9 @@ def world(tmp_path, monkeypatch):
                             "tools/research/src/research/store/moves.json": '{"moves": []}\n',
                             MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
                                  '[words]\n"old_proto" = "new_proto"\n',
+                            PATHS: '[roots]\nold = { old_proto = "old_proto" }\nnew = { new_proto = "new_proto" }\n\n'
+                                   '[paths]\n"old_proto/" = "new_proto/"\n\n[modules]\n"old_proto" = "new_proto"\n\n'
+                                   '[rewrite]\nexclude = ["tools/move/**"]\n',
                             "old_proto/__init__.py": "", "old_proto/a.py": A, "b.py": B}))
     return w
 
@@ -46,13 +49,15 @@ def _push_main(world: World, commit: str) -> None:
     _git(world.dev, "fetch", "-q", "origin")
 
 
-def _move(world: World) -> str:
-    """The map's commit on `main` as it is: what `rename.py` writes there, with its move line, as `stage.py` commits it."""
+def _move(world: World, paths: bool = False) -> str:
+    """A map's commit on `main` as it is, as `stage.py` commits it: what `rename.py` writes there for the word map, with its
+    `Move:` line, or with ``paths`` what `layout.py` writes for the path map, with its `Layout-move:` line."""
     _git(world.dev, "checkout", "-q", "--detach", "origin/main")
-    subprocess.run([sys.executable, "tools/move/rename.py", "--map", MAP], cwd=world.dev, env=ENV, check=True,
-                   capture_output=True)
+    script, args, line = (("tools/move/layout.py", ["--map", PATHS, "--no-lock"], f"Layout-move: {PATHS} --no-lock") if paths
+                          else ("tools/move/rename.py", ["--map", MAP], f"Move: {MAP}"))
+    subprocess.run([sys.executable, script, *args], cwd=world.dev, env=ENV, check=True, capture_output=True)
     _git(world.dev, "add", "-A")
-    _git(world.dev, "commit", "-q", "-m", f"Move by {MAP}\n\nMove: {MAP}\n")
+    _git(world.dev, "commit", "-q", "-m", f"Move by {args[1]}\n\n{line}\n")
     return _git(world.dev, "rev-parse", "HEAD")
 
 
@@ -126,6 +131,27 @@ def test_a_restack_across_a_move_keeps_the_mark_and_verdict_and_one_more_edit_or
         assert _kept(fresh, 1, head) == (False, [])
 
 
+def test_a_restack_across_a_path_move_keeps_the_mark_and_verdict_and_one_more_edit_loses_both(world):
+    """The same across a path map, a commit ending in `Layout-move:` that `layout.py` wrote, as the layout's moves are staged:
+    #1's edit of the file the map moves and its new import of the old module, restacked, are its old change with the map
+    applied, so the new head takes both labels; with one more line edited it takes neither."""
+    world.gh.put(1, old := world.change({"old_proto/a.py": A.replace("return 2", "return 3"),
+                                         "c.py": "import old_proto.a\n\nW = 1\n"}), ready=False)
+    _mark(world, 1, old)
+    _land(world, _move(world, paths=True))
+    world.gh.put(1, new := _restack(world, old), ready=False)
+    q = _queue(world)
+    assert _git(q.workdir, "show", f"{new}:c.py").startswith("import new_proto.a")
+    assert _git(q.workdir, "show", f"{new}:new_proto/a.py").endswith("return 3")
+    assert q.own_change(new) not in (None, q.own_change(old))
+    assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
+
+    world.gh.put(1, extra := world.change({"c.py": "import new_proto.a\n\nW = 2\n"}, base=new), ready=False)
+    q.fetch(world.gh.open_prs())
+    assert q.mapped_change(old, extra) == q.own_change(new) != q.own_change(extra)
+    assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, extra) == (False, [])
+
+
 def test_a_pr_the_map_doesnt_touch_keeps_both_by_its_plain_own_change_and_a_head_with_no_move_between_maps_to_none(world):
     """#2 changes a file the map doesn't name: restacked across the move, its own change is its old head's, so it keeps the mark
     and verdict as before the move rule, by its plain own change.  A head crossing no move has no mapped change."""
@@ -189,3 +215,23 @@ def test_an_old_head_that_doesnt_merge_with_the_moves_base_or_whose_script_fails
     q.fetch(world.gh.open_prs())
     assert q.mapped_change(two, new) is None
     assert world.logs[-1].endswith(f"the move {move[:12]}'s script fails on it: exit 1: the script fails")
+
+
+def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
+    """A PR based on a commit `main` took after the move's base, before the move landed, is one `restack.py` refuses
+    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner merges `main`
+    instead: `mapped_change` maps it to nothing either, and says why."""
+    move = _move(world)
+    _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
+    world.gh.put(1, old := world.change({"b.py": B + "Y = old_proto.a.g()\n"}), ready=False)
+    _git(world.dev, "push", "-q", "origin", f"{old}:refs/heads/old")
+    tree = _git(world.dev, "merge-tree", "--write-tree", other, move)
+    _push_main(world, _git(world.dev, "commit-tree", tree, "-p", other, "-p", move, "-m", "Queue: #9 the move"))
+    r = subprocess.run([sys.executable, str(ROOT / "tools/move/restack.py"), old, "--main", "origin/main", "--json"],
+                       cwd=world.dev, env=ENV, capture_output=True, text=True)
+    assert json.loads(r.stdout)[0]["status"] == "based-after"
+    world.gh.put(1, new := world.change({"c.txt": "c merged\n"}), ready=False)
+    q = _queue(world)
+    assert q.mapped_change(old, new) is None
+    assert world.logs[-1].endswith(f"it has {other[:12]}, which came after {_git(world.dev, 'rev-parse', f'{move}^')[:12]}, "
+                                   f"the base of the move {move[:12]}: restack.py refuses it (based-after)")
