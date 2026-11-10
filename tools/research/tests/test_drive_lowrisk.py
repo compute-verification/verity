@@ -41,7 +41,7 @@ def _skipped(world: World) -> list[str]:
 
 @pytest.mark.parametrize("files, low", [
     (["tools/research/src/research/drive.py", "README.md"], True),
-    (["integrations/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
+    (["integrations/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "benchmarks/definitions/y.py"], True),
     (["Security/Proofs/Core/X.lean"], False),
     (["docs/a.md", "verity/protocols/pous/lean/lean-audit.json"], False),
     (["verity/flock/verifier/lakefile.toml"], False),

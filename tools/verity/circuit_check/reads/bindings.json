@@ -917,7 +917,7 @@
     "verity/commitments",
     "verity/commitments/gates",
     "verity/definitions",
-    "verity/ml/definitions/word/__init__.py",
+    "benchmarks/definitions/word/__init__.py",
     "verity/flock/prover",
     "verity/flock/python",
     "verity/flock/python/ast",
@@ -1208,8 +1208,8 @@
     "verity/definitions/word.py"
    ],
    "probes": [
-    "verity/ml/definitions/call_scope/__init__.py",
-    "verity/ml/definitions/cross_call/__init__.py"
+    "benchmarks/definitions/call_scope/__init__.py",
+    "benchmarks/definitions/cross_call/__init__.py"
    ]
   },
   {
@@ -1968,7 +1968,7 @@
     "verity/commitments/crypto",
     "verity/commitments/crypto/aead.py",
     "verity/commitments/crypto/lms.py",
-    "verity/ml/definitions/numerics/fa3_model/__init__.py",
+    "benchmarks/definitions/numerics/fa3_model/__init__.py",
     "verity/definitions/registry/sampling_twins.py",
     "verity/definitions/registry/tp_allreduce_check.py",
     "verity/flock/python/contextvars",
@@ -3190,7 +3190,7 @@
     "verity/definitions/numerics/mma.py"
    ],
    "probes": [
-    "verity/ml/definitions/numerics/mma/__init__.py"
+    "benchmarks/definitions/numerics/mma/__init__.py"
    ]
   },
   {
@@ -3211,8 +3211,8 @@
    ],
    "probes": [
     "verity/definitions/ops/tables",
-    "verity/ml/definitions/numerics/gemm_relation/__init__.py",
-    "verity/ml/definitions/numerics/kernel_zoo/__init__.py"
+    "benchmarks/definitions/numerics/gemm_relation/__init__.py",
+    "benchmarks/definitions/numerics/kernel_zoo/__init__.py"
    ]
   },
   {

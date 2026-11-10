@@ -3,8 +3,8 @@
 ``torch.ops._C.rms_norm`` (``kernel="cuda"``).
 
 The arithmetic lives in ``cpp/rms_triton_model.cpp``; this module builds/loads it, reconstructs the hardware
-tables it needs (``MUFU.SQRT`` and ``MUFU.RSQ`` measured by ``../../ml/definitions/numerics/cuda/rms_probe.cu``, ``MUFU.RCP`` measured by
-``../../ml/definitions/numerics/cuda/mufu_probe.cu``; all verified against the RTX 4090 on all 2^32 inputs) and exposes
+tables it needs (``MUFU.SQRT`` and ``MUFU.RSQ`` measured by ``../../../benchmarks/definitions/numerics/cuda/rms_probe.cu``, ``MUFU.RCP`` measured by
+``../../../benchmarks/definitions/numerics/cuda/mufu_probe.cu``; all verified against the RTX 4090 on all 2^32 inputs) and exposes
 
 * :func:`rms_norm_rows` -- the model: BF16 rows + BF16 weight + eps -> BF16 rows (and the fp32 scalars);
 * :func:`gate` -- the measured domain (kernel specialisation, dtype, n_cols family, contiguity).

@@ -50,7 +50,7 @@ SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
 RECORD = "fa2_softcap_capture.json"
 HDIMS = (128, 256)
 CAP = 50.0
-TANH_SRC = Path(__file__).resolve().parents[2] / "verity/ml/definitions/numerics/cuda/tanh_probe.cu"
+TANH_SRC = Path(__file__).resolve().parents[2] / "benchmarks/definitions/numerics/cuda/tanh_probe.cu"
 #: (heads, KV heads, head dim) of the pinned Gemma-2 checkpoints whose selector scale is D^-0.5 (`query_pre_attn_scalar == head_dim`)
 MODELS = {"gemma-2-2b": (8, 4, 256), "gemma-2-9b": (16, 8, 256)}
 #: finite heads per launch the reference evaluator also runs (the twin's own check)

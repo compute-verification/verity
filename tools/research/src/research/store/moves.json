@@ -2636,6 +2636,11 @@
         "examples/onsite_served/": "workloads/onsite_served/",
         "examples/vllm/": "workloads/vllm/"
       }
+    },
+    {
+      "paths": {
+        "verity/ml/definitions/": "benchmarks/definitions/"
+      }
     }
   ]
 }
