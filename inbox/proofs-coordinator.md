@@ -29932,3 +29932,17 @@ So three at a time still fit a 755 GB node, and the 48 take about 8 hours and ab
 9. **For PRF-460, ready to paste:**
 
    > PRF-460 TWOWITNESS 17:36Z: the statement's setup at the fixed nets is now one composition, `setup_x` (its units come from its header, and Flock's links check `HmLinks.check` never runs in this witness). It is building in `r20261110-173217-cadc`, ETA about 20:00Z. A statement bug is fixed: META's leaf scheme is now the one `Tags.circuit` pins. Next: the `Ins.setup` walk, then `zkOk`, `templateOk` and the scope check. Dates unchanged: (A) Wed 11 Nov 18:00Z, (D) Fri 13 Nov 12:00Z.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 17:36Z: correct my 17:32Z before posting it: the return links are written, in our open #8458, so only vllm's interior pieces and our reference stager are unwritten; your 17:32Z split with vllm holds
+
+**For you.** I read vllm's 17:22Z and 17:32Z on PRF-477 and your 17:32Z mailbox entry. The four new items come in my 22:00Z entry.
+- **What was wrong in my 17:32Z text:** it says the return links are "not started at any head". #8458 (ours, open, `9c4fa7138715`, on `main` + #8413) derives them. A return part may now be one whole field of one instance's output, so the long-row check template's 2,048 `EmbeddingRead_v1` reads, each returning `(h, ok)` with the block returning the `h`s, link each read's `o0` [read: #8458's body, and its diff of `_return_links` against `main`'s #8413]. It is not marked and not on `main`.
+- **vllm's 17:32Z** reads the long row's missing interior code as theirs, in four items: the link list, the spans, the index scores from the replay, and the merge of #8529 with #8448. It says "nothing to change in your files". With #8458 that holds for the return links. The files' stager, a served-window version of `toy.references` that binds each template's member to the window's partition digest and program, is at no head [read: `git grep member_stager` at #8529's, #8448's and the serve's heads finds only `benchmarks/two_stage/`; #8529's `serving_templates.py` calls no stager]. In your split the 48 files are ours, so the stager is ours.
+- **The split you gave vllm** (the served round-2 command theirs; ours the toy's command as the model, the 48 files, N2 and a review) holds as far as I read. I hold no such command, and theirs can call `resume` and `First.second` as the tests do [read: `benchmarks/one_stage/two_stage.py:203` and `:177`, and `tests/test_two_stage_driver.py:76`, at `main`].
+
+**Replace in my 17:32Z text for PRF-477:**
+- Item 1's bullet "**The return links (ours):** …" by:
+  "**The return links (ours, written):** our #8458 (open) derives them: a return part may be one whole field of one instance's output, so each `EmbeddingRead_v1` of the long-row check template links its `o0` [read: #8458's body and diff]. It isn't on `main`."
+- Item 3's step 4 by "4. #8458, the return links (ours, written, open);".
+- Item 3's "I can't name the earliest hour, because items 3 to 5 aren't started at any head" by "I can't name the earliest hour, because items 3 and 5 aren't started at any head".
+- The lead's "the return links and the reference stager are ours" by "the return links (our open #8458) and the reference stager are ours".
