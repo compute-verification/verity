@@ -2415,6 +2415,14 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
 
 
+def test_wc_record_0_leaves_the_class_of_records_measurement_out(tmp_path):
+    """Nothing reads the class of record's measurement, so a run may leave it out (WC_RECORD=0): the gating classes are
+    counted as before, the measurement isn't started, and a line says so."""
+    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"}, WC_RECORD="0")
+    assert rc == 0 and limits == ["30m"], (rc, lines)
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement): not run (WC_RECORD=0)"]
+
+
 @pytest.mark.parametrize("classes, answers, refused", [
     ("4,32,4 8,64,4", {"4,32,4": "count", "8,64,4": "refuse", "record": "count"}, "WINDOW-CIRCUIT class 8,64,4 refused (exit 2): "),
     ("4,32,4", {"4,32,4": "expire", "record": "count"}, "WINDOW-CIRCUIT class 4,32,4 timed out after WC_TIMEOUT=30m"),

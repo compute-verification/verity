@@ -56,7 +56,7 @@
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 45m), run after the record (step 5),
 #     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
-#     then gates here instead); then the window audited from its records alone
+#     then gates here instead; WC_RECORD=0 leaves the measurement out); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the sampled proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
@@ -1038,8 +1038,10 @@ circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted); unde
   [ -z "${H1_TIE:-}" ] || [ -z "$V3C" ] || v3c_circuit
   return "$bad"
 }
-measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gates nothing, and nothing after it reads it
+measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gates nothing, and nothing after it reads it,
+  # so WC_RECORD=0 leaves it out
   grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py || return 0
+  [ "${WC_RECORD-1}" != 0 ] || { say "WINDOW-CIRCUIT class record (measurement): not run (WC_RECORD=0)"; return 0; }
   case " $CLASSES " in
     *" record "*) ;;
     *) circuit record "WC_RECORD_TIMEOUT=${WC_RECORD_TIMEOUT:-45m}" "WINDOW-CIRCUIT class record (measurement)";;
