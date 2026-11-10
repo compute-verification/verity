@@ -19,7 +19,8 @@ LC_ALL = "C.UTF-8"
 RESEARCH_SLACK_REGISTRY = "{src}/.agents/skills/using-slack/registry.json"
 RESEARCH_NOTES = "/data/steward/research-notes"
 RESEARCH_MACHINES_D = "/data/steward/research-notes/machines.d"
-RESEARCH_AGENT_URL = "https://cursor.com/agents/bc-5a69647d-04f7-5d94-9ff1-56593e2e1037"   # infra's coordinator, on its posts
+# infra's holder, as the registry names it: fleet.py posts `--as infra`, which `research msg` takes only from the handle's holder
+RESEARCH_AGENT_URL = "https://cursor.com/agents/bc-6a6f43b8-948e-5389-a706-1b4904497078"
 
 # the H200 idle stop and the deadline and lease backstops (h200-idle.sh, dc-backstop.sh, glm53-cpu2-backstop.sh)
 [[loop]]
