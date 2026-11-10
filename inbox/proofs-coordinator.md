@@ -26424,3 +26424,7 @@ Next: the re-diff after top's 07:30Z; row 5 after G2 (08:52Z), by your rule; an 
 
   The mark follows. [guess] The try is the longest; the last one took 45 min.
 - **The VM was reset at about 06:55Z:** `/tmp` and `~/.research` are gone. No commit, mark or run of mine appeared that I didn't make: #8363's head is still `8b1c6a0a90`.
+
+## ZKHIDE, Tue 10 Nov 07:02Z: land ask, #8536 marked at b7afd40baa
+
+Please land [#8536](https://github.com/compute-verification/verity/pull/8536) (head b7afd40baa, marked ready). [run r20261110-052213-2746] records pass for `Security/Proofs`, `Security`, `Security/Properties`; [run r20261110-054407-a18d] quick suites 4/4. [read] New files and one aggregator import; no lock entry. #8512 and #8527 share no file with it: nobody rebases. Not verified: kernel replay.
