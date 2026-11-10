@@ -30248,3 +30248,108 @@ want = '    scratch flock-tmpl "$S/base/verity/flock/verifier" flock-tmpl-base'
    - **Already delivered:** LEDGER's PRF-492 keys and the 1.78e16 text (3631be472d); vllm's three (5da89b22ba).
 
 I end my turn here, per your 17:16Z item 3.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 17:59Z: correct your 17:35Z to vllm: a rate law fixes Q once round 1 registers N, so the 48 need no draw; on #8529's record, which has no history table, round 2 covers none of the long row, so Thursday needs neither the 48 nor a return link; items (a) to (g) ready to paste; N2 fixed, its Lean try passes
+
+**For you, not for the issue.**
+- **Correct at once.** Your 17:35Z answer to vllm says that under a rate law the 48 are staged after Thursday's first draw, and that INF-677 moves. That isn't so [read at `main` `e7b03e4a6c`, item (d)].
+  - Both verifiers turn a rate law into a uniform Q-subset of the N replay blocks round 1 registers, with Q = T·⌈NUM·N/(DEN·T)⌉. The first draw picks which blocks, never how many.
+  - The files depend on Q and the design alone.
+  - The sentence for vllm: "Under the rate law Thursday uses, Q is fixed by N: Q = T·⌈NUM·N/(DEN·T)⌉ over the N replay blocks round 1 registers. The first draw picks which blocks, not how many, and the 48 files depend on Q and the design alone. So they can be staged once round 1 registers N, before any draw, or earlier if your serve fixes N ahead."
+  - Your 16:44Z line ("they need only the serve's head and N") was right in substance; the rate law's text is the Spec's, fixed before the serve.
+- **Thursday needs neither, as #8529 stands.** Its record has no history table, so the long row's interior can't be registered and round 2 covers none of it (item (c)). The 48 matter only once the long row's serve commits its tables. Nothing to ask of infra for Wed or Thu until then.
+- **N2: a gap of mine, fixed.** While checking item 4 I found that `tablesServed` took any of a record's entries for a port. So a record listing a port twice passed N2 at an earlier root, one round 1's checks never hold.
+  - It now reads each port's last root (`Record.byPort`), in Lean and in the Python mirror, with difftest and named-test cases.
+  - It's on branch `cursor/proofs-n2-table-root-5b1e` at `82c9c9e53c`. No mark, no PR.
+- **N2's runs:**
+  - The Lean try `r20261110-174746-1ef3` passed [run]: Spot built (217 jobs), `Pieces.lean` exited 0 and the siblings check was clean.
+  - The three suites the change touches (`verity-core-sampled-proofs`, `verity/core/protocols/spot`, `verity-vllm`) are running as `r20261110-174838-ba58`, ETA about 19:00Z.
+  - The records run is `r20261110-175006-9296` at `82c9c9e53c`, on the warm build-0, ETA about 19:45Z (timeout 20:50Z). I cancelled `5fe1`, which recorded `dec036480b`, whose `tablesServed` changed.
+  - The full suites `r20261110-170747-e457` at `dec036480b` are running, ETA about 20:30Z. The change reaches only the three suites `ba58` runs.
+- **My 17:32Z prices measure the circuit file alone.** A reference also runs `stage` on zero rows for its public file (`toy.py:328–333`), which I didn't measure. Item (e) carries that.
+- **#8458:** noted, it is marked. I cross it when you write BASE here.
+- **The stager:** I start it once N2's verdicts are in an entry, after `ba58` and `9296`. Its list is item (g).
+- I quote line numbers only from files I checked equal at the head named.
+
+**Text for PRF-477, ready to paste:**
+
+proofs, Tue 10 Nov 9:59 AM PST (17:59Z), to vllm. **Seven answers, and a correction of our 17:35Z: Thursday's rate law fixes Q once round 1 registers N, so the 48 files can be staged before the first draw, and nothing the draw picks changes them. But on #8529's record, which has no history table, round 2 covers none of the long row. So Thursday needs neither the 48 nor a return link, and Thursday's long row carries round 1 alone. Your served round-2 command hands `a5.audit` what the toy's `audit.py` hands it, and our N2 takes your port names as they are.** Tags: [run] is a run of ours, [read] is read in code at the head named, [guess] is neither. The heads are `main` `e7b03e4a6c`, #8448's `f81ce1a085be` and #8486's `075c43ac5f5c`.
+
+**(a) The hand-off** [read at `main`, which holds #8486's `benchmarks/two_stage/`].
+- **Copy `benchmarks/two_stage/audit.py`'s round 2** (lines 352–382). After `First.second`'s interior registration and second draw, call `a5.audit(...)` as line 268 does.
+  - a5 composes, stages, proves (`flock-circuit prove --zk`) and verifies (`flock-verify`) each drawn member. So the prover and Lean's verify read files a5 writes, not files you write.
+  - `interior` is yours (`interior_rows.interior`, `interior_rows.py:551` at #8448's head). Prove and verify are `a5.audit`'s (`benchmarks/one_stage/a5.py`, ours).
+- **What to hand it:**
+  - The interior window, written with `CS.write` as `toy.write` does (`toy.py:344–350`), so a5 finds `registration.json`, `window.json` and each member's files (`a5.py:696–701`).
+  - `sets`: by template id, its composer and Definition (`audit.py:83–91`, `:377`). The composer is `member_stager` on the window's partition digest and program, as our reference files are; any other fails the pins (`audit.py:222–227`).
+  - `registered=`: by member key, the reads each port is verified against, as `toy.reads` makes them (`toy.py:294–308`). A link port reads the value its link names, a wired port its writer's output port, and any other port its own. a5 writes them as `m<k>/registered.json` (`a5.py:792–797`).
+  - `drawn=(draw, law, receipt)`, the second stage's (`audit.py:380`).
+- **The names:**
+  - The template id is the member's `template`, its bound template's descriptor id.
+  - The instance is the member's units, `range(base, base + n)`. a5 writes the public file `m<k>/pub-<n>.bin` before the draw (`a5.py:736–737`), and the prover's file `inst-<n>.bin` for each drawn member after it (`a5.py:632–646`).
+  - A port is `<template>/<port>` in the interior record (`Member.port`), and a wired port reads its writer's (`Binding.held`).
+  - A link value is `<block>/<value>`, where `<block>` is `descriptor_id(Layout.replay)` (`second_stage.replay_links`, `second_stage.py:625–630` at #8486's head).
+- **Then** `statements` (`audit.py:203–219`: each session's template, public header, `unit_draw` and `registered.json`), `round_two` (`:230–251`), and `stream.outcome(..., statements=, proofs=)` (`:158–179`), with `proofs` naming our 48 files.
+
+**(b) The return link** [read].
+- **Whether it's needed:** whenever the long row's block is in round 2. With our #8458, each `EmbeddingRead_v1` read links its `o0` to the block's `o0`. Under #8486 each read's session must read its `o0` at `<block>/o0`, or round 2 refuses it at `second-read` (`_linked_read` and `second-read`, `second_stage.py:955` and `:1041–1042` at #8486's head).
+- **Which value:** the block's returned `kv` as your replay computes it, Q·2,048 rows [guess at the order: read j of sampled span s at row s·2,048 + j].
+- **By whom:** your interior registers it, as it registers the linked parameters (`interior_rows.py:670`), and your `spec_of` declares it a registered interior value, as it does them (`two_stage.py:114`; both at #8448's head). Our side is #8458 and #8486, both written and open.
+- **Where it's built:** nowhere. Your interior registers only `IL.values(links)` (`interior_rows.py:648–670`).
+- **What it ties:** each read's output to your interior's own registered copy, and to nothing served. The stand-in replay block's return is no port of round 1, whose `b.egress` holds the served ids (`boundary_rows.py:16`, `:27`).
+- **Thursday:** as #8529 stands, nothing needs it (item (c)).
+
+**(c) A record with no table** [read].
+- **Round 2 covers none of the long row.**
+  - Its interior must hold all Q·n_rho proof blocks of the block's check, in the challenger's order (`interior-population` and `population-order`, `service.py:2057–2066` at `main`). The 2,048 reads are among them.
+  - Each read's `root` and `domain` are supplied from round 1's table (`interior_links.py:209`).
+  - With no table, the challenger can name none (`interior_links.history` raises, `interior_links.py:273`, at #8448's head). So no interior is registered, and none of the long row's proof blocks gets a session.
+- **So none of the 48 is worth staging for such a record.** They are once the long row's serve commits its tables, which is yours. A check without the reads would need no table, but its window is a different one, so its files would be different too [guess].
+- **Thursday's sentence then:** "Round 1 registers every served request's boundary and draws the first stage. Round 2 does not cover the long row: its serve commits no history table, so its interior can't be registered."
+
+**(d) The first stage's law** [read at `main`].
+- **The rule:** both verifiers take only a rate law, `rate:NUM/DEN[:T]`. Python's `TwoStage` refuses any other (`service.py:351–353`, `:375–376`), and so does Lean's `Rule.ofJson` (`replayLaw?`, `Select.lean:153`). A fixed count `subset:Q` is refused as a rule, because the prover sizes N (`Select.lean:10–12`, `service.py:283–297`, and your `Rule`, `two_stage.py:73`). `bernoulli:NUM/DEN` parses, but registration refuses it (`service.py:802–812`, `:1924–1925`).
+- **What it draws:** over the N replay blocks round 1 registers, the rate law is `subset:Q` with Q = T·⌈NUM·N/(DEN·T)⌉.
+  - In Lean that's `textOver` and `Rate.count` (`Select.lean:194–205`, `Rate.lean:27`); in Python, `selection_law` and `draw.rate_count` (`service.py:743–764`, `draw.py:111–115`).
+  - This is the uniform Q-subset that `FirstStageAt`'s second case covers at q ≤ Q/N (`TwoStageCheck.lean:42–45`). I didn't trace the inputs' class (`all`) through the draw.
+- **So Q follows N and isn't drawn.** The 48 depend on Q and the design alone, not on the blocks the draw picks:
+  - the reference is built at a placeholder run, and "Both files are a function of `q` and the design alone, byte for byte" (`toy.py:318–324`);
+  - the partition digest hashes only the program and query (`rows.py:409–414`);
+  - the pin compares only the circuit's SHA-512 (`audit.py:222–227`).
+- **For your window:** the same holds if it is built that way [guess: it isn't written].
+
+**(e) Both timelines, priced.**
+- **The work** [run: the circuit file alone, one template at a time; a reference's zero-row `stage` is unmeasured]. The 48 are:
+  - 32 Counts, at 173 to 181 GB and 34 to 36 minutes each;
+  - 8 MaskBlocks, at 93 GB and 12 minutes;
+  - 8 MaskPositions, at 195 GB and 19.5 minutes.
+  - In all about 23 core-hours. On one 755 GB node, three at a time, that's about 8 hours; on two nodes, about 4. The files take 0.45 TB of disk [guess: from those three runs].
+- **A rate law (Thursday's, the only one either verifier takes):**
+  - Staging can start when round 1 registers N [read: Q follows N], or before the serve if your serve fixes the class's N ahead [guess: that's yours].
+  - Nothing else waits for the files. The first draw, the interior registration, the second draw and the proofs don't read them; only `outcome` does (`service.py:2241–2245`, `:2275–2277`) [read].
+  - The proofs are due 24 hours after the sample (`PROOF_DEADLINE_S` = 86,400 s, `two_stage.py:58–60`) [read]. The auditor's 8 hours fit inside that on one node of its own [guess].
+- **Does the prover stage its own in parallel? Yes** [read]. a5 composes each member's circuit file itself (`a5.py:717–734`), so the prover's side pays the same lowering again inside its 24 hours: about 8 hours of a node, plus proving [guess].
+- **A subset law:** neither verifier takes one as a rule today [read], so there is no such timeline for Thursday. A rate law with N fixed ahead gives the same early staging.
+- **To ask of infra:** nothing for Wed or Thu as #8529 stands (item (c)). Once the long row's serve commits its tables: one 755 GB node with 0.45 TB free, for about 8 hours from round 1's registration, or earlier if N is fixed ahead. That's for the auditor; the prover uses nodes of its own.
+
+**(f) What Thursday's round can run without the 48** [read].
+- **All of round 1.** The serve, the boundary registration and the first draw read no reference file. `proofs` enters only `outcome` and `_audit_two` (`service.py:2241–2245`, `:2374–2378`).
+- **Round 2 on any row whose templates aren't the 48,** with that row's own reference files [guess: whether Thursday has such a row is yours].
+- **On the long row, once its tables are committed:** everything up to the outcome. That's the interior registration, the second draw, and the prover's sessions verified against its own circuit files. But without the auditor's params every statement fails `second-header` and `second-values` (`service.py:2275–2277`), so no long-row outcome accepts.
+- **Without the tables (as #8529 stands):** none of round 2 on the long row (item (c)).
+
+**(g) What our reference stager reads from your interior window,** so your worker can build to it [read: `toy.references`, `toy.py:311–341`, and `member_stager`, `class_statement.py:1228–1241`, at `main`]:
+1. A window builder that takes Q and a placeholder run, as the toy's `interior_window("00" * 64, range(q))` does, and gives the same `CS.Binding` your interior registers. Its partition, program and members are then a function of Q and the design alone.
+2. Its `partition_digest` and `partition["program"]`: the program `interior_program(q)` checks (`service.py:2086–2096`).
+3. Each member, in the partition's order:
+   - its `template`, and the bound Definition it instantiates;
+   - `rows` and `outs` as `(port, words)`, with `schema(port)`;
+   - `n` and `base`;
+   - each port's table size (`tables`), and its slots in that table (`held_leaves`).
+4. Each port's read, with its words and schema: a link port reads the value its link names, a wired port its writer's output port (`held`), and any other port its own.
+5. No `FLOCK_*` switch set (`FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS`, `FLOCK_GEMM_TILE`); `member_stager` refuses one (`class_statement.py:1236–1239`).
+
+**N2 against your names** [read].
+- **N2 reads your port names unchanged.** It holds each table the interior's `history` names to round 1's port of that name, at the port's last root, with that root and domain.
+- **Your challenger's names match.** It names each sampled span's table `BT.name(run, prompt, outputs, slot, layer)`, which is your port name `history/<run>/p<P>-o<O>/s<slot>/model.layers.<L>.self_attn.latent`. It then copies round 1's root (`First.history`, `two_stage.py:208–217`; `interior_links.history`, `interior_links.py:258–284`; both at #8448's head).
+- **It never reads the block id.** Which layer a read opens is `First.history`'s argument, the challenger's own. On a record with no table, N2 has nothing to check.
