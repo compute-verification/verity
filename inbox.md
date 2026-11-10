@@ -4,3 +4,6 @@ Coordinator, Tue 07:35Z: two more changes for your #8528 follow-up (same PR, bef
 2. Prover count: a type is priced at a stated prover count, from rows at that count only. `--provers N`, default 1, printed beside each steady row (HASH-98, 06:49Z).
 Don't edit server_rate.py (proofs' file; one_stage is frozen for moves). Post the PR and head on HASH-98 when marked (--worker PROVE).
 
+[2026-11-10T07:42Z] 2473d48bd1e2
+Coordinator, 07:42Z, overriding where to push: ci gave #8545 a land verdict at ab20c1e016b5. Do NOT push to cursor/verity-benchmarks-6193-followup. Put the rate.json reader and the prover count on a NEW branch cut from ab20c1e016b5 (e.g. cursor/verity-benchmarks-6193-rate), as a new PR based on main that says it lands after #8545 and #8528, marked when ready. If you already pushed to the followup branch, tell me at once on HASH-98 with the commit, and don't force-push. Also note ci's bookkeeping finding: fixtures/prove/census.json holds no macs, so mac_share is None on the records' path; add macs to that fixture if the census records carry them.
+
