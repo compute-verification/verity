@@ -44,8 +44,10 @@ verity bench rho --out DIR    # every scenario; writes rho.md, rho.json and figu
 `verity bench rho` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
 `figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
-range, its parts by kind and its premises ranked; `periods.py --measured CIRCUIT` evaluates them with a measured training
-step's design in place of the FLOP model, after a table of the step beside it (`circuits.py`).
+range, its parts by kind and its premises ranked; each row says what it assumes about proofs, and the remote scenario
+with proofs sampled at the registry's share stands beside the one where every unit is proved. `periods.py --measured
+CIRCUIT` evaluates them with a measured training step's design in place of the FLOP model, after a table of the step
+beside it (`circuits.py`).
 
 ## Inputs
 

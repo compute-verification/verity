@@ -1,10 +1,13 @@
 """`periods.py`: the slowdown per monitoring period, over one datacenter and over the world's compute.
 
-For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, and today's
-operating point, `reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's
-compute, the census's world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with
-the scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
+For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, the remote
+one with sampled proofs beside it, `reference-remote-h200-sampled`, and today's operating point,
+`reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's compute, the census's
+world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with the scenario's own
+`fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
 
+* **what it assumes about proofs** (`proofs`): every unit proved, or proofs sampled at the regime's compute share
+  (`proof_share`), where each accepted incorrect proof block injects the widest public size class of output bits;
 * **the slowdown's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
   and the padded size ratio `|A| / T_0` it comes from;
@@ -44,7 +47,8 @@ from rho.envelopes import ROUTES
 from rho.params import Registry
 from rho.scenario import Result, _binding_k
 
-SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-onsite-h200-today")
+SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-remote-h200-sampled",
+             "reference-onsite-h200-today")
 #: (fleet, label): one datacenter, and the world's compute
 FLEETS = (("reference-h200", "one datacenter"), ("world-h200", "the world"))
 #: core's monitoring periods, by name (`params.PERIODS`)
@@ -57,6 +61,15 @@ FIXED = ("datasheet", "measured", "declared", "ruled")
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
     return {f"scenario.{name}.fleet": fleet, f"scenario.{name}.horizon": period}
+
+
+def proofs(r: Result) -> str:
+    """What a row assumes about proofs: every unit is proved (`Detection` unsampled, `q = 1`), or proofs are sampled at
+    the regime's compute share (`proof_share`); no proofs where the regime detects nothing."""
+    d = getattr(operating._inner(r.scenario.regime), "detection", None)
+    if d is None:
+        return "no proofs"
+    return f"proofs sampled at {100 * d.proof_share:.3g}% of compute" if d.sampled else "every unit proved"
 
 
 def without_hosts(reg: Registry) -> dict[str, float]:
@@ -144,7 +157,7 @@ def evaluate(reg: Registry, names=SCENARIOS, fleets=FLEETS, periods=PERIODS) -> 
                 ends = [r.lo] + [v for s in swings for v in (s.at_low, s.at_high)]
                 f = run.picked(r)
                 rows.append({
-                    "scenario": name, "fleet": fleet, "where": label, "period": period,
+                    "scenario": name, "proofs": proofs(r), "fleet": fleet, "where": label, "period": period,
                     "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.period.seconds,
                     "slowdown": r.lo, **sensitivities(at, name), "padded": run.padded(r), "mfu": r.scenario.mfu,
                     "range": [min(ends), max(ends)], "corner": corner.rho, "seconds": r.scenario.seconds(r.lo),
@@ -198,16 +211,18 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
             "slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀ (Lean's "
             "`hardwareMultiple`, at least 1, so no protocol gives 1); the padded size ratio `|A| / T_0` is the "
             "intermediate it comes from. The time to the target is wall-clock, at least the slowdown times "
-            "`T_0 / (MFU₀ Φ_total)`."), "",
+            "`T_0 / (MFU₀ Φ_total)`. Each row says what it assumes about proofs: every unit proved, or proofs "
+            "sampled at the regime's compute share (`regime.<name>.proof_share`), where each accepted incorrect proof "
+            "block injects the widest public size class of output bits (`step_bits`)."), "",
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
-           ("| scenario | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | set by | "
-           "what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|"]
+           ("| scenario | proofs | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | "
+            "set by | what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for x in rows:
         p = x["parts"]
         sets = ", ".join(f"{t['name']} {t['share']:.0%}" for t in x["attribution"][:2])
         beyond = " (beyond the period)" if x["seconds"] > x["period_s"] else ""
-        out.append(f"| {x['scenario']} | {x['where']} | {x['period']} | **{fmt(x['slowdown'])}**"
+        out.append(f"| {x['scenario']} | {x['proofs']} | {x['where']} | {x['period']} | **{fmt(x['slowdown'])}**"
                    f" | {fmt(x['range'][0])} to {fmt(x['range'][1])} | {fmt(x['corner'])} | {fmt(x['padded'])}"
                    f" | {p.get('status', '—')}, {p.get('premise') or '—'} | {p.get('setter') or '—'} | {sets} | "
                    f"{operating.human(x['seconds'])}{beyond} |")
@@ -217,10 +232,11 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
              "more efficiently than the reference, so free compute counts at MFU₀). Sensitivities, not headlines: "
              "without the first, each regime's host CPUs count at their INT8 datasheet peak (`regime.<name>.host` = 1); "
              "without the second, free compute counts at peak (`task.reference_efficiency` = false)."), "",
-            ("| scenario | over | period | slowdown ≥ | without the hosts assumption | without the reference-efficiency "
-             "assumption | without both |"), "|---|---|---|---|---|---|---|"]
-    out += [f"| {x['scenario']} | {x['where']} | {x['period']} | {fmt(x['slowdown'])} | {fmt(x['without_hosts'])} | "
-            f"{fmt(x['without_reference_efficiency'])} | {fmt(x['without_both'])} |" for x in rows]
+            ("| scenario | proofs | over | period | slowdown ≥ | without the hosts assumption | without the "
+             "reference-efficiency assumption | without both |"), "|---|---|---|---|---|---|---|---|"]
+    out += [f"| {x['scenario']} | {x['proofs']} | {x['where']} | {x['period']} | {fmt(x['slowdown'])} | "
+            f"{fmt(x['without_hosts'])} | {fmt(x['without_reference_efficiency'])} | {fmt(x['without_both'])} |"
+            for x in rows]
     out += ["", "## Its parts", ""]
     seen: dict[str, list[dict]] = {}
     for x in rows:
