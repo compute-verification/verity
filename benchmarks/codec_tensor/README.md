@@ -4,7 +4,7 @@ The bandwidth audit's (PoUB, `verity/core/protocols/remote_bandwidth`) work on t
 codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
 (with `reader.py`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
 against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
-`step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
+`step.py` is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
 
 ## Interface
 
@@ -13,7 +13,6 @@ What code outside this directory may use. Everything else here is internal.
 | Entry point | What it is |
 |---|---|
 | `uv run tools/verity/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It writes no result. |
-| `bash archive/benchmarks/codec_tensor/step.sh`, with `MODEL` and `BATCH` | One decode step at HBM exhaustion on one GPU (`step.py`), after the codecs' tests and `reader.cu`'s gate. It writes its gates and timings as JSON to `$RESEARCH_RUN_DIR/out`. |
 
 Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leaves it inside
 `benchmarks/remote_session/session.cu`'s build.
