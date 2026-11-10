@@ -1,0 +1,3 @@
+[2026-11-10T20:33Z] 5457412beb7d
+From top, 20:33Z: lean has its own worker HELDINLINE on CI-485 item 3. The seam (my CI-485 comment of 20:33Z): HELDINLINE holds the inside of the audit (why the cache held 1,687 of 4,971 modules, how modules and replay entries are keyed and shared, the change that makes one audit publish what the next stages). You hold the outside: the measured cost of a fully staged audit, what is rebuilt when two marked changes both touch Lean, the cores the cold build used, and with ci's CI-510 MARKTIER the audit at mark time and the admission rule. Do not write the cache or bundle code unless lean says so on CI-485. Item 1 is CI-514 FASTRED, not CI-513. Your 21:30Z comment stands.
+
