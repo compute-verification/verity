@@ -63,8 +63,8 @@ untraced = [
 # pearl_c_sm90's arm.
 # test_proved_ticks_placed places PoUW's compiled Program on a block of the datacenter model (benchmarks/datacenter's
 # package, on pytest's `pythonpath`), with what that package imports of core: the registration log (registration.py, over
-# site and wire) and PoUB's block size (its codec.py); its census resolves the Boolean Definitions
-# (verity/ml/definitions).
+# site and wire) and PoUB's block size (its codec.py); its census of a block's ANDs loads every registry module
+# (verity/ml/definitions' boolean.py, over its registry, numerics and evidence).
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
@@ -165,7 +165,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/datacenter/datacenter", "verity/core/protocols/registration.py",
           "verity/core/protocols/remote_bandwidth/__init__.py", "verity/core/protocols/remote_bandwidth/codec.py",
           "verity/core/site/__init__.py", "verity/core/wire/__init__.py",
-          "verity/ml/definitions/__init__.py", "verity/ml/definitions/boolean.py"]
+          "verity/ml/definitions/__init__.py", "verity/ml/definitions/boolean.py", "verity/ml/definitions/evidence.py",
+          "verity/ml/definitions/evidence.json", "verity/ml/definitions/registry", "verity/ml/definitions/numerics"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
