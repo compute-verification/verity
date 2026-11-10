@@ -390,6 +390,8 @@ A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the
 after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
 keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
+A copy the store gave up this way, or by a withdrawal below, no longer holds a node's copy of an expired run in place:
+`research retention gc` deletes it (the tool README's retention section).
 
 An artifact that holds values which must never be shared leaves by `research data withdraw ART... --reason T --ref ISSUE`
 (`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the

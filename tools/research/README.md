@@ -447,7 +447,7 @@ is written for it, and a sidecar wins.
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
@@ -455,15 +455,32 @@ research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root 
 a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
-then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
-expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
-`/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are
-read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
-count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
-for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of unowned,
+Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`, where a filesystem's use is the
+larger of its blocks' and its inodes'. It deletes the lowest priority, then the oldest expiry, until the filesystem is under
+`--low-pct` (75%), and at most `--max-paths` paths in one pass (200; 0 lifts the cap), leaving the rest for the next. A path
+qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable, it holds no nested
+record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before
+`--apply` deletes a path, its record and the job scripts are read again. An implicit record's marker must still vouch for the run
+dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads no remote;
+either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of unowned,
 unpreserved files on a node that nobody can decide to delete.
+
+A record's expiry is its owner's word that the data may go. The remote check, made just before `--apply` deletes a preserved path,
+is there so that gc never deletes the only copy of data somebody still promises to keep. It reads the store `--store` or
+`$RESEARCH_STORE` names (on a node, `/workspace/research/store`), and its answer is one of seven:
+
+| the stored copy is | which means | the path is |
+|---|---|---|
+| `verified` | the remote holds the artifact (`preserved.check` in head mode); with no remote to ask, as on a node, which holds no store key, the store's catalog recorded the replica custody verified when it pushed | deleted |
+| `expired` | the remote holds its manifest and has dropped its blobs, and the manifest is older than its kind's time to live (the store README's §7.4) | deleted |
+| `withdrawn` | the remote dropped its blobs and it carries a `withdrawn` label (`research data withdraw`) | deleted |
+| `uncovered` | the artifact doesn't hold every file now under the path at its size, so files custody trimmed never count as stored | kept |
+| `mismatch` | the remote's copy isn't the artifact's, or a blob is absent that neither rule above explains | kept |
+| `unknown` | the remote has no manifest for it, so it never stored it | kept |
+| `unreachable` | the remote could not be asked; with none, the store doesn't vouch for the artifact | kept, and the pass exits 1 |
+
+An `--apply` ends with how many of each it found. A node's timer, `vy-retention-gc.timer` on every node that holds runs
+(`pods/nebius/deploy.toml`), runs `research retention gc --apply` hourly against the node's store.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
