@@ -54,7 +54,8 @@ run: ``second-read`` alone lets a port no link or wire names read any value eith
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
-statement is read.
+statement is read. With it, ``second-schedule`` fails where the boundary registration's record commits a schedule
+(``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that commits none passes.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
@@ -73,6 +74,7 @@ from verity.ml.circuits.types import Array, RecordType, Tuple
 from verity.ml.commitments.window import window_binding
 
 from .one_stage.verdict import Verdict, _Collect
+from .schedule import failure as schedule_failure
 
 FORM = False
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
@@ -1112,8 +1114,12 @@ def interior_order_ok(own: Own) -> bool:
 
 
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
-    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`."""
-    return [] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)]
+    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then ``second-schedule``
+    where the schedule the boundary registration's record commits is not one of its replay blocks
+    (`schedule_failure`)."""
+    why = schedule_failure(own.boundary)
+    return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
+            + ([] if why is None else [("second-schedule", why)]))
 
 
 def _pos_of(ps: Sequence[Part], t: str) -> int:
