@@ -107,8 +107,10 @@ taken under their lock while the step tree has none for its manifest and toolcha
 (`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
 move them away without touching the links. The first build of a package here is cold; later ones are not.
 
-A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
-compared with that build (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
+A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does), and so has, at its own turn,
+each package that a missed package's `proved_in` names: `Facts.lean` imports every root of both locks, and a lock's root
+need not be under its lakefile's default targets. The guarantees' records are then
+compared with those builds (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
 judgment of the guarantees, without the kernel replay, so a record two merges left stale (a statement or a definition a
 guarantee reads changed, a guarantee gone, a `reads` digest no longer its definitions') fails the run before the audit's cold
 build reaches it.
@@ -407,10 +409,15 @@ def errors(text: str, pkg: str, files: list[str]) -> list[str]:
     return [line for line in text.splitlines() if (m := ERROR.match(line)) and m.group(1) in own]
 
 
-def guarantee_roots(pkg: str, tree: Path) -> list[str]:
-    """The roots of ``tree/pkg``'s policy when it lists a guarantee, which `records` reads; none otherwise."""
+def guarantee_roots(pkg: str, tree: Path, proves: bool = False) -> tuple[list[str], bool]:
+    """(The roots of ``tree/pkg``'s policy that `records` reads, whether it has guarantees of its own to compare). A policy
+    listing a guarantee has its roots read for it; one that ``proves`` another's (a missed package's `proved_in` names it)
+    lists none and has them read for that package (`audit.proved`). Each is built by name, as the audit builds it: a
+    lock's root need not be under the lakefile's default targets. No roots otherwise."""
     policy = AUDIT.load(tree / pkg)
-    return list(policy["roots"]) if policy.get("guarantees") else []
+    listed = bool(policy.get("guarantees"))
+    roots = list(policy["roots"]) if listed or proves else []
+    return roots, listed and bool(roots)
 
 
 def records(pkg: str, tree: Path, lake: str) -> list[str]:
@@ -419,7 +426,8 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
     that no longer lists the modules the guarantees read or their definitions' digest, or a named assumption whose record
     no longer matches the definition the guarantees read. A spec's
-    guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`).
+    guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`)
+    with the roots of their locks (`guarantee_roots`).
     Raises RuntimeError when `Facts.lean` cannot read a build."""
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
@@ -1677,6 +1685,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
         failed: list[str] = []
         built: list[str] = []
         compared: list[str] = []
+        proving = {q for p in todo for q in provers(p)}
         try:
             for pkg in todo:
                 n = sync(closure(pkg), files, tree)
@@ -1684,9 +1693,9 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                     log(f"lean-changed: {pkg}: skipped; lean-audit builds it")
                     continue
                 try:
-                    roots = guarantee_roots(pkg, tree)
+                    roots, compare = guarantee_roots(pkg, tree, pkg in proving)
                 except (OSError, ValueError, KeyError) as e:
-                    roots = []
+                    roots, compare = [], False
                     log(f"lean-changed: {pkg}: its {AUDIT.POLICY} cannot be read ({e!r}); its guarantees are not compared here")
                 t0 = time.monotonic()
                 rc, text = build(pkg, tree, lake)
@@ -1706,7 +1715,7 @@ def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
                     continue
                 built.append(pkg)
                 log(f"lean-changed: {pkg}: built in {took:.0f} s ({n} files changed in the tree)")
-                if not roots:
+                if not compare:
                     continue
                 t0 = time.monotonic()
                 try:
