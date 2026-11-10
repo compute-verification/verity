@@ -102,8 +102,8 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
   with its `trace`, whose raw product rows the grade prices with `capture.products.priced` (it holds no price);
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy, what every partition of the attack's traced circuit must pay, beside S
-  (what this attack pays) and never mixed into it; "not available", with what is missing, where the calculator has
-  no function that gives it;
+  (what this attack pays) and never mixed into it; "not available", with what is missing, where the search record
+  gives the bound no traced step to read;
 - **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over a
   window, a week, a month and a year, with the measured, proved and scaled parts named.
 

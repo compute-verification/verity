@@ -422,10 +422,9 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
 
 
 def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeypatch):
-    """Where the calculator has `min_cut`, the bound of record is its `bound` at the policy's (c, k) on the traced
-    step's N, O, β_w, β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without the module, without a traced
-    step, or on one whose M is empty (no operand holds a bit, so there is no β to hand over), it is not available,
-    with the reason."""
+    """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
+    β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without a traced step, or on one whose M is empty (no
+    operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
     calls = []
 
@@ -433,7 +432,7 @@ def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeyp
         calls.append((c, k, n, kw))
         return SimpleNamespace(slowdown=7.5, blocks=3.0, statement="HE", rests_on="given (H) and (E)")
 
-    monkeypatch.setattr(calculator, "_min_cut", lambda: SimpleNamespace(bound=stub))
+    monkeypatch.setattr(calculator, "_min_cut", lambda: SimpleNamespace(bound=stub, HE="the statement"))
     s = graded(runs, ref)
     work, got = s["rho"]["work"], s["bound_of_record"]
     assert calls == [(*policy.CONSOLE, None, {"N": work["N"], "O": work["O"], "size": work["C_gates"],
@@ -444,26 +443,25 @@ def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeyp
     assert "pays at least 7.5x (HE: at least 3 blocks" in G.text(s) and "rests on: given (H) and (E)" in G.text(s)
     untraced = graded([job([UNDER])], ref)["bound_of_record"]
     assert not untraced["available"] and "gives none" in untraced["why"] and len(calls) == 1
+    assert untraced["theorem"] == "the statement" and (untraced["c_gates"], untraced["k_bits"]) == policy.CONSOLE
+    assert "bound of record   not available: " in G.text(graded([job([UNDER])], ref))
     flat = trace()
     for b in (flat, *flat["at"].values()):
         b["rows"] = [r | {"rates": [0.0, 0.0]} for r in b["rows"]]
     empty = graded([*runs[:2], traced([OVER, UNDER], **flat)], ref)
     assert empty["rho"]["terms"] == {"products": 0.0} and empty["rho"]["rho"] == 1 and empty["rho"]["work"] is None
     assert not empty["bound_of_record"]["available"] and len(calls) == 1
-    monkeypatch.setattr(calculator, "_min_cut", lambda: None)
-    s = graded(runs, ref)
-    absent = s["bound_of_record"]
-    assert not absent["available"] and absent["why"].startswith("not available: ") and calculator.THEOREM in absent["why"]
-    assert (absent["c_gates"], absent["k_bits"]) == policy.CONSOLE and "bound of record   not available: " in G.text(s)
 
 
 def test_the_bound_call_fits_the_calculator_as_it_is():
-    """On the calculator as the tree has it: available exactly where it has the module, and then a slowdown of at
-    least 1 from the grade's own call."""
+    """On the calculator as the tree has it, the grade's own call gives a slowdown of at least 1 under one of the two
+    statements the calculator's `min_cut` names, the first of them the one the grade says ρ's products term has the
+    form of."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
-    got = s["bound_of_record"]
-    assert got["available"] == (calculator._min_cut() is not None)
-    assert got["slowdown"] >= 1 if got["available"] else got["why"].startswith("not available: ")
+    got, mod = s["bound_of_record"], calculator._min_cut()
+    assert got["available"] and got["slowdown"] >= 1
+    assert got["theorem"] in (mod.HE, mod.HE_SHARED) and got["rests_on"].startswith(got["theorem"])
+    assert calculator.theorem() == mod.HE and mod.HE in s["per_period"]["parts"]["proved"]
 
 
 def test_the_periods_and_fleets_are_the_calculators():

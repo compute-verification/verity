@@ -377,7 +377,7 @@ def per_period(run_gates: float, rho: dict) -> dict:
     return {"run_and_gates": run_and, "window": calculator.window()[0], "rows": rows, "parts": {
         "measured": "|C| of each seed and H, the counted gates of the records read, so p; ρ's inputs, one traced step "
                     "of the search record",
-        "proved": (f"the form of ρ's products term, {calculator.THEOREM}'s second conjunct (`HEShared`'s where its "
+        "proved": (f"the form of ρ's products term, {calculator.theorem()}'s second conjunct (`HEShared`'s where its "
                    "products share arrays): a lower bound at the N, O, β_w, β_x and b_y the traced step gives, given "
                    "(H), (E) and the theorem's hypotheses on the circuit, which the trace doesn't check; p and the "
                    "shares are not proved" if rho["binding_kind"] == "products" else
