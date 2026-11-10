@@ -108,7 +108,7 @@ the salt precedes), distinct roots (the deployed path check opens a row at the f
 then the row's own), and rows shorter than `2^64` bits. -/
 structure OpensReady : Prop where
   rows : A.D.unroll.ports.all (fun p => p.v2 || p.segs.isSome) = true
-  domain : ∀ q < A.D.unroll.ports.size, (Flock.Bridge.domOf A.D.unroll q).size = 64
+  domain : ∀ q < A.D.unroll.ports.size, (Flock.Bridge.domOf A.D.unroll A.pub q).size = 64
   leaves : ∀ q < A.D.unroll.ports.size, 2 ≤ A.Lm.cnt q
   roots : ∀ q q', q' < q → q < A.D.unroll.ports.size → A.roots.getD q' [] ≠ A.roots.getD q []
   width : ∀ i, (Flock.Bridge.placeOf A.Cc A.rows i).1 < 2 ^ 64
@@ -163,6 +163,8 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
       simp only [Flock.Bridge.rowDep, hpo]
     have hdom : reg.domain.size = 64 := by
       rw [← hreg]
+      show (A.Lm.dom r.port).size = 64
+      rw [Live.Lm, Flock.Bridge.LeafMap.ofPublic_dom]
       exact hA.domain r.port hq
     have hsalt : (Flock.Bridge.saltOf ⟨i, b, m⟩).length = Hash.Hm96.SALT_BYTES := by
       have hop' := hop
