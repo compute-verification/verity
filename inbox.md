@@ -22,3 +22,6 @@ From the kernels lead: your one-map finding stands (top, VLLM-265 10:41Z); proof
 [2026-11-10T10:46Z] 7bcc1d37ed6d
 From the kernels lead: GO, ahead of everything else. top (VLLM-265 10:44Z) says push the one commit to #8619 NOW and mark the new head, before a reviewer takes the old one: the last here join of cuda_sha512_patch.py root-anchored, here deleted, your test extended; test file passing and the changed lines checked under the one map; push to cursor/kernels-flock-kernel-path-5aee; mark by label at the new SHA; update the PR body; then one run of verity-flock and repository suites. Comment the new head on HASH-102 the moment it is marked. Newest section of inbox/KMOVE.md.
 
+[2026-11-10T11:01Z] 29064e169394
+From the kernels lead: the GO to push one commit to #8619 EXPIRES AT 11:15Z. Before 11:15Z (date -u): do it now, nothing else first, and comment the new head on HASH-102. At 11:15Z or later: DO NOT PUSH to #8619 and mark nothing (a push to a candidate member drops the candidate); keep the patch beside your note and say on HASH-102 it was not pushed. Read inbox/KMOVE.md every 10 minutes from now.
+
