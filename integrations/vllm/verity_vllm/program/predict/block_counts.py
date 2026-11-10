@@ -20,15 +20,17 @@ published with the judgment.
 
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
 verifier's pins (`interface.input_count`: θ the weights pinned before the run at the roots the window's registration
-records) over its m slots, since no wire crosses slots. A table's openings are among them: an opening counts θ's only
-under a pin of its reader's Definition (`input_count`'s ``readers``), and a day's declaration names none. The wires are the
+records) over its m slots, since no wire crosses slots. A table's openings are among them unless the declaration pins
+their reader: an opening counts θ's only under a pin of its reader's Definition, and the pinned Definitions are the
+declaration's ``pins``, a list of closure digests (`input_count`'s ``readers``). The wires are the
 record's declarations, which the session
 Definition doesn't carry, so this is the record's count and not `NciCheck.Count`'s ``fresh`` on the session Definition,
 which would count every wired read.
 
 **The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
-declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
-named by its SHA-512. Its rules, in `NciCheck.Count`'s order: every class's block at most c gates (undecided where a block
+declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, and ``pins`` where it pins opening
+readers, such as the inference-only policy) is named by its SHA-512. Its rules, in `NciCheck.Count`'s order: every
+class's block at most c gates (undecided where a block
 reaches an unpriced primitive, its gates then a lower bound, unless that bound already passes c) and k fresh bits, and the
 day's blocks at most n. The day is accepted when every rule accepts, and refused otherwise, its reason the first rule that
 doesn't, naming c, k or n and never a count. The work is per distinct circuit record (a class's windows share theirs, by
@@ -112,25 +114,28 @@ def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Cou
     return got
 
 
-def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> int:
-    """A block's fresh-input bits (module docstring): the record's free and ingress bits at the verifier's ``pins`` and the
-    window's ``roots`` (`interface.input_count`), over its m slots."""
-    count = IF.input_count(doc, pins=pins, roots=roots)
+def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots: Mapping[str, str] | None,
+          readers: Sequence[str] | None = None) -> int:
+    """A block's fresh-input bits (module docstring): the record's free and ingress bits at the verifier's ``pins``, the
+    window's ``roots`` and the declaration's pinned opening ``readers`` (`interface.input_count`), over its m slots."""
+    count = IF.input_count(doc, pins=pins, roots=roots, readers=readers)
     bits = count["free"] + count["ingress"]
     if bits % m:
         raise ValueError(f"{doc.get('name')}: {bits} fresh input bits over {m} slots, not a slot's share each")
     return bits // m
 
 
-def declaration(doc: Any) -> tuple[str, int, int, int]:
-    """A declaration's SHA-512 (its JSON, sorted keys, compact) and its natural ``c``, ``k`` and ``n``; refused
-    (ValueError) where it isn't a JSON object holding them."""
+def declaration(doc: Any) -> tuple[str, int, int, int, Any]:
+    """A declaration's SHA-512 (its JSON, sorted keys, compact), its natural ``c``, ``k`` and ``n`` and its ``pins``, the
+    opening readers it pins (None where it names none; `interface.input_count` refuses any that are no list of closure
+    digests); refused (ValueError) where it isn't a JSON object holding c, k and n."""
     if not isinstance(doc, Mapping):
         raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
     got = [doc.get(f) for f in ("c", "k", "n")]
     if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
         raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
-    return (hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), *got)
+    return (hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), *got,
+            doc.get("pins"))
 
 
 def judge(classes: Sequence[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
@@ -150,9 +155,11 @@ def judge(classes: Sequence[RBC.BlockClass], total: int, c: int, k: int, n: int)
 
 @dataclass
 class Day:
-    """A day's served windows, counted one at a time (`add`), as `judgment` judges them."""
+    """A day's served windows, counted one at a time (`add`) under the opening ``readers`` its declaration pins, as
+    `judgment` judges them."""
     day: str
     pins: Mapping[str, str] | None = None
+    readers: Sequence[str] | None = None
     _sessions: dict[str, tuple[Any, int, int]] = field(default_factory=dict)
     _fresh: dict[tuple[str, frozenset], int] = field(default_factory=dict)
     _classes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -166,7 +173,7 @@ class Day:
         fn, m, steps = self._sessions[rec]
         held = (rec, IF.held_params(self.pins, roots))
         if held not in self._fresh:
-            self._fresh[held] = fresh(doc, m, self.pins, roots)
+            self._fresh[held] = fresh(doc, m, self.pins, roots, self.readers)
         d = PV2.id_digest(fn)
         c = self._classes.setdefault(d, {"fn": fn, "slots": m, "steps": steps, "fresh": 0, "count": 0})
         c["fresh"], c["count"] = max(c["fresh"], self._fresh[held]), c["count"] + m
@@ -175,8 +182,12 @@ class Day:
 
     def judgment(self, decl: Mapping[str, Any]) -> tuple[RBC.BlockJudgment, dict[str, Any]]:
         """The public judgment (`records.block_counts`) of the windows added against the declaration ``decl``, and the
-        private one: the public one with each class's exact blocks, the day's and its windows."""
-        digest, c, k, n = declaration(decl)
+        private one: the public one with each class's exact blocks, the day's and its windows. Refused (ValueError) where
+        ``decl`` pins other opening readers than the windows were counted under."""
+        digest, c, k, n, readers = declaration(decl)
+        if readers != self.readers:
+            raise ValueError(f"the declaration pins the opening readers {readers}, and the day's windows were counted "
+                             f"under {self.readers}: count them under the declaration's (`Day`'s ``readers``)")
         table, _ = gate_table(x["fn"] for x in self._classes.values())
         memo: dict = {}
         classes, exact = [], {}
@@ -195,8 +206,8 @@ class Day:
 def judgment(day: str, windows: Sequence[tuple[Mapping[str, Any], Mapping[str, str] | None]], decl: Mapping[str, Any],
              pins: Mapping[str, str] | None = None) -> tuple[RBC.BlockJudgment, dict[str, Any]]:
     """``day``'s public and private judgment (`Day.judgment`) from its served ``windows``, each ``(circuit record, the
-    roots its registration records)``, against ``decl`` at the verifier's ``pins``."""
-    d = Day(day, pins)
+    roots its registration records)``, against ``decl`` at the verifier's ``pins`` and the opening readers ``decl`` pins."""
+    d = Day(day, pins, declaration(decl)[4])
     for doc, roots in windows:
         d.add(doc, roots)
     return d.judgment(decl)
@@ -216,14 +227,15 @@ class Options:
     the public judgment alone (no count), and the exact counts in a private file."""
     day: str = option("--day", help="the UTC day served, YYYY-MM-DD")
     declaration: Path = option("--declaration", type=Path,
-                               help="the day's declaration: a JSON object with natural c, k and n (the inference-only policy)")
+                               help="the day's declaration: a JSON object with natural c, k and n, and pins, the closure "
+                                    "digests of the opening readers it pins (the inference-only policy)")
     private: Path = option("--private", type=Path,
                            help="write the private judgment, with the exact counts, here (0600), beside the run's private files")
     window: list = option("--window", nargs=2, action="append", metavar=("CIRCUIT", "REGISTRATION"), default=[],
                           help="one served window: its circuit record (circuit.json) and its registration (the "
                                "registered roots it records), or - for none; repeat for each of the day's windows")
     pins: Path | None = option("--pins", default=None, type=Path,
-                               help="the committer's weights registration, the verifier's pins (none: every read is free)")
+                               help="the committer's weights registration, the verifier's root pins (none: every read is free)")
     out: Path | None = option("--out", default=None, type=Path, help="write the public judgment here as well as to stdout")
 
 
@@ -231,11 +243,12 @@ def main(a: Options) -> int:
     pins = None
     if a.pins is not None:
         pins = dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)
-    d = Day(a.day, pins)
+    decl = json.loads(a.declaration.read_text())
+    d = Day(a.day, pins, declaration(decl)[4])
     for circuit, registration in a.window:
         roots = None if registration == "-" else IF.registered_roots(json.loads(Path(registration).read_text()))
         d.add(json.loads(Path(circuit).read_text()), roots)
-    pub, private = d.judgment(json.loads(a.declaration.read_text()))
+    pub, private = d.judgment(decl)
     pub = RBC.BlockJudgment.of(pub.dump(), "block-counts")
     write_private(a.private, private)
     text = json.dumps(pub.dump(), indent=1, sort_keys=True)

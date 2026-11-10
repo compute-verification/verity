@@ -20,8 +20,9 @@ gives a grid level of each and never the counts; the entries, and which units ma
 block): an entry's slot digit is of radix m, so it gives every block the same share of its units. ``k`` is a block's fresh
 input in bits, |in(I) ∖ θ|, θ the weights (`window_builder.WEIGHTS`' parameters) held at their registered roots: what is
 neither wired nor θ's (`interface.input_count`'s ``free`` and ``ingress`` with only the weights held), the scan state among
-it, over the m blocks. An opening of a table over θ (the embedding's row, salt and path) is among it too: it is θ's only
-under the verifier's pin of its reader's Definition (`input_count`'s ``readers``), and B holds no pin of the verifier's.
+it, over the m blocks. An opening of a table over θ (the embedding's row, salt and path) is among it too, unless its
+reader is pinned: it is θ's only under the verifier's pin of its reader's Definition, and B takes the pinned readers as
+given (``readers``, the closure digests the day's declaration pins: `input_count`'s).
 Every slot is the same class Program lowered side by side and no wire crosses slots, so each block's fresh input is the
 circuit's over m.
 
@@ -106,27 +107,28 @@ def decode(rs: Sequence[bytes]) -> tuple[str, int, list[tuple[str, int, tuple[in
     return program, m, entries
 
 
-def budgets(circuit: IF.Circuit) -> tuple[int, int]:
-    """``(c, k)``: every block's gates and its fresh-input bits (module docstring)."""
+def budgets(circuit: IF.Circuit, readers: Sequence[str] | None = None) -> tuple[int, int]:
+    """``(c, k)``: every block's gates and its fresh-input bits under the pinned opening ``readers`` (module docstring)."""
     b = _blocks(circuit)
     c = sum(e.units // b.slots * circuit.template(e.template).gates for e in b.inference)
     theta = {p: _ROOT for p in (circuit.registered.params if circuit.registered is not None else {})
              if p.split("/", 1)[0] == WEIGHTS}
-    count = IF.input_count(circuit.description(), pins=theta, roots=theta)
+    count = IF.input_count(circuit.description(), pins=theta, roots=theta, readers=readers)
     fresh = count["free"] + count["ingress"]
     if fresh % b.slots:
         raise ValueError(f"{circuit.name}: {fresh} fresh input bits over {b.slots} slots, not a slot's share each")
     return c, fresh // b.slots
 
 
-def commit(circuit: IF.Circuit, program: str | None = None,
-           salts: Sequence[bytes] | None = None) -> tuple[dict[str, Any], AC.Committed]:
+def commit(circuit: IF.Circuit, program: str | None = None, salts: Sequence[bytes] | None = None,
+           readers: Sequence[str] | None = None) -> tuple[dict[str, Any], AC.Committed]:
     """``circuit``'s partition into inference blocks committed (module docstring): its public statement and the
-    commitment, the prover's to keep (the rows, their salts, the tree). ``program`` as `rows` takes it."""
+    commitment, the prover's to keep (the rows, their salts, the tree). ``program`` as `rows` takes it, ``readers`` as
+    `budgets` does."""
     rs = rows(circuit, program)
     padded = rs + [bytes(ROW_BYTES)] * (PV2.grid(len(rs)) - len(rs))
     reg = AC.commit(padded, ROW_BITS, BINDING, salts)
-    c, k = budgets(circuit)
+    c, k = budgets(circuit, readers)
     st = RIB.InferenceBlocks(query=QUERY, c=c, k=k, blocks=PV2.grid(_blocks(circuit).slots), rows=len(padded),
                              root=reg.root.hex())
     return st.dump(), reg

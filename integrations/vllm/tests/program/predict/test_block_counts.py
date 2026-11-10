@@ -5,7 +5,7 @@ and `check_count`, which `nci-count-difftest` holds the Lean to) on the session 
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
 the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); a block reaching an
 unpriced primitive leaves the gates undecided; and on `test_window_circuit`'s TINY window a block's fresh bits are B's k
-(`inference_blocks.budgets`)."""
+(`inference_blocks.budgets`), its openings among them unless the declaration pins their reader."""
 from __future__ import annotations
 
 import importlib.util
@@ -162,12 +162,34 @@ def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
                                              "a block of 100 gates, more than c = 99")
 
 
+def test_a_declarations_pins_are_the_opening_readers_a_block_is_counted_under(small, monkeypatch):
+    """A declaration's ``pins`` reach `input_count` as its ``readers``: on TINY's window a block's embedding openings leave
+    its fresh bits under a pin of their reader, and stay among them under another pin or none. One constant stands in for
+    every reader's digest here (`test_window_circuit` takes the catalog reader's own). A day judged against a declaration
+    of other pins than its windows were counted under is refused, and so are pins that are no list of digests."""
+    from tests.program.predict.test_window_circuit import OPENED, WINDOW, _circuit
+    from verity_vllm.program.predict.window_builder import WEIGHTS
+
+    pin, limits = "cd" * 64, {"c": 10 ** 12, "k": 10 ** 12, "n": 2}
+    assert BC.declaration({**limits, "pins": [pin]})[1:] == (10 ** 12, 10 ** 12, 2, [pin]) and BC.declaration(limits)[4] is None
+    monkeypatch.setattr(IF, "reader_digest", lambda fn: pin)
+    circuit = _circuit(WINDOW)
+    doc = {**circuit.description(), "name": circuit.name}
+    roots = {p: "ab" * 64 for p in circuit.registered.params if p.split("/", 1)[0] == WEIGHTS}
+    assert BC.fresh(doc, 2, roots, roots, [pin]) == 4548 * 16
+    assert BC.fresh(doc, 2, roots, roots, ["ef" * 64]) == BC.fresh(doc, 2, roots, roots) == 4548 * 16 + OPENED // 2
+    with pytest.raises(ValueError, match="counted under None"):
+        BC.Day(DAY).judgment({**limits, "pins": [pin]})
+    with pytest.raises(ValueError, match="a list of closure digests"):
+        BC.judgment(DAY, [(small, None)], {**limits, "pins": [GEMM]})
+
+
 @pytest.mark.slow
-def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
+def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k(monkeypatch):
     """TINY's window at its class (2 slots): two blocks a window, each of the session's gates, and fresh bits B's k with the
-    weights held (its slot's lane of the scan state and its positions' embedding openings, whose reader the day's
-    declaration pins nowhere)."""
-    from tests.program.predict.test_window_circuit import WINDOW, _circuit
+    weights held (its slot's lane of the scan state and its positions' embedding openings, where the day's declaration
+    pins no reader; the lane alone under its pin of theirs, a constant standing in for the reader's digest)."""
+    from tests.program.predict.test_window_circuit import WINDOW, _circuit, opened
     from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict.window_builder import WEIGHTS
 
@@ -179,3 +201,7 @@ def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     (cls,) = pub.classes
     assert (cls.slots, private["total"], cls.fresh) == (2, 2, IB.budgets(circuit)[1]) and cls.fresh > 0
     assert not cls.unpriced and cls.gates > IB.budgets(circuit)[0]
+    pin = "cd" * 64
+    monkeypatch.setattr(IF, "reader_digest", lambda fn: pin)
+    pinned, _ = BC.judgment(DAY, [(doc, roots)], {"c": 0, "k": 0, "n": 0, "pins": [pin]}, pins=roots)
+    assert pinned.classes[0].fresh == IB.budgets(circuit, [pin])[1] == cls.fresh - opened(circuit) // 2
