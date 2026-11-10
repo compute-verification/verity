@@ -1356,9 +1356,10 @@ def verdict_packs(store, limit: int = GATHER, remote: bool = False) -> list[dict
     """{run, sha256, bytes} of the pack of each of the ``limit`` recorded checks that ended last and published one, newest first: a
     failed or cancelled run's too, since its pack holds only the passes its steps stored, each under a key of everything it read.
     One whose listed size would take them past `GATHER_BYTES` is passed over by name, unfetched, and with ``remote`` so is one the
-    store's remote doesn't hold, which no URL fetches.  The store's attempts are refreshed first when it has a remote."""
+    store's remote doesn't hold, which no URL fetches.  When the store has a remote, the attempts started in the last
+    `common.RECENT_S` are refreshed from it first."""
     if store.remote is not None:
-        store.refresh(attempts_only=True)
+        store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
     rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
                            "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
     packs, room = [], GATHER_BYTES

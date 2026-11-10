@@ -331,8 +331,8 @@ class _Store:
         self.index, self.refreshed, self.fetched, self.signed = self, [], [], []
         self.remote = types.SimpleNamespace(presign=self.presign) if signs else None
 
-    def refresh(self, attempts_only: bool = False) -> None:
-        self.refreshed.append(attempts_only)
+    def refresh(self, attempts_only: bool = False, since: str | None = None) -> None:
+        self.refreshed.append((attempts_only, since))
 
     def sql(self, query: str, params: tuple = ()) -> list[tuple]:
         import sqlite3
@@ -370,18 +370,38 @@ def test_a_recorded_check_sends_the_newest_recorded_checks_packs_as_urls_and_fet
     """A launch fetched and combined the newest recorded checks' packs on the control pod's network volume, some ten minutes
     of each shard's launch.  It now lists them, newest first, each with a URL of its blob signed for `VERDICT_URL_TTL_S`, in a
     file only its owner reads, and fetches none; a run that stored none is passed over.  The URLs live as long as the Lean
-    bundles' (`lean_audit.URL_TTL_S`), which the same run fetches after the same wait for its slot."""
+    bundles' (`lean_audit.URL_TTL_S`), which the same run fetches after the same wait for its slot.  The newest checks are listed
+    from the store's remote, as only its last `common.RECENT_S` of attempts: listing all of them took half a minute a launch."""
     check = _load("check")
     packs = _packs(tmp_path, monkeypatch, {"new": {"tests/k1.json": "new"}, "old": {"tests/k1.json": "old", "tests/k3.json": "3"}})
     store = _Store(tmp_path, {"r-new": packs["new"], "r-none": None, "r-old": packs["old"]}, signs=True)
+    nows: list[float] = []
+    monkeypatch.setattr(check.COMMON, "recent", lambda now: nows.append(now) or "r20261108-120000")
     path = check.verdict_url_file(tmp_path, store)
     assert path == tmp_path / check.VERDICT_URLS and path.stat().st_mode & 0o777 == 0o600
     assert [(p["run"], p["sha256"], p["bytes"], p["url"]) for p in json.loads(path.read_text())] == \
         [(f"r-{k}", _sha(packs[k]), packs[k].stat().st_size, packs[k].as_uri()) for k in ("new", "old")]
     assert [ttl for _, ttl in store.signed] == [check._lean_audit().URL_TTL_S] * 2 and store.fetched == []
-    assert store.refreshed == [True], "the newest checks are listed from the store, not this machine's stale copy of its index"
+    assert store.refreshed == [(True, "r20261108-120000")], "the newest checks are listed from the store, not this machine's stale index"
+    assert len(nows) == 1 and nows[0] > 1.7e9, "the cutoff is counted back from the time of day, not from a monotonic clock"
     assert "sending presigned URLs for the verdict packs of 2 recorded checks (0 MiB): r-new, r-old" in capsys.readouterr().out
     assert check.verdict_url_file(tmp_path / "none", _Store(tmp_path, {"r-none": None}, signs=True)) is None
+
+
+def test_a_launch_lists_the_attempts_started_since_before_the_longest_recorded_check_could(monkeypatch):
+    """`recent` is the run id prefix `RECENT_S` before a time, in UTC as every run id is on any machine's zone; it reaches back
+    past the longest a recorded check runs, or a long one that just ended would go unlisted where the index lacks it."""
+    import time
+
+    check = _load("check")
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    time.tzset()
+    try:
+        assert check.COMMON.recent(check.COMMON.RECENT_S + 40 * 86400 + 3661.5) == "r19700210-010101"
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+    assert check.COMMON.RECENT_S >= 2 * check.STEP_BUDGET_S
 
 
 def test_a_run_imports_each_pack_sent_newest_first_and_names_each_in_its_result(tmp_path, monkeypatch, capsys):

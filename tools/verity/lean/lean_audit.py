@@ -1544,15 +1544,16 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
     most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `check.verdict_packs` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules of packages whose audit passed. Empty when the store can't be
-    read: each node then reuses only what it built."""
+    cancelled run's too, since its bundle holds only modules of packages whose audit passed. When the store has a remote, the
+    attempts started in the last `common.RECENT_S` are refreshed from it first. Empty when the store can't be read: each node
+    then reuses only what it built."""
     from research.store.local import LocalStore
 
     out: list[str] = []
     try:
         store = store or LocalStore()
         if store.remote is not None:
-            store.refresh(attempts_only=True)
+            store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
         rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
                                "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
         for (rid,) in rows:
