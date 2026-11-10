@@ -1,0 +1,49 @@
+# Fresh input in names: what `tools/move/rename.py --map tools/move/fresh_input_map.toml` renames, the Lean's names for
+# the input a block takes in that is not registered information, which spell it "novel" (GLOSSARY.md: fresh input). The
+# prose's words are `fresh_input_prose_map.toml`'s.
+# - `novelReads` becomes `freshInput`, `novelInfo` `freshInfo` and `novelWidth` `freshWidth`, each with every name it is
+#   one part of (`novelReads_piece`, `le_novelInfo_iff`, `novelWidthExact`, `novelWidth_sum`).
+# - `Novel` becomes `Fresh`: the namespace `NciCheck.Properties.SecurityProofs.Novel` and its module
+#   `Security/Proofs/Properties/Nci/Novel.lean`, and the statements `NovelExact` and `NovelWidthExact`.
+# - `novelExact_of` becomes `freshExact_of`, and the theorem `novel_eq` of the check's proofs `fresh_eq`, a whole word
+#   held to those proofs: Core's `fresh_eq_external_add_produced` spells the new word as one part of its name, and a word
+#   that renames a part is certified only to a word the tree spells nowhere.
+# What stays:
+# - C-Flock's novel basis (`NovelBasis` and its files, upstream's `NovelPolynomialBasis`, and `novelCoeffs` and the
+#   names beside it, which no row reaches), another thing ([keep], [keep_paths]).
+# - "Novel" where a sentence opens with it, which is prose: `fresh_input_prose_map.toml` renames the phrases ([keep]).
+# - The check's README's sentence that says which older names stay, a hand edit once none does ([keep]).
+# - The liveness vectors' kind `"novel"` and the function `NciCheck.DescLiveness.novel` that builds it: the vectors
+#   spell the kind, and the check's lock pins the vectors' digests. A local name (`hnovel`, a `novel` bound in a `let`)
+#   renames no declaration, so `move_check.py` certifies no change of it: a hand edit.
+#
+# It renames declarations the Lean locks record (`Nci.novelReads` is read by the policy's guarantees): their records
+# follow in a commit of their own, `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
+
+[words]
+"novelReads" = "freshInput"
+"novelInfo" = "freshInfo"
+"novelWidth" = "freshWidth"
+"novelExact" = "freshExact"
+"Novel" = "Fresh"
+
+[[words_in]]
+files = ["Security/Proofs/Properties/Nci*"]
+words = { "novel_eq" = "fresh_eq" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lints' own examples, the frozen backends, files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line
+# itself), lock files, move_check's own tests, and the Lean tools' fixtures, locks as they were on a past tree, which
+# their tests read as such.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+# C-Flock's basis; a sentence's first word
+patterns = ['Novel(?:Polynomial)?Basis', 'Novel(?= )']
+strings = ['"novel information" and `novelReads` for fresh input']
+
+[keep_paths]
+"Security/Proofs/Flock/**" = ["Novel"]
