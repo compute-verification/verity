@@ -1,4 +1,4 @@
-"""The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
+"""The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the import order over the tree.
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, the served
@@ -10,7 +10,8 @@
     soundness path, which only shrinks;  under ``verity/``, outside the verifiers and the devices, only the files
     their ``loaded_by`` lists load one, tests included, and that only shrinks too;  no unit imports
     another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
-    imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
+    imports the standard library, its declared dependencies and itself;  ``infra/`` is the listing's last row, which no file
+    of another row loads, a test included, but the ties it lists;
     nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
     packages or its analysis (``SPOT_NOT_CERTIFIER``).
@@ -155,11 +156,6 @@ CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/prot
                   "verity/protocols/certifier/verifier/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
-#: Files outside ``infra/`` that import a package of it, each with why.
-INFRA_IMPORTERS = {
-    "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
-                                                "deploy and Slack code",
-}
 #: Files outside ``benchmarks/`` that import a module of it, by name or by path, each with its owner and what it imports.
 #: ``benchmarks/`` is measurement only: a number a protocol uses reaches it
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
@@ -519,37 +515,6 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
                             ["Security/Proofs/lakefile.toml", "verity/flock/verifier/lakefile.toml"])
     assert modules == {"Proofs.Flock.Bytes": ["Security/Proofs/Flock/Bytes.lean"],
                        "Flock.Bytes": ["verity/flock/verifier/Flock/Bytes.lean"]}, modules
-
-
-def _infra_packages() -> set[str]:
-    """The import packages of ``infra/``'s distributions, from each one's wheel configuration.  A project with no wheel (the
-    Slack events service's suite, whose code Vercel deploys) has no package to import."""
-    return {Path(p).name for pyproject in sorted((ROOT / "infra").glob("*/pyproject.toml"))
-            for p in tomllib.loads(pyproject.read_text()).get("tool", {}).get("hatch", {}).get("build", {})
-            .get("targets", {}).get("wheel", {}).get("packages", [])}
-
-
-def test_nothing_outside_infra_imports_it() -> None:
-    packages = _infra_packages()
-    assert "cluster" in packages
-    tracked = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, check=True, capture_output=True).stdout
-    word = re.compile(r"\b(?:" + "|".join(map(re.escape, sorted(packages))) + r")\b")
-    found: dict[str, list[str]] = {}
-    for rel in (p for p in tracked.decode().split("\0") if p and not p.startswith("infra/")):
-        path = ROOT / rel
-        if not path.is_file() or not word.search(text := path.read_text(encoding="utf-8", errors="replace")):
-            continue
-        try:
-            names = _imports(path, ROOT, ())
-        except SyntaxError:
-            continue
-        hits = [f"{line}: {name}" for name, line, imported in names if imported and name.split(".")[0] in packages]
-        if hits:
-            found[rel] = hits
-    offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in INFRA_IMPORTERS for hit in hits]
-    assert not offenders, "\n".join(offenders)
-    stale = sorted(set(INFRA_IMPORTERS) - set(found))
-    assert not stale, f"INFRA_IMPORTERS entries that no longer import infra/; remove them: {stale}"
 
 
 def _benchmarks_packages() -> set[str]:
@@ -1326,6 +1291,9 @@ ORDER_TREE = {
     "benchmarks/probe/run.py": "import tools.lazy\n",
     "benchmarks/probe/tests/test_run.py": "import infra.cluster.usage\n",
     "infra/cluster/usage.py": "import benchmarks.probe.run\n",
+    "infra/ops/pyproject.toml": '[tool.hatch.build.targets.wheel]\npackages = ["src/verity_ops"]\n',
+    "infra/ops/src/verity_ops/__init__.py": "",
+    "tools/tests/test_console.py": "import verity_ops.no_such_module\n",
     "verity/protocols/__init__.py": "",
     "verity/protocols/pouw/__init__.py": "",
     "verity/protocols/pouw/verifier/__init__.py": "",
@@ -1347,7 +1315,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     """The four checks above aren't vacuous.  Against the listing's order: an import at load, inside a function and as a
     module named in a string, the package above a module of an earlier row, a bare import under a directory put on
     ``sys.path``, a Lean import from a package required by path and that requirement, and a test's import of the last
-    row; not a load with the order, a test's of another row, a sidecar's, or a module no tracked file holds.  From a
+    row, by its path and by the name of a package one of its distributions ships, whatever module of it is named; not a
+    load with the order, a test's of another row, a sidecar's, or a module no tracked file holds.  From a
     verifier: its import of its prover inside a function and that of a distribution inside it, the places it loads, at
     the grain of a row's packages, and the place it reaches only through another file; not its prover's import of it,
     its test's or its Lean script's of the prover, nor, among its places, what a distribution inside it loads.  Into a
@@ -1370,6 +1339,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         ("verity/flock", "verity/protocols/pouw"): ["verity/flock/prover/stage.py"],
         ("verity/spot", "workloads"): ["verity/spot/by_path.py"],
         ("tools", "benchmarks"): ["tools/lazy.py"],
+        ("tools", "infra"): ["tools/tests/test_console.py"],
         ("benchmarks", "infra"): ["benchmarks/probe/tests/test_run.py"],
     }, found
     assert _row("verity/settings.py", steps) == "verity" and _row("pyproject.toml", steps) == "." \
