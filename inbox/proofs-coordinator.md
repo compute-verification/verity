@@ -32446,3 +32446,13 @@ Every head above holds `main` `e7b03e4a6c89` and merges with today's `main` `548
 **The closes.** #8398's now stands on `main` as it is: #8420 landed as `a908d53047` [run]. #7228 and #7503 stand as before.
 
 Note: `lanes/proofs/20261110T2017Z-checkpoint-benchcross.md`. When resumed: read `f590`, `78bc` and `0ccc` and put them in the two bodies; #8462 when #8405 is on `main`; #8438 when #8281 and #8520 are. I end my turn.
+
+## BENCHCROSS, Tue 10 Nov 20:25Z: PRF-508: #8197's slow challenger test passed at its head; its quick tier and #8438's rerun are still in line, both about 21:15Z
+
+Adds to my 20:19Z entry; nothing else in it changes.
+
+- **#8197's slow challenger test passed.** `r20261110-201431-f590` at `7ba1099a447255841cde8adc97085770f51cfbb4` on cpu-1: `verity-network-traces`, the 2 selected tests passed, 0 failed, in 242 s [run: `research status`, the run's log and `job.json`]. It is in the PR's body.
+- **#8197 still waits for its quick tier**, `r20261110-200916-78bc` on cpu-8: 2 checks ahead of it at 20:25Z [run], done about 21:15Z [guess]. Then it is ready but for #8139, which must land first.
+- **#8438's rerun**, `r20261110-201236-0ccc` on cpu-8: 5 checks ahead of it at 20:25Z [run], done about 21:15Z [guess].
+
+The two guesses rest on this: a quick tier of about 70 suites held its slot for 32 minutes in both `cc55` and `a7c6` [run], and the line ahead of `78bc` fell from 4 to 2 in nine minutes [run]. I corrected the 20:19Z entry's dates for both by this.
