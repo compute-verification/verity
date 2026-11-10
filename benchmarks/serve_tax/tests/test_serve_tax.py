@@ -157,6 +157,18 @@ def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypat
     assert "VLLM_PLUGINS" not in env and "VLLM_PLUGINS" not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 1.0, 1.0)
 
 
+def test_no_server_writes_a_requests_or_a_responses_text_to_its_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    for name in S.LOGS_TEXT_ENV:
+        monkeypatch.setenv(name, "1")
+    for arm in ("compiled", "record", "two-stage"):
+        env = S.server_env(S.ARMS[arm], tmp_path, tmp_path, None, 600.0, 600.0, check=S.MODELS["glm53"].check,
+                           private=tmp_path / "private")
+        assert not set(S.LOGS_TEXT_ENV) & set(env)
+    for model in S.MODELS.values():
+        for arm in S.ARMS.values():
+            assert not set(S.LOGS_TEXT_ARGS) & set(S.server_argv(arm, model, tmp_path, 8000))
+
+
 def test_an_arms_plugins_are_loaded_once_before_its_server_starts(tmp_path: Path):
     """vLLM serves on without a plugin whose import fails; `check_plugins` refuses before the server starts."""
     site = tmp_path / "site"

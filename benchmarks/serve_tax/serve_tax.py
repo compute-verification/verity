@@ -250,6 +250,10 @@ class Model:
 #: every arm's engine: vLLM's defaults but for the context (the plan's longest request is 1,024 + 256 tokens), the batch
 #: cap (pinned, so that a saturated load hits the same cap on every vLLM build) and the seed
 BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", "--disable-uvicorn-access-log")
+#: what makes vLLM write a request's or a response's text to the server's log, which a run publishes: the flags no arm
+#: or model may carry, and the variable a server's environment never keeps
+LOGS_TEXT_ARGS = ("--enable-log-requests", "--enable-log-outputs")
+LOGS_TEXT_ENV = ("VLLM_DEBUG_LOG_API_SERVER_RESPONSE",)
 MODELS = {
     "moonlight": Model("moonshotai/Moonlight-16B-A3B-Instruct", "4e735b07a89f73647dfab71ab91b840f362ede5b", "moonlight-16b",
                        ("--dtype", "bfloat16", "--trust-remote-code"), (2.0, 0.08)),
@@ -365,15 +369,17 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
     plugin site, this tree for a change of `servetax_plugin`'s or the tick, and each other plugin's directory, so a
     stock arm's processes import nothing of ours; ``VLLM_PLUGINS``, which would let a job's environment drop one of
-    them, is unset. An arm with ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its
-    place, with ``check`` (the model's check template) where it names none, at ``window_s``; its classes' directories,
-    which hold values, go under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``."""
+    them, is unset, and so is what would put each response's text in the server's log (`LOGS_TEXT_ENV`). An arm with
+    ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its place, with ``check`` (the
+    model's check template) where it names none, at ``window_s``; its classes' directories, which hold values, go
+    under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``."""
     ours = [*([str(site)] if entry_points(arm) else []),
             *([str(HERE), str(ROOT / "integrations/vllm"), str(ROOT)] if arm.plugin or arm.tick else []),
             *(str(ROOT / path) for _, path in arm.general)]
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([*ours, *SHARED.PYTHONPATH]))
-    env.pop("VLLM_PLUGINS", None)
+    for name in ("VLLM_PLUGINS", *LOGS_TEXT_ENV):
+        env.pop(name, None)
     if private is None and keeps_private(arm):
         raise SystemExit("this arm keeps files on the node, outside its run's directory: --private DIR")
     env.update(_private(arm.env, private))
