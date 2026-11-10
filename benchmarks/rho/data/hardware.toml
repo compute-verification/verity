@@ -71,14 +71,14 @@ host_memory = { value = 6.4e13, unit = "bit", source = "4 x location.h200-hgx ho
 host_ops = { value = 1.835e15, unit = "op/s", source = "4 x location.h200-hgx host_ops", status = "derived" }
 links = { value = 1.92e13, unit = "bit/s", low = 3.2e12, high = 1.92e13, source = "the servers' NICs all uplinked, 4 x location.h200-hgx links; low: a 4:1 oversubscribed uplink", status = "assumed" }
 
-# Fleets, the inventory: the monitored locations and the dark leaves. MFU is what a construction gets of the peak (dense FP8).
+# Fleets, the inventory: the monitored locations and the unregistered leaves. MFU is what a construction gets of the peak (dense FP8).
 [fleet.reference-h200]
 location = "h200-hgx"
 count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluster", status = "assumed" }
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "benchmarks/nci/tiers.py DEFAULTS mfu (Llama 3 405B: 38-43% of BF16 peak; PaLM 540B 46.2%); low: DeepSeek-V3 in FP8, 6 x 37e9 x 14.8e12 FLOP over 2.788M H800-hours at 1,979 TFLOP/s; high: PaLM-class", status = "assumed" }
 mfu_serve = { value = 0.4, source = "the served work's MFU, prefill-heavy (sizes a fleet to its committed work; no regime reads it)", status = "assumed" }
-mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as mfu_train: one connected pool trains like the monitored fleet; the range lets its interconnect help or hurt", status = "assumed" }
+mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as mfu_train: one connected pool trains like the monitored fleet; the range lets its interconnect help or hurt", status = "assumed" }
 
 [fleet.reference-h100]
 location = "h100-hgx"
@@ -86,7 +86,7 @@ count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluste
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
-mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
+mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_unreg", status = "assumed" }
 
 [fleet.reference-b200]
 location = "b200-hgx"
@@ -94,7 +94,7 @@ count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluste
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
-mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
+mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_unreg", status = "assumed" }
 
 [fleet.reference-gb200]
 location = "gb200-nvl72"
@@ -102,7 +102,7 @@ count = { value = 1389, unit = "location", source = "about 100k GPUs as NVL72 ra
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
-mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
+mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_unreg", status = "assumed" }
 
 [fleet.reference-gb200-400k]
 location = "gb200-nvl72"
@@ -110,7 +110,7 @@ count = { value = 5556, unit = "location", source = "about 400k GPUs as NVL72 ra
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
-mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
+mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_unreg", status = "assumed" }
 
 [fleet.reference-h200-rack4]
 location = "h200-hgx-rack4"
@@ -118,7 +118,7 @@ count = { value = 3125, unit = "location", source = "fleet.reference-h200's 100k
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
-mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
+mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_unreg", status = "assumed" }
 
 [fleet.tiers-reference]
 location = "rtx-pro-6000-server"
@@ -126,4 +126,4 @@ count = { value = 1e5, unit = "location", source = "benchmarks/nci/tiers.py DEFA
 eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (tiers' unmonitored is 0); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, source = "benchmarks/nci/tiers.py DEFAULTS mfu", status = "declared" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
-mfu_dark = { value = 0.4, source = "as mfu_train", status = "assumed" }
+mfu_unreg = { value = 0.4, source = "as mfu_train", status = "assumed" }
