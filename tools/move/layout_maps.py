@@ -204,6 +204,8 @@ ALIASES = {
 DROP = {
     "benchmarks/pouw/contents/paths/machine_model.toml":
         ("hardware", "the entry of `benchmarks/pouw`'s contents for `machine_model/`, which leaves `benchmarks/pouw`"),
+    "benchmarks/pouw/contents/paths/np_kernel.toml":
+        ("archive", "the entry of `benchmarks/pouw`'s contents for `np_kernel/`, which goes to `archive/`"),
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
@@ -223,6 +225,8 @@ NEW = {
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
     "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "benchmarks/pouw/np_kernel/": "archived",          # a kernel nothing serves or imports: its owner archives it,
+    "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and its test with it
 }
 #: directories written as one row though a file of theirs is archived, so that a file added to the directory, or one it
 #: fetches, goes with it: {the directory today: why}
