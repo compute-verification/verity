@@ -12,7 +12,7 @@ import pytest
 from test_lean_verifier import LEAN, VERIFIER
 
 
-NCI_SCRIPTS = Path(__file__).resolve().parents[2] / "core" / "protocols" / "network" / "nci" / "lean" / "scripts"
+NCI_SCRIPTS = Path(__file__).resolve().parents[2] / "protocols" / "inference_only" / "verifier" / "nci" / "lean" / "scripts"
 
 
 def _tile_window(bits: bool) -> str:

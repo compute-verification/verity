@@ -32,7 +32,7 @@ path = "../../verity/protocols/pouw/verifier/lean/commit"
 
 [[require]]
 name = "nci_check"
-path = "../../verity/core/protocols/network/nci/lean"
+path = "../../verity/protocols/inference_only/verifier/nci/lean"
 
 [[require]]
 name = "certifier_device"

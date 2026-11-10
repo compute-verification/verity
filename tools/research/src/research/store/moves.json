@@ -2503,6 +2503,13 @@
         "verity/core/protocols/pouw/": "verity/protocols/pouw/verifier/",
         "verity/ml/protocols/pouw/": "verity/protocols/pouw/prover/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/": "verity/protocols/inference_only/nci/",
+        "benchmarks/rho/": "verity/protocols/inference_only/rho/",
+        "verity/core/protocols/network/nci/": "verity/protocols/inference_only/verifier/nci/"
+      }
     }
   ]
 }

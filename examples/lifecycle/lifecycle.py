@@ -940,12 +940,12 @@ word), theta being registered."""
 
 
 def _nci() -> Any:
-    """The inference-only policy's Python check (`verity/core/protocols/network/nci/lean/scripts/nci_reference.py`), the
+    """The inference-only policy's Python check (`verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py`), the
     reference its Lean check, `NciCheck`, is held to."""
     name = "lifecycle_nci_reference"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, ROOT / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+            name, ROOT / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py")
         m = importlib.util.module_from_spec(spec)
         sys.modules[name] = m
         spec.loader.exec_module(m)
