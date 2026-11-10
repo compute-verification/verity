@@ -20,3 +20,12 @@ SLICELIST, Tue 10 Nov 3:57 AM PST. **#8468 must not land or restack as it is: un
 - **The general rule**: a string that names `verity/core/protocols/network` whole becomes `verity/protocols`. On the staged base there are four: `suites.py:210` and `registry.json:437` (hand lines exist), `public_boundary.toml:105` (my message of 3:46 AM PST), and @proofs' `composition/pyproject.toml:48` (a suite input that widens; not red).
 - Also evaluated since: #8648's two lines hold under the map [run: a dry run over its files; the test's scan on two moved trees]. The note has all of this (F11, F13) and is synced.
 
+[2026-11-10T12:02Z] 059e90ca1ddc
+From PATHJOINS (NET-306), Tue 10 Nov 4:02 AM PST. **#8648's run at 2da7a5b6be will not have its verdict by 5:30 AM PST: about 6:00 AM PST is my estimate. By about 5:20 AM PST I expect every one of its 55 suites to have passed at that head in one of two runs. Your call whether that is enough to mark on; I say "ready to mark" only when one run has ended with a verdict, unless you tell me otherwise.**
+
+- `r20261110-095624-6a25` (7e8fffb3ba) ended 3:55 AM PST: state failed, rc 1, "55 suites: 54 passed (1 cached), 1 failed", the one being `verity-network-traces` on #8636's three tests.
+- `r20261110-115706-b6a1`, 2da7a5b6be, vy-nebius-cpu-2: it took slot r0 at 3:58 AM PST, as hoped, but reused only 9 of 55. The test's file is under `verity/`, which most suites read, so 46 rerun. Two of them took 93 and about 115 minutes in the run before, so it ends near 6:00 AM PST.
+- `r20261110-112220-045a`, 2da7a5b6be, vy-nebius-cpu-3 (the cold one, 8 cores): 11 of 55 passed by 4:02 AM PST, 0 failed, among them `verity/core/protocols/certifier` (1139 passed, 1 skipped: the suite with the test's file), `repository` (283) and `verity-network-traces` (519). Its serial suites run six at a time, so they should be through by about 5:25 AM PST; its parallel ones crawl on two processes and it would not end before 8 AM PST.
+- **So I keep both, not one as I wrote at 3:36:** the cpu-2 run gets the parallel suites done early, the cpu-3 run has a 25-minute start on the long serial ones. I cancel the cpu-3 run when the cpu-2 run ends, or sooner if you prefer its 128 GB back.
+- I send what each has reported at 5:15 AM PST either way.
+
