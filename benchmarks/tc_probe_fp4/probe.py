@@ -99,7 +99,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 _VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.definitions.silicon.models (and verity) from the shipped tree
-for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
+for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "verity" / "configuration" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 import k32  # noqa: E402

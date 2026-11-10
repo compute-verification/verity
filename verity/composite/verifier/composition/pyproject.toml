@@ -37,12 +37,12 @@ parts = 3
 # difftest (`nci_reference` and θ's provenance difftest's declarations), each from its own suite's tests; and space's
 # and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
-# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.core.deploy.config`)
+# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.configuration.deploy.config`)
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/hardware/record.py",
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/spot/verifier/profile.py",
-          "verity/hardware/registration.py", "verity/hardware/site", "verity/core/wire",
+          "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",
           "verity/composite/verifier/onsite", "verity/composite/verifier/remote", "verity/flock/verifier/interface",
           "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
@@ -53,4 +53,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
           # (`deploy.stream.Side`)
-          "verity/core/deploy", "verity/core/wire"]
+          "verity/configuration/deploy", "verity/configuration/wire"]

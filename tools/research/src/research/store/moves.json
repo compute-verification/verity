@@ -2408,6 +2408,13 @@
         "verity/core/protocols/tests/test_record.py": "verity/hardware/tests/test_record.py",
         "verity/core/site/": "verity/hardware/site/"
       }
+    },
+    {
+      "paths": {
+        "tools/config/": "verity/configuration/config/",
+        "verity/core/deploy/": "verity/configuration/deploy/",
+        "verity/core/wire/": "verity/configuration/wire/"
+      }
     }
   ]
 }

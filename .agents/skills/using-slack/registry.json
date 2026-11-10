@@ -327,7 +327,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/core/deploy/",
+        "verity/configuration/deploy/",
         "Security/Definitions/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -489,7 +489,7 @@
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
-        "tools/config/",
+        "verity/configuration/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",

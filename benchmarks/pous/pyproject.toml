@@ -55,11 +55,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/spot/verifier/one_stage/registered.py",
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`deploy.stream.Side`) and the challenger's parties run on
-          "verity/core/deploy", "verity/core/wire"]
+          "verity/configuration/deploy", "verity/configuration/wire"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pous_wipe_resume.py"]
-paths = ["verity/core/deploy", "verity/core/protocols/pous", "verity/core/wire"]
+paths = ["verity/configuration/deploy", "verity/core/protocols/pous", "verity/configuration/wire"]

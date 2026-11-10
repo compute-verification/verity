@@ -1,6 +1,6 @@
 """The local-process adapter: a party run in a process of its own on this machine, over TCP to the run that spawned it.
 
-`spawn(spec)` starts `python -m verity.core.deploy.process` and writes `spec` to its stdin as JSON; the child calls
+`spawn(spec)` starts `python -m verity.configuration.deploy.process` and writes `spec` to its stdin as JSON; the child calls
 `runtime.run` for its parties and prints the run's summary (`RunResult.summary`) as its last line of stdout. Core
 imports no protocol, so the spec names the code the child loads, each as `module:attr`:
 
@@ -26,7 +26,7 @@ from .runtime import _load, run
 
 def spawn(spec: Mapping[str, Any]) -> subprocess.Popen[bytes]:
     """The child process running `spec`, its stdout a pipe for the summary."""
-    child = subprocess.Popen([sys.executable, "-m", "verity.core.deploy.process"], stdin=subprocess.PIPE,
+    child = subprocess.Popen([sys.executable, "-m", "verity.configuration.deploy.process"], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE)
     assert child.stdin is not None
     child.stdin.write(json.dumps(dict(spec)).encode())

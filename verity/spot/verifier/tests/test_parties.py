@@ -15,11 +15,11 @@ import json
 
 import pytest
 
-from verity.core.deploy.manifest import place, site_of
-from verity.core.deploy.runtime import run
+from verity.configuration.deploy.manifest import place, site_of
+from verity.configuration.deploy.runtime import run
 from verity.spot.verifier import parties as P
 from verity.spot.verifier.one_stage import registration as R
-from verity.core.wire import Refused
+from verity.configuration.wire import Refused
 
 SP, POUW = P.SUBPROTOCOLS["verity/remote/v0"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v0"]["pouw"]
 CERT = P.IDS["certifier"]

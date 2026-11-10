@@ -12,7 +12,7 @@ import pytest
 
 from verity.hardware.site import (OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
                               Refused, Registration, Sheet, Site, check, check_registration, genesis, refusal)
-from verity.core.wire import canonical
+from verity.configuration.wire import canonical
 
 GHZ = 10 ** 9
 SHEET_A = Sheet(DeviceFigures("sim-int8-a", GHZ, 64 * GHZ), 3200, 1 << 25, 64 << 30)

@@ -37,5 +37,5 @@ The proofs of the properties are in `Security/Proofs/Properties/Pous/` (`MemoryC
   `SessionLog`, `LmsSigner`, `verdict`); its module docstring is the record formats' spec.
 - `verity/protocols/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`.
 - `verity/protocols/pous/device/challenger_party.py` and `wipe_party.py`: each as a party of its own on the challenger's
-  host; `wipe_parties.py`, the wipe's parties on the party runtime (`verity/core/deploy`).
+  host; `wipe_parties.py`, the wipe's parties on the party runtime (`verity/configuration/deploy`).
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.

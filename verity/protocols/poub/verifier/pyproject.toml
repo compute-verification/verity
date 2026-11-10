@@ -23,7 +23,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/pous",
           "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
-          "verity/core/wire", "verity/core/deploy",
+          "verity/configuration/wire", "verity/configuration/deploy",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)

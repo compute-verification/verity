@@ -16,7 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from verity.core.deploy.stream import Side
+from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.verifier import wipe_party as WP
 from verity.protocols.pous.verifier import wipe_period as W
 

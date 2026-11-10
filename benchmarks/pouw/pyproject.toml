@@ -71,7 +71,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/definitions/kernels", "verity/ml/randomness", "verity/flock/prover/python", "verity/ml/windows",
           "verity/hardware",
-          "tools/config/verity_config",
+          "verity/configuration/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
           "verity/ml/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
@@ -184,7 +184,7 @@ tests = [
     "tests/test_served_h1.py",
     "tests/test_served_h1_producer.py",
 ]
-paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+paths = ["benchmarks/pouw", "verity/configuration/config/verity_config", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]

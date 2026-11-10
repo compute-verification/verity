@@ -789,7 +789,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a view of its head (vllm)",
     "integrations/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
-    "tools/config/verity_config/settings.py::Registry":
+    "verity/configuration/config/verity_config/settings.py::Registry":
         "homonym, one distribution's settings from the environment: rename (ci)",
     "tools/move/layout.py::Layout": "homonym, a layout move's directory map: rename (ci)",
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
@@ -798,7 +798,7 @@ KNOWN: dict[str, str] = {
     # verity/core/
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
-    "verity/core/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
+    "verity/configuration/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/protocols/certifier/device/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes `grid.Record`'s port beside `RecordHead` (moved) (network-accounting)",
     "verity/protocols/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":

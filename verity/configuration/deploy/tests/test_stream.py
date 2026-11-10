@@ -9,9 +9,9 @@ import sys
 
 import pytest
 
-from verity.core.deploy.party import Finish, Identity, LogEntry, Send, Timer
-from verity.core.deploy.stream import Side, run
-from verity.core.wire import Message
+from verity.configuration.deploy.party import Finish, Identity, LogEntry, Send, Timer
+from verity.configuration.deploy.stream import Side, run
+from verity.configuration.wire import Message
 
 
 class Duplex:
