@@ -8,14 +8,14 @@ public import Flock.TemplateQuery
 /-!
 # The inference-only policy's check of an execution phase's circuit record
 
-`NciCheck.Baseline` decides the rate rule on a Program that holds every weight it reads and every wire between its
+`Baseline` decides the rate rule on a Program that holds every weight it reads and every wire between its
 units. An execution phase's Program holds neither: its root is calls and batches of templates, each unit reading
 committed rows, and which unit reads which registered parameter and which unit feeds which are declarations of the
 phase's circuit record (its wires, registered reads, table reads, openings and ingress), which SPOT checks unit by
-unit. This module does for such a record what `NciCheck.Baseline.evaluate` does for a Program: it reads the record
+unit. This module does for such a record what `Baseline.evaluate` does for a Program: it reads the record
 (`read`), takes one summary of it (`summarize`), decides the rate rule on the summary (`rate`), and counts as θ only
 what the registration log registers at the start of the deployment (`isTheta`). It is a library with a difftest
-(`NciCheck.RecordDifftest`): no executable, protocol or verdict reads it.
+(`RecordDifftest`): no executable, protocol or verdict reads it.
 
 ## The instance and the trusted input
 
@@ -24,12 +24,12 @@ An instance is `{"program", "record", "gamma", "alpha", "pins"}`, and optionally
 * `program`: the Program, a v1 descriptor, as text;
 * `record`: the circuit record, as the text the run's registration record commits;
 * `gamma`, `alpha`: `Γ`, and `α = [num, den]`, as `NciCheck.parse` reads them;
-* `pins`: SHA-512s in lower-case hex, each the closure digest (`NciCheck.DefinitionDigest.closureDigest`) of a
+* `pins`: SHA-512s in lower-case hex, each the closure digest (`DefinitionDigest.closureDigest`) of a
   Definition the policy takes as the reader of a table opening. The pins are the policy's parameter, the verifier's
   own: nothing of the Program or the record sets them;
 * `order`: the order of the record's unit ranges, read where the record states none (`Spot.Wires.Wiring.order`).
 
-The trusted input is `NciCheck.Baseline`'s, `{"log", "params", "run"}`: the deployment's registration log, the first
+The trusted input is `Baseline`'s, `{"log", "params", "run"}`: the deployment's registration log, the first
 record first, and the digest of the run's own record. `params` is not read.
 
 ## What it reads, and what it refuses
@@ -37,9 +37,9 @@ record first, and the digest of the run's own record. `params` is not read.
 `evaluate` gives the summary and the verdict, or the first refusal's code, in this order:
 
 1. `instance`, `params`: a field is missing or of the wrong JSON kind; `Γ`, `α` or a pin is not as stated.
-2. `program`, `not-topological`: the Program is refused as `NciCheck.Desc.evaluate` refuses one before it analyzes it.
+2. `program`, `not-topological`: the Program is refused as `Desc.evaluate` refuses one before it analyzes it.
 3. `record`: the record's text is no JSON object.
-4. `trusted`: as `NciCheck.Baseline.trustedOf` refuses it.
+4. `trusted`: as `Baseline.trustedOf` refuses it.
 5. `run-program`, `run-circuit`: the run's record does not name this Program, or its `window.circuit` is not the
    SHA-512 of this record's text.
 6. `templates`: the record does not name the Program, or its `templates` are not the root's nodes that are no input,
@@ -112,14 +112,14 @@ they lie.
 
 A block is one slot of the class, as the record's own `blocks.inference` divides the units: unit `at + i` of an
 inference entry has `i`'s digits in the entry's mixed radix, the first the slowest, and its slot is the digit the
-entry's `axes` name `slot`. `NciCheck.Desc.evaluate` takes its blocks from a partition of the root's nodes instead,
+entry's `axes` name `slot`. `Desc.evaluate` takes its blocks from a partition of the root's nodes instead,
 and where a root node is a batch of every slot's units of a template no such partition separates two slots: on such a
 Program it has one block for the whole phase.
 
 Every slot holds the same number of each template's units, so a block's gates and input bits are one figure: `gates`,
 each template's units in a block times its Definition's gates, the Program's own count
 (`Flock.Program.Defn.gates`); and `inputs`, every row of every unit, whole, 16 bits a word, whether or not a gate
-reads it. `NciCheck.Desc.evaluate` counts only the leaves some gate reads, so over a phase its input bits are fewer by
+reads it. `Desc.evaluate` counts only the leaves some gate reads, so over a phase its input bits are fewer by
 the rows no gate reads.
 
 Every input row of every unit has exactly one kind (`Kind`), by one total function (`Case.rowKind`): what fills the
@@ -185,7 +185,7 @@ That the units of a pinned Definition accept only a row the table's root commits
 Definition's circuit, which the pin fixes by SHA-512, and it holds up to a SHA-512 collision: both are premises of the
 bound, not something this check decides. The collision is a narrow one. A closure digest hashes the canonical entry
 of each Definition its Definition reaches, itself among them, and the one object that maps those Definitions' ids to
-their entries' digests (`NciCheck.DefinitionDigest.closureDigest`). Two Definitions with one closure digest whose
+their entries' digests (`DefinitionDigest.closureDigest`). Two Definitions with one closure digest whose
 reached Definitions are not the same, entry for entry, give two different strings among those the two digests hash
 with one SHA-512, and no collision anywhere else stands in for it. A reader that is not pinned counts every port
 fresh, whatever the record declares of it.
@@ -871,7 +871,7 @@ def isTheta (T : Baseline.Trusted) (leaves : Nat) (p : String) : Bool :=
   | _, _ => false
 
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
-descriptor is `desc` (`NciCheck.DefinitionDigest.closureDigest`), where that is among `pins`. -/
+descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
 def pinOf (desc : Json) (pins : Array String) (tid : String) : Option String :=
   match NciCheck.DefinitionDigest.closureDigest desc tid with
   | .ok d => if pins.contains d then some d else none

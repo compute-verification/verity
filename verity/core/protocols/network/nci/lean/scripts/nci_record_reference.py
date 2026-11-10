@@ -9,8 +9,8 @@
     exported(instance, trusted, rows) -> [[slot, why the row is θ or None], …] | {"error": code}
     count(instance, trusted, limits) -> {"bool_gates", "complies", "failure"} | {"error": code}
 
-`NciCheck.Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
-of the summary counts; `NciCheck.RecordCount`'s gives the count's limits. Where the Lean reads each template's gates
+`Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
+of the summary counts; `RecordCount`'s gives the count's limits. Where the Lean reads each template's gates
 from the Program's own count and its rows from its Definition's parameters, takes one closed form per wire and per
 declaration, and multiplies through the slots, this file expands: each template's gates gate by gate
 (`nci_reference.activation_gates`), every unit's slot from the inference entries' digits, every input row of every
@@ -73,14 +73,14 @@ TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
 INGRESS = {"reader", "port", "at", "units", "step"}
-#: `NciCheck.Record.Kind`: what an input row of a unit is classed as, each row exactly one. `inside`: a wire fills it
+#: `Record.Kind`: what an input row of a unit is classed as, each row exactly one. `inside`: a wire fills it
 #: from a writer of its own block. `theta`: a registered read of θ, a table read of a table over θ, or a port of an
 #: opening held against such a table (`held`). The rest are fresh (`FRESH`): `cross_wires`, a wire that is not inside;
 #: `free`, nothing fills it; `ingress`; `unregistered`, a registered read or a table read of a parameter that is not θ;
 #: `openings`, a port of an opening that is not held.
 KINDS = ("inside", "theta", "cross_wires", "free", "ingress", "unregistered", "openings")
 FRESH = KINDS[2:]
-#: the summary's fields, in the order `NciCheck.Record.Summary` holds them
+#: the summary's fields, in the order `Record.Summary` holds them
 SUMMARY = ("blocks", "gates", "inputs", "fresh", *FRESH, "wired_rows", "wired_bits")
 
 
@@ -105,7 +105,7 @@ def parse(inst) -> dict:
 
 def closure_digest(desc: dict, key: str) -> str:
     """The closure digest of Definition `key` of the Program whose descriptor is `desc`, which a pin names
-    (`NciCheck.DefinitionDigest.closureDigest`), by its one Python mirror, the network suite's
+    (`DefinitionDigest.closureDigest`), by its one Python mirror, the network suite's
     `period_case.slot_entry_digest`, read from the checkout `verity.ml.circuits` comes from."""
     if "period_case" not in sys.modules:
         _load("period_case", Path(codec.__file__).resolve().parents[2] / "core" / "protocols" / "network" / "tests")
@@ -210,7 +210,7 @@ def refused(code: str, message: str) -> Malformed:
     return e
 
 
-#: `NciCheck.Record.OWN_ROWS`
+#: `Record.OWN_ROWS`
 OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Every argument of a root node that is no "
             "input node is affine runs of leaves of the root's input nodes, a batch maps every argument over its "
             "members, and no leaf is handed to two rows. Fix the Program, not the record: build its root as templates "
@@ -562,7 +562,7 @@ def held(x: Inputs, is_theta, is_pinned, o: dict) -> bool:
 
 
 def front(inst, tr) -> tuple:
-    """`NciCheck.Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
+    """`Record.front`, the stages as far as `own-rows`: the instance's fields, the Program, its descriptor,
     the record, the trusted input and the templates. Refused (`Malformed`) with the first stage's code."""
     i = parse(inst)
     program = reference.desc_program(i["program"])
@@ -587,7 +587,7 @@ def front(inst, tr) -> tuple:
 
 
 def closed(inst, tr) -> list | dict:
-    """Each template's closed rows as the form reads them (`NciCheck.Record.Tmpl.closed`), `[template, rows]` each
+    """Each template's closed rows as the form reads them (`Record.Tmpl.closed`), `[template, rows]` each
     in the record's order, a template's rows in its parameters'; or the refusal of a stage as far as `own-rows`."""
     try:
         return [[t.tid, t.closed] for t in front(inst, tr)[-1]]
@@ -600,7 +600,7 @@ def expand(inst, tr) -> dict:
     cuts, the declarations (`x`), the slots and each unit's (`slots`, `slot`), each wire's `within`, `kind` (the class
     of what fills a row), each template's pin where the policy pins its Definition (`pins`), and per slot the sums
     `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and `fresh`, the sum of `FRESH`'s. Refused
-    (`Malformed`) with the first stage's code, in `NciCheck.Record`'s order."""
+    (`Malformed`) with the first stage's code, in `Record`'s order."""
     i, program, desc, rec, T, templates = front(inst, tr)
     wires, cuts = wires_of(templates, rec, (i["order"],) if "order" in i else None)
     leaf_widths(program, templates, wires, cuts)
@@ -651,7 +651,7 @@ def expand(inst, tr) -> dict:
 
 
 def evaluate(inst, tr) -> dict:
-    """`NciCheck.Record.evaluate`: the summary, each per-block count the greatest over the slots, and the rate rule on
+    """`Record.evaluate`: the summary, each per-block count the greatest over the slots, and the rate rule on
     it: `size` where a block has more than `Γ` gates, else `nci` where its fresh bits exceed `α` times its gates."""
     e = expand(inst, tr)
     i = e["i"]
@@ -663,7 +663,7 @@ def evaluate(inst, tr) -> dict:
 
 
 def check_detail(inst, tr) -> dict:
-    """`NciCheck.Record.checkDetail`: the whole verdict, or the refusal (with its message, where it has one), for the
+    """`Record.checkDetail`: the whole verdict, or the refusal (with its message, where it has one), for the
     private record only."""
     try:
         return evaluate(inst, tr)
@@ -672,13 +672,13 @@ def check_detail(inst, tr) -> dict:
 
 
 def check(inst, tr) -> dict:
-    """`NciCheck.Record.check`, what the form publishes: the judgment, or the refusal."""
+    """`Record.check`, what the form publishes: the judgment, or the refusal."""
     res = check_detail(inst, tr)
     return res if "error" in res else {"complies": res["complies"]}
 
 
 def kinds(inst, tr, rows) -> list | dict:
-    """`NciCheck.Record.kinds`: the class of each of `rows`, `[template, port, unit, row]` each (`free` where the
+    """`Record.kinds`: the class of each of `rows`, `[template, port, unit, row]` each (`free` where the
     record's declarations fill no such row), or the refusal."""
     try:
         e = expand(inst, tr)
@@ -688,7 +688,7 @@ def kinds(inst, tr, rows) -> list | dict:
 
 
 def exported(inst, tr, rows) -> list | dict:
-    """`NciCheck.Record.exported`: of each of `rows`, `[template, port, unit, row]` each, `[slot, reason]`: the unit's
+    """`Record.exported`: of each of `rows`, `[template, port, unit, row]` each, `[slot, reason]`: the unit's
     slot (`Case.slot`), and why the row is θ (`Case.heldAt`), None where it is not: `["read", parameter]`,
     `["table", name, parameter, whether it reads the root]` or `["opened", name, parameter, the reader's pin]`. Or
     the refusal."""
@@ -711,7 +711,7 @@ def exported(inst, tr, rows) -> list | dict:
 
 
 def count(inst, tr, limits) -> dict:
-    """`NciCheck.RecordCount.count`: `(c, k, n)` over the blocks' Boolean gates (each gate its primitive's entry of the
+    """`RecordCount.count`: `(c, k, n)` over the blocks' Boolean gates (each gate its primitive's entry of the
     gate table), fresh bits and number. `instance` or `params` where the limits are not as stated, then the form's own
     refusal, then `gate-table` where the table lacks a primitive a block computes."""
     if not (isinstance(limits, dict) and all(k in limits for k in LIMITS) and isinstance(limits["table"], dict)):

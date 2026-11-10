@@ -5,7 +5,7 @@ reference: the Python half.
 two in five broken in one way, and 42 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
-`NciCheck.Record` and `NciCheck.RecordCount` give Python's results on every case, and unless SPOT's reader reads the
+`Record` and `RecordCount` give Python's results on every case, and unless SPOT's reader reads the
 same wiring from the form's instance and from the one Python builds from its own layout of each template. The audit
 checks the data against the record's SHA-256 and caches its pass on the Lean package's files alone, so the first test
 is what says the data is still what the generator and the reference write. The second checks that the generator
@@ -17,7 +17,7 @@ that reads it, into a row that is not closed (`leaf-widths`), and a root that ha
 gates of its own (`own-rows`), each with what the form would count without the refusal. The seventh is what the
 form exports of a row: its unit's slot, and why it is held. The eighth is the check that no wire crosses slots: none
 does at the served class's shape, and one that does is counted. The ninth sets the form beside
-`NciCheck.Desc.evaluate`'s reference on the same Program: one block for the whole phase there and one a slot here,
+`Desc.evaluate`'s reference on the same Program: one block for the whole phase there and one a slot here,
 and input bits apart by exactly the rows no gate reads. The tenth holds the reference to
 `verity.ml.windows.interface`, the rules a lowering states a record by: the stage that refuses a record, each unit's
 slot, and `input_count`'s totals.
@@ -489,7 +489,7 @@ def test_no_wire_crosses_slots_at_the_served_shape(random_cases, shaped):
 
 
 def test_every_row_is_counted_and_a_block_is_a_slot(shaped):
-    """`NciCheck.Desc.evaluate`'s reference on the Program of the served class's shape, every root node that computes
+    """`Desc.evaluate`'s reference on the Program of the served class's shape, every root node that computes
     in one block (a root node holds every slot's units of its template, so no partition of them separates two slots)
     and θ empty: that block's gates are the form's gates a block times its blocks, and its input bits are the leaves
     some gate reads. The form counts every row of every unit, so over the phase its input bits are more by exactly the

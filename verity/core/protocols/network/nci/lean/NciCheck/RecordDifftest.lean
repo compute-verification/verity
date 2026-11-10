@@ -6,25 +6,25 @@ public import NciCheck.CountDifftest
 /-!
 # The record check's difftest, against the Python reference
 
-`scripts/record_difftest_vectors.py` writes cases of `NciCheck.Record` (an instance, the trusted input, the rows whose
+`scripts/record_difftest_vectors.py` writes cases of `Record` (an instance, the trusted input, the rows whose
 kinds are asked, and the count's limits) and, on each, `scripts/nci_record_reference.py`'s results, which visit every
-row of every unit where `NciCheck.Record` reads the record's description. `NciCheck/RecordDifftestMain.lean` fails
+row of every unit where `Record` reads the record's description. `NciCheck/RecordDifftestMain.lean` fails
 unless, on every case:
 
-* `NciCheck.Record.checkDetail` gives Python's `check_detail`: the summary's counts, the verdict and the failure, or
+* `Record.checkDetail` gives Python's `check_detail`: the summary's counts, the verdict and the failure, or
   the first refusal's code, with its message where it has one;
-* `NciCheck.Record.check` gives Python's `check`, the verdict or the refusal's code and message and no other field;
-* `NciCheck.Record.kinds` gives Python's `kinds`, the class of each row asked, or the refusal's code;
-* `NciCheck.Record.exported` gives Python's `exported`, of each row asked its unit's slot and why the row is θ, or
+* `Record.check` gives Python's `check`, the verdict or the refusal's code and message and no other field;
+* `Record.kinds` gives Python's `kinds`, the class of each row asked, or the refusal's code;
+* `Record.exported` gives Python's `exported`, of each row asked its unit's slot and why the row is θ, or
   the refusal's code;
-* `NciCheck.RecordCount.checkDetail` gives Python's `count`: a block's Boolean gates, the verdict and the failure, or
+* `RecordCount.checkDetail` gives Python's `count`: a block's Boolean gates, the verdict and the failure, or
   the first refusal's code;
-* the templates `NciCheck.Record.front` reads have the closed rows of Python's `closed`, template by template, or the
-  two refuse with one code: what each Definition passes on (`NciCheck.Record.passedOn`), held on every template
+* the templates `Record.front` reads have the closed rows of Python's `closed`, template by template, or the
+  two refuse with one code: what each Definition passes on (`Record.passedOn`), held on every template
   whether or not a wire fills its rows;
 * **the same circuit**: where the case states the instance of SPOT's `wires` piece that Python builds from its own
   layout of each template, SPOT's reader (`Spot.Wires.Wiring.ofJson`) reads from it the wiring it reads from the
-  form's own (`NciCheck.Record.piece`), and the form refuses the record's wires exactly where SPOT's reader or its
+  form's own (`Record.piece`), and the form refuses the record's wires exactly where SPOT's reader or its
   check (`Spot.Wires.check`) refuses that instance.
 
 The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.

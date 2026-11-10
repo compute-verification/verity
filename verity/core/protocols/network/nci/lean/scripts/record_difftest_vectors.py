@@ -4,7 +4,7 @@ for `NciCheck/RecordDifftestMain.lean`.
     python scripts/record_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes two files under `DIR/record_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted", "spot",
-"rows", "count"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`NciCheck.Record`'s
+"rows", "count"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`Record`'s
 docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, each template's rows and outputs
 Python's own layout of it; `null` where the reference refuses the case before its wires, or that layout has no row
 for a port), some input rows of its units (`[template, port, unit, row]` each) and the count's limits
@@ -44,7 +44,7 @@ which lacks bits of the 16-bit row it fills, refused into one leaf and into a cl
 hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, with
 a row every unit shares, and with a row of computed gates.
 
-Every wire of every case is one `NciCheck.Record.sameSlot`'s search decides within its fuel (`searched`, the search
+Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
 """
 from __future__ import annotations
@@ -83,7 +83,7 @@ reference = ref.reference
 
 COUNT = 600
 BIG = 10 ** 15
-#: `NciCheck.Record.FUEL`: the boxes `sameSlot`'s search visits for one wire before it counts the wire as crossing
+#: `Record.FUEL`: the boxes `sameSlot`'s search visits for one wire before it counts the wire as crossing
 FUEL = 4096
 V2 = "verity/registration/v2"
 #: how a random case is broken, by the stage that refuses it
@@ -301,7 +301,7 @@ class Circuit:
 
 
 def grids(c: Circuit) -> dict[str, list[tuple[int, int, int]]]:
-    """`NciCheck.Record.gridsOf`: per template its entries in unit order as `(first unit, units, units a slot holds in
+    """`Record.gridsOf`: per template its entries in unit order as `(first unit, units, units a slot holds in
     a row)`, neighbours of one row length merged."""
     out: dict[str, list[tuple[int, int, int]]] = {}
     for e in sorted(c.entries, key=lambda e: e["at"]):
@@ -314,7 +314,7 @@ def grids(c: Circuit) -> dict[str, list[tuple[int, int, int]]]:
 
 
 def searched(S: int, g: dict[str, list[tuple[int, int, int]]], w) -> bool | None:
-    """`NciCheck.Record.sameSlot`, mirrored: whether the search shows wire `w` inside one slot, None where it runs out
+    """`Record.sameSlot`, mirrored: whether the search shows wire `w` inside one slot, None where it runs out
     of `FUEL`. A box is the wire's reader rows with some digits fixed; it is inside where its reader units lie in one
     grid, its writers in one, no digit carries into a grid's slot digit and every digit moves both slots alike; else
     it is split on the digit that reaches furthest (the writers', or the readers' when only they leave their grid)."""
