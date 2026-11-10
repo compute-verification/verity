@@ -64,8 +64,19 @@ def test_a_whole_run_passes_and_arms_selects_in_the_arms_order(bench, tmp_path: 
     assert bench.main([*SMALL, "--batch", "1", "--arms", "plan", "--out", str(tmp_path)]) == 0
     check = research_result.check(tmp_path, None)
     assert check.valid, check.errors
-    assert check.validation_status == "passed"
+    assert check.validation_status == "passed" and check.doc["validation"]["checker"] == "every arm ended done"
     assert bench.parse(["--arms", "cpu,tables.twin,plan,gate"]).arms == ["gate", "tables.twin", "plan", "cpu"]
     for bad in ("beside", "hash", "tables"):
         with pytest.raises(SystemExit):
             bench.parse(["--arms", bad])
+
+
+def test_the_checker_names_only_the_checks_of_the_arms_done(bench) -> None:
+    step = "a small step's device and CPU-twin roots equal row_tables.step_roots"
+    strings = "is history.check's over its strings"
+    assert bench.checker({"plan.1": {}, "cpu": {}}) == "every arm ended done"
+    assert bench.checker({"gate": {"twin": True}}) == f"every arm ended done; {step.replace('device and ', '')}"
+    assert bench.checker({"gate": {"twin": True, "device": False}, "tables.python": {}}) == \
+        f"every arm ended done; {step}; each history table's root (python) {strings}"
+    assert bench.checker({"tables.device": {}, "tables.twin": {}}) == \
+        f"every arm ended done; each history table's root (twin, device) {strings}; the device table's root is the twin's"

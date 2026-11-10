@@ -304,6 +304,18 @@ def gates(done: dict[str, dict[str, Any]]) -> dict[str, bool]:
     return got
 
 
+def checker(done: dict[str, dict[str, Any]]) -> str:
+    """The checks a passed validation rests on: `gates`' for the arms in ``done``, and no check of an arm left out."""
+    said = ["every arm ended done"]
+    if roots := [name for k, name in (("device", "device"), ("twin", "CPU-twin")) if k in done.get("gate", {})]:
+        said.append(f"a small step's {' and '.join(roots)} roots equal row_tables.step_roots")
+    if tabs := [a.split(".")[1] for a in ARMS if a.startswith("tables.") and a in done]:
+        said.append(f"each history table's root ({', '.join(tabs)}) is history.check's over its strings")
+        if {"twin", "device"} <= set(tabs):
+            said.append("the device table's root is the twin's")
+    return "; ".join(said)
+
+
 def run(arms: list[tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]], summary: dict[str, Any],
         path: Path | None) -> dict[str, dict[str, Any]]:
     """Run ``arms`` in order, ``summary`` rewritten to ``path`` before the first and after each: ``summary["arms"]`` each ended
@@ -367,9 +379,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "gpu": summary["gpu"], "capability": summary["capability"], "torch": torch.__version__,
                                      "cuda": torch.version.cuda, "nvcc": nvcc_v},
             "validation": {"status": "passed" if ok else "failed",
-                           "checker": "every arm ended done; a small step's device and CPU-twin roots equal "
-                                      "row_tables.step_roots; each history table's root is history.check's over its strings, "
-                                      "the device table's the twin's",
+                           "checker": checker(done),
                            "detail": json.dumps({"gate": summary["gate"], "failed": failed}), "evidence": []},
             "measurements": [{"name": f"{name}.{k}", "value": r[k], "unit": u} for name, r in done.items()
                              for k, u in MEASURES.get(name.split(".")[0], ())]
