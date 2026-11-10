@@ -10,7 +10,7 @@ set -uo pipefail
 export HZ_CONFIGS=form-refusals HZ_MEM_GB=${FP_MEM_GB:-32}
 [ -n "${FP_CACHE:-}" ] && export HZ_CACHE=$FP_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 TU=$(cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
 [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }

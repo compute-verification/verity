@@ -7,7 +7,7 @@
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
 #     (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
-#     from integrations/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
+#     from adapters/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units sampled, on ranks PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=DIR: a single-GPU (TP1) Commit's row dir on this node: Llama-3.2-1B's Commit ($LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
@@ -109,7 +109,7 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
   esac
 fi
 PLAIN=(); LAW=subset; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
 # node; its own worker and verifier threads take 64 MiB
@@ -183,7 +183,7 @@ print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["w
 rc=0
 FORGE=${PP_FORGE:-0:1}
 if [ -n "${PP_TP:-}" ]; then
-  $PP advice --workload integrations/vllm/workloads/$ROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+  $PP advice --workload adapters/vllm/workloads/$ROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
   GLM="--tp-commit $PP_TP/commit --build-root $PP_TP/build"
   run glm "$GLM" $W/advice.bin ${PP_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json} "${PP_RANKS:-}" || rc=1
   run glm-forged "$GLM" $W/advice.bin benchmarks/prove_path/glm53_silu_mul_v2_i1536_step16_all.json "${PP_FORGED_RANKS:-0}" \
@@ -217,7 +217,7 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   fi
 else
   S=$W/served
-  (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \
+  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
   mkdir -p $O/standin && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8

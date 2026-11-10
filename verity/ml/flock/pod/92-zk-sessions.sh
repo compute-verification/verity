@@ -16,7 +16,7 @@ set -uo pipefail
 export HZ_CONFIGS=zk-sessions HZ_MEM_GB=${ZS_MEM_GB:-32}
 [ -n "${ZS_CACHE:-}" ] && export HZ_CACHE=$ZS_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/benchmarks/numerical/python
 STATEMENT=verity/flock-circuit+seed-injection
 setup
 FIX=$OUT/fixture

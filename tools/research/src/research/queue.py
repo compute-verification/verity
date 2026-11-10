@@ -2882,7 +2882,7 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
+_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/",
                   "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/ml/flock/python/",
                   "verity/ml/commitments/", "verity/ml/private_circuits/", "benchmarks/numerical/python/")
 
@@ -3818,7 +3818,7 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
 #: a directory, of the prefix): they take about 20 s and 40 s, and a train that fails one of them loses its hour-long check
-PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)

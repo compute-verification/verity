@@ -10,7 +10,7 @@ def _boolean_gather_roots() -> list[Any]:
     that is a tree of Calls with a partial last chunk (V = 1100), bf16, i32 and f32, and the bit selection of a 32-bit word; and
     the two levels of the f32 gather over the training step's vocabulary (V = 50304) that V = 1100 doesn't reach, its partial
     chunk of 128 words and its 50 chunk words. That gather's whole chunks are V = 1100's; the gather itself, 4.8M gates, is too heavy a target for every
-    `circuit-check --all`, and its tests pin it and hold it to its word (`integrations/vllm/tests/program/test_boolean_gather.py`).
+    `circuit-check --all`, and its tests pin it and hold it to its word (`adapters/vllm/tests/program/test_boolean_gather.py`).
     The bf16 widening (`verity.ml.circuits.ops.boolean.cast`) is static-free.
 
     The chunked gather at V = 100 in V-chunks of at most 40 (three, 34, 33 and 33 words: its offsets, both widths and the

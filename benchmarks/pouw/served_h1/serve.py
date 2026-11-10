@@ -44,7 +44,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the sampling coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own: the gated served window of record is vllm's
-  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
+  H1 path, `adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds the salt, round-0 request
   table, open root R, session S and requests_root rules, so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
   ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
@@ -88,7 +88,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
-    cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
+    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at <ISO time> --by LANE \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """
@@ -411,7 +411,7 @@ def run(a: argparse.Namespace) -> dict:
     rec = Record(out)
     if a.gate:
         raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
-                         "record is vllm's H1 path, integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "
+                         "record is vllm's H1 path, adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "
                          "which holds the salt, round-0 request table, R, S and requests_root rules (#2950, PRF-132); "
                          "here a window's coins are in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
@@ -1080,7 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=settings.get(CO.GATE_ENV), metavar="USER@HOST",
                     help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
-                         "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
+                         "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 

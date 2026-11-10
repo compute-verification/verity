@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 TREE = Path.cwd()
-for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "integrations/vllm",
+for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "adapters/vllm",
            "verity/ml/flock/python", "."):
     sys.path.insert(0, str(TREE / _p))
 

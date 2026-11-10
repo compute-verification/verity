@@ -98,7 +98,7 @@ import served_case as SC
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
-PINS = ROOT / "integrations" / "vllm" / "manifests" / "checkpoints-int8.json"
+PINS = ROOT / "adapters" / "vllm" / "manifests" / "checkpoints-int8.json"
 ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
 #: each linear as vLLM's Llama holds it, from the checkpoint's tensors concatenated by rows in this order
 MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),

@@ -35,7 +35,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "integrations" / "vllm")]
+sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "adapters" / "vllm")]
 
 from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 

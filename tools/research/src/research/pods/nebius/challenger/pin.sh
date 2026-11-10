@@ -2,7 +2,7 @@
 # vy-challenger-pin COMMIT < TAR: pin the tree the challenger runs from, as root. COMMIT must be on origin/main's or
 # origin/next's first-parent history, which this script fetches from GitHub itself (a commits-only partial clone in
 # /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
-# integrations/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
+# adapters/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
 # network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
 # unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
@@ -13,7 +13,7 @@
 # auditor.py refuses one whose pin moved. Rerunning it for an installed COMMIT skips the unpack and reads no TAR, and logs the
 # pin again.
 #
-#   git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json \
+#   git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json \
 #     | ssh vy-admin@HOST sudo vy-challenger-pin COMMIT
 set -euo pipefail
 die() { echo "vy-challenger-pin: $*" >&2; exit "${2:-1}"; }

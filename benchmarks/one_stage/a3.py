@@ -1,7 +1,7 @@
 """One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one sample and
 one integrity profile.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--layer 0] [--k 128] [--delta 2^-20]
 

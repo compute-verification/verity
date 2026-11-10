@@ -664,7 +664,7 @@ def past_block(b: dict) -> str | None:
             f"for {b['ands']:,} ANDs and its ports, read off its Definition), its {b['rows']} rows' {b['sha512x3']} sha512x3 and "
             f"{b['hm96']} hm96 slots of 2^{SLOT_LOG}, and the mask; C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean "
             f"Stmt.InRange): cut it into narrower units that each read fewer row bytes (a served row's column blocks or slices, "
-            f"integrations/vllm/verity_vllm/pipeline/serving_templates.py), split the unit (e.g. PoUW's lanes form, "
+            f"adapters/vllm/verity_vllm/pipeline/serving_templates.py), split the unit (e.g. PoUW's lanes form, "
             f"verity/core/protocols/pouw/leaf_lanes.py), or extend the proved range (proofs)")
 
 

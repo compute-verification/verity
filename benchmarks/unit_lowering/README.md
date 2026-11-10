@@ -6,7 +6,7 @@ What writing a PoUW H1 circuit file costs, and the file it writes, for three sta
   8 columns, with the lane index a public input.
 - `combine`: the leaf's `PouwH1Combine_v1{TILE}`, which joins the lanes.
 - `tile`: the whole H1 tile unit, the auditor's lowering whose file a PoUW period-open commits as `k<K>`
-  (`python -m tests.protocols.pouw_h1_circuits --lower K R C BIND PATH` from `integrations/vllm`).
+  (`python -m tests.protocols.pouw_h1_circuits --lower K R C BIND PATH` from `adapters/vllm`).
 
 The tile is a parameter. 32 × 32 is the H1 kernel's warp tile, never a choice made for proving. The lane and the combine are
 what can be proved once the tile is past the block (`verity/core/protocols/pouw/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).

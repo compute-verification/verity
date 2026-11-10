@@ -356,7 +356,7 @@ def stop(server: subprocess.Popen) -> None:
 def tick_modules():
     """The vLLM integration's `serve_admit` (the release headers and the watermark's path) and `tick_plugin` (the server's
     plugin and middleware, and ``VERITY_TICK``), imported only for ``--admit tick``."""
-    p = str(ROOT / "integrations/vllm")
+    p = str(ROOT / "adapters/vllm")
     if p not in sys.path:
         sys.path.insert(0, p)
     from verity_vllm.pipeline import serve_admit, tick_plugin
@@ -784,7 +784,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             *(["--middleware", TICK_MIDDLEWARE] if tick else [])]
     engine_env = {**ENGINE_ENV, **model.env}
     env = dict(os.environ, **engine_env, **adversary, VERITY_TRACE_DIR=str(d / "raw"),
-               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
+               PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "adapters/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     if tick:
         env[tick_modules()[1].TICK_ENV] = json.dumps({**{k: tick[k] for k in ("bucket_us", "sat_us", "free_us")},

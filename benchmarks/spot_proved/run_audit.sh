@@ -20,7 +20,7 @@ export PATH="$HOME/.elan/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
 export HZ_CONFIGS=spot HZ_MEM_GB=${SP_MEM_GB:-400} HZ_CACHE=${SP_CACHE:-/workspace/spot-cache}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 (cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }

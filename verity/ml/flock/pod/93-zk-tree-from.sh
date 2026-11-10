@@ -25,7 +25,7 @@ set -uo pipefail
 export HZ_CONFIGS=zk-tree-from HZ_MEM_GB=${TF_MEM_GB:-32}
 [ -n "${TF_CACHE:-}" ] && export HZ_CACHE=$TF_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/benchmarks/numerical/python
 CHALLENGER_REPO=$SRC CHALLENGER_WORK=$W/challengers
 source verity/ml/flock/pod/challenger.sh
 challenger_build

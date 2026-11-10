@@ -94,7 +94,7 @@ elif [ -n "${H1S_OPENED:-}" ]; then
     "${RESEARCH_RUN_DIR%/runs/*}/requests/${RESEARCH_RUN_DIR##*/}/inputs/${H1S_OPENED##*/}" ;; esac
   log "h1-served: the openings of $(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['window'][:16], 'unit', d['unit']['unit'], 'K', d['k'])" "$OP")"
 else
-  HPP=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/h1_prove
+  HPP=$SRC:$SRC/adapters/vllm:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/h1_prove
   ledgers=()
   for l in ${H1S_LEDGER:?}; do ledgers+=(--ledger "$l"); done
   PYTHONPATH=$HPP "${H1S_PY:?}" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "${H1S_CALLS:?}" --session "${H1S_SESSION:?}" \

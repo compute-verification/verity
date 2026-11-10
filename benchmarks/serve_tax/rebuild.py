@@ -1098,7 +1098,7 @@ def shape_report(target: str, shape: Dummies, w: dict[str, Any], steps: dict[int
 def run(a: argparse.Namespace) -> dict[str, Any]:
     import torch
 
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     sys.path.insert(0, str(HERE))
     from servetax_plugin import step_outputs_hook
     from verity_vllm.engine.hooks import Hooks
@@ -1379,7 +1379,7 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
     import tp_edge as E
     import tp_restore as TR
 
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     sys.path.insert(0, str(HERE))
     from servetax_plugin import step_outputs_hook
     from verity_vllm.engine.hooks import Hooks

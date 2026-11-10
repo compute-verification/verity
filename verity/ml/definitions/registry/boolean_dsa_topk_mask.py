@@ -1,5 +1,5 @@
 """`dsa_topk_mask`'s Definitions on bits.  These are the definitions; `dsa_topk_mask`'s word versions are accelerators that
-circuit-check and integrations/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
+circuit-check and adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
 
     DsaTopKKey_v2                  (s: 32 bits) -> 32 bits; word view DsaTopKKey_v1
     DsaRadixPass_v1{N,TOPK}        (eq, gt: N bits, r: RB bits, e: N bits) -> (N bits, N bits, RB bits); traced, no word

@@ -11,7 +11,7 @@ M0 `--zk` sessions, each of N instances with every unit sampled and bound to its
 `verify` gives the tail's reason only once every earlier check, the proof's included, has passed. Lean's verdict on the
 honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\
       --tmpl-unit flock-tmpl-unit --work DIR --fixture DIR
 
