@@ -34544,3 +34544,41 @@ The nightly, every test: 5,016 s at `main`, 2,885 s here. No thousand comes unde
 **The PR's goal line.** PRF-513 carries no goal label, so `open` writes none. I will write `Goal ci/slow-tests-off-gate`, the goal this serves. Say if a proofs goal should stand there instead.
 
 **Next entry:** when `a23b` ends and the PR is open, with its number.
+
+## PRF-518 MOEBIND2, Tue 10 Nov 23:50Z: yes, Flock's registered-read checks accept a statement whose template has two parameters named `w` and whose second `w`'s rows open at the first value's root; no, SPOT's path refuses the program before any session; step 3 is a fix: Flock's decoder refuses the program
+
+- **Which exit it is:** `r20261110-230422-fd52`, vy-nebius-cpu-11, at `20c94de16aa8` [run: `out/head.txt`].
+  - The Lean half's own exit is 0, not an `echo`'s [run]: `lean.log:72` "lean exit 0 in 3 s", `:73` "axiom probe: no theorems in it", `:74` "lean rc=0". Every guard of the committed test held.
+  - The copy that prints each refusal also exited 0 [run]: `lean-eval.log:74` "lean exit 0 in 1 s", `:76` "lean-eval rc=0".
+- **What was registered** [read: `Flock/Test/RegTwoParams.lean`]:
+  - The program registers `A` and `B`, two rows of two bytes each.
+  - Its template, `RegisteredTestTwoParams_v0(w, w)`, reads row u of `A` at its first `w` and row u of `B` at its second.
+  - The verifier's registered-reads file has two ports, `w` and `u`. Neither names a `param`, so each reads the parameter of its own name. Both are value `A` at `A`'s root, reading rows 0 and 1.
+- **What was opened** [read: the test]: a statement of the template's two instances whose circuit has ports `w` and `u`, both opening rows of `A` at its root. Port `u` carries the second `w`'s rows, which the program reads from `B`.
+- **Flock's verdict, the four printed values in order** [run: `lean-eval.log`, the four lines above line 74]:
+  - The file's parameters: `some #["u", "w"]`.
+  - The two-`w` program on that file: `""`. This is acceptance by `Registered.ofJson`, `paramsOf`, `checkProgram`, `namesOnce`, `check`, `checkComplete` and `checkCover`, in `flock-verify verify`'s order.
+  - The `w`/`v` program on the same file: "registered reads (cover): parameter v of RegisteredTestTwoParams_v0 reads a registered input of the verifier's program, and no port of the verifier's registered reads reads it: its rows would be committed afresh".
+  - The `w`/`v` program once port `u` names parameter `v`: `""`.
+- **Which check let it through:**
+  - `checkCover` matches ports to parameters by name (`coversParam`). Port `w` covers both parameters named `w`, so the second needs no port of its own [run: the `coverMiss` guard of `fd52` and `e783`; read: `Registered.lean` 424–461].
+  - `check` then opens port `u`'s rows at the root the file gives them, `A`'s [run].
+  - No check of Flock's ties a port's value to the registered input its parameter reads [read]. The fourth line shows the same with distinct names: the file decides each port's root [run].
+- **Not run:**
+  - The rest of `verify`: `buildSessionOf`'s other checks, and a proof [read: `FlockVerify.lean` 1084–1094].
+  - A compiled circuit. My circuit is hand-built: its META `program_digests` names the template under a placeholder digest, and its second port is `u`. `deriveTemplateUnits` reads only the template's id from that META [read: `HmRow.lean` 1196–1218].
+  - So whether a circuit compiled from this template could name its second port other than `w` is unknown; `namesOnce` refuses two `w`s [read].
+  - A circuit with port `w` alone, the second `w`'s rows in no port, would pass the same checks; the reads would then commit them afresh [guess].
+- **SPOT: refused, as before** [run: `r20261110-210944-e783`, `python.log:3` and `:7`]:
+  - The verifier's builder of its own file (`registered.reads`, and so `reads_file` and `served.register_served`) refuses the program: "unit 0: parameter 'w' of RegisteredTestTwoParams_v0 reads 'B', and in another unit 'A'".
+  - The `w`/`v` program gets ports `w` to `A` and `v` to `B`, each at its own root [run].
+  - I did not give `OneStageZk` a hand-written file [read].
+- **What step 3 is** (`cursor/proofs-two-params-7db2` at `57cedd0bf385`):
+  - **On Flock's path, a fix for an accepted statement.** `Flock.Program.decode`'s `paramsOf` refuses the program with "definition 'RegisteredTestTwoParams_v0': parameters: a name twice", which `checkCover` returns for the statement above [read: the branch's test; run: pending, `r20261110-231042-538f`].
+  - **On SPOT's path, a refusal made earlier and clearer.** `Builder` refuses the template, with the same message, as it is built, before the file builder's misleading one [run: locally].
+  - **What it leaves:** the fourth line. With distinct names Flock still takes the verifier's file's word for each port's root, and on SPOT's path that file is written from the verifier's own program [run].
+- **For a reader outside the lane:**
+  1. Flock's Lean verifier matches the verifier's registered reads to a template's parameters by name. So on a template with two parameters of one name, one port of that name passes the check that every registered parameter has a port. Its checks of registered reads then accepted a statement that reads the second parameter's rows at the first registered value's root instead of its own.
+  2. SPOT's audit never reaches such a statement: the verifier builds its registered reads from its own program, and that builder refuses a program that names a parameter twice.
+  3. The fix, on a branch whose checks are running, makes Flock's decoder, the Python decoder and the Python builders refuse any Definition that names a parameter twice, so the statement can no longer be made.
+- **Runs out:** `r20261110-231042-538f` (step 3's quick suites and the Lean try) and `r20261110-231041-32e8` (the records for Flock and its requirers), both on vy-nebius-cpu-8, done about 01:30Z [guess].
