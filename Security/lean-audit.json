@@ -296,10 +296,6 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
-  "NetTiming.Covered": {
-   "owner": "@network-accounting",
-   "why": "A scope inside RLeakCertifierChecked, which the honest lemma at a placed window concludes within WindowGoodChecked: the relation speaks of the observation sequences whose every boundary link's status is complete."
-  },
   "NetTiming.FaultyGate": {
    "owner": "@network-accounting",
    "digest": "bbc940eb0195b83903ed55053117b14b34c4ced8f375905ce44f5cb54f4afdc3",
@@ -344,11 +340,6 @@
    "owner": "@proofs",
    "digest": "f17496cd6b0bcd44de69fbfce427ecc3108c8dd849bc058ad04b6c0dc706ede3",
    "why": "A scope: where every audit accepts, the restarts serving picks are among the registered patterns Cs, whose number the count charges as advice; the record rule's restarts (the registration's first run, and at most one chosen reset a week) give it over the records with no probability."
-  },
-  "NetTiming.WindowGoodChecked": {
-   "owner": "@network-accounting",
-   "digest": "d7f24e08de9111d984f779e6be244db62f883f2bf7b2869e87498cd625318148",
-   "why": "the scope of the held clause: the secrets whose every window meets its good event"
   },
   "NetTiming.WindowsPlaced": {
    "owner": "@network-accounting",
@@ -2526,6 +2517,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "NetTiming.WindowGoodChecked": {
+   "owner": "@network-accounting",
+   "digest": "d7f24e08de9111d984f779e6be244db62f883f2bf7b2869e87498cd625318148",
+   "issue": "NET-313",
+   "due": "2026-11-30"
+  },
   "Pous.AuditSecure": {
    "owner": "@memory-accounting",
    "digest": "a3177b785e75e85d950fe1bf29d9d301bfdbf3e1e7b85f01a10896efcc740f03",
@@ -4486,7 +4483,7 @@
    "nontrivial": "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
   },
   "NetTiming.SecurityProofs.PeriodLeakChecked": {
-   "honest": ["NetTiming.Witness.PeriodLeakChecked_honest", "NetTiming.Witness.PeriodLeakChecked_placed_honest"],
+   "honest": ["NetTiming.Witness.PeriodLeakChecked_honest"],
    "nontrivial": [
     "NetTiming.Witness.PeriodLeakChecked_nontrivial",
     "NetTiming.Witness.PeriodLeakChecked_readsBy_exclusion"
@@ -19291,9 +19288,6 @@
     "reads": []
    },
    "type_hash": "a2e3c2d055b64a79c4efe5cf53e85cd98aa12a6933fab37ed85927a11f19aebf"
-  },
-  "NetTiming.Witness.PeriodLeakChecked_placed_honest": {
-   "owner": "@network-accounting"
   },
   "NetTiming.Witness.PeriodLeakChecked_readsBy_exclusion": {
    "owner": "@network-accounting",
