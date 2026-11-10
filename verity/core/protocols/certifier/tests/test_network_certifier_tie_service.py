@@ -404,4 +404,4 @@ def test_only_the_tie_service_builds_an_ingress_tie_verdict():
             if (isinstance(f, ast.Name) and f.id == "IoTieVerdict") or \
                     (isinstance(f, ast.Attribute) and f.attr == "IoTieVerdict"):
                 builders.add(path.relative_to(root).as_posix())
-    assert builders == {"core/protocols/certifier/tie_service.py"}
+    assert builders == {Path(TS.__file__).resolve().relative_to(root).as_posix()}
