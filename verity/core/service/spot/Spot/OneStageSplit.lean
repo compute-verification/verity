@@ -127,7 +127,9 @@ def inTurnFrom (roots : Array String) : Nat → List String → Bool
 /-- **The sessions in turn**, in the release log's lines `log`: `roots` the sessions' coin trees' roots in session
 order, every line that opens a coin tree's round (`Challenger.openLine`) opens one of a session's tree, and never one
 of an earlier session's than the line before it. So session `j + 1`'s first round is opened after session `j`'s last.
-Lines that open no round may come anywhere. -/
+Lines that open no round may come anywhere. A round is taken to be the first session's whose root the line names
+(`roots.idxOf?`), which is its own session only when no two sessions name one tree: `treesHeld` refuses such a pair
+(`Challenger.SHARED_TREE`), and `severalRun` runs it before `inTurnHeld`. -/
 def inTurn (roots : Array String) (log : List String) : Bool := inTurnFrom roots 0 log
 
 /-- The root of the coin tree a session's record names (its `coin_tree`'s `root`), read as `treesHeld` reads the
