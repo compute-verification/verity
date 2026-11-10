@@ -5,8 +5,8 @@ difftest harness's `ProtocolPort`.
 The reference decodes the protocol's formats (`NciCheck/Protocol.lean`'s module docstring), checks that the run's
 record names the declared circuit (`names`), rebuilds the policy's check's instance and trusted input (the params' log
 with the run's own record, the commitment, appended, and that record's digest the run) and runs `check_baseline`, which
-`NciCheck.BaselineDifftest` holds `NciCheck.Baseline.check` to. The cases are θ's provenance difftest's declarations
-(`baseline_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
+`NciCheck.ThetaDifftest` holds `NciCheck.Theta.check` to. The cases are θ's provenance difftest's declarations
+(`theta_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
 then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
 budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
 commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) samples the
@@ -45,7 +45,7 @@ def _load(name: str):
     return module
 
 
-vectors = _load("baseline_difftest_vectors")
+vectors = _load("theta_difftest_vectors")
 NR = vectors.reference
 
 # --- the reference ----------------------------------------------------------------------------------------------------

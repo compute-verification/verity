@@ -1748,6 +1748,19 @@
       "paths": {
         "Security/Proofs/Properties/Nci/Novel.lean": "Security/Proofs/Properties/Nci/Fresh.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Nci/Assumptions/Baseline.lean": "Security/Definitions/Nci/Assumptions/Theta.lean",
+        "Security/Proofs/Properties/Nci/Baseline.lean": "Security/Proofs/Properties/Nci/Theta.lean",
+        "Security/Proofs/Properties/Nci/BaselineSteps.lean": "Security/Proofs/Properties/Nci/ThetaSteps.lean",
+        "Security/Properties/Nci/Baseline.lean": "Security/Properties/Nci/Theta.lean",
+        "verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean": "verity/core/protocols/network/nci/lean/NciCheck/Theta.lean",
+        "verity/core/protocols/network/nci/lean/NciCheck/BaselineDifftest.lean": "verity/core/protocols/network/nci/lean/NciCheck/ThetaDifftest.lean",
+        "verity/core/protocols/network/nci/lean/NciCheck/BaselineDifftestMain.lean": "verity/core/protocols/network/nci/lean/NciCheck/ThetaDifftestMain.lean",
+        "verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py": "verity/core/protocols/network/nci/lean/scripts/theta_difftest_vectors.py",
+        "verity/core/protocols/network/tests/test_nci_baseline_difftest.py": "verity/core/protocols/network/tests/test_nci_theta_difftest.py"
+      }
     }
   ]
 }
