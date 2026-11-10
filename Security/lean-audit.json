@@ -55416,7 +55416,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "d8b60089315fb541362a23f8bd0559f1c853f7ca7fbf11d09b9996cedabf7d92",
+   "digest": "68b385cae07dffbd467608706b5ef8a220a977ff008d123ef51eeb008b4b85b8",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -55456,7 +55456,7 @@
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "ee6091fd92f6ca94bb554a9d32ad7e3c24631a95b2a2349065009f7ffdf2e0dc",
     "Spot.OneStage.paramsOfJson": "999d78a093de5052bca080e42c16b5b7b6ed73744fd42218f09e6f3f34202362",
-    "Spot.OneStage.paramsParsed": "66bf6326a0114b4fc678f49c785457c6ee18817f6556a009585d1aad2a65abbc",
+    "Spot.OneStage.paramsParsed": "ef1da79583c5914848d15ddbc01110f65bf5ae0bfe5e0d4ed9b99ba01096f6fc",
     "Spot.OneStage.publicJson": "1eecfca42c0f31de9d361496f31e2620a0c17671e0b9ff47d59552ef11d92e14",
     "Spot.OneStage.recordChecks": "c8f06b53e4b19f87065742547208d843a2f54ebaa146f2581da7b9fceca4eb39",
     "Spot.OneStage.rule": "7ba31f61033f83f3ac5b2be2fd9efd65b893824765e65ede6a53be4109fd4abb",
