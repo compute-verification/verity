@@ -67,7 +67,7 @@ directory = "verity/configuration/config"
 owner = "ci"
 
 [[distribution]]
-directory = "verity/protocols/inference_only/rho"
+directory = "verity/protocols/inference_only/slowdown"
 owner = "training"
 date = "2026-11-16"
 
@@ -646,9 +646,9 @@ loaded_by = [
     "verity/flock/prover/tests/test_tmpl_statement.py",
     "verity/flock/prover/tests/tmpl_statement.py",
     "verity/protocols/certifier/prover/window_charge.py",
-    "verity/protocols/inference_only/rho/rho/params.py",
-    "verity/protocols/inference_only/rho/tests/test_envelopes.py",
-    "verity/protocols/inference_only/rho/tests/test_params.py",
+    "verity/protocols/inference_only/slowdown/slowdown/params.py",
+    "verity/protocols/inference_only/slowdown/tests/test_envelopes.py",
+    "verity/protocols/inference_only/slowdown/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/h1window.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
     "verity/protocols/tests/test_profile.py",
@@ -669,9 +669,9 @@ reaches = [
 ]
 loaded_by = [
     "verity/flock/prover/tests/test_audit_profile.py",
-    "verity/protocols/inference_only/rho/rho/params.py",
-    "verity/protocols/inference_only/rho/tests/test_envelopes.py",
-    "verity/protocols/inference_only/rho/tests/test_params.py",
+    "verity/protocols/inference_only/slowdown/slowdown/params.py",
+    "verity/protocols/inference_only/slowdown/tests/test_envelopes.py",
+    "verity/protocols/inference_only/slowdown/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
     "verity/protocols/tests/test_profile.py",
     "verity/spot/optimize.py",

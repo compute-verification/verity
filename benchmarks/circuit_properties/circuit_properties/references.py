@@ -10,7 +10,7 @@ products.
   `AttnDotStep`s, activation by activation, and are not counted.
 
 `configs` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with
-no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are verity/protocols/inference_only/rho's
+no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are verity/protocols/inference_only/slowdown's
 (its `data/models.toml`, read through `rho.instances`, imported by path).
 """
 
@@ -38,18 +38,18 @@ def boolean_gemm(K: int, N: int) -> Program:
 
 
 def rho_models() -> dict:
-    """verity/protocols/inference_only/rho's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
+    """verity/protocols/inference_only/slowdown's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
     and a `tests`, as this package's does, and must shadow neither."""
-    rho = str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho")
+    rho = str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "slowdown")
     if rho not in sys.path:
         sys.path.append(rho)
-    from rho import instances
+    from slowdown import instances
     return instances.models()
 
 
 def shape(model) -> dict:
     """A rho model's shape in b1's configuration keys: a dense model with grouped-query attention and a SwiGLU MLP."""
-    from rho import instances
+    from slowdown import instances
     a = model.attention
     if a.get("kind") != "gqa" or set(model.matrices) != {"attention", "dense", "head"}:
         raise ValueError(f"{model.name}: b1's layer is a dense one with grouped-query attention")

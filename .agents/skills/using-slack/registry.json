@@ -692,7 +692,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "verity/protocols/inference_only/rho/",
+        "verity/protocols/inference_only/slowdown/",
         "benchmarks/circuit_properties/",
         "benchmarks/training_slowdown/"
       ],
