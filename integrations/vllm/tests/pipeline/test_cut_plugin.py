@@ -43,14 +43,14 @@ class Req:
 
 
 class Sched:
-    """Admits waiting requests in queue order up to ``cap`` running, prefilling each whole, then decodes one token a
+    """Admits waiting requests in queue order up to ``most`` running, prefilling each whole, then decodes one token a
     step; a scheduled token is in flight until `update` processes its step. `_preempt_request` is vLLM's: it frees the
     request's blocks, resets its computed tokens and puts it at the waiting queue's front. ``requests`` is its request
     table, in the order `add_request` received them."""
     block_size = 4
 
-    def __init__(self, cap: int = 3, policy: str = "fcfs", connector=None, dp: int = 1):
-        self.scheduler_config, self.connector, self.cap = NS(policy=policy), connector, cap
+    def __init__(self, most: int = 3, policy: str = "fcfs", connector=None, dp: int = 1):
+        self.scheduler_config, self.connector, self.most = NS(policy=policy), connector, most
         self.vllm_config = NS(parallel_config=NS(data_parallel_size=dp))
         self.waiting, self.skipped_waiting, self.running, self.requests = Queue(), Queue(), [], {}
         self.current_step, self.prev_step_scheduled_req_ids, self.reset_preempted_req_ids = 0, set(), set()
@@ -78,7 +78,7 @@ class Sched:
         step = {"prev": set(self.prev_step_scheduled_req_ids), "admitted": [], "scheduled": {}}
         for r in self.running:
             step["scheduled"][r.request_id] = 1
-        while self.waiting and len(self.running) < self.cap:
+        while self.waiting and len(self.running) < self.most:
             r = self.waiting.popleft()
             r.status = "RUNNING"
             self.running.append(r)
