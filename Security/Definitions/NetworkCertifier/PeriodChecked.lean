@@ -1,8 +1,8 @@
 module
 
-public import Definitions.NetworkCertifier.Assumptions.RegisteredInputs
 public import Definitions.NetworkCertifier.Checked
 public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.RegisteredInputs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
