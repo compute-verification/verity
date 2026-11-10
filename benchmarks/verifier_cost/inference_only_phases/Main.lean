@@ -1,7 +1,7 @@
 import InferenceOnlyCheck
 
 /-!
-`nci-phases INSTANCE [TOP [BIG]]`: `InferenceOnlyCheck.Desc.evaluate`'s steps on one `nci-check --policy` instance, each timed, one
+`inference-only-phases INSTANCE [TOP [BIG]]`: `InferenceOnlyCheck.Desc.evaluate`'s steps on one `inference-only-check --policy` instance, each timed, one
 `PHASE {json}` line per step on stdout (milliseconds, resident and peak RSS in MB): the file's read, the instance's JSON
 parse, `InferenceOnlyCheck.parse`, three of the decoder's parts on their own (the program text's JSON parse, `Flock.canon` of it and
 SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), Flock's decoder
@@ -11,7 +11,7 @@ Definition's summary (`summarize`, callees first, the `TOP` slowest named with t
 the `TOP` with the most return pieces; one of at least `BIG` body nodes, 2^17 unless given, step by step, with its
 return's pieces before and after `coalesce`: `summarizeTimed`) and the
 root's reads (`nodeReads`), and the verdict (θ, the owners, `intoOf`, `freshWidth`). The last line is the verdict, which
-`inference_only_cost.sh` holds to `nci-check --policy`'s. A measurement, not a verifier: it runs what `InferenceOnlyCheck.Desc.evaluate`
+`inference_only_cost.sh` holds to `inference-only-check --policy`'s. A measurement, not a verifier: it runs what `InferenceOnlyCheck.Desc.evaluate`
 runs, in its order.
 -/
 
@@ -107,7 +107,7 @@ def summarizeTimed (P : Flock.Program.Prog) (memo : Array Summary) (d : Nat) (to
   return { ret := PS.of joined, used }
 
 def main (args : List String) : IO UInt32 := do
-  let some (path : String) := args[0]? | IO.eprintln "usage: nci-phases INSTANCE [TOP [BIG]]"; return 2
+  let some (path : String) := args[0]? | IO.eprintln "usage: inference-only-phases INSTANCE [TOP [BIG]]"; return 2
   let topN := (args[1]? >>= String.toNat?).getD 20
   let big := (args[2]? >>= String.toNat?).getD (2 ^ 17)
   let t ← IO.monoNanosNow
