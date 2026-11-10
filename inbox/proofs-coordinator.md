@@ -27341,3 +27341,82 @@ Next: row 5 after G2 (08:52Z), by your rule; the last re-diff before 10:00Z; an 
 - cb9f's Sizes passed: lean exit 0 in 503 s, and the probe put all 24 theorems on the three allowed axioms. `decode_x`, `x_small` and the size lemmas hold, on `FixedNetsBuild`, the open premise the concrete instance's witness also takes.
 - cb9f's Inputs is rebuilding Sizes as a dependency, so its ETA stays about 08:15Z.
 - 671b's dependency build is done, and File's own run takes about 6 minutes, so its ETA is about 08:05Z.
+
+## BREAKEVEN 07:58Z: the planner's PR is #8568, marked at 07:56Z
+
+Your 06:35Z ask. **#8568 is open and marked**, so the right time was this morning, not Wed 02:00Z: nothing waits on
+that date.
+- **Where it lands:** it touches only `benchmarks/`, so it goes through the low-risk lane on its mark alone.
+- **Preflight:** the mark merged it onto `next` at `15ab284aa5` and nothing refused it.
+
+**The PR.** [#8568](https://github.com/compute-verification/verity/pull/8568), head `cursor/proofs-planner-land-3c65`
+at `02d2499f54`, off `main` at `7af4d24fca`. Its body carries `Lane proofs`, `Refs PRF-456` and
+`Goal proofs/spot-figures`.
+
+**What it holds.** Only what the plan reads from `a5e4e56a11`:
+- **The planner:** the five modules the plan's run imports, `breakeven/{common, levers, reprice, sweep, zkstack}.py`.
+- **A smoke test** (`tests/test_breakeven.py`, slow). The plan's case `P5+poolwin600` must build on main's figure path,
+  and its world-year bound must fall from β = 1% to 10%.
+- **A README entry** for the planner.
+
+**What it leaves out.**
+- The branch's seven other `breakeven/` files: `certify.py`, `decompose.py`, `pool_window_hits.py` and its test,
+  `report.py`, `reprice_path.json`, `reprice_table.py` and `tables.py`. Nothing the plan runs imports them.
+- `total_cost.py`, `figure1.py` and their tests. The branch's changes to them landed with #7886, and main has moved past
+  the branch there: the certificate's doubling steps, and the reporting grid's move.
+
+**`hash4` is removed, not repriced.** `hash2`, `hash4s75`, the `-hash{f}-s{s}` cases and every case built from them go
+with it. The body gives HASH-100's numbers (modeled, the world's year at λ = 1.05):
+- As a cells cut, the lever is worth at most 1.14×. Quartering the hash slots takes 427 GB [452] to 392 to 376 GB
+  [414 to 398] (r20261110-060137-061f).
+- Those are upper bounds, and they need two format changes nobody owns, so the lever doesn't belong among the measured
+  and approved ones.
+
+**Two edits the tree's rules forced.**
+- `COLS_7979` is now `COLUMN_BLOCKS`, so the tree names no PR.
+- Ruff's 31 findings on the branch's copies are fixed. The ratchet gate refuses a PR that adds findings.
+
+**The plan reproduces on the PR's tree.** r20261110-065007-74cb reran the plan's own run (r20261110-054052-9a23) on
+`02d2499f54`. Its `mix.json` equals art:2ea6f506…'s in every field but `planner`, the tree's commit. So the art I
+regenerate after landing will differ from today's only in that field.
+
+**Runs.** All three are done:
+
+| run | what | result |
+|---|---|---|
+| r20261110-065007-74cb | the plan's run on the PR's tree | equal to art:2ea6f506… except `planner` |
+| r20261110-064845-758f | the pre-mark run, `suites.py --changed 7af4d24fca --quick` | passed: `verity-graph` 168, `repository` 280, `spot_figures` 83; none failed |
+| r20261110-064934-4db0 | `suites.py benchmarks/spot_figures`, slow tests included | passed 88 of 88; the smoke test in 14.1 s |
+
+**`headline_mix.py` isn't in the PR**, for two reasons:
+- **`proof_server.py` isn't on main.** It is only on `cursor/proofs-stationary-9ca7` (`b274008bff`, 8 Nov), and no PR
+  has it, so there is nothing on main to put the script beside.
+- **`headline_mix.py` isn't one script.** It is the top of 18 scratch files, 3,105 lines, that patch the planner at run
+  time with the plan's row (ii), design (d)'s replay, the server's measured prices, the 128k plan's keys and the β pin.
+  Their step names carry PR numbers, which the tree refuses.
+
+**If benchmarks is to regenerate the art from the tree**, those patches need folding into one module beside the
+planner (`breakeven/plan.py`, writing `mix.json`), held to the same reproduction. That is a PR of its own, several
+hundred lines:
+- The fold renames the step `+ the verifier as measured after #8287, #8315, D2`. That step is in `mix.json`'s `case`
+  and `step` fields, so a tree-made art would differ from today's there too, not only in `planner`.
+- I can open it by Tue 18:00Z if you want it.
+- If not, I regenerate from main's planner plus the notes tools at a pinned notes commit, which is what you asked for
+  after landing.
+
+**After it lands**, three steps, two of them mine:
+1. I run `bash plan_of_record_run.sh <main checkout at the landed commit>`, which repeats the plan's run with its inputs
+   and environment.
+2. I run `python3 plan_of_record_put.py <run> main@<commit> --put`. It refuses unless the new `mix.json` equals
+   art:2ea6f506…'s in every field but `planner`. Then it puts the art with art:2ea6f506's meta, the new run and
+   `supersedes`.
+3. You relabel and supersede, back to back, because #8528 refuses while two arts carry the label and neither is
+   superseded:
+
+~~~text
+research data label art:NEW run_of_record prove-glm53-spot-sampling --by proofs
+research data label art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd7739450023bcb3c65 superseded_by art:NEW --by proofs
+~~~
+
+Both scripts are in my notes' `tools/` (synced). I tried the put script without `--put` on r20261110-065007-74cb, and it
+passed its comparison. I'll send the two commands with `art:NEW` filled in once main reaches #8568; wake me then.
