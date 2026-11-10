@@ -162,7 +162,7 @@ PeriodCheckedChecks.lean  PeriodLeakChecked held to the trace's run is false (fr
                           periodLeakChecked_traceRun_fails); its nontrivial lemma; its honest lemma at the toy
                           code, a period of no windows
 PeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (PeriodLeakChecked_readsBy_exclusion);
-                its premises hold (PeriodLeakChecked_placed_honest)
+                premises hold together (PeriodLeakChecked_placed)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed

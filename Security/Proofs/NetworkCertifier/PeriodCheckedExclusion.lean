@@ -69,10 +69,11 @@ schedules (`adm_not_readsBy`), and both secrets are counted against `#Θ · wind
 **The premises together.** At the same window, under the one schedule `oneSched` and a server that is not late, the
 record reads back under the registered parameter (`RecordFormat.readsBy_comp`), the network certifier registers its
 observations at the operator whose move is the unset bit, the window meets `WindowGoodChecked`, and
-`PeriodLeakChecked`'s premises hold together (`PeriodLeakChecked_placed_honest`). It is at one secret: the toy circuit
+`PeriodLeakChecked`'s premises hold together (`PeriodLeakChecked_placed`). It is at one secret: the toy circuit
 has no free input, so its count is 1, and an operator fixed before the secrets registers one ingress. `posL` rejects
-every run, so the lemma shows that the premises hold together at a placed window, not that the deployed verifier
-meets them. The toy has no checked input, so neither lemma shows anything about a checked input.
+every run, so the lemma shows that the premises and the good event are consistent at a placed window. It is no honest
+lemma of the statement: no honest run is accepted there. The toy has no checked input, so neither lemma shows
+anything about a checked input.
 -/
 
 @[expose] public section
@@ -416,13 +417,13 @@ theorem PeriodLeakChecked_readsBy_exclusion :
 /-! ## The premises at a placed window -/
 
 /-- **`PeriodLeakChecked`'s premises hold together at a monitoring period of one placed window that meets its good
-event.** At `posL`, the format `bitFmt`, the one schedule `oneSched` and the one secret of a server that is not late:
+event**, at a verifier that rejects every run: they are consistent there, and no honest run passes. At `posL`, the format `bitFmt`, the one schedule `oneSched` and the one secret of a server that is not late:
 `Compiled.KS`, the commitment's binding, the window's placement (`WindowsPlaced`), its check's pinning at no checked
 input (`CheckedUnique`), `TrustedHost` at a host that runs the network certifier's code, the read-back under the one
 registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`PeriodChannelReg`); the network certifier
 registers the window's observations at the operator whose move is the unset bit (`CertifierRegisters`); and the window
 meets its good event (`WindowGoodChecked`), at the check every run passes. -/
-theorem PeriodLeakChecked_placed_honest :
+theorem PeriodLeakChecked_placed :
     (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
