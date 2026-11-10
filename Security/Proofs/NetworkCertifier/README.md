@@ -82,6 +82,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/PeriodChecked.lean  trusted: the run at the network certifier's rows
                                (certifierRun) and the leak relation there (RLeakCertifierChecked)
 ../../Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean  trusted: WindowGoodChecked and PeriodLeakChecked
+../../Definitions/NetworkCertifier/Guarantees/PeriodFails.lean  trusted: the period's leak with each failure charged
+                               (failPatterns, KraftWeights; PeriodLeakFails, PeriodLeakFailsAtMost, PeriodLeakCharged)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts, openings and record formats the witnesses
                                are stated at (trivLay, notLay, certOps, noFormat, bitFmt)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
@@ -118,6 +120,10 @@ TapRows.lean    at the network certifier's rows: the trace filled in with its va
 PeriodChecked.lean  the period's leak with the checked inputs left out (periodLeakChecked): each window's
                                          bound at the network certifier's rows (periodChecked_first), and the
                                          records by Carried's count at the empty pool (periodChecked_second)
+PeriodFails.lean  the period's leak with each failure charged (periodLeakFails, periodLeakFailsAtMost,
+                                         periodLeakCharged): periodLeakChecked at each fail pattern
+                                         (checked_at_pattern), summed over the patterns (exists_failPatterns,
+                                         encard_failsExactly_le, encard_weighted_le)
 Period.lean     PeriodLeakAccepted as PeriodLeakChecked's instance at no checked input
                                          (periodLeak_of_checked, periodLeak; periodLeak_fixed at operators fixed
                                          before the period)
@@ -391,6 +397,13 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   network certifier's rows (`certifierRun`): held to the trace's run the statement is false
   (`PeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace holds the registration's values at the
   registered inputs. `PeriodLeakAccepted` is its instance at no checked input.
+- **The period's bound with each failure charged as it happens** (`PeriodFails.lean`): where the operator's moves
+  and the registered values may follow the network certifier's fail cells, the secrets whose run fails exactly `j`
+  connections, each below its cap, number at most `failPatterns cap j` times `PeriodLeakChecked`'s count
+  (`PeriodLeakFails`); at most `j`, the factor summed over `0 … j`, with the lengths held at each run's own pattern
+  (`PeriodLeakFailsAtMost`); and under weights on the number of failures that sum to at most one (`KraftWeights`),
+  the secrets charged at most `log2 T` number at most `T` (`PeriodLeakCharged`). Each is `PeriodLeakChecked` applied
+  once a fail pattern, and takes its premises and no other but the weights' sum.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

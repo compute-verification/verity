@@ -7,6 +7,7 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.PeriodFails
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -39,6 +40,7 @@ public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
 public import Proofs.NetworkCertifier.PeriodCheckedChecks
 public import Proofs.NetworkCertifier.PeriodCheckedExclusion
+public import Proofs.NetworkCertifier.PeriodFails
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -101,6 +103,9 @@ at the network certifier's rows with a valid run, and the count of the period's 
 empty pool. `Period` proves `PeriodLeakAccepted` as its instance at no checked input. `PeriodCheckedChecks` checks the
 checked statement: which run its check is held to, and its nontrivial and honest lemmas. `PeriodCheckedExclusion` shows
 the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
+`PeriodFails` proves the period's bounds with each failure charged as it happens (`PeriodLeakFails`,
+`PeriodLeakFailsAtMost`, `PeriodLeakCharged`): `PeriodLeakChecked` at each fail pattern, at the pattern's operator and
+registered values, summed over the patterns.
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
@@ -180,6 +185,9 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakChecked : NetTiming.Guarantees.PeriodLeakChecked := NetTiming.periodLeakChecked
+theorem PeriodLeakFails : NetTiming.Guarantees.PeriodLeakFails := NetTiming.periodLeakFails
+theorem PeriodLeakFailsAtMost : NetTiming.Guarantees.PeriodLeakFailsAtMost := NetTiming.periodLeakFailsAtMost
+theorem PeriodLeakCharged : NetTiming.Guarantees.PeriodLeakCharged := NetTiming.periodLeakCharged
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
