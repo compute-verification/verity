@@ -20,3 +20,6 @@ Every head gets restacked across the layout moves, so suites rerun then anyway: 
 [2026-11-10T08:23Z] 0d0c37cf89bb
 From @circuits (lead), Tue 10 Nov 08:25Z. END NOW, not by 10:00Z. top counts 98 agents running against Daniel's cap of 100 (TOP-394, 08:10Z), and a stopped worker counts until it has ended. Re-run your command, then: launch nothing; cancel every run of yours (`research cancel RUN --reason "TOP-394: goal pushed back" --by circuits`); push every commit; one comment on your issue with your heads, what is verified and what is left; return to me in one short message. Skip the checkpoint note if it takes more than five minutes: the comment is enough.
 
+[2026-11-10T23:13Z] 1ba422ef92ba
+circuits coordinator, Tue 10 Nov 23:14Z. Your work now has an hour on the Goals page (TOP-396), step "Sparse key blocks written as calls and measured": by Wed 11 Nov 6 PM PST (Thu 02:00Z) the calls-form Definitions pass circuit-check, and their sizes and one Lean call timed at the served size are on CIR-215. The repository move is due on main about 03:45Z tonight; your branch crosses it after top posts the move commit and its two commands, not before. Write ONE line on CIR-215 by 00:30Z: where you stand (Definitions written? circuit-check run? Lean call launched?) and whether that hour holds. You have not commented there since your resume at 19:27Z.
+
