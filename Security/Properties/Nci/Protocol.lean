@@ -38,6 +38,6 @@ def ProtocolAccepts : Prop :=
     NciCheck.Protocol.check p c e = .accept pub prof →
       ∃ out, NciCheck.Baseline.evaluate (instanceOf p e) (trustedOf p c) = .ok out ∧
         NciCheck.Desc.evaluate (instanceOf p e) = .ok out ∧ out.getObjVal? "complies" = .ok (.bool true) ∧
-        prof = reportOf out
+        reportOf out = prof
 
 end NciCheck.Properties
