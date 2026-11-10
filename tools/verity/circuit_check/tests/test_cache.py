@@ -1,9 +1,10 @@
-"""The cache's per-target keys (`circuit_check.cache`, `circuit-check-cache/v2`), on a synthetic tree: a registry of small
+"""The cache's per-target keys (`circuit_check.cache`, `circuit-check-cache/v4`), on a synthetic tree: a registry of small
 Definitions, a catalog (`targets.py`) and shared pins of its own (``pins/``, a file per pin), checked through `cli.run`'s `--all` path with the catalog's
 functions standing in for the real ones (the real catalog takes a minute to build).  A target's entry holds what its own check
 read or resolved, and nothing another target or the task list read."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -13,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from circuit_check import cache as CC
 from circuit_check import entries as E
 from verity.ml.definitions.numerics import _jit
 
@@ -350,7 +352,8 @@ def _values(root: Path, target: str, field: str = "value") -> list:
 
 
 def _entry(root: Path, target: str) -> dict:
-    (e,) = [json.loads(p.read_text()) for p in (root / "cache").glob("*/*/*.json")
+    """The one stored entry of ``target``, its reads as `cache.store` was handed them (`cache.read`)."""
+    (e,) = [CC.read(p) for p in (root / "cache").glob("*/*/*.json")
             if json.loads(p.read_text())["key"]["request"]["target"][1] == target]
     return e
 
@@ -1130,6 +1133,44 @@ def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)")
     assert _run(root)["hits"] == ["SynOther_v1"]
+
+
+#: the harness's lookups as they were before entries shared their read records: each entry's reads whole (`cache.read`),
+#: digested now, against what it holds
+WHOLE = """
+CC._current = lambda root, p, e: CC._digests(root, {k: list(v) for k, v in (r := CC._expand(p, e)).items()}) == r
+"""
+
+
+def test_each_distinct_read_record_is_stored_once_and_reuse_is_decided_as_by_whole_reads(tmp_path):
+    """Each distinct module or unit record (its content and import sites) is a read record of its own, stored once under the
+    SHA-512 of its bytes, which every entry that read it refers to, and no entry holds one.  `lookup`, which holds each read set
+    and run to the tree by reference, reuses and stores what comparing each entry's reads whole does in a tree beside it: a
+    first run, a run that reuses every target, a pure move (`_moved` follows the import sites the records hold), and an edit of
+    the moved module that reruns its target."""
+    trees = {"refs": _tree(tmp_path / "refs"), "whole": _tree(tmp_path / "whole")}
+    harness = {"refs": HARNESS, "whole": HARNESS.replace("rep = cli.run(", WHOLE + "rep = cli.run(")}
+    steps = [(lambda root: None, []), (lambda root: None, ["SynOther_v1", "SynTop_v1"]),
+             (lambda root: _move(root, "syn/top.py", "syn/fam/top.py", ("syn/catalog.py", "from syn import extra, top",
+                                                                         "from syn.fam import top\n    from syn import extra")),
+              ["SynOther_v1", "SynTop_v1"]),
+             (lambda root: _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)"), ["SynOther_v1"])]
+    for step, hits in steps:
+        got = {}
+        for name, root in trees.items():
+            step(root)
+            got[name] = _run(root, harness[name])
+        assert got["refs"]["hits"] == got["whole"]["hits"] == hits
+        assert got["refs"]["stats"]["stored"] == got["whole"]["stats"]["stored"]
+    cache = trees["refs"] / "cache"
+    (reads,) = cache.glob(f"*/{CC.READS}")
+    assert all(hashlib.sha512(p.read_bytes()).hexdigest() == p.stem for p in reads.rglob("*.json"))
+    entries = list(cache.glob("*/*/*.json"))
+    sited = {json.dumps(v, sort_keys=True, separators=(",", ":")).encode() for p in entries
+             for kind, held in CC.read(p)["reads"].items() if kind in ("modules", "units") for v in held.values() if isinstance(v, dict)}
+    values = [p.read_bytes() for p in (reads / "values").glob("*.json")]
+    assert len(values) == len(sited) and set(values) == sited
+    assert not any(b'"sites"' in p.read_bytes() for p in entries)
 
 
 def test_a_pure_move_of_a_definition_module_with_a_sidecar_reuses_its_targets(tmp_path):

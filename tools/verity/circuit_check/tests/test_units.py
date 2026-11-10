@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from circuit_check import cache as CC
 from test_cache import REPO, _bindings, _edit, _run, _tree
 
 #: one cached `--all` run over the synthetic bindings with the catalog's records; prints its cache stats and each target's value
@@ -158,7 +159,7 @@ def test_records_digest_each_read_once_and_store_what_each_records_own_digest_ga
     assert json.loads(made.read_text()) == 1
     after = {p.name: p.read_bytes() for p in _records(root)}
     assert len(after) == 5 and after == before
-    assert sum("syn.prims" in json.loads(b)["reads"]["modules"] for b in after.values()) == 4
+    assert sum("syn.prims" in CC.read(p)["reads"]["modules"] for p in _records(root)) == 4
 
 
 #: after the full build stored its records, `syn/prims.py` edited and every record stored again in the same process: the
@@ -496,7 +497,7 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5 and first["scratch_bytes"] > 0, first
     # the records and the catalog's roots record (`units.store_roots`): no target's entry, no task list
     assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 6
-    assert first["bytes"] == sum(p.stat().st_size for p in _records(root))
+    assert first["bytes"] == sum(p.stat().st_size for p in (root / "cache").rglob("*.json"))     # with the read records they share
     assert _records_only(root) == {"reused": 5, "rebuilt": [], "scratch_bytes": 0, "stored": 0, "bytes": first["bytes"]}
 
     warm = _copied(root, tmp_path / "warm")
