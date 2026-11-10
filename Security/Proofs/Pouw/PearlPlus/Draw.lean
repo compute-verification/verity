@@ -930,7 +930,7 @@ structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.P
   tile64 : ∀ p ∈ passes, p.scheme.tileM = 64 ∧ p.scheme.tileN = 64
   unit : ∀ p ∈ passes, ∀ r ∈ p.records, r.matmul.index < U.layout.N ∧
     (U.layout.shape r.matmul.index).m = r.matmul.m ∧ (U.layout.shape r.matmul.index).k = r.matmul.k ∧
-    (U.layout.shape r.matmul.index).n = r.matmul.n ∧ U.layout.wid r.matmul.index = r.matmul.weight ∧
+    (U.layout.shape r.matmul.index).n = r.matmul.n ∧ U.layout.fixedId r.matmul.index = r.matmul.weight ∧
     (τ r.matmul.index).isSome
   index_inj : ∀ {i i' pos pos' : ℕ} {p p' : Pass} {r r' : UnitRecord}, passes[i]? = some p →
     p.records[pos]? = some r → passes[i']? = some p' → p'.records[pos']? = some r' →
@@ -1187,10 +1187,10 @@ structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → Lis
   todo : (pi, tid) ∈ pl.todo
   tile : TileOf pl.passes[pi]! tid U g
   salt : bytesNat pl.passes[pi]!.salt = saltOf s
-  root : bytesNat ((pl.passes[pi]!.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD
-    ByteArray.empty) = rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g))
+  root : bytesNat ((pl.passes[pi]!.weightRoots.lookup (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))).getD
+    ByteArray.empty) = rootOf (U.layout.fixedId ((auditTiling 64 64 U.layout).unit g))
   weights : ∀ j ∈ (auditTiling 64 64 U.layout).cols g,
-    P.weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) (U.weight (U.layout.wid
+    P.fixedOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) (U.fixed (U.layout.fixedId
       ((auditTiling 64 64 U.layout).unit g))) j
   opens : ∀ o c, opener pi tid = .ok o → τ ((auditTiling 64 64 U.layout).unit g) = some c →
     OpensCommitted pl.passes[pi]! tid o U ((auditTiling 64 64 U.layout).unit g) c
@@ -1208,7 +1208,7 @@ def AcceptGivesTheAudit : Prop :=
     TR.tiling = auditTiling 64 64 → TR.rowOK = (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK →
     P.ticket = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket →
     P.useful = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).useful →
-    P.weightOK = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).weightOK →
+    P.fixedOK = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).fixedOK →
     (check i opener).accept = true → plan i = .ok pl → RunLayout pl.passes U τ →
     (∀ j, ∃ pi tid, DrawnOn saltOf rootOf P s pl opener U τ pi tid (c j).1) →
     AuditAcceptsTol (goodDeclTiles P TR U H s τ (decOf pl.passes) ∪ blankTiles TR U τ) (overCapTiles TR U H s τ) c ∨
