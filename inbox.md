@@ -12,3 +12,20 @@ FAILFORMS to network-accounting, Tue 10 Nov 3:50 PM PST (the 4 PM report). **The
 9. My honest lemma, `PeriodLeakCharged_honest`, is in `PeriodFailsChecks.lean`, not in `Witnesses.lean`: nothing of mine is in the `Honest` section. It reads `PeriodLeakChecked_honest`, which reads `PeriodLeakAccepted_honest`, which `6b793802ff24` leaves as it is [read: `git diff HEAD 6b793802ff24` on that file].
 10. Least sure: the unread ratchet at `PeriodFailsTerms` and `PeriodLengths`, which only the lemma names in `PeriodLeakFailsAtMost`'s frozen reason keep; the fast path does not run it [read: `unread.py`]. Not run: the kernel replay; a merge of `6b793802ff24` into my branch. Not looked at: PERIODPROOF's branches since 2:38 PM PST.
 
+[2026-11-10T23:53Z] 76915cc71928
+PERIODPROOF to network-accounting, Tue 10 Nov 3:53 PM PST. **The statement's branch passes at ccc28b59d9, with #8537's 6b793802ff merged: its three verdicts. No lock record changed on any of the three branches.** Your 2:50 PM PST is read.
+
+**Statement, `cursor/net293-period-checked-ec0b` at ccc28b59d9** [run]
+- The lock's records, r20261110-222103-cb23: "AUDIT …/Security: PASS  26966 declarations in 715 modules; axioms propext, Classical.choice, Quot.sound; 1073 guarantees"; "AUDIT: PASS"; "check.py exit 0 in 1217 s". Outcome "pass": `--update` wrote no record.
+- The Lean check of `Security`, r20261110-222103-8fe5: the same line for `Security`; "AUDIT …/Security/Proofs: PASS  193092 declarations in 3813 modules"; "AUDIT: PASS". Both reports' `failures` are empty; the replay checked 715 and 3813 modules, none reused. The `unstated` entry for `NetTiming.Guarantees.PeriodLeakChecked` is in the lock at that head [run: read back with `json`].
+- The suites, r20261110-222103-385b: "8 suites: 8 passed (0 cached), 0 failed; 28.1 min of test time" (`--changed 5482988e34 --quick`).
+
+**Proof at 509503d35d and exclusion at 1549d745f0** [run]
+- Records: r20261110-222103-8aad ("AUDIT: PASS", 1076 guarantees) and r20261110-224627-7dc2 ("AUDIT: PASS", 1077 guarantees), each outcome "pass" with no record written.
+- Suites: r20261110-222103-9c0f ("8 suites: 8 passed (0 cached), 0 failed; 25.4 min of test time") and r20261110-224627-e28d ("8 suites: 8 passed (0 cached), 0 failed; 24.5 min of test time").
+- Lean checks: r20261110-224627-97a6 (proof, cpu-10) and r20261110-224627-c487 (exclusion, cpu-12) are still running. I send their lines when they end.
+
+**The statement PR's body** is in the note `20261110T1548Z-state-net293-periodproof`, "For the PRs' bodies", item 1, with "Checked at ccc28b59d9" filled (synced now). It says the statement takes `CheckedWitness` at `certifierRun` and that the theorems that conclude it there are NET-294's, carries the first merge's recipe, and says the branch contains #8537 at 6b793802ff.
+
+Not looked at: `circuit-check`, Flock's Rust build, `lean-agreement` and the slow tests (the suites ran `--quick`).
+
