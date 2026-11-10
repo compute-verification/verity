@@ -226,10 +226,6 @@ ALLOWED: dict[str, str] = {
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
-    "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
-        "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
-    "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
-                                             "(`NetworkCheck.Period`); renamed with the Lean",
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
