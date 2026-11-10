@@ -373,6 +373,20 @@ def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_pa
     assert "*p/lean*\n• changed guarantee `P.t`" in text and "new guarantee" not in text and "P.u" not in text
 
 
+def test_a_fixture_of_the_audits_tests_is_no_record(tmp_path):
+    """A layout move renamed a test fixture named `lean-audit.json` under the audit's directory, whose `reads` are lists:
+    read as a record it failed the DM, and Daniel was told the records couldn't be read."""
+    repo = _repo(tmp_path)
+    toy = {"guarantees": {"Core.G": {"owner": "@lean"}}, "reads": {"Core.G": ["Core.helper"]}}
+    old = _commit(repo, "tools/verity/lean/tests/fixtures/unread/Old/lean-audit.json", toy, "base")
+    subprocess.run(["git", "-C", str(repo), "mv", "tools/verity/lean/tests/fixtures/unread/Old",
+                    "tools/verity/lean/tests/fixtures/unread/new"], check=True)
+    moved = _commit(repo, "tools/verity/lean/tests/fixtures/unread/new/lean-audit.json", toy, "Layout move (#9)")
+    assert spec._records_changed(repo, old, moved) == [] and spec.message(repo, old, moved) is None
+    edited = _commit(repo, "tools/verity/lean/tests/fixtures/unread/new/lean-audit.json", {**toy, "roots": ["A"]}, "m")
+    assert spec.message(repo, moved, edited) is None
+
+
 def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_as_moves(tmp_path):
     """The Lean move merged six packages' records into one: matched file by file, the DM listed 990 guarantees removed from
     the six and 990 new in the one, where all but a handful kept their names and type hashes."""

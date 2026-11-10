@@ -24,18 +24,11 @@ def s8_words(K: int) -> int:
     return K // 2 + 2
 
 
-#: the row templates whose MUFU table reads `reads` lays out in lookup slots: the attention rows (in neither ``CUT`` nor
+#: the whole-row templates whose MUFU table reads `reads` lays out in lookup slots: the attention rows (in neither ``CUT`` nor
 #: ``SPLITS``, so the whole row is the unit), and the per-key-block Calls the window circuit cuts their heads into
 #: (`window_circuit.CUTS`: FA2's v18 by `AttentionHead_v19`, FA3's v4 by `AttentionHead_v20`), each reading EX2 a score or
-#: RCP once; the MoE router's row and its slots form (``serving_templates.SLOTS``), reading EX2 and RCP an expert; and DSA's
-#: indexer query row, reading EX2 a head. Inline, the router's reads put its net past the GPU prover's 32-bit offsets
-#: (``GPU_NNZ_MAX``, `verity/ml/flock/live/src/circuit.rs`), and the indexer query's alone fill over two thirds of them
-SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5", "AttnBlock_v4", "AttnHeadEnd_v1",
-             "MoeRouterSigmoidBias_v1", "MoeRouterSigmoidBiasSlots_v1", "DsaIndexerQ_v1")
-#: FlashInfer's FP8 linear, a coordinate (``COORDS``) or its quantisation part (``PARTS``), whose quantisation's RCP reads
-#: `reads` lays out in lookup slots: inline, they put a K = 6144 coordinate's net past the GPU prover's 32-bit offsets
-#: (``GPU_NNZ_MAX``, `verity/ml/flock/live/src/circuit.rs`)
-SLOT_LINEARS = ("FlashInferFp8Linear_v1", "FlashInferFp8Quant1x128_v1")
+#: RCP once
+SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5", "AttnBlock_v4", "AttnHeadEnd_v1")
 #: the fewest keys of a sparse MLA key block, a ``CHAINS`` block's NVIS or a ``SPLITS`` part's T, whose EX2 reads, one a key,
 #: `reads` lays out in lookup slots (a whole block of fewer keys reads in slots too): inline, a block's reads reach the GPU
 #: prover's 32-bit offsets at about 40 keys
@@ -48,9 +41,7 @@ def reads(tp: Any) -> str:
     EX2 reads are 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots), for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
     622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
-    k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls,
-    for the MoE router's row and slots form and DSA's indexer query row (``SLOT_ROWS``),
-    and for FlashInfer's FP8 linear, a coordinate or its quantisation part (``SLOT_LINEARS``), else inline, as step 16's 16-key part and
+    k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes. A ``CHAINS`` block reads as a split part of its NVIS keys does (slots from
     `SLOT_KEYS` keys or for a whole block), its end inline as the combine. A ``STAGES`` stage reads in slots: a stats part or a
@@ -59,9 +50,7 @@ def reads(tp: Any) -> str:
     from verity_vllm.pipeline import chain_rows as CH, split_rows as SP
     from verity_vllm.query.program_view import spec_base, spec_statics
 
-    if spec_base(tp.id) in SLOT_LINEARS:
-        return "slots"
-    if tp.layout in ("row", "slots"):
+    if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
         return "slots"
