@@ -242,7 +242,7 @@ def test_every_setting_of_a_lakefile_is_in_the_key_but_the_lists_of_what_a_build
                   LIBS.replace('name = "r"', 'name = "r"\nplatformIndependent = true'),
                   LIBS.replace('name = "r"', 'name = "r"\nsomethingNobodyThoughtOf = 1'),
                   LIBS.replace("autoImplicit = true", "autoImplicit = false"),
-                  LIBS.replace('name = "S"', 'name = "S"\nprecompileModules = true'),
+                  LIBS.replace('name = "S"', 'name = "S"\nmoreLeanArgs = ["-DautoImplicit=true"]'),
                   LIBS.replace('name = "S"', 'name = "S"\nsomethingNobodyThoughtOf = 1'),
                   LIBS + '\n[[lean_exe]]\nname = "tool"\nroot = "Tool"\n',
                   LIBS + '\n[[require]]\nname = "d"\npath = "../d"\n',
@@ -281,9 +281,6 @@ def test_a_module_that_moves_to_a_library_with_other_options_has_another_key(tmp
                    exe + 'root = "R.A"\nleanOptions = {autoImplicit = true}\n', exe + 'root = "S"\n'):
         (root / "lakefile.toml").write_text(LIBS + differ)
         assert not {"R.A", "S"} <= set(MK.keys(root, build)), differ
-    both = LIBS.replace('name = "R"\n', 'name = "R"\nprecompileModules = true\n') + exe + 'root = "R.A"\nprecompileModules = true\n'
-    (root / "lakefile.toml").write_text(both)
-    assert "R.A" not in MK.keys(root, build), "alike, but each loads R's other modules another way"
 
 
 def _manifest(root: Path, change) -> str:
@@ -379,6 +376,25 @@ def test_a_workspace_lake_could_configure_otherwise_has_no_keys(tmp_path):
     assert MK.keys(root) == {} and "overrides the manifest's entries" in MK.workspace(root)
     root = _workspace(tmp_path / "d", {"d/lakefile.toml": 'name = "r"\n\n[[lean_lib]]\nname = "D"\n'})
     assert MK.keys(root) == {} and "two packages are named r" in MK.workspace(root)
+
+
+def test_a_workspace_whose_compiles_load_native_code_has_no_keys(tmp_path):
+    """A package or a library that precompiles its modules, or names plugins or dynlibs, makes a compile load native
+    code, and a key reads none of its bytes. Such a package has no keys, and neither has a root that requires it by
+    path, whose modules import its own. The defaults (`false`, no plugin) load nothing and change nothing."""
+    lib = '\n[[lean_lib]]\nname = "D"\n'
+    for i, (lakefile, why) in enumerate([
+            (f'name = "d"\nprecompileModules = true\n{lib}', "precompileModules"),
+            (f'name = "d"\n{lib}precompileModules = true\n', "precompileModules"),
+            (f'name = "d"\n{lib}plugins = ["d/Plug:shared"]\n', "plugins"),
+            (f'name = "d"\n{lib}dynlibs = ["d/Ffi:shared"]\n', "dynlibs"),
+            (f'name = "d"\nmoreLeanArgs = ["--load-dynlib=libffi.so"]\n{lib}', "--load-dynlib=libffi.so"),
+            (f'name = "d"\n{lib}weakLeanArgs = ["--plugin=p.so"]\n', "--plugin=p.so")]):
+        root = _workspace(tmp_path / f"n{i}", {"d/lakefile.toml": lakefile})
+        assert MK.keys(root) == {}, lakefile
+        assert MK.workspace(root).endswith(f"{why} makes a compile load native code, which no key reads")
+    root = _workspace(tmp_path / "ok", {"d/lakefile.toml": f'name = "d"\nprecompileModules = false\n{lib}plugins = []\n'})
+    assert set(MK.keys(root)) == set(MK.keys(_workspace(tmp_path / "plain")))
 
 
 def test_a_package_s_input_files_are_in_the_key_of_each_of_its_modules(tmp_path):

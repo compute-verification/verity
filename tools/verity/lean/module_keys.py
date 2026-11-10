@@ -174,12 +174,12 @@ class Package(NamedTuple):
         a module several targets own with the settings of whichever a build reaches it through (an import: the last such
         library, `Package.findModule?`; `lake build +M` or the executable's build: the executable, `LeanExe.root`), so
         such a module is owned only where it makes no difference: by them all (their names, joined) when they differ in
-        nothing but `OWN` and none precompiles its modules, under which Lake loads a module of the importer's own
-        library otherwise. None when no target owns it, or several that differ."""
+        nothing but `OWN`. (Where a target precompiles its modules Lake loads a module of the importer's own library
+        another way; such a package has no keys, `NATIVE`.) None when no target owns it, or several that differ."""
         m = name(mod)
         owners = [(t, rest) for t, roots, rest in self.targets
                   if (m in roots if t.startswith(EXE) else any(_prefix(r, mod) for r in roots))]
-        if len(owners) > 1 and (len({rest for _, rest in owners}) > 1 or '"precompileModules"' in owners[0][1]):
+        if len({rest for _, rest in owners}) > 1:
             return None
         return "+".join(sorted(t for t, _ in owners)) or None
 
@@ -195,6 +195,11 @@ EXE = "lean_exe:"
 #: what two targets that own one module may differ in (`Package.owner`): their names, which modules they hold, and of an
 #: executable what only its link reads. Any other field, one this reading has never met included, leaves the module unowned
 OWN = ("name", "roots", "globs", "root", "exeName", "supportInterpreter")
+#: the settings of a package or of a target that make a compile load native code, which no key reads: a module compiled
+#: so has no key (`package`), nor has any module of a workspace that holds its package
+NATIVE = ("precompileModules", "plugins", "dynlibs")
+#: the Lean arguments that load native code as those settings do (`leanArgs`, `moreLeanArgs`, `weakLeanArgs`)
+NATIVE_ARGS = ("--plugin", "--load-dynlib")
 #: the lakefile's arrays of tables this reading follows: another kind of target could feed a compilation what no key reads
 TARGETS = ("lean_lib", "lean_exe", "require", "input_file", "input_dir")
 
@@ -246,7 +251,8 @@ def settings(doc: dict) -> str:
 def package(d: Path) -> Package | str:
     """The package at ``d`` from its `lakefile.toml`, or why it has no keys: a `lakefile.lean` (alone, or beside the
     `lakefile.toml`, where Lake reads the `lakefile.lean`), a library or executable with a source directory or globs of
-    its own, which this reading doesn't follow, or input files it can't read (`input_files`)."""
+    its own, which this reading doesn't follow, input files it can't read (`input_files`), or a setting that makes a
+    compile load native code (`NATIVE`, `NATIVE_ARGS`), whose bytes no key reads."""
     f = d / "lakefile.toml"
     if not f.is_file():
         return f"{d} has no lakefile.toml"
@@ -265,6 +271,10 @@ def package(d: Path) -> Package | str:
            or not isinstance(t.get("roots", []), list) or not all(isinstance(r, str) for r in t.get("roots", []))
            or not isinstance(t.get("root", ""), str) for t in [*libs, *exes]):
         return f"{f}: a library or executable with a srcDir or globs of its own, or of another shape"
+    for t in [doc, *libs, *exes]:
+        args = [a for k in ("leanArgs", "moreLeanArgs", "weakLeanArgs") for a in (t.get(k) if isinstance(t.get(k), list) else [])]
+        if loads := [k for k in NATIVE if t.get(k)] + [a for a in args if isinstance(a, str) and a.startswith(NATIVE_ARGS)]:
+            return f"{f}: {loads[0]} makes a compile load native code, which no key reads"
     targets = doc.get("defaultTargets", [])
     if not isinstance(targets, list) or not all(isinstance(t, str) for t in targets):
         return f"{f}: defaultTargets is not a list of names"
