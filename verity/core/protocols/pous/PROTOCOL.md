@@ -253,7 +253,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `cliff`: the most rounds the structure tolerates at any `k`;
   - `segments`: how many segments of `W` the theorem is about;
   - `theorem`, and its open `hypotheses`;
-  - `claims`: ids in `verity.core.claims`' format.
+  - `claims`: ids in `verity.claims`' format.
 
   Each `theorem` is the recorded proof `Pous.SecurityProofs.X` it rests on, of the guarantee `Pous.Guarantees.X`. At
   the frozen point, the band's certificate is `Pous.SecurityProofs.BandMultiMeetsFamily`, with no hypothesis: k 111,
@@ -350,7 +350,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `segDom_inj` is the certificates' hypothesis.
   - `tests/test_pous_protocol.py` checks it for every scheme, and replays the attack on real labels.
   - `benchmarks/pous` gates every implementation's tags against `salt ‖ u64 s` over 448 segments.
-- **Claims.** `protocol.claim(id)` resolves an id from `verity.core.claims`, or from `protocol.LOCAL_CLAIMS` until core
+- **Claims.** `protocol.claim(id)` resolves an id from `verity.claims`, or from `protocol.LOCAL_CLAIMS` until core
   holds it: `ideal-permutation`, `perfect-isolation` (the help-accounted row: "The problem"), `sequential-step-floor`,
   `feistel-indifferentiability` (refuted at the reference `Π₂`: "Main caveat"), and P2's `m1-ideal-permutations`,
   `sms-m1-instantiation`, `seq-root`.
@@ -1006,7 +1006,7 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-host` (`verity.core.claims`): "the auditor's device runs its stated code, timing
+  `trusted-host` (`verity.claims`): "the auditor's device runs its stated code, timing
   included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.

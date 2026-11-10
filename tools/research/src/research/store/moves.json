@@ -2391,6 +2391,13 @@
       "paths": {
         "verity/core/difftest/": "verity/difftest/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/claims/": "verity/claims/",
+        "verity/core/protocols/pyproject.toml": "verity/protocols/pyproject.toml",
+        "verity/core/protocols/reporting.py": "verity/protocols/reporting.py"
+      }
     }
   ]
 }

@@ -32,7 +32,7 @@ def _core(name: str) -> bool:
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
                 "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock")
     return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
+                                or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
 
 def _verity_modules() -> dict[str, tuple[object, object, object]]:

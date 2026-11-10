@@ -63,7 +63,7 @@ untraced = [
 # pearl_c_sm90's arm.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/claims/__init__.py",
+          "verity/claims/__init__.py",
           "verity/hardware/record.py",
           "verity/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
           "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",

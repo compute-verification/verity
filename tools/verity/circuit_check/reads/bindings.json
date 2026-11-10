@@ -908,7 +908,7 @@
     "verity/difftest/python/ast",
     "verity/difftest/python/ast.py",
     "verity/difftest/python/ast/__init__.py",
-    "verity/core/protocols",
+    "verity/protocols",
     "verity/core/protocols/certifier",
     "verity/ml",
     "verity/circuits",
@@ -1903,7 +1903,7 @@
     "tools/verity/graph/warnings",
     "tools/verity/graph/warnings.py",
     "tools/verity/graph/warnings/__init__.py",
-    "verity/core/claims",
+    "verity/claims",
     "verity/difftest/python",
     "verity/difftest/python/contextvars",
     "verity/difftest/python/contextvars.py",
@@ -2025,7 +2025,7 @@
   },
   {
    "probes": [
-    "verity/core/claims/__init__.py",
+    "verity/claims/__init__.py",
     "verity/protocols/pouw/verifier/coins.py",
     "verity/protocols/pouw/verifier/registration.py",
     "verity/protocols/pouw/verifier/salt.py",

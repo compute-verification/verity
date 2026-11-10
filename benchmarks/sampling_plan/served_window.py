@@ -63,7 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
-from verity.core.protocols import reporting
+from verity.protocols import reporting
 from verity.spot.verifier.profile import WINDOW_DELTA
 from verity.spot.costfit import Fitted, fit
 from verity.spot.verifier.one_stage.partition import UNIT_CLASS_MAX

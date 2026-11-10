@@ -1,4 +1,4 @@
-# A suite of `verity`'s tests (the root's pyproject.toml is the distribution): those of verity/core/protocols' own modules; each
+# A suite of `verity`'s tests (the root's pyproject.toml is the distribution): those of verity/protocols' own modules; each
 # protocol under it is a suite of its own.
 [tool.pytest.ini_options]
 testpaths = ["tests"]

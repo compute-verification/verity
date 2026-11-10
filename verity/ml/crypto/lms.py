@@ -1,6 +1,6 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
 certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
-(`verity.ml.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.core.claims`).
+(`verity.ml.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.claims`).
 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
@@ -16,7 +16,7 @@ the party's messages (`PartyKey`): one root per certification period (`period_ro
 only, and one public liveness record per execution phase (`liveness_message`). An `HssSignature` is the lower key, its
 certificate and the signature; `hss_verify` checks both levels, and `verify_liveness` a liveness record in the clear. Both
 levels are at ``DEPLOYED`` and both trees' states are `LeafState`s, so neither ever signs twice at a leaf, as long as its
-host never restores an earlier copy of the state (`faithful`, `verity.core.claims`).
+host never restores an earlier copy of the state (`faithful`, `verity.claims`).
 
 **The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
 first word of SHA-512's output, asked for by name with ``toy=True``), is circuit-check's binding of the verifier and is never

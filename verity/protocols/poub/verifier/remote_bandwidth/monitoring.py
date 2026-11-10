@@ -31,7 +31,7 @@ from typing import Any
 
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
 from verity.core.protocols.pous.wipe_monitoring import short_sessions
-from verity.core.protocols.reporting import DELTAS, PERIODS
+from verity.protocols.reporting import DELTAS, PERIODS
 
 from . import codec, pooled
 

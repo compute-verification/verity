@@ -18,7 +18,7 @@ import pytest
 
 import reference as R
 
-PROTOCOLS = (Path(__file__).resolve().parents[4] / "core" / "protocols")
+PROTOCOLS = (Path(__file__).resolve().parents[4] / "protocols")
 V0 = "verity/inference-only/v0"
 PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leaves, compliance proved, padded profile) "
                 "may be composed")

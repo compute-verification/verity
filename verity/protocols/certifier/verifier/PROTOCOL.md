@@ -1930,7 +1930,7 @@ sealed under an AEAD built from SHA-512 alone.
   - Why each piece is standard:
     - Each keystream input is 88 bytes, inside one compression block, with the key in it. That is SHA-512's compression
       function as a dual PRF keyed by the secret bytes of its first block: the claim `prf/sha-512`
-      (`verity.core.claims`), on which `verity.ml.randomness`'s keyed streams already rest. Every input has one
+      (`verity.claims`), on which `verity.ml.randomness`'s keyed streams already rest. Every input has one
       length, so length extension doesn't arise.
     - Counter mode over a PRF is IND-CPA while no nonce repeats under a key (Bellare, Desai, Jokipii and Rogaway, 1997).
     - HMAC-SHA512 is a PRF under the same assumption (Bellare, 2006; FIPS 198-1), so it is a strongly unforgeable MAC.

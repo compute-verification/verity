@@ -65,7 +65,7 @@ uniform registers (256 bytes a warp) and TLB, where a kernel can keep constants,
 across `σ`. The chip's are its copy-engine, PCIe and memory-controller buffers and its video engines. sm_120 has no
 Tensor Memory (the same reference, chapter 14).
 
-**The assumptions** that carry the bound to a real device are claims of `verity.core.claims`:
+**The assumptions** that carry the bound to a real device are claims of `verity.claims`:
 
 - **`random-oracle`** (assumption): the tag is a random oracle fresh at `σ`: for `ro-blake3/v1`, keyed BLAKE3 under a
   key derived from `σ` by SHA-512; for `ro-sha512/v1`, SHA-512 after a prefix that holds `σ`. The proof's oracle is one

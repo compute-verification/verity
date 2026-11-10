@@ -27,7 +27,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "verity/definitions/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/spot/verifier/profile.py",
           "verity/protocols/poub/verifier/remote_bandwidth", "verity/spot/verifier/__init__.py",
-          "verity/core/claims/__init__.py",
+          "verity/claims/__init__.py",
           "verity/spot/device/challenger.py", "verity/spot/device/remote.py",
           "verity/protocols/pouw/verifier/__init__.py",
           "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py",

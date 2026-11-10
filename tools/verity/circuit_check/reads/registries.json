@@ -5,7 +5,7 @@
    "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
    "verity/__init__.py",
    "verity/core/__init__.py",
-   "verity/core/claims/__init__.py",
+   "verity/claims/__init__.py",
    "verity/core/protocols/__init__.py",
    "verity/protocols/certifier/verifier/__init__.py",
    "verity/protocols/certifier/verifier/active.py",

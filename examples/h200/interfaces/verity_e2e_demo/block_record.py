@@ -43,7 +43,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.reporting import DELTAS, PERIODS
+from verity.protocols.reporting import DELTAS, PERIODS
 from verity.spot.verifier.profile import Stratified
 
 FORMAT = "verity/block-record/v2"

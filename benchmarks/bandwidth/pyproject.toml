@@ -10,7 +10,7 @@ untraced = ["tests/test_stream.py"]
 # tests/ reads tagger.cu's and verity/definitions/kernels/sha512.cuh's text (the twins' constants) and imports gpu.py and
 # reference.py, which import the bandwidth audit and PoUS's verifier and geometry; reference.py reads the bandwidth
 # audit's pinned vectors.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",

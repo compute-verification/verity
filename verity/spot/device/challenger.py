@@ -18,7 +18,7 @@ a client derives what it samples from the opened coin (`verity.ml.randomness.der
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
 **Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+`verity.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
 `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
@@ -189,7 +189,7 @@ Flock's live-coin part releases them, so its unopened coins rest on the tree's h
 
 The first client is PoUW's live window (`verity.protocols.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.ml.commitments`, `verity.core.claims` and `verity.hardware.record`, so any client calls it as it is.
+`verity.ml.commitments`, `verity.claims` and `verity.hardware.record`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -207,7 +207,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.core import claims
+from verity import claims
 from verity.hardware import record as core_record
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
@@ -338,7 +338,7 @@ NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only a
 #: the property every coin source's claim instance is assumed of: independent uniform output
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
-            "assumption of verity.core.claims), so no assumption covers its coins: a served challenger draws from a named "
+            "assumption of verity.claims), so no assumption covers its coins: a served challenger draws from a named "
             "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
@@ -348,14 +348,14 @@ class CoinError(ValueError):
 
 def coin_claim(entropy: Any) -> str | None:
     """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` assumption of
-    `verity.core.claims`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
+    `verity.claims`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
     `CoinError`: a misnamed source is refused, never taken for an unnamed one."""
     claim = getattr(entropy, "claim", None)
     if claim is None:
         return None
     prop, sep, instance = claim.partition("/") if type(claim) is str else ("", "", "")
     if not (sep and prop == COIN_PROPERTY and instance in claims.INSTANCES):
-        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> assumption of verity.core.claims, "
+        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> assumption of verity.claims, "
                         f"not {claim!r}")
     return claim
 

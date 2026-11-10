@@ -150,7 +150,7 @@ def test_fresh_randomness() -> None:
 def test_the_claims_the_spec_cites_resolve() -> None:
     from pathlib import Path
 
-    from verity.core import claims
+    from verity import claims
 
     spec = (Path(hm96.__file__).parent / "PROTOCOL.md").read_text(encoding="utf-8")
     for cid, kind in (("statistical-hiding", "guarantee"), ("common-reference-string", "model"), ("hash-derived-key", "assumption"),
@@ -251,7 +251,7 @@ def test_sha512_scheme_digest_is_the_sha512_identity() -> None:
 
 
 def test_the_setup_claims_name_both_keys_and_the_event() -> None:
-    from verity.core import claims
+    from verity import claims
 
     assert "2^-64" in claims.get("hash-derived-key").name and "fails" in claims.get("hash-derived-key").name
     crs = claims.get("common-reference-string").name
