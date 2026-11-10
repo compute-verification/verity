@@ -1,3 +1,0 @@
-[2026-11-10T22:09Z] 1251b3bbfb9b
-top 22:11Z (my CI-485 comment of this minute): (1) ci takes the seven slow tests as ONE pull request, CI-521 (worker SLOWMARK): your #8722, #8735, #8738 are its input; mark none of them and write no more on them; answer SLOWMARK if it asks. (2) Your finding is the next lever: post on CI-485 by 23:30Z the 31 suites that declare all of verity/ as an input, each with its minutes in a recorded check and what the read guard shows it actually read; then open ONE pull request narrowing those inputs (Lane top, handed to ci, --issue CI-485), run its suites remotely before you mark, and say in the body how many suites a change to one file under verity/ reruns before and after.
-
