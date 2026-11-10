@@ -1098,7 +1098,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
     (`LakeArtifacts.take`), so its builds restore what they compiled."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
-    urls = sent_urls(run_dir)
+    urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
     def refused(why: str | None, pkg: str = name) -> int:
@@ -1230,7 +1230,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             os.environ.pop(LEAN_SLOT.HELD, None)
 
 
-def sent_urls(run_dir: str | None) -> dict[str, str]:
+def sent_urls(run_dir: str | None, log=print) -> dict[str, str]:
     """The presigned URLs `research run` sent this run (`inputs/lean-deps-urls.json`, `lean_audit.url_file`), read and deleted
     before anything else runs: each grants a read until it expires. {} outside a run, or without them."""
     sent = Path(run_dir) / "inputs" / LA.URLS if run_dir else None
@@ -1238,7 +1238,8 @@ def sent_urls(run_dir: str | None) -> dict[str, str]:
         return {}
     try:
         urls = json.loads(sent.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        log(f"lean-records: the bundle URLs research run sent can't be read ({type(e).__name__}): none taken")
         urls = {}
     sent.unlink(missing_ok=True)
     return urls if isinstance(urls, dict) else {}
