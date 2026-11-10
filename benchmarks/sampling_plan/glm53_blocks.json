@@ -1,6 +1,6 @@
 {
  "model": "GLM-5.3 as served: vLLM eager, H200, TP8, block FP8, greedy",
- "source": "art:3a3a3999066825d5fdc1d3d6ceee8637d08a15a8e9814e62c23850ed21d4d202",
+ "source": "art:4bb214110ad9bc7f64d35ee82e700930073e51d3b0d14f2c568935e818b8c391",
  "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
  "prompt_len": 256,
  "decode_steps": 31,
@@ -3675,33 +3675,15 @@
     "DsaMqaLogits_v3"
    ]
   },
-  "GreedyChunk_v1{N=7424,FIRST=false}": {
-   "family": "GreedyChunk_v1",
-   "prefill": 8,
-   "decode": 248,
-   "out_bits": 32,
-   "ands": 942832,
-   "macs": 0,
-   "rows": [
-    14848,
-    2,
-    2
-   ],
-   "k_log": 24,
-   "of": [
-    "TokenSelect_v1"
-   ]
-  },
   "GreedyCombine_v1{V=154880,N=16384}": {
    "family": "GreedyCombine_v1",
    "prefill": 8,
    "decode": 248,
    "out_bits": 32,
-   "ands": 1376,
+   "ands": 944208,
    "macs": 0,
    "rows": [
-    2,
-    2,
+    14848,
     2,
     2,
     2,
@@ -3723,7 +3705,7 @@
     2,
     2
    ],
-   "k_log": 24,
+   "k_log": 25,
    "of": [
     "TokenSelect_v1"
    ]
