@@ -40,9 +40,9 @@ parts = 3
 # them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.core.deploy.config`)
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
-          "verity/core/protocols/record.py",
+          "verity/hardware/record.py",
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/spot/verifier/profile.py",
-          "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire",
+          "verity/hardware/registration.py", "verity/hardware/site", "verity/core/wire",
           "verity/composite/verifier/onsite", "verity/composite/verifier/remote", "verity/flock/verifier/interface",
           "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
           "verity/core/protocols/network", "verity/core/protocols/certifier",

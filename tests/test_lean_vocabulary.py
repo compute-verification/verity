@@ -74,7 +74,7 @@ SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/flock/verifier/Flock/"
 PROTOCOL = "verity/flock/verifier/interface/CoreProtocol/Protocol.lean"
 REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
-SITE_LEAN, SITE_PY = "verity/flock/verifier/interface/CoreProtocol/Site.lean", "verity/core/site/__init__.py"
+SITE_LEAN, SITE_PY = "verity/flock/verifier/interface/CoreProtocol/Site.lean", "verity/hardware/site/__init__.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
 CANONICAL: dict[str, tuple[str, ...]] = {
@@ -684,9 +684,9 @@ KNOWN: dict[str, str] = {
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/highutil/period.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/capacity.py::Window":
+    "verity/hardware/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/eps.py::Machine":
+    "verity/hardware/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",

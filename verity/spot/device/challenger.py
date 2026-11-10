@@ -110,7 +110,7 @@ more entries, its `period-open` and `period-close`, which name the prover in the
     declaration = body {by, [for], blocks, day, declared_utc, pinned, program} (session null)
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
+each entry a record entry (`verity.hardware.record`, `Core.Record`), each line as the auditor writes it
 (`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
 (`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
@@ -189,7 +189,7 @@ Flock's live-coin part releases them, so its unopened coins rest on the tree's h
 
 The first client is PoUW's live window (`verity.protocols.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.ml.commitments`, `verity.core.claims` and `verity.core.protocols.record`, so any client calls it as it is.
+`verity.ml.commitments`, `verity.core.claims` and `verity.hardware.record`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -208,7 +208,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.core import claims
-from verity.core.protocols import record as core_record
+from verity.hardware import record as core_record
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.ml.commitments import coin_tree as CT

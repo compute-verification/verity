@@ -66,7 +66,7 @@ worker_gb = 8
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/spot/verifier/__init__.py",
-          "verity/core/protocols/record.py",
+          "verity/hardware/record.py",
           "verity/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/definitions/kernels", "verity/definitions/private_circuits",
           "verity/ml/randomness", "verity/definitions", "verity/flock/prover/python/verity_flock", "verity/ml/windows",
           "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/audit.py", "verity/protocols/pouw/verifier/salt.py",

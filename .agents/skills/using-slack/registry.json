@@ -235,7 +235,7 @@
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
-        "benchmarks/pouw/machine_model/",
+        "verity/hardware/machine_model/",
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",

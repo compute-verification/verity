@@ -320,7 +320,7 @@ def _doc(text: str) -> list[str]:
 
 
 def _rel(s: Sheet) -> str:
-    return f"benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
+    return f"verity/hardware/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
 
 
 def _simp(head: str, names: list[str]) -> list[str]:

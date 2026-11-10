@@ -267,7 +267,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/primitives/world",
+   "../../verity/hardware/world",
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/plausible",
    "type": "git",

@@ -11,7 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_host.py"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/record.py",
+          "verity/hardware/record.py",
           "verity/spot/verifier/profile.py", "verity/protocols/poub/verifier", "verity/ml/__init__.py",
           "verity/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the Lean verifier a session runs beside audit.AuditRun, and the difftest a replay serves: their Lake

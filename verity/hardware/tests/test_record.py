@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from verity.core.protocols import record
+from verity.hardware import record
 from verity.spot.device import challenger as Ch
 from verity.ml.commitments.identity import identity_digest_sha512
 
