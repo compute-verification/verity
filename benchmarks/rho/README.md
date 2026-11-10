@@ -127,6 +127,24 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `figures.py` | `render` |
 | `lean.py` | `status(name)`, `weakest(cites)` |
 
+## What it writes and what loads it
+
+`run.py` and `periods.py` print Markdown. With `--out DIR`, `run.py` writes `rho.md`, `rho.json` and `figures/` there
+and `periods.py` writes `periods.md` and `periods.json`. Neither writes a file unless told where.
+
+Nothing outside `benchmarks/` loads this package (`tests/test_boundaries.py`). A benchmark that needs the bound loads
+the package where it sits, with this directory put on `sys.path` and `rho` imported, and one that needs a number of
+the registry reads its file under `data/` by path. Either way its suite names what it reads here among its `inputs`, so
+this lists every loader:
+
+~~~sh
+git grep -n benchmarks/rho -- 'benchmarks/*/pyproject.toml'
+~~~
+
+Among them, `benchmarks/nci` calls `theorem.multiple_bound` for its slowdown `D`, and `benchmarks/circuit_properties`
+reads a model's shapes (`instances`, `params`). In the other direction, `families.py` reads
+`benchmarks/nci/algorithms.json` when a family names an algorithm of that library (a family of kind `nci`).
+
 ## Status
 
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
