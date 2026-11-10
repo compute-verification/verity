@@ -69,5 +69,6 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
 - **Loads:** `verity.ml.definitions`, `verity.ml.circuits` with the primitive circuits (`verity.ml.circuits.ops`),
-  `verity.ml.commitments`, Flock (`verity_flock`), `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build
-  and run Flock's circuit prover and its Lean verifier.
+  `verity.ml.commitments`, `verity.core.protocols.spot`, `verity.hardware`, Flock (`verity_flock`),
+  `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
+  verifier.

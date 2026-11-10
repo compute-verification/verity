@@ -43,5 +43,6 @@ graphs is `integrations/vllm/verity_vllm/acquire/sources/served_compiled_source.
   step (`tp_decode.py`) and the scripts that launch and profile them.
 - **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms, and `benchmarks/moe_align`,
   which imports `tp_decode`.
-- **Loads:** the vLLM integration's `commit`, `acquire`, `engine` and `pipeline` packages, `benchmarks/harness`
-  (`verity_bench`), torch and vLLM.
+- **Loads:** the vLLM integration's `commit`, `pipeline`, `engine`, `acquire`, `correspondence`, `query` and `protocols`
+  packages; `verity.ml.circuits`, `verity.ml.definitions`, `verity.ml.commitments` and `verity.ml.kernels`;
+  `benchmarks/harness` (`verity_bench`); torch and vLLM.

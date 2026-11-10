@@ -12,6 +12,7 @@ package's docstring lists every module.
 - **Loaded by:** `benchmarks/prove_path`, `benchmarks/compile_cost`, `benchmarks/one_stage`, `benchmarks/route_capture`,
   `benchmarks/spot_proved`, `integrations/vllm/tools` and `circuit-check`. No module of the Build, the Match or the
   Commit imports it.
-- **Loads:** `verity.ml.circuits`, `verity.ml.definitions`, `verity.ml.windows` and `verity.ml.commitments.gates`; the
-  certifier's and SPOT's modules under `verity.core.protocols` and `verity.ml.protocols`; and the integration's
-  `program`, `pipeline`, `engine`, `acquire`, `check` and `records`.
+- **Loads:** `verity.ml.circuits`, `verity.ml.definitions`, `verity.ml.windows` and `verity.ml.commitments`; the
+  certifier's modules under `verity.core.protocols` and `verity.ml.protocols`, and SPOT's under `verity.core.protocols`;
+  and the integration's `program`, `config`, `pipeline`, `engine`, `check`, `records`, `observe`, `acquire`, `query` and
+  `protocols`, with `correspondence`, `commit` and `target_family` inside functions.

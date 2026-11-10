@@ -9,5 +9,5 @@ admission difftests and the exactness checks.
   and the difftest adapters that `properties-admission --adapter` loads by name (`difftests`).
 - **Loaded by:** the integration's `check`, `observe` and `pipeline` packages. Otherwise it is run, as those commands and
   by the GPU tests.
-- **Loads:** `verity.ml.circuits` and `verity.ml.definitions`, and the integration's `observe`, `engine`, `commit`,
-  `check` and `query`.
+- **Loads:** `verity.ml.circuits` and `verity.ml.definitions`; the integration's `observe`, `config`, `settings`,
+  `engine`, `commit`, `acquire`, `check`, `query` and `program`; and torch and vLLM inside functions.
