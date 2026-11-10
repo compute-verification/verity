@@ -23,7 +23,9 @@ checks of the descriptor alone, one step per member, slot and unit:
 * `descOk`, `two_of_descOk`, `partition_two_of_descOk`: the registration's descriptor decided, and the registration's
   side of `stmtOk`, `(partition h s).isSome && (two h s).isSome`, from it and each member's unit net built (`Built`,
   which the unrolled circuit of a statement `Flock.Desc.parseStmt` parsed has, flat or templated:
-  `FlockSoundness.Discharge.Hidden.built_of_parseStmt`; a flat file's, `FlockC3.VStarList.built_of_parse`).
+  `FlockSoundness.Discharge.Hidden.built_of_parseStmt`; a flat file's, `FlockC3.VStarList.built_of_parse`), where
+  every template's reference statement reads as a member's (`templateOk`, a hypothesis here: `descOk` doesn't decide
+  it).
 -/
 
 @[expose] public section
@@ -202,18 +204,19 @@ def descOk (h : Held) : Bool :=
 /-! ## The registration's side of `stmtOk` -/
 
 /-- **`two` returns the members' replay design** where the descriptor's checks pass at the replay layout and the first
-stage's design, and each member's unit net is built. -/
+stage's design, each member's unit net is built, and every template's reference statement reads as a member's
+(`templateOk`). -/
 theorem two_of_descAt (h : Held) (s : AuditStatement) {l : Spot.Slots.Layout} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
-    (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit) (hok : descAt h h.ms l d = true) :
-    two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
+    (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit) (hok : descAt h h.ms l d = true)
+    (ht : ∀ t < h.ms.length, templateOk h t = true) : two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
   simp only [descAt, Bool.and_eq_true, List.all_eq_true, beq_iff_eq, decide_eq_true_eq] at hok
   obtain ⟨⟨⟨⟨⟨hm, hf⟩, hfill⟩, hdes⟩, hk⟩, hk1⟩ := hok
   exact two_eq_filesReplay h s hl hd (fun ci hci => memberFits_of_memberOk (hb ci hci) (hm ci hci))
-    (filesFill_of_fillOk hfill) (wellFormed_filesReplay_iff.2 hdes) hk hk1 hf
+    (filesFill_of_fillOk hfill) (wellFormed_filesReplay_iff.2 hdes) hk hk1 hf ht
 
 theorem two_of_descOk (h : Held) (s : AuditStatement) (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit)
-    (hok : descOk h = true) : (two h s).isSome := by
+    (hok : descOk h = true) (ht : ∀ t < h.ms.length, templateOk h t = true) : (two h s).isSome := by
   unfold descOk at hok
   rcases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with _ | l
   · rw [hl] at hok
@@ -222,13 +225,15 @@ theorem two_of_descOk (h : Held) (s : AuditStatement) (hb : ∀ ci ∈ h.ms, Flo
   · rw [hl, hd] at hok
     simp at hok
   rw [hl, hd] at hok
-  simp [two_of_descAt h s hl hd hb hok]
+  simp [two_of_descAt h s hl hd hb hok ht]
 
 /-- **The registration's side of `stmtOk`**, `(partition h s).isSome && (two h s).isSome`, where the registration's
-descriptor is in the two-stage scope (`descOk`) and each member's unit net is built. -/
+descriptor is in the two-stage scope (`descOk`), each member's unit net is built, and every template's reference
+statement reads as a member's (`templateOk`). -/
 theorem partition_two_of_descOk (h : Held) (s : AuditStatement) (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit)
-    (hok : descOk h = true) : ((partition h s).isSome && (two h s).isSome) = true := by
-  rw [two_of_descOk h s hb hok]
+    (hok : descOk h = true) (ht : ∀ t < h.ms.length, templateOk h t = true) :
+    ((partition h s).isSome && (two h s).isSome) = true := by
+  rw [two_of_descOk h s hb hok ht]
   rfl
 
 end SpotFlock
