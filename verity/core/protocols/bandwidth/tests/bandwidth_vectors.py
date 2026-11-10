@@ -13,8 +13,8 @@ import json
 from pathlib import Path
 
 from verity.core.protocols.bandwidth import audit, tags
-from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash
 
 PATH = Path(__file__).with_name("vectors.json")
 BLOCK_DOMAIN = b"verity/bandwidth/test-block/v1\0"

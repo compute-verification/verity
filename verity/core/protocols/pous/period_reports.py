@@ -22,7 +22,7 @@ from __future__ import annotations
 from verity.commitments import attest
 from verity.commitments.crypto import lms
 
-from .memory_challenger import Verify
+from verity.protocols.pous.device.memory_challenger import Verify
 
 __all__ = ["PERIOD", "PeriodSigner", "period_verify"]
 

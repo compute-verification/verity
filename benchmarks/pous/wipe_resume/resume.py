@@ -55,10 +55,10 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT / "verity/core/protocols/pous/tests")]
 
 import pous_test_signer as ts  # noqa: E402
-from verity.core.protocols.pous import streamed_wipe as sw  # noqa: E402
-from verity.core.protocols.pous import wipe_period as W  # noqa: E402
+from verity.protocols.pous.verifier import streamed_wipe as sw  # noqa: E402
+from verity.protocols.pous.verifier import wipe_period as W  # noqa: E402
 
-WIPE_VERDICT = ROOT / "verity/core/devices/memory_challenger/lean/wipe_verdict.py"
+WIPE_VERDICT = ROOT / "verity/protocols/pous/device/memory_challenger/lean/wipe_verdict.py"
 LABEL = sw.LABEL_BYTES
 BAND_SHARE = Fraction(5 * 200, 65_536)
 """What the band attack keeps of a block: five 200-byte SHAKE256 states of a 64 KiB block."""

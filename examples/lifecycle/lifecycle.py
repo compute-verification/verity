@@ -46,7 +46,7 @@ import numpy as np
 
 from verity.configuration.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.protocols import reporting
-from verity.core.protocols.pous import wipe_period
+from verity.protocols.pous.verifier import wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.spot.verifier.python import parties

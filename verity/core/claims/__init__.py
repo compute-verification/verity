@@ -265,7 +265,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
-    # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
+    # its falsification test is the measurement behind ROOT_CALL_NS (verity/protocols/pous/verifier/PROTOCOL.md, P2's SeqRoot):
     # the timing red team's modelled floor and the 8-core cooperation run; a faster squaring on the stated device
     # falsifies it
     Entry("pous-ring-speed", "assumption",

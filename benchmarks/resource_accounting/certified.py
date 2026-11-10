@@ -91,7 +91,7 @@ def chip(device: dict) -> dict:
 def window_params(tag: str):
     """A bandwidth window of `tag` at the proof's samples, with the RTT at P2's cap: `T + RTT` one ns under the rebuild floor."""
     from verity.core.protocols.bandwidth import audit
-    from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
+    from verity.protocols.pous.verifier.schemes.p2 import RTT_ALLOWANCE_CAP_NS
     return audit.Params(tag, audit.SAMPLES, audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
 
 
@@ -213,7 +213,7 @@ def capacity(memory_bytes: int | None, s_cert: float | None = None, why: str = N
 
 def stored(result: dict) -> float | None:
     """|C| in bytes from the result's blocks at its registered scheme's block bits, for a result with no profile."""
-    from verity.core.protocols.pous import schemes
+    from verity.protocols.pous.verifier import schemes
     try:
         return result["blocks"] * schemes.get(result["scheme"], segments=result["segments"]).params.m / 8
     except (KeyError, TypeError, ValueError):

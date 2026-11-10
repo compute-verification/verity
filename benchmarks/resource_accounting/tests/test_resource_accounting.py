@@ -377,7 +377,7 @@ def test_q_cert_is_the_granted_rate_and_t_holds_the_rtt_at_p2_s_cap_under_the_fl
     the RTX PRO 6000's S_chip, error 2^-40.42; an uncertified tag has no Q_cert; a chain without windows certifies none;
     and the T a remote verifier would grant holds the RTT at P2's cap one ns under the rebuild floor."""
     from verity.core.protocols.bandwidth import audit
-    from verity.core.protocols.pous.schemes.p2 import RTT_ALLOWANCE_CAP_NS
+    from verity.protocols.pous.verifier.schemes.p2 import RTT_ALLOWANCE_CAP_NS
     p = C.window_params("ro-blake3/v1")
     assert (p.samples, p.rtt_allowance_ns, p.limit_ns) == (audit.SAMPLES, RTT_ALLOWANCE_CAP_NS, audit.REGEN_FLOOR_NS - 1)
     assert p.deadline_ns == audit.REGEN_FLOOR_NS - RTT_ALLOWANCE_CAP_NS - 1 == 1_354_057
@@ -417,8 +417,8 @@ def small_store():
     from types import SimpleNamespace
 
     from verity.core.protocols.bandwidth import audit
-    from verity.core.protocols.pous import protocol, schemes
-    from verity.core.protocols.pous.schemes.p2 import P2Params
+    from verity.protocols.pous.verifier import protocol, schemes
+    from verity.protocols.pous.verifier.schemes.p2 import P2Params
     sch = schemes.P2(P2Params(128, 173, 8, 2))
     w = bytes(range(256))[: sch.params.w_bytes]
     com, source = protocol.commit(sch, w), b"setup source"

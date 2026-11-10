@@ -25,7 +25,7 @@ import gpu  # noqa: E402
 import reference  # noqa: E402
 import summarize  # noqa: E402
 from verity.core.protocols.bandwidth import audit, tags  # noqa: E402
-from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E402
+from verity.protocols.pous.verifier.verifier import MerkleTree, node_hash  # noqa: E402
 from verity.commitments.crypto import blake3  # noqa: E402
 
 CU = (HERE / "tagger.cu").read_text()

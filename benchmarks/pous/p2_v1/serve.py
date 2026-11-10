@@ -41,8 +41,8 @@ if __package__ in (None, ""):
 else:
     from . import store as S
 
-from verity.core.protocols.pous import setup
-from verity.core.protocols.pous.schemes.p2 import expand_prefix
+from verity.protocols.pous.verifier import setup
+from verity.protocols.pous.verifier.schemes.p2 import expand_prefix
 from verity.core.protocols.remote_bandwidth import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"

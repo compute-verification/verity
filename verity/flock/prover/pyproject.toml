@@ -238,7 +238,7 @@ tests = ["tests/test_partition_units.py", "tests/test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/core/protocols/certifier",
-    "verity/core/protocols/pous",
+    "verity/protocols/pous/verifier",
     "verity/ml",
 ]
 

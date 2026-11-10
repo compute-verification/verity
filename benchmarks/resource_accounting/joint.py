@@ -54,7 +54,7 @@ sys.path.insert(0, str(HERE))
 import certified as C
 
 from verity.core.protocols.bandwidth import audit, tags
-from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
+from verity.protocols.pous.verifier.verifier import MerkleTree, VerifierKey, leaf_hash
 
 BANDWIDTH = HERE.parent / "bandwidth"
 JOINT_TAG = "ro-blake3/v1"

@@ -4,7 +4,7 @@ the conventions of P2's staging decode (`benchmarks/torch_gpu/p2_stage`).
 **Layout.** W is the seeded weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
 scales and bf16 gains and embeddings, at `Tensor.offset`). Block j of the store carries W bytes
 [2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row, P2 v4 (`p2-16448/v4`,
-`verity.core.protocols.pous.schemes.p2`) at the registered point, keys from `sha512_keys` under `expand_prefix(salt)`; the
+`verity.protocols.pous.verifier.schemes.p2`) at the registered point, keys from `sha512_keys` under `expand_prefix(salt)`; the
 last block is zero-padded. Block j is (segment, block) = divmod(j, 2^16).
 
 **The decode call.** `Store.stage(name, dst)` writes linear ``name``'s codes, (N, K) s8, into the staging buffer ``dst`` (or a
@@ -38,7 +38,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.pous.schemes import p2 as S
+from verity.protocols.pous.verifier.schemes import p2 as S
 
 from .weights import SW, Weights
 

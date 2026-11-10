@@ -37,8 +37,8 @@ onsite_piece_commands() {
 
 onsite_cases() {
   local rc
-  POUS_EXE=$(exe pous-run-protocol verity/core/protocols/pous/check) \
-    && WIPE_EXE=$(exe wipe-protocol verity/core/devices/memory_challenger/lean) || return 0
+  POUS_EXE=$(exe pous-run-protocol verity/protocols/pous/verifier/check) \
+    && WIPE_EXE=$(exe wipe-protocol verity/protocols/pous/device/memory_challenger/lean) || return 0
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} LEASE_MIN=${CASE_LEASE_MIN:-60} MEM_GB=${CASE_MEM_GB:-170} PY=$PY \
     POUS_EXE=$POUS_EXE WIPE_EXE=$WIPE_EXE timeout -k 1m "${CASE_TIMEOUT:-90m}" bash benchmarks/pous/served_case.sh \
     "$OUT/pieces" > "$P/served_case.log" 2>&1

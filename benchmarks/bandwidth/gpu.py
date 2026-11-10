@@ -44,7 +44,7 @@ from pathlib import Path
 import reference
 from reference import COMMITMENT, geometry
 from verity.core.protocols.bandwidth import audit, tags
-from verity.core.protocols.pous.verifier import DIGEST_BYTES, MerkleTree, VerifierKey
+from verity.protocols.pous.verifier.verifier import DIGEST_BYTES, MerkleTree, VerifierKey
 
 TAG_IDS = {"gf31-poly/v1": 0, "ro-sha512/v1": 1, "ro-blake3/v1": 2}
 BLOCK_BYTES = 2056

@@ -130,7 +130,7 @@ by the verifier, would move this to the chip; the audit doesn't use it.
 
 ## 3. The store and its leaves
 
-`E` is PoUS's P2 store `C*` (`verity.core.protocols.pous.schemes.p2`): `N = 2^19` labels of 2,056 bytes (1.08 GB),
+`E` is PoUS's P2 store `C*` (`verity.protocols.pous.verifier.schemes.p2`): `N = 2^19` labels of 2,056 bytes (1.08 GB),
 encoded from the useful data `W` under PoUS's setup (`pous.setup`: the commitment to `W`, then the verifier's salt, then
 `vk`). Each label is two slow roots of its keyed payload, `c = ρ(σ_K(ρ(m + t)))`: under P2's assumptions a label is
 incompressible except through `W`, and rebuilding it from `W` takes two roots in sequence. `Params` refuses `T + RTT`

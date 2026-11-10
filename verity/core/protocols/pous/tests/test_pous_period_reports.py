@@ -12,7 +12,7 @@ import pytest
 import pous_test_signer as ts
 from test_pous_memory_challenger import BLOCK_BYTES, LIMIT, ROOT, Clock, coins, expected
 from verity.commitments import attest
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.protocols.pous.device import memory_challenger as mc
 from verity.core.protocols.pous import period_reports as pr
 from verity.commitments.crypto import lms
 

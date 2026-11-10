@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous import memory_challenger as mc
+from verity.protocols.pous.device import memory_challenger as mc
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[5]
@@ -44,7 +44,7 @@ def _load(name: str, path: Path) -> Any:
 
 
 V = _load("memory_challenger_lean_verdict", HERE.parent / "verdict.py")
-TS = _load("pous_test_signer", ROOT / "verity/core/protocols/pous/tests/pous_test_signer.py")
+TS = _load("pous_test_signer", ROOT / "verity/protocols/pous/verifier/tests/pous_test_signer.py")
 
 
 def expected_of(rec: dict[str, Any], signed: mc.SignedSession):
