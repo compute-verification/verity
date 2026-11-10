@@ -986,7 +986,7 @@ def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_
                 and [(tree / p / ".lake" / "build" / "olean").read_text() for p in ("new", "new/Proofs", "code")]
                 == ["spec", "proofs", "code"])
 
-    monkeypatch.setattr(LC.MOVED, "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
+    monkeypatch.setattr(LC._moved(), "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
     checkout = tmp_path / "checkout"
     for f in ("new/lakefile.toml", "new/A.lean", "new/Proofs/lakefile.toml", "code/lakefile.lean", "README.md"):
         (checkout / f).parent.mkdir(parents=True, exist_ok=True)
