@@ -231,12 +231,12 @@ def tensor_bytes(g, seed, name, start=0, stop=None):
     return hashlib.shake_256(seed + b"/" + name.encode()).digest(n)[start:n if stop is None else stop]
 
 
-def program(g, seed):
+def model_id(g, seed):
     return "test/" + g.name + "/" + hashlib.sha512(seed).hexdigest()[:8]
 
 
 def manifest(g, seed):
-    return {"program": program(g, seed), "stream_bytes": stream_bytes(g),
+    return {"model": model_id(g, seed), "stream_bytes": stream_bytes(g),
             "tensors": [{"name": t.name, "kind": t.kind, "nbytes": t.nbytes,
                          "sha256": hashlib.sha256(tensor_bytes(g, seed, t.name)).hexdigest()} for t in tensors(g)]}
 '''
