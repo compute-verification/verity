@@ -163,12 +163,13 @@ import re
 import time
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
+from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
 from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.partition import Level
 from verity.ml.circuits.program import Program
+from verity.ml.commitments import history as HT
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Subset
 
 from . import second_stage as SS
@@ -899,6 +900,18 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
         raise ValueError(f"the params name the circuits of {[t for t, *_ in named]}, not the check's templates {ids}, "
                          "each once, in its order")
     return tuple(named)
+
+
+def tables_served(record: Any, tables: Iterable[tuple[str, bytes, bytes]]) -> bool:
+    """Whether each history table the interior reads is one the boundary registration served (`interior-table`): every
+    table of `tables`, `(name, root, domain)` with the root and domain id `history.roots_of` computed for it, is a port
+    of the boundary registration's record `record` of that name with that root and domain (its ``roots``). The
+    interior's copies name the tables round 2 recomputes from the writers it opens; this holds each one to the table
+    round 1 registered under its name. The Lean verifier's `Run.tablesServed` is this."""
+    roots = record.get("roots") if isinstance(record, Mapping) else None
+    roots = roots if isinstance(roots, list) else []
+    return all(any(isinstance(r, Mapping) and r.get("port") == name and r.get("root") == root.hex()
+                   and r.get("domain") == domain.hex() for r in roots) for name, root, domain in tables)
 
 
 def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
@@ -2039,8 +2052,10 @@ class Stream:
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
         query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R7 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
-        record is the registration it follows, and the copies given here, as `register` takes them), and
-        `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
+        record is the registration it follows, and the copies given here, as `register` takes them),
+        `population-order`, and each history table `history` names being a port of the boundary registration's record
+        at the root and domain it computed for it (`tables_served`: `interior-table`). Its receipt follows the log as a
+        registration's does, and it is logged; it reads no clock.
         It names no links, wires or rows: the verifier derives them from the replay block's Definition
         (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
@@ -2064,6 +2079,9 @@ class Stream:
                             outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
+                tables = {} if history is None or not v.ok else HT.roots_of(leaf_layer, history)
+                if v.ok and not tables_served(first.registration.record, [(n, *rd) for n, rd in tables.items()]):
+                    v = _refuse("interior-table", {"tables": sorted(tables)}).verdict
                 got.update(program=program, earlier=earlier)
             got["checks"] = v
             if not v.ok:

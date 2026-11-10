@@ -58,6 +58,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
 * `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512 and its statements'
   reference header and registered reads, in the check's order (`Run.templateCircuits`);
+* `tables_served`: whether each history table an interior reads is a port of the boundary registration's record at its
+  root and domain (`Run.tablesServed`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -809,6 +811,15 @@ def templateCircuits (j : Json) : V Json := do
   let named ← Run.templateCircuits (getD j "proofs") (getD j "query")
   return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h, r) => Json.arr #[Json.str t, Json.str c, h, r]))]
 
+/-- `{"record", "tables": [[name, root, domain], ...]}` (root and domain lowercase hex) to `{"served": bool}`: whether
+each history table the interior reads is one the boundary registration's record served (`Run.tablesServed`). -/
+def tablesServed (j : Json) : V Json := do
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.mapM fun
+    | .arr #[.str n, .str r, .str d] => return (n, ← Flock.unhex r, ← Flock.unhex d)
+    | _ => throw "a table is [name, root, domain], its root and domain hex strings"
+  return Json.mkObj [("served", Json.bool (Run.tablesServed (getD j "record") tables))]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("registration", registration),
@@ -823,7 +834,8 @@ def table : List (String × (Json → V Json)) :=
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
+   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits),
+   ("tables_served", tablesServed), ("hello", Hello.check),
    ("fits", fits),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),

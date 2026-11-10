@@ -4,7 +4,8 @@ program's runs (`history_order`), on valid and broken inputs at capacities up to
 `2^17`. The named cases hold what the guarantee reads off the check: a rank past the table's length opens as the public
 placeholder, and the root binds the rows' order and the capacity. The strings come from the writer's members' public
 bodies as the circuit prover lays them out (`history_strings`), and each table's root from bodies the leaf layer binds
-(`history_roots`), each held to its Python mirror (`history.table_strings`, `history.roots_of`)."""
+(`history_roots`), each held to its Python mirror (`history.table_strings`, `history.roots_of`). An interior's tables
+are held to the boundary registration's ports (`tables_served`, `service.tables_served`)."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+from verity.core.protocols.spot import service as S
 from verity.ml.commitments import history as H
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -242,14 +244,80 @@ CHECK = D.Port(PIECES, "history_check", reference_check,
 ORDER = D.Port(PIECES, "history_order", reference_order, st.one_of(*[orders() for _ in range(3)], orders(broken=True)),
                package=PACKAGE, of_record="lean")
 
+
+def reference_served(j):
+    """`Run.tablesServed` (`service.tables_served`): whether each ``[name, root, domain]`` of ``tables`` is a port of
+    ``record`` at that root and domain."""
+    ts = j.get("tables") if isinstance(j, dict) else None
+    if not isinstance(ts, list):
+        raise D.Reject("tables is not a list")
+    tables = []
+    for t in ts:
+        if not (isinstance(t, list) and len(t) == 3 and all(type(x) is str for x in t) and HEX.fullmatch(t[1])
+                and HEX.fullmatch(t[2])):
+            raise D.Reject("a table is [name, root, domain], its root and domain hex strings")
+        tables.append((t[0], bytes.fromhex(t[1]), bytes.fromhex(t[2])))
+    return {"served": S.tables_served(j.get("record"), tables)}
+
+
+@st.composite
+def served(draw, broken: bool = False):
+    """A boundary registration's record, its ``roots`` its own port and one to three tables', and tables an interior
+    reads: some of the record's at their roots and domains, or one with its root, domain or name changed, one the record
+    has no port of, the same name twice, or the record's ``roots`` in another form; broken, a table that isn't
+    ``[name, root, domain]`` in lowercase hex."""
+    digest = st.binary(min_size=64, max_size=64).map(bytes.hex)
+    names = draw(st.lists(NAMES, min_size=1, max_size=3, unique=True))
+    entries = [{"port": n, "root": draw(digest), "leaves": 2 ** 17, "domain": draw(digest)} for n in names]
+    roots = [{"port": "b.ingress", "root": draw(digest), "leaves": 4, "domain": draw(digest)}, *entries]
+    tables = [[e["port"], e["root"], e["domain"]] for e in draw(st.lists(st.sampled_from(entries), max_size=3))]
+    how = draw(st.integers(0, 9))
+    if how == 1 and tables:
+        tables[0][1] = draw(digest)
+    elif how == 2 and tables:
+        tables[-1][2] = draw(digest)
+    elif how == 3 and tables:
+        tables[0][0] += "/x"
+    elif how == 4:
+        tables.append(["layer.9/keys", draw(digest), draw(digest)])
+    elif how == 5 and tables:
+        tables.append([tables[0][0], draw(digest), tables[0][2]])
+    elif how == 6:
+        roots = draw(st.sampled_from([None, {}, "roots", [1, None], [{"port": n} for n in names]]))
+    elif how == 7 and tables:
+        roots[1:] = [{**e, "root": e["root"].upper()} for e in entries]
+    record = draw(st.sampled_from([{"roots": roots}, {"roots": roots, "population": 3}])) if how != 8 else roots
+    if broken:
+        bad = draw(st.sampled_from([[1, "aa", "bb"], ["n", "AA", "bb"], ["n", "a", "bb"], ["n", "aa"], "n", None]))
+        tables = [*tables, bad] if draw(st.booleans()) else [bad, *tables]
+        return {"record": record, "tables": tables} if draw(st.integers(0, 3)) else {"record": record, "tables": bad}
+    return {"record": record, "tables": tables}
+
+
+SERVED = D.Port(PIECES, "tables_served", reference_served, st.one_of(*[served() for _ in range(3)], served(broken=True)),
+                package=PACKAGE, of_record="lean")
+
 pieces = D.server_fixture(ROOT)
 
 
-@pytest.mark.parametrize("port, examples", [(ROOT, 300), (CHECK, 300), (ORDER, 1500)],
-                         ids=["history_root", "history_check", "history_order"])
+@pytest.mark.parametrize("port, examples", [(ROOT, 300), (CHECK, 300), (ORDER, 1500), (SERVED, 300)],
+                         ids=["history_root", "history_check", "history_order", "tables_served"])
 def test_a_history_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 2 and stats.rejects > 0, stats
+
+
+def test_a_table_is_served_only_at_its_ports_root_and_domain(pieces):
+    """An interior's table is round 1's only where round 1's record has a port of its name at its root and domain
+    (`Run.tablesServed`): another root, another domain, another name or no port is refused, and no tables are served."""
+    port = {"port": "layer.3/keys", "root": "aa" * 64, "leaves": 2 ** 17, "domain": "bb" * 64}
+    record = {"roots": [{"port": "b.ingress", "root": "cc" * 64, "leaves": 4, "domain": "dd" * 64}, port]}
+    for tables, want in [([["layer.3/keys", "aa" * 64, "bb" * 64]], True), ([], True),
+                         ([["layer.3/keys", "ab" * 64, "bb" * 64]], False), ([["layer.3/keys", "aa" * 64, "ba" * 64]], False),
+                         ([["layer.4/keys", "aa" * 64, "bb" * 64]], False), ([["b.ingress", "aa" * 64, "bb" * 64]], False),
+                         ([["layer.3/keys", "aa" * 64, "bb" * 64], ["layer.3/keys", "ab" * 64, "bb" * 64]], False)]:
+        j = {"record": record, "tables": tables}
+        assert _call(pieces, "tables_served", j) == reference_served(j) == {"served": want}, tables
 
 
 def _call(pieces, fn: str, j):
