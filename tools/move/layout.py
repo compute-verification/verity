@@ -732,11 +732,14 @@ class Run:
         """In a list of paths (`lists`), an entry that names what stands for no one place after the move (`_parts`) becomes
         where its files went: the directories and files of the moved tree that hold the files the list's entries held, all
         of them together, and no others (`cover`). Each is written once, at the first such entry that held a file of it,
-        with what the entry had around its path, and one that an entry the list keeps already holds is not written. An
-        entry left with nothing to write goes, and a line left empty goes with it. A directory with another entry of the
-        list above or below it is not read so: such a list names levels, and neither is a workspace's `members`, each one
-        distribution's directory, which `_members` keeps. Returns the text with a mark where each rewritten entry was, and
-        what each mark stands for, so that no later rewrite reads the new paths as old ones."""
+        with what the entry had around its path, and one that an entry the list keeps already holds is not written. The
+        first entry that names a package's `__init__.py` the move deletes becomes the package levels above the entries
+        the move wrote anew (`_levels`), those no entry holds: the list named the levels above what it holds, and an
+        import still runs each. An entry left with nothing to write goes, and a line left empty goes with it. A directory
+        with a row, and another entry of the list above or below it, is not read so: such a list names levels, and the
+        row says which the directory is. Neither is a workspace's `members`, each one distribution's directory, which
+        `_members` keeps. Returns the text with a mark where each rewritten entry was, and what each mark stands for, so
+        that no later rewrite reads the new paths as old ones."""
         if not hasattr(self, "_parts_re"):
             names = [p for p in (*self.old_dirs, *self.dropped, *self.leftover) if self._parts(p)]
             self._parts_re = re.compile(alternation(names)) if names else None
@@ -751,20 +754,29 @@ class Run:
                      and (m["p"] in self.old_dirs or m["p"] in self.tracked_old) and not self.L.kept(m["p"], path)]
             names = {m["p"] for _, _, m in named}
             # entries one above the other name levels, not the files below them: those are left to the other rewrites
-            # and one whose [split] row names the part the file means is that part
-            todo = {p for p in names if self._parts(p) and not self._part(path, p)[0] and not (p in self.old_dirs and any(
-                q.startswith(p + "/") or p.startswith(q + "/") for q in names))}
+            # where a row gives the directory a place, and one whose [split] row names the part the file means is that part
+            todo = {p for p in names if self._parts(p) and not self._part(path, p)[0] and not (
+                p in self.old_dirs and self.L.directory(p)[0] is not None and any(
+                    q.startswith(p + "/") or p.startswith(q + "/") for q in names))}
             if not todo:
                 continue
             files = {p: self._under(p) for p in names}
             cover = self.cover({f for fs in files.values() for f in fs})
             held = [self._part(path, p, *self.L.path(p, p in self.old_dirs))[0] or p for p in names - todo]
+
+            def new(parts) -> list[str]:
+                return [c for c in sorted(parts) if not any(c == h or c.startswith(h + "/") for h in held)]
+            written = {}
+            for a, b, m in named:
+                if m["p"] in todo:
+                    written[a] = new({cover[f] for f in files[m["p"]]})
+                    held += written[a]
+            if (lost := next((a for a, _, m in named if m["p"] in self.leftover), None)) is not None:
+                written[lost] = new({level for c in held if c not in names for level in self._levels(c)})
             for a, b, m in named:
                 if m["p"] not in todo:
                     continue
-                parts = [c for c in sorted({cover[f] for f in files[m["p"]]})
-                         if not any(c == h or c.startswith(h + "/") for h in held)]
-                held += parts
+                parts = written[a]
                 q = text[a - 1] if text[a - 1] in "\"'" and text[b:b + 1] == text[a - 1] else ""
                 self._count(path, "list entries covered")
                 self.note("list entries written as where their files went", f"{path}: {m[0]} -> {' '.join(parts) or 'nothing'}")
@@ -792,6 +804,12 @@ class Run:
                 lines.append(line)
             out = "\n".join(lines)
         return out, marks
+
+    def _levels(self, p: str) -> list[str]:
+        """The `__init__.py` of each package directory above path `p` of the moved tree, where `p` is in a package."""
+        def package(d: str) -> bool:
+            return f"{d}/__init__.py" in self.new_files or f"{d}/__init__.py" in self.texts
+        return [f"{d}/__init__.py" for d in _ancestors(p) if package(d)] if package(posixpath.dirname(p)) else []
 
     def _under(self, p: str) -> list[str]:
         """The files the move keeps that old path `p` names: itself, or those below it."""

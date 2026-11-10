@@ -542,22 +542,26 @@ new = { verity = "verity" }
 def test_a_list_entry_naming_a_directory_the_map_empties_becomes_the_cover_of_where_its_files_went(tmp_path):
     """`lib/core/` goes three ways and its own `__init__.py` is deleted, so no one path stands for it. In a list of paths
     it becomes the fewest directories and files of the moved tree that hold what the list's old entries held, taken over
-    all of them: beside `lib/commit/` that is `verity/` whole, alone it is the two parts. An entry naming the deleted
-    `__init__.py` goes. What is no such list stays as it was: entries one above the other (levels), a tuple that an
-    assignment unpacks or that is a row of a table, and a word of a command that takes one directory."""
+    all of them: beside `lib/commit/` that is `verity/` whole, alone it is the two parts, and so it is beside an entry
+    below it, since no row gives it a place. An entry naming the deleted `__init__.py` becomes the package levels above
+    what the move wrote anew in its list (`marks`), and goes where the list names nothing the move wrote (`bare`). What
+    is no such list stays as it was: a tuple that an assignment unpacks or that is a row of a table, and a word of a
+    command that takes one directory."""
     r, p = _run(tmp_path, {
         "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
         "lib/core/proto/check.py": "Y = 1\n", "lib/core/claims.py": "Z = 1\n", "lib/commit/c.py": "C = 1\n",
         "docs/a.md": "a\n", "other/x.py": "W = 1\n",
         "gates.toml": ('low_risk = ["docs/", "lib/core/", "lib/commit/"]\ncore = ["lib/core/"]\n'
-                       'levels = ["lib/core/", "lib/core/wire/"]\nmarks = [\n    "lib/core/__init__.py",\n    "lib/core/claims.py",\n]\n'),
+                       'levels = ["lib/core/", "lib/core/wire/"]\nmarks = [\n    "lib/core/__init__.py",\n    "lib/core/claims.py",\n]\n'
+                       'bare = ["lib/core/__init__.py", "docs/a.md"]\n'),
         "tools/lists.py": 'ROOTS = ("lib/core", "other")\nA, B = "lib/core", "docs"\nROWS = [("lib/core", "why")]\n',
         "job.sh": "#!/bin/sh\ngit rev-parse HEAD:lib/core HEAD:other\ncd lib/core\n",
     }, COVER_MAP)
     assert p.returncode == 0, p.stderr
     assert (r / "gates.toml").read_text() == (
         'low_risk = ["docs/", "verity/", "verity/commit/"]\ncore = ["verity/config/", "verity/protocols/proto/"]\n'
-        'levels = ["lib/core/", "verity/config/wire/"]\nmarks = [\n    "verity/config/claims.py",\n]\n')
+        'levels = ["verity/config/", "verity/protocols/proto/", "verity/config/wire/"]\nmarks = [\n'
+        '    "verity/__init__.py", "verity/config/__init__.py",\n    "verity/config/claims.py",\n]\nbare = ["docs/a.md"]\n')
     assert (r / "tools/lists.py").read_text() == (
         'ROOTS = ("verity/config", "verity/protocols/proto", "other")\nA, B = "lib/core", "docs"\nROWS = [("lib/core", "why")]\n')
     assert (r / "job.sh").read_text() == "#!/bin/sh\ngit rev-parse HEAD:verity/config HEAD:verity/protocols/proto HEAD:other\ncd lib/core\n"
@@ -609,21 +613,22 @@ def test_a_path_below_a_split_directory_that_names_no_tracked_file_follows_the_t
     assert bare.returncode != 0 and "job.sh: lib/flock (" in bare.stderr and "tests/test_gate.py: lib/flock (" in bare.stderr
 
 
-def test_a_workspaces_members_are_no_list_of_paths_and_follow_the_tokens_row(tmp_path):
+def test_a_workspaces_members_and_a_directory_beside_its_own_parts_follow_the_tokens_row(tmp_path):
     """`lib/flock/` is a distribution and goes three ways. In a list of paths it becomes where its files went, here all of
     `verity/flock/`. The workspace's `members` names the directory its `pyproject.toml` is in, which the `[tokens]` row
-    says: written as the cover it would name no distribution, and the workspace would lose it."""
+    says: written as the cover it would name no distribution, and the workspace would lose it. And in a list that names
+    it beside a part of it (`levels`), it is the part the row says, not all of them."""
     r, p = _run(tmp_path, {
         **BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "lib/flock/pyproject.toml": '[project]\nname = "flock"\n',
         "other/pyproject.toml": '[project]\nname = "other"\n',
         "pyproject.toml": ('[tool.uv.workspace]\nmembers = ["lib/flock", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
-                           '[tool.gate]\nkeyed = ["lib/flock", "other"]\n'),
+                           '[tool.gate]\nkeyed = ["lib/flock", "other"]\nlevels = ["lib/flock", "lib/flock/verifier"]\n'),
     }, BELOW_MAP.replace("[tokens]", '"lib/flock/pyproject.toml" = "verity/flock/prover/pyproject.toml"\n\n[tokens]')
         + '\n[split]\n"pyproject.toml: lib/flock" = "the distribution"\n')
     assert p.returncode == 0, p.stderr
     assert (r / "pyproject.toml").read_text() == (
         '[tool.uv.workspace]\nmembers = ["verity/flock/prover", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
-        '[tool.gate]\nkeyed = ["verity/flock", "other"]\n')
+        '[tool.gate]\nkeyed = ["verity/flock", "other"]\nlevels = ["verity/flock/prover", "verity/flock/agreement"]\n')
 
 
 PART = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n",
