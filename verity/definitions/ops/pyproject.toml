@@ -14,7 +14,8 @@ inputs = ["verity", "Security", "verity/definitions/kernels", "integrations/vllm
           "benchmarks/numerical/tests/checker/test_fp8.py",
           "benchmarks/numerical/tests/reference/hawkeye_harness.cpp",
           "benchmarks/numerical/tests/reference/test_hawkeye_close.py",
-          "benchmarks/numerical/tests/reference/test_normalisation_d3.py"]
+          "benchmarks/numerical/tests/reference/test_normalisation_d3.py",
+          "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/numerical/python/verity_numerical/reference/__init__.py"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
