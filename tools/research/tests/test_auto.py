@@ -85,8 +85,11 @@ def test_a_pool_whose_line_is_stalled_on_memory_never_takes_the_job():
     stuck = pool(*(slot(f"r{i}", mem=None) for i in range(5)), waiters=1, minutes=auto.STALL_MIN)
     target, why = auto.choose({N2: share(waiters=56), CPU1: stuck, CPU5: busy}, 4, 16)
     assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: its line is stalled: a run has waited 5 min" in why
-    with pytest.raises(auto.Unplaceable, match="its line is stalled"):
-        auto.choose({N2: "no answer in 30 s", CPU1: stuck, CPU5: "no answer in 30 s"}, 4, 16)
+    target, why = auto.choose({N2: "no answer in 30 s", CPU1: stuck, CPU5: "no answer in 30 s"}, 4, 16)
+    assert target == (CPU1, "research") and "every pool that fits is stalled" in why, "a stalled line beats refusing the job"
+    longer = pool(*(slot(f"r{i}", mem=None) for i in range(5)), waiters=4, minutes=auto.STALL_MIN)
+    assert auto.choose({N2: "no answer in 30 s", CPU1: longer, CPU5: stuck}, 4, 16)[0] == (CPU5, "research"), "the shorter"
+    assert auto.choose({N2: share(free=48), CPU1: stuck}, 4, 16)[0] is None, "node 2 starting it now beats a stalled line"
     starved = pool(*(slot(f"r{i}", blocked=mem) for i in range(13)))
     target, why = auto.choose({N2: share(waiters=56), CPU1: starved, CPU5: busy}, 4, 16)
     assert target == (CPU5, "research") and "every slot of it that fits waits on memory and none runs" in why

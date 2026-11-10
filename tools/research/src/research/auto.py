@@ -208,6 +208,14 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
         return dict(zip(asks, ex.map(one, asks.items())))
 
 
+class Stalled(ValueError):
+    """A pool whose line is stalled on memory (`_pool`): skipped while anything else can take the job, its last resort else."""
+
+    def __init__(self, why: str, waiting: int):
+        super().__init__(why)
+        self.waiting = waiting
+
+
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job."""
     if not isinstance(doc, dict) or "error" in doc:
@@ -226,10 +234,11 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     # a waiter retries every 20 s (slot.py's POLL_S), so one still waiting beside a free slot waits on what that slot's document
     # doesn't show: the memory its own --mem-gb asks (cpu-3's head asked 256 GB for hours while its other slots sat free)
     if free and waiters and (head := max(w.get("minutes") or 0 for w in waiters)) >= STALL_MIN:
-        raise ValueError(f"its line is stalled: a run has waited {head} min while slot {free[0]['name']} is free, for memory "
-                         f"it asks beyond what that slot shows")
+        raise Stalled(f"its line is stalled: a run has waited {head} min while slot {free[0]['name']} is free, for memory "
+                      f"it asks beyond what that slot shows", waiting)
     if all(s.get("holder") is None and MEMORY_BLOCK in str(s.get("blocked")) for s in open_):
-        raise ValueError(f"its line is stalled: every slot of it that fits waits on memory and none runs ({open_[0]['blocked']})")
+        raise Stalled(f"its line is stalled: every slot of it that fits waits on memory and none runs ({open_[0]['blocked']})",
+                      waiting)
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
     # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears
@@ -250,7 +259,7 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
     else:
         said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
                 f"{share['waiters']} waiting")
-    ranked, notes = [], [said]
+    ranked, stalled, notes = [], [], [said]
     for i, (machine, pool) in enumerate(SPILL):
         doc = docs.get(machine)
         lean = doc.get("lean") if isinstance(doc, dict) else None
@@ -259,6 +268,10 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
             continue
         try:
             fit, free, waiting, why = _pool(doc.get(pool) if isinstance(doc, dict) else doc, cpus, mem_gb)
+        except Stalled as e:
+            notes.append(f"{machine}'s {pool} pool skipped: {e}")
+            stalled.append((e.waiting, i, (machine, pool)))
+            continue
         except (ValueError, KeyError, TypeError) as e:
             notes.append(f"{machine}'s {pool} pool skipped: {e}")
             continue
@@ -271,6 +284,10 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
     if ranked:
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
+    if stalled and share is None:
+        (_, _, target) = min(stalled)
+        return target, "; ".join(notes) + (f": every pool that fits is stalled and {AUTO_NODE} can't be reached, so the shortest "
+                                           f"stalled line, {target[0]}'s {target[1]} pool, where it waits until memory frees")
     if share is None:
         raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} can't be reached, so nothing would run it. "
                           f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
