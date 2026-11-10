@@ -65,7 +65,8 @@ roots and domains are.
 Round 2 holds the statement's header to its template's reference with the run's fields put in (`SecondStage.atRun`):
 each port's binding is `portBinding interior0` at it. `portBinding_i0` and `portBinding_o0` give them, `bindOf "i0" s 1`
 and `bindOf "o0" s 2` at the reference's schema `s`: the window domain's tagged SHA-512 of `bindJ`'s canonical string,
-which stays a term, since the kernel evaluates neither the hash nor `canonUtf8` at a free schema.
+which stays a term, since the kernel evaluates neither the hash nor `canonUtf8` at a free schema. `atRun_interior0`
+puts them, with the run's set, into a reference header whose ports are `i0` and `o0`.
 
 ## What this does not show
 
@@ -341,6 +342,21 @@ theorem portBinding_i0 (schema : String) :
 theorem portBinding_o0 (schema : String) :
     Spot.SecondStage.portBinding interior0 "o0" schema RUN0 = some (bindOf "o0" schema 2) :=
   portBinding_interior0 (e := rootO0) (by kernel_rfl) (by kernel_rfl)
+
+/-- **A reference header with the instance's run put in** (`SecondStage.atRun`): where the interior record is
+`interior0`, no port is wired, and the reference's schemas are `sI` at `i0` and `sO` at `o0`, round 2 sets its set to
+the run's `k`-th and its bindings to `bindOf` at each port. -/
+theorem atRun_interior0 {own : Spot.SecondStage.Own} {t : String} {r : Json} {sI sO : String} (k : ℕ)
+    (hi : own.interior = interior0) (hw : ∀ p, Spot.SecondStage.wireOf own t p = none)
+    (hs : Spot.entries (Spot.getD (Spot.getD r "frame_v3") "schemas") = #[("i0", .str sI), ("o0", .str sO)]) :
+    Spot.SecondStage.atRun own false k t r = some (Spot.SecondStage.putAt
+      (Json.mkObj [("i0", .str (bindOf "i0" sI 1)), ("o0", .str (bindOf "o0" sO 2))])
+      (Spot.SecondStage.putAt (.str (Spot.SecondStage.setName RUN0 k)) r ["set"]) ["frame_v3", "bindings"]) := by
+  have hp : ∀ p, Spot.SecondStage.heldPort own false t p = p := fun p => by
+    simp [Spot.SecondStage.heldPort, hw, Spot.SecondStage.portOf]
+  simp only [Spot.SecondStage.atRun, hi, runOf_interior0, hs, hp, Array.mapM_toArray, List.mapM_cons, List.mapM_nil,
+    portBinding_i0, portBinding_o0, Option.bind_eq_bind, Option.bind_some, Option.pure_def, Option.map_eq_map,
+    Option.map_some, List.toList_toArray]
 
 variable (R : Ref) (desc : Msg) (q : Query) (c₀ : Code)
 
