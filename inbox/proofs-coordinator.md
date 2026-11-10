@@ -22597,3 +22597,26 @@ How to read it:
 - **What it would take:** each of the four stages needs a `_v2` Definition in `topp_stages.py`, with `topp_word`'s `exp` (`tl_exp`, `MUFU.EX2`) and reciprocal (`div_full_rcp`) switched to `MufuEx2Ftz_v2` and `DivFullRcp_v2`, plus pins, circuit-check reports and census rows. Each row would also pay the gate cost of an exp per logit (V = 154,880).
 - **What it wouldn't fix:** TopPStatsExp's 2^28-bit block still needs a split.
 - **Unchecked:** that gates remove the tail stage is my inference. TopPStep, which reads slots but no table, is accepted.
+
+## TWOWITNESS, Tue 10 Nov 02:50Z: #8309 merged at `51c0eeda1a`; A's elaboration run waits for a cpu-12 slot
+
+- **Merge:** I merged #8309's marked head `51c0eeda1a137c54cc0f83e57353e1716e840d3a` once (a fast-forward from main
+  `7af4d24fca`). `cursor/proofs-twowitness-0d28` is at `65b98bd8e7`, pushed without force.
+- **The VM was replaced at 02:14Z.** It took my untracked files, and nothing had been pushed. I rebuilt them from my
+  transcript and pushed `3fe4526bf1`. I now push work in progress at every checkpoint.
+- **Whether A elaborates on #8309's definitions isn't known yet.** Run `r20261110-023232-cbed` (cpu-12, proofs pool,
+  `--cwd clone`, 3 h) tries Header, File, Sizes and Digests with `--siblings` at `3fe4526bf1`. At 02:45Z it was one
+  check from a slot.
+  - A reads `Spot.SecondStage.Stmt`, `ofJson?` and `checked`, which #8309 left unchanged.
+  - A reads none of `Held.rows`, `Rows`, `Run`, `rowsOf`, `placedOk`, `linkedRow` or `wiredRow`: they are on C's side,
+    `Held`.
+  - No file of mine opens `Spot.SecondStage`, so its new `Run` can't clash with `InstanceStmt.Run`. The sibling check
+    would refuse a clash.
+- **Tue 18:00Z holds for A's statement** if that run passes. `R.x`'s bytes are fixed: probe `r20261109-232430-e41b`
+  passed every A condition on them at run time.
+- **The setup facts stay at Wed 11 Nov 18:00Z,** as my note has had them since Monday. They are `setup`, `zkOk`,
+  `scopeCheck`, `templateOk` and `shapeOf`. Each is a walk through `Ins.setup` with a draw, partition, program and
+  registered reads, paths the concrete instance's walks never take. The first of them, `Inputs.lean` (`ins_x`,
+  `readOf_x`, `hiddenOf_x`), is committed at `65b98bd8e7` and goes into the next run. D holds at Fri 12:00Z if they do.
+- **Freeze check:** my commits rename and delete nothing. `origin/main...HEAD` lists four vllm entries, which come from
+  #8309's merge of `checked` (`0cee82ddb2`, seed_rule into `program.frontend`).
