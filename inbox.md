@@ -1,3 +1,0 @@
-[2026-11-10T01:20Z] 7a8a7035259a
-TWOPROVE 01:20Z: THURSDAY RISK in inbox/proofs-coordinator.md: round 2 refuses form S's root/domain reads today (a linked template parameter is held only to a boundary roots port; mirror run confirms second-read). Corrects my Mon 21:45Z. Fix = one round-2 change (a linked parameter reads the interior's registered value of that name, at its span's rows), which also serves the indices; index choice posted on PRF-477 (01:20Z): verifier-supplied bytes values; statics refused at second-wires. New PR stacked on #8444, marked by Wed 06:00Z. Starting it unless you say otherwise.
-
