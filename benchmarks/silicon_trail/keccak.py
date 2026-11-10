@@ -12,11 +12,11 @@ P places 4w input bits in four lanes.  Two placements:
            does (m[255:0] into state bits 0..255).
     diag   lanes (0,0), (1,1), (2,2), (3,3): Ketje Major's.  Ketje v2 runs the twisted round pi . R . pi^-1 and absorbs
            into plane y = 0 of the twisted state; in the plain round's coordinates that plane is this diagonal
-           (`twisted_step` and `test_keccak.py` check the equivalence).
+           (`twisted_step` and `selfcheck.py` check the equivalence).
 
 The round constant is a parameter.  It never matters to which inputs collide: iota adds a constant to lane (0, 0),
 which both placements absorb into, so a chain with constant rc on inputs (x_1, ..., x_n) is the chain with constant 0
-on (x_1, x_2 xor rc, ..., x_n xor rc), xor rc at the end (`test_keccak.py`).
+on (x_1, x_2 xor rc, ..., x_n xor rc), xor rc at the end (`selfcheck.py`).
 """
 
 from __future__ import annotations
