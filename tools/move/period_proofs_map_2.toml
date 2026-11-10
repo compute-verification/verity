@@ -1,0 +1,37 @@
+# Stage 2 of the Spot, WeightSecurity and Challenger declarations' period move: the entries NET-118's draft renames in its
+# second stage (names under `Properties.Challenger.Session`, which stage 1 renames: rename.py renames a container and a
+# name under it only in two moves). Run it on stage 1's commit. The header of `period_proofs_map.toml` says which word
+# becomes which.
+
+[words]
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it in another sense).
+"trustedSessionOf_ok_spec" = "trustedChallengePhaseOf_ok_spec"
+"sessionOf_ok_spec" = "challengePhaseOf_ok_spec"
+"drawCoins_session" = "drawCoins_challengePhase"
+"sessionOf_bound" = "challengePhaseOf_bound"
+"sessionOf_read" = "challengePhaseOf_read"
+"sessionOf_run" = "challengePhaseOf_run"
+
+[[words_in]]
+# Verity's sampled reads declare `sessionNamed_ok` and `trustedSessionOf_ok` too, and `session_size` is a short word, so
+# the challenger's are renamed only in their file and those that read them.
+files = [
+    "Security/Proofs/Properties/Challenger/ChallengePhase.lean",
+    "Security/Proofs/Properties/Challenger/Drawn.lean",
+    "Security/Proofs/Properties/Challenger/Window.lean",
+]
+words = { "sessionNamed_ok" = "challengePhaseNamed_ok", "session_size" = "challengePhase_size", "trustedSessionOf_ok" = "trustedChallengePhaseOf_ok" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+# version ("window", "session", "period" as JSON keys and tag strings).
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '"(?:window|windows|session|sessions|period|periods)"']
+strings = []

@@ -1,0 +1,131 @@
+# The period family in the Glossary's words for the Spot, WeightSecurity and Challenger declarations: NET-118's map's
+# entries (network-accounting's draft at eb226fa15d) that rename a declaration or module declared in
+# Security/{Definitions,Proofs,Properties}/Spot*, Security/Proofs/WeightSecurity, Security/{Properties,Proofs/Properties}/Challenger*
+# or verity/core/service/spot. `tools/move/rename.py --map tools/move/period_proofs_map.toml` renames them in one move;
+# `period_proofs_map_2.toml` is its second stage. The word becomes the Glossary's for what it denotes: the live
+# challenger's gate session -> "challenge phase"; SPOT's served span with its audit -> "run"; a window that is an
+# execution phase -> "execution phase"; a monitoring period's "period" -> "monitoring period".
+# `PeriodPlays` is also Flock's (`Security/Proofs/Flock/EndToEnd`), in the same sense, and is renamed with it.
+
+[words]
+# Module paths named for the word alone.
+"Challenger/Session" = "Challenger/ChallengePhase"
+"Challenger.Session" = "Challenger.ChallengePhase"
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it in another sense).
+"exfiltration_bound_windows" = "exfiltration_bound_executionPhases"
+"sessionOf_record_spec" = "challengePhaseOf_record_spec"
+"trustedSession_record" = "trustedChallengePhase_record"
+"sessionHashed_length" = "challengePhaseHashed_length"
+"sessionNamed_record" = "challengePhaseNamed_record"
+"isReservedSession" = "isReservedChallengePhase"
+"sessionTreesPiece" = "challengePhaseTreesPiece"
+"sessionNamed_sid" = "challengePhaseNamed_sid"
+"sessionOf_record" = "challengePhaseOf_record"
+"creditedSession" = "creditedChallengePhase"
+"WindowPoolReset" = "RunPoolReset"
+"auditedSession" = "auditedChallengePhase"
+"WindowSeedSalt" = "RunSeedSalt"
+"pinnedSession" = "pinnedChallengePhase"
+"sessionHashed" = "challengePhaseHashed"
+"isSessionId" = "isChallengePhaseId"
+"PeriodPlays" = "MonitoringPeriodPlays"
+"sessionPiece" = "challengePhasePiece"
+"isV1Window" = "isV1ExecutionPhase"
+"isWindow" = "isExecutionPhase"
+
+[[words_in]]
+# `windowSalt` begins PoUW's `windowSaltReason` and `windowSaltCheck`, which are an execution phase's, so SPOT's is
+# renamed only in its file, the one that reads it.
+files = [
+    "verity/core/service/spot/Spot/Supplied.lean",
+]
+words = { "windowSalt" = "runSalt" }
+
+[[words_in]]
+# `sessionOf` is also RemoteAudit's, Flock's, Verity's sampled record's and the one-stage's, so Spot's challenger's is
+# renamed only in its file and those that spell a reference to it (the build's `.ilean` references, and the prose that
+# names it). `Challenger/Session.lean`, which the move renames `ChallengePhase.lean`, is named by a pattern that matches
+# it under both names.
+files = [
+    "Security/Proofs/Properties/Challenger/Coins.lean",
+    "Security/Proofs/Properties/Challenger/[SC][eh]*.lean",
+    "Security/Proofs/Properties/Challenger/Window.lean",
+    "Security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean",
+    "Security/Proofs/Properties/Verity/SampledRead.lean",
+    "Security/Properties/Verity/Game.lean",
+    "verity/core/service/spot/Spot/ChallengerSession.lean",
+]
+words = { "sessionOf" = "challengePhaseOf" }
+
+[[words_in]]
+# `sessionNamed` and `trustedSessionOf` begin other declarations' names (`Verity.Sampled.sessionNamed_ok`,
+# `Verity.Sampled.trustedSessionOf_ok`), so they are renamed as whole words where they stand.
+files = [
+    "Security/Proofs/Pouw/Credit.lean",
+    "Security/Proofs/Properties/Challenger/Coins.lean",
+    "Security/Proofs/Properties/Challenger/[SC][eh]*.lean",
+    "Security/Proofs/Properties/Challenger/Window.lean",
+    "Security/Proofs/Properties/Pouw/LiveSalt.lean",
+    "Security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean",
+    "Security/Proofs/Properties/Verity/SampledRead.lean",
+    "Security/Properties/Pouw/LiveSalt.lean",
+    "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean",
+    "verity/core/protocols/pouw/lean/check/PouwCheck/Pass.lean",
+    "verity/core/protocols/pouw/lean/check/PouwCheck/Rounds.lean",
+    "verity/core/protocols/pouw/lean/check/README.md",
+    "verity/core/service/spot/Spot/ChallengerCoins.lean",
+    "verity/core/service/spot/Spot/ChallengerDraw.lean",
+    "verity/core/service/spot/Spot/ChallengerSession.lean",
+    "verity/core/service/spot/Spot/ChallengerTrees.lean",
+]
+words = { "sessionNamed" = "challengePhaseNamed", "trustedSessionOf" = "trustedChallengePhaseOf" }
+
+[[words_in]]
+# `sessionTreeReason` and `sessionsTreeReason` begin Verity's `sessionTreeReason_link` and `sessionsTreeReason_one`, so
+# they are renamed as whole words where they stand.
+files = [
+    "Security/Proofs/Properties/Verity/Sampled.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Binding.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Counts.lean",
+    "Security/Proofs/Properties/Verity/Sampled/CountsLayout.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Lines.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Link.lean",
+    "Security/Proofs/Properties/Verity/Sampled/LinkPts.lean",
+    "Security/Proofs/Properties/Verity/Sampled/LinkTrees.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Moves.lean",
+    "Security/Proofs/Properties/Verity/Sampled/MovesLayout.lean",
+    "Security/Proofs/Properties/Verity/Sampled/MovesReach.lean",
+    "Security/Proofs/Properties/Verity/Sampled/RecordRounds.lean",
+    "Security/Proofs/Properties/Verity/Sampled/RoundsRead.lean",
+    "Security/Proofs/Properties/Verity/Sampled/SpecTie.lean",
+    "Security/Proofs/Properties/Verity/Sampled/Trees.lean",
+    "verity/core/service/spot/Spot/ChallengerInnerTrees.lean",
+    "verity/core/service/spot/Spot/ChallengerTrees.lean",
+    "verity/core/service/spot/Spot/OneStageZk.lean",
+]
+words = { "sessionTreeReason" = "challengePhaseTreeReason", "sessionsTreeReason" = "challengePhasesTreeReason" }
+
+[[words_in]]
+# `window_opens` also stands inside SPOT's test names (`test_a_window_opens_the_pool_its_chain_left`), so it is renamed
+# only where it is declared and read.
+files = [
+    "Security/Proofs/Properties/Challenger/Drawn.lean",
+    "Security/Proofs/Properties/Challenger/Window.lean",
+]
+words = { "window_opens" = "executionPhase_opens" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+# version ("window", "session", "period" as JSON keys and tag strings).
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '"(?:window|windows|session|sessions|period|periods)"']
+# The new names that hold their old word after a lowercase letter, where it would match again: kept, so that running
+# the map again on its move changes nothing (`stage.py`'s rerun).
+strings = ["MonitoringPeriodPlays"]
