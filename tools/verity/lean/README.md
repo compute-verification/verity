@@ -237,7 +237,8 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   and only `open_seed` ({module prefix or owner: {issue, due[, owner]}}, consumed) lets `--update` add one. A premise is a closed hypothesis, or one a statement takes whose head the repository builds
   (`Facts.lean`'s `premises`); a `Prop` a statement only reads is in neither, held by its `reads` record, unless its `open`
   entry gives a `why` by hand, one line naming the statement that holds it (a conjunct of its event): each guarantee that
-  reads it then lists it under `premises.open`, and the `why` fails once a statement takes the `Prop`. A new named
+  reads it without taking it then lists it under `premises.open`, whoever else takes it, and the `why` fails when no
+  guarantee does. A new named
   assumption fails until `--update` adds it with its guarantees' owner. An alias of listed premises is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of
   `∀` and `→` and reducible unfolding, only listed premises or such aliases (`Facts.lean`'s `unfolds`; what it takes may
   mention only listed ones). Its parts are held to the lock in its place, and a closed one's are the guarantee's. One

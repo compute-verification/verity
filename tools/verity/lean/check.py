@@ -1406,7 +1406,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     it.  Each guarantee keeps its `owner`; ``owner`` (`--update --owner`) is that of one without, and an update writes no
     record for a guarantee that has none.  ``ticket`` (with ``update``: `repaired`, `--bookkeeping warn`) files each open
     premise the lock doesn't list, and gives an owner to each entry without one (`assumption_records`).  A guarantee's
-    `premises.open` lists the open premises it takes and each one resting on a read (`on_read`) that its statement reads."""
+    `premises.open` lists the open premises it takes and each one resting on a read (`on_read`) that its statement reads,
+    whoever else takes it; such an entry's `why` fails when no guarantee reads its `Prop` without taking it."""
     fails = []
     if free := unowned_lock(policy) and not owner:
         ticket = None
@@ -1612,7 +1613,12 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for a, gs in taken.items():
         for g in gs:
             rests.setdefault(g, set()).add(a)
-    on_reads = {a for a, e in opens.items() if on_read(e) and a not in taken}
+    on_reads = {a for a, e in opens.items() if on_read(e)}
+    for a in sorted(on_reads):
+        if not {g for es in reads.values() if a in es for g in es[a]["guarantees"]} - taken.get(a, set()):
+            fails.append(Failure("open.why-stale", a, f"open: {a}'s entry gives a `why`, which says that the guarantees "
+                                 f"reading {a} without taking it rest on it, and none does: it is a premise of "
+                                 f"{', '.join(sorted(taken.get(a, ())))}; remove the `why`"))
     for name in sorted(recorded):
         r = kept[name]
         takes = rests.get(name, set()) | set(r["assumptions"])
@@ -2059,9 +2065,10 @@ def read_props(pin: dict, policy: dict, on_reads=()) -> set[str]:
 
 
 def on_read(rec) -> bool:
-    """Whether the `open` entry ``rec`` says it rests on a read: it gives a `why`, one line a person writes naming the
-    statement that holds its `Prop` without taking it as a hypothesis (a conjunct of its event).  An update keeps the
-    field and writes none (`assumption_records`)."""
+    """Whether the `open` entry ``rec`` says it rests on a read: it gives a `why`, one line a person writes naming a
+    statement that holds its `Prop` without taking it as a hypothesis (a conjunct of its event).  The guarantees that read
+    the `Prop` without taking it then rest on it, whether or not another statement takes it.  An update keeps the field
+    and writes none (`assumption_records`)."""
     return isinstance(rec, dict) and "why" in rec
 
 
@@ -2759,8 +2766,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     an entry without an owner takes its guarantees' (the first, of several) or ``ticket``'s.  A `Prop` that a statement
     reads but none takes is held by its `reads` record and listed in none, unless its `open` entry rests on a read
     (`on_read`): that entry stays, with its issue and its due date, its digest the `reads` record's, and each guarantee
-    that reads the `Prop` lists it under `premises.open` (`judge`); an update keeps its `why` and adds none, and a `why` on
-    the entry of a `Prop` some statement takes fails.  Each
+    that reads the `Prop` lists it under `premises.open` (`judge`); an update keeps its `why` and adds none.  The `why` may
+    stay once a statement takes the `Prop`, since the guarantees that only read it still rest on it: the entry owes its
+    issue, its due date and its `why` either way, and fails when no guarantee reads the `Prop` without taking it.  Each
     entry has an `owner` and a `digest`, so a changed premise
     shows as its own record, and an entry no guarantee takes or reads fails.  The digest is the one its `reads` record
     holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
@@ -2945,13 +2953,12 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         if kind == "open":
             ticket = {k: rec[k] for k in ("issue", "due") if k in (rec or {})} if section == "open" else \
                 {k: v for k, v in (issue_of(a, who) or {}).items() if k in ("issue", "due")}
-            if a not in premised:
+            if held:
                 if not (isinstance(rec["why"], str) and rec["why"].strip() and "\n" not in rec["why"] and (free or (
                         OPEN_ISSUE.fullmatch(str(ticket.get("issue"))) and OPEN_DUE.fullmatch(str(ticket.get("due")))))):
-                    fails.append(Failure("open.form", a, f"open: {a}'s entry, of a `Prop` a statement reads and none "
-                                         f"takes, gives the `issue` that discharges it as a Linear key (TEAM-N), its `due` "
-                                         f"as a date (YYYY-MM-DD) and its `why`, one line naming the statement that "
-                                         f"holds it"))
+                    fails.append(Failure("open.form", a, f"open: {a}'s entry, which gives a `why`, gives the `issue` that "
+                                         f"discharges it as a Linear key (TEAM-N), its `due` as a date (YYYY-MM-DD) and "
+                                         f"its `why` as one line naming a statement that holds it without taking it"))
             elif not ticket and not (free and section == "open"):
                 fails.append(unlisted(a, premised[a], entry))
                 continue
@@ -2959,10 +2966,6 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                  and OPEN_DUE.fullmatch(str(ticket.get("due")))):
                 fails.append(Failure("open.form", a, f"open: {a}'s entry gives its `due` as a date (YYYY-MM-DD) and its "
                                      f"`issue`, when it has one, as a Linear key (TEAM-N)"))
-            if held and a in premised:
-                fails.append(Failure("open.taken", a, f"open: {a} is a premise of {', '.join(sorted(premised[a]))}, and its "
-                                     f"entry gives a `why`, which only the entry of a `Prop` no statement takes gives: "
-                                     f"remove the `why`"))
             entry |= ticket | ({"why": rec["why"]} if held else {})
         if not who and not free:
             fails.append(Failure(f"{kind}.no-owner", a, f"{kind}: {a} has no owner: write \"owner\": \"@lane\" in its "
