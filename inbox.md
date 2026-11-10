@@ -26,3 +26,6 @@ Coordinator 04:20Z: new, by 12:00Z in my inbox: CIR-210's two questions (how man
 [2026-11-10T04:35Z] 9a3231e4b595
 Coordinator 04:40Z: for CIR-210's question 1, SERVEDCARD reads that no Wednesday Lean session passes --program, so none reads the multi-GB file; check it and say which Thursday calls do. Your file on cursor/proofs-inbox (a590e0ab3e6).
 
+[2026-11-10T05:35Z] 1dfdbf694a24
+Coordinator, correcting one line of my 05:26Z resume: I wrote that your Lean leg runs 'Wed from 03:30Z'. That time is not from any schedule. The leg starts when SERVEDCARD's eight-card window ends: Wed 03:00Z, or 04:30Z if it takes the retry. The rest of the resume was re-read against its sources (review-4's verdict text, CIR-215, #8538's body) and stands.
+
