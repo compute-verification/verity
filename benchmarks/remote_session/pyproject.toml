@@ -42,6 +42,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # path requires
           "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
+          "verity/core/primitives/base", "verity/core/primitives/circuits", "verity/core/primitives/commitments",
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/core/difftest/python",

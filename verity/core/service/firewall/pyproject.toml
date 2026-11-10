@@ -20,5 +20,7 @@ untraced = [
     "tests/test_firewall_session_loop.py",
 ]
 # `lake` builds this package and, through its path requires, Flock's verifier (`Flock.Firewall.Contract` and what it
-# imports; its `flock-firewall contract` decides the references' transcripts) and the core protocol interface.
-inputs = ["verity/core/service/flock", "verity/core/protocols/interface"]
+# imports; its `flock-firewall contract` decides the references' transcripts), the base packages under it and the core
+# protocol interface.
+inputs = ["verity/core/service/flock", "verity/core/protocols/interface",
+          "verity/core/primitives/base", "verity/core/primitives/circuits", "verity/core/primitives/commitments"]
