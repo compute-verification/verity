@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Properties.Pouw.PearlPlus.Noise.LineKey
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Range.Basic
+import all Init.Data.String.Defs
 
 /-! Noise lines 0 to 127 of the test noise's F_B, sixteen to a kernel computation (`Witness.test_fb0` to
 `Witness.test_fb7`), checked one after another, so that a build holds one chunk's kernel state for the module at a
