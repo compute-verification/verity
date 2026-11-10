@@ -55,6 +55,9 @@ from .vqueue import FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Failed, Ver
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
+#: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
+#: how its launch is waited for
+OWN_TRAIN = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "train.sh"
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
 #: `CHECK_READS` (check.py, the modules it loads as it starts, and what they read), and the lean-build of `LEAN`, read from its
 #: source at the commit keyed (`_declared`), never run
@@ -108,7 +111,8 @@ def start(driver: Driver, sha: str, base: str, shards: int = 0) -> dict | None:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
     if shards > 1:
-        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{k}/{shards}"))
+        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{k}/{shards}",
+                                                      train_from=OWN_TRAIN))
                for k, on in enumerate(shard_machines(driver.on, shards), 1)]
         rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
         if any(r is None for r, _ in got):
@@ -118,7 +122,7 @@ def start(driver: Driver, sha: str, base: str, shards: int = 0) -> dict | None:
         elif not any("launch" in r for r, _ in got):
             rec = _grouped(rec)
     else:
-        rec, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw))
+        rec, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw, train_from=OWN_TRAIN))
     if rec is None:
         driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
         return None
