@@ -20,7 +20,7 @@ stands:
 2. **Its incorrect set** (`Compiled.FregX`): `Compiled.Freg`'s form at that trace, one set at every tape.
 3. **Its finder** (`Compiled.BconfX`): two independent runs, each at its own tape. Two runs at one statement open under
    one roots, so two that open one gate two ways give a collision, whatever their tapes.
-4. **Its error** (`Compiled.εregX`): `Compiled.εreg` with `B_conf,X` under the square root.
+4. **Its error** (`Compiled.εregX`): `Compiled.εreg` at `B_conf,X` in both binding terms.
 5. **The claim** (`Compiled.KSRegX`): `Compiled.KSReg`'s two conjuncts at `FregX` and `εregX`.
 6. **The compiler's statement** (`CompilerKSRegX`): at `CompilerKSReg`'s premises.
 
@@ -93,13 +93,14 @@ noncomputable def BconfX (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily 
 /-! ## 4. Its error -/
 
 /-- **The committed form's error at the trace read at the statement**:
-`ε_reg,X = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf,X] + Pr[B_conf]`, `εreg` with `B_conf,X` under the square root. The
+`ε_reg,X = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf,X] + Pr[B_conf,X]`, `εreg` at `B_conf,X` in both binding terms. The
 rewinding lemma's table is over the tape as well as the coins, so its conflicts are between two runs at two tapes
-(`BconfX`); one run's extractions that open a position two ways are still `Bconf`'s first run's. -/
+(`BconfX`). The last term, one run's extractions that open a position two ways, is at `BconfX` too, whose first run
+it is: the error then reads one finder, so a reader takes binding at one finder family, not at `Bconf` beside it. -/
 noncomputable def εregX (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) : ℝ :=
   L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) +
-    (Bconf H L Ω P x).Pr H
+    (BconfX H L Ω P x).Pr H
 
 /-! ## 5. The claim -/
 
