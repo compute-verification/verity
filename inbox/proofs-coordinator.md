@@ -27222,3 +27222,62 @@ and under "If you approve A": "soundness sizes the new step for this rule, and t
 **What I could not verify:** soundness's size and dates [relayed: its comment on TOP-394, created 07:28Z, read]; PROVECUT's table counts and its guess on the cards [relayed]; that compute-research's branch is still at 62b96de13f (not refetched since my 07:36Z entry).
 
 **Next from me:** I read my file inbox every 20 minutes or so for your reply on (a) to (c) and for the merge commit of `Spot/OneStageZk.lean`; I change the bullet when you relay soundness's answer.
+
+## VERIFYFAST-B, Tue 10 Nov 07:47Z (CIR-212): the step block is proved under `--zk` on the CPU prover, with no card. The Rust verifier accepted both sessions, and Lean passed every check. Node A now needs one card for at most 15 minutes, about 5 expected [guess]
+
+**For CIR-212, in four lines, if you want them:**
+> `TopPStep_v1{V=154880,S=1,N=2048,FIRST=false,COMBINE=-1}`, one instance on synthetic values at the served statics: 38.8M
+> ANDs and 1.27e9 nonzeros at k_log 27 [run]. Flock's CPU prover proves it under `--zk` in 6.5 s a session at a 35.6 GiB peak,
+> Flock's Rust verifier accepted both sessions, and Lean's verifier passed every check on both [run]. The GPU prover's figures
+> follow if node A runs it. Your `_v2` is 8% smaller and not yet run.
+
+**Result** of `r20261110-071034-e533`, on vy-nebius-cpu-12's proofs slot p6 (45 cores of an EPYC Genoa), at #8538's head
+`c329acde06`. It ended at 07:41:44Z with exit 0.
+- **Staged** `census:TopPStep_v1{…}` at one instance, from `stage.py`'s seeded synthetic values, its outputs checked against
+  the Program's reference [run]:
+  - 38,821,224 ANDs and 1,266,481,794 nonzeros (674.6M in A, 591.9M in B) at k_log 27, so m = 30 [run].
+  - The circuit file is 11.29 GB, written in 934 s at a 44.4 GiB peak [run].
+- **Proved under `--zk`:** `flock-cpu` on 37 cores, against the loopback Rust verifier (`serve --zk --draw subset:1`) on 8 [run].
+  - Both sessions were accepted with an empty `why`. The warm-up session took 9.48 s end to end, 7.01 s of it proving; the
+    timed one took 8.97 s, 6.52 s proving [run].
+  - Each session, the prover sent 2.09 MB and received 0.27 MB [run].
+  - The prover's command ran 114 s in all, its load included, at a 35.6 GiB peak [run].
+  - The verifier built the statement in 86.8 s, checked the sessions in 2.4 and 2.1 s, and peaked at 24.2 GiB [run; that
+    peak is from 5 s samples].
+- **Lean:** `flock-verify verify --zk`, built from the same tree, on one thread [run].
+  - It refused both sessions with `NO_PROGRAM`, which `verify` reaches only once every check has passed [read:
+    `ProvedScope.lean`]. This harness gives Lean no Program for a proof block, so that is the verdict its `summarize.py`
+    passes an honest run on [read: `benchmarks/served_units/README.md`]. It is not an acceptance.
+  - Both sessions took 269.9 s at a 41.9 GiB peak: 103.8 s to read the inputs, then 82.0 and 83.8 s a session [run]. One
+    session alone took 185.4 s at the same peak [run].
+  - `ks-form` printed `KS-FORM ok`, in 135.6 s at a 45.0 GiB peak [run].
+  - Not run: the forgeries of `job.sh`'s selftest build (a false output word, a false output claim, a flipped internal bit).
+
+**Every peak fell inside the plan's bands:**
+
+| step | the plan's band | measured |
+| --- | --- | --- |
+| the prover's host | 15 to 40 GiB | 35.6 GiB [run] |
+| the Rust verifier | 15 to 30 GiB | 24.2 GiB [run] |
+| Lean `verify --zk` | 30 to 100 GiB | 41.9 GiB, and 45.0 GiB for `ks-form` [run] |
+
+**What it answers, and what it doesn't:**
+- Circuits' "largest proved, 314e6 nonzeros" is out of date. This block is 4.0 times that and 4.6 times its 8.47M ANDs [run;
+  read: circuits' figures], and 1.3 times rmsnorm-v8's in both, at the same 33 nonzeros an AND [run].
+- It is `_v1`, `main`'s Definition, not circuits' flat `_v2`. `_v2` has 8% fewer nonzeros and 9% fewer ANDs [run: circuits'
+  `ca0e`], so I expect it to prove as well [guess]. It is not itself proved; staging it needs circuits' branch.
+- The prover here is the CPU's. The served prover is the GPU's, and only node A's run measures its device memory and time.
+
+**Node A, firmed.** The lease covers all of `prove_time.sh`'s `session()`: the circuit's hash, the verifier's statement
+build and the prover.
+- On the CPU that span took 216 s [run]. On node A I expect 4 to 6 minutes [guess], so I ask for one card for at most 15
+  minutes, about 5 expected. That replaces the plan's 30 and 15.
+- Before the lease, about 20 minutes of node A's CPUs: the CUDA build, 161 s [run: `4fb0`], and staging, 934 s [run].
+- After it, with no card, Lean on node A's CPUs: about 9 minutes with its build [run: 131 s, 270 s and 136 s on cpu-12].
+- `cir212/gpu.sh` now defaults to `LEASE_MIN=15` and logs its staged circuit's digest beside the CPU run's, so the two
+  statements can be matched.
+- No cannot-fit notice is needed: the attempt has its result now, and a node A slot that starts by Wed 07:00Z lands before
+  08:00Z [guess].
+
+**Next:** nothing runs until your slot. Two CPU-only follow-ups are ready if you want either; neither needs node A. One is
+`_v2` from circuits' branch, the other the forgeries on this statement. Each takes about an hour of a CPU node [guess].
