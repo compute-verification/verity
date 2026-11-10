@@ -49,7 +49,7 @@ import threading
 import time
 import tomllib
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -4272,12 +4272,16 @@ def staged_line(staged: dict) -> str:
 SAMPLE_RNG: random.Random = secrets.SystemRandom()
 #: the sampled recompile takes this many modules, or this share of them, whichever is more
 SAMPLE_MIN, SAMPLE_SHARE = 8, 0.02
-#: a module's outputs the sampled recompile compares, as Lake writes them (`sampled_file`)
-SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.sig", "c", "bc")
-#: what Lake writes beside them, hidden with them in the recompile's overlay so Lake compiles the module
-SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
+#: a module's outputs the sampled recompile compares: the parts a seal holds (`SNAPSHOT_PARTS`, `SNAPSHOT_CODE`), which are
+#: all that every reader after the seal reads of it
+SAMPLED_OUTPUTS = ("olean", "olean.server", "olean.private", "ir.sig", "ir")
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
+#: the lakefile settings, of a package or a target, that give Lake's `lean` command more than the options and files the
+#: sample's command passes (`sampled_setup`): a module so compiled fails its sample rather than be compared with another
+SAMPLE_UNREPEATED = ("buildType", "moreLeanArgs", "weakLeanArgs", "backend")
+#: the share of the cores the sample's compiles take, beside the replay, which runs at the same time
+SAMPLE_CORE_SHARE = 0.5
 #: (its package's build, module) of each module a build of this process compiled (`sampled_recompile`): a dependent's
 #: build reuses what its path dependencies' audits compiled, which without the sandbox is as cold as its own
 RUN_COMPILED: set[tuple[Path, str]] = set()
@@ -4285,54 +4289,97 @@ _RUN_COMPILED_LOCK = threading.Lock()
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
-    """Where ``mod``'s file ``ext`` (`SAMPLED_OUTPUTS`, `SAMPLED_BESIDE`) sits in a package's ``build`` (``mk``:
+    """Where ``mod``'s file ``ext`` (`SAMPLED_OUTPUTS`, its `trace`) sits in a package's ``build`` (``mk``:
     `module_keys`): Lake keeps the C code, its hash and the `setup.json` it gives `lean` under `ir/`, the rest under
     `lib/lean/`."""
     ir = ext == "setup.json" or ext.split(".")[0] in ("c", "bc")
     return build / ("ir" if ir else "lib/lean") / mk.path_of(mod, f".{ext}")
 
 
-def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], jobs: list[str],
-                      log=print) -> tuple[list[Failure], dict]:
-    """Recompile a random sample of the modules ``pkg``'s build didn't compile, and fail on any difference from the outputs
-    the build holds for them: (its failures, the report's `sampled`). The audit judges a module by its `.olean` files, and
-    a module the build didn't compile has outputs it restored (the node's artifact cache, `stage_build`, or a bundle another
-    node published) or kept (the package's kept build, `lean_audit.WarmBuilds`); nothing else binds those outputs to the
-    module's source. The population is every module of the build (``roots`` and the default targets, the workspace's path
-    dependencies included, `module_keys.keys`) with a trace in its package's build and not in ``built`` (the modules Lake
-    reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when fewer, taken
-    with `SAMPLE_RNG` after the build.
+def _options(table: dict, at: str = "") -> dict:
+    """A lakefile's `leanOptions` table as `lean` reads options: TOML nests a dotted key (`backward.proofsInPublic`)."""
+    out = {}
+    for k, v in table.items():
+        out |= _options(v, f"{at}{k}.") if isinstance(v, dict) else {f"{at}{k}": v}
+    return out
 
-    The build is never written: other packages' audits read a path dependency's outputs (their tests, their seals' re-hash)
-    while this runs. In the sandbox each of the build's `.lake` directories (`writable`) gets an overlay whose upper layer
-    is under ``work``/`sampled` (`in_overlay`); there the sampled modules' outputs and Lake's files beside them
-    (`SAMPLED_BESIDE`) are removed, and `lake build +M...` compiles them (``jobs``: the build's `env` prefix, without the
-    staged cache, so Lake restores nothing), into the upper layer at the build's own path. Every output (`SAMPLED_OUTPUTS`)
-    must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
-    one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
-    Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
-    and its file, and keeps the recompile's outputs in the upper layers; a pass removes them. Without the sandbox there is
-    no overlay, so nothing is recompiled and the report's `unsampled` says so; a module of the population that no build of
-    this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only
-    a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit prints the sample
-    under its line (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories
-    (`writing`), so no build changes an overlay's lower layer while it is mounted."""
+
+def sampled_setup(mk, key, mod: str, lakefiles: dict[Path, dict]) -> dict | str:
+    """The `--setup` file Lake writes for ``mod`` (``key``, `module_keys.keys`) but its `importArts`, which stays empty, so
+    `lean` finds every import on its search path, the seal's: the module's name and package, whether it is a `module`
+    file, and the options Lake gives it, the package's `leanOptions` and then its target's (a library, or the executable
+    whose root it is; `Package.owner`). Or why the sample can't repeat its compile: no single target owns it, or the
+    package or that target sets one of `SAMPLE_UNREPEATED`. ``lakefiles`` caches each package's parsed lakefile."""
+    p = key.package
+    if (doc := lakefiles.get(p.dir)) is None:
+        doc = lakefiles[p.dir] = tomllib.loads((p.dir / "lakefile.toml").read_text())
+    if not (owner := p.owner(mod)):
+        return f"no single target of {p.name} compiles it"
+    first = owner.split("+")[0]
+    kind, name = ("lean_exe", first.removeprefix(mk.EXE)) if first.startswith(mk.EXE) else ("lean_lib", first)
+    target = next((t for t in doc.get(kind, []) if t.get("name") == name), {})
+    if unrepeated := [k for t in (doc, target) for k in SAMPLE_UNREPEATED if k in t]:
+        return f"{p.name}'s lakefile sets {unrepeated[0]}, which Lake's `lean` command reads and the sample's doesn't"
+    return {"name": mod, "package": p.name, "isModule": key.module, "importArts": {}, "dynlibs": [], "plugins": [],
+            "options": _options(doc.get("leanOptions", {})) | _options(target.get("leanOptions", {}))}
+
+
+def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], sealed: "Sealed | None",
+                      threads: int | None = None, log=print) -> tuple[list[Failure], dict]:
+    """Recompile a random sample of the modules ``pkg``'s build didn't compile, and fail on any difference from the copies
+    of them its seal holds (``sealed``): (its failures, the report's `sampled`). The audit judges a module by its `.olean`
+    files, and a module the build didn't compile has outputs it restored (the node's artifact cache, `stage_build`, or a
+    bundle another node published) or kept (the package's kept build, `lean_audit.WarmBuilds`); nothing else binds those
+    outputs to the module's source. The population is every module of the build (``roots`` and the default targets, the
+    workspace's path dependencies included, `module_keys.keys`) that the seal holds and that is not in ``built`` (the
+    modules Lake reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when
+    fewer, taken with `SAMPLE_RNG` after the build.
+
+    It runs after the seal, beside the replay, and reads nothing a build can write: once the package is announced
+    (`audit`'s ``built``), a dependent's build may rewrite its `.lake`. Each sampled module is compiled from its source by
+    the toolchain's `lean`, on the seal's search path (`Sealed.bin`) with a setup that names no import's files
+    (`sampled_setup`), so every import it loads is the seal's copy. It runs in the build sandbox, writable only in its own
+    directory under ``work``/`sampled`, where it writes its outputs, `SAMPLE_CORE_SHARE` of ``threads`` (the build's
+    `LEAN_NUM_THREADS`, which each `lean` is given, else the cores) at a time. Every output (`SAMPLED_OUTPUTS`) must be in
+    both the seal and the recompile or in neither, and equal byte for byte; where only `PATH_PARTS` differ, the module's
+    parts must be one object graph but for strings that are absolute paths ending in the module's source path
+    (`olean_graph.differs`): Lean keeps a message's file in `olean.server`, so a build at another path differs there. A
+    failure names the module and its file, and keeps the recompile's outputs; a pass removes them.
+
+    Without the sandbox ``sealed`` is None, and the audit calls this before its seal: nothing is recompiled and the
+    report's `unsampled` says so. A module of the population (there: those with a trace in their package's build) that
+    no build of this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the
+    audit, and only a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit
+    prints the sample under its line (`sampled:`), so a run records what it checked."""
     mk, og = sibling("module_keys"), sibling("olean_graph")
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
     with _RUN_COMPILED_LOCK:
         RUN_COMPILED.update((k.package.build().resolve(), m) for m, k in keyed.items() if m in built)
         cold = set(RUN_COMPILED)
-    pop = sorted(m for m, k in keyed.items()
-                 if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
+    builds: dict[Path, Path] = {}
+
+    def build(m: str) -> Path:
+        p = keyed[m].package
+        return builds.get(p.dir) or builds.setdefault(p.dir, p.build().resolve())
+
+    def live(m: str, ext: str) -> Path:
+        return sampled_file(mk, build(m), m, ext)
+
+    def held(m: str) -> bool:
+        if sealed is None:
+            return live(m, "trace").is_file()
+        return (f := sealed.moved(live(m, "olean"))) is not None and f.is_file()
+
+    pop = sorted(m for m in keyed if m not in built and held(m))
     sample = sorted(SAMPLE_RNG.sample(pop, min(len(pop), max(SAMPLE_MIN, math.ceil(SAMPLE_SHARE * len(pop))))))
     rep: dict = {"population": len(pop), "modules": sample}
     if not keyed and isinstance(why := mk.workspace(pkg), str):
         rep["unkeyed"] = why
-    if sample and not sandboxed():
-        rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in an overlay in the "
-                                                "sandbox's mount namespace, never in the build other packages read")
-        if warm := [m for m in pop if (keyed[m].package.build().resolve(), m) not in cold]:
+    if sample and sealed is None:
+        rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in the sandbox, against the "
+                                                "seal, never on the build other packages read")
+        if warm := [m for m in pop if (build(m), m) not in cold]:
             rep["seconds"] = round(time.monotonic() - s, 1)
             return [Failure("sampled", None, (
                 f"sampled: the sandbox probe failed here (`sandboxed`), yet {len(warm)} of the {len(pop)} modules "
@@ -4343,87 +4390,62 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
         rep["seconds"] = round(time.monotonic() - s, 1)
         return [], rep
     top = work / "sampled"
-    _remove_tree(top)
-    lakes = sorted({d.resolve() for d in [*writable(pkg), *(keyed[m].package.dir / ".lake" for m in sample)] if d.is_dir()})
-    layers = {d: top / str(i) for i, d in enumerate(lakes)}
-
-    def upper(f: Path) -> Path | None:
-        f = f.resolve()
-        d = max((d for d in layers if f.is_relative_to(d)), default=None)
-        return d and layers[d] / "upper" / f.relative_to(d)
-
-    gone = [f for m in sample for ext in (*SAMPLED_OUTPUTS, *SAMPLED_BESIDE)
-            if (f := sampled_file(mk, keyed[m].package.build(), m, ext)).is_file()]
-    if out := [f for f in gone if upper(f) is None]:
-        rep["seconds"] = round(time.monotonic() - s, 1)
-        return [Failure("sampled", None, f"sampled: {out[0]} resolves outside the .lake directories the recompile "
-                                         f"overlays ({', '.join(map(str, lakes))}), so it can't be recompiled")], rep
-    top.mkdir(parents=True)
-    (listing := top / "remove.txt").write_text("".join(f"{f.resolve()}\n" for f in gone))
-    log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile")
-    rc, text = run(in_overlay(layers, ["bash", "-c", 'while IFS= read -r f; do rm -f -- "$f" || exit; done < "$0"; exec "$@"',
-                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)]),
-                   pkg, work / "sampled.log")
-    for t in layers.values():
-        _remove_tree(t / "work")
-    rep["seconds"] = round(time.monotonic() - s, 1)
-    if rc:
-        return [Failure("sampled", None, f"sampled: the recompile of {', '.join(sample)} exited {rc}\n{text[-3000:]}")], rep
-    fails, graphs = [], []
-    compiled = {m for m, *_ in BUILT.findall(text)}
-    for m in sample:
-        if m not in compiled:
-            fails.append(Failure("sampled", m, f"sampled: {m}: Lake didn't recompile it, so its outputs can't be compared"))
+    shutil.rmtree(top, ignore_errors=True)
+    lakefiles: dict[Path, dict] = {}
+    fails, plans = [], []
+    for i, m in enumerate(sample):
+        setup = sampled_setup(mk, keyed[m], m, lakefiles)
+        if isinstance(setup, str):
+            fails.append(Failure("sampled", m, f"sampled: {m}: {setup}, so the sample can't repeat its compile"))
             continue
-        p = keyed[m].package
-        old = {ext: sampled_file(mk, p.build(), m, ext) for ext in SAMPLED_OUTPUTS}
-        now = {ext: upper(f) for ext, f in old.items()}
+        (d := top / str(i)).mkdir(parents=True)
+        (d / "setup.json").write_text(json.dumps(setup))
+        plans.append((m, d))
+    lean, n = sealed.bin("lean"), threads or cores()
+    rep["jobs"] = jobs = max(1, min(len(plans), int(n * SAMPLE_CORE_SHARE)))
+    log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile against its seal, "
+        f"{jobs} at a time")
+
+    def compile(m: str, d: Path) -> tuple[int, str]:
+        (o := d / mk.path_of(m, ".olean")).parent.mkdir(parents=True, exist_ok=True)
+        return run([*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), "--ro", str(sealed.dir), str(d), "--",
+                    *lean[:-1], *([f"LEAN_NUM_THREADS={threads}"] if threads else []), lean[-1],
+                    str(keyed[m].package.file(m)), "-o", str(o), "-i", str(o.with_suffix(".ilean")),
+                    "-c", str(o.with_suffix(".c")), "--setup", str(d / "setup.json"), "--json"],
+                   keyed[m].package.dir, d / "lean.log")
+
+    with ThreadPoolExecutor(max_workers=jobs) as ex:
+        ran = list(ex.map(lambda md: compile(*md), plans))
+    rep["seconds"] = round(time.monotonic() - s, 1)
+    graphs = []
+    for (m, d), (rc, text) in zip(plans, ran):
+        if rc:
+            fails.append(Failure("sampled", m, f"sampled: {m}: `lean` exited {rc} on its source against the seal\n"
+                                               f"{text[-3000:]}"))
+            continue
+        old = {ext: sealed.mapped(live(m, ext)) for ext in SAMPLED_OUTPUTS}
+        now = {ext: d / mk.path_of(m, f".{ext}") for ext in SAMPLED_OUTPUTS}
         if one := [ext for ext in SAMPLED_OUTPUTS if now[ext].is_file() != old[ext].is_file()]:
-            fails.append(Failure("sampled", m, f"sampled: {m}: {', '.join(one)} only in the build or only in the recompile"))
+            fails.append(Failure("sampled", m, f"sampled: {m}: {', '.join(one)} only in the seal or only in the recompile"))
             continue
         here = [ext for ext in SAMPLED_OUTPUTS if old[ext].is_file()]
         differ = [ext for ext in here if now[ext].read_bytes() != old[ext].read_bytes()]
         if bad := [ext for ext in differ if ext not in PATH_PARTS]:
-            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {old[bad[0]].relative_to(p.dir)} differs from "
-                                               f"what its source compiles to ({', '.join(bad)} differ; the recompile's is "
-                                               f"{now[bad[0]]})"))
+            fails.append(Failure("sampled", m, f"sampled: {m}: the build's {live(m, bad[0])} differs from what its source "
+                                               f"compiles to ({', '.join(bad)} differ; the seal's copy is {old[bad[0]]}, "
+                                               f"the recompile's {now[bad[0]]})"))
             continue
         if differ:
             parts = [q for q in og.PARTS if q in here]
             if why := og.differs({q: old[q] for q in parts}, {q: now[q] for q in parts}, mk.path_of(m, ".lean").as_posix()):
-                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {old[differ[0]].relative_to(p.dir)} differs "
-                                                   f"from what its source compiles to: {why}"))
+                fails.append(Failure("sampled", m, f"sampled: {m}: the build's {live(m, differ[0])} differs from what its "
+                                                   f"source compiles to: {why}"))
                 continue
             graphs.append(m)
     rep["by_graph"] = graphs
-    if fails:
-        for f in list(top.rglob("*")):
-            if f.is_symlink() or not (f.is_file() or f.is_dir()):
-                f.unlink()                              # whiteouts: the run's files keep regular files only
-        return fails, rep
-    _remove_tree(top)
-    rep["seconds"] = round(time.monotonic() - s, 1)
-    return [], rep
-
-
-def _remove_tree(d: Path) -> None:
-    """Remove ``d``, opening each directory first: the kernel leaves an overlay's work directory unreadable (mode 0)."""
-    with contextlib.suppress(OSError):
-        d.chmod(0o700)
-    for root, dirs, _ in os.walk(d):
-        for sub in (os.path.join(root, x) for x in dirs):
-            if not os.path.islink(sub):
-                with contextlib.suppress(OSError):
-                    os.chmod(sub, 0o700)
-    shutil.rmtree(d, ignore_errors=True)
-
-
-def in_overlay(layers: dict[Path, Path], argv: list[str]) -> list[str]:
-    """``argv`` in the build sandbox with an overlay over each directory of ``layers`` ({directory: its layers'
-    directory}, `sandbox.sh`'s `--overlay`): it reads each directory as it is and writes only into its layers, so the
-    directory itself, which other processes read meanwhile, never changes."""
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"),
-            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), "--", *argv]
+    if not fails:
+        shutil.rmtree(top, ignore_errors=True)
+    return fails, rep
 
 
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
@@ -5264,10 +5286,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
-          store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False) -> dict:
+          store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
+          matched=lambda ok: None, prover_matched=lambda q: None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
-    modules the build didn't compile is compiled again and compared with what the build holds (`sampled_recompile`; the
-    report's `sampled`) before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
+    modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
+    copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
+    as it does for the replay: a failure there fails the package, and its facts document is then neither written nor
+    stored. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``prover_matched`` (a
+    package whose facts `proved` read) returns once that package's sample has, False when it didn't match, and the
+    package then fails (`proved_in.sampled`). Without the sandbox nothing is recompiled, and the sample's check runs
+    before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
@@ -5314,7 +5342,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         log(f"replay: {pkg}: {rep['replay_cache']}; every module is replayed")
         replay_cache = None
     t, _peak.bytes = time.monotonic(), 0
-    pipe = None
+    pipe = later = None
     if build:
         rep["sandbox"] = sandboxed()
         (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"]}))
@@ -5385,17 +5413,23 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["sampled"] = "none sampled: a --dev-cache build restores from Lake's own cache, and its run is never a verdict"
         else:
             compiled = set(build_seconds([work / f"{step}.log" for step in ("build-plugins", "build", "build-roots")]))
-            with writing(pkg, log):
-                fails, rep["sampled"] = sampled_recompile(
-                    pkg, policy["roots"], work, compiled,
-                    ["env", "-u", "LAKE_CACHE_DIR", *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])], log)
-            if fails:
-                rep["failures"] += fails
-                return reported(rep)
+            if rep["sandbox"]:
+                later = compiled
+            else:
+                with writing(pkg, log):
+                    fails, rep["sampled"] = sampled_recompile(pkg, policy["roots"], work, compiled, None, n, log)
+                if fails:
+                    rep["failures"] += fails
+                    return reported(rep)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
     # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
     try:
         sealed = seals.take(pkg, rep["toolchain"], policy["roots"], policy.get("exempt", {}), work, log) if seals is not None else None
+        own_seal = None
+        if later is not None and sealed is None:        # the sample reads only a seal: without the run's, it takes its own
+            with writing(pkg, log):
+                own_seal = Sealed(pkg, rep["toolchain"], work / "sample-seal").take(
+                    policy["roots"], policy.get("exempt", {}), work, log)
     except RuntimeError as e:                           # the build cannot be sealed; `one`'s finally announces it unpassed
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         return reported(rep)
@@ -5406,9 +5440,27 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # tampered with, so by default it reuses the cache but writes nothing — a live-keyed verdict never enters it.
     # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
     store = (sealed is not None) if store is None else store
+    if later is None:
+        matched(True)
     built()
     files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=5)
+    background = ThreadPoolExecutor(max_workers=6)
+    sample = background.submit(timed, sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log) \
+        if later is not None else None
+
+    def sampled() -> list[str]:
+        """The sample's failures, once it has ended, which ``matched`` hears; called once, on every way out below."""
+        if sample is None:
+            return []
+        try:
+            (got, rep["sampled"]), rep["seconds"]["sampled"] = sample.result()
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, CancelledError) as e:
+            got = [Failure("sampled", None, f"sampled: the recompile raised {type(e).__name__}: {e}")]
+        if own_seal:
+            shutil.rmtree(own_seal.dir, ignore_errors=True)
+        matched(not got)
+        return got
+
     # tests run sandboxed on the live `.lake`, not a seal: a package with `runs` is one no other package builds, so every
     # build in the run has ended before its tests start, and `tests` fails loudly if a build is still writing that `.lake`
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
@@ -5419,12 +5471,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
         if early and "upstream" in policy else None
     current = renamed_current(policy, moved)
-    s, waited = time.monotonic(), []
+    s, waited, read = time.monotonic(), [], []
 
     def built_prover(q: Path):
         w = time.monotonic()
         passed = ready(q)
         waited.append(time.monotonic() - w)
+        read.append(q)
         return passed
 
     replayed = scanned = digested = unread = None
@@ -5453,6 +5506,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
         background.shutdown(cancel_futures=True)
+        rep["failures"] += sampled()
         return reported(rep)
     if waited:
         rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
@@ -5465,6 +5519,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             rep["moved"] = lift(pkg, current, facts, lifts)
         except ValueError as e:
             rep["failures"].append(Failure("lift", None, f"lift: {e}"))
+        rep["failures"] += sampled()
         return reported(rep)
     facts["source_modules"] = sorted(module_files(pkg))
     fails, new = judge(current, facts, files, update, owner)
@@ -5517,6 +5572,19 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if replayed:
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
+    unsampled, w = sampled(), time.monotonic()
+    for q in read:
+        if prover_matched(q) is False:
+            entry = os.path.relpath(q, pkg.resolve())
+            unsampled.append(Failure("proved_in.sampled", entry, f"proved_in: {entry}'s sampled recompile failed (its "
+                                     f"report says which module), so the facts read from its seal may not be of its sources"))
+    if read:
+        rep["seconds"]["proved-in-sample-wait"] = round(time.monotonic() - w, 1)
+    if unsampled:
+        fails += unsampled
+        if facts_cache is not None or facts_out is not None:
+            rep["facts_cache"] = "not written: a sampled recompile failed, so the facts may not be of the sources"
+            facts_cache = facts_out = None
     if pipe:
         rep["pipeline"] = [dict(b) for b in pipe.batches]
     if fresh:
@@ -5978,6 +6046,9 @@ def main(argv: list[str]) -> int:
         sandboxed()                                     # probed once, before anything runs beside the probe
     built = {p: threading.Event() for p in pkgs}
     passed: set[Path] = set()
+    #: each package's sampled recompile has ended (`audit`'s ``matched``), and those whose sample matched
+    sample_done = {p: threading.Event() for p in pkgs}
+    matching: set[Path] = set()
     needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
     by_controls: list[str] = []
     reports: dict[Path, dict] = {}
@@ -6024,10 +6095,13 @@ def main(argv: list[str]) -> int:
                             bookkeeping=due, seals=run_seals,
                             facts_cache=(a.facts_only or a.facts_cache).resolve()
                             if (a.facts_only or a.facts_cache) and mine else None,
-                            facts_reuse=a.facts_cache is not None)
+                            facts_reuse=a.facts_cache is not None,
+                            matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
+                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None)
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
+            sample_done[pkg].set()
         with lock:
             if tamper := [Failure("tamper", p, f"tamper: {p} changed while {pkg} was built and audited")
                           for p in tampered(seals, bins)]:
