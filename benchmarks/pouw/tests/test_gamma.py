@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("pouw_gamma", Path(__file__).parents[1] / "gamma.py")
+spec = importlib.util.spec_from_file_location("pouw_gamma", Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "gamma.py")
 G = importlib.util.module_from_spec(spec)
 sys.modules["pouw_gamma"] = G
 spec.loader.exec_module(G)

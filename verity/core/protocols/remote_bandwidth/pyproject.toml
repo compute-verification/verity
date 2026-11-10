@@ -32,13 +32,13 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/spot/verifier/tests/fixtures/main-first-parent.txt",
           # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
           # canonical JSON, held to the circuits codec's
-          "verity/core/protocols/pouw/lean/check/models.json",
+          "verity/protocols/pouw/verifier/lean/check/models.json",
           # the claims registry, which test_ledger.py holds the memory line's named PRF claim to
           "verity/core/claims/__init__.py",
           # PoUW's core answer form and what it imports, which test_p2_party.py holds a session's answer to
-          "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
-          "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
-          "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",
-          "verity/core/protocols/pouw/window.py", "verity/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/audit.py",
+          "verity/protocols/pouw/verifier/coins.py", "verity/protocols/pouw/verifier/core_check.py",
+          "verity/protocols/pouw/verifier/protocol.py", "verity/protocols/pouw/verifier/salt.py",
+          "verity/protocols/pouw/verifier/window.py", "verity/spot/verifier/one_stage/__init__.py",
           "verity/spot/verifier/one_stage/partition.py",
           "verity/spot/verifier/one_stage/registered.py"]

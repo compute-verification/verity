@@ -8,7 +8,7 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
-- **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
+- **work**, by proof of useful work (PoUW, `verity/protocols/pouw/verifier/`), on the served model itself: the endpoint
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
 - **the inference-only policy** (`verity/core/protocols/network/nci/`): the registered circuit divides into inference

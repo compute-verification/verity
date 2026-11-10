@@ -135,15 +135,15 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its products, `z`'s and the lanes' segment
     dots (r·c·(2K + 32m)), as int8 multiply-adds, of which census/v1 counts none served (Lean's `Accounting.Gates.roleOf`
     puts the tile's served role on its receipt's words, which take no MACs). Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
-    proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved", which credits its tile's `z` products,
+    proved bound for its census (verity/protocols/pouw/proved_ticks.py), basis "proved", which credits its tile's `z` products,
     r·c·K, and not the segment dots'. Slow: compiling builds the unit's 15
     million gates (about 40 s), and no other test has a compiled Program."""
     import importlib.util
     import sys
     from pathlib import Path
 
-    from verity.ml.protocols.pouw.circuit import compile as pouw
-    from verity.ml.protocols.pouw.circuit import h1tile
+    from verity.protocols.pouw.prover.circuit import compile as pouw
+    from verity.protocols.pouw.prover.circuit import h1tile
     from datacenter.models import s8_grid
 
     spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
@@ -182,8 +182,8 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     import sys
     from pathlib import Path
 
-    from verity.ml.protocols.pouw.circuit import compile as pouw
-    from verity.ml.protocols.pouw.circuit import h1tile
+    from verity.protocols.pouw.prover.circuit import compile as pouw
+    from verity.protocols.pouw.prover.circuit import h1tile
     from datacenter.models import s8_grid
 
     spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")

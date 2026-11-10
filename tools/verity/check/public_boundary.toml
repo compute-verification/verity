@@ -37,7 +37,7 @@ ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,ker
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
     "verity/core/protocols/{profile.py,pouw}",
-    "verity/ml/protocols/pouw",
+    "verity/protocols/pouw/prover",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
     "Security/Definitions/Assumptions/Pouw.lean",
@@ -93,13 +93,13 @@ benchmarks = [
 ]
 
 [private]
-# PoUW's tests and difftest vectors that run the clear audit (`benchmarks/pouw/clear`, a reference tool), H1's lanes
+# PoUW's tests and difftest vectors that run the clear audit (`verity/protocols/pouw/clear`, a reference tool), H1's lanes
 # (`benchmarks/pouw/h1_lanes`) or the network certifier
 pouw_tests = [
-    "verity/core/protocols/pouw/tests/test_pouw_{audit,epoch_coins,pearl_c,pearl_c4,pearl_c_sm120,pearl_c_work,pearl_kw}.py",
-    "verity/core/protocols/pouw/tests/{epoch_coins_vectors,test_pouw_salt}.py",
-    "verity/core/protocols/pouw/lean/commit/tests/{difftest_vectors,test_pouw_commit_lean_difftest}.py",
-    "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_{audit,epoch_coins,pearl_c,pearl_c4,pearl_c_sm120,pearl_c_work,pearl_kw}.py",
+    "verity/protocols/pouw/verifier/tests/{epoch_coins_vectors,test_pouw_salt}.py",
+    "verity/protocols/pouw/verifier/lean/commit/tests/{difftest_vectors,test_pouw_commit_lean_difftest}.py",
+    "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
     "verity/core/protocols/{pous,bandwidth,remote_bandwidth,network}",

@@ -11,7 +11,7 @@ import pytest
 from verity_machine_model.eps import design, designs, eps, machine
 from verity_machine_model.model import device, devices
 
-spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[1] / "eps_budget.py")
+spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[3] / "verity" / "protocols" / "pouw" / "eps_budget.py")
 E = importlib.util.module_from_spec(spec)
 sys.modules["pouw_eps_budget"] = E
 spec.loader.exec_module(E)

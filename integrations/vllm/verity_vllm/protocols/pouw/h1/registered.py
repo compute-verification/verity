@@ -42,7 +42,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.pouw.audit import hm96_salt
+from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.spot.verifier.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch

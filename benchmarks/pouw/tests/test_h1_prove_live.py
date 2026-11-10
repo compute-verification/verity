@@ -14,9 +14,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.ml.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw import live_reads as LR
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.prover.circuit import live as L
+from verity.protocols.pouw.verifier import live_reads as LR
 from verity.spot.verifier.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
@@ -131,7 +131,7 @@ def test_evidence_is_credits_live_statements_on_the_staged_program(prepared, tmp
     import hashlib
     import shutil
 
-    from verity.core.protocols.pouw import credit as CR
+    from verity.protocols.pouw.verifier import credit as CR
 
     base, _pub, _rc = prepared
     work = tmp_path / "work"

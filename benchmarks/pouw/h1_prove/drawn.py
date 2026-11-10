@@ -17,7 +17,7 @@ from typing import Sequence
 
 import numpy as np
 
-from verity.core.protocols.pouw import credit as CR
+from verity.protocols.pouw.verifier import credit as CR
 from verity.spot.verifier.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import drawn as D
 

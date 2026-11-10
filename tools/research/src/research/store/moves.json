@@ -2227,6 +2227,22 @@
         "verity/core/service/vstar/tests/recursive_data.json": "verity/spot/verifier/recursive/tests/recursive_data.json",
         "verity/core/service/vstar/tests/test_vstar_recursive.py": "verity/spot/verifier/recursive/tests/test_vstar_recursive.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/budget.py": "verity/protocols/pouw/budget.py",
+        "benchmarks/pouw/budget_fill.json": "verity/protocols/pouw/budget_fill.json",
+        "benchmarks/pouw/budget_sampling.json": "verity/protocols/pouw/budget_sampling.json",
+        "benchmarks/pouw/clear/": "verity/protocols/pouw/clear/",
+        "benchmarks/pouw/eps_budget.py": "verity/protocols/pouw/eps_budget.py",
+        "benchmarks/pouw/gamma.py": "verity/protocols/pouw/gamma.py",
+        "benchmarks/pouw/grind_price.py": "verity/protocols/pouw/grind_price.py",
+        "benchmarks/pouw/period_cost.py": "verity/protocols/pouw/period_cost.py",
+        "benchmarks/pouw/proved_ticks.py": "verity/protocols/pouw/proved_ticks.py",
+        "benchmarks/pouw/receipts/": "verity/protocols/pouw/receipts/",
+        "verity/core/protocols/pouw/": "verity/protocols/pouw/verifier/",
+        "verity/ml/protocols/pouw/": "verity/protocols/pouw/prover/"
+      }
     }
   ]
 }

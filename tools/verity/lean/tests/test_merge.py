@@ -1204,7 +1204,7 @@ paths = ["tests"]
 inputs = ["verity/__init__.py", "verity/settings.py",
           "verity/circuits",
           # the H1 units read both.
-          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
+          "verity/protocols/pouw/verifier/core_check.py", "verity/protocols/pouw/verifier/leaf_lanes.py",
           "verity/ml/protocols/pous/circuit.py"]
 untraced = ["fixtures"]
 '''
@@ -1233,7 +1233,7 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     text, left = _pyproject(tmp_path, PYPROJECT, gone, add("verity/b.py"))
     assert left == 0, text
     assert set(tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:]) == {
-        "verity/core/protocols/pouw/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
+        "verity/protocols/pouw/verifier/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
     def version(v):
         return add(f"verity/{v}.py").replace('version = "0.1.0"', f'version = "{v}"')
     text, left = _pyproject(tmp_path, PYPROJECT, version("1"), version("2"))

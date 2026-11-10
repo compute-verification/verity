@@ -256,13 +256,13 @@ BENCHMARKS_IMPORTERS = {
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
     **dict.fromkeys((
-        "verity/core/protocols/pouw/tests/epoch_coins_vectors.py", "verity/core/protocols/pouw/tests/test_pouw_audit.py",
-        "verity/core/protocols/pouw/tests/test_pouw_epoch_coins.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_c.py",
-        "verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_c_sm120.py",
-        "verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_kw.py",
-        "verity/core/protocols/pouw/lean/commit/tests/difftest_vectors.py",
-    ), "compute-accounting: PoUW's clear lifecycle (`benchmarks/pouw/clear`, and `pearl_c4`)"),
-    "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
+        "verity/protocols/pouw/verifier/tests/epoch_coins_vectors.py", "verity/protocols/pouw/verifier/tests/test_pouw_audit.py",
+        "verity/protocols/pouw/verifier/tests/test_pouw_epoch_coins.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c.py",
+        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c4.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
+        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_kw.py",
+        "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py",
+    ), "compute-accounting: PoUW's clear lifecycle (`verity/protocols/pouw/clear`, and `pearl_c4`)"),
+    "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
     **dict.fromkeys(("verity/core/protocols/pous/check/scripts/difftest_vectors.py",
                      "verity/core/protocols/pous/check/tests/test_timed_audit.py"),

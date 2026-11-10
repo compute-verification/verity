@@ -61,7 +61,7 @@ from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import INTEGER_FIELDS, WardenParams
-from verity.core.protocols.pouw import core_check as CC
+from verity.protocols.pouw.verifier import core_check as CC
 from verity.spot.verifier.one_stage import registration as R
 from verity.spot.verifier.one_stage.draw import stratum_k
 from verity.circuits import boolean as BL, codec, population

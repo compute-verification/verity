@@ -19,8 +19,8 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.circuits.types import Array, Value
-from verity.core.protocols.pouw import audit as PA
-from verity.core.protocols.pouw.protocol import tagged
+from verity.protocols.pouw.verifier import audit as PA
+from verity.protocols.pouw.verifier.protocol import tagged
 from verity.spot.verifier.one_stage import (audit, draw as D, partition as P, registered as G, registration as R,
                                                  verifier as V)
 

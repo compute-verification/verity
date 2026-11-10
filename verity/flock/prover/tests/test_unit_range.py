@@ -39,7 +39,7 @@ def test_a_unit_past_the_range_is_refused_before_it_is_lowered(monkeypatch):
     with pytest.raises(ValueError, match=r"^unit/wide: the unit needs a slot of 2\^28 witness bits \(134,217,727 ANDs and 3 port "
                                          r"bits, read off its Definition\); C-Flock's proved range is 2\^27 \(Flock/Statement\.lean "
                                          r"Stmt\.InRange\): split the unit \(e\.g\. PoUW's lanes form, "
-                                         r"verity/core/protocols/pouw/leaf_lanes\.py\) or extend the proved range \(proofs\)$"):
+                                         r"verity/protocols/pouw/verifier/leaf_lanes\.py\) or extend the proved range \(proofs\)$"):
         CS.UnitStager(d, "unit/wide", [("x", V2, 2, ["x"])], [(V2, (0,))])
 
 

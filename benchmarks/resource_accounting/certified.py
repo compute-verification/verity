@@ -44,7 +44,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
-CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
+CLEAR = ROOT / "verity" / "protocols" / "pouw" / "clear"
 #: the panel line and version Pearl-C's arms run (`price_twins.statement` drops the hashing format)
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
@@ -122,7 +122,7 @@ def price_twins():
 
 
 def clear_work():
-    """PoUW's work sampling design, the clear audit's (`clear_work`; benchmarks/pouw/clear is not a package)."""
+    """PoUW's work sampling design, the clear audit's (`clear_work`; verity/protocols/pouw/clear is not a package)."""
     if str(CLEAR) not in sys.path:
         sys.path.append(str(CLEAR))
     import clear_work
@@ -130,9 +130,9 @@ def clear_work():
 
 
 def scheme():
-    from verity.ml.protocols.pouw.schemes import pearl_c as C
-    from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
-    from verity.core.protocols.pouw.serving import SchemeId
+    from verity.protocols.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+    from verity.protocols.pouw.verifier.serving import SchemeId
     sid = SchemeId.parse(SCHEME)
     s = C.PearlC(forming=sid.forming, device=DEVICES[sid.device], hashing=sid.hashing)
     if s.name != SCHEME:
@@ -154,7 +154,7 @@ def priced_path(s) -> str:
 def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
     """γ for Pearl-C at (n, k), or of a served `layout` (`LAYOUT`): `price_twins.lookup`'s record (both prices, the larger
     published, what's missing), with the statement's cap held to the scheme's and K to ε_s and δ."""
-    from verity.ml.protocols.pouw.circuit import plan
+    from verity.protocols.pouw.prover.circuit import plan
     P, s = price_twins(), scheme()
     stmt = P.statement(LINE, VERSION)
     if P.CAPS[stmt] != s.cap or clear_work().draw_wref(s).cap != s.cap:
@@ -168,8 +168,8 @@ def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
 
 def wref_cell(n: int, k: int) -> Fraction:
     """One credited cell's reference work at (n, k), every channel kept: the sampled statement's (`ticket_cell`)."""
-    from verity.core.protocols.pouw.protocol import Matmul, Shape
-    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+    from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
     return clear_work().ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))
 
 

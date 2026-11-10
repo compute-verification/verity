@@ -124,7 +124,7 @@ class Pin:
         return f"cd {self.under} && {self._sha256sum(root)} > {Path(self.path).name}"
 
 
-NCP = "verity/core/protocols/pouw/tests/ncp_lean.py"
+NCP = "verity/protocols/pouw/verifier/tests/ncp_lean.py"
 PINS = (
     Pin("verity/core/protocols/pous/lean/TRUSTED.sha256", None, "verity/core/protocols/pous/lean", None),
     Pin("verity/flock/tests/fixtures/randomness_lean.json", "inputs", "", "bash verity/flock/tests/lean/generate.sh",
@@ -135,7 +135,7 @@ PINS = (
         "bash verity/spot/verifier/tests/lean/generate.sh", "Security/Proofs"),
     Pin("verity/flock/tests/fixtures/inner_claims.json", "inputs", "",
         "bash verity/flock/tests/lean/generate_inner_claims.sh", "verity/flock/verifier"),
-    Pin("verity/core/protocols/pouw/tests/vectors/ncp_lean.json", "sources_sha256", "Security",
+    Pin("verity/protocols/pouw/verifier/tests/vectors/ncp_lean.json", "sources_sha256", "Security",
         f"uv run python {NCP} write Security && (cd Security && lake build Definitions.Pouw.NCP.RouteU && "
         f"lake env lean NcpCheck.lean > ncp_lean.out) && uv run python {NCP} pin Security/ncp_lean.out Security; "
         f"s=$?; rm -f Security/NcpCheck.lean Security/ncp_lean.out; exit $s", "Security"),

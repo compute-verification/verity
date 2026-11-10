@@ -688,55 +688,55 @@
    "groups": "0-10,12-63,67-69,97-103,106-107,113-114,124-127,155-170,172-173,194,201-206,219-237,325-353,355-356,519,586",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.admit.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.admit.circuit-check#_pouw_roots": {
    "groups": "0-63,67-69,97-103,106-107,113-114,124-127,149,155-161,163-170,172-174,176-177,180,194,201-206,219-237,325-353,355-356,535",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.cap.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.cap.circuit-check#_pouw_roots": {
    "groups": "0-7,11-55,58-65,67-76,79-82,86-91,97-118,124-125,127,130,132-133,155-159,162-169,175,181,185-187,194-195,201-213,219-226,255,285,355",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.dither.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.dither.circuit-check#_pouw_roots": {
    "groups": "0-63,67-69,97-103,106-107,113-114,124-127,150,155-157,160,162-170,176-177,180,194,201-206,219-237,325,327-328,330-351,355-356,536",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.h1tile.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.h1tile.circuit-check#_pouw_roots": {
    "groups": "0-49,52-63,66-69,97-103,106-107,113-114,124-127,155,158,162-170,172-173,194,201-206,219-237,325,327-328,330-351,356,429",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.h1window.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.h1window.circuit-check#_pouw_roots": {
    "groups": "0-49,52-54,56,58-63,65-69,97-103,106-107,113-114,124-127,158,162-169,194,201-206,219-237,325,327-328,330-351,354,356,393,429",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.h1zy.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.h1zy.circuit-check#_pouw_roots": {
    "groups": "0-63,65-69,71,97-103,106-107,113-114,124-127,151,158,162-169,194,201-206,219-237,325,327-328,330-351,354,356,393",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.live.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.live.circuit-check#_pouw_roots": {
    "groups": "0-6,8-63,67-69,79,97-103,106-107,113-114,124-127,155-169,180,194,201-206,219-237,325-353,355-356,537,587",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.ncp2.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.ncp2.circuit-check#_pouw_roots": {
    "groups": "0-9,11-49,52-57,60-77,79-84,86-94,97-117,124-125,127,130,132-133,155-159,162-170,172-173,181-183,185-189,194-195,201-213,219-226,262,275,285",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.pc4.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.pc4.circuit-check#_pouw_roots": {
    "groups": "0-5,7-8,11-55,60-76,79-83,86-91,93,97-118,124-125,130,132-133,155-159,162-169,181,185-187,194-195,201-213,219-226,254,257,285",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.pc8.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.pc8.circuit-check#_pouw_roots": {
    "groups": "0-5,7,11-55,58-76,79-82,86-91,93-94,97-118,124-125,130,132-133,152,155-159,162-169,175,181,185-187,194-195,201-213,219-226,254-257,262,285,588",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.rowk.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.rowk.circuit-check#_pouw_roots": {
    "groups": "0-5,7-8,11-55,58-76,79-83,86-91,93-94,97-118,124-125,127,130,132-133,152,155-159,162-169,175,181,185-187,194-195,199,201-215,219-226,254-257,285,323,388,415,589",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.seeds.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.seeds.circuit-check#_pouw_roots": {
    "groups": "0-63,66-69,71,77-78,97-103,106-107,113-117,124-127,152,155-156,158-159,162-170,172-173,176-177,180,189,194,201-206,219-226,254-256,262,285,325,327-328,330-350,356,393,532,590",
    "registry": true
   },
-  "verity.ml.protocols.pouw.circuit.segment.circuit-check#_pouw_roots": {
+  "verity.protocols.pouw.prover.circuit.segment.circuit-check#_pouw_roots": {
    "groups": "0-63,66-69,71,97-103,106-107,113-114,124-127,153,155-158,160,162-170,172-174,176-177,180,189,194,201-206,219-225,227-237,325,327-328,330-351,356,393,536,538,591",
    "registry": true
   },
@@ -928,8 +928,8 @@
     "verity/ml/protocols",
     "verity/ml/protocols/certifier",
     "verity/ml/protocols/pous",
-    "verity/ml/protocols/pouw",
-    "verity/ml/protocols/pouw/circuit"
+    "verity/protocols/pouw/prover",
+    "verity/protocols/pouw/prover/circuit"
    ]
   },
   {
@@ -959,29 +959,29 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/rowk.py"
+    "verity/protocols/pouw/prover/circuit/rowk.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/live.py"
+    "verity/protocols/pouw/prover/circuit/live.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/cap.py"
+    "verity/protocols/pouw/prover/circuit/cap.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/leaves.py",
-    "verity/ml/protocols/pouw/circuit/pc4.py",
-    "verity/ml/protocols/pouw/circuit/pc8.py"
+    "verity/protocols/pouw/prover/circuit/leaves.py",
+    "verity/protocols/pouw/prover/circuit/pc4.py",
+    "verity/protocols/pouw/prover/circuit/pc8.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/ncp2.py"
+    "verity/protocols/pouw/prover/circuit/ncp2.py"
    ]
   },
   {
@@ -1016,7 +1016,7 @@
   },
   {
    "probes": [
-    "verity/core/protocols/pouw"
+    "verity/protocols/pouw/verifier"
    ]
   },
   {
@@ -1219,17 +1219,17 @@
   },
   {
    "probes": [
-    "verity/core/protocols/pouw/window.py"
+    "verity/protocols/pouw/verifier/window.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/anchors.py"
+    "verity/protocols/pouw/prover/circuit/anchors.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/pouw/audit.py"
+    "verity/protocols/pouw/verifier/audit.py"
    ]
   },
   {
@@ -1239,7 +1239,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/h1tile.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/h1tile.circuit-check.py"
    ]
   },
   {
@@ -1300,7 +1300,7 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/h1window.py"
+    "verity/protocols/pouw/prover/circuit/h1window.py"
    ]
   },
   {
@@ -1359,18 +1359,18 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/schemes/pearl_c.py",
-    "verity/ml/protocols/pouw/schemes/pearl_c_device.py"
+    "verity/protocols/pouw/prover/schemes/pearl_c.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c_device.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/schemes/__init__.py"
+    "verity/protocols/pouw/prover/schemes/__init__.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/pouw/core_check.py"
+    "verity/protocols/pouw/verifier/core_check.py"
    ]
   },
   {
@@ -1956,8 +1956,8 @@
     "verity/core/protocols/certifier/schedule.py",
     "verity/core/protocols/certifier/served_rows.py",
     "verity/core/protocols/certifier/warden.py",
-    "verity/core/protocols/pouw/leaf_lanes.py",
-    "verity/core/protocols/pouw/live_reads.py",
+    "verity/protocols/pouw/verifier/leaf_lanes.py",
+    "verity/protocols/pouw/verifier/live_reads.py",
     "verity/spot/verifier/one_stage/produced.py",
     "verity/circuits/evaluation",
     "verity/definitions/silicon",
@@ -2012,24 +2012,24 @@
     "verity/ml/protocols/certifier/ingress_scan.py",
     "verity/ml/protocols/certifier/window_charge.py",
     "verity/ml/protocols/pous/__init__.py",
-    "verity/ml/protocols/pouw/circuit/h1device.py",
-    "verity/ml/protocols/pouw/schemes",
+    "verity/protocols/pouw/prover/circuit/h1device.py",
+    "verity/protocols/pouw/prover/schemes",
     "verity/ml/randomness",
     "verity/ml/windows"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/schemes/pearl_c_debit.py"
+    "verity/protocols/pouw/prover/schemes/pearl_c_debit.py"
    ]
   },
   {
    "probes": [
     "verity/core/claims/__init__.py",
-    "verity/core/protocols/pouw/coins.py",
-    "verity/core/protocols/pouw/registration.py",
-    "verity/core/protocols/pouw/salt.py",
-    "verity/core/protocols/pouw/serving.py",
+    "verity/protocols/pouw/verifier/coins.py",
+    "verity/protocols/pouw/verifier/registration.py",
+    "verity/protocols/pouw/verifier/salt.py",
+    "verity/protocols/pouw/verifier/serving.py",
     "verity/spot/verifier/profile.py",
     "verity/core/protocols/record.py",
     "verity/spot/device/challenger.py",
@@ -2044,14 +2044,14 @@
     "verity/spot/verifier/service.py",
     "verity/ml/commitments/coin_tree.py",
     "verity/ml/crypto/turboshake.py",
-    "verity/ml/protocols/pouw/schemes/pearl_c4.py",
-    "verity/ml/protocols/pouw/schemes/pearl_c4_c_L.py",
-    "verity/ml/protocols/pouw/schemes/pearl_kw.py"
+    "verity/protocols/pouw/prover/schemes/pearl_c4.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c4_c_L.py",
+    "verity/protocols/pouw/prover/schemes/pearl_kw.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/schemes/ncp.py"
+    "verity/protocols/pouw/prover/schemes/ncp.py"
    ]
   },
   {
@@ -2406,29 +2406,29 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/admit.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/admit.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/dither.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/dither.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/h1tile.circuit-check.json",
-    "verity/ml/protocols/pouw/circuit/h1zy.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/h1tile.circuit-check.json",
+    "verity/protocols/pouw/prover/circuit/h1zy.circuit-check.json"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/words.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/words.circuit-check.json"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/boolean.circuit-check.json",
-    "verity/ml/protocols/pouw/circuit/segment.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/boolean.circuit-check.json",
+    "verity/protocols/pouw/prover/circuit/segment.circuit-check.json"
    ]
   },
   {
@@ -2471,42 +2471,42 @@
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/h1zy.py"
+    "verity/protocols/pouw/prover/circuit/h1zy.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/h1tile.py"
+    "verity/protocols/pouw/prover/circuit/h1tile.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/seeds.py"
+    "verity/protocols/pouw/prover/circuit/seeds.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/dither.py"
+    "verity/protocols/pouw/prover/circuit/dither.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/segment.py"
+    "verity/protocols/pouw/prover/circuit/segment.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/hashes.py"
+    "verity/protocols/pouw/prover/circuit/hashes.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/words.py"
+    "verity/protocols/pouw/prover/circuit/words.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/admit.py"
+    "verity/protocols/pouw/prover/circuit/admit.py"
    ]
   },
   {
@@ -2585,29 +2585,29 @@
   },
   {
    "probes": [
-    "verity/core/protocols/pouw/__init__.py"
+    "verity/protocols/pouw/verifier/__init__.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/circuit/__init__.py"
+    "verity/protocols/pouw/prover/circuit/__init__.py"
    ]
   },
   {
    "probes": [
-    "verity/ml/protocols/pouw/__init__.py"
+    "verity/protocols/pouw/prover/__init__.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/pouw/protocol.py"
+    "verity/protocols/pouw/verifier/protocol.py"
    ]
   },
   {
    "probes": [
-    "verity/core/protocols/pouw/grind.py",
-    "verity/core/protocols/pouw/weights.py",
-    "verity/ml/protocols/pouw/circuit/compile.py"
+    "verity/protocols/pouw/verifier/grind.py",
+    "verity/protocols/pouw/verifier/weights.py",
+    "verity/protocols/pouw/prover/circuit/compile.py"
    ]
   },
   {
@@ -2628,7 +2628,7 @@
   {
    "probes": [
     "verity/ml/commitments/domains.py",
-    "verity/ml/protocols/pouw/circuit/boolean.py"
+    "verity/protocols/pouw/prover/circuit/boolean.py"
    ]
   },
   {
@@ -2988,22 +2988,22 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/pc4.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/pc4.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/cap.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/cap.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/pc8.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/pc8.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/rowk.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/rowk.circuit-check.py"
    ]
   },
   {
@@ -3028,7 +3028,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/ncp2.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/ncp2.circuit-check.py"
    ]
   },
   {
@@ -3857,8 +3857,8 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/h1window.circuit-check.py",
-    "verity/ml/protocols/pouw/circuit/h1zy.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/h1window.circuit-check.py",
+    "verity/protocols/pouw/prover/circuit/h1zy.circuit-check.py"
    ]
   },
   {
@@ -4798,7 +4798,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/seeds.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/seeds.circuit-check.py"
    ]
   },
   {
@@ -4813,22 +4813,22 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/admit.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/admit.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/dither.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/dither.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/live.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/live.circuit-check.py"
    ]
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/segment.circuit-check.py"
+    "verity/protocols/pouw/prover/circuit/segment.circuit-check.py"
    ]
   },
   {
@@ -5248,7 +5248,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/live.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/live.circuit-check.json"
    ]
   },
   {
@@ -5269,7 +5269,7 @@
   },
   {
    "files": [
-    "verity/ml/protocols/pouw/circuit/seeds.circuit-check.json"
+    "verity/protocols/pouw/prover/circuit/seeds.circuit-check.json"
    ],
    "probes": [
     "tools/verity/circuit_check/src/circuit_check/pins/pieces/PouwXor32_v1.json"

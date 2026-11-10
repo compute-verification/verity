@@ -20,15 +20,15 @@ path = ".."
 
 [[require]]
 name = "pouw_window"
-path = "../../verity/core/protocols/pouw/lean/window"
+path = "../../verity/protocols/pouw/verifier/lean/window"
 
 [[require]]
 name = "pouw_check"
-path = "../../verity/core/protocols/pouw/lean/check"
+path = "../../verity/protocols/pouw/verifier/lean/check"
 
 [[require]]
 name = "pouw_commit"
-path = "../../verity/core/protocols/pouw/lean/commit"
+path = "../../verity/protocols/pouw/verifier/lean/commit"
 
 [[require]]
 name = "nci_check"

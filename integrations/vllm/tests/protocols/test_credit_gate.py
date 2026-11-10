@@ -19,11 +19,11 @@ import pytest
 torch = pytest.importorskip("torch")
 # ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw.coins import Challenger
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.prover.circuit import live as L
+from verity.protocols.pouw.verifier.coins import Challenger
 from verity.spot.device import challenger as LC
 from verity.spot.device import remote as R
 from verity.spot.device.challenger import LiveOpening, LiveRecord
@@ -436,7 +436,7 @@ def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing
     """A claim instance names where coins come from, not who holds them. The harness's coins, held in the
     serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier's claim instance
     names their source; a window is credited only on the auditor host's challenge phase (the int8 arm's test above)."""
-    from verity.core.protocols.pouw import verifier
+    from verity.protocols.pouw.verifier import verifier
     held, real = [], Challenger
 
     def named(epoch, entropy):
@@ -695,7 +695,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its sampled calls' statements
     (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
     (`credit.window`) passes its weights and refuses it only for want of its sampled calls' proof files."""
-    from verity.core.protocols.pouw import salt as PS
+    from verity.protocols.pouw.verifier import salt as PS
     k = PHC.draw_k(LAYOUT)
     assert k == 2
     auditor = periodic(k, files=FILES)

@@ -29,7 +29,7 @@ from verity.core.protocols.remote_bandwidth import audit, codec, store
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-MODELS_JSON = Path(__file__).resolve().parents[3] / "pouw" / "lean" / "check" / "models.json"
+MODELS_JSON = Path(__file__).resolve().parents[5] / "protocols" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 ROLE = "SYNTHETIC_BF16"
 NODE = b"node-under-test"
 KEY = bytes(range(32))

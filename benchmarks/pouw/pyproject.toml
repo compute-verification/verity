@@ -44,7 +44,7 @@ untraced = [
 # difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
-# (verity/definitions/kernels/sha512.cuh). benchmarks/pouw/receipts, filler and
+# (verity/definitions/kernels/sha512.cuh). verity/protocols/pouw/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
 # so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
 # imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
@@ -65,8 +65,8 @@ inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/record.py",
-          "verity/spot/verifier/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/spot",
-          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/protocols/certifier",
+          "verity/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/core/protocols/spot",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/ml/protocols/certifier",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/definitions/kernels", "verity/ml/randomness", "verity/flock/prover/python", "verity/ml/windows",
@@ -146,7 +146,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "Security/Definitions/Pouw/Guarantees", "Security/Definitions/Accounting/Guarantees/HeadlineDc.lean",
           "Security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "Security/lean-audit.json",
           "Security/Proofs/Accounting/Gates/Rows.lean",
-          "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
+          "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/pouw/receipts", "benchmarks/pouw/filler",
           "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
@@ -161,8 +161,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
-artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
-             "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",
+artifacts = ["verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-check",
+             "verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-check-difftest",
              "verity/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest"]
 
 [tool.pytest.ini_options]
@@ -197,7 +197,7 @@ paths = ["verity/definitions/ops"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_h1_prove_live.py"]
 paths = [
-    "verity/core/protocols/pouw",
+    "verity/protocols/pouw/verifier",
     "verity/spot/verifier/one_stage",
     "verity/circuits",
     "verity/ml/commitments/frame_v3",
@@ -210,11 +210,11 @@ paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
-paths = ["verity/core/protocols/pouw/tests", "verity/definitions/kernels"]
+paths = ["verity/protocols/pouw/verifier/tests", "verity/definitions/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_grouped.py"]
-paths = ["verity/core/protocols/pouw/tests"]
+paths = ["verity/protocols/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_prefill.py"]
@@ -226,8 +226,8 @@ paths = ["benchmarks/pouw/filler"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_salt_bind.py"]
-paths = ["verity/core/protocols/pouw/lean/check/tests"]
+paths = ["verity/protocols/pouw/verifier/lean/check/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]
-paths = ["verity/core/protocols/pouw", "verity/circuits", "verity/definitions/kernels"]
+paths = ["verity/protocols/pouw/verifier", "verity/circuits", "verity/definitions/kernels"]

@@ -22,10 +22,10 @@ torch = pytest.importorskip("torch")
 # ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 from torch import nn
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.spot.device import remote as R
 from verity.spot.verifier.one_stage import registered as G, registration as REG
 from verity.circuits.codec import canonical_json

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import window as Wd
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import window as Wd
 from verity.spot.device import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

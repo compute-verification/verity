@@ -438,8 +438,8 @@ def run(a: argparse.Namespace) -> dict:
                                                                        RC.noise_blocks_cpu(probe, 40)))})
 
     from tests.engine import int8_exact_gpu as G
-    from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import Challenger
+    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.pouw.verifier.coins import Challenger
     from verity_vllm import protocols as PO
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
@@ -519,8 +519,8 @@ def run(a: argparse.Namespace) -> dict:
     pending: list[tuple] = []
     round_log: list[dict] = []
     if live:
-        from verity.core.protocols.pouw import window as Wd
-        from verity.ml.protocols.pouw.circuit import h1tile as HT
+        from verity.protocols.pouw.verifier import window as Wd
+        from verity.protocols.pouw.prover.circuit import h1tile as HT
         from verity.spot.device import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds

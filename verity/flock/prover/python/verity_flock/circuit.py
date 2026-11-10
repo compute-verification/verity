@@ -601,7 +601,7 @@ def past_range(w: dict) -> str | None:
         return None
     return (f"the unit needs a slot of 2^{w['k']} witness bits ({w['ands']:,} ANDs and {w['port_bits']:,} port bits, read off its "
             f"Definition); C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean Stmt.InRange): split the unit (e.g. PoUW's "
-            f"lanes form, verity/core/protocols/pouw/leaf_lanes.py) or extend the proved range (proofs)")
+            f"lanes form, verity/protocols/pouw/verifier/leaf_lanes.py) or extend the proved range (proofs)")
 
 
 def _block_ranges(n_sha: int, n_hm: int, unit_log: int, units: int, unit_packed: bool = False,
@@ -665,7 +665,7 @@ def past_block(b: dict) -> str | None:
             f"{b['hm96']} hm96 slots of 2^{SLOT_LOG}, and the mask; C-Flock's proved range is 2^{K_MAX} (Flock/Statement.lean "
             f"Stmt.InRange): cut it into narrower units that each read fewer row bytes (a served row's column blocks or slices, "
             f"integrations/vllm/verity_vllm/pipeline/serving_templates.py), split the unit (e.g. PoUW's lanes form, "
-            f"verity/core/protocols/pouw/leaf_lanes.py), or extend the proved range (proofs)")
+            f"verity/protocols/pouw/verifier/leaf_lanes.py), or extend the proved range (proofs)")
 
 
 def refuse_past_range(definition, name: str) -> dict:

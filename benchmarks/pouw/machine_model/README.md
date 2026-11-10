@@ -267,7 +267,7 @@ Beside its names, a design file has these keys:
 - `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
-  `[baseline]` and `[routes]`. `[skip.served]` is the number `../eps_budget.py` gives the design's `[noise]` and `sums`
+  `[baseline]` and `[routes]`. `[skip.served]` is the number `../../../verity/protocols/pouw/eps_budget.py` gives the design's `[noise]` and `sums`
   (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
   and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 

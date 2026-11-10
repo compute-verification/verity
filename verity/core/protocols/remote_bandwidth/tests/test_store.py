@@ -27,7 +27,7 @@ KEY = bytes(range(32))
 B = store.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
 """A checkpoint of 6 weights blocks an arena."""
-MODELS_JSON = Path(__file__).resolve().parents[2] / "pouw" / "lean" / "check" / "models.json"
+MODELS_JSON = Path(__file__).resolve().parents[4] / "protocols" / "pouw" / "verifier" / "lean" / "check" / "models.json"
 
 
 def checkpoint(directory: Path, *, layers: int = 2, hidden: int = 48, heads: int = 4, kv_heads: int = 2,
@@ -248,7 +248,7 @@ def test_a_pin_whose_files_arent_the_checkpoints_is_refused_before_anything_read
 
 @pytest.fixture
 def models_json(ckpt, tmp_path) -> Path:
-    """Core's pin in its shape (`verity/core/protocols/pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files,
+    """Core's pin in its shape (`verity/protocols/pouw/verifier/lean/check/models.json`, {ROLE: {checkpoint_sha512, files,
     recipe, repo, revision}}), pinning the synthetic checkpoint as SYNTHETIC_BF16 beside another role."""
     pin = json.loads((ckpt / "pin.json").read_text())
     other = {**pin["checkpoint"], "config.json": "ab" * 64}

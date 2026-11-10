@@ -173,7 +173,7 @@ tests = [
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
-paths = ["verity/core/protocols/pouw/tests"]
+paths = ["verity/protocols/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
@@ -231,7 +231,7 @@ tests = [
     "tests/test_rec_outer.py",
     "tests/test_rec_vstar_checks.py",
 ]
-paths = ["verity/core/protocols/pouw/lean/check/models.json"]
+paths = ["verity/protocols/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_partition_units.py", "tests/test_rec_shape.py"]

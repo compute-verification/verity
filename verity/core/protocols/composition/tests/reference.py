@@ -50,7 +50,7 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
-from verity.core.protocols.pouw import core_check, credit, period_check
+from verity.protocols.pouw.verifier import core_check, credit, period_check
 from verity.spot.device import challenger as CH
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"

@@ -31,7 +31,7 @@ path = "../../../spot/verifier/lean"
 
 [[require]]
 name = "pouw_check"
-path = "../pouw/lean/check"
+path = "../../../protocols/pouw/verifier/lean/check"
 
 # The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
 [[require]]
