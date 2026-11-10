@@ -309,6 +309,18 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
     assert not job.exists() and (out / AUTO_PLAN).is_file()
 
 
+def test_plan_shards_asks_the_planner_for_its_own_n_at_most_max_shards_or_exactly_n(tmp_path, monkeypatch):
+    """`plan_shards` hands `PLAN_JOB` the steps, and `--max-shards M` (drive's `auto:MAX`) or `--n N` (the loop's `auto:N`)."""
+    asked = []
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(D, "detach", lambda repo, argv, env: asked.append(argv) or {"dir": "job", "pid": 1})
+    got = [D.plan_shards(tmp_path, "t" * 40, "pytest,lean-build", **kw) for kw in ({}, {"max_shards": 4}, {"n": 6})]
+    assert [a[:6] for a in asked] == [["sh", "-c", D.PLAN_JOB, "sh", g["out"], "t" * 40] for g in got]
+    assert [a[6:] for a in asked] == [["--deferred", "pytest,lean-build", *more] for more in ([], ["--max-shards", "4"],
+                                                                                             ["--n", "6"])]
+    assert all(Path(g["out"]).parent == tmp_path / D.LAUNCHES and g["dir"] == "job" for g in got)
+
+
 def _plan_doc(n: int) -> dict:
     return {"kind": "check-shard-plan/v1", "n": n, "digest": "d" * 64, "predicted_s": 3600.0}
 
