@@ -65,7 +65,8 @@ and the header itself are as `canon` and `canonUtf8` write them, which it takes 
 `setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `drawJ` and the partition `partObj` to
 the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is `hdrD`, whose text it
 takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW` keeps
-`HmRow.delta`'s. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`. With no program, the statement's units
+`HmRow.delta`'s; its partition finding is `checkPartition_X`'s, `HmRow.checkPartition` at the statement's circuit and
+partition object. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`. With no program, the statement's units
 come from its header, and Flock's links check (`HmLinks.check`) never runs in this witness.
 -/
 
@@ -101,6 +102,9 @@ condition is walked. -/
 theorem map_some_ok {ε α : Type} {m : Except ε α} {a : α} (h : m = .ok a) : (some <$> m) = .ok (some a) := by
   rw [h]; rfl
 
+theorem cO_sha (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    (cO ls lh H C A B A' B' s1).sha = H := rfl
+
 fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String)
     (hr : r.Plain) (hCe : C.isEmpty = false)
     (hu1 : canon (unitsJ (hexOf C)) = .ok s3)
@@ -109,7 +113,7 @@ fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A'
     HmIn.loadPublic tz (cO ls lh H C A B A' B' s1) {} (pubOf r (hexOf H) (hexOf C)) by
   [findByte_pub hr (plainStr_hexOf H) (plainStr_hexOf C), extract_hdr r (hexOf H) (hexOf C), fromUTF8?_toUTF8,
     parse_hdr hr (plainStr_hexOf H) (plainStr_hexOf C), norm_hdr r (hexOf H) (hexOf C),
-    extract_body r (hexOf H) (hexOf C), bne_self, hCe, any_bne_two, hu1, hu2, hd]
+    extract_body r (hexOf H) (hexOf C), cO_sha, bne_self, hCe, any_bne_two, hu1, hu2, hd]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, Flock.norm]
   shallow [metaText]
@@ -121,6 +125,12 @@ def oB (c : Circuit) (p : Nat) : Array (Nat × Nat) := (HmOut.delta c p).2
 
 /-- Δ of a statement without public input ports, `HmOut.delta`'s arrays kept as they are. -/
 theorem delta_in (c : Circuit) (p : Nat) : HmIn.delta c {} p = (oA c p, oB c p) := rfl
+
+fwd_def cpX checkPartition_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    HmRow.checkPartition (cO ls lh H C A B A' B' s1) (some partObj) by
+  [cpo_part, canon_part, bne_self]
+  block [canon, canonUtf8, HmRow.checkPartitionObject]
+  shallow [metaText] trace
 
 fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (s1 s3 s4 s5 s6 : String) (hello : ByteArray → Nat → String)
@@ -142,7 +152,8 @@ fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' 
     (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
     Stmt.setupHidden tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX [] (some drawJ) (some partObj) none none by
   [parseOut_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck,
-    load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, map_some_ok, cpo_part, canon_part, bne_self, hd2, hid,
+    load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, checkPartition_X ls lh H C A B A' B' s1, map_some_ok,
+    cpo_part, canon_part, bne_self, hd2, hid,
     hhello, unit_eq, delta_in]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, HmRow.checkPartitionObject,
