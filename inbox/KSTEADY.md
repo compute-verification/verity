@@ -367,3 +367,10 @@ ci's reviewer would land #8679 but the queue refused its verdict: the body had n
 queue reads the owner. The lead added it (the head is unchanged). Every body opens with that line (`inbox/RULES.md`).
 For your next change to `server_rate.py`, not this marked one: ci names two retired-term sites, line 89 (`cap`, in
 `a6.chunk_cap`) and line 97 (`drawn`).
+
+## Tue 10 Nov 21:12Z: card 4 with cores 12-23 is a fourth slot, from 21:15Z to Wed 04:00Z
+
+KP2's run on card 4 ended at 20:38Z and left nothing on it; vllm's half hour on cores 22-23 is over. The calendar's
+row is pushed. Use it for the one-prover rows still open (row 13, 15, 28, 29, 30, 32, 34, 36, 37 to 40), the same
+start check, lock and one lease. Card 4 is on NUMA node 2 and cores 12-23 on node 0, and the slot has 12 cores, not
+24: say both in each row's conditions, and keep a type whose provers need more than 12 cores off it.
