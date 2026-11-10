@@ -274,7 +274,6 @@ paths = ["integrations/vllm/verity_vllm", "verity"]
 [[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_serve_remote.py",
-    "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
 paths = ["benchmarks/remote_session", "verity/core/protocols/remote_bandwidth"]

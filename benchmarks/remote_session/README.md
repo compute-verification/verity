@@ -4,10 +4,10 @@ The session harness of PoUB (`verity/core/protocols/remote_bandwidth`), not the 
 protocol's demo, which is `verity demo vllm`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 
-**Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`
-and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean verifier names
-`auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session` over `verity/`,
-`benchmarks/`, `examples/`, `tests/` and `integrations/`.
+**Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`,
+which `tests/test_boundaries.py` lists), the audit's Lean verifier names `auditor_line.py` as its line of record, and
+its suite runs in `check`. Decided by `rg remote_session` over `verity/`, `benchmarks/`, `examples/`, `tests/` and
+`integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/remote_session` runs both processes over a loopback, the driver's
 reference (`CpuBackend`) as the prover's backend, and the Lean line test where `lake` is. `run.sh` is the GPU run, one
@@ -20,7 +20,7 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
   runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`, and refuses
   a run where the two differ; `wire.py` beside it frames the messages between the two processes.
 - `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
-  `benchmarks/codec_tensor/reader.cu`), `inplace.py` reads vLLM's tensors in place, and `serve.py` serves vLLM as the prover.
+  `benchmarks/codec_tensor/reader.cu`), and `serve.py` serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.
 
 **Reads and writes:** a store (synthetic, or a pinned checkpoint `store_layout.py` writes) and the prover's plan (`PLAN`:

@@ -16,11 +16,8 @@ def commit_session(opts: Any, out: Any, kv_pages: int | None) -> Any:
     """The session (`remote.CommitSession`) of ``opts``' ``--remote-*`` options (`pipeline.commit.Options`'s, or serve-openai's
     `serve_remote.RemoteOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``."""
     remote = protocols.driver(POUB, "remote")
-    backend_of = None
-    if opts.remote_session_lib:
-        backend_of = protocols.driver(POUB, "in_place").InPlaceBackend.for_commit(opts.remote_session_lib)
     return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
-                                weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib, backend_of=backend_of,
+                                weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib,
                                 out=out, step_ms=opts.remote_step_ms, filler_gib=opts.remote_filler_gib,
                                 log=lambda m: print(m, flush=True))
 

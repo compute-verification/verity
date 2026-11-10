@@ -126,7 +126,6 @@
     {"file": "benchmarks/remote_session/auditor_line.py", "count": 1},
     {"file": "benchmarks/remote_session/device.py", "count": 1},
     {"file": "benchmarks/remote_session/engine.py", "count": 2},
-    {"file": "benchmarks/remote_session/inplace_gate.py", "count": 1},
     {"file": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py", "count": 1},
     {"file": "benchmarks/remote_session/lease.py", "count": 1},
     {"file": "benchmarks/remote_session/node.py", "count": 2},
