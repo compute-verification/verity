@@ -27,6 +27,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "tests/test_agent_watch.py",
     "tests/test_agent_watch_relay.py",
+    "tests/test_control_door.py",
     "tests/test_deploy.py",
     "tests/test_drive_sh.py",
     "tests/test_keeper.py",
@@ -53,7 +54,9 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/watchers.py", "infra/control/watchers.toml", "infra/control/vm_stop.py", "infra/control/vm_stop.toml",
           "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
           # drive's loop, whose checkout per verb is tested here
-          "infra/control/drive.sh"]
+          "infra/control/drive.sh",
+          # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
+          "infra/control/vy-control-gate", "infra/control/door_setup.sh"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

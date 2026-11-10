@@ -166,6 +166,24 @@ A change to `post_start.sh` takes effect at the next reset. To apply a new link 
 or the whole script: each link is `ln -sfn`, so a rerun only repeats them. It does start a second copy of every loop,
 though: the steward's lease makes its copy stand by, but kill the old guard first.
 
+## The door
+
+Root here is for an admin key that no agent holds. Every other key belongs to the account `research` and is forced to
+`vy-control-gate`, which runs one verb with checked arguments, as root through one sudo rule, or refuses: the budgets guard's
+state and a wake for any agent (`research pods create`, `research run --on`), RunPod's list, get, create and terminate for a
+machine that holds no RunPod key, and for ci's own key `drive.sh`'s listed forms (`... -- drive queue baseline SHA --by ci`).
+The gate's docstring names the verbs, and a request is never given to a shell. `research` sends verbs once the machine
+registry's entry for `vy-control-verity` is that account (`provider = "ssh"`, `user = "research"`, written with `research pods
+register --host --port --user`); until then it asks root's shell as before and says so (`tools/research/src/research/pods/door.py`).
+
+`door_setup.sh`, deployed as `/data/infra/vy-control-setup`, makes the account, its sudo rule and the gate's copy in
+`/usr/local/sbin` from two files of public keys on the volume: `/data/boot/door/gate-keys` (`LANE TYPE BASE64` a line, LANE `-`
+for the key every agent holds, `ci` for ci's) and `/data/boot/door/admin-keys` (root's). Run without a flag it adds the admin
+keys to root's; `--lock`, refused before that, leaves root the admin keys only, and `--unlock` puts the earlier file back.
+`post_start.sh` runs it after a reset, when the image has given root the pod's `PUBLIC_KEY` again, so a locked door locks
+again; until that run the key the pod was created with is root. Once the door is locked, every command in this file that
+reaches root (`$CP`, `msg.sh`) is run with the admin key.
+
 ## Running `research msg` as root
 
 `msg.sh` runs `research msg ARGS` on the pod for a handle holder who needs a credential that lives only here: the Slack app's

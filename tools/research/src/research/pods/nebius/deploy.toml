@@ -66,6 +66,15 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*", "/etc/vy/verifier.json"]
 
+# the control pod (RunPod, not a Nebius node): only its door is deploy's there so far; its loops are copied as
+# infra/control/README.md's Deploy section says. Root there is the admin key's and the registry's entry is the gated account's,
+# whose gate takes no deploy, so the relays' drift skips it (`admin`), and infra's lead runs `research deploy drift|install --on
+# vy-control-verity` from a machine that holds the admin key and whose own machines.toml binds the name to root at the same host.
+[nodes.vy-control-verity]
+admin = true
+record = "/data/infra/deploy/record.jsonl"
+managed = ["/data/infra/vy-control-*", "/usr/local/sbin/vy-control-*", "/etc/sudoers.d/*vy*"]
+
 # cpu-2 and cpu-3 (train slots): only the OOM order and the memory drop-ins are deploy's there so far; the rest
 # is set by hand until they are full deploy.toml nodes, so `managed` names just those files
 [nodes.vy-nebius-cpu-2]
@@ -348,6 +357,30 @@ owner = "infra"
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers-challenger"
 nodes = ["vy-challenger-1"]
+owner = "infra"
+
+# ---- the control pod's door (infra/control/vy-control-gate): every key but root's admin key is the `research` account's there,
+# forced to the gate. Once the two files are installed and /data/boot/door holds gate-keys (`LANE TYPE BASE64 [COMMENT]` a line,
+# LANE `-` for the key every agent holds) and admin-keys (root's, which no agent holds), `vy-control-setup` makes the account, its
+# sudo rule and the gate's copy under /usr/local/sbin, and `vy-control-setup --lock` leaves root the admin keys only;
+# post_start.sh runs it again after a reset.
+
+[[file]]
+path = "/data/infra/vy-control-gate"
+src = "infra/control/vy-control-gate"
+nodes = ["vy-control-verity"]
+owner = "infra"
+
+[[file]]
+path = "/data/infra/vy-control-setup"
+src = "infra/control/door_setup.sh"
+nodes = ["vy-control-verity"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-control-gate"
+by = "infra/control/door_setup.sh"
+nodes = ["vy-control-verity"]
 owner = "infra"
 
 # ---- the verifier's auditor host, vy-auditor-1, an auditor host as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
