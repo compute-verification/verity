@@ -1,4 +1,6 @@
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 import torch
@@ -81,7 +83,6 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     # tied table's lookup (58 multiplexers per word), w1 and the head
     floor = 32 * (V * D + D * D) / (58 * D + D * D + V * D)
     assert all(b > floor for b in fam["beta"].values()), fam["beta"]
-    assert (tmp_path / "out" / "checkpoints").exists()
 
 
 EPS, LR = 1e-3, 1e-2
@@ -194,6 +195,35 @@ def test_the_route_loop_trains_scores_and_encodes_from_the_config(tmp_path):
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]
         assert (cp["format"], cp["changed"]) == ("full", 3) and cp["e_bytes"] > 0
+
+
+def test_a_job_keeps_no_weights_but_its_last_e_and_the_whole_state_only_when_asked(tmp_path, monkeypatch):
+    """By default a job's output is its record and its last checkpoint's E, which rebuilds that checkpoint's output
+    from θ bit for bit; an E at or over the size a job keeps leaves the record alone; `--keep-weights` adds the last
+    checkpoint's whole state."""
+    rec, cfg, reg = job(tmp_path)
+    out = tmp_path / "out"
+    *before, last = rec["checkpoints"]
+    assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"] and [p.name for p in (out / "e").iterdir()] == [
+        "step0000002.bin"] == [Path(last["e_path"]).name]
+    assert not any("path" in cp or "e_path" in cp for cp in before) and "path" not in last
+    enc = (out / last["e_path"]).read_bytes()
+    assert (len(enc), hashlib.sha256(enc).hexdigest()) == (last["e_bytes"], last["e_sha256"])
+    theta = starts.load(cfg.start, reg.parent / "starts")
+    plan = config.route(cfg.route).plan(cfg.dials)
+    rebuilt = theta | plan.decode(enc, {k: theta[k] for k in plan.keys(enc)})
+    assert run.theta_sha256(rebuilt) == last["output_sha256"] != run.theta_sha256(theta)
+
+    monkeypatch.setattr(run, "E_KEEP_BYTES", last["e_bytes"])
+    rec, _, _ = job(tmp_path / "large")
+    assert [p.name for p in (tmp_path / "large" / "out").iterdir()] == ["run.json"]
+    assert not any("path" in cp or "e_path" in cp for cp in rec["checkpoints"])
+
+    rec, _, _ = job(tmp_path / "kept", "--keep-weights")
+    last = rec["checkpoints"][-1]
+    state = torch.load(tmp_path / "kept" / "out" / last["path"], weights_only=True)
+    assert last["path"] == "checkpoints/step0000002.pt" and run.theta_sha256(state) == last["output_sha256"]
+    assert not any("path" in cp for cp in rec["checkpoints"][:-1])
 
 
 RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}

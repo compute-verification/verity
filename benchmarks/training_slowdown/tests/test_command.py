@@ -115,6 +115,15 @@ def test_the_honest_configs_jobs_come_with_it_and_on_names_the_machine(tree, reg
     assert any("attacks/ref.toml" in argv[-1] for argv in r.runs)
 
 
+def test_a_job_keeps_its_weights_only_under_the_commands_one_flag(tree, reg_path):
+    write_config(tree / "a.toml")
+    r = Research()
+    assert command(r, "a", "--starts", str(reg_path)) == 3 and "--keep-weights" not in r.runs[0][-1]
+    r = Research()
+    assert command(r, "a", "--starts", str(reg_path), "--weights") == 3
+    assert f"--starts {reg_path.resolve()} --keep-weights --out" in r.runs[0][-1]
+
+
 def test_a_dry_run_starts_and_labels_nothing(tree, reg_path, capsys):
     write_config(tree / "a.toml")
     r = Research()

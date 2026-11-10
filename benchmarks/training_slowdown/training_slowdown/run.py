@@ -2,7 +2,7 @@
 computes through torch is counted (flops.py).
 
     python -m training_slowdown.run --config attacks/NAME.toml --seed 0 --split search|final --out OUT \\
-        [--starts starts.toml] [--starts-root DIR] [--device cuda] [--tier 0]
+        [--starts starts.toml] [--starts-root DIR] [--device cuda] [--tier 0] [--keep-weights]
     python -m training_slowdown.run --retrace RUN_JSON --out OUT [--starts starts.toml] [--device cpu]
 
 The route loop (`train`): the route builds its model and optimizers (`training_slowdown.routes`), the harness loads θ
@@ -20,8 +20,9 @@ recorded as refused and leaves the job valid. `--retrace` takes a record's trace
 the record's own config text, for a record whose trace a later grade doesn't read.
 
 Writes `OUT/run.json` (the count, the checkpoints, the flags, the config with its digest and text, the route, θ's
-digest, the trace and the job's label) and the last checkpoint's weights (`--keep-checkpoints`, tier 2: every
-checkpoint's). Torch
+digest, the trace and the job's label). No weights are kept by default: of the last checkpoint the job keeps E, the
+bytes that rebuild its output from θ, when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole
+state. Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
 invalid when it uses an op the counter can't price (flops.py), reads token data out of torch, starts a thread or a
 process, or imports a module that names a way around the dispatcher or that was written during the run (`Imports`).
@@ -67,6 +68,8 @@ CHECKPOINTS = 20
 C_PER_FORWARD_TOKEN = 4096
 #: a run past its tier's GPU budget by this factor is stopped at its next step
 BUDGET_SLACK = 1.2
+#: a job keeps its last checkpoint's E under OUT when E is smaller than this
+E_KEEP_BYTES = 50 * 2**20
 
 
 class BudgetExceeded(RuntimeError):
@@ -118,13 +121,13 @@ class Harness:
 
     def __init__(self, theta: dict[str, torch.Tensor], out: Path, *, seed: int = 0, tier: int = 0, device: str = "cpu",
                  start: dict | None = None, evaluator=None, split: str = "", budget_s: float = 0.0,
-                 keep_checkpoints: bool = False, digests: bool = True, clock=time.perf_counter,
+                 keep_weights: bool = False, digests: bool = True, clock=time.perf_counter,
                  families: Path | None = None):
         self.theta, self.out = theta, Path(out)
         self.families_root = Path(families) if families else self.out / "families"
         self.seed, self.tier, self.device = seed, tier, device
         self.start = start or {}
-        self.evaluator, self.split, self.budget_s, self.keep = evaluator, split, budget_s, keep_checkpoints
+        self.evaluator, self.split, self.budget_s, self.keep_weights = evaluator, split, budget_s, keep_weights
         self.encoding: Plan | None = None
         self.theta_digests: dict[str, str] | None = None
         self.problems: list[str] = []
@@ -271,9 +274,9 @@ class Harness:
             state = plain(self._state())
         self.checkpoint_state(step, state, {"source": "output"})
 
-    def _encode(self, step: int, state: dict[str, torch.Tensor], digests: dict[str, str]) -> dict:
+    def _encode(self, step: int, state: dict[str, torch.Tensor], digests: dict[str, str]) -> tuple[dict, bytes | None]:
         """E of `state`: its weights that differ from θ (a weight θ lacks against zeros), by `encoding`, with its size,
-        digest and rebuild MACs, and a problem where it doesn't rebuild them bit for bit."""
+        digest and rebuild MACs, and a problem where it doesn't rebuild them bit for bit; and E's bytes."""
         if self.theta_digests is None:
             self.theta_digests = {k: digest(v) for k, v in self.theta.items()}
         changed = sorted(k for k in state if digests[k] != self.theta_digests.get(k))
@@ -283,31 +286,42 @@ class Harness:
             enc = self.encoding.encode({k: state[k] for k in changed}, bases)
         except Unencodable as e:
             self.problems.append(f"checkpoint {step}: the route's plan has no E of its output ({e})")
-            return {"e_bytes": None}
+            return {"e_bytes": None}, None
         rebuilt = self.encoding.decode(enc, bases)
         if wrong := [k for k in changed if digest(rebuilt[k]) != digests[k]]:
             self.problems.append(f"checkpoint {step}: the route's E doesn't rebuild its output's {wrong[:3]}")
         stored = all(isinstance(c, Identity) for _, c in self.encoding.rules)
         return {"e_bytes": len(enc), "e_sha256": hashlib.sha256(enc).hexdigest(), "format": "full" if stored else "codecs",
-                "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}
+                "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}, enc
 
     def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None) -> dict:
-        """Score `state` as the output model after step `step` (inclusive), and encode it, uncounted."""
+        """Score `state` as the output model after step `step` (inclusive), and encode it, uncounted. Of the planned
+        steps' last checkpoint the job keeps E under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and
+        with `keep_weights` the whole state under `checkpoints/` (`path`); of any other, nothing."""
         with self.uncounted(), torch.no_grad():
             digests = {k: digest(v) for k, v in state.items()}
             out_sha256 = state_sha256(digests)
             score = self.evaluator(state, out_sha256) if self.evaluator else None
             cp = {"step": step, "macs": self.macs_so_far(), "bpb": score["bpb"] if score else None, "score": score,
                   "elapsed_s": self.elapsed(), "output_sha256": out_sha256} | (extra or {})
+            enc = None
             if self.encoding is not None:
-                cp |= self._encode(step, state, digests)
-            if self.keep or (self.n_steps and step == max(self.cp_steps, default=-1)):
-                path = self.out / "checkpoints" / f"step{step:07d}-{len(self.checkpoints):02d}.pt"
-                path.parent.mkdir(exist_ok=True)
-                torch.save({k: v.cpu() for k, v in state.items()}, path)
-                cp["path"] = str(path.relative_to(self.out))
+                fields, enc = self._encode(step, state, digests)
+                cp |= fields
+            if self.n_steps and step == max(self.cp_steps, default=-1):
+                if enc is not None and len(enc) < E_KEEP_BYTES:
+                    cp["e_path"] = self._keep(f"e/step{step:07d}.bin", lambda path: path.write_bytes(enc))
+                if self.keep_weights:
+                    cp["path"] = self._keep(f"checkpoints/step{step:07d}.pt",
+                                            lambda path: torch.save({k: v.cpu() for k, v in state.items()}, path))
             self.checkpoints.append(cp)
         return cp
+
+    def _keep(self, name: str, write) -> str:
+        path = self.out / name
+        path.parent.mkdir(exist_ok=True)
+        write(path)
+        return name
 
     def finish(self, meta: dict, problems: list[str] | None = None, notes: list[str] | None = None) -> dict:
         """The run's record, with `problems` (what makes it invalid) and `notes` (flags) besides the counter's own."""
@@ -547,7 +561,9 @@ def parse(argv=None) -> argparse.Namespace:
                          "checks need them)")
     ap.add_argument("--tier", type=int, default=0, choices=(0, 1, 2))
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    ap.add_argument("--keep-checkpoints", action="store_true")
+    ap.add_argument("--keep-weights", action="store_true",
+                    help="keep the last checkpoint's whole state under OUT/checkpoints (default: its E alone, when "
+                         "under 50 MiB)")
     ap.add_argument("--families", type=Path, default=None,
                     help="where counterexample families are written (default OUT/families; their verdicts are in run.json)")
     ap.add_argument("--peak-macs-per-s", type=float, default=0.0, help="the device's peak, for the unexplained-GPU flag")
@@ -575,7 +591,7 @@ def main(argv=None) -> int:
     evaluator = Evaluator(data, a.split, theta, s.shape, a.device)
     torch.manual_seed(a.seed)
     te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=s.entry(), evaluator=evaluator,
-                 split=a.split, budget_s=60 * cfg.budget.get("minutes", 0), keep_checkpoints=a.keep_checkpoints,
+                 split=a.split, budget_s=60 * cfg.budget.get("minutes", 0), keep_weights=a.keep_weights,
                  digests=a.digests != "off", families=a.families)
     stream = Stream(data, a.seed, ctx=int(s.shape["ctx"]))
     guard_exits()

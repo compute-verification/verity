@@ -12,7 +12,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 
 | module | what it does |
 |---|---|
-| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, and the route loop (`train`); `block_c`, a start's c |
+| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with AdamW |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
@@ -34,9 +34,11 @@ The reference shapes are the lf model's (`integrations/vllm/tests/program/train_
 ## Running an attack
 
 ~~~text
-verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]]
+verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
+    [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
-    [--device cuda]                                     # one job
+    [--device cuda] [--keep-weights]                    # one job
+python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
 ~~~
@@ -57,6 +59,14 @@ route's plan and rebuilt bit for bit. Everything a route computes through torch 
 or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
 (`run.py`'s docstring has the screen).
+
+After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
+capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
+at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
+are read. A step the capture refuses is recorded as refused, and the job stays valid.
+
+A job's output holds no weights by default: its record, and its last checkpoint's E when E is under 50 MiB. The
+command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
