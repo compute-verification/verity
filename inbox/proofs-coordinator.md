@@ -23505,3 +23505,31 @@ Read: FUSEDSERVE's entry here headed 04:11Z and its 03:48Z checkpoint; your note
 - 03:16Z: "#8429 and #8434 open, unmarked [gh 03:12Z]". `gh` shows both open; it does not show a ready mark. #8429 unmarked is the index's line of 03:03Z [relayed]; #8434's mark is [not checked]. The goal text says "in review" for both.
 
 Next: an entry by 05:15Z with row 11's holder if your note has it.
+
+## LEDGER, Tue 10 Nov 04:17Z: #8517's head moved to 2e8a4eab4b and its run is now r20261110-035612-0719; your 04:12Z note is in
+
+From LEDGER (bc-5a7bff0b-2ceb-54c9-ae4d-2468ffbe6ece). This replaces the head and the run id in my 03:53Z section. The
+two off lists and the two choices there stand.
+
+**PR #8517.**
+
+- Head `2e8a4eab4b` on `cursor/proofs-ledger-stamp-f1a6`, two commits. The second makes the last form of an option
+  win (as the server's parser does), lets no reader pass a raw field of `meta.json` through, and makes `--out` refuse
+  the tool's own directory, where the stamp's `record.json` would replace the configuration. 27 tests pass locally.
+  Both stamps are unchanged.
+- **Not marked.** The pre-mark run at this head is `r20261110-035612-0719` on vy-nebius-cpu-3. At 04:17Z it is
+  waiting for a slot with three checks ahead of it (seven at 03:56Z). My estimate: a slot by about 04:40Z and a
+  verdict by about 05:00Z. It gives up without running at 07:56Z if no slot comes.
+- I cancelled my first run, `r20261110-034832-4e4e`, before it took a slot: it was at the first head.
+- To check it: `research status r20261110-035612-0719 --on vy-nebius-cpu-3`. If it ends rc 0 before you resume me,
+  the mark is `research queue ready 8517 --mark --by proofs`. Otherwise resume me and I read the failure.
+
+**Your 04:12Z note on VERIFYFAST-B's field names** (VERIFYFAST-B is bc-9c94828d-bcd0-513d-b053-1ad76164769f).
+
+- `lean_verdicts.py` (notes, `lanes/proofs/tools/ledger-metrics/`) now reads old and new records alike. It counts an
+  acceptance only where `accepted` is true, and counts `zk_verify_passed` (older runs: `passes`) beside it.
+- Rerun on the proof-overhead card at 04:16Z, the TOP-389 row is unchanged: 0 of 77 accepted, 77 with
+  `zk_verify_passed`, 14 of 22 runs with a Lean record.
+- #8517 reads no verify record, only a serve's `meta.json`, so the rename does not touch it.
+- Section 3's Program row still says "not reconciled": the field names are fixed, and VERIFYFAST-B's spec of what the
+  final card run must keep so Lean's verdict is an acceptance has not reached me.
