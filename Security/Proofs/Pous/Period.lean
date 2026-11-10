@@ -11,7 +11,7 @@ public import Proofs.Accounting.PerRunJoint
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee
 
 **The extractor passes** (`extractPasses`). On a certified capacity coin, `Instantiates` gives the memory challenger's
-draw and the strategy's answers in the ring model, the challenged blocks of `C`; the certificate's `AnsweredOnTime`
+sample and the strategy's answers in the ring model, the challenged blocks of `C`; the certificate's `AnsweredOnTime`
 is on time within `Δ + RTT` (`onTime_of`), so `DeviceModel` bounds each round's program by `(D, Q, L)`, and where the
 account holds at most `B` bits at every tick, each round's state by `B + S_chip + c < S₀` bits. A state of fewer than
 `S₀` bits survives `StateBits.pack` (`unpack_pack`), and a program within the budget runs unclipped (`clip_run`), so

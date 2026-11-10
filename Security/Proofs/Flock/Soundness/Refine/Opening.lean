@@ -11,7 +11,7 @@ import Mathlib.Data.List.GetD
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.Fold
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Exec
 import Proofs.Flock.Soundness.Refine.Plays
@@ -211,7 +211,7 @@ theorem oStep_fold (claims : Array Flock.Claim) (rs : Array (Array F128)) (C : �
       rw [List.foldl_cons, h1, h2]
       simp [oStep]
 
-/-- **The model's ring switches** (O3, O5): claim by claim, receive `ŝ` and draw `r''`. -/
+/-- **The model's ring switches** (O3, O5): claim by claim, receive `ŝ` and sample `r''`. -/
 theorem mapM_plays {m : ℕ} (rs : Array (Array F128)) (C : ℕ → Array F128) :
     ∀ (cs' : List (Model.Claim 𝔽 m)) (a : ℕ), (∀ i ∈ List.range' a cs'.length, (C i).size = 7) →
       Plays fOf (cs'.mapM fun c => do

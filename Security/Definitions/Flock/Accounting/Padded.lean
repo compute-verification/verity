@@ -5,9 +5,9 @@ import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# The bound with a padded level 0 (C-Flock ZK)
+# The bound with a padded level 0 (Flock ZK)
 
-C-Flock ZK (`verity/ml/flock/live/PROTOCOL.md` §7) hides level 0 two ways, and both change
+Flock ZK (`verity/ml/flock/live/PROTOCOL.md` §7) hides level 0 two ways, and both change
 level 0's soundness terms:
 
 * **Per-lane padding.** Every lane's codeword encodes its message and `t` uniform coefficients, so

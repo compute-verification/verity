@@ -45,7 +45,7 @@ def _run(roots: list[bytes], errors: tuple[str, ...] = ()) -> RunCommitment:
 
 
 def test_a_run_with_an_uncommitted_step_has_no_root_to_draw_from():
-    """The Commit's opening draw (`pipeline.commit`, the config run's ``--bounded-staging``) takes the root through
+    """The Commit's opening sample (`pipeline.commit`, the config run's ``--bounded-staging``) takes the root through
     `run_root_of`: rows-sha512's 64-byte root or vllm-v1's 32; a step the committer refused is a placeholder root and the
     run has none, refused by its steps and first error, not by the root's length."""
     step = hashlib.sha256(b"step").digest()

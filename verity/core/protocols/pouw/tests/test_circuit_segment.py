@@ -49,7 +49,7 @@ def _rsel(pos: int) -> list[int]:
 
 
 def _honest_v3(rnd, ks, s, fold, dither):
-    """A thread's whole call under `PouwSegCheck_v3`: its committed leaves, coin and draw, and receipt leaves holding its
+    """A thread's whole call under `PouwSegCheck_v3`: its committed leaves, coin and sample, and receipt leaves holding its
     honest window words at one position."""
     a, b = [_leaf(rnd) for _ in range(ks)], [_leaf(rnd) for _ in range(ks)]
     asel, bsel = _onehot(16, rnd.randrange(16)), _onehot(8, rnd.randrange(8)) + [0] * 8

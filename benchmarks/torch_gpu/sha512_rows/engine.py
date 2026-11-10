@@ -15,7 +15,7 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
     roots = E.root(leaves_of_trees, dids)                # (T, 8): pads to a power of two, then every level
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
-of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` draws row ``salt_row``'s y in slot s as ChaCha20
+of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` derives row ``salt_row``'s y in slot s as ChaCha20
 chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
 
@@ -40,12 +40,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity_config.settings import of
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.ml.kernels import ROW_COMMIT, SHA512
-from verity_config.settings import of
 
 __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "device_lib", "digests", "host_lib", "words"]
 

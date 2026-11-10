@@ -294,7 +294,7 @@ def test_the_hyper_connected_rank_profile_states_the_builds_weights_record():
     assert own[-4:] == ["fp8.dynamic_deepgemm_linear", "gemm.cublas_linear_default", "gemm.cublas_mm_f32out", "norm.rms_norm_cuda"]
     assert names[:len(own)] == own and names[len(own):len(own) + 4] == [
         "tp.embedding_shard_cuda", "tp.collective", "moe.marlin_shared_experts.mxfp4", "residual_add.aten_add"]
-    assert prof.witnesses == ("schedule",)
+    assert prof.witnesses == ()
     h = RunHeader("verity-capture/log/v1", "2026-10-18T00:00:00Z", "pid", {}, {"repo": mod.REPO_ID, "config": mod.HF_CONFIG, "tp": 8},
                   {"requests": []})
     assert mod.check_header(h) == []

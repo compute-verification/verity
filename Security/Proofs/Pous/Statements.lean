@@ -531,7 +531,7 @@ challenger rejects (more than `f₀` rounds are not hits) with probability at mo
 `q` is a parameter, not an assumption, and the statement holds for every machine, but a `q` is a rate in one
 configuration. A tighter deadline needs a larger `q`: at a fixed hard deadline the rounds and the histories do not
 depend on `(D, Q)`, and a smaller `(D, Q)` turns some hits into late answers. A machine is deterministic, so the only
-randomness the theorem bounds is the setup and the index draw, and `q` is the worst miss rate over the next index, at
+randomness the theorem bounds is the setup and the index sample, and `q` is the worst miss rate over the next index, at
 the worst setup and after the worst history. The model's honest responder, which keeps `C` and answers by lookup, hits
 every round: `q = 0` (`PousContinuous.honest_complete`).
 
@@ -541,7 +541,7 @@ which is not a valid `q`. A valid `q` is the worst per-round miss probability ov
 produce, such as the rate right after a miss. Bursty or correlated misses set the two far apart: a host that misses 1%
 of its rounds in bursts of mean length 10 (a miss follows a miss with probability `0.9`) has run-average rate `0.01`,
 but at `n = 1000` and `f₀ = 25` it is rejected with probability `0.123`, against `α = 1.56·10⁻⁵` at `q = 0.01`; its
-valid `q` is about `0.9`. Carrying the tail bound from the index draw to the clock's miss process is the same tail
+valid `q` is about `0.9`. Carrying the tail bound from the index sample to the clock's miss process is the same tail
 rule applied outside the Lean model, and is not proved here.
 
 `1 − q` is truncated at `0`, so above `q = 1` the bound is `q^n ≥ 1` when `f₀ < n`, and `0` otherwise, where the
@@ -564,16 +564,16 @@ def ContinuousComplete : Prop :=
         ≤ ∑ m ∈ (Finset.range (n + 1)).filter (fun m : ℕ => f₀ < m),
             (n.choose m : ℝ≥0∞) * q ^ m * (1 - q) ^ (n - m)
 
-/-! ## The continuous audit, time-averaged, with arrivals drawn by the memory challenger
+/-! ## The continuous audit, time-averaged, with arrivals sampled by the memory challenger
 
 Red team: needed. The memory challenger of `ContinuousAudit`,
-unchanged, run on arrivals it draws itself: one coin per slot of one unit
-(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
+unchanged, run on arrivals it samples itself: one coin per slot of one unit
+(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals sampled by the memory challenger"). Arrivals queue
 behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
 normalized by the expected number of challenges `λT`, not the realized one. -/
 
 /-- **The continuous audit's time-averaged bound.** From `TimedINC sch D Q β π`, for every machine, every hard
-deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the memory challenger's `T` slot draws
+deadline `(D_late, Q_late)`, every `f` and every `βe > 0`, over the setup and the memory challenger's `T` slot samples
 `x t ∈ Fin b × Fin B` (a challenge arrives at slot `t` iff its coin is below `a`, probability `p = a/b`; its index is
 the slot's): the memory challenger, run on these arrivals, accepts with tolerance `f` and
 `p·Σ_{t idle} max(ε_t − ε_proof, 0)` exceeds `G(f) = inf_{θ > 0} (θ·f + ln(1/βe)) / (1 − e^−θ)` with probability at most
@@ -590,7 +590,7 @@ This is an average over the idle slots, not over the whole period: it does not b
 off the event, with `0 < a` and `ε_proof ≥ 0`, `ε̄ ≤ ε_proof + g + (busy slots)/T` whatever the memory at a busy slot,
 and a responder that pads every hit to `D` units makes about 2.5% of the slots busy at `D = 2` and 9.9% at `D = 5`
 (100 challenges/s on 241.5 µs slots) without a miss. Neither is proved here. `a ≤ b` keeps `a/b` a probability,
-and `0 < b` makes the draw space nonempty. The
+and `0 < b` makes the sample space nonempty. The
 scope is the model's: the arrival coins are the memory challenger's own randomness, independent of the setup and the
 answers; memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which
 the step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover

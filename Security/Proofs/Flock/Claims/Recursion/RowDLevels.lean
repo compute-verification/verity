@@ -46,12 +46,12 @@ import Proofs.Flock.VBridge.Runs.ZcLc
 # Row D's `hlev`: the verifier's query positions, and the honest proof's Merkle checks
 
 `DecAt.levels_of_merkleOk` gives row D's `hlev` from FlockComplete's `Lg.MerkleOk` at some query coins `cf` from a
-round `k`, and the tie `htie` that every run of the verifier rows queries level `ℓ` at the positions those coins draw at
+round `k`, and the tie `htie` that every run of the verifier rows queries level `ℓ` at the positions those coins sample at
 round `k + qOff sch ℓ`.
 
 * **The tie, outright** (`rows_pos`, `DecAt.htie`): any run of `verifierRows` on rounds with no empty round queries
   level `ℓ` at the positions of the rounds' own coins at `lgStart + qOff sch ℓ`, where `lgStart` is Ligerito's first
-  round (after the zerocheck's, the lincheck's and ring switching's), step by step as `ligeritoRun` draws them
+  round (after the zerocheck's, the lincheck's and ring switching's), step by step as `ligeritoRun` samples them
   (`levelsLoop_pos`, `ligeritoRun_pos`). So `htie` holds at `cf = cfOf rounds`, `k = lgStart`.
 * **`hlev` from `MerkleOk` at any coins that agree there** (`merkleOk_congr`, `DecAt.hlev_of_merkleOk`): `MerkleOk`
   reads its coins only at the queried rounds.

@@ -107,7 +107,8 @@ bash check.sh                       # the audit and the grader's controls
 
 **Trusted without proof:** the statements in the three layers `Security/lean-audit.json`'s `meaning` lists,
 `Definitions/Pous`, `Definitions/Pous/Assumptions` and `Definitions/Pous/Guarantees` (each directory and its own `.lean` file),
-and the lemmas' statements in `Proofs/Pous/Statements.lean` that grade.sh grades against;
+Core's `Verity.Game.prCoin` (`Definitions/Core/Game.lean`), which `Pous.pr` abbreviates, and the lemmas' statements in
+`Proofs/Pous/Statements.lean` that grade.sh grades against;
 Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is checked by machine. Docstring paths such
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
@@ -134,16 +135,19 @@ graded proof moves into `Security/Proofs/Pous/` as a module, with its theorem ad
 `Security/Proofs/Pous.lean` and listed as a guarantee in `Security/lean-audit.json` (`check.py --update`,
 then review the records' diff).
 
-**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` or adding a `.lean` file under
+**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` (among them Core's `prCoin`, in
+`Definitions/Core/Game.lean`, and the proved files `Sanity.lean` imports) or adding a `.lean` file under
 `Definitions/Pous`, regenerating it from this directory (`tools/verity/check/pins.py --regen` runs this command, and
-`--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`):
+`--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`). A file the command
+starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them too (`verity/core/protocols/pous/tests/test_pous_trusted.py` names it):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
   ../../../../../Security/lean-toolchain ../../../../../Security/lakefile.toml ../../../../../Security/lake-manifest.json \
   ../../../../../Security/Proofs/lakefile.toml ../../../../../Security/Proofs/lake-manifest.json \
-  ../../../../../Security/Definitions/Pous.lean \
+  ../../../../../Security/Definitions/Pous.lean ../../../../../Security/Definitions/Core/Game.lean \
   ../../../../../Security/Proofs/Pous/Statements.lean ../../../../../Security/Proofs/Pous/Sanity.lean \
+  ../../../../../Security/Proofs/Pous/Prob.lean ../../../../../Security/Proofs/Core/Game/Basic.lean \
   ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
   $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~

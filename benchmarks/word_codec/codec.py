@@ -19,7 +19,7 @@ little-endian integer S, and word i's payload is bits b·i … b·i + b − 1 of
 The field, ρ and the rounds are the store codec's (`verity.core.protocols.remote_bandwidth.codec`'s `Field`, `rho` and
 `encode_word` over an unmasked `Sloth`); the keys and the packing are this module's.
 
-The seed is drawn after the weights are registered. Encoding a word costs k roots (59k squarings and a square test
+The seed is sampled after the weights are registered. Encoding a word costs k roots (59k squarings and a square test
 each) and decoding it k squarings, whatever k is, and there is no keystream: the honest prover decodes at about
 one squaring per round and word, and a prover missing the word rebuilds it at about 59.
 

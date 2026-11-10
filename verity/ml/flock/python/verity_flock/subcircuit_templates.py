@@ -24,6 +24,8 @@ GLM-5.3's served SiLU·mul (vLLM ``_C.silu_and_mul``) is ``silu-mul-v2``, ``Silu
 Its served RMSNorms (vLLM's width-8 CUDA kernels, ``registry.cuda_rmsnorm``) are ``rmsnorm-fused-cuda-vec8``,
 ``RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-fused-cuda``'s ports, and ``rmsnorm-cuda-vec8``,
 ``RMSNormCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-triton``'s; BLOCK is the launch's block, which the token count picks.
+The served fused norm binds ``RMSNormFusedCudaVector8_v3``, v1's words with its sum of squares stated as batches (its unit
+netlist orders the same gates differently, so it has no pins here); ``rmsnorm-fused-cuda-vec8`` keeps v1.
 
 The registered compiler's dead-free Definitions (``registry.dead_free``) have templates of their own: ``rmsnorm-triton-v5``,
 ``RMSNormTriton_v5{N, EPS}`` on ``rmsnorm-triton``'s ports, and ``attention-head-v18``, ``AttentionHead_v18{T, D, BN, DOT, INV,
@@ -38,12 +40,12 @@ that has a kernel: ``AttentionHead_v3`` as ``Attention_v3{NH=1, KVH=1}`` (a batc
 vLLM step ``AmpereBF16TcDot16_v1``; it and core's ``_v2`` evaluate the same function (``tc_dot_total`` on
 ``AMPERE_BF16_M16N8K16``), so both evaluate through core's ``_v2`` (tested on sampled inputs).
 
-Sampling (:meth:`Subcircuit.draw`): draw ``j`` of a synthetic set reads each port's words from the counter stream
+Sampling (:meth:`Subcircuit.draw`): sample ``j`` of a synthetic set reads each port's words from the counter stream
 ``key.stream((port, j), ...)`` of ``verity.ml.randomness`` (SHA-512 counter mode, index-addressable), four bytes per word, so
-draw ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
+sample ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
 ``(r >> 1) & 0x7F``, exponent field ``c - h + ((r >> 8) & 0xFFFF) mod (2h + 1)`` for the port's window (centre ``c``,
 half-width ``h`` chosen per sample from the port's classes by ``key.uniform(len, ("class", port, j))``), replaced by an edge
-word (``+-0``, ``+-`` smallest subnormal, ``+-1``) ``EDGES[(r >> 29) mod 6]`` when ``(r >> 24) & 0x1F == 0``.  GEMM draws
+word (``+-0``, ``+-`` smallest subnormal, ``+-1``) ``EDGES[(r >> 29) mod 6]`` when ``(r >> 24) & 0x1F == 0``.  GEMM samples
 share their activation row in tiles of ``tile`` (the shape serving uses): ``x`` and its class are sampled at ``j // tile``.
 """
 from __future__ import annotations
@@ -73,7 +75,7 @@ class Port:
 
 @dataclass(frozen=True)
 class Draw:
-    """One synthetic draw: its input words per port, the statics that vary per instance, and what ``index.json`` records."""
+    """One synthetic sample: its input words per port, the statics that vary per instance, and what ``index.json`` records."""
 
     inputs: dict[str, np.ndarray]
     instance_statics: dict[str, int]
@@ -525,7 +527,7 @@ ATTN_SEMANTICS = {
 
 
 def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2.bf16") -> Subcircuit:
-    """One attention head, ``T`` per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic draw's range
+    """One attention head, ``T`` per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic sample's range
     ``lo:hi`` (uniform per sample).  ``sm80.fa2.bf16``: FA2 (``AttentionHead_v3``, evaluated as ``Attention_v3{NH=1, KVH=1}``);
     ``sm90.fa3.bf16``: FA3 on the H100's wgmma step (``AttentionHead_v2{DOT=HopperBF16WgmmaDot16, INV=Fa3InvSum}``, evaluated as
     ``Attention_v2{NH=1, KVH=1}``)."""
@@ -833,7 +835,7 @@ ROWS: dict[str, _Row] = {r.template: r for r in (
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
          lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v2<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
          pattern=r"i(?P<I>\d+)", example={"I": 256}),
-    _Row("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1", "verity.ml.definitions.registry.cuda_rmsnorm:RMSNormFusedCudaVector8",
+    _Row("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1", "verity.ml.definitions.registry.cuda_rmsnorm:RMSNormFusedCudaVector8V1",
          ("N", "EPS", "BLOCK"), lambda s: _u16(s["N"], "in0", "in1", "in2"), lambda s: _u16(s["N"], "out.0", "out.1"), _rms_fused_sample,
          lambda s: f"n{s['N']}-b{s['BLOCK']}-eps{_slug_float(s['EPS'])}/bf16",
          lambda s: f"RMSNormFusedCudaVector8_v1<{s['N']}> · BLOCK {s['BLOCK']} · eps {s['EPS']:g} · BF16",

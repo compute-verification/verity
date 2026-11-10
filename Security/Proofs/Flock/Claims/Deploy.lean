@@ -48,7 +48,7 @@ The shipped verifier (`flock-verify verify`, plain or `--zk`) as a `Claims.Verif
 live session's, each answered by that round's live coin, and the last is decided by the shipped verdict, with every
 SHA-512 call an oracle query.
 
-* **Coins.** A live coin (`Coin`) is the `65536` GF(2^128) elements a round may draw (S12: `1 ≤ n ≤ 65536`); a round of
+* **Coins.** A live coin (`Coin`) is the `65536` GF(2^128) elements a round may sample (S12: `1 ≤ n ≤ 65536`); a round of
   `n` coins reads the first `n` (`Coin.vals`), the link's points the first `points · m_pts` (`pointsOf`). The verifier's
   answer `b_j` is the coin's bytes (`Coin.bytes`).
 * **Messages.** `a_1` is the link message (tag `0`: each table's `root_B` and public words, `linkBody`); `a_2, …` are the
@@ -58,7 +58,7 @@ SHA-512 call an oracle query.
 * **The decision** (`decision`): the statement's setup over `OC` (`setupM`, `Stmt.setupTablesWith Hashes.oc`), then at
   its session the shipped verdict over `OC` (`verifyWithM Hashes.oc`, or `Zk.verifyWithM`), every SHA-512 call of both
   an `OC.query`, the session's digests and the live coins' among them (S12's `msg_sha512`, `dgWith`); then, with no
-  hash, the live session's custody (`checks`): the last message's statement is `x`, the record's draw is the statement's,
+  hash, the live session's custody (`checks`): the last message's statement is `x`, the record's sample is the statement's,
   the record's link and rounds are the live messages and coins (`custody`); then the scope (`ProvedScope.check`) and a
   draw-less session's refusal (`drawLaw zk tags false none`), and last S0, the record in its canonical text (`RecordText.check`),
   as `verifyCmd` orders them.
@@ -82,7 +82,7 @@ open Lean (Json)
 
 /-! ## Coins -/
 
-/-- **A live coin**: the `65536` GF(2^128) elements a round may draw. -/
+/-- **A live coin**: the `65536` GF(2^128) elements a round may sample. -/
 def Coin : Type := Fin 65536 → F128
 
 instance instInhabitedCoin : Inhabited Coin := ⟨fun _ => 0⟩
@@ -222,7 +222,7 @@ def setupCallsOf (h : ByteArray → ByteArray) (r : Readable.Read) : ℕ :=
   Stmt.setupCalls h r.tags r.I.circuitFile r.I.publicFile r.coins r.I.count r.I.tables r.draw r.I.partition r.I.program
     r.I.work r.I.stratified r.I.closure r.publicInputs
 
-/-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's draw is the
+/-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's sample is the
 statement's whatever its key order (`drawEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the
 live session's custody, the verifier's scope check, a draw-less session's refusal, and last the record's canonical text
 (S0, `RecordText.check`: the record is what `printT` prints of what it parses to). -/

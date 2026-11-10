@@ -1,4 +1,4 @@
-"""The pinned H1 tile's population (`population_program`, `TemplateInstances_v1{PouwH1Tile_v1{K=64,R=4,C=8}, N}`, a window's
+"""The pinned H1 tile's population (`population_program`, `TemplateInstances_v1{PouwH1Tile_v1{K=64,R=4,C=8}, N}`, an execution phase's
 program over the tile): each instance's salt is a coin, its position a position and its receipt a sink, so the port rules
 accept it, and a Program that feeds an instance's salt from anything but a coin is refused."""
 from __future__ import annotations

@@ -52,7 +52,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `Zk/Json/Goals.lean` at a run of any number of tables (`Run`), from `StmtAt` and the prover's pieces
 (`proverOkJ`): the record is the printed honest masked record of one `root_B` per table (`sessionPZk_factsJ`), which
 `Record.decodeWith` reads as `sessOf` (`decode_recordObjZkJ`) and `liveOf` as its live session (`live_recordObjZkJ`):
-`Run.jsonJ`. Its checks follow (`recordJsonJ`): the draw, the live reads, custody (each table's `root_B`, no public
+`Run.jsonJ`. Its checks follow (`recordJsonJ`): the sample, the live reads, custody (each table's `root_B`, no public
 words, the points, one round per round message and each round its message), the decode, each table's public words, the
 proof digests listing the rep streams (each found under its name, `find?_name`), every rep's stream, and each table's
 extra claims. What `RecordAt` asks of the proof files (`FilesAt`: their sizes, each rep's file decoding at the table's

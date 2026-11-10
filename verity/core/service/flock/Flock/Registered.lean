@@ -1,5 +1,5 @@
 /-
-`Flock.HmRow` (registered reads); `protocols/sampled_proofs/README.md`, "Registered values": a statement's rows of a
+`Flock.HmRow` (registered reads); `protocols/spot/README.md`, "Registered values": a statement's rows of a
 registered value (a program's weights, constants and tables, committed once at registration under `hm96-sha512/row/v1`
 leaves, or a served tree's rows under its port's `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` leaves), opened against
 the verifier's own registered roots at the positions its own program reads.
@@ -524,8 +524,8 @@ def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
   roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
-/-- Whether every draw by `d`'s law draws unit `u`: a subset draw of the whole population, a `p = 1` draw, or a unit whose
-stratum draws all of its units (`k_s = n_s`). -/
+/-- Whether every sample by `d`'s law samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
+stratum samples all of its units (`k_s = n_s`). -/
 def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
   match d.law with
@@ -535,16 +535,16 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   | .work _ strata => strata.any (full ·.toStratum)
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
-does not draw in full. -/
+does not sample in full. -/
 def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
   own.findSome? fun p =>
     if roundCommitment p.value then
       ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
     else none
 
-/-- U4 (`Flock.HmRow`): a drawn statement draws in full every unit that reads a round's commitment by the verifier's
+/-- U4 (`Flock.HmRow`): a sampled statement samples in full every unit that reads a round's commitment by the verifier's
 own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw` is the record's; a statement without a
-draw proves its whole population. -/
+sample proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
   let d ← Draw.UnitDraw.ofJson j
@@ -656,7 +656,7 @@ def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : 
 /-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
 table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across
 the statements; null without registered reads. A produced record holds every session's to its own
-(`SampledProofs.Produced.shared`). -/
+(`Spot.Produced.shared`). -/
 def registeredOpenings (sts : Array Stmt) (registered : Option (Array Registered.Port)) : Lean.Json :=
   match registered with
   | none => Lean.Json.null

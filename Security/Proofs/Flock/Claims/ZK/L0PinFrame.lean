@@ -334,7 +334,7 @@ theorem fr_link (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (a b : Arr
     FR coin n coins ((stepAsks coins true).link a b) ((asksCut coin n).link a b) :=
   fr_fail _ fun _ => rfl
 
-/-- `asksCut` as the firewall's `Asks`. -/
+/-- `asksCut` as the ZK server's `Asks`. -/
 def cutAsks (coin : Nat → Nat → F128) (n : Nat) : _root_.Flock.Firewall.Finish.Asks PS :=
   ⟨(asksCut coin n).link, (asksCut coin n).round⟩
 

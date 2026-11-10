@@ -11,6 +11,7 @@ a command, so an `import` after one is refused. Lean refuses a tab and a byte-or
 `module`."""
 from __future__ import annotations
 
+import functools
 import re
 from typing import NamedTuple
 
@@ -20,13 +21,21 @@ WORDS = ("module", "prelude", "public", "meta", "import", "all")
 NAME = re.compile(r"(?:«[^»]*»|[^.«»]+)(?:\.(?:«[^»]*»|[^.«»]+))*")
 
 
+@functools.lru_cache(maxsize=None)
+def components(mod: str) -> tuple[str, ...]:
+    """A module name's components, each without the `«»` that quotes it, kept per name: the task graph's listing asks for
+    each imported module's some hundred times (`module_keys.Package.claims`, once per library root of each package)."""
+    return tuple(p.strip("«»") for p in re.findall(r"«[^»]*»|[^.«»]+", mod))
+
+
 def parts(mod: str) -> list[str]:
     """A module name's components, each without the `«»` that quotes it."""
-    return [p.strip("«»") for p in re.findall(r"«[^»]*»|[^.«»]+", mod)]
+    return list(components(mod))
 
 
+@functools.lru_cache(maxsize=None)
 def name(mod: str) -> str:
-    return ".".join(parts(mod))
+    return ".".join(components(mod))
 
 
 class Import(NamedTuple):

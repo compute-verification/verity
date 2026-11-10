@@ -2,7 +2,7 @@ module
 
 public import Proofs.Core.QSort
 public import Proofs.Properties.Pouw.LiveSalt.Canon
-public import Proofs.Properties.NetworkRecords.Bytes
+public import Proofs.Properties.NetworkCertifier.Records.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -20,7 +20,7 @@ with one form are one (`canon_inj`).
 namespace Properties.Challenger.Commitment
 
 open Lean (Json)
-open SampledProofs.Challenger (LiveCommitment familiesJson)
+open Spot.Challenger (LiveCommitment familiesJson)
 open Properties.Pouw.LiveSalt.Canon (canon_obj canon_nat canon_families canon_str famStr canonStr_split nat_split
   fam_split)
 

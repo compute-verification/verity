@@ -38,7 +38,7 @@ import Proofs.Flock.Claims.Recursion.HresAsm
 # The recursive verifier's knowledge soundness at the linked relation
 
 `RecursiveKSLinkAt` is `RecursiveKSAt` with the linked relation `R_L` (the deployed relation, and every listed link's
-reader row equal to its writer row), the extractor that also reads the link table's rows off its judged draw, and one
+reader row equal to its writer row), the extractor that also reads the link table's rows off its judged sample, and one
 more term, the link finder's `Pr[B_L]`. `recursiveKSLink_of` proves it at the deployed values from `RecursiveKS`, the
 deployed chain at `R` (`RecDeploy.ResLower.recursiveKS_deployed`), and the links' binding at the deployment
 (`LinksBindDeployed`: on an accepted run whose extracted witness is in `R` and fails the link clause, two of the inputs
@@ -53,7 +53,7 @@ namespace Flock.Guarantees
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
 
-/-- **The links bind at the deployment**: at every brings, coin-server record, pair of decoders meeting the
+/-- **The links bind at the deployment**: at every brings, live-coin record, pair of decoders meeting the
 list-decoding spec and dense statement, `LinkBindsAt` at the deployed record, bound and outer Flock. -/
 def LinksBindDeployed {Tb : Type} (Q : Msg → Claims.Flock.Wit → Tb → Prop) (rows : Msg → List Claims.Flock.Wit → Tb)
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →

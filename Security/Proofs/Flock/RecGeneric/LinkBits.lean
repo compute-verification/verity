@@ -4,7 +4,7 @@ public import Proofs.Flock.RecGeneric.PlansProof
 public import Proofs.Flock.Claims.ERepCost
 
 /-!
-# The link term's bits (F9b)
+# The binding error's bits (F9b)
 
 A run finder's collision bound reads its expected cost (`ExpectedCR`), and `RunFinder.MadeLe F e` bounds that cost by
 `e(x) · c` in every model whose runs, and forks of them, cost at most `c` calls on average. So a finder that meets
@@ -24,7 +24,7 @@ namespace Claims.RecGeneric
 open Claims
 open Claims.Recursion (fork)
 
-/-- **An average over a selector, a tape and draws** is at most `b` where each selector value and tape's is. -/
+/-- **An average over a selector, a tape and samples** is at most `b` where each selector value and tape's is. -/
 theorem Ex_sel_le {S Ω V : Type} [Fintype S] [Nonempty S] [Fintype Ω] [Nonempty Ω] [Fintype V]
     (F : S → Ω → V → ℝ) (b : ℝ) (h : ∀ q ω, Ex (F q ω) ≤ b) :
     Ex (fun s : S × Ω × V => F s.1 s.2.1 s.2.2) ≤ b :=

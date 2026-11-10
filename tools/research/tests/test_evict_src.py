@@ -1,6 +1,5 @@
-"""`research data evict --src-dir`: the hourly eviction of `research run`'s shipped source trees (`evict.evict_src`).  Node 1 hit
-74% inodes on 4 Oct with nothing pruning `/workspace/research/src`, and @infra pruned it by hand under root's three conditions:
-the tree is recoverable on the node, nothing uses it, and no run record holds it as its source's only copy.  Each condition keeps a
+"""`research data evict --src-dir`: the hourly eviction of `research run`'s shipped source trees (`evict.evict_src`).  With nothing
+pruning `/workspace/research/src` a node runs out of inodes, so a tree goes under three conditions: the tree is recoverable on the node, nothing uses it, and no run record holds it as its source's only copy.  Each condition keeps a
 tree here, a pass that can't establish one deletes nothing, and a tree meeting all of them goes."""
 import json
 import os
@@ -303,8 +302,8 @@ def test_a_tree_that_may_be_a_runs_only_copy_of_its_source_is_kept(node, setup, 
 
 
 def test_a_run_refused_before_its_workload_does_not_keep_the_tree_once_it_is_old(node):
-    """On node 2 (16 Oct), 43 trees and 1.15M inodes were kept only by refused runs (launch.json, refused.json, no job.json), as
-    "records no source commit": a refused run ran nothing, so the tree can't be the only copy of what it ran."""
+    """Refused runs (launch.json, refused.json, no job.json) must not keep trees as "records no source commit" (on a node, dozens
+    of trees and over a million inodes): a refused run ran nothing, so the tree can't be the only copy of what it ran."""
     for name, hours in (("r15", 3.0), ("r16", 0.5)):
         rd = node.root / "runs" / name
         rd.mkdir(parents=True)
@@ -331,7 +330,7 @@ PRESERVED = {"preserved": True, "files": {"job.json": [1, "f" * 64], "source-dir
 
 
 def test_a_dirty_run_whose_preserved_record_holds_its_capture_no_longer_keeps_the_tree(node):
-    """The 10 Oct src sweep deleted trees that were seven runs' only copy of their dirty sources; the runner now captures a dirty
+    """A src sweep can delete a tree that is a run's only copy of its dirty source; the runner captures a dirty
     source into the run dir and custody uploads it, so once the record is preserved the tree is not the only copy."""
     _captured(node, marker=PRESERVED)
     rep = run(node)
@@ -569,8 +568,26 @@ def test_the_cli_runs_the_pass_whatever_the_target_and_reports_it(node, monkeypa
     assert seen["keep_s"] == 1800, "a node short of inodes keeps recent trees for less"
 
 
+def test_a_store_pass_that_fails_still_lets_the_source_tree_pass_run(node, monkeypatch, capsys):
+    """A store this user can't write (a catalog another user made, whose schema gained an index) once stopped every pass before the
+    source trees, and the tree stopgaps put in its place deleted trees live runs were in."""
+    import sqlite3
+
+    from research.store.cli import main
+
+    def broken(*a, **kw):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setattr(EV, "evict_store", broken)
+    monkeypatch.setattr(EV, "evict_src", lambda src, **kw: {"deleted": [], "kept": [{"tree": node.a}], "error": None})
+    assert main(["evict", "--target-free-gb", "0", "--src-dir", str(node.src), "--dry-run", "--json"]) == 3
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["error"] == "store pass: OperationalError: attempt to write a readonly database"
+    assert rep["src"]["kept"] == [{"tree": node.a}]
+
+
 def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_its_commit(node):
-    """Root, 4 Oct 17:27Z: condition 1 is recoverability, so the node's `git/verity.git` (refs/research/src/<sha>, what `research
+    """Condition 1 is recoverability, so the node's `git/verity.git` (refs/research/src/<sha>, what `research
     run` re-ships from) is its repository and no credential for GitHub is needed: c, a branch origin never saw, goes; a tree whose
     commit the node doesn't hold stays."""
     stray = "f" * 40
@@ -582,7 +599,7 @@ def test_by_default_a_tree_is_recoverable_when_the_nodes_own_repository_holds_it
 
 
 def test_a_tree_that_is_not_exactly_its_commit_is_kept(node):
-    """Red team (bc-ddc07abc) on node 1: trees with lean-audit.json rewritten in place after the ship would have gone.  The commit is
+    """Trees with lean-audit.json rewritten in place after the ship must not go.  The commit is
     recoverable, its tree's own changes are not: a tracked file edited, an untracked file however deep, another HEAD, no .git."""
     (node.src / node.a / "f").write_text("edited in place: no commit has this")
     (node.src / node.b / "notes" / "deep").mkdir(parents=True)

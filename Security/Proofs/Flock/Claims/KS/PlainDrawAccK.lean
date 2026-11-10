@@ -50,11 +50,11 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# flock-verify's acceptance at a draw value, through `keep`
+# flock-verify's acceptance at a sample value, through `keep`
 
 The acceptance lemmas the deployed plain decoders read take `Exec.Accepts`, and read it only as a setup that succeeds
-and `verify`'s acceptance against it, with the record's draw only an argument of `Stmt.setupTables`. So each holds at
-`AcceptsAtDK keep I dr`, the setup at a draw value `dr`, with `dr` for the record's draw, by its proof on the walkers of
+and `verify`'s acceptance against it, with the record's sample only an argument of `Stmt.setupTables`. So each holds at
+`AcceptsAtDK keep I dr`, the setup at a sample value `dr`, with `dr` for the record's sample, by its proof on the walkers of
 `verifyWithMK keep` at SHA-512 (`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep`
 (`decodeWithK_points`, `decodeWithK_roundsWF`, `decodeWithK_allRetained`), each lemma's session the one the record
 decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
@@ -69,8 +69,8 @@ decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
 * `accepts_repsOneDLfK`, `accepts_repsOneDK`: `accepts_reps` and `accepts_repsH` at once, the one table's statement
   `setupOne`'s at `dr`, where each table's verdict accepts at `lf`, and at `leaf512` under `hm96-sha512/v1`.
 * `drawSetup_of_acceptsDK`, `tableAt_of_acceptsDK`, `drawSetupH_of_acceptsDK`, `tableAtH_of_acceptsDK`:
-  `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
-  with no premise on a record's draw.
+  `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the sample `some d`,
+  with no premise on a record's sample.
 -/
 
 @[expose] public section
@@ -543,8 +543,8 @@ open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs verifyK_one_ok)
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 
-/-- **A draw flock-verify accepts at sets up**: `drawSetup_of_accepts` at `AcceptsAtDK keep I (some d)`, with no
-premise on the record's draw. -/
+/-- **A sample flock-verify accepts at sets up**: `drawSetup_of_accepts` at `AcceptsAtDK keep I (some d)`, with no
+premise on the record's sample. -/
 theorem drawSetup_of_acceptsDK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -559,8 +559,8 @@ theorem drawSetup_of_acceptsDK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a draw flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
-`tableAt_of_accepts` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
+`tableAt_of_accepts` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAt_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
@@ -576,8 +576,8 @@ theorem tableAt_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} 
   obtain ⟨y, hy, e⟩ := tableAt_stmtOf ht dj x₀ x
   exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, e⟩⟩
 
-/-- **A draw flock-verify accepts at under hidden outputs sets up**: `drawSetupH_of_accepts` at
-`AcceptsAtDK keep I (some d)`, with no premise on the record's draw. -/
+/-- **A sample flock-verify accepts at under hidden outputs sets up**: `drawSetupH_of_accepts` at
+`AcceptsAtDK keep I (some d)`, with no premise on the record's sample. -/
 theorem drawSetupH_of_acceptsDK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
@@ -592,8 +592,8 @@ theorem drawSetupH_of_acceptsDK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetupH_of_setupHiddenI ht hc hst hf hD hS hm⟩
 
-/-- **At a draw flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
-accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
+accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAtH_of_acceptsDK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)

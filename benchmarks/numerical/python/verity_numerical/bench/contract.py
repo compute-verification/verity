@@ -201,7 +201,7 @@ INSTANCES_DATASET = census.INPUT_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: The frozen FP8 Ada input set (``FP8_ADA_INSTANCES_DATASET``): the synthetic VUs ``archive/direct/ligero/fp8/chain.py``
-#: draws (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
+#: samples (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
 #: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here so a reader
 #: recognises the set without importing the prover; a change to the recipe is a new tier.
@@ -209,7 +209,7 @@ _FP8_ADA = census.INPUT_SETS["bench-instances-fp8-ada-v1"]
 FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
 FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
 #: The frozen Hopper input sets (``BF16_HOPPER_INSTANCES_DATASET``, ``FP8_HOPPER_INSTANCES_DATASET``): the synthetic
-#: VUs ``archive/direct/ligero/relchain.py`` draws for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``)
+#: VUs ``archive/direct/ligero/relchain.py`` samples for the ``bf16-hopper`` / ``fp8-hopper`` relations (``relations.py``)
 #: -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
 #: (``benchmarks/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
 #: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (after the rows
@@ -222,7 +222,7 @@ _FP8_HOPPER = census.INPUT_SETS["bench-instances-fp8-hopper-v1"]
 FP8_HOPPER_INSTANCES_DATASET, FP8_HOPPER_INSTANCES_TIER = _FP8_HOPPER.dataset, _FP8_HOPPER.tier
 FP8_HOPPER_INSTANCES_SEED, FP8_HOPPER_INSTANCES_DIGEST = _FP8_HOPPER.seed, _FP8_HOPPER.manifest_sha256
 #: The frozen NVFP4 sm_120 input set (``NVFP4_INSTANCES_DATASET``): the synthetic VUs
-#: ``archive/direct/ligero/fp4/chain.py`` draws (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
+#: ``archive/direct/ligero/fp4/chain.py`` samples (``instances_fp4``: VU ``i`` from edge family ``VU_FAMILIES[i % 14]`` --
 #: uniform / zero / subnormal / top / spanning scales, sparse / saturated codes, exact cancellation, per-step mixtures --
 #: from seed :data:`NVFP4_INSTANCES_SEED`, model-recorded accumulators).  :data:`NVFP4_INSTANCES_DIGEST` is
 #: ``chain.instances_digest(4096)`` = sha256 of ``"fp4-nvf4 synthetic|seed=20260922|n=4096|K=1536|families=<the 14>"``,

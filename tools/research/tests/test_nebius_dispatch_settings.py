@@ -1,6 +1,6 @@
 """Node 1's dispatcher loop runs each tick in a fresh process from the environment it started with, so an edit to dispatch.env
-applies at the next tick and a key removed from it drops out. On 2 Oct a lend of cores 128-159 to provers never reached the
-running loop, which had read the file once, at its start, and two agents had to restart it by hand."""
+applies at the next tick and a key removed from it drops out, with no restart by hand; a loop that read the file once, at its
+start, would never see a change."""
 from __future__ import annotations
 
 import importlib.util

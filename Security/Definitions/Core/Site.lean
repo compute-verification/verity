@@ -63,7 +63,7 @@ the entry's own refusal, else by these (`Registration.refusal`).
 
 **Days.** A day is a part of a cut of the monitoring period's span (`MonitoringPeriod`, `TickSpan.Cut`), and a
 declaration names its day by the part's index. The prover declares one circuit a day, before the day's first coin: the
-verifier reads the day's declaration from the log it holds when it draws (`Registration.declared`), and since a second
+verifier reads the day's declaration from the log it holds when it samples (`Registration.declared`), and since a second
 declaration of the day is refused, that declaration is the day's for the rest of the log. A window runs its day's
 declared circuit when its span lies within the day's and its program is the one the day declares
 (`Registration.RunsDeclared`).

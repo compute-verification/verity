@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The ZK server's send check (FC_FIREWALL=1, the Lean flock-firewall's session loop) against the host's witness alone, per proved
-# witness bit. Per SC_PLAN entry ROLE:K:N (job.sh's staging, N instances, all drawn), SC_REPS rounds of one loopback --zk CPU
+# witness bit. Per SC_PLAN entry ROLE:K:N (job.sh's staging, N instances, all sampled), SC_REPS rounds of one loopback --zk CPU
 # session per arm, the arms' order rotated each round:
 #   nofw  FC_HOST_WITNESS=1
 #   fw    + FC_FIREWALL=1 through this tree's flock-firewall (beside job.sh's flock-verify, built if missing)
@@ -9,9 +9,9 @@
 # seconds and wall are recorded. Run from the source tree's root (`research run --cwd source`, 16 CPUs, 48 GB):
 #   SC_PLAN="hidden:256:1 hidden:256:128 hidden:256:256" SC_REPS=3 bash benchmarks/pouw/hidden_zk/send_check.sh
 # Results in $RESEARCH_RUN_DIR/out: send_check.tsv (a row a session: m, k_log, the session's wall, the verdict, the frame
-# stops, the prover's phase seconds, the firewall processes' CPU seconds and the session process's wall) and send_check.json
+# stops, the prover's phase seconds, the ZK server processes' CPU seconds and the session process's wall) and send_check.json
 # (per config and arm the medians, and per firewall arm the least-squares seconds a proved bit, 2^m, over the configs: the
-# firewall's CPU and the session's wall over nofw's).
+# ZK server's CPU and the session's wall over nofw's).
 set -uo pipefail
 SRC=$(pwd)
 PLAN=${SC_PLAN:-"hidden:256:1 hidden:256:128 hidden:256:256"}

@@ -23,7 +23,7 @@ sigma = delta*rho, alpha = 448/(s + 4*sigma); F's lines are E4M3 codes of (N_F/s
 (w, v unit-RMS lines of entries +-(1..128)); D = HOPPER_E4M3_K32.step(C = f32(alpha*x), E'_row, F_l) per element; A' =
 RNE_E4M3(D) with saturation. Pi's activation rules are checked per row: the noise floor sigma*alpha >= 1 and liveness (at
 most k/64 entries with |x| >= 8*sigma); a cell whose rows break them is out of the domain ("rejected"). The collision rate
-is how often two independent noise draws give an element the same code: the element-level noise entropy.
+is how often two independent noise samples give an element the same code: the element-level noise entropy.
 """
 from __future__ import annotations
 
@@ -193,7 +193,7 @@ def unit_lines(n: int, rng: np.random.Generator) -> np.ndarray:
 
 def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: np.random.Generator, chunk: int = 1 << 17,
             lines_out: list | None = None):
-    """§5's forming of rows X against F's codes Fc (k x 32). Returns codes, a second draw's codes (for the collision rate),
+    """§5's forming of rows X against F's codes Fc (k x 32). Returns codes, a second sample's codes (for the collision rate),
     the share of E' codes that are zero or subnormal, and the rows' domain verdicts (noise floor, liveness)."""
     rows, k = X.shape
     s = np.abs(X).max(1)
@@ -576,9 +576,9 @@ def cross_group(a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarr
 def transfer(a_sim: np.ndarray, b_sim: np.ndarray, a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarray,
              G: int = 4) -> dict:
     """The statement reviewer's transfer test (cross-group-transfer-probe.py): an adversary that knows the activations, the
-    weights and F before the salt simulates a noise draw, finds the greedy set on it, and skips that set on the real draw.
+    weights and F before the salt simulates a noise sample, finds the greedy set on it, and skips that set on the real sample.
     Per sampled word: does the real ticket word survive the skip, and how many of the set's atoms are outside the real
-    draw's debit flags (the credit it would gain)? Beside it, the real draw's own set and its overlap with the simulated one."""
+    sample's debit flags (the credit it would gain)? Beside it, the real sample's own set and its overlap with the simulated one."""
     rows = []
     for p in words:
         S_sim = greedy_set(a_sim[p:p + 1], b_sim[p:p + 1], G)
@@ -680,7 +680,7 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                             "cross_group_beyond_debit_mean": round(float(beyond.mean()) / T, 6),
                             "cross_group_beyond_debit_max": round(float(beyond.max()) / T, 6)})
             if transfer_words and forming == "s5":
-                # The reviewer's transfer test on the unpromoted chain: a set found on a simulated draw, skipped on the real one.
+                # The reviewer's transfer test on the unpromoted chain: a set found on a simulated sample, skipped on the real one.
                 sample = np.unique(np.linspace(0, len(A) - 1, transfer_words).astype(int))
                 a_sim = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A", "simulated"))[0][ii.ravel()]
                 b_sim = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B", "simulated"))[0][jj.ravel()]

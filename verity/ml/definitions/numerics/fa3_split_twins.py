@@ -1,8 +1,9 @@
-"""Numpy twin of `registry.fa3_split.AttentionHeadSplit_v1`, vectorised over rows that share the key count: the blocks are
+"""Numpy twins of `registry.fa3_split`'s heads, vectorised over rows that share the key count: `AttentionHeadSplit_v1`
+(`head_split_rows`), `AttentionHeadLse_v1` (`head_lse_rows`) and `AttentionHeadSplitLse_v1` (`head_split_lse_rows`).  The blocks are
 `derived_rows.attn_block` (`AttnBlock_v4`'s steps), each split's end `sparse_mla_split_twins.split_end_rows` and the combine
-`combine_rows`.  The capture's fast path (`tests/properties/glm53_fa3_prefill_capture_gpu.py`), checked word for word against the
-Definition in `tests/program/test_fa3_split.py`.  A row whose dot reads a non-finite operand is flagged (`attn_block`'s
-``nonfinite``) and never claimed exact."""
+`combine_rows` / `combine_lse_rows`.  The capture's fast path (`tests/properties/glm53_fa3_prefill_capture_gpu.py`), checked word
+for word against the Definitions in `tests/program/test_fa3_split.py`.  A row whose dot reads a non-finite operand is flagged
+(`attn_block`'s ``nonfinite``) and never claimed exact."""
 from __future__ import annotations
 
 import numpy as np
@@ -12,10 +13,8 @@ from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
 from verity.ml.definitions.registry import fa3_split as F
 
 
-def head_split_rows(q, k, v, *, T: int, BN: int, PER: int, masked_from: int, dot16=DR.tc_dot16_hopper,
-                    inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
-    """`AttentionHeadSplit_v1{T, D, BN, DOT, INV, MASKED_FROM, PER}`: q (R, D), k and v (R, T, D) or (T, D) bf16 words ->
-    (out (R, D) bf16 words, nonfinite (R,))."""
+def _ends(q, k, v, *, T: int, BN: int, PER: int, masked_from: int, dot16, inv) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Each split of `row_splits(T, BN, PER)` ended: (lse (R, NSPLIT), partial (R, NSPLIT, D), nonfinite (R,))."""
     q = np.asarray(q, dtype=np.uint16)
     R, D = q.shape
     k, v = (np.broadcast_to(np.asarray(a, dtype=np.uint16), (R, T, D)) if np.ndim(a) == 2 else np.asarray(a, dtype=np.uint16)
@@ -37,7 +36,32 @@ def head_split_rows(q, k, v, *, T: int, BN: int, PER: int, masked_from: int, dot
         part, lse = TW.split_end_rows(m, l, o, scale=D ** -0.5, inv=inv)
         parts.append(part)
         lses.append(lse)
-    return TW.combine_rows(np.stack(lses, axis=1), np.stack(parts, axis=1), inv=inv), nf
+    return np.stack(lses, axis=1), np.stack(parts, axis=1), nf
 
 
-__all__ = ["head_split_rows"]
+def head_split_rows(q, k, v, *, T: int, BN: int, PER: int, masked_from: int, dot16=DR.tc_dot16_hopper,
+                    inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
+    """`AttentionHeadSplit_v1{T, D, BN, DOT, INV, MASKED_FROM, PER}`: q (R, D), k and v (R, T, D) or (T, D) bf16 words ->
+    (out (R, D) bf16 words, nonfinite (R,))."""
+    lses, parts, nf = _ends(q, k, v, T=T, BN=BN, PER=PER, masked_from=masked_from, dot16=dot16, inv=inv)
+    return TW.combine_rows(lses, parts, inv=inv), nf
+
+
+def head_split_lse_rows(q, k, v, *, T: int, BN: int, PER: int, masked_from: int, dot16=DR.tc_dot16_hopper,
+                        inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`AttentionHeadSplitLse_v1{T, D, BN, DOT, INV, MASKED_FROM, PER}`: `head_split_rows`' operands -> (out (R, D) bf16 words,
+    lse (R,) f32 words, nonfinite (R,))."""
+    lses, parts, nf = _ends(q, k, v, T=T, BN=BN, PER=PER, masked_from=masked_from, dot16=dot16, inv=inv)
+    out, lse = TW.combine_lse_rows(lses, parts, inv=inv)
+    return out, lse, nf
+
+
+def head_lse_rows(q, k, v, *, T: int, BN: int, masked_from: int, dot16=DR.tc_dot16_hopper,
+                  inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`AttentionHeadLse_v1{T, D, BN, DOT, INV, MASKED_FROM}`: the unsplit head, one split of all ceil(T / BN) blocks ended, its
+    partial to bf16 -> (out (R, D) bf16 words, lse (R,) f32 words, nonfinite (R,))."""
+    lses, parts, nf = _ends(q, k, v, T=T, BN=BN, PER=-(-T // BN), masked_from=masked_from, dot16=dot16, inv=inv)
+    return DR.f2fp_bf16(parts[:, 0]), lses[:, 0], nf
+
+
+__all__ = ["head_lse_rows", "head_split_lse_rows", "head_split_rows"]

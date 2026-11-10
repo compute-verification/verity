@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The named premise a tile unit's C-Flock session takes for its Definition's checks
+# The named premise a tile unit's Flock session takes for its Definition's checks
 
 `TileChecks`: the session's key program computes `PouwH1TileZy_v1`'s Definition at its decoded registered ports, so
 that its `ok` wires carrying the `ok` row means the tile's cells check. It is the tile counterpart of

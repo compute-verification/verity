@@ -305,5 +305,5 @@ def fixture_secrets(run_id: str) -> tuple[bytes, bytes]:
 
 
 def fixture_salt(run_id: str) -> Callable[[int], bytes]:
-    """A FIXTURE salt key a step, from the run id (a test's roots then repeat); a run of record draws them fresh."""
+    """A FIXTURE salt key a step, from the run id (a test's roots then repeat); a run of record samples them fresh."""
     return lambda step: hashlib.sha512(b"e2e-h200/salt-key-fixture\0" + run_id.encode() + step.to_bytes(4, "big")).digest()[:32]

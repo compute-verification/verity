@@ -43,11 +43,11 @@ PROFILES = {0: "synchronous (zero lag: run moves with emit)", 1: "admitted one-s
 PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.async_scheduling -- the ONE resolved field A and LAG both read
 FAMILIES = ("is_eos", "emit", "run", "out", "in")  # b_t, e_t, r_t, o_t, u_t: Q(P) identities with named families
 #: the Definition's statement about randomness.  The sampler of slot `t` EXECUTES iff `r_t = 1` (it is the
-#: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program draws exactly once
+#: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program samples exactly once
 #: per executed slot: the lag slot (e, r) = (0, 1) consumes ONE sample after the served EOS, an inactive slot none.  With the counter RNG of
 #: record (Philox keyed by (seed, pos), no sequential state; `pos` = the QUERY position whose logits are sampled, the
-#: record's own `pos` fact: slot t draws at pos = prompt_len - 1 + (t - 1), the ledger's "draw k at prompt_len - 1 + k") "advances" means "the
-#: draw at pos exists": the served draws at pos < prompt_len - 1 + n are unchanged whether or not the lag slot ran.  stoch_recompute carries the
+#: record's own `pos` fact: slot t samples at pos = prompt_len - 1 + (t - 1), the ledger's "sample k at prompt_len - 1 + k") "advances" means "the
+#: sample at pos exists": the served samples at pos < prompt_len - 1 + n are unchanged whether or not the lag slot ran.  stoch_recompute carries the
 #: accounting; POSITIONS HERE ARE THE LEDGER'S (one convention on the record).
 RNG_STATEMENT = ("RNG advances iff r_t: the sampler of slot t executes iff r_t = 1; the lag slot (0, 1) consumes exactly one draw after the served "
                  "EOS at pos = prompt_len - 1 + n (n served slots; pos = the query position of record, slot t at prompt_len - 1 + (t - 1)); an "
@@ -56,7 +56,7 @@ RNG_STATEMENT = ("RNG advances iff r_t: the sampler of slot t executes iff r_t =
 
 
 def rng_accounting(slots: Sequence["Slot"], *, prompt_len: int | None = None) -> dict[str, Any]:
-    """The named RNG field: how many draws the rule says the Program makes, and where the post-EOS one is (position relative to the prompt, and
+    """The named RNG field: how many samples the rule says the Program makes, and where the post-EOS one is (position relative to the prompt, and
     absolute when `prompt_len` is known).  A statement about the Definition; the record-side count is stoch_recompute's."""
     exe = executed_slots(slots)
     lag = lag_slots(slots)
@@ -318,10 +318,10 @@ def slot_map(executed_engine_steps: Sequence[int], *, arrive_step: int, prefill_
 
 def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int], prompt_len: int) -> dict[str, Any]:
     """The sample positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
-    `pos` fact = the query position whose logits are sampled: the sample ledger's 'draw k at pos = prompt_len - 1 + k', slot t = k + 1;
+    `pos` fact = the query position whose logits are sampled: the sample ledger's 'sample k at pos = prompt_len - 1 + k', slot t = k + 1;
     the counter RNG is keyed by `(seed, pos)`), read from the recurrence over the SERVED list (the one mechanism).
-    An ORDERED list: the served slots' draws, then the one lag draw (A = 1, EOS before the cap), nothing after -- so an over-cap draw without
-    an EOS, a second post-EOS draw, or a sample at an inactive slot is an EXTRA position by name, a missing served draw a MISSING one
+    An ORDERED list: the served slots' samples, then the one lag sample (A = 1, EOS before the cap), nothing after -- so an over-cap sample without
+    an EOS, a second post-EOS sample, or a sample at an inactive slot is an EXTRA position by name, a missing served sample a MISSING one
     (`compare_draw_positions`).  `A in {0, 1}` (check_profile) -- a lag >= 2 has no admitted profile."""
     check_profile(A)
     if prompt_len < 1:

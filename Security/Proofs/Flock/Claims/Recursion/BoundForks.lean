@@ -58,7 +58,7 @@ section Coupling
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The inner rounds' forks bind**: at every draw of `Be`'s fork at round `j` where `E_O` gives witnesses on both
+/-- **The inner rounds' forks bind**: at every sample of `Be`'s fork at round `j` where `E_O` gives witnesses on both
 runs and the inner views read off them differ at message `j`, `Be` finds a collision there. -/
 def ForksBind (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (j : ℕ)
@@ -76,7 +76,7 @@ theorem ForksBind.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {D
     (h : ForksBind H D I DO) (x : Msg) : ForksBindAt H D I DO x :=
   fun decO => h decO x
 
-/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
+/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le_fork`, from `ForksBind`. -/
 theorem Pr_bad_le_fork_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
@@ -107,7 +107,7 @@ theorem sum_forkColl_inner_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
     rw [hS]
     exact mul_nonneg (Nat.cast_nonneg _) (PrBe_nonneg H D I DO decO P x)
 
-/-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
+/-- **A sample is bad at most as `√(k_I·k(x)·Pr[Be])`**: `Pr_bad_le`, from `ForksBind`. -/
 theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hR : InnerRounds D I) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type}
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
@@ -117,7 +117,7 @@ theorem Pr_bad_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
   exact (Pr_bad_le_fork_binds hFk decO x P).trans
     (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_forkColl_inner_le hR decO x P) (Nat.cast_nonneg _)))
 
-/-- **Bad reruns and a rejecting judged draw together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
+/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**: `bad_rej_le`, from
 `ForksBind`. -/
 theorem bad_rej_le_binds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     (hFk : ForksBind H D I DO) (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO)

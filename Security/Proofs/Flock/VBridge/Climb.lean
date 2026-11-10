@@ -28,7 +28,7 @@ direction bit `d[h]` swaps the current digest and the sibling (`_Forms.swap`: `t
 `(cur ⊕ t, sib ⊕ t)`), and the node is SHA-512 of the pair from the IV (`_sha(ops, IV, left + right, 0)`).
 
 `sound_climbFrom`: whenever the rows hold, if the forms carry the bytes of a 64-byte digest and of 64-byte siblings
-(`Carries`) and the direction bits are the position's low bits, the output carries the verifier of record's climb,
+(`Carries`) and the direction bits are the position's low bits, the output carries the verifier's climb,
 `Flock.climb ms` of the digest at the position through the siblings, for any scheme `ms` whose node is `SHA-512(l ‖ r)`
 (`MerkleScheme.hm96Sha512`, and `MerkleScheme.sha512`'s unsalted leaves).
 -/
@@ -115,7 +115,7 @@ theorem sound_swap (d : Lin) (a s : List Lin) : Sound (swap d a s) fun z lr => �
   · rw [hlen2]; cases ev z d <;> simp [hx.1, hxy]
   · rw [(hbit i (by omega)).2]; cases ev z d <;> simp [hx.2 i (by omega), hy.2 i (by omega)]
 
-/-- **V*'s climb is the verifier of record's.** For a Merkle scheme `ms` whose node is `SHA-512(l ‖ r)`, whenever the
+/-- **V*'s climb is the verifier's.** For a Merkle scheme `ms` whose node is `SHA-512(l ‖ r)`, whenever the
 rows of `climbFrom d h cur sibs` hold under `z`: if `cur` carries a 64-byte digest `acc`, each sibling's forms carry a
 64-byte sibling of `ss`, and the direction bit at level `h + j` is bit `j` of the position `idx`, the output carries
 `Flock.climb ms acc idx ss`. -/

@@ -13,7 +13,7 @@ from `A`'s history, picks. `zkmalR_seqU` proves the composed protocol `ZKmalR` f
 (Goldreich–Oren's sequential composition, with the hybrids in Wee's order): the hybrid that changes `B` keeps `A` real,
 so `B`'s `Fork` is charged against a verifier whose tape is `A`'s real run, and the one that changes `A` runs `B`'s
 simulator after it, a function of `A`'s transcript and fresh coins. `zkmalR_seq` is its corollary for finitely many
-units and `B` one `ZKmalR` protocol, whose simulator draws coins for every unit.
+units and `B` one `ZKmalR` protocol, whose simulator flips coins for every unit.
 
 The composed tape is `forkTape a`: a guess `j < a + 1`, both nonces, and two rests for `A`, of which `A` reads the
 second when `j < a` and the first when `j = a`. `Fork` then shares `A`'s run at `j = a`, so its collision is `B`'s at
@@ -102,7 +102,7 @@ theorem histOf_append (τ τ' : List (Msg × Out)) : histOf (τ ++ τ') = histOf
   simp [histOf]
 
 theorem stepWith_comap {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω' → Ω) (x : Msg) (ω : Ω')
-    (vnext : List Msg → OC Out) : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    (vnext : List Msg → OC Out) : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       stepWith H (P.comap f) x ω vnext n hist as t = stepWith H P x (f ω) vnext n hist as t
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by
@@ -120,7 +120,7 @@ theorem runStar_comap {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (f : 
 /-- The run reads the prover only at `x` and its tape. -/
 theorem stepWith_congr {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (x : Msg) (ω : Ω) (ω' : Ω')
     (vnext : List Msg → OC Out) (h : ∀ hist, P'.next x hist ω' = P.next x hist ω) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       stepWith H P' x ω' vnext n hist as t = stepWith H P x ω vnext n hist as t
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by
@@ -236,7 +236,7 @@ theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → P
 /-- **Every call in a run's `pLog` is one round's**: the trace's own, or the prover's on the history before some
 round. -/
 theorem stepWith_pLog_mem {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as = hist.map Prod.fst →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = hist.map Prod.fst →
       ∀ e ∈ (stepWith H P x ω vnext n hist as t).pLog, e ∈ t.pLog ∨
         ∃ i < (interact (fun as => ((vnext as).eval H).1) (fun h => ((P.next x h ω).eval H).1) n hist).length,
           e ∈ ((P.next x (hist ++ histOf ((interact (fun as => ((vnext as).eval H).1)
@@ -359,7 +359,7 @@ theorem Pr_forkTape (a : ℕ) {NA ΩA NB ΩB : Type} [Fintype NA] [Fintype ΩA] 
   simp only [Pr_fst p]
   exact Ex_const _
 
-/-- **One unit's coins among every unit's** have the law of that unit's. -/
+/-- **One unit's coins among every unit's** have the sampling design of that unit's. -/
 theorem Pr_pi_at {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)]
     [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p := by
   have e := Pr_equiv (Equiv.piSplitAt i β) fun q => p q.1

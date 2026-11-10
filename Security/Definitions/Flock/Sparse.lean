@@ -63,7 +63,7 @@ def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
 
 /-! ## Rounds in coefficient form -/
 
-/-- `n` coins, one draw each. -/
+/-- `n` coins, one sample each. -/
 def drawFin : (n : ℕ) → Game (Fin n → F)
   | 0 => pure Fin.elim0
   | n + 1 => do
@@ -76,7 +76,7 @@ def drawFin : (n : ℕ) → Game (Fin n → F)
 def degNext {k : ℕ} (claim : F) (c : F × (Fin k → F)) (r : F) : F :=
   c.1 + (claim + ∑ i, c.2 i) * r + ∑ i, c.2 i * r ^ (i.val + 2)
 
-/-- `n` rounds of degree `k + 1`: per round the prover sends `(c₀, c₂ … c_{k+1})` and the verifier draws the round's
+/-- `n` rounds of degree `k + 1`: per round the prover sends `(c₀, c₂ … c_{k+1})` and the verifier flips the round's
 coin. Returns the coins in round order and the last claim. -/
 def degRounds (k : ℕ) : (n : ℕ) → F → Game ((Fin n → F) × F)
   | 0, claim => pure (Fin.elim0, claim)

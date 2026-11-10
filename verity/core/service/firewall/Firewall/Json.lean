@@ -14,7 +14,7 @@ write them (`live/src/firewall_record_vectors.json`):
   the challenger's verdict (a boolean) or `{"panic": msg}`. `sent_at` is the release time a session that was sent waited
   for, if it had one.
 
-A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
+A record the ZK server can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
 statements, budget and schedule are checked before the record is read, as Python checks them.
 -/
 module
@@ -97,7 +97,7 @@ def opFn (input : Json) : V Json := do
   | "register", 2 =>
     let rest ← Flock.unhex (← arg 1 "the record after its number")
     let r ← read
-    let ((n, _), evs) := register r.events fun n => Flock.be64 n.toUInt64 ++ rest
+    let ((n, _), evs) := register r.events fun n => (Flock.be64 n.toUInt64 ++ rest, none)
     pure (answer r (Json.num n) evs)
   | "registrations", 4 =>
     let (s, p) := (← arg 1 "session", ← arg 2 "part")

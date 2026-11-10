@@ -13,12 +13,12 @@ public import Proofs.Properties.Verity.Sampled.Digest
 bound digests' two-continuation finder (`Constructions.withBind`), the projection at the sample-coupled coin maps
 (`Constructions.withProject` at `sampleMaps`) and the messages' two-continuation finders (`Constructions.withMessages`),
 cut at the binding's property of the play, the log v2's check read is the device's (`Binding.Logged Binding.readsV2`),
-and at the digest's: v2 draws at the strategy's `afterAt` (`SampledDigest`).
+and at the digest's: v2 samples at the strategy's `afterAt` (`SampledDigest`).
 
 * **(a), the binding** (`Binding.logged_le`): an accepted play whose log v2 read isn't the device's is at most as likely
   as the read finder's collision plus the forger's forgery, wherever the device printed each play's log
   (`Binding.binds_of_prints`, at `Lines.PrintsLog`).
-* **(a'), the digest** (`digestBound_of`): an accepted play whose draw doesn't answer `afterAt` is at most as likely as
+* **(a'), the digest** (`digestBound_of`): an accepted play whose sample doesn't answer `afterAt` is at most as likely as
   the square root of the bound digests' finder's success, a SHA-512 collision on `bind`'s messages
   (`prob_not_sampledDigest_le`).
 * **(b), the logged coupling** (`couplingTarget_withProject_of_sample`), off the openings' empty classes (`linkEmpty`,
@@ -70,10 +70,10 @@ theorem avg_srcCoinsAt {m : ℕ} {A : Live} (hL : A.Lb 0 = m * 64) (H : (Fin m �
 
 /-- **No coin of `m` whole frames is empty.** -/
 theorem chunks_ne_nil_of_size : ∀ (m : ℕ) (ξ : ByteArray),
-    ξ.size = _root_.SampledProofs.Challenger.COIN_BYTES * m → ∀ cs ∈ chunks m ξ, cs ≠ []
+    ξ.size = _root_.Spot.Challenger.COIN_BYTES * m → ∀ cs ∈ chunks m ξ, cs ≠ []
   | 0, _, _, _, h => by simp [chunks] at h
   | m + 1, ξ, h, cs, hc => by
-    have h64 : _root_.SampledProofs.Challenger.COIN_BYTES ≤ ξ.size := by
+    have h64 : _root_.Spot.Challenger.COIN_BYTES ≤ ξ.size := by
       rw [h, Nat.mul_succ]
       exact Nat.le_add_left _ _
     rw [chunks, List.mem_cons] at hc
@@ -82,10 +82,10 @@ theorem chunks_ne_nil_of_size : ∀ (m : ℕ) (ξ : ByteArray),
       have hl := congrArg List.length he
       rw [Verity.bitsOfBytes, List.length_map, List.length_range, ByteArray.size_extract, Nat.min_eq_left h64,
         List.length_nil] at hl
-      have : 0 < _root_.SampledProofs.Challenger.COIN_BYTES := by decide
+      have : 0 < _root_.Spot.Challenger.COIN_BYTES := by decide
       omega
-    · have hs : (ξ.extract _root_.SampledProofs.Challenger.COIN_BYTES ξ.size).size =
-          _root_.SampledProofs.Challenger.COIN_BYTES * m := by
+    · have hs : (ξ.extract _root_.Spot.Challenger.COIN_BYTES ξ.size).size =
+          _root_.Spot.Challenger.COIN_BYTES * m := by
         rw [ByteArray.size_extract, Nat.min_self, h, Nat.mul_succ, Nat.add_sub_cancel]
       exact chunks_ne_nil_of_size m _ hs cs hc
 
@@ -153,8 +153,8 @@ def DrawReadAll (k : Verity.Registration.Composite) (read : Verity.Sent → Opti
 /-- **The read with v2's own tests shows every coin of the sample's family**: they are the `m` whole frames of the coins
 v2 sampled from. -/
 theorem fresh_logRead_ne {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
+    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
     (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr)
     {log : List Verity.Release} (h : logRead s = some log) :
     ∀ cs ∈ freshCoins dr.label dr.after log, cs ≠ [] := by
@@ -181,8 +181,8 @@ theorem drawReadAll_logRead (k : Verity.Registration.Composite) : DrawReadAll k 
 /-- **The play's log shows the sample** where v2's read of it is the device's (`Binding.Logged Binding.readsV2`):
 `shows_of_logged` at the binding's property. -/
 theorem shows_of_readsV2 {k : Verity.Registration.Composite} (hR : DrawReadAll k coinsRead) {o : Verity.Exchange}
-    {a b e : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k o.sent)
+    {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k o.sent)
     (hcase : V2Case k o.sent a b e) (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr)
     (hl : Binding.Logged Binding.readsV2 o) : ShowsDraw o.log dr ξ := by
   obtain ⟨log, hlog, hs, hne⟩ := hR o.sent a b e p c ev ξ dr hS hcase hacc
@@ -194,7 +194,7 @@ theorem shows_of_readsV2 {k : Verity.Registration.Composite} (hR : DrawReadAll k
 
 /-- **The sample in a play** at the binding's property: `logged_draw` with `Binding.Logged Binding.readsV2`. -/
 theorem logged_draw_v2 {V : Vocab d α} {k : Verity.Registration.Composite} (hR : DrawReadAll k coinsRead)
-    {o : Verity.Exchange} {p₀ : _root_.SampledProofs.OneStageZk.Params} (hθ : ParamsAt o.params p₀)
+    {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀)
     (hv : V.Verdict k .sampled o) (hl : Binding.Logged Binding.readsV2 o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧ ShowsDraw o.log dr ξ := by
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hθ (verdict_case hv)
@@ -209,8 +209,8 @@ theorem coupled_draw_coins_v2 {V : Vocab d α} {k : Verity.Registration.Composit
     (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) {o : Verity.Exchange} (hθ : o.params = θ)
     (hv : V.Verdict k .sampled o) (hl : Binding.Logged Binding.readsV2 o) {m B : ℕ}
     (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
-    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
-      _root_.Properties.SampledProofs.bytesOf (coinBytes m B (κ ω) 0)) :
+    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m B (κ ω) 0)) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T,
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
@@ -253,7 +253,7 @@ the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps
 most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`),
 `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps
 an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
-plays whose log v2 read is the device's and whose draw answers the strategy's `afterAt` are the writer's at the moves
+plays whose log v2 read is the device's and whose sample answers the strategy's `afterAt` are the writer's at the moves
 v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
     (rd : Readings)

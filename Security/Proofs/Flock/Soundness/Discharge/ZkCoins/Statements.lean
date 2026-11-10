@@ -11,9 +11,9 @@ import Mathlib.Combinatorics.Matroid.Init
   probability at most the optimal prover's against live coins (`value p g.erase`) plus `δ₁` for each committed round,
   where `δ₁` is the leaf's hiding gap (`Claims.Hm96Hiding`).
 * `CommittedLeHm96`: the same at hm96-sha512 under a fresh uniform key, with `δ₁ = 2^-257` and no hypothesis on the
-  key: the key is drawn first and is public, and the event, the interaction, the digests, the leaf hash and the prover
+  key: the key is sampled first and is public, and the event, the interaction, the digests, the leaf hash and the prover
   may all depend on it.
-* `SessionCoinsSound`, `SessionCoinsHm96`: the batched `--zk` session on C-Flock ZK's coin tree (`sessionZKC`): table
+* `SessionCoinsSound`, `SessionCoinsHm96`: the batched `--zk` session on Flock ZK's coin tree (`sessionZKC`): table
   `j`'s `padLinkError + (padRepError + εInner)²` plus `δ₁` (resp. `2^-257`) for each of the `1 + 2·J·R` committed
   rounds.
 
@@ -41,7 +41,7 @@ def CommittedLe : Prop :=
       ∀ τ : (I → D) → TGame.CStrat Salt g, probC p g dig My cs H τ ≤ value p g.erase + Fintype.card I * δ₁
 
 /-- **Committed coins at hm96-sha512 under a fresh key.** As `CommittedLe`, with the leaf
-`H κ (dig κ i b + M(κ)·y, cs y)` for a 1536-bit salt `y`, the Hankel matrix `M(κ)` of a uniform 2047-bit key `κ` drawn
+`H κ (dig κ i b + M(κ)·y, cs y)` for a 1536-bit salt `y`, the Hankel matrix `M(κ)` of a uniform 2047-bit key `κ` sampled
 first, and a salt hash `cs` with at most `2^512` values. The event `p κ`, the interaction `g κ`, the digests `dig κ`, the
 leaf hash `H κ` (hm96-sha512's carries `H(κ)`) and the prover `τ κ` are chosen after the key: the probability, averaged
 over the key, is at most the average of `value (p κ) (g κ).erase` plus `|I|·2^-257`. -/
@@ -58,7 +58,7 @@ def CommittedLeHm96 : Prop :=
           avg (fun κ => value (p κ) (g κ).erase) + Fintype.card I * ENNReal.ofReal (1 / 2 ^ 257)
 
 /-- **Soundness of table `j` in a batched `--zk` session on committed coins.** For every committed prover, the session
-on C-Flock ZK's coin tree (`sessionZKC`, `R` rounds a stream, any balanced decoders `dc`) accepts while table `j`'s
+on Flock ZK's coin tree (`sessionZKC`, `R` rounds a stream, any balanced decoders `dc`) accepts while table `j`'s
 committed values do not satisfy its statement with probability at most table `j`'s
 `padLinkError + (padRepError + εInner)²` plus `δ₁` for each of its `1 + 2·J·R` committed rounds. -/
 def SessionCoinsSound : Prop :=
@@ -72,7 +72,7 @@ def SessionCoinsSound : Prop :=
           (sessionZKC dc R A ts) dig My cs H τ ≤
         (ts.get j).bound + ((1 + 2 * ts.length * R : ℕ) : ℝ≥0∞) * δ₁
 
-/-- **Soundness of table `j` in a batched `--zk` session on C-Flock ZK's coin tree at hm96-sha512.** As
+/-- **Soundness of table `j` in a batched `--zk` session on Flock ZK's coin tree at hm96-sha512.** As
 `SessionCoinsSound`, with the leaves under a fresh uniform 2047-bit key that the prover sees, and the digests `dig κ`
 and the leaf hash `H κ` chosen after it: table `j`'s bound plus `2^-257` for each of the `1 + 2·J·R` committed rounds,
 with no hypothesis on the key. -/

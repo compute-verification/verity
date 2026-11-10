@@ -20,7 +20,7 @@ at most `2^{−167.7} + t·2^{−174.95}` (`ksLinkOn_tight`); where no run accep
   link's term near `β₂·c` at `M = 2^256`; at two it is `β₂·(2c + 1)/2^256 ≤ t·β₂·c_S/2^255` where
   `2c + 1 ≤ 2t·c_S` (`link_term_le`).
 * A rerun of `E_O`'s model costs at most `t·c_B/2 + L` on average (`verModel_Ex_cost_le`): its compiled run's and
-  `E_O`'s calls are a draw's, as route 2C charges them, and `L` bounds the rest, its inner view's run's, its searched
+  `E_O`'s calls are a sample's, as route 2C charges them, and `L` bounds the rest, its inner view's run's, its searched
   calls and the compiled verifier's own, which are at most `n_V + w + |S(x_I)| + n + v` (`verModel_extras_le`).
 * The other four terms are as `Claims.Recursion.lin2_bound_le` charges them (`lin2_four_le`), and
   `link_bound_split_le` adds the five.
@@ -28,7 +28,7 @@ at most `2^{−167.7} + t·2^{−174.95}` (`ksLinkOn_tight`); where no run accep
 The premises are SHA-512's named collision assumptions (`StrictBirthday` at `B`; `ExpectedCR` at `B_I`, `FCI` and
 `F0I` charged as route 2C charges them, and at the link's finder at the reruns, `verModel`), the prover's calls
 `t ≥ 1` per run, route 2C's call bounds `n` and `v`, and two facts about the deployed code that put a rerun's calls
-beyond its draw's at most `|S(x_I)| + 2(n + v)`: the inner view's run makes at most `n` calls (`n_V ≤ n`), and the calls
+beyond its sample's at most `|S(x_I)| + 2(n + v)`: the inner view's run makes at most `n` calls (`n_V ≤ n`), and the calls
 `E_O`'s witnesses record number at most `v` (`w ≤ v`).
 -/
 
@@ -407,7 +407,7 @@ theorem lin2_four_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : D
 /-- **Route 2C's bound with the gated link, at `M = 2^256` and `R = 2^257`, is at most `κ + t·ε`**, `ε` route 2C's
 five terms after `κ`, written out: the first four as route 2C charges them (`lin2_four_le`), and the gated link's in
 place of the deviation finder's (`link_term_le`), in a model whose reruns cost at most `t·c_B/2 + L` calls on average,
-a draw's average and `L` more, with `L ≤ |S(x_I)| + 2(n + v)`. -/
+a sample's average and `L` more, with `L ≤ |S(x_I)| + 2(n + v)`. -/
 theorem link_bound_split_le {W Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     (I : Claims.Recursion.Inner Coin W) (DO : Claims.Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T)
     (Cp : Caps Coin) (hS : SessionAccepts D) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ)
@@ -463,7 +463,7 @@ variable [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Col T : Type} [Decidab
   [DecidableEq Col']
 
 /-- **A rerun of `E_O`'s model costs at most `t·c_B/2 + L` calls on average**, at every tape: its compiled run's and
-`E_O`'s calls are a draw's, which average at most `t·c_B/2` (`Claims.Recursion.Ex_drawCost_le`), and its inner
+`E_O`'s calls are a sample's, which average at most `t·c_B/2` (`Claims.Recursion.Ex_drawCost_le`), and its inner
 view's run's, searched and own calls are at most `L` at every rerun. -/
 theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} (hS : SessionAccepts (D.record Bd.IVStar)) (x : Msg) {Ω : Type}
@@ -502,7 +502,7 @@ theorem verModel_Ex_cost_le {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin 
             (L : ℝ) := by rw [Ex_add, Ex_const]
     _ ≤ t * cBe (D.record Bd.IVStar) x / 2 + L := by linarith
 
-/-- **A rerun's calls beyond its draw's are at most `n_V + w + |S(x_I)| + n + v`**: none in the inner view's run or
+/-- **A rerun's calls beyond its sample's are at most `n_V + w + |S(x_I)| + n + v`**: none in the inner view's run or
 searched where `E_O` gives up; on its witnesses, the inner view's run's at most `n_V`, and the searched ones the
 recorded calls at most `w`, the inner setup's and the inner verifier's at most `n` (`Deploy.callsAt`); and the
 compiled verifier's own at the run's V\* statements at most `v`. `n` and `v` are route 2C's bounds; `n_V` and `w` hold
@@ -552,7 +552,7 @@ session's verifier accepts on an accepted run, under SHA-512's named collision a
 `F0I` and the link's finder at the reruns. `n` and `v` are route 2C's call bounds, the inner verifier's calls on the
 inner messages (`hn`) and the compiled verifier's own at the V\* statements (`hv`); a rerun's inner view's run makes at
 most `n` (`hV`) and the calls `E_O`'s witnesses record number at most `v` (`hW`), so a rerun of `E_O`'s model makes at
-most `|S(x_I)| + 2(n + v)` calls beyond its draw's (`verModel_extras_le`, `verModel_Ex_cost_le`). -/
+most `|S(x_I)| + 2(n + v)` calls beyond its sample's (`verModel_extras_le`, `verModel_Ex_cost_le`). -/
 theorem ksLinkOn_bits [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecAt Coin} {Bd : Bound Coin Col T}
     {DO : Claims.Flock.Deploy Coin Col' T'} {Cp : Caps Coin} {G : Msg → Prop} (hK : KSLinkOn H D Bd DO Cp G)
     (hS : SessionAccepts (D.record Bd.IVStar)) {x : Msg} (hx : G x) {Ω : Type} [Fintype Ω] [Nonempty Ω]

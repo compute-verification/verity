@@ -58,7 +58,7 @@ pass and the rank bound (`MaskRank.MaskRankBound`, which `pr_badZk_le` reads).
   replay of zerocheck and lincheck (`Replay`, in place of `Goals`' `zerocheck` and `lincheck`), the ring switch on the
   claims valued by their checks (`RingSwitchZk`), the masked Ligerito (`LigeritoZk`), level 0's lane phase
   (`LaneConstraints`) and the inner proof (`Inner`).
-* **Proved here**, as in `Skeleton`: the last message's statement, the scope check (`CaseZk.scope_ok`), a drawn
+* **Proved here**, as in `Skeleton`: the last message's statement, the scope check (`CaseZk.scope_ok`), a sampled
   session, the link and last messages read back given their lengths, and S18 from S16; and the keyed coin tree
   (`coinTree_goal`, from `readyZk`).
 * **The composition**: `RunZk.rep_ok` (`zk_verifyRepWith_ok`), `RunZk.verdict_ok` (`zk_verifyWith_ok`),
@@ -218,7 +218,7 @@ def FinalFitsZk : Prop :=
 
 /-! ### B's checks -/
 
-/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
+/-- **The record's sample is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatchesZk : Prop :=
   ∀ o : RunZk H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
@@ -336,7 +336,7 @@ def ConsumedZk : Prop :=
 def CapCommittedZk : Prop :=
   ∀ o : RunZk H rel, ∀ i < o.tabs.size, ∀ r < 2, (flat (o.zp i r).proof.cap != o.sess.rootB[i]!) = false
 
-/-- **The masked goals**, every check but the six proved here (the statement, the scope, a drawn session, the link and
+/-- **The masked goals**, every check but the six proved here (the statement, the scope, a sampled session, the link and
 last messages read back given their lengths, S18 from S16, and the coin tree). The fields are `Goals`' where the check
 is the plain one's. -/
 structure GoalsZk : Prop where
@@ -380,7 +380,7 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, every
+/-- `readyZk` at the case's setup: one table, the session samples a unit, the statement is under `2^64` bytes, every
 table's regions fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest
 masked record fits. -/
 theorem CaseZk.ready_all (c : CaseZk H rel) :
@@ -392,7 +392,7 @@ theorem CaseZk.ready_all (c : CaseZk H rel) :
   rw [c.setup] at h
   simpa [and_assoc] using h
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, the
+/-- `readyZk` at the case's setup: one table, the session samples a unit, the statement is under `2^64` bytes, the
 setup against `H` is the case's, and the session's coins are the keyed coin tree. -/
 theorem CaseZk.ready_parts (c : CaseZk H rel) :
     c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧
@@ -423,7 +423,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk tags false none`. -/
+/-- **A sampled session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem CaseZk.drawn (c : CaseZk H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.2.1
   cases h : c.s.read.draw

@@ -42,15 +42,20 @@ import math
 import statistics
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
-import fixture as FX  # noqa: E402
 import kbench  # noqa: E402
 import kgate  # noqa: E402
+
+import fixture as FX  # noqa: E402
 import run as R  # noqa: E402
 import wgmma as W  # noqa: E402
 
@@ -73,7 +78,7 @@ def linears(models: tuple[str, ...]) -> list[tuple[str, str, int, int]]:
     return out
 
 
-def probe():
+def probe() -> Callable[[], list[int | None]]:
     """[SM clock MHz, board power W] of torch's GPU (NVML, by the device's UUID: NVML's indices ignore
     CUDA_VISIBLE_DEVICES), or [None, None]."""
     try:
@@ -86,9 +91,9 @@ def probe():
         return lambda: [None, None]
 
 
-def reader(nvml, clk: torch.Tensor):
+def reader(nvml: Callable[[], list[int | None]], clk: torch.Tensor) -> Callable[[], list[float | None]]:
     """[NVML SM MHz, NVML board W, clock64 MHz of the last launch that wrote clk since the last read, or None]."""
-    def read():
+    def read() -> list[float | None]:
         torch.cuda.synchronize()
         mhz = W.sm_mhz(clk)
         clk.zero_()
@@ -105,7 +110,7 @@ def mm(a: torch.Tensor, b: torch.Tensor, out: torch.Tensor | None = None) -> tor
     return torch._int_mm(a, b.t()) if out is None else torch._int_mm(a, b.t(), out=out)
 
 
-def med(v: list):
+def med(v: list) -> float | None:
     return statistics.median(v) if v else None
 
 
@@ -116,7 +121,7 @@ def clock_med(items: list) -> dict:
             "clock64_mhz": med([pair[1][2] for pair in items if pair[1][2] is not None])}
 
 
-def graph(f) -> torch.cuda.CUDAGraph:
+def graph(f: Callable[[], None]) -> torch.cuda.CUDAGraph:
     """f captured as `kbench.timed` captures it: two warm calls on a side stream, then three replays."""
     side = torch.cuda.Stream()
     side.wait_stream(torch.cuda.current_stream())
@@ -133,7 +138,7 @@ def graph(f) -> torch.cuda.CUDAGraph:
     return g
 
 
-def held(fns: dict, read, calls: int) -> dict:
+def held(fns: dict, read: Callable[[], list[float | None]], calls: int) -> dict:
     """Each fn's graph replayed back to back for about HOLD_S, alone, then read: {arm: {us, nvml_mhz, nvml_w, clock64_mhz}}."""
     out = {}
     for arm, f in fns.items():
@@ -167,7 +172,7 @@ def other_width(cfg: W.Cfg, n: int) -> W.Cfg | None:
 class Linear:
     """One (N, K) at M: X, weight copies, O copies (torch._int_mm's sums), the outputs."""
 
-    def __init__(self, n: int, k: int, m: int, seed: int):
+    def __init__(self, n: int, k: int, m: int, seed: int) -> None:
         self.n, self.k, self.m = n, k, m
         cw, co = copies(n * k), copies(4 * m * n)
         self.calls = max(cw, co)
@@ -182,20 +187,20 @@ class Linear:
     def w(self, i: int) -> R.Weights:
         return self.ws[i % len(self.ws)]
 
-    def loop(self, one):
-        def f():
+    def loop(self, one: Callable[[int], object]) -> Callable[[], None]:
+        def f() -> None:
             for i in range(self.calls):
                 one(i)
         return f
 
-    def alone(self, cfg: W.Cfg):
+    def alone(self, cfg: W.Cfg) -> Callable[[], None]:
         return self.loop(lambda i: W.scaled_mm(self.x, self.sa, self.w(i).w, self.w(i).sw, self.y, cfg, self.clk))
 
 
 class Reduction:
     """R [r, 4N] (seeded s8 codes), its kernel order, one z a fused arm, and the separate pass's arm."""
 
-    def __init__(self, lin: Linear, r: int, seed: int):
+    def __init__(self, lin: Linear, r: int, seed: int) -> None:
         self.lin, self.r = lin, r
         g = torch.Generator(device="cuda").manual_seed(seed)
         self.mat = torch.randint(-128, 128, (r, 4 * lin.n), generator=g, dtype=torch.int16, device="cuda").to(torch.int8)
@@ -211,11 +216,11 @@ class Reduction:
             self.zs[arm] = torch.empty((self.lin.m, self.r), dtype=torch.int32, device="cuda")
         return self.zs[arm]
 
-    def fused(self, cfg: W.Cfg, flush: str, arm: str):
+    def fused(self, cfg: W.Cfg, flush: str, arm: str) -> Callable[[], None]:
         lin, z = self.lin, self.z(arm)
         return lin.loop(lambda i: W.reduce_mm(lin.x, lin.sa, lin.w(i).w, lin.w(i).sw, lin.yf, self.rk, z, cfg, flush, lin.clk))
 
-    def sep(self):
+    def sep(self) -> Callable[[], None]:
         lin = self.lin
         return lin.loop(lambda i: mm(lin.os[i % len(lin.os)].view(torch.int8), self.mat, self.zsep))
 
@@ -271,7 +276,8 @@ def after(lin: Linear, reds: dict[int, Reduction]) -> dict:
     return out
 
 
-def measure(model: str, name: str, n: int, k: int, m: int, rs: tuple[int, ...], reps: int, nvml, kern) -> dict:
+def measure(model: str, name: str, n: int, k: int, m: int, rs: tuple[int, ...], reps: int,
+            nvml: Callable[[], list[int | None]], kern: R.Kernel) -> dict:
     lin = Linear(n, k, m, seed=1000 + n + k)
     clock = reader(nvml, lin.clk)
     pick = kern.pick(m, n, k)
@@ -314,7 +320,7 @@ def blocks(m: int, r: int) -> tuple[int, int]:
     return math.ceil(m * 4 * r / BLOCK), m * math.ceil((4 * r + PAD) / BLOCK)
 
 
-def weighted(mine: list[dict], arm_of, key: str):
+def weighted(mine: list[dict], arm_of: Callable[[dict], str], key: str) -> float | None:
     """The held readings' `key` over the linears, weighted by each one's time at that arm; None where any lacks one."""
     vals = [(row["us"][arm_of(row)], row["held"].get(arm_of(row), {}).get(key)) for row in mine]
     if any(v is None for _, v in vals):
@@ -358,7 +364,7 @@ def summarize(rows: list[dict], rs: tuple[int, ...]) -> dict:
     return out
 
 
-def num(v, fmt: str = ".0f") -> str:
+def num(v: float | None, fmt: str = ".0f") -> str:
     return "-" if v is None else format(v, fmt)
 
 

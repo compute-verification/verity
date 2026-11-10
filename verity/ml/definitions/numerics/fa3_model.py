@@ -189,7 +189,7 @@ def num_splits(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
 
 
 def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num_sms: int,
-               Dv: int | None = None) -> tuple[int, list[int]]:
+               Dv: int | None = None, seqlens_k: list[int] | np.ndarray | None = None) -> tuple[int, list[int]]:
     """(the launch's ``params.num_splits``, each sequence's split count) of one causal varlen self-attention launch (``cu_seqlens_q =
     cu_seqlens_k``, the sequences' lengths ``seqlens``) when the caller passes ``num_splits = 0`` (vLLM's MLA prefill outside batch
     invariance).  The launch runs the ``Split`` mainloop and ``FlashAttnFwdCombine`` exactly when the first exceeds 1:
@@ -198,22 +198,33 @@ def split_plan(seqlens: list[int] | np.ndarray, H: int, KVH: int, D: int, *, num
     num_sm)`` over every sequence's ``num_m_blocks * num_n_blocks``; ``max(min(ceil(num_n_blocks / blocks_per_sm), static), 1)``); one
     split past ``PREPARE_VARLEN_MAX_BATCHES_1CTA`` sequences.  The host heuristic is IEEE f32; the device's ``/`` is ``div.full.ftz.f32``
     (``--use_fast_math``: the numerator times the measured MUFU.RCP of ``num_sm``, ``DivFullRcp_v1``), assumed to lower as Triton's does.
-    A sequence counted above 1 is combined from its splits (`registry.fa3_split`); one counted 1 is written directly."""
+    A sequence counted above 1 is combined from its splits (`registry.fa3_split`); one counted 1 is written directly.
+
+    ``seqlens_k``: the non-causal launch of vLLM's MLA prefill context (``run_prefill_context_chunk``), sequence i's ``seqlens[i]``
+    query rows over its own ``seqlens_k[i]`` keys: the n-blocks and ``size_one_kv_head`` count keys (max_seqlen_k for the bound, each
+    sequence's own for its split), the m-blocks query rows.  Causality reaches the heuristic only past an L2 of a KV head, and the
+    tile only below head 256 (``tile_size_fwd_sm90``), so such a launch is planned at D = 256 alone."""
     from verity.ml.definitions.numerics import derived_rows as DR
     L = [int(x) for x in seqlens]
+    K = L if seqlens_k is None else [int(x) for x in seqlens_k]
+    if len(K) != len(L):
+        raise ValueError(f"{len(L)} sequences' query rows, {len(K)} sequences' keys")
+    causal = seqlens_k is None
+    if not causal and int(D) != 256:
+        raise ValueError(f"a non-causal launch at head dim {D}: its tile is modelled at head 256 only (kBlockN follows causality below)")
     Dv = int(D if Dv is None else Dv)
     g = int(H) // int(KVH)
     if not L or len(L) > PREPARE_VARLEN_MAX_BATCHES_1CTA:
         return 1, [1] * len(L)
-    max_q = max(L)
+    max_q, max_k = max(L), max(K)
     BM, BN = modelled_tile(D, max_q, g)
     nmb_static = -(-(max_q * g) // BM)
-    nnb_static = -(-max_q // BN)
-    static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_q * (int(D) + Dv) * 2, True, 128)
+    nnb_static = -(-max_k // BN)
+    static = num_splits_heuristic(int(KVH) * nmb_static, int(num_sms), nnb_static, nmb_static, max_k * (int(D) + Dv) * 2, causal, 128)
     if static == 1:
         return 1, [1] * len(L)
     nmb = [-(-(x * g) // BM) for x in L]
-    nnb = [-(-x // BN) for x in L]
+    nnb = [-(-x // BN) for x in K]
     total = sum(m * n for m, n in zip(nmb, nnb))
     f32 = np.float32
     a = np.array([f32(f32(f32(total) * f32(1.1)) * f32(KVH))], np.float32).view(np.uint32)

@@ -12,7 +12,9 @@ multi-line key's lines too).
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
 lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
-NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a
+`preToolUse` event's for the Shell tool (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key
+names go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -36,12 +38,15 @@ allowed command is refused once, with the message as the refusal's text, which i
 `agent_message` on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command
 keeps the message queued, and the delivered text is appended to `<conversation_id>.delivered`. Messages pushed from other
 VMs reach the inbox through `inbox.py pull`, which the hook starts in the background, detached, at most every
-$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network.
+$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network. A message
+still queued when the agent's turn ends is delivered by the stop hook (`stop_hook.py`) instead.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
-them only in a clone's config) from the checkout's own `research.clone.RECORD_DRIVER` when lean-audit's is unset, as boot.sh and
-every run clone do. A VM that never ran boot.sh (a cloud worker's) otherwise merges each lean-audit.json line by line and shows
-conflicts the queue never sees: 359 in one trial merge of a PR onto `next`.
+them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
+every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
+cloud worker's) otherwise merges each lean-audit.json line by line and shows conflicts the queue never sees: 359 in one trial
+merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
+Security's lock to one `reads` group when an old branch merged main.
 """
 import json
 import math
@@ -51,8 +56,9 @@ import shlex
 import subprocess
 import sys
 import time
+from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S
+from settings import INBOX, INBOX_POLL_S, record_event
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -320,15 +326,20 @@ def weight(text: str) -> int:
 
 
 def available() -> tuple[float, float] | None:
-    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or, where this process's cgroup's
-    limit is tighter, that limit and the lesser of MemAvailable and what the limit leaves over the cgroup's working set. The working
-    set is memory.current less memory.stat's inactive_file, the file cache the kernel reclaims on demand, as container runtimes
-    count it; all of memory.current where memory.stat can't be read."""
+    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, plus what a hypervisor balloon holds
+    (/proc/vmstat beside it), or, where this process's cgroup's limit is tighter, that limit and the lesser of that and what the
+    limit leaves over the cgroup's working set. The working set is memory.current less memory.stat's inactive_file, the file cache
+    the kernel reclaims on demand, as container runtimes count it; all of memory.current where memory.stat can't be read."""
+    meminfo = Path(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo"))
     try:
-        info = dict(re.findall(r"^(\w+):\s+(\d+) kB", open(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo")).read(), re.M))
+        info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
     except (OSError, KeyError, ValueError):
         return None
+    # the balloon's pages are counted as used, but the hypervisor hands them back as the VM asks for memory
+    if (vmstat := meminfo.with_name("vmstat")).is_file():
+        v = dict(re.findall(r"^(balloon_inflate|balloon_deflate) (\d+)$", vmstat.read_text(), re.M))
+        avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
         rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
@@ -343,10 +354,15 @@ def available() -> tuple[float, float] | None:
     return avail, total
 
 
+#: a command this hook would read past its first part: on a node it runs whole only inside one `bash -lc`
+COMPOUND = re.compile(r"&&|\|\||;|\|")
+
+
 def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
-    remote = (f"Run it on a node: `research run --on auto -- CMD` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
+    cmd = f"bash -lc {shlex.quote(command)}" if COMPOUND.search(command) else "CMD"
+    remote = (f"Run it on a node: `research run --on auto -- {cmd}` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
               f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends, for at most 20 "
               f"minutes). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")
@@ -458,6 +474,15 @@ def delivery(conversation: str) -> str | None:
     return text if text.strip() else None
 
 
+def checkout(root: str, cwd: str) -> str:
+    """The checkout an inbox pull runs from: the workspace root, or when the root isn't one (a Task-launched cloud agent's
+    `/agent`), the first checkout under its `repos/`, else the command's directory."""
+    if root and not os.path.exists(os.path.join(root, ".git")):
+        found = sorted(Path(root).glob("repos/*/.git"))
+        root = str(found[0].parent) if found else ""
+    return root or cwd
+
+
 def poll(conversation: str, repo: str) -> bool:
     """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
     interval; whether it started one."""
@@ -482,35 +507,50 @@ CLONE_PY = "tools/research/src/research/clone.py"
 
 
 def merge_drivers(command: str, cwd: str) -> None:
-    """Set the record merge drivers in ``cwd``'s repository before a merge there, when lean-audit's is unset (module doc)."""
+    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, else the
+    checkout's when lean-audit's is unset (module doc)."""
     if not MERGE.search(command):
         return
     import importlib.util
     import subprocess
+    import tempfile
 
-    def git(*args: str) -> str:
-        return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, timeout=3).stdout.strip()
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, timeout=3)
 
-    if git("config", "--get", "merge.lean-audit.driver") or not (top := git("rev-parse", "--show-toplevel")):
+    if not (top := git("rev-parse", "--show-toplevel").stdout.strip()):
         return
-    spec = importlib.util.spec_from_file_location("agent_guard_clone", os.path.join(top, CLONE_PY))
-    if spec is None or spec.loader is None:
+    main = git("show", f"origin/main:{CLONE_PY}")
+    if main.returncode and git("config", "--get", "merge.lean-audit.driver").stdout.strip():
         return
-    clone = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(clone)
+    with tempfile.TemporaryDirectory(prefix="agent-guard-clone-") as tmp:
+        path = os.path.join(top, CLONE_PY)
+        if not main.returncode:
+            with open(path := os.path.join(tmp, "clone.py"), "w") as f:
+                f.write(main.stdout)
+        spec = importlib.util.spec_from_file_location("agent_guard_clone", path)
+        if spec is None or spec.loader is None:
+            return
+        clone = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(clone)
+    have = dict(e.split("\n", 1) for e in git("config", "-z", "--get-regexp", r"^merge\.").stdout.split("\0") if "\n" in e)
     for k, v in clone.RECORD_DRIVER.items():
-        git("config", k, v)
+        if have.get(k) != v:
+            git("config", k, v)
 
 
 def main() -> int:
     raw = sys.stdin.read()
     try:
         event = json.loads(raw)
-        command = event.get("command") or ""
+        shell = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+        command = event.get("command") or shell.get("command") or ""
         conversation = str(event.get("conversation_id") or "")
         root = next(iter(event.get("workspace_roots") or []), "")
-        cwd = event.get("cwd") or root or os.getcwd()
+        cwd = event.get("cwd") or shell.get("cwd") or root or os.getcwd()
+        record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
+        record_event("shell_hook.py", raw)
         command, conversation, cwd, root = raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
@@ -536,7 +576,7 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
-            poll(conversation, root or cwd)
+            poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:

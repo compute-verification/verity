@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.CROnly.Hm96Defs
 import Mathlib.Algebra.BigOperators.Field
 import Mathlib.Algebra.Order.Chebyshev
 import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # hm96 hiding from the universal hash

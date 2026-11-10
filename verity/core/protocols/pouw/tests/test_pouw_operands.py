@@ -1,4 +1,4 @@
-"""A window's operand rows (`pouw.operands`): committed per window, held by the verifier only under the window's own
+"""An execution phase's operand rows (`pouw.operands`): committed per execution phase, held by the verifier only under the execution phase's own
 context, and their root X moving with every value's root."""
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def test_a_record_states_the_operands_with_their_gaps_or_why_they_are_refused():
 
 def test_x_is_the_root_of_the_windows_values_its_salt_epoch_binds():
     """X is SHA-512(tag ‖ u64be(len program) ‖ program ‖ per value in name order: u64be(len name) ‖ name ‖ domain ‖ root),
-    the bytes the salt epoch root reads as the window's activations' root (``core_check.values_root``)."""
+    the bytes the salt execution phase root reads as the execution phase's activations' root (``core_check.values_root``)."""
     b = block()
     want = b"verity/pouw-window-values/v1" + len(b"p").to_bytes(8, "big") + b"p"
     for v in ("a", "b"):

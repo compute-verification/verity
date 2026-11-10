@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The firewall's PIOP is the masked session's from its source
+# The ZK server's PIOP is the masked session's from its source
 
 `Flock.Firewall.Finish`'s transcript, zerocheck, lincheck and ring switch are copies of the analysis's, its sends an
 `Asks` of its own (`Flock.Firewall.Finish.Asks`, the same two fields, read through `Asks.toC`). Each is the analysis's
@@ -69,17 +69,17 @@ theorem sampleVecP_eq (io : Asks M) (n : ℕ) : sampleVecP io n = FlockComplete.
 
 theorem sampleKP_eq (io : Asks M) : sampleKP io = FlockComplete.sampleKP io.toC := rfl
 
-/-- **The firewall's zerocheck** is the masked session's from its source, at the masked values `mk`. -/
+/-- **The ZK server's zerocheck** is the masked session's from its source, at the masked values `mk`. -/
 theorem zerocheckFw_eq [MonadLiftT V M] (io : Asks M) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
     (mk : ℕ → F128) :
     zerocheckFw io m digest cap root lay mk = FlockComplete.zerocheckCut io.toC m digest cap root lay mk := rfl
 
-/-- **The firewall's lincheck** is the masked session's from its source, at the masked values `mk`. -/
+/-- **The ZK server's lincheck** is the masked session's from its source, at the masked values `mk`. -/
 theorem lincheckFw_eq [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M) (c : CircuitFold) (m : ℕ)
     (lay : Zk.PadLayout) (mk : ℕ → F128) (zc : ZcOut) :
     lincheckFw io c lay mk zc = FlockComplete.lincheckCut io.toC c m lay mk zc := rfl
 
-/-- **The firewall's ring switch** is the masked session's from its source, at the switched vectors `sv`. -/
+/-- **The ZK server's ring switch** is the masked session's from its source, at the switched vectors `sv`. -/
 theorem ringSwitchP_eq [MonadLiftT V M] (io : Asks M) (sv : ℕ → Array F128) (claims : Array Claim) :
     ringSwitchP io sv claims = FlockComplete.ringSwitchCut io.toC sv claims := rfl
 

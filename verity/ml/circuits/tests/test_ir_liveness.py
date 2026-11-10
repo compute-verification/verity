@@ -166,6 +166,22 @@ def test_transitive_dead_gates_are_a_superset():
         assert set(direct.ids) <= set(trans.ids), label
 
 
+def test_a_transitive_activation_with_nothing_live_is_the_walks_own_result():
+    """`Liveness._dead`, which a transitive analysis takes when no return leaf is live, gives what the walk gives, on every
+    body each program reaches (its root, and the callees of every call, batch and scan)."""
+    for label, P in programs():
+        todo, seen = [P.root], set()
+        while todo:
+            fn = todo.pop()
+            if isinstance(fn, PrimitiveDefinition) or id(fn) in seen:
+                continue
+            seen.add(id(fn))
+            todo.extend(n.fn for n in fn.body.nodes)
+            lv = Liveness(transitive=True)
+            assert lv._dead(fn.body) == lv._analyse(fn.body, ()), (label, fn.id)
+        assert Liveness(transitive=True).analyse(P.root, ()).reads == ((),) * len(P.root.body.params), label
+
+
 def test_dead_gate_ids_are_a_prefix_under_a_limit():
     P = Program(bind(Butterfly, L=32))
     full = dead_gates(P, limit=10 ** 9)

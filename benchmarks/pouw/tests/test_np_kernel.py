@@ -1,7 +1,7 @@
 """The lead's kernel off the device (benchmarks/pouw/np_kernel): cpu_check.cc's ragged calls, whose padding rows carry their
 tags, lane-coin A' and coins (and a control whose padding rows have none is rejected), the fold's window, exact at
 `serving.LEAD_FOLD_BOUND` and at no other bound, the lead serving verity_int8's own y at Llama-3.2-1B's linears (and
-83d82109a8's fold caught there), G's rejection draw, ssn.cu's check holding served outputs to verity_int8's epilogue within
+83d82109a8's fold caught there), G's rejection sample, ssn.cu's check holding served outputs to verity_int8's epilogue within
 the same bound, gate.py's GateRecord from a run's out directory, and the recorded one (gate.json)."""
 
 from __future__ import annotations

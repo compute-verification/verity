@@ -97,7 +97,7 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **A simulator at the verdict at the draw gives the plain table bound counted per round, on accepted first runs**:
+/-- **A simulator at the verdict at the sample gives the plain table bound counted per round, on accepted first runs**:
 `plain_tableBoundθAt_of_simD`'s escapes and proof, with the escapes on accepted first runs
 (`Claims.Flock.slackEsc_onAcc₁`) and their fit counted per round (`Claims.Escapes.FitsFork.fitsForkR`). -/
 theorem plain_tableBoundθAccAtR_of_simD {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

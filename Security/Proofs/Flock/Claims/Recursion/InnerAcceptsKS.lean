@@ -48,11 +48,11 @@ recorded calls collide. This file proves `InnerKS` at the same bound, `γ_eA` un
 one more code fact, `RoundsMargin`: on an accepted run the inner protocol takes a round and the compiled verifier at
 least three rounds past the inner ones.
 
-* The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged draw's
+* The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged sample's
   inner view rejects (`PrBadGood_le_abort_rej`): `InnerAccepts` only closed the last case.
-* A bad draw costs at most `√(k_I·Σ_{j<k_I} Pr[forkColl j])` (`Pr_bad_le_fork`): the differing openings are collisions
+* A bad sample costs at most `√(k_I·Σ_{j<k_I} Pr[forkColl j])` (`Pr_bad_le_fork`): the differing openings are collisions
   at the inner rounds' forks only.
-* A rejecting judged draw is a collision at every fork (`Pr_innerRejects_le_fork`), so at the forks past the inner
+* A rejecting judged sample is a collision at every fork (`Pr_innerRejects_le_fork`), so at the forks past the inner
   rounds, which `Pr_bad_le_fork` leaves unused, it costs at most a third of their sum. Those forks' spare mass covers
   it (`sqrt_margin`), so `N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])` (`bad_rej_le`), the term `InnerKS`
   holds for bad reruns alone.
@@ -76,7 +76,7 @@ def RoundsMargin (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) : Prop :
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
     0 < I.V.k (xI D x) ∧ I.V.k (xI D x) + 3 ≤ D.V.k x
 
-/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
+/-- **A sample is bad at most as `√(k_I·Σ_{j<k_I} Pr[forkColl j])`**: `Pr_bad_le`'s argument, stopped before the inner
 rounds' forks are bounded by all of `Be`'s. -/
 theorem Pr_bad_le_fork {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
@@ -118,7 +118,7 @@ theorem unifMap_drop {Ω R C Q : Type} [Fintype Ω] [Fintype R] [Fintype C] [Fin
   exact (UnifMap.equiv e).comp hfst
 
 /-- **The inner stage fails where `E^rep` fails against `P_I`'s aborting runs, at a bad rerun, or where the judged
-draw's inner view rejects**: `PrBadGood_le_abort`'s argument, where the judged draw's acceptance is read off the draw
+sample's inner view rejects**: `PrBadGood_le_abort`'s argument, where the judged sample's acceptance is read off the sample
 where its inner view doesn't reject, in place of `InnerAccepts`. -/
 theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decC : Msg → Msg → Coin} (hV : InnerViewRun H D I DO) (hpc : PublicCoin H I decC) (hR : InnerRounds D I)
@@ -223,11 +223,11 @@ theorem PrBadGood_le_abort_rej {H : Msg → Msg} {D : Deploy Coin} {I : Inner Co
       (InnerRejects H D I DO decO P x)
   linarith
 
-/-- **Bad reruns and a rejecting judged draw together cost what `InnerKS` holds for bad reruns**:
-`N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])`. A bad draw costs at most `√(k_I·A)`, `A` the inner rounds'
-forks' collisions (`Pr_bad_le_fork`); a rejecting draw at most each fork's, so a third of `B`, the forks' past the
+/-- **Bad reruns and a rejecting judged sample together cost what `InnerKS` holds for bad reruns**:
+`N_I·Pr[bad] + Pr[rejects] ≤ N_I·√(k_I·k(x)·Pr[Be])`. A bad sample costs at most `√(k_I·A)`, `A` the inner rounds'
+forks' collisions (`Pr_bad_le_fork`); a rejecting sample at most each fork's, so a third of `B`, the forks' past the
 inner rounds (`Pr_innerRejects_le_fork`, `RoundsMargin`), and `k(x)·Pr[Be] = A + B` (`sqrt_margin`). Where no run is
-accepted, no draw rejects, and `Pr_bad_le` alone gives it. -/
+accepted, no sample rejects, and `Pr_bad_le` alone gives it. -/
 theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
     (hT : CallsTrue H D I DO) (hR : InnerRounds D I) (hA : InnerAcceptsColl H D I DO) (hN0 : CallsNil H D)
@@ -286,7 +286,7 @@ theorem bad_rej_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : 
     _ = NI D I x * Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
         rw [mul_assoc, htot, hsplit]
 
-/-- **`InnerKS` from `Inner.KSAbort` where V* meets `InnerAcceptsColl`**: `innerKS_of_KSAbort`, with the judged draw's
+/-- **`InnerKS` from `Inner.KSAbort` where V* meets `InnerAcceptsColl`**: `innerKS_of_KSAbort`, with the judged sample's
 rejection paid from the spare forks (`PrBadGood_le_abort_rej`, `bad_rej_le`), at the same bound. -/
 theorem innerKS_of_KSAbort_coll [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {opening : Opening} {decC : Msg → Msg → Coin} (hKS : I.KSAbort H)

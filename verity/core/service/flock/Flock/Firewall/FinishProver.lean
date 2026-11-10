@@ -1,8 +1,8 @@
 /-
-# The firewall's own prover: what `flock-firewall finish` computes a rep's proof file with
+# The ZK server's own prover: what `flock-firewall finish` computes a rep's proof file with
 
 The masked prover's phases of the analysis (`FlockComplete.squeezeP` to `FlockComplete.innerP`, live PROTOCOL.md §1–§7),
-here as code the firewall runs: definition by definition the analysis's, so that each is that one by unfolding. Two
+here as code the ZK server runs: definition by definition the analysis's, so that each is that one by unfolding. Two
 differ, each by a parameter or a line:
 
 * `ligeritoPZk` takes the commitment of levels ≥ 1 as an argument (`commit`): the analysis's is `commitP`, which

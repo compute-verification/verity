@@ -16,7 +16,7 @@ object, written as a pure value of the record's parts with every digest `dgOf sp
 * **The record's parts**: a round (`roundObj`), a rep stream (`streamObj`), a proof digest (`proofObj`), the link
   (`linkObj`, with `y = 0`, `yOf`) and the bytes `link_*` digests (`lbOf`).
 * **Printable** (`Good`): every object of the record is a tree of distinct keys and every number a natural, so the record
-  is printable when the statement's draw is (`good_recordObj`).
+  is printable when the statement's sample is (`good_recordObj`).
 * **Key lookups**: an object built from a list of distinct keys has each key's value (`getObjVal?_mkObj`) and no other
   key (`get?_mkObj_none`); through `Same`, a parsed object's `Record.fld`, `str`, `nat`, `arr` and `isNull` read the
   printed object's values (`fld_same`, …), and a value with no object in it parses back to itself (`Plain.same_eq`).
@@ -206,7 +206,7 @@ theorem good_linkObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
   obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
   exact good_arr_str _
 
-/-- **The record is printable** when the statement's draw is. -/
+/-- **The record is printable** when the statement's sample is. -/
 theorem good_recordObj {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
     (hd : Good (spec.unitDraw.getD Json.null)) : Good (recordObj spec h #[rb] points streams proofs) := by

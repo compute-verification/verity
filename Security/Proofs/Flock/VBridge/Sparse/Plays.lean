@@ -134,7 +134,7 @@ def phaseMsgs (w : Array F128) : List Msg :=
   msgTape (msg2 w) 0 6 ++ ([⟨𝔽, fOf w[wV2]!⟩] ++ (msgTape (msg3 sh w (2 * sh.ell)) 0 sh.nu ++
     (msgTape (msg3 sh w (2 * sh.ell + 1)) sh.nu sh.sLog ++ ([⟨Fin (2 ^ sh.pLog) → 𝔽, uOf sh w⟩] ++ vtTape sh w))))
 
-/-- The phase's coins, in the order the model draws them. -/
+/-- The phase's coins, in the order the model samples them. -/
 def phaseCoins (cs : Array F128) : List (Array F128) :=
   coinTape cs 0 6 ++ (coinTape cs 6 6 ++ (coinTape cs 12 sh.nu ++ (coinTape cs (12 + sh.nu) sh.sLog ++
     (coinTape cs (12 + nR sh) sh.pLog ++ coinTape cs (12 + nR sh + sh.pLog) sh.tLog))))

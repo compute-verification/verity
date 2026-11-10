@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
@@ -47,6 +48,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
   `deltaEntry_inDelta`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
+* `Built`: an untyped statement's unit is built, from the parse (`built_of_parseStmt`);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
 * `Delta`: Δ as `HmRow.delta`'s, then `outPairs` (`hidden_delta'`);
@@ -61,7 +63,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Unpin`: the statement without Δ's pinned copies (`unpin`), its layout (`unpin_layout`), and a satisfying witness of
   the accepted statement satisfies it and carries 0 on the pinned bits (`sat_unpin`, `Pinned.sat_unpin`);
-* `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
+* `Committed`: an output row's registered `b ‖ c` at a sampled proof block is the commit string of its prefix and the output words
   its template instance computes (`outputs_committed'`);
 * `Theorems`: one theorem per frozen statement;
 * `Wide.Defs`: `OutputsCommitted` and `OutputsBinding` widened to a tail that returns the outputs (`…Tail`, which no
@@ -99,7 +101,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row
   of any mix (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
-* `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
+* `Wide.Shared`: a shared-row population's `b ‖ c` at a sampled proof block (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
 * `Wide.SharedP`: that `b ‖ c` at public inputs, the public file read under the public input words (`inRows`,
   `loadPublic_inRows`, `bc_drawnWP`);

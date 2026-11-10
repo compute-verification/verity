@@ -6,12 +6,12 @@ public import Proofs.Flock.ZkAny.RelayLoopCommit
 # The `Finish`'s slot case at the deployed loop
 
 At the `Finish` the relay reads the loop's own proofs once the hold's barrier passes, and the model's message there is
-the deferred release's last: the firewall's own `Finish` where every round passed, else the stop. The session goes on
+the deferred release's last: the ZK server's own `Finish` where every round passed, else the stop. The session goes on
 past no `Finish`, so only what the relay read there is the model's. Here is `envPre_loop`'s step at the `Finish`:
 
 * `slot_finish`: the `Finish`'s slot comes after the `Hello` left.
 * `nextD_finish`: at the last round, where every earlier round passed, the server refuses none of it and the worker's
-  value is the firewall's own, the deferred release is the firewall's own message.
+  value is the ZK server's own, the deferred release is the ZK server's own message.
 * **`slotCase_finish`**: where the run's messages are the deferred release's and, at the `Finish`, the session's stop
   is whether an earlier round failed, what the relay read at the `Finish` is the model's last message.
 -/
@@ -33,8 +33,8 @@ theorem slot_finish {S : State} {P : Placed} (h : slot S P = some .finish) : S.s
   rename_i h2
   simpa using h2
 
-/-- **At the last round the deferred release is the firewall's own message**, where every earlier round passed, the
-firewall's own `Finish` does not stop and the worker's value is the firewall's own: the run is live there. -/
+/-- **At the last round the deferred release is the ZK server's own message**, where every earlier round passed, the
+ZK server's own `Finish` does not stop and the worker's value is the ZK server's own: the run is live there. -/
 theorem nextD_finish {W Rr : Type} (L : LeanRelease W Rr) (n : Claims.Msg → Nat) (wk : L.toSrv.Worker)
     (x : Claims.Msg) (w : W) (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Claims.Msg × Claims.Msg))
     (hl : h.length = L.last x) (h0 : h.length ≠ 0) (hlb : L.toSrv.liveBefore wk x w ρ κ h = true)
@@ -64,7 +64,7 @@ theorem nextD_finish {W Rr : Type} (L : LeanRelease W Rr) (n : Claims.Msg → Na
 /-- **The `Finish`'s slot case**: where each of the run's messages is the deferred release's and, at the `Finish`,
 the session's stop is whether an earlier round of the model's run failed, what the relay read at the `Finish` is the
 model's last message: once the hold's barrier passes, the session has not stopped, so every earlier round passed, and
-the run is live at its last round, its message the firewall's own `Finish` of the loop's proof files. The session goes
+the run is live at its last round, its message the ZK server's own `Finish` of the loop's proof files. The session goes
 on past no `Finish`. -/
 theorem slotCase_finish {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}
     {spec : SessionSpec} {sts : Array Stmt} {nonce : ByteArray} (hOwn : M.Own)

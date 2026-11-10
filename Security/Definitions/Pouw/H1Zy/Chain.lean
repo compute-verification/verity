@@ -7,7 +7,7 @@ public import Definitions.Pouw.PearlC.Sha512
 /-!
 # A lane's fx1 chain on words: `h1tile._chain` at a 32 × 32 leaf (trusted)
 
-Lane `l` of a drawn leaf over `PouwH1Tile_v1` folds `KS + m` sets of 32 words into an fx1 state keyed from σ_R, and its
+Lane `l` of a sampled leaf over `PouwH1Tile_v1` folds `KS + m` sets of 32 words into an fx1 state keyed from σ_R, and its
 partial is the state's two receipt words after each set (`h1tile.fold`, `h1zy.lane_partial` before the admit mask). This
 states that chain as the step machine `ChainSteps` (`h1Chain K`), so a lane's chain words are `chainOf (h1Chain K)` and a
 chunk's carry is its state. On the primitives' word views:

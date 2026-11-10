@@ -28,7 +28,7 @@ the gate is in (a page requests share is freed once, after the last of them read
 `live` ends (`Definitions.Accounting.Requirement`, whose `StoreMatches` keeps every block holding a credited value
 resident through it), and it is `requirement.Requirement.last` over the circuit's census.  It reads the circuit, its
 schedule and the registration, never a committed value.  A free at a value's last use (the last step whose gather
-selected it) breaks `StoreMatches` for each candidate no later step selects, and one wrong unit upstream of the
+selected it) breaks `StoreMatches` for each candidate no later step selects, and one incorrect proof block upstream of the
 selection moves it.  vLLM's `kv_free` is a free, though the pages' bytes stay as they were: a block left live past its
 values' last structural reader would be credited past the circuit's use of it and past the lifetime cap, so the writer
 records the free, and the store's filler plan leaves the released blocks out.  A free of a slot below N releases its

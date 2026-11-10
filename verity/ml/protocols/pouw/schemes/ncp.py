@@ -1,5 +1,5 @@
-"""``ncp-v1``: noise-cancelling polarization under TT_NCP(0.5%) (Lean `Pouw.NCP`, its γ
-`Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`).
+"""``ncp-v1``: noise-cancelling polarization under TT_NCP(0.5%) (Lean `Pouw.NCP`, its gap
+`Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`).
 
 For int7 activations ``A`` (m x k) and weights ``B`` (committed as its n rows along k, so the product is ``A·Bᵀ``):
 
@@ -221,9 +221,9 @@ def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[in
 
 
 class NCP:
-    """NCP at checked depth 16.  The lead domain is 16 | m, 64 | k, n, k in [1088, 2^16] (so γ_0 = 1/200 >= 16/(3k)) and
-    n in [1600, 2^16] (Ω* = 1 + 8/1600 over the credited 3·m·k·n, so γ <= 1%).  Smaller bounds make a test instance,
-    whose certificate has no γ."""
+    """NCP at checked depth 16.  The lead domain is 16 | m, 64 | k, n, k in [1088, 2^16] (so the target gap g₀ = 1/200 >= 16/(3k))
+    and n in [1600, 2^16] (Ω* = 1 + 8/1600 over the credited 3·m·k·n, so the gap is <= 1%).  Smaller bounds make a test
+    instance, whose certificate has no gap."""
 
     def __init__(self, perm: str = "word", k_min: int = 1088, n_min: int = 1600, tile: tuple[int, int] = (16, 16)):
         if perm not in ("word", "shift24"):
@@ -237,12 +237,13 @@ class NCP:
         lead = k_min >= 1088 and n_min >= 1600
         self.certificate = Certificate(
             conjecture="tt-ncp-u",
-            gamma0=Fraction(1, 200) if lead else None,
+            gap0=Fraction(1, 200) if lead else None,
             omega=Fraction(3 * n_min + FORM_UNITS, 3 * n_min),
             claims=("tt-ncp-u", "random-oracle", "xof/shake-256", "cr/sha-256", "w1-cost-model", "live-verifier"),
-            theorems=("Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1", "Pouw.SecurityProofs.NCP.TTNCPUIff",
-                      "Pouw.SecurityProofs.NCP.TTNCPUWitness", "Pouw.SecurityProofs.Theorem1",
-                      "Pouw.SecurityProofs.WorkWeightedSampling", "Pouw.SecurityProofs.EndToEnd",
+            theorems=("Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1", "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1",
+                      "Pouw.SecurityProofs.NCP.TTNCPUIff", "Pouw.SecurityProofs.NCP.TTNCPUWitness",
+                      "Pouw.SecurityProofs.Theorem1", "Pouw.SecurityProofs.WorkWeightedSampling",
+                      "Pouw.SecurityProofs.EndToEnd", "Pouw.SecurityProofs.EndToEndEps",
                       "Pouw.SecurityProofs.NCP.Cancel", "Pouw.SecurityProofs.NCP.Stacked",
                       "Pouw.SecurityProofs.NCP.CheckedUEq", "Pouw.SecurityProofs.NCP.CheckedUFinal",
                       "Pouw.SecurityProofs.NCP.WrapU", "Pouw.SecurityProofs.NCP.RangeU", "Pouw.SecurityProofs.NCP.MmWUExact",
@@ -251,12 +252,12 @@ class NCP:
                       "Pouw.SecurityProofs.NCP.WrapWordFloorIndU", "Pouw.SecurityProofs.Barrier.Generic",
                       *(("Pouw.SecurityProofs.NCP.IndependentWitness", "Pouw.SecurityProofs.NCP.ShiftBy24Admissible")
                         if perm == "shift24" else ())),
-            hypotheses=("TTNCP_U(β, γ_0) in M_4090 under W1 with sub-word moves priced (Pouw.NCP.Assumptions.TTNCP_U)",
+            hypotheses=("TTNCP_U(β, g₀) in M_4090 under W1 with sub-word moves priced (Pouw.NCP.Assumptions.TTNCP_U)",
                         "AdmitsRef: H_ref runs within wref",
                         "Word.NzNCP of the wrapped route-U values (the word floors' hypothesis)",
                         *(("P v1.1's checkpoint independence and MinRank 16 at each k (script-certified; not in Lean)",)
                           if perm == "word" else ())),
-            allowances=("the free final value, d/(3k) per output entry, inside γ_0",),
+            allowances=("the free final value, d/(3k) per output entry, inside g₀",),
             parameters=(("beta", BETA), ("f", FORM_UNITS), ("n0", n_min), ("k_max", 1 << 16)),
         )
 

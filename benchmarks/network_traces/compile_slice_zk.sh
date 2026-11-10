@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The compile slice in zero knowledge (compile_slice_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier built
+# Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the sampled-proofs verifier built
 # in the tree. From a clone, in one of the network pool's pinned slots, as a job of at most 180 minutes:
 #   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
@@ -25,7 +25,7 @@ setup
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
   benchmarks/network_e2e/encodings/tests/fixtures verity/core/protocols/certifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

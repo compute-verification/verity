@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.DeployInputs
-public import SampledProofs.OneStageZk
+public import Spot.OneStageZk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,11 +40,11 @@ import VCVio.Prelude.Core
 /-!
 # A step of `acc_of_accepts`: a V\* part's base setup, compiled and model
 
-A V\* part's verdict (`VStar.Recursive.partVerdict`) sets its session up with `SampledProofs.OneStageZk.buildSessionOf`
+A V\* part's verdict (`VStar.Recursive.partVerdict`) sets its session up with `Spot.OneStageZk.buildSessionOf`
 at the statement `verity/flock-circuit`'s tags `tags0`, on one table's keyed coin tree, with `--zk`'s hooks at the
 circuit's `mask_log`, and no lookup tables. The model's recursive setup (`RecDeploy.RecIns.setup`) starts with the same
 calls at its statement's reading `r` (`Readable.Read`): the hm96-sha512 rows check, `Read.setup`, each table's
-`checkRegistered` and `noIdentifier`, and `Registered.checkFull` at the reading's draw.
+`checkRegistered` and `noIdentifier`, and `Registered.checkFull` at the reading's sample.
 
 `baseSetup_of_build`: where `r` reads the part's inputs as `FlockDeploy.Raw.ins` reads a `--zk` statement (the tags
 `tags0`, the coin tree, one table, no tables, no `--work`, `--stratified`, `--closure` or
@@ -127,9 +127,9 @@ theorem body_yield {α : Type} {A B : α → V Unit} :
 
 /-- The compiled `checkIdentifier` (no `--identifier`) passing is the model's `noIdentifier` passing: both pass exactly
 when the public header names no identifier, and the compiled one refuses every header that names one. -/
-theorem noIdentifier_of_check {st : Flock.Stmt} (h : SampledProofs.OneStageZk.checkIdentifier st = .ok ()) :
+theorem noIdentifier_of_check {st : Flock.Stmt} (h : Spot.OneStageZk.checkIdentifier st = .ok ()) :
     FlockDeploy.noIdentifier st = .ok () := by
-  unfold SampledProofs.OneStageZk.checkIdentifier at h
+  unfold Spot.OneStageZk.checkIdentifier at h
   unfold FlockDeploy.noIdentifier
   rcases hj : st.pub.header.getObjVal? "identifier" with e | j
   · rfl
@@ -148,15 +148,15 @@ namespace Verity.Recursive
 open BaseSetup in
 /-- **A V\* part's base setup.** Let `tags0` be the part's statement tags, and `coins` and `tags` the coin tree
 and tags `partVerdict` sets its session up on. Suppose the compiled `buildSessionOf` sets the part's circuit `circuitB`
-and staged public file `pubB` up at the draw `draw`, with `partition`, `program` and the verifier's registered reads
+and staged public file `pubB` up at the sample `draw`, with `partition`, `program` and the verifier's registered reads
 `registered`, to `(spec, sts)`. Let `r` read the same inputs as `Raw.ins` reads a `--zk` statement. Then the model's
 calls at the start of `RecIns.setup` all succeed at `r` with the same `(spec, sts)`: the hm96-sha512 rows check,
 `Read.setup`, each table's `checkRegistered` and `noIdentifier` (pointwise, and as `RecIns.setup`'s loop), and
-`Registered.checkFull` at `r`'s draw. -/
+`Registered.checkFull` at `r`'s sample. -/
 theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {draw partition : Option Json}
     {program : Option ByteArray} {registered : Option (Array Flock.Registered.Port)} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt}
-    (hb : SampledProofs.OneStageZk.buildSessionOf
+    (hb : Spot.OneStageZk.buildSessionOf
       (Flock.ProvedScope.circuitOf
         (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
         circuitB [])
@@ -194,7 +194,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
       circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program := by
     simp only [Flock.Readable.Read.setup, htags, hcoins, hdraw, hpi, hI]
-  unfold SampledProofs.OneStageZk.buildSessionOf at hb
+  unfold Spot.OneStageZk.buildSessionOf at hb
   have hh : (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1).hm96Rows = true := by
     refine Classical.byContradiction fun hne => ?_
     simp [hne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hb
@@ -204,7 +204,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
         (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
         circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program = .ok x ∧
       (∀ st ∈ x.2, Flock.checkRegistered st registered = .ok () ∧
-        SampledProofs.OneStageZk.checkIdentifier st = .ok ()) ∧
+        Spot.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () ∧ (x.1, x.2) = (spec, sts) := by
     split at hb
     · next hhid =>
@@ -212,7 +212,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
       refine ⟨x, ?_, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
       simpa only [Flock.ProvedScope.circuitOf, hhid, ↓reduceIte] using hs
@@ -220,7 +220,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
       exact ⟨x, hs, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
   obtain ⟨⟨spec', sts'⟩, hs, hpt, hfull, hx⟩ := hstep
   simp only [Prod.mk.injEq] at hx

@@ -25,7 +25,7 @@ from typing import Any
 
 from verity_vllm.config import option
 
-#: the throwaway prompts' ids, drawn above the special ids
+#: the throwaway prompts' ids, sampled above the special ids
 WARMUP_SEED, FIRST_ID = 200, 3
 
 

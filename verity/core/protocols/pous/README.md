@@ -72,13 +72,6 @@ Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
 
-As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
-instead (`period_reports`, on `verity.core.attest`): each session is an execution phase whose one public output is its
-liveness record, and the period's root is signed once at its close, for the prover only. The party starts its
-attachment on its key once (`lms.PartyKey.start`), so a challenger restarted within the attachment signs no more of its
-sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads
-`Attest.accepts`.
-
 ~~~python
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
@@ -149,7 +142,7 @@ On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: t
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
-past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
@@ -202,12 +195,16 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
-  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
-  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
-  16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
-  is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
+  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
+  `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
+  fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
+  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
+  are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
+  (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
+  the tree over its leaves is `verifier.py`'s (`MerkleTree`, `verify_path`). `wire.py` beside it is `p2-audit-wire/v4`
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
-  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+  `parse_envelope`, `verify_audit`, `parse_final`).
 - **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
   `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
   over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not

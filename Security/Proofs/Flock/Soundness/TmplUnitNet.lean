@@ -53,7 +53,8 @@ theorem parseTmpl_cases' {tags : Flock.Tags} {bytes : ByteArray} {tables : List 
   unfold HmOut.parseTmpl at h
   dsimp only at h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
-  obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
+  split at h
+  · cases h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   obtain ⟨_, -, h⟩ := Flock.TmplOrder.bind_ok h
   split at h

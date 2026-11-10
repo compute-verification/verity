@@ -1,4 +1,4 @@
-"""A served tree registered as a port (`verity.core.protocols.sampled_proofs.one_stage.served`), on a statement Flock
+"""A served tree registered as a port (`verity.core.protocols.spot.one_stage.served`), on a statement Flock
 proves: the end-to-end fixture of `test_lean_served_registered.py`, beside it in Flock's tests (which may import core).
 
 The program (`program`) is `N` RoPE d64 template instances, instance `i` reading row `POS[i]` of the served tree `cs_table`
@@ -37,8 +37,8 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.core.protocols.sampled_proofs.one_stage.served import ServedTree, register_served
+from verity.core.protocols.spot.one_stage import partition as P, registered as G
+from verity.core.protocols.spot.one_stage.served import ServedTree, register_served
 
 N = 32
 ROWS = 40

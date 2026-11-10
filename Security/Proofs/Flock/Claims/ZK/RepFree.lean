@@ -41,14 +41,14 @@ import Proofs.Flock.Claims.ZK.SimZerocheck
 
 Answered by `asksCut`, a rep's sends are counted by its coins and its public sizes: every squeeze sends one body and is
 answered by the coin of the log's size, every absorb, commitment and state step sends nothing, and the only refusals
-past the PIOP read coins (the pair `ρ₀, ρ₁`, `β`). So where the firewall's rep returns, the rep from any source returns
+past the PIOP read coins (the pair `ρ₀, ρ₁`, `β`). So where the ZK server's rep returns, the rep from any source returns
 from a log of the same size, with a log of the same size, whatever values either sends.
 
 * **Forward runs** (`Fw R x y`): where `x` returns, `y` returns with a log of the same size and a result related by
   `R`. Binds (`fw_bind`), the shared squeezes (`Coined`), and on Ligerito's state, `FwL`: from states with as many
   messages, the same.
-* **`ligeritoPZk_cut_fw`**: the firewall's masked Ligerito opening and the cut's, from logs of one size: where the
-  firewall's returns, the cut's returns, with as many messages, lane challenges and out-of-domain values.
+* **`ligeritoPZk_cut_fw`**: the ZK server's masked Ligerito opening and the cut's, from logs of one size: where the
+  ZK server's returns, the cut's returns, with as many messages, lane challenges and out-of-domain values.
 -/
 
 @[expose] public section
@@ -414,7 +414,7 @@ theorem fw_runL_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : LP P
 
 -- `ligeritoPZk`'s and `ligeritoCut`'s unfolded runs taken together, a `*_bind` step per bind on both sides
 set_option maxHeartbeats 4000000 in
-/-- **The cut's Ligerito opening returns where the firewall's did**: answered by `asksCut` from logs of one size, where
+/-- **The cut's Ligerito opening returns where the ZK server's did**: answered by `asksCut` from logs of one size, where
 the masked opening (`ligeritoPZk`, every nonce `0`) returns, the opening from any source returns, with a log of the
 same size and as many messages, lane challenges and out-of-domain values; whatever the tables, bases, layouts, pads,
 commitments, schemes and hashes on either side. -/

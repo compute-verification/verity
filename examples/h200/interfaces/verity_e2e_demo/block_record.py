@@ -1,7 +1,7 @@
 """The block record: what each subprotocol writes for one server block and the verdict on it, one document
 ``verity/block-record/v2``. It extends the all-protocols runner's per-period report
 (``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
-steps, every leg in one shape, the Lean verdict with the JointHorizonLive error sum, and the monitoring period.
+steps, every leg in one shape, the Lean verdict with the JointPooledLive error sum, and the monitoring period.
 
 **The record.**
 
@@ -14,7 +14,7 @@ steps, every leg in one shape, the Lean verdict with the JointHorizonLive error 
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`, the bound sampled
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
   proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
   block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check`` or ``remote check``)'s
@@ -27,7 +27,7 @@ steps, every leg in one shape, the Lean verdict with the JointHorizonLive error 
   ``product`` names another: remote's composes sampled proofs and PoUW, and its other legs are ``dropped``, not run and
   not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
@@ -43,7 +43,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
+from verity.core.protocols.reporting import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
 FORMAT = "verity/block-record/v2"
@@ -56,7 +56,7 @@ PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw")}
 #: the protocol each product's Lean check (`onsite check`, `remote check`) names in its answer, and `Core.Verdict`'s names
 CHECKS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
 VERDICTS = ("accept", "reject", "undecided")
-JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
+JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
 
@@ -66,7 +66,7 @@ def frac(x: Any) -> Fraction:
 
 
 def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
-    """The most wrong units of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
+    """The most incorrect proof blocks of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
     count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
     ``δ``."""
     return Stratified.uniform(n, kd).count_bound(delta)
@@ -139,7 +139,7 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
 
 
 def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
-    """What ``product``'s legs say about the block and the JointHorizonLive error over it (module docstring), no verdict:
+    """What ``product``'s legs say about the block and the JointPooledLive error over it (module docstring), no verdict:
     the record's is its Lean answer's (`composed`). A product other than onsite's names itself and its ``dropped``
     legs."""
     if product not in PRODUCTS:

@@ -19,7 +19,7 @@ Two places differ from the source, neither on an input the verifier reads:
   character and every second nesting level does, so the fuel never runs out; were it to, the text would be refused
   (`offset N: nesting too deep`), never accepted.
 
-`parse` is the one JSON reader of C-Flock's Lean (`tests/test_flock_json.py` refuses a call of `Lean.Json.parse` in
+`parse` is the one JSON reader of Flock's Lean (`tests/test_flock_json.py` refuses a call of `Lean.Json.parse` in
 `verity/core/service/flock`). It is `@[irreducible]`, so that elaboration treats it as the opaque constant proofs were
 written against; `unfold` and the kernel see its body.
 -/
@@ -39,7 +39,7 @@ inductive R (α : Type) where
 def EOF : String := "unexpected end of input"
 
 /-- `Lean.Json.Parser`'s `USize.size`, at 64 bits. -/
-def USIZE : Nat := 2 ^ 64
+@[noinline] def USIZE : Nat := 2 ^ 64
 
 /-- `ws`: skip tabs, newlines, carriage returns and spaces. -/
 def ws : List Char → Nat → List Char × Nat

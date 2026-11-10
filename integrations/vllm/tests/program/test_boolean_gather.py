@@ -269,7 +269,7 @@ def test_the_vocabularies_chunked_gathers_are_the_whole_gather(V: int) -> None:
 
 
 def _block(d) -> dict:
-    """``d`` as one C-Flock block, as `benchmarks/unit_block` composes it (each parameter one ``hm96-sha512/row/v2`` bit row and
+    """``d`` as one Flock block, as `benchmarks/unit_block` composes it (each parameter one ``hm96-sha512/row/v2`` bit row and
     its return one more): its META."""
     return CS.UnitStager(d, f"unit-block/{d.name}", [(p, V2, t.leaves, [p]) for p, t in d.signature()[0]], [(V2, (0,))]).meta
 

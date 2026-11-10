@@ -35,7 +35,7 @@ namespace Accounting.Guarantees.Sketch
 open Accounting.Tag Pouw.Fp8Atom
 open scoped ENNReal
 
-/-- **Non-collision.** Two integer vectors `x ≠ y`, fixed before the signs are drawn, have the same sketch under `k`
+/-- **Non-collision.** Two integer vectors `x ≠ y`, fixed before the signs are sampled, have the same sketch under `k`
 independent uniform ±1 rows with probability at most `2^-k`: for one row, flipping a sign where `x − y` is nonzero moves
 the row's inner product with `x − y` off `0`, so at most half the rows vanish on it. -/
 def NonCollision : Prop :=
@@ -63,9 +63,9 @@ def TensorCoreNonCollision : Prop :=
         (fun S => x ≠ y ∧ ∀ i, sketchWord (S i) x = sketchWord (S i) y) ≤ (2 ^ k : ℝ≥0∞)⁻¹
 
 /-- **Commit, then project (Freivalds's check with ±1 rows).** For integer matrices `A`, `B` and a claimed product `C`
-fixed before the signs are drawn, `C ≠ A·B` and `S·C = (S·A)·B` hold together with probability at most `2^-k` over
+fixed before the signs are sampled, `C ≠ A·B` and `S·C = (S·A)·B` hold together with probability at most `2^-k` over
 `k` uniform ±1 rows `S`: a column where `C` and `A·B` differ is a nonzero vector that every row must miss. `C` may have
-been computed after the job's own seed; what the bound needs is that a binding commitment fixed it before `S` was drawn.
+been computed after the job's own seed; what the bound needs is that a binding commitment fixed it before `S` was sampled.
 The verifier's work is `S·A` and `S·C`, `k(mn + mp)` additions of signed entries, and `(S·A)·B`, `knp` multiply-adds,
 against `A·B`'s `mnp`. -/
 def CommitThenProject : Prop :=

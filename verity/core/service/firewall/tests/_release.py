@@ -2,7 +2,7 @@
 the cases frozen from Rust's `flock_live::release` before the Lean replaced it, in `fixtures/`, and `flock-firewall
 contract` for the send check's verdict), and the strategies that sample records, ops and outer sessions.
 
-Every record drawn is one the ZK server wrote (Python's, from a drawn history of ops, registrations among them), or one
+Every record sampled is one the ZK server wrote (Python's, from a sampled history of ops, registrations among them), or one
 torn by a crash (its last line cut short), with blank lines in it or without its final newline. Strings are any Unicode but
 lone surrogates, integers are below 2^40, a registration's record is lowercase hex after its number, and a schedule is any
 JSON but floats: outside that domain Python and Rust differed from each other (a budget
@@ -25,10 +25,10 @@ from verity_flock import firewall as FW
 
 HERE = Path(__file__).resolve().parent
 PKG = HERE.parent
-ROOT = PKG.parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 FLOCK = ROOT / "verity" / "ml" / "flock"
 LEAN_FLOCK = ROOT / "verity" / "core" / "service" / "flock"
-VECTORS = FLOCK / "live" / "src" / "firewall_record_vectors.json"
+VECTORS = ROOT / "verity/ml/flock/live/src/firewall_record_vectors.json"
 FIXTURES = HERE / "fixtures"
 REFUSED = "FIREWALL-REFUSED: "
 
@@ -93,7 +93,7 @@ def e2e_record() -> list[str]:
 @functools.cache
 def firewall_agree():
     """`verity/ml/flock/verifier/firewall_agree.py`, the contract check's sessions."""
-    spec = importlib.util.spec_from_file_location("firewall_agree", FLOCK / "verifier" / "firewall_agree.py")
+    spec = importlib.util.spec_from_file_location("firewall_agree", ROOT / "verity/ml/flock/verifier/firewall_agree.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -144,7 +144,7 @@ HEX = st.binary(max_size=3).map(bytes.hex)
 #: the registrations a statement reads, by number, or why its value commitments are none of the server's
 READS = st.one_of(st.lists(st.integers(0, 4), max_size=3), st.lists(st.integers(0, 4), max_size=3),
                   st.lists(NAT, max_size=2), TEXT)
-#: rule 5's ops, drawn only by `op_input`, so `outer_input`'s draws stay those `fixtures/release-outer.jsonl.gz` was frozen on
+#: rule 5's ops, sampled only by `op_input`, so `outer_input`'s samples stay those `fixtures/release-outer.jsonl.gz` was frozen on
 REG_OP = st.one_of(
     st.builds(lambda h: ["register", h], HEX),
     st.builds(lambda s, p, r: ["registrations", s, p, r], SESSION, PART, READS),

@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import proofs as PF
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
-VERIFIER = HERE.parent / "verifier"
+LEAN = Path(__file__).resolve().parents[4] / "verity/core/service/flock"
+VERIFIER = Path(__file__).resolve().parents[4] / "verity/ml/flock/verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 HIDDEN = HERE / "fixtures" / "hidden-outputs" / "flat"
 FLAT = "verity/flock-circuit@f5df3bbc+seed-injection"

@@ -88,7 +88,7 @@ EVALUATORS = {
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     **{f"TokenSelect_v{n}": f"first-max argmax over the bf16 logits (TokenSelect_v{n} = TokenSelect_v1 word for word, index 0 at V = 1)" for n in (3, 4)},
     # the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
-    # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
+    # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox samples from the committed seed + the Const64 pos)
     # evaluated by the core reference (`verity.ml.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
     "GumbelTopPTokenSelect_v1": "verity.ml.definitions.registry.sampling.GumbelTopPTokenSelect{V} via verity.ml.circuits.evaluation.evaluate (TemperatureScale -> "
@@ -204,7 +204,7 @@ _GUMBEL_TOPP_OPERANDS = (("logits", 16), ("top_p", 32), ("seed", 64), ("pos", 64
 def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]) -> int:
     """`GumbelTopPTokenSelect_v1{V}` on its six operand word arrays -- (bf16 logits[V], f32 top_p, i64 seed,
     i64 pos, f32 temp, i32 splits) -- evaluated by the REGISTRY (the composite of record: TemperatureScale -> TopPMask_v1{V} with `splits`
-    as the S operand -> GumbelSelectF32, Philox draws from (seed, pos)); returns the sampled id.  No re-implementation: the core
+    as the S operand -> GumbelSelectF32, Philox samples from (seed, pos)); returns the sampled id.  No re-implementation: the core
     reference (`verity.ml.circuits.evaluation.evaluate`, the one-call walk the difftest (G4) and the Match-time stoch recompute run).  The words
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""
@@ -766,7 +766,7 @@ _row("MoeSum_v1", moe_sum, ("sum",))
 from verity.ml.definitions.numerics import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
 from verity.ml.definitions.numerics import (  # noqa: E402
     act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, dsv4_rows, glm53_rows, int8_rows, moe_align_rows,
-    softcap_rows,
+    softcap_rows, stop_rows,
 )
 
 
@@ -776,9 +776,9 @@ def attention_softcap(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dic
     return softcap_rows.attention_softcap(f64_statics(statics), ops, prim_static(statics, "DOT", f), prim_static(statics, "INV", f))
 
 
-EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_rows, batched_gemm_rows)}
+EVALUATORS |= {m.FAMILY: m.EVALUATOR for m in (softcap_rows, act_rows, dsa_norm_rows, batched_gemm_rows, stop_rows)}
 for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_expf), (dsa_norm_rows, dsa_norm_rows.row),
-              (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
+              (batched_gemm_rows, batched_gemm_rows.batched_gemm), (stop_rows, stop_rows.stop_check)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
 register_rows(int8_rows, EVALUATORS, _row)

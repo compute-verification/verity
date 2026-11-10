@@ -523,8 +523,8 @@ def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
 
 def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
     """`plan.tile_layout` at m = 80 proves a 16-row tile with its 16 `RowA` units, in its own stratum at 16/64 of a whole
-    tile's W_ref.  That is two tile strata, which the work law refuses (`check_work_strata`, the window pin's `hone`) and
-    the count law draws; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work law draws, and
+    tile's W_ref.  That is two tile strata, which the work sampling design refuses (`check_work_strata`, the window pin's `hone`) and
+    the count law samples; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work sampling design samples, and
     `unsound_work_bound` reads the short tile's W_ref."""
     key = derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc8-short"})
     lay = plan.tile_layout(replace(SHORT, hidden=True), 64)

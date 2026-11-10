@@ -34,7 +34,7 @@ import Proofs.Flock.Soundness.ZK.Session
 Δ pairs `HmOut.delta`, `HmIn`'s public-input filter, and every row's `b ‖ c` region) at `--session-tables J`, each table
 with its own coin vector.
 
-* `zk_session_viewH`: at one table, the view of `tablesAtZKH`'s table at every draw `verify --zk` sets up.
+* `zk_session_viewH`: at one table, the view of `tablesAtZKH`'s table at every sample `verify --zk` sets up.
 * `ZkViewAtJ`, `zk_session_viewHJ`: at `J` tables, the joint view of `planZHJ`'s tables (`zk_session_soundHJ`'s plan),
   at any coin vector per table, within `Σ_j 2·|Hid_j|·δ₁` of the per-table simulators' joint view, both ways, at any
   bound `δ₁` at which hm96 hides: the pinned key's hiding gap with no premise (`CROnly.hm96Hiding_gap`), `2^-193` under
@@ -76,7 +76,7 @@ theorem tableZKH_eq {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y₁ y₂
   obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz₁.symm.trans hz₂))
   rfl
 
-/-- The hidden-output `--zk` tables at a draw `verify --zk` sets up are its table. -/
+/-- The hidden-output `--zk` tables at a sample `verify --zk` sets up are its table. -/
 theorem tablesAtZKH_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZKH I mPts S (dj S)) :
     tablesAtZKH (Reg := Reg) dj y₀ S R = y.table := by
@@ -84,7 +84,7 @@ theorem tablesAtZKH_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : 
   rw [tableAtZKH, dif_pos ⟨y⟩]
   exact tableZKH_eq _ _
 
-/-- Table `j` of the hidden-output plan, at a draw at which `verify --zk` sets table `j` up, is its table. -/
+/-- Table `j` of the hidden-output plan, at a sample at which `verify --zk` sets table `j` up, is its table. -/
 theorem planZHJ_get_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (S : Finset (Fin n)) (R : Reg) (j : Fin (nTab I))
     (y : DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
@@ -175,7 +175,7 @@ theorem zkViewAtJ_of_ok {J : ℕ} (C : Fin J → CoinedSetup) (hC : ∀ j, Coine
 hidden outputs).
 
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
-refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
+refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the challenger's live-coin part commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
 refuses a statement that meets the mask slot (`Zk.maskFree`). -/
@@ -191,12 +191,12 @@ theorem zk_session_viewH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ 
     (δ₁ := (2 : ℝ≥0∞) ^ (-193 : ℤ)) hKey
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is zero knowledge, at the coins it doesn't refuse**: at every
-draw at which `verify --zk` sets every table up (`ys`), the joint view of `zk_session_soundHJ`'s plan `planZHJ`, table
+sample at which `verify --zk` sets every table up (`ys`), the joint view of `zk_session_soundHJ`'s plan `planZHJ`, table
 `j` at its executable statement, at any coin vector per table that the honest prover doesn't refuse, within
 `Σ_j 2·|Hid_j|·δ₁` at any bound `δ₁` at which hm96 hides (`hT1`).
 
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
-refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
+refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the challenger's live-coin part commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
 refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.DrawSetupZHJ.avoidsMask`). -/
@@ -220,7 +220,7 @@ theorem zk_session_viewHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀
 `zk_session_viewHJ` on the same plan `planZHJ dj y₀`.
 
 Which verifiers: this is honest-verifier zero knowledge at each fixed coin vector, a zerocheck outer coin `1` among the
-refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the coin server commits every coin at
+refused (`CoinedSetup.Admits`). It covers a verifier that chooses its coins because the challenger's live-coin part commits every coin at
 `Hello`, before the prover's first message (`coin_tree.rs`), under `keyed-cr`, which no statement here models yet
 (`ASSUMPTIONS.md`, zero knowledge's coverage). `avoidsMask` (`hdm`) holds at every setup `verify --zk` makes: its shape check
 refuses a statement that meets the mask slot (`Zk.maskFree`, `FailClosed.DrawSetupZHJ.avoidsMask`). -/
@@ -234,12 +234,12 @@ theorem zk_session_composedHJ
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOkH c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

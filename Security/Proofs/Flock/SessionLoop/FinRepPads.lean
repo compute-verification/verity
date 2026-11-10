@@ -45,7 +45,7 @@ import Proofs.Flock.SessionLoop.RepSrc
 # The pads commitment from the views
 
 At (c.3)'s context, rep stream `k`'s pads commitment from the views' leaves (`Loop.padsView`) has the size, root and tree
-of the firewall's (`Finish.innerCommitP` of the request's pads under its leaf salts), wherever table `k / 2`'s rows hold
+of the ZK server's (`Finish.innerCommitP` of the request's pads under its leaf salts), wherever table `k / 2`'s rows hold
 at its base:
 
 * **`Hm96.viewR_leavesP`**: a real view's pads leaves read the randomness alone, whatever the witness, so where the rows
@@ -166,8 +166,8 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
   (x : Msg) (w : Flock.Wit)
 
-/-- **The pads commitment from the views is the firewall's** up to its columns and salts: in the masked scope, at a
-witness in the relation, where the frame draws the tape's pads (`Loop.RepSrc`) and every table's rows hold at its base
+/-- **The pads commitment from the views is the ZK server's** up to its columns and salts: in the masked scope, at a
+witness in the relation, where the frame samples the tape's pads (`Loop.RepSrc`) and every table's rows hold at its base
 (as `Loop.FinRows` states them), rep stream `k`'s pads commitment from the views' leaves has the size, root and tree of
 `Finish.innerCommitP` on its request's pads and leaf salts. -/
 theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)

@@ -45,7 +45,7 @@ Top's hypotheses name one unit and copy per part (`un p`, `cp p`) and per openin
 V* computes the two reps in two instances, and a registered bit has one value (`AccChain.regBit_unique`), so at those
 maps `hres` and `hu` would force the reps' values equal. Top's `rep`, `ops` and `files` are functions of the layers
 alone, but each rep's coins, extra claims and comb, each level's `α` and the table files' streams are the verifier's,
-drawn from the history `t`, and V*'s wires register only what is computed from them (`v`, `coef`, `dirs`). So
+sampled from the history `t`, and V*'s wires register only what is computed from them (`v`, `coef`, `dirs`). So
 `vbridge_of_reps` is `vbridge_of_vstar` with the unit maps indexed by the rep and `rep`, `acc`, `ops`, `files` read at the
 history as well, from the same per-rep lemmas. Its `ResZeroAt` and `OpensAt` take the parts' and openings' outputs as
 registered reads (`RegOut`). At the family the parts' and openings' outputs are read in the layers instead, and
@@ -374,7 +374,7 @@ def HFull : Prop :=
     ∃ u, g ∈ ((Placed.keyProg (F.Vs j).c (F.Vs j).hU (F.Vs j).nv).partition
       (Layout.outsOf (F.Vs j).c (F.Vs j).hU (F.Vs j).nv)).io u
 
-/-- `VFull` under the full draw (`vFull_of_whole`). -/
+/-- `VFull` under the full sample (`vFull_of_whole`). -/
 theorem vFull_of_hFull (h : F.HFull) : VFull (ℐ).r F.Sk := FlockVBridge.Full.vFull_of_whole _ F.Sk h
 
 end VStarFamily

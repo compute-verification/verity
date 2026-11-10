@@ -809,7 +809,7 @@ def _relay_admitted(fw: Firewall, session: str, part: str, req: bytes, worker_r,
                 why = "the worker ended the session before Finish"
                 fw.stop(session, part, why)
                 return {"outcome": "stop", "why": why}, None
-    except Exception as e:  # noqa: BLE001 - any fault of the relay's stops the session, never the firewall
+    except Exception as e:  # noqa: BLE001 - any fault of the relay's stops the session, never the ZK server
         why = f"the relay's fault ({type(e).__name__}: {e})"
         fw.stop(session, part, why)
         return {"outcome": "stop", "why": why}, (req, refused(f"{why}: recursive session {session} stopped at {part}"))

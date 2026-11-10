@@ -1,4 +1,4 @@
-"""`run` draws from its seed and Hypothesis's own constants alone, without Lean. Hypothesis also draws constants it scrapes
+"""`run` samples from its seed and Hypothesis's own constants alone, without Lean. Hypothesis also samples constants it scrapes
 from every local module the process has loaded, so a fixed seed's samples moved with what was imported: the vstar
 difftest's coverage assertion failed when `rec_residuals.py`, which its reference loads, gained literals. These
 tests pin the hook `run` patches, so a Hypothesis upgrade that moves it, or stops sampling scraped constants, fails here."""
@@ -49,7 +49,7 @@ def plant(tmp_path, monkeypatch):
 
 
 def bare() -> list[int]:
-    """What plain Hypothesis draws, seeded as `run` seeds it."""
+    """What plain Hypothesis samples, seeded as `run` seeds it."""
     drawn = []
 
     @use_seed(SEED)
@@ -71,7 +71,7 @@ def through_run(server: D.Server) -> list[int]:
 
 def test_a_seeded_run_draws_the_same_inputs_whatever_the_process_has_loaded(server, plant):
     """The control: plain Hypothesis's samples move when a module with new constants is imported, so the pool `run` empties
-    is still sampled from. `run`'s draws don't move."""
+    is still sampled from. `run`'s samples don't move."""
     before, ran_before = bare(), through_run(server)
     plant("difftest_planted_a")
     after, ran_after = bare(), through_run(server)

@@ -1,14 +1,14 @@
-"""Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session sampled by a law no soundness claim draws by (a bernoulli
+"""Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session sampled by a sampling design no soundness claim samples by (a bernoulli
 sample, a work sample with or without a closure) at setup, whatever flags it holds, and passes a stratified sample, and at
 hidden outputs a subset sample, on to the session's checks. The statement's form is checked last, once every check has
 passed, and a session without a sample is refused after that. The statement is
 `test_lean_registered_reads.py`'s honest one (`stage`, every port registered): its program and partition are the ones a
-work sample's law derives from, so a work sample sets up there, where any other statement refuses it at setup before its law
-is read. Each session is a record that names its sample and no proof files: a sample that passes the law check sets up and
+work sample's law derives from, so a work sample sets up there, where any other statement refuses it at setup before its sampling design
+is read. Each session is a record that names its sample and no proof files: a sample that passes the sampling design check sets up and
 meets the session's files, which it has none of, and so does a session without a sample, in either mode, since its
 refusal comes after every check (its own refusal shows on the statements whose form is covered: `test_lean_zk.py`,
 `test_lean_record_checks.py`, `test_lean_hidden_outputs.py`). Each sample is its own setup (about 10 s), and staging composes the
-circuit (about 30 s), so the module is slow; it is the only test that reaches the law check with a work sample."""
+circuit (about 30 s), so the module is slow; it is the only test that reaches the sampling design check with a work sample."""
 from __future__ import annotations
 
 import json
@@ -84,9 +84,9 @@ def test_no_claim_draws_by_these_laws_in_either_mode(verdicts, zk, name, why):
 
 
 def test_a_subset_draw_at_hidden_outputs_passes_the_law_in_either_mode(verdicts):
-    """At hidden outputs a plain claim draws a subset (`SoundExecH`), as `--zk` does: the subset sample sets up and meets
+    """At hidden outputs a plain claim samples a subset (`SoundExecH`), as `--zk` does: the subset sample sets up and meets
     the session's files in either mode, as a stratified sample does without `--zk`. At public outputs, without `--zk`, it is
-    refused for its law (`test_lean_session_tables.py`'s `SUBSET`)."""
+    refused for its sampling design (`test_lean_session_tables.py`'s `SUBSET`)."""
     for zk in (False, True):
         assert verdicts[zk]["subset"]["why"].startswith("session files: "), (zk, verdicts[zk]["subset"]["why"])
     assert verdicts[False]["stratified"]["why"].startswith("session files: "), verdicts[False]["stratified"]["why"]

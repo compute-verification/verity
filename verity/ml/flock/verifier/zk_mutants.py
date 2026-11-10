@@ -219,7 +219,7 @@ def main(src, out, table=None):
     def coin_tree(field, value):
         return lambda rec: rec["coin_tree"].__setitem__(field, value(rec["coin_tree"][field]))
 
-    # round 0's coins are r_skip, drawn and never read (`verity/ml/flock/verifier/README.md` A1)
+    # round 0's coins are r_skip, sampled and never read (`verity/ml/flock/verifier/README.md` A1)
     record_case("zk-coin-unused", coin(0), ACCEPT)
     record_case("zk-coin-round1", coin(1), reject("ligerito: final check failed"))
     record_case("zk-coin-last-round", coin(-1), reject("zk inner: column"))

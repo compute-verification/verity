@@ -46,13 +46,13 @@ import Proofs.Flock.Claims.Recursion.SlotsCheck
 `RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem`.
  It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
 the compiled record's own reference prover (`refP`, the record's `P`) at the deployed recursive record
-`recBound Readable.relation bR (layR elem) bdR.IVStar` (`bR` the brings whose transcript is the coin server's record,
+`recBound Readable.relation bR (layR elem) bdR.IVStar` (`bR` the brings whose transcript is the challenger's live-coin part's record,
 `recTr`), on a statement `x` in the recursion's relation at the inner witness `w`, and the part's outer witness is the
 one `refP` hands its masked session (`RefParts.wit`, at the inner rounds as the prover saw them).
 
 `honest_partAccepts_layR` is `partAccepts_run_deployRec` there, with these of its premises proved:
 
-* `ReadsBackB` (`hrb`): `readsBack_recTr`, the coin server's record read back by `recRead`;
+* `ReadsBackB` (`hrb`): `readsBack_recTr`, the challenger's live-coin part's record read back by `recRead`;
 * `HeldB` (`hHeld`): `heldB_layoutBTops` at `finOpen (restR elem)` (`heldB_layRH`: `layR` changes only the calls);
 * the run's messages (`hms`): `ms` is the run's;
 * `Flock.check` at the part's V\* statement (`hck`): the honest outer witness is in the V\* relation there
@@ -131,7 +131,7 @@ theorem runVstar_getD_staged {W : Type} (H : Msg → Msg) (I : Claims.Recursion.
   exact vstarAt_staged hN (by rw [hsu]; rfl)
 
 /-- **Part `s`'s circuit accepts on the honest outer run, at the layout of record** (non-vacuity of `RecursiveKSAt`'s
-`DecompB` premise, the parts' half). At the deployed recursive record over `DeployedR.layR elem` with the coin server's
+`DecompB` premise, the parts' half). At the deployed recursive record over `DeployedR.layR elem` with the challenger's live-coin part's
 record (`recTr`), on the record's reference prover's run (`refP`) at a statement `x` in the recursion's relation read
 at the dense form, where that run accepts, `PartAccepts` holds at the
 run's messages and coins, its outer witness the one the reference prover hands part `s`'s session. It takes what is

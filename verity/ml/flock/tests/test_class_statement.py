@@ -1,4 +1,4 @@
-"""A unit class of any partition as a ``verity/flock-circuit`` statement (`verity_flock.class_statement`): on circuit-check's tiny
+"""A size class of any partition as a ``verity/flock-circuit`` statement (`verity_flock.class_statement`): on circuit-check's tiny
 Serve_v1 under `Q_word`, two table-free classes and the embedding gather compose with one row port per input source, their
 laid-out unit rows agree with the reference on synthetic lanes, a source read by several instances is one shared row (the
 gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`` names a proving build of ``flock-circuit``, a

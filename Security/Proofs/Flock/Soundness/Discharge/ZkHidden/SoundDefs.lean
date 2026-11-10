@@ -24,7 +24,7 @@ ZkExec's `RunsZCLive` (`ZkExec/LiveStatements.lean`) for the sessions production
 `Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`). Its `opnAtZ` reads the
 statement `Stmt.setupH` sets up, so the hidden case is a different `RunsZC` instance:
 
-* `opnAtZH`: `opnAtZ` at the statement `Stmt.setupHidden` sets up at the record's draw under the `--zk` tags and coin
+* `opnAtZH`: `opnAtZ` at the statement `Stmt.setupHidden` sets up at the record's sample under the `--zk` tags and coin
   tree.
 * `RunsZCLiveH`: `RunsZCLive` with `tablesAtZKH`, `opnAtZH`, `TablesAtZKHLive`, `TagsOkH` and `DrawOkZKH` for
   `tablesAtZK`, `opnAtZ`, `TablesAtZKLive`, `TagsOk` and `DrawOkZK`, and `TablesAtZKHLive`'s hypotheses on the circuit
@@ -45,8 +45,8 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **The `--zk` openings at draw `S` under hidden outputs** (`opnAtZ` with `setupHidden` for `setupH`): `opnZ` at the
-statement setupHidden sets up at the record's draw `dj S` under the `--zk` tags and coin tree, and its `--zk` schedule,
+/-- **The `--zk` openings at sample `S` under hidden outputs** (`opnAtZ` with `setupHidden` for `setupH`): `opnZ` at the
+statement setupHidden sets up at the record's sample `dj S` under the `--zk` tags and coin tree, and its `--zk` schedule,
 on the first two proof files. -/
 noncomputable def opnAtZH (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : ZkLink.OpensZ 𝔽 Dig (List UInt8) :=
@@ -57,11 +57,11 @@ noncomputable def opnAtZH (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : 
     | .error _ => default
   | .error _ => default
 
-/-- **`RunsZC` at the live hidden-output `--zk` tables, at the law's draws** (`RunsZCLive` under hidden outputs). Given
+/-- **`RunsZC` at the live hidden-output `--zk` tables, at the sampling design's samples** (`RunsZCLive` under hidden outputs). Given
 that wherever flock-verify accepts a hidden-output session the `--zk` table is the executable's (`TablesAtZKHLive`), on
 untyped one-table inputs under the tags `TagsOkH` fixes, whose circuit file `HmOut.parse` accepts (at the `--zk` tags)
 as a circuit whose unit returns the outputs, with `wr` the challenger's record of the live `--zk` session and each of
-the law's draws proving its units at `mPts` link points (`DrawOkZKH` at `L.draw ω`), `RunsZC` holds at the law's draws
+the sampling design's samples proving its units at `mPts` link points (`DrawOkZKH` at `L.draw ω`), `RunsZC` holds at the sampling design's samples
 (`RunsOnZC`) at the tables `tablesAtZKH` under `hm96-sha512/v1` (`hs512`), with the decoder `decAtZ`, the openings
 `opnAtZH`, no tail and `capOfRoot`. The reference setup `y₀` is data. -/
 def RunsZCLiveH : Prop :=

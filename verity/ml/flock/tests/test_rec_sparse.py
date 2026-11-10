@@ -94,7 +94,7 @@ def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[in
     (rows and columns of ELL + S_LOG + 1 bits, the other units public); the comb is the lincheck's, ``Σ_i e[i] M[i, c]`` with
     ``e[s + 64 u] = L_s(z) eq(ρ_in, u)``, folded at the column point (bit j of a column against its coordinate j); every
     message comes from the tables and the coins alone. ``inner``: alpha, z and the points from the inner rep's coins
-    (`rec_sparse.inner_points`), else drawn; ``tau``, ``tables``: the session's, else drawn."""
+    (`rec_sparse.inner_points`), else sampled; ``tau``, ``tables``: the session's, else sampled."""
     g = random.Random(seed)
     E, hb, n = sh.ELL, sh.S_LOG + 1, 1 << sh.NU
     tables = tables if tables is not None else [_template(g, sh) for _ in range(sh.T)]
@@ -258,7 +258,7 @@ def test_the_ands_are_the_products_and_the_selects():
 
 
 def _inner_rounds(inner):
-    """An inner rep's coins by round, as many as `rec_algebra.run` draws at the shape."""
+    """An inner rep's coins by round, as many as `rec_algebra.run` samples at the shape."""
     from verity_flock import rec_algebra as A
 
     rec = A._dummy_coins(inner)
@@ -448,7 +448,7 @@ class _Replay:
 
 def _toy(seed: int, sh: RS.Shape = TOY, pos0: int = 2, count: int = 3):
     """A hidden circuit of 100 rows (one cell in both A and B, one held twice in A), its range of ``count`` slots at
-    ``pos0`` in a block of 2^(ELL + 3) rows, the rep's fold points drawn, and h as the relay folds it
+    ``pos0`` in a block of 2^(ELL + 3) rows, the rep's fold points sampled, and h as the relay folds it
     (`rec_session.hidden_fold`): ``(entries, points, U, h)``."""
     from verity_flock.rec_session import hidden_fold
 

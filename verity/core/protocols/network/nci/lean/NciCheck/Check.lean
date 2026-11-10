@@ -16,7 +16,7 @@ and reports per IU its size and novel reads, and the first IU that fails, with t
 
 An instance is one JSON object:
 * `program`: the declaration's circuit `D`, a `verity-ir/descriptor/v1` Program as text (`verity/ml/circuits/PROTOCOL.md`),
-  read with C-Flock's decoder (`Flock.Program.decode`). Its canonical layout (§6) is `D`: gate `g` of the layout is
+  read with Flock's decoder (`Flock.Program.decode`). Its canonical layout (§6) is `D`: gate `g` of the layout is
   `Fin D.N` gate `g`, one primitive call returning one `Value<w>`, and `w g` is that `w`, in bits (`Circuit.w`, which
   the definition calls `verity.ir`'s `Value<w>`). The input gates are the input nodes, `Input<w>_v1` and
   `RegisteredInput<w>_v1` (§5). `reads g` is the set of gates `g`'s operands name (`Flock.Program.Prog.gate`: the
@@ -192,7 +192,7 @@ def verdict (gates : Nat) (r : Array (Nat × Nat)) (f : Option (Nat × String)) 
       | none => Json.null
       | some (u, rule) => Json.arr #[toJson u, Json.str rule])]
 
-/-- The instance's Program as C-Flock's decoder reads it, refused (`program`) where the decoder refuses it, among them a
+/-- The instance's Program as Flock's decoder reads it, refused (`program`) where the decoder refuses it, among them a
 reference that reads a leaf at another width than it was committed with (`Flock.Program.Widths`, `E_REINTERPRET`;
 `refusalOf` gives its message). -/
 def decodeProgram (text : String) : Except String Flock.Program.Prog :=

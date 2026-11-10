@@ -178,7 +178,7 @@ namespace LeanRelease
 /-! ## The transport's trust, and a round's state -/
 
 /-- The frame's check after `h` at the state `m`, of a stopped rep (`st`) or not, of the device round `v` against the
-firewall's scheduled round at witness `w` (`pass`, `check_release`). -/
+ZK server's scheduled round at witness `w` (`pass`, `check_release`). -/
 def checkAt {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) (m : Masker)
     (st : Bool) (v : Msg) : Except String (ByteArray × Masker × Option String) :=
   check (L.cfg x ρ h) { m with stopped := st } ⟨v.toArray⟩
@@ -247,7 +247,7 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
   exact congrArg (fun s => s.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) >>=
     rankStop (L.cfg x ρ h)) hp'
 
-/-- **A round's state at level 0**: where the firewall's scheduled round after `h` carries no free value at any
+/-- **A round's state at level 0**: where the ZK server's scheduled round after `h` carries no free value at any
 `stopped`, with `t`'s state but for `stopped`, and releases `out` at the state `m`, the frame's state after the history
 with that release and the stream's answer is its taking of the stream's coins at `t`, at some `stopped`, past the rank
 stop. -/
@@ -272,7 +272,7 @@ theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : 
 
 /-- **The binding starts level 0's phase**: where the frame takes the coins before the opening's binding at a state
 outside a masked phase, after the algebraic phase's opening and before level 0 closes, short of the layout's last
-value, at a Ligerito rep, the firewall's scheduled round is the binding with `z`'s squeeze, and the next round is the
+value, at a Ligerito rep, the ZK server's scheduled round is the binding with `z`'s squeeze, and the next round is the
 rep's, the frame's state after the binding's release and the stream's answer to `z`'s squeeze is level 0's phase at the
 same position. -/
 theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
@@ -306,7 +306,7 @@ theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
     (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by rfl) (by exact hp)) rfl)⟩
 
 /-- **A masked round of level 0 moves the position by its values**: where the frame takes the coins before a level-0
-round (`L0Round`) at level 0's phase and the round's position, its values short of the layout's last, the firewall's
+round (`L0Round`) at level 0's phase and the round's position, its values short of the layout's last, the ZK server's
 scheduled round is the round at the pads (`G`) with its squeeze, and the next round is the rep's, the frame's state
 after the round's release and the stream's answer is level 0's phase past the round's values. -/
 theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
@@ -348,7 +348,7 @@ theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R
 
 /-- **The pair's sums reach the layout's last value and take `ρ_0`**: where the frame takes the coins before a level-0
 round at level 0's phase and the round's position, with no `ρ` coin yet, whose values end the layout's and which squeezes
-`ρ_0`'s two coins, the firewall's scheduled round is the round at the pads with its squeeze, and the next round is the
+`ρ_0`'s two coins, the ZK server's scheduled round is the round at the pads with its squeeze, and the next round is the
 rep's, the frame's state after the round's release and the stream's answer `r0, r1` is level 0's phase at the layout's
 end with `ρ = (r0, r1)`. -/
 theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
@@ -389,7 +389,7 @@ theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
 
 /-- **`ρ_1`'s round takes `ρ_1`**: where the frame takes the coins before level 0's last round, its squeeze of `ρ_1`'s
 two coins alone, at level 0's phase with every value of the layout absorbed past the algebraic phase's and `ρ_0`'s
-words `r0, r1` taken, the firewall's scheduled round is that squeeze, the next round is the rep's and the stream answers
+words `r0, r1` taken, the ZK server's scheduled round is that squeeze, the next round is the rep's and the stream answers
 words `a0, a1` independent of them over F128, the frame's state after the round's release and the answer is level 0's
 phase with its four `ρ` coins: the state the closing round reads (`release_close`). -/
 theorem answered_rho1 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))

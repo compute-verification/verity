@@ -70,7 +70,7 @@ theorem foldl_extract_zero (a : Array ℕ) (w : ℕ) (hw : w = 0) (L : Array ℕ
   | nil => intro acc; rfl
   | cons x l ih => intro acc; rw [List.foldl_cons, ih]; simp
 
-/-- A hidden-output statement's drawn public file holds no output word. -/
+/-- A hidden-output statement's sampled public file holds no output word. -/
 theorem drawn_outputs_nil {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmOut.drawn c pop d = .ok pub) :
     pub.outputs = #[] := by
   obtain ⟨D, -, hout⟩ := Layout.drawn_outputs h

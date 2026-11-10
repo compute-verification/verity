@@ -6,8 +6,7 @@ At each B of TIME_B, each unit and torch's nearest op, interleaved rep by rep, u
 - median_ms: the GPU's time.  A torch.cuda._sleep ahead of the start event keeps the stream busy while the host queues
   the launch, so the events bracket the kernels and nothing of the host; ``covered`` says the start event was still
   queued when the host had queued the end event (if not, the host's time leaked in);
-- host_ms: the start event on an idle stream, then the launch (the ruler of the first H200 run, which counts the
-  host's ~0.05 ms of a launch).
+- host_ms: the start event on an idle stream, then the launch, which counts the host's time of a launch.
 Then a step row twice: ``summed_ms``, the units' medians times their counts at a decode step (STEP), and ``measured_ms``,
 that step's launches queued in a decode step's order (per layer: RMSNorm, quantizer of 16384, softmax at n = 32,
 quantizer, residual add, RMSNorm, quantizer, quantizer of 65536 with ReLU, residual add; then the final RMSNorm,
@@ -46,7 +45,7 @@ LAYERS = 52
 settings = of(__file__)
 STEP = {"rmsnorm 16384 (units)": 2 * LAYERS + 1, "quant 16384 (units)": 3 * LAYERS + 1, "quant 65536 relu (units)": LAYERS,
         "softmax n=32 (units)": LAYERS, "add 16384": 2 * LAYERS, "argmax 256 (units)": 1}
-#: the prelude's cycles: an arm's host time is well under a millisecond, a step's ~500 launches well under 100 ms
+#: the prelude's cycles: each sleep outlasts the host's queuing of what follows it, an arm's launch or a step's launches
 ARM_SLEEP, STEP_SLEEP = 2_000_000, 200_000_000
 
 

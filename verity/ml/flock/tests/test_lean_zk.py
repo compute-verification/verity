@@ -1,8 +1,8 @@
 """`verify --zk` (`Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
-two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
-them with upstream's offline verdict (`verity/ml/flock/verifier/vectors.json`). None is accepted: the circuit is no Program's, so the drawn session is refused for
+two tables, of one m = 26 table and of a sampled one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
+them with upstream's offline verdict (`verity/ml/flock/verifier/vectors.json`). None is accepted: the circuit is no Program's, so the sampled session is refused for
 want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no sample, which `verify` refuses
 first (`Flock.ProvedScope`, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
 from __future__ import annotations
@@ -22,7 +22,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 d12a2420…) with the live build's --zk sessions:
 #: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
 #: sessions/m26 (one table of 32) and sessions/drawn (a subset sample of 16 of 32), each with its server's index.jsonl (all
-#: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-022105-c4fb); a fetched
+#: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`); a fetched
 #: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
@@ -139,7 +139,7 @@ def test_zk_takes_no_coins_flag(zk):
 
 @pytest.mark.slow
 def test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
-    """The drawn session passes every check and, verified without the verifier's program (the fixture's circuit is no
+    """The sampled session passes every check and, verified without the verifier's program (the fixture's circuit is no
     Program's), is refused for that alone; the sessions of two tables and of one m = 26 table, which have no sample, pass
     every check and are refused for that alone."""
     [j2] = _verify(zk, _one(zk, "j2"), public="pub-32.bin", tables=2)

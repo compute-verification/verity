@@ -234,11 +234,11 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
 
 def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set | None) -> tuple[list[int] | None, dict]:
     """[R3's one mechanism] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
-    its SERVED tokens (draw k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
+    its SERVED tokens (sample k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
     min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as `verity_vllm.program.lifting.continuation.recurrence` /
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
-    None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer draws than the cap, or an EOS before the cap
+    None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than the cap, or an EOS before the cap
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
     from verity_vllm.program.lifting import continuation as CT  # the Continuation_v1 recurrence: THE mechanism, not a twin of it
 
@@ -255,7 +255,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
                                          f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
         return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (LAG in (0, 1)); the recurrence refuses it"}
-    # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); draws past C are EXTRA positions for
+    # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); samples past C are EXTRA positions for
     # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
     slots = CT.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
@@ -271,13 +271,13 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     not stated: 'RNG advances iff r_t' read LITERALLY as an ordered-set comparison of the DRAWN positions against the positions the
     Program's rule says are executed:
 
-      * draw k of a request (its k-th sampled row, k from 0; slot t = k + 1) is the TopPTokenSelect at pos = prompt_len - 1 + k (the query
+      * sample k of a request (its k-th sampled row, k from 0; slot t = k + 1) is the TopPTokenSelect at pos = prompt_len - 1 + k (the query
         position whose logits are sampled; the Philox counter is (seed, pos), no state);
       * the rule (`expected_executed_slots`, R3's one mechanism): every slot up to the cap C executes while no served token is an EOS; the
         first EOS at slot t < C is followed by exactly min(A, C - t) lag slot(s) (A = the record's attested async_scheduling, 0/1) and
         nothing after; a request that runs to C has no lag slot (nothing is scheduled past the length bound);
-      * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every drawn position not in the set is 'the RNG advanced without r_t'
-        (a sample past the cap without an EOS, a second draw after the lag slot, a sample for another row's counter), every expected position
+      * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every sampled position not in the set is 'the RNG advanced without r_t'
+        (a sample past the cap without an EOS, a second sample after the lag slot, a sample for another row's counter), every expected position
         not sampled is 'an executed slot did not sample' (a deleted step); one sample per engine step, in order;
       * an undeclared stop rule with an early stop, or an EOS before the cap with the profile unattested, leaves the request UNJUDGED --
         named, never a pass.
@@ -342,7 +342,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             continue
         t_eos = info.get("t_eos")
         # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
-        # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first draw 1023);
+        # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first sample 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
         from verity_vllm.program.lifting import continuation as CT
         if any(y is None for y in served[:T]):
@@ -668,7 +668,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     s_ok = not s_disagree
     s_checked = sum(1 for r in rows if r.get("S_agree") is True)
     reasons.extend(chain_absent)
-    # the sample ledger: one sample per request per step at pos = prompt_len - 1 + k, draws == cap or
+    # the sample ledger: one sample per request per step at pos = prompt_len - 1 + k, samples == cap or
     # EOS + exactly eos_lag_rows lag draw(s) and none after; a ledger problem is a FAIL reason by name
     ledger = draw_accounting(draws_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
     reasons.extend(ledger["problems"])
@@ -703,7 +703,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             "evaluator": {"name": evaluator, "what": EVALUATOR_DOC[evaluator], "eval_seconds_total": eval_seconds_total,
                           "reference": ref_check, "jobs": jobs, "cpu_quota": _cpu_quota()},
             # the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
-            # (executed, unserved) draws Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
+            # (executed, unserved) samples Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
             # and nothing else moves; a wrong pos on a device row is a mismatch by name above
             "rng": {"kind": "counter (Philox4x32-10 word 0), key (seed_lo, seed_hi), counter (pos_lo, pos_hi, 0, 0) -- tl.randint(seed, pos)",
                     "state": "none: the draw of a row is a pure function of (seed, pos, lane); no draw is consumed or advanced by another row",

@@ -57,7 +57,7 @@ the masked values, the switched vectors, the layout, the cap or the root.
 * **`FlockComplete.piopCut_src_free`**: two cut PIOPs from a log of one size and transcripts with no rounds: where one
   returns, so does the other at any source, layout, cap, root and extra claims of the same count, with a log of the same
   size; at the same extra claims, with the same switched claims (`piopCut_sws_eq`).
-* **`Masked.piopCut_of_repFwC`**: at a live statement whose opened coins are admitted, where the firewall's rep `r` of
+* **`Masked.piopCut_of_repFwC`**: at a live statement whose opened coins are admitted, where the ZK server's rep `r` of
   table `j` returned from rep `2j + r`'s base, the cut PIOP from any source returns there, its rank check at the earlier
   reps' points and the mask slot's words, with no premise on the masked values.
 -/
@@ -201,8 +201,8 @@ open CoinLayer
 
 namespace Masked
 
-/-- **The cut PIOP from any source returns where the firewall's rep did**: at a live statement whose opened coins are
-admitted, where the firewall's rep of table `j` returned from rep `2j + r`'s base, answered by the opened coins, the cut
+/-- **The cut PIOP from any source returns where the ZK server's rep did**: at a live statement whose opened coins are
+admitted, where the ZK server's rep of table `j` returned from rep `2j + r`'s base, answered by the opened coins, the cut
 PIOP at table `j`'s setup from any source, layout, cap and root, at extra claims of the rep's count, from a transcript
 with no rounds, returns from that base, its rank check at the earlier reps' points and the mask slot's words. -/
 theorem piopCut_of_repFwC {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}

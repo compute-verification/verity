@@ -15,7 +15,7 @@ collision probability:
 * round `w`'s fork of two coin paths (`Paths.splice`);
 * **the fork finder** (`forkFinder`, one per adversary, value of its coins and round; `forkFinders`): run the adversary
   from its commitment on a seed and on `k` continuations forked from it at round `w`, and output the first collision
-  among the verifier's SHA-512 inputs in those runs. At `k = 1` it is the binding finder; at C-Flock's `k` reruns
+  among the verifier's SHA-512 inputs in those runs. At `k = 1` it is the binding finder; at Flock's `k` reruns
   it is the link finder's form (two openings of one committed leaf, both checked by the verifier);
 * an adversary's error at its finders' collision probabilities (`breakPr`);
 * the machine of functions at no cost (`funMachine`), where the nontrivial lemma's adversary lives, and the service
@@ -49,7 +49,7 @@ def Paths.splice {Ω : Type} : {n : ℕ} → ℕ → Paths Ω n → Paths Ω n �
   | _ + 1, i + 1, x, y => (x.1, Paths.splice i x.2 y.2)
 
 /-- The seeds of a fork at round `w`: `σ`, then each continuation `σ' i`, which keeps `σ`'s first `w` rounds and
-draws the rest afresh. -/
+samples the rest afresh. -/
 def forkSeeds (S : HashedService) {Ω : Type} {R : ℕ} (e : S.Seed ≃ Paths Ω R) (w : Fin R) {k : ℕ} (σ : S.Seed)
     (σ' : Fin k → S.Seed) : List S.Seed :=
   σ :: List.ofFn fun i => e.symm (Paths.splice w.val (e σ) (e (σ' i)))

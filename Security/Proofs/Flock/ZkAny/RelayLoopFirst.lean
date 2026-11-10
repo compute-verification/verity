@@ -23,7 +23,7 @@ public import Proofs.Flock.ZkAny.RelaySwitch
   level 0 the one the loop drew (`BuiltAt`), so giving a table whose commitment's cap is its root
   (`tab_of_placeholder`, `cap_of_drawn`).
 * `tab_of_same`, `tab_of_placeholder`: a level 0 at another's `m` and `t_pad` gives a table where it does, so one
-  drawn at the table's `m` gives one where the rep's placeholder is there.
+  sampled at the table's `m` gives one where the rep's placeholder is there.
 -/
 
 @[expose] public section
@@ -171,7 +171,7 @@ theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.Firewall.Leve
     rw [ite_eq_right h3]
     exact ⟨_, rfl⟩
 
-/-- **A level 0 drawn at the table's `m` gives a table**, where rep stream `k`'s placeholder is there: the
+/-- **A level 0 sampled at the table's `m` gives a table**, where rep stream `k`'s placeholder is there: the
 placeholder's level 0 gives one, at the same `m` and the `t_pad` of its schedule (`Level0.ofDraws_ok`). -/
 theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128} {c' : Cfg}
     {t' : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
@@ -203,7 +203,7 @@ first of table `i`'s rep `r`'s stream (`hk`), the rep's frame fresh (`FreshAt`) 
 (`roundRun_same_first`), the frame `roundPlace` readied being the rep's run from its start (`repRun_first0` at rep 0,
 `roundPlace_prior` at rep 1), the model's state the rep's start (`ofLoop_answered_switch`), its placeholder,
 configuration and schedule the model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the table's level 0
-the one drawn at its statement's `m` (`tables_inj`), so giving a table as the placeholder's does (`tab_of_placeholder`)
+the one sampled at its statement's `m` (`tables_inj`), so giving a table as the placeholder's does (`tab_of_placeholder`)
 whose commitment's cap is its root (`cap_of_drawn`), and the round's count the plan's (`Loop.loopNr_succ`,
 `Count.plan_sched`), with its opening unbegun (`roundRun_alg_first`); the rep's salts are not read, the algebraic phase
 having a round past the first's coins. -/

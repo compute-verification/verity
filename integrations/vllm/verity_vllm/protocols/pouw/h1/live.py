@@ -39,7 +39,7 @@ import numpy as np
 from verity.core.protocols.pouw import core_check as CC
 from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
@@ -253,7 +253,7 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
 
 
 def _salts(reg: Any) -> np.ndarray:
-    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, drawn in one pass where its salts are drawn on
+    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, sampled in one pass where its salts are sampled on
     read (`pouw_h1_registered.Salts.at`)."""
     got = reg.salts.at(range(reg.leaves)) if hasattr(reg.salts, "at") else b"".join(reg.salts)
     return np.frombuffer(got, np.uint8).reshape(reg.leaves, 1, -1)

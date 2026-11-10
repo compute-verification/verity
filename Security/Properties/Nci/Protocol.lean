@@ -16,7 +16,7 @@ trusted input its params and commitment give (`trustedOf`).
   instance, and the profile is the verdict's report (`reportOf`).
 
 With `Properties.Composition`'s `AnswerAccepts` and `AcceptMeans` it takes an accepted onsite or remote answer to an
-accepted check of record; `BaselineProvenance` (`Properties.Nci.Baseline`) and `DescWitnesses` (`Properties.NciDesc.Verdict`)
+accepted check of record; `BaselineProvenance` (`Properties.Nci.Baseline`) and `DescWitnesses` (`Properties.Nci.Desc.Verdict`)
 say what that verdict means: θ holds what the deployment's first record registers, and the declaration complies.
 
 Proved as `NciCheck.Properties.SecurityProofs.ProtocolAccepts : NciCheck.Properties.ProtocolAccepts` in

@@ -59,10 +59,10 @@ readers take it off `x` and the coins alone:
 * each rep `r`'s rounds, where its stream has any, are `canonRounds` of the coins after the link, up to rounds of no
   coins (`CoinSource.ofRounds` drops them, so `verifierRows` reads only the rest: `verifierRows_filter`).
 
-`staged_innerAt` proves it from the verifier's checks. The rounds are the coin server's record's (`coinTie_sized`, the
+`staged_innerAt` proves it from the verifier's checks. The rounds are the challenger's live-coin part's record's (`coinTie_sized`, the
 coin tie with `repCoins`' round counts); `checkReads` holds that record to the schedule of the verifier's inner shape,
 which at the dense form is the table's two reps at `repRounds` (`scheduleOf_dense`, `two_reps`), so the record's
-round of rep `r`'s stream at round `j` is its round `1 + r R + j` after the link, drawn by that coin (`showsTr`); the
+round of rep `r`'s stream at round `j` is its round `1 + r R + j` after the link, sampled by that coin (`showsTr`); the
 record's rounds are the transcript's, but for the one round of no coins `repCoins` lets it skip
 (`filter_of_places`).
 
@@ -501,7 +501,7 @@ theorem staged_rounds {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {r 
   obtain ⟨ps, hps, hdrawn⟩ := hc
   rw [hshow] at hps
   cases hps
-  -- each round of `R` drew its coins from its coin
+  -- each round of `R` flipped its coins from its coin
   have hdr : ∀ g (hg : g < R.rounds.length), Drawn (c (g + 1)) R.rounds[g].coins.toArray := by
     intro g hg
     have hlen : g + 1 < (R.msgs.map fun mc => (mc.1, mc.2.toArray)).length := by

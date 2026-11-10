@@ -28,7 +28,7 @@ import Proofs.Flock.C3.RegLevels.LgHeld
 `stagesHeld_of_run`'s, within the history's rounds where the stages take `holoCTs`' count (`coins_total_holo`).
 `stageCoins_holo_held`: `stageCoins_holo` at `holoMap` with `hlater` from `laterCoins_holo` at every accepted outer
 proof and `hlt` from `srcLevelTie_of_maps`, both at R's run in V*'s sessions (`MapsAt`) at the `C3` the verifier
-builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round draws (`coinsEncoded_holoMap`). The
+builds of its hold (`C3Held`), and the reps' `henc` at the map's one-round samples (`coinsEncoded_holoMap`). The
 record facts the stages read are named below (`RecordPoints` … `RepStagesCounted`).
 `histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
 (`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
@@ -58,7 +58,7 @@ section held
 
 variable {Cm Coin : Type}
 
-/-- **Hypothesis: the link points are the session record's**: the coin server's record at the history decodes to a
+/-- **Hypothesis: the link points are the session record's**: the challenger's live-coin part's record at the history decodes to a
 session whose points read as the run's link points (`laterCoins_of_held`'s `hdec`, `hu`). -/
 def RecordPoints (wr : List (Cm × Coin) → Lean.Json × String) {e : ExecHolo} (t : List (Cm × Coin))
     (u : C3Run e) : Prop :=
@@ -246,7 +246,7 @@ def MapsAt (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fi
 at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verifier's hold (`C3Held`), the stages'
 total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
 `1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
-encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
+encoded and sampled at the map's one-round samples (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
 `repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
 hypothesis) and the run's points are the history's first coin
 (`hpts`, `PointsFromHistory`). -/

@@ -30,13 +30,13 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
   rate at most `q` is rejected with probability at most `P[Bin(n, q) > f₀]`, by the graded audit's tail rule
   (`PousContinuous.continuous_complete`; pinned as `Pous.SecurityProofs.ContinuousComplete`). The honest responder
   is the case `q = 0` (`honest_complete`, not pinned).
-* `Continuous/TimeAverage.lean`: the memory challenger draws the arrivals, and the bound reads the memory at every idle
+* `Continuous/TimeAverage.lean`: the memory challenger samples the arrivals, and the bound reads the memory at every idle
   slot (`PousContinuous.continuous_time_average`; pinned as `Pous.SecurityProofs.ContinuousTimeAverage`).
 * `Continuous/BandTimeAverage.lean`: that bound on the `N`-segment band at every `D ≤ 510`, `k ≤ 900`
   (`PousContinuous.band_cont_time_average_row`), and the rows `D = 0, 1, 2, 5`
   (`PousContinuous.band_family_continuous_time_average`; pinned as
   `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`).
-* `Continuous/Verdict.lean`: the verdict as one proof unit, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
+* `Continuous/Verdict.lean`: the verdict as one proof block, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
   `contAccepts M` holds on the records its openings determine (`PousVerdict.verdictProg_accepts`,
   `PousVerdict.verdict_accepts`), not pinned.
 * `Continuous/VerdictCode.lean`: the unit's executable code (`PousCheck.Verdict`, which the difftest runs against the

@@ -35,10 +35,9 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fixtures as F
 import shape as S
 import units as UN
-
-import fixtures as F
 from verity.ml.protocols.pouw.circuit import h1tile as HT
 from verity.ml.protocols.pouw.circuit import seeds as SD
 
@@ -59,7 +58,8 @@ def libs_of(h1u: list[str], ref: str | None, sm: bool) -> dict:
     return libs
 
 
-def run_build(lib, a, b, salt, roots, base, picks) -> dict:
+def run_build(lib: UN.H1u | UN.Ref, a: torch.Tensor, b: torch.Tensor, salt: bytes, roots: tuple[bytes, bytes],
+              base: int, picks: list[int]) -> dict:
     """One build on one call, run under each poison (`units.twice`): {receipts of picks (uint32), seed_c and sigma of
     picks (bytes), z of picks (the fallback's), words left unwritten and words unstable between the runs (in every proof block
     the build computed)}."""

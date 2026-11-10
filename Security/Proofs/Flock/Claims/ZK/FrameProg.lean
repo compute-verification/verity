@@ -42,7 +42,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 Toward `ofLoop_progChecks`: at a scheduled round the loop's frame state after
 it is the placeholder frame's check of the placeholder's scheduled round against itself, and the deployed frame's check
-of any device round, at the tape's draws and its scheduled round, leaves the same state but for `stopped`:
+of any device round, at the tape's samples and its scheduled round, leaves the same state but for `stopped`:
 
 * `Frame.run` over appended requests (`run_append`).
 * `check_alike_self`: where the frame's check at `c` of a device round against the scheduled round of frames `fs`
@@ -580,7 +580,7 @@ theorem ofDraws_mask : (Cfg.ofDraws l d m).mask = m := rfl
 theorem ofDraws_h : (Cfg.ofDraws l d m).h = d.h := rfl
 end OfDraws
 
-/-- **A rep's configurations at two draws** of one layout and mask slot are alike. -/
+/-- **A rep's configurations at two samples** of one layout and mask slot are alike. -/
 theorem cfgAlike_ofBytes (l : _root_.Flock.Zk.PadLayout) (b b' : ByteArray)
     (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
     CfgAlike (Cfg.ofDraws l (Draws.ofBytes l b) m) (Cfg.ofDraws l (Draws.ofBytes l b') m) where
@@ -910,7 +910,7 @@ theorem schedOf_sched_error (real : ℕ → V (_root_.Flock.Firewall.Finish.Tab 
   rw [hx, hq]
   simp only [hreal, hs]
 
-/-- **Rep stream `k`'s placeholder**, where it is one: the frame's configuration at zero draws at `Drive.start`'s layout
+/-- **Rep stream `k`'s placeholder**, where it is one: the frame's configuration at zero samples at `Drive.start`'s layout
 and mask slot, the stream's domain and the extra claims at the link points. -/
 theorem placeholder_ok {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} {link : Array F128} {c' : Cfg}
     {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
@@ -1536,7 +1536,7 @@ open Loop in
 /-- **`ProgChecks` at a scheduled round, from the rep's own table**: as `ofLoop_progChecks_step`, where the rep's own
 table (`real`) is of the placeholder's shape (`TabAlike`, at the bounds `schedSoFar_alike` reads) and its schedule so
 far holds round `j + 1`. The placeholder's schedule is then of the real one's shape (`schedSoFar_alike`), so of its
-coin counts, and the configuration at the tape's draws alike the placeholder's (`cfgAlike_ofBytes`). -/
+coin counts, and the configuration at the tape's samples alike the placeholder's (`cfgAlike_ofBytes`). -/
 theorem ofLoop_progChecks_sched (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))

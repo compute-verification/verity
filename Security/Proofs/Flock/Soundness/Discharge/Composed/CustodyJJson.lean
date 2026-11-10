@@ -17,12 +17,12 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# `zk_session_soundJ_custody` from the printed draw file
+# `zk_session_soundJ_custody` from the printed sample file
 
-`zk_session_soundJ_custody` takes `RecordCustodyZKJ`: the record is the live session's (`RecordsLiveZKJ`), and its draw
-file decodes only to the verifier's draw under the subset law (`DrawFileZK`). `zk_session_soundJ_custody_json` takes the
-first half as it is and, for the second, that each draw file is the JSON value `flock-verify draw` printed for the
-verifier's own draw under `subset kd` (`drawFileZK_of_toJson_subset`).
+`zk_session_soundJ_custody` takes `RecordCustodyZKJ`: the record is the live session's (`RecordsLiveZKJ`), and its sample
+file decodes only to the verifier's sample under the subset sampling design (`DrawFileZK`). `zk_session_soundJ_custody_json` takes the
+first half as it is and, for the second, that each sample file is the JSON value `flock-verify draw` printed for the
+verifier's own sample under `subset kd` (`drawFileZK_of_toJson_subset`).
 -/
 
 @[expose] public section
@@ -36,9 +36,9 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One `--zk` sampled session of `J` tables is sound, at the record's custody and the printed draw file.**
-`zk_session_soundJ_custody` with `RecordsLiveZKJ` (`live-verifier`: the record is the live session's) and each draw file
-the JSON value `flock-verify draw` printed for the verifier's own draw under `subset kd` in place of `RecordCustodyZKJ`. -/
+/-- **One `--zk` sampled session of `J` tables is sound, at the record's custody and the printed sample file.**
+`zk_session_soundJ_custody` with `RecordsLiveZKJ` (`live-verifier`: the record is the live session's) and each sample file
+the JSON value `flock-verify draw` printed for the verifier's own sample under `subset kd` in place of `RecordCustodyZKJ`. -/
 theorem zk_session_soundJ_custody_json
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -52,8 +52,8 @@ theorem zk_session_soundJ_custody_json
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, the coin server's custody of the record, and its draw file as `flock-verify draw`
-    -- printed the verifier's draw
+    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `flock-verify draw`
+    -- printed the verifier's sample
     (hTags : TagsOkZJ I)
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)

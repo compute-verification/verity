@@ -221,7 +221,7 @@ theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Sche
   linarith
 
 /-- **The masked escapes with level 0's fit the deployed weight with the fork event of weight `k`, counted per
-round**, at a statement whose tables `st j` are C-Flock ZK's, when each table's pads' weight is at most its deployed
+round**, at a statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed
 pads' domain and each table puts at most one event at a round: `2·k < 8·N₀/e + 2`, round `0`'s weights are at most
 every table's but `2`, and every table's at most its weight but `4·len/e` (`cZW_sum_le_tableWeight`). -/
 theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)

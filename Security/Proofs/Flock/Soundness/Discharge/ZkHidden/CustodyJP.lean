@@ -7,23 +7,23 @@ public import Proofs.Flock.Soundness.Assumptions.ZkP
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
-# The coin server's draws and the decoder at the verifier's public inputs, under the record's custody
+# The challenger's live-coin part's samples and the decoder at the verifier's public inputs, under the record's custody
 
 `ZkReg.drawOkZKHJ_of_file` and the decoder the `--zk` session's simulator reads, at flock-verify `--zk --public-inputs`
 (`own`):
 
 * `setupHidden_mPts_drawnP`, `setupHidden_mPts_of_provedP`: `setupHidden_mPts_drawn` and `setupHidden_mPts_of_proved`
-  at `own`, from `Hidden.setupHidden_specP` and the draw over the public input ports (`HmIn.drawn`, which is
+  at `own`, from `Hidden.setupHidden_specP` and the sample over the public input ports (`HmIn.drawn`, which is
   `HmRow.drawn` at the circuit with those ports as its output ports), at the statement circuit `c`
   (`HmOut.parseStmt`, whose `g` is the committed circuit's: `unrolled_g`).
-* `drawOkZKHJP_of_size`: from `DrawFileZK dj law pop`, at a draw `S` whose file decodes only to `kd` units, with
+* `drawOkZKHJP_of_size`: from `DrawFileZK dj law pop`, at a sample `S` whose file decodes only to `kd` units, with
   `nTab I` dividing `kd`, `DrawOkZKHJP` holds at `mPtsOf c.g (kd / nTab I)` link points, by `drawOkZKHJ_of_size`'s
   argument.
 * `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJPLaw` (`live-verifier`
-  at `own` and the registration's law), at a law whose draw files decode only to `kd` units.
-* `drawOkZKHJP_of_count`, `decodesZCJH_custodyAt`: the same at one table under a law read per draw, at the draw's own
-  count's link points `mPtsOf c.g |S|`, at a sampling design each of whose draws has the session's `mPts` link points
-  (a member of a window's sample, whose part `S` is drawn by `subset |S|`).
+  at `own` and the registration's law), at a sampling design whose sample files decode only to `kd` units.
+* `drawOkZKHJP_of_count`, `decodesZCJH_custodyAt`: the same at one table under a sampling design read per sample, at the sample's own
+  count's link points `mPtsOf c.g |S|`, at a sampling design each of whose samples has the session's `mPts` link points
+  (a member of a window's sample, whose part `S` is sampled by `subset |S|`).
 -/
 
 @[expose] public section
@@ -42,7 +42,7 @@ section MPts
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {partition : Option Json} {program own : Option ByteArray} {st : Flock.Stmt}
 
-/-- **`m_pts` at a drawn hidden-output session at `own`** (`setupHidden_mPts_drawn`). -/
+/-- **`m_pts` at a sampled hidden-output session at `own`** (`setupHidden_mPts_drawn`). -/
 theorem setupHidden_mPts_drawnP {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
     ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ st.mPts = mPtsOf st.c.g ud.proved.size := by
@@ -54,7 +54,7 @@ theorem setupHidden_mPts_drawnP {d : Json}
   rw [s.mPts, s.nbl, s.blocksReal, s.n, hn]
   rfl
 
-/-- **`m_pts` from the circuit and the draw's proved count at `own`** (`setupHidden_mPts_of_proved`). -/
+/-- **`m_pts` from the circuit and the sample's proved count at `own`** (`setupHidden_mPts_of_proved`). -/
 theorem setupHidden_mPts_of_provedP {c : Flock.Circuit} {d : Json} {N₀ : ℕ} (hty : tags.typed = false)
     (hcS : HmOut.parseStmt tags cf tables = .ok c) (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
@@ -68,7 +68,7 @@ end MPts
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The coin server's draws are `DrawOkZKHJP` at a draw of `kd` units, under any law** (`drawOkZKHJ_of_size` at
+/-- **The challenger's live-coin part's samples are `DrawOkZKHJP` at a sample of `kd` units, under any sampling design** (`drawOkZKHJ_of_size` at
 `own`). -/
 theorem drawOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd pop : ℕ)
@@ -164,8 +164,8 @@ theorem drawOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.t
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
 /-- **The decoder at the live hidden-output tables at `own`, under `live-verifier`** (`decodesZCJH_liveIP` at
-`RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`), and its draw file, which decodes
-only to `kd` units under the registration's law, the coin server's draws (`drawOkZKHJP_of_size`), at
+`RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`), and its sample file, which decodes
+only to `kd` units under the registration's law, the challenger's live-coin part's samples (`drawOkZKHJP_of_size`), at
 `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd : ℕ)
@@ -184,8 +184,8 @@ theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.
   decodesZCJH_liveIP I own ht dj y₀ wr L hT hCust.1 fun ω =>
     drawOkZKHJP_of_size I own ht hcS law kd n hdiv dj hCust.2 (L.draw ω) (hsz (L.draw ω))
 
-/-- **The coin server's draws are `DrawOkZKHJP` at one table, at the draw's own count**: at a session of one table, a draw
-`S` whose file decodes only to the verifier's draw of `S` under the law `law S` is `DrawOkZKHJP` at `mPtsOf c.g |S|` link
+/-- **The challenger's live-coin part's samples are `DrawOkZKHJP` at one table, at the sample's own count**: at a session of one table, a sample
+`S` whose file decodes only to the verifier's sample of `S` under the sampling design `law S` is `DrawOkZKHJP` at `mPtsOf c.g |S|` link
 points. -/
 theorem drawOkZKHJP_of_count (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (h1 : I.count ≤ 1)
@@ -212,10 +212,10 @@ theorem drawOkZKHJP_of_count (I : Inputs) (own : Option ByteArray) (ht : I.tags.
     rw [hdr] at h
     rw [hdj S D h, drawOf_proved, drawOf_size]
 
-/-- **The decoder at the live hidden-output tables at `own`, at one table, under `live-verifier` at the law of each
-draw** (`decodesZCJH_liveIP` at `RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`),
-and its draw file, which decodes only to the verifier's draw under its law, the coin server's draws
-(`drawOkZKHJP_of_count`) at `mPts` link points, at a sampling design each of whose draws `S` has `mPtsOf c.g |S| = mPts`. -/
+/-- **The decoder at the live hidden-output tables at `own`, at one table, under `live-verifier` at the sampling design of each
+sample** (`decodesZCJH_liveIP` at `RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`),
+and its sample file, which decodes only to the verifier's sample under its sampling design, the challenger's live-coin part's samples
+(`drawOkZKHJP_of_count`) at `mPts` link points, at a sampling design each of whose samples `S` has `mPtsOf c.g |S| = mPts`. -/
 theorem decodesZCJH_custodyAt (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (h1 : I.count ≤ 1)
     (law : Finset (Fin n) → Draw.Law) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}

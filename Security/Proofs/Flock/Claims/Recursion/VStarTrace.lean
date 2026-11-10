@@ -43,7 +43,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The trace assigner places the port inputs (`places_assign`)
 
 The builder `VStarBuild.vstarWit` runs an assigner `A` on a part's circuit at its port inputs. Here `A` is the
-trace the deployed C-Flock prover assigns (`VStar.Trace.assign`, difftested bit for bit against `flock-circuit`'s
+trace the deployed Flock prover assigns (`VStar.Trace.assign`, difftested bit for bit against `flock-circuit`'s
 `Stmt::witness` by `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`), the empty witness where the assigner
 refuses, and `places_assign` is the port lemma for it: under `TraceOk`, each port's row bits sit at their unit input
 columns (`rowHidden`) and each salt at its port's hm96 slot (`hmSalt`), whatever the mask. `placesR_assign` adds what

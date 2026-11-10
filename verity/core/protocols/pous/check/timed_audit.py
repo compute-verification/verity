@@ -1,6 +1,6 @@
-"""The timed audit's verdict of record, two ways: `memory_challenger.verdict` (the Python reference, `protocol.TimedAudit`
-replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedAudit`), on generated records and on the
-records of runs.
+"""The timed audit's verdict of record, two ways: the memory challenger's `timed_audit.verdict` (the Python reference,
+`protocol.TimedAudit` replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedAudit`), on
+generated records and on the records of runs.
 
     uv run python verity/core/protocols/pous/check/timed_audit.py --generated [--out FILE]
     uv run python verity/core/protocols/pous/check/timed_audit.py --replay RUN_DIR... [--out FILE]
@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import random
 import subprocess
@@ -41,21 +40,19 @@ from typing import Any
 from verity_difftest import Server, build, canonical
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 EXE = "pous-timed-audit"
 
 
 def challenger():
-    """`benchmarks/pous/band_gpu/memory_challenger.py`, the reference."""
-    path = ROOT / "benchmarks" / "pous" / "band_gpu" / "memory_challenger.py"
-    spec = importlib.util.spec_from_file_location("pous_memory_challenger", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """`verity.core.devices.memory_challenger.timed_audit`, the reference."""
+    from verity.core.devices.memory_challenger import timed_audit
+
+    return timed_audit
 
 
 def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
-    """`memory_challenger.verdict` by `pous-timed-audit READY LEAVES AUDIT`."""
+    """The memory challenger's `timed_audit.verdict` by `pous-timed-audit READY LEAVES AUDIT`."""
     exe = build(HERE, EXE)
     with tempfile.TemporaryDirectory() as tmp:
         files = [Path(tmp) / name for name in ("ready.json", "leaves.bin", "audit.json")]

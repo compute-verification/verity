@@ -1,4 +1,4 @@
-"""The verifier's plan for an epoch: public, because the verifier's coins and draws are.
+"""The verifier's plan for an epoch: public, because the verifier's coins and samples are.
 
 A `Plan` says which epoch is audited, which devices the challenger wipes and when, which stores it challenges, which
 read windows it opens, how its stores change (`changes`: blocks appended, released and re-keyed under the verifier's

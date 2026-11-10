@@ -21,7 +21,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as RG, registration as R
+from verity.core.protocols.spot.one_stage import partition as P, registered as RG, registration as R
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
@@ -190,7 +190,7 @@ def _client(addr: str, rec: dict, tree: dict | None = None) -> list:
 @pytest.fixture(scope="module")
 def served(tmp_path_factory):
     """`rec_session.serve` on loopback, its challenger returning the fixture's recorded coins in the order the prover's
-    rounds drew them (z_partial's coinless round draws none), and the fake prover's answers."""
+    rounds drew them (z_partial's coinless round samples none), and the fake prover's answers."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
@@ -883,7 +883,7 @@ def test_rs_opening_registers_its_messages_in_the_verifiers_round_order(stacked_
     prover row opens. A prover that exchanges c0 and c1 (the two claims' ring switches, equal in size) registers round 1's row
     as c0 and round 0's as c1, and the verifier's per-row check refuses both; a record whose message sits at a round that
     absorbs none is refused before anything is registered."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     r = stacked_session.read
     program = O.session_program((stacked_session.d / "inner" / "public.json").read_bytes())

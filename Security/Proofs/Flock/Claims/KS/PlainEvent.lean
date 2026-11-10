@@ -49,8 +49,8 @@ is the transport of the run's coins to the live session's:
 
 * `cols_plain`: an accepted plain run's reader looks up table 0's columns at the shape and level 0 `TxNoOff` reads, in
   its live session's rep streams and its proof files.
-* `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and on a statement of draw `d` (which the
-  record's draw then is, as a value: `recordDraw_of_decide`), a run whose reader looks up no column off `C` has
+* `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and on a statement of sample `d` (which the
+  record's sample then is, as a value: `recordDraw_of_decide`), a run whose reader looks up no column off `C` has
   `plainVerdict` at its live outcome and its link's root.
 -/
 
@@ -106,7 +106,7 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
     List.append_nil]
 
 /-- **The deployed event gives `wrP`'s verdict**: an accepting run of `V false` at SHA-512 decides on its messages and
-coins, and on a statement of draw `d`, if the run's reader looks up no column off `C` at table 0, `plainVerdict` holds
+coins, and on a statement of sample `d`, if the run's reader looks up no column off `C` at table 0, `plainVerdict` holds
 at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse `--public-inputs`
 (`publicInputs_none_of_checks`), flock-verify accepts what `wrP` writes for the run (`accepts_wrP`), and that
 transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's

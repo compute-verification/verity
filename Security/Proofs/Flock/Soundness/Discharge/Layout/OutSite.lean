@@ -12,12 +12,12 @@ import Proofs.Flock.Soundness.Refine.Walk
 set_option Elab.async false
 
 /-!
-# The drawn units' returned outputs: the population's
+# The sampled proof blocks' returned outputs: the population's
 
-A drawn statement's outputs are `HmRow.drawn`'s: instance `r`'s `nOut` output words are proved unit `D.proved[r]`'s in
+A sampled statement's outputs are `HmRow.drawn`'s: instance `r`'s `nOut` output words are proved unit `D.proved[r]`'s in
 the registered population's public file (`drawn_outputs`), which holds `n · nOut` words, each below `2^16`
 (`loadPublic_outputs`). So at a proved unit's slot, region "out"'s output `j` of the slot's leaf is the population's
-(`outVal_drawn`), and a satisfying witness holds its bits at the slot's output columns (`out_drawn`; at a drawn unit's
+(`outVal_drawn`), and a satisfying witness holds its bits at the slot's output columns (`out_drawn`; at a sampled proof block's
 site in its table's accepted statement, `out_site`).
 -/
 
@@ -93,7 +93,7 @@ theorem outVal_drawn {c : Circuit} {pop pub : Public} {d : Lean.Json} {D : Draw.
   rw [hsz, ← hpopn]
   nlinarith
 
-/-- **The returned outputs a satisfying witness of a drawn statement holds at a proved unit's slot** are the unit's in
+/-- **The returned outputs a satisfying witness of a sampled statement holds at a proved unit's slot** are the unit's in
 the registered population's public file: in an untyped circuit whose unit returns the outputs, at block `o` and unit slot
 `k` (below `2^⌊log₂ count⌋`) whose instance `o · c.g + k / upv` is proved, the bit at column `16 j + t` of the slot's
 returned-output group is bit `t` of the population's output word `lo[j]` of unit `D.proved[o · c.g + k / upv]`, for the
@@ -129,7 +129,7 @@ theorem out_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
 
 variable {T : Model.Statement}
 
-/-- **The returned outputs at a drawn unit's site are the population's**: in a satisfying witness of an accepted drawn
+/-- **The returned outputs at a sampled proof block's site are the population's**: in a satisfying witness of an accepted sampled
 statement of an untyped circuit whose unit returns the outputs, at a site (`BcSite`: block `o`, template instance `g`, proved unit `u`),
 the bit at column `16 j + t` of the returned-output group of the template instance's copy `u'` is bit `t` of the
 population's output word `lo[j]` of `u`, for the copy's leaf's outputs `lo`, under `out_pinned`'s conditions. -/

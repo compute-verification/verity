@@ -18,7 +18,7 @@ link's backlog; when both are due, ingress first (`active.TICK_ORDER`). It perfo
 it: a write with `drain` is delivered once the write returns, as is each salt frame's write on the salt connection,
 which `connectSalt` opens with `connect`. It closes a stream's connection when it takes the read that ends it, as
 `active.py` closes its writer then, and when both grids have run all their ticks it closes the connections still open
-and the link, as `Proxy.run` does, and returns. With the salt on, it draws every PoUW window's salt from the world's
+and the link, as `Proxy.run` does, and returns. With the salt on, it samples every PoUW window's salt from the world's
 coins before its first tick; the device reads one only once its frame is released.
 -/
 
@@ -47,7 +47,7 @@ def pollNs : Nat := 200000
 
 /-- The salt source of `c`'s salt, if on: one salt of its bits for every PoUW window of the run, from the device's own
 coins. -/
-def drawSalts (w : Core.World Out) (c : Config) : IO Config := do
+def sampleSalts (w : Core.World Out) (c : Config) : IO Config := do
   let some s := c.salt | return c
   let k := max s.pouwWindow 1
   let values ← (List.range ((c.windows + k - 1) / k)).toArray.mapM fun _ => w.coins (s.bits / 8)
@@ -55,7 +55,7 @@ def drawSalts (w : Core.World Out) (c : Config) : IO Config := do
 
 /-- **The driver**, for a proxy that starts at window `start` with its first egress frame at `position`. -/
 def run (w : Core.World Out) (c : Config) (start position : Nat := 0) : IO Unit := do
-  let c ← drawSalts w c
+  let c ← sampleSalts w c
   match c.check start with
   | .error e => throw (IO.userError e)
   | .ok () => pure ()

@@ -13,7 +13,7 @@ commitment to it post-processed by the verifier's sample and the simulator (`aud
 
 * `prob_map_strat`: relabelling the output with the strategy that plays the same moves relabels the event;
 * `Close.trans`, `Close.symm`, `Close.mono`: closeness is a pseudometric's ball, and grows with its radius;
-* `Close.coin`: closeness under a uniform coin drawn first;
+* `Close.coin`: closeness under a uniform coin flipped first;
 * `auditSimAfter`, `auditSim_eq_andThen`: the simulator as a post-processing of the commitment;
 * `Flock.SecurityProofs.GenericSampledZK`.
 -/
@@ -46,7 +46,7 @@ theorem symm {ε : ℝ≥0∞} (h : Close a b ε) : Close b a ε := fun E => ⟨
 theorem mono {ε ε' : ℝ≥0∞} (h : Close a b ε) (hε : ε ≤ ε') : Close a b ε' := fun E =>
   ⟨(h E).1.trans (add_le_add le_rfl hε), (h E).2.trans (add_le_add le_rfl hε)⟩
 
-/-- **Closeness under a uniform coin**: if each coin's two experiments are `ε`-close, so are the experiments that draw
+/-- **Closeness under a uniform coin**: if each coin's two experiments are `ε`-close, so are the experiments that sample
 the coin first and relabel each view by the coin. -/
 theorem coin {Rnd W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W) {ε : ℝ≥0∞}
     (h : ∀ r, Close (a r) (b r) ε) :

@@ -30,7 +30,7 @@ theorem expect_add {Ω : Type} [Fintype Ω] (f g : Ω → ℝ) :
   rw [Finset.sum_add_distrib, add_div]
 
 theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
-  unfold prob
+  unfold prob Claims.prUniform
   simp
 
 /-- An indicator below an event's: its expectation is at most the event's probability. -/

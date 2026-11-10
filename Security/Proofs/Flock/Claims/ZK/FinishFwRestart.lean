@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 /-!
 # A deployed rep's level-0 restart is `Σ y₁'·bFold`
 
-`fwRows_at` takes the firewall's level-0 restart `t'` as `Σ_col y₁'(col)·bFold(col)`. Here that is read off the deployed
+`fwRows_at` takes the ZK server's level-0 restart `t'` as `Σ_col y₁'(col)·bFold(col)`. Here that is read off the deployed
 rep: `repFwC`'s Ligerito on table `j`'s rep `r`, answered by the opened coins (`ligCoin`) from the rep's base, on the
 packed table of the witness's trace (`ligTab`) and the tape's extra lanes, with extra claims at the statement's region
 claims' points.

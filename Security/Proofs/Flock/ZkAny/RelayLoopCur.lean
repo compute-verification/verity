@@ -304,7 +304,7 @@ theorem ofLoop_placeholder (T : ZKMal.CoinLayer.TableData)
 
 open Loop LeanRelease in
 /-- **The configuration at the loop's own frames is of the placeholder's shape**: past `Hello` and the `Commit`, at
-the rep of the round after `h`, the tape's draws and the placeholder's zeros configure the rep alike
+the rep of the round after `h`, the tape's samples and the placeholder's zeros configure the rep alike
 (`cfgAlike_ofBytes`). -/
 theorem ofLoop_cfgAlike (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit

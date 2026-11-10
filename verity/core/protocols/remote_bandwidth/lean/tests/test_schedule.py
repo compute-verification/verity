@@ -1,5 +1,5 @@
 """`schedule.py`'s schedule check held to its Lean (`RemoteAudit.Schedule`, served by `remote-audit-difftest`'s
-`schedule`), refusals as outputs so that both sides' reasons are compared word for word: drawn schedules (registered
+`schedule`), refusals as outputs so that both sides' reasons are compared word for word: sampled schedules (registered
 frees, appended chunks never resident, never freed and freed, passes at increasing steps), each session's passes and
 appends the schedule's or with one fault (a plan steered off the schedule's, a step, a pass or an append missing or
 moved, a schedule that is not one, a schedule over the cap committed before the coins), with malformed inputs
@@ -60,7 +60,7 @@ def as_json(blocks: int, cap: int, sc: schedule.Schedule, passes, appends) -> di
 
 @st.composite
 def inputs(draw) -> dict:
-    """A drawn schedule with its own session's passes and appends and a cap at or above its bits, or one fault (most
+    """A sampled schedule with its own session's passes and appends and a cap at or above its bits, or one fault (most
     often none)."""
     blocks, sc = draw(schedules())
     passes = [(s, list(sc.plan(blocks, s))) for s in sc.steps]

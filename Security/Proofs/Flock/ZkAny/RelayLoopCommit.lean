@@ -11,7 +11,7 @@ there is the deferred release's link. Here is `envPre_loop`'s step at the `Commi
 
 * `LoopModel.length_hist`: the history before the run's `j`-th message has `j` rounds; `LoopModel.msgs_drop_headD`:
   the run's next message past `j` is its `j`-th.
-* `nextD_link`: at the link (round `1`), below the last round, the deferred release is the firewall's own message,
+* `nextD_link`: at the link (round `1`), below the last round, the deferred release is the ZK server's own message,
   whatever the worker sends.
 * **`slotCase_commit`**: where the run's messages are the deferred release's and `J` is kept at the `Commit`, what the
   relay read at the `Commit` is the model's link, whose roots are the level 0 the loop drew for the session, and
@@ -38,7 +38,7 @@ theorem LoopModel.msgs_drop_headD {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (
   unfold LoopModel.msgs
   rw [← List.map_drop, List.drop_eq_getElem_cons hj, List.map_cons, List.headD_cons]
 
-/-- **At the link the deferred release is the firewall's own message**, below the last round, whatever the worker
+/-- **At the link the deferred release is the ZK server's own message**, below the last round, whatever the worker
 sends. -/
 theorem nextD_link {W Rr : Type} (L : LeanRelease W Rr) (n : Claims.Msg → Nat) (wk : L.toSrv.Worker)
     (x : Claims.Msg) (w : W) (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Claims.Msg × Claims.Msg)) (h1 : h.length = 1)
@@ -52,7 +52,7 @@ theorem nextD_link {W Rr : Type} (L : LeanRelease W Rr) (n : Claims.Msg → Nat)
   exact L.frameD_recomp L.fillOf wk x w ρ κ h hk
 
 /-- **The `Commit`'s slot case**: where each of the run's messages is the deferred release's, the run has more than
-two, and `J` is kept at the `Commit`, what the relay read at the `Commit` is the model's link, the firewall's own
+two, and `J` is kept at the `Commit`, what the relay read at the `Commit` is the model's link, the ZK server's own
 message there, whose roots are the level 0 the loop drew for the session; and `LoopP` holds at the next request with
 that message taken, the session having opened one more. -/
 theorem slotCase_commit {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}

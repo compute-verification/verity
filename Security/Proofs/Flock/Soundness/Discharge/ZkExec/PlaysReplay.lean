@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Refine.Zerocheck
 # The masked replay's runs
 
 `zk_replay_plays`: `Zk.replay` refines the model's masked zerocheck and lincheck, with the two masked claims' points.
-The executable draws exactly the clear verifier's coins (§1, §4); its messages are the masked proof's, and its checks
+The executable samples exactly the clear verifier's coins (§1, §4); its messages are the masked proof's, and its checks
 on them are constraints, so nothing it does after a coin depends on whether a check holds.
 
 * `forIn_push`: a loop that consumes one one-coin round per step and pushes that coin keeps the coins, in order.

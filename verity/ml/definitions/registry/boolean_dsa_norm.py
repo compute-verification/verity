@@ -1,11 +1,16 @@
 """`dsa_norm`'s RMSNorms on bits: `DsaRMSNorm_v2{N, EPS}` and `TritonBlockRMSNorm_v2{N, BLOCK, WARPS, EPS}`, `dsa_norm.rms_norm` over
 `boolean_dsa.bit_ops` (core's Boolean FP32 pieces: `Bf16ToF32`, `F32Fma`, `F32Mul`, `F32Add`, `DivFullScaleA`, `DivFullRcp`,
-`RsqrtApprox`) and `F2fpBf16_v2`, each traced as one circuit (`boolean_dsa.flat`), so its word view is the `_v1` at the same statics."""
+`RsqrtApprox`) and `F2fpBf16_v2`, each traced as one circuit (`boolean_dsa.flat`), so its word view is the `_v1` at the same statics.
+`DsaLatentRow_v2{KVL, R, EPS}` is `DsaLatentRow_v1` on bits, a composite of `DsaRMSNorm_v2` and `boolean_rope.RoPEHeadGptJ_v3`."""
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
+from verity.ml.definitions.registry import boolean_rope as BR
 from verity.ml.definitions.registry import dsa_norm as DN
 from verity.ml.definitions.registry.boolean_dsa import bit_ops, flat
 
@@ -30,4 +35,17 @@ TritonBlockRMSNormV2 = flat("TritonBlockRMSNorm", 2, ["N", "BLOCK", "WARPS", "EP
                             lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)), _block_rms,
                             DN.TritonBlockRMSNorm)
 
-BOOLEAN_DSA_NORM = [DsaRMSNormV2, TritonBlockRMSNormV2]
+def _latent(B, S, kv, w, cs):
+    """`DsaLatentRow_v1` on bits: `DsaRMSNorm_v2{KVL, EPS}` of kv's first KVL words, then `boolean_rope.RoPEHeadGptJ_v3{R}` of its
+    last R, as one row."""
+    kvc = B.call(bind(DsaRMSNormV2, N=S.KVL, EPS=S.EPS), kv[0:S.KVL], w)
+    kpe = B.call(bind(BR.RoPEHeadGptJ, D=S.R), kv[S.KVL:S.KVL + S.R], cs)
+    return Coll(Array(S.KVL + S.R, BF16), concat([kvc.refs, kpe.refs]))
+
+
+DsaLatentRowV2 = EW.on_bits(
+    "DsaLatentRow", 2, ["KVL", "R", "EPS"],
+    lambda S: ((("kv", Array(S.KVL + S.R, BF16)), ("w", Array(S.KVL, BF16)), ("cs", Array(S.R, BF16))), Array(S.KVL + S.R, BF16)),
+    _latent, DN.DsaLatentRow)
+
+BOOLEAN_DSA_NORM = [DsaRMSNormV2, TritonBlockRMSNormV2, DsaLatentRowV2]

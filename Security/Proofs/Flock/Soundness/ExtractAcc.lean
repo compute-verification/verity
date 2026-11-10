@@ -4,7 +4,7 @@ public import Definitions.Flock.Extract
 public import Definitions.Flock.Rewinding
 public import Mathlib.Analysis.Complex.Exponential
 public import Proofs.Flock.Soundness.Extract
-public import Proofs.Flock.Soundness.Game.Runs
+public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
@@ -13,7 +13,6 @@ import Mathlib.Analysis.Normed.Field.Basic
 import Mathlib.Data.EReal.Inv
 import Mathlib.Logic.Equiv.PartialEquiv
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Expect
 meta import Lean.Meta.Tactic.NormCast
 
 /-!
@@ -22,7 +21,7 @@ meta import Lean.Meta.Tactic.NormCast
 The expected-time extractor (DESIGN.md §3) runs the session once and, only if that run accepts,
 reruns until `k` reruns have accepted: `1 + k` runs in expectation, whatever the acceptance
 probability `ε`, and no estimate of `ε`. Its accepted reruns are `k` independent runs conditioned
-on all accepting, and it fills its table from them (`firstTable`). `expectAcc` is that law, written
+on all accepting, and it fills its table from them (`firstTable`). `expectAcc` is that sampling design, written
 without the loop: `k` independent runs weighted by their acceptance, over `ε^k`.
 
 Against it, an accepted fresh run opens a position off the table in one of two ways
@@ -47,7 +46,7 @@ open Game Rewinding
 
 variable {β P V : Type}
 
-/-- **The law of `k` independent accepted runs**: the expectation of `F` over the extractor's
+/-- **The sampling design of `k` independent accepted runs**: the expectation of `F` over the extractor's
 accepted reruns, as `k` runs weighted by their acceptance, over `ε^k`. It is zero when `ε = 0`. -/
 noncomputable def expectAcc (g : Game β) (s : Strategy g) (acc : β → Prop) (k : ℕ)
     (F : List β → ℝ) : ℝ :=

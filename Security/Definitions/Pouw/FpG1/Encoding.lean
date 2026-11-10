@@ -51,7 +51,7 @@ integer level `R` that the honest prover picks on a format's integer grid, plus 
   below when `v − lo ≤ hi − v`). It is the honest encoder's choice only. No check reads it: GPTQ and a clip search
   pick other levels on the same grid, and the Program checks the level's grid, not how it was picked.
 * `Coin`: a live fair coin, `0` or `1`, the record's operand bit (co32c's).
-* `Entry`: an operand entry as a proof unit's values carry it: FP8-g1's E4M3 level and coin, W4A8-g1's weight (an
+* `Entry`: an operand entry as a proof block's values carry it: FP8-g1's E4M3 level and coin, W4A8-g1's weight (an
   integer UE4M3 block scale `m`, a doubled E2M1 level `q` and a coin), or the record's Dither int8 activation (`⌊v⌋`
   and its coin, served uncentred). `Entry.int` is what the int8 MMA reads, `Entry.offset` the centring (`½`, `½`,
   `0`) and `Entry.served = Entry.int − Entry.offset` the value the served model multiplies.
@@ -105,7 +105,7 @@ abbrev Coin : Type := Fin 2
 plus the coin. -/
 def fp8 (B : ℕ) (s x : ℚ) (b : Coin) : ℤ := rn (e4m3Grid B) (x / s) + (b : ℕ)
 
-/-- **An operand entry** as a proof unit's values carry it:
+/-- **An operand entry** as a proof block's values carry it:
 * `fp8 R b`: FP8-g1, an E4M3 integer level `R` and its coin, served `R + b − ½`;
 * `fp4 m q b`: W4A8-g1's weight, an integer UE4M3 block scale `m`, a doubled E2M1 level `q` and its coin, served
   `m·q + b − ½`;

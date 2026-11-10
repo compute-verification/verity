@@ -40,7 +40,7 @@ import Proofs.Flock.Claims.KS.ConflictTied
 /-!
 # The fork's coin coupling at a simulator of uniform functions
 
-`ForkSlack` asks for the coupling of the fork's coin law (`ForkCoinCoupling`) at a simulator's coins; `FnFork` proves
+`ForkSlack` asks for the coupling of the fork's coin distribution (`ForkCoinCoupling`) at a simulator's coins; `FnFork` proves
 it at `fnAt`, a tape of uniform functions of the live coins' history read through a prefix key
 (`FnFork.fnAt_coupling`). Here the two meet, in `ForkSlack`'s closure:
 

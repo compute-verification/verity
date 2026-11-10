@@ -148,9 +148,9 @@ def PlainAccPrRdR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
             Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧
               u ≠ C p
 
-/-! ## The draw -/
+/-! ## The sample -/
 
-/-- **`checksAtJ` refuses a session without a draw** (`drawLaw false tags none`). -/
+/-- **`checksAtJ` refuses a session without a sample** (`drawLaw false tags none`). -/
 theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
     (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : ∃ d, s.read.draw = some d := by
@@ -164,7 +164,7 @@ theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link
   | none => simp [hd, ProvedScope.drawLaw] at h
   | some d => exact ⟨d, rfl⟩
 
-/-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a draw** (`decideR_sha512`,
+/-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a sample** (`decideR_sha512`,
 `checksAtJ_drawSome`). -/
 theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
@@ -177,7 +177,7 @@ theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
     obtain ⟨d, hd⟩ := checksAtJ_drawSome hc
     exact ⟨s, spec, sts, d, actR_setupOf ha, hd⟩
 
-/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a draw** (`accK_draw` at `VR rd`). -/
+/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a sample** (`accK_draw` at `VR rd`). -/
 theorem accR_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
     (hacc : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) :
     ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
@@ -287,7 +287,7 @@ def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover
         #[]
 
 open Classical in
-/-- **The plain mixture's first bound at the statement's draw, from a simulation, at `VR rd`**
+/-- **The plain mixture's first bound at the statement's sample, from a simulation, at `VR rd`**
 (`plain_first_of_simDK`'s proof, at `plainVerdictAtJK id` by `plainVerdictAtJK_of_runR`, with `colsRV rd` the run's
 columns by `PlainRConflict`'s `colsRV_run`). -/
 theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
@@ -638,7 +638,7 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
 
 open Classical in
 /-- **What the bound at `VR rd` still reads off the simulation and the decoders**, at every plain statement in scope
-that sets up at a draw, its one table's `fast100` schedule and layout: a leaf, openings and decoders of the table
+that sets up at a sample, its one table's `fast100` schedule and layout: a leaf, openings and decoders of the table
 (`hdec`, at `plainVerdictAtJK id`), and at each prover `P` and tape `ω` a simulator `P'` of `P` (`PlainSimR`) whose
 self-clashes are `VR rd`'s collisions (`PlainClashRunR`) and whose later-level openings are rows an accepting run of
 `VR rd` opens (`plainRawLevelColsRV`, `plainRel_ofK`'s conclusion). -/

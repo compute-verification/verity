@@ -61,7 +61,7 @@ its root at its position, so two of them at one tree and position are one row's 
 (`Accounting.TS.Lanes.rowsAgree_or_leafColl`), which the leaf layer's relation admits (`LeafColl`).
 
 Like `Accounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package, so it sits
-here until C-Flock's spec is extracted.
+here until Flock's spec is extracted.
 -/
 
 @[expose] public section
@@ -80,7 +80,7 @@ accumulator can clamp, so `z` need not be the exact dot, and the verifier refuse
 wires, if the `ok` word that `decL` reads from `vals`' port rows (`portRead`) is `1`, then `decL`'s view of them meets
 `LaneOk` at `dq` and `part`: its partials row is the honest one at its rows, its public inputs and its index, and each
 of its 32 cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]`. At the combine's session `sess none`, whose circuit is
-`PouwH1Combine_v1{TILE}`'s at `K ≥ 384` (`h1zy.LEAST_K`, the least `K` at which C-Flock proves the combine), the same
+`PouwH1Combine_v1{TILE}`'s at `K ≥ 384` (`h1zy.LEAST_K`, the least `K` at which Flock proves the combine), the same
 holds of `decC`'s view with `CombineOk`: the rows' XOR in lane order is the receipt.
 
 It reads every port row, registered or not, and asks nothing of `own`: that every port the decodes read (`ok`'s cone,

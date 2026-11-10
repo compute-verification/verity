@@ -157,7 +157,7 @@ theorem stagesAccept_of_runs
     ((wmsg (layers zs dg N k Rw R ω t R₂ τ)).zip (t.map Prod.snd)) (hfiles R ω t R₂ τ o h) (hruns R ω t R₂ τ o h halg)
 
 /-- **VBridge G on the verifier's own definitions**, from the pieces still open: `vbridge_compiled` at `ℐ`, with
-`StagesAccept` from one table's files and both reps' runs (`stagesAccept_of_runs`) and `VFullR` from V*'s full draw
+`StagesAccept` from one table's files and both reps' runs (`stagesAccept_of_runs`) and `VFullR` from V*'s full sample
 (`vFullR_of_read`). -/
 theorem vbridge_exec
     (zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

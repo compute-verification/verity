@@ -1,7 +1,7 @@
 # The stacked share of live KV
 
 How much of a node's live KV a prover could hold as encoded carriers inside the honest compute budget the audit allows. That's
-the stacking law, read in bytes:
+the stacking sampling design, read in bytes:
 
     stock(L) = 128 R_cap L / E + R_in L        f = stock(L) / M_dyn
 
@@ -42,7 +42,7 @@ At f ≥ 1 no KV is credited.
   allow at each E, and the c the stated life allows (the witness's `c ≤ 0.442`, `E ≥ 364,497` restated at the new E).
 - `job.sh` builds the exact-int8 8B request Program (LP=256, T=31) on one GPU and runs `units.py` on it (`DESCRIPTOR=PATH`
   skips the Build and needs no GPU).
-- `beta.py DESCRIPTOR.json.gz --out beta.json [--chunk N ...]` bounds the stacked share by a min cut instead of the law's
+- `beta.py DESCRIPTOR.json.gz --out beta.json [--chunk N ...]` bounds the stacked share by a min cut instead of the sampling design's
   rate. The graph is the Program's root Calls over its census/v1 steps. A value a later step reads is a dynamic-memory
   write, and each read is an edge from the Call that made it. Over cuts (U, D) with every write on D's side:
 
@@ -78,7 +78,7 @@ a throughput int8 serving hasn't been measured at.
 
 ## Frontier models
 
-The same law for models no Program has been built for (DeepSeek-V3/R1, DeepSeek-V3.2-Exp, Kimi K2, Qwen3-235B-A22B,
+The same sampling design for models no Program has been built for (DeepSeek-V3/R1, DeepSeek-V3.2-Exp, Kimi K2, Qwen3-235B-A22B,
 Qwen3-Next, GLM-4.5/4.6, GLM-5.3, MiniMax-M1/M2, with the Llama-3.1 baseline), each costed as the exact-int8 profile would
 serve it:
 

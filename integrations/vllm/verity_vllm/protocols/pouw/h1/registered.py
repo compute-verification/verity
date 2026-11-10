@@ -10,7 +10,7 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
 * **The commit strings.** ``b = x ⊕ M y`` gathers hm96's byte tables over every row (`hm96.batch.masks`), ``c``
   and the tree leaf hash from the instance's one-block prefixes, and the frame-v3-sha512 leaves, nodes and pads from
   their tag's and domain's constant prefix (`merkle.frame_hash`'s message), so a row costs a few short SHA-512 calls.
-* **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are drawn again on read
+* **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are sampled again on read
   (`Salts`, or a public table's `PublicSalts`), and the rows are kept only with ``keep_rows`` (`Rows`), or stand for
   themselves (``rows``, a public table's, built again on read): a window's call tables and its own ``b/<K>`` are
   rebuilt by the prover from what it keeps (`pouw_h1_prover.keep_call`, its weights), so `Served` keeps none of their
@@ -43,7 +43,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.pouw.audit import hm96_salt
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch
 from verity.ml.commitments.merkle import merkle_depth
@@ -140,7 +140,7 @@ class _Frame:
 
 
 class Salts(Sequence):
-    """A registered value's salts, drawn again on read: item j is `audit.hm96_salt(key, nonce, j)`; `at` draws many at
+    """A registered value's salts, sampled again on read: item j is `audit.hm96_salt(key, nonce, j)`; `at` samples many at
     once."""
 
     def __init__(self, key: bytes, nonce: int, n: int) -> None:
@@ -157,7 +157,7 @@ class Salts(Sequence):
         return hm96_salt(self.key, self.nonce, j % self.n)
 
     def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
-        """Items ``positions`` (each in [0, n)) concatenated, drawn in one pass (`hm96.batch.salts`)."""
+        """Items ``positions`` (each in [0, n)) concatenated, sampled in one pass (`hm96.batch.salts`)."""
         at = np.asarray(positions)
         if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
             raise IndexError(f"a position outside the value's {self.n} rows")
@@ -175,7 +175,7 @@ class PublicSalts(Sequence):
     """A public table's salts, which anyone derives: item j is position ``first + j``'s, ``SHA-512(head || u64be(first +
     j) || u8(i))`` for i = 0, 1, 2 (`core_check.public_row_salt`, ``head`` its domain, context length and context), or
     with ``ok`` ``SHA-512(head || u64be(first + j) || u32be(i))`` (`core_check.ok_salt`, ``head`` its tag, context and
-    0), drawn on read; `commit` derives them where it hashes (`public_salts`). Distinct positions, so no salt is
+    0), sampled on read; `commit` derives them where it hashes (`public_salts`). Distinct positions, so no salt is
     reused."""
 
     head: bytes

@@ -162,11 +162,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "whose ops are charged to accounts other than the compute account", "Rate device"),
     # falsified by a partial completion cheaper than x * c_enc / b: x bits of a word of E, rebuilt from setup, the weights
     # they encode and the rest of the word, in less than that of the compute account's units, by any schedule. At k = 2
-    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits (r20261012-163319-2804), and fplll, the
-    # best of five reducers, costs 12.3x the claim at 512 bits (r20261012-164518-ccba); the 1.2x at the reduction's
-    # operation-count floor is an estimate from operation counts, unmeasured (r20261012-170958-f49a). At k = 1 with the
-    # payload known, F27 (r20261012-132841-565e) is such a completion, at a floor of half a GMP extended GCD
-    # (r20261012-164518-ccba). In partial-completion form it is `Accounting.Assumptions.WorkHardness`
+    # the red team's 4-dimensional lattice completes a tail of up to b/10 bits, and fplll, the best of five reducers,
+    # costs more than the claim at 512 bits, as does the reduction's operation-count floor, an estimate from operation
+    # counts, unmeasured. At k = 1 with the payload known, F27 is such a completion, at a floor of half a GMP extended
+    # GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
     # (Security/Definitions/Accounting/Assumptions/RateAudit.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
@@ -267,10 +266,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's modelled floor
-    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
-    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
-    # stated device falsifies it
+    # the timing red team's modelled floor and the 8-core cooperation run; a faster squaring on the stated device
+    # falsifies it
     Entry("pous-ring-speed", "assumption",
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
           "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
@@ -284,14 +281,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
-    # `Pouw.PearlC.GγPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open hypothesis
-    # of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced); it implies
-    # the γ-gap property Gγ itself (Pouw.PearlC.W1Stop.gγ_of_withStop)
+    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (Security/Definitions/Pouw/PearlC/W1Stop.lean): the one open
+    # hypothesis of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
+    # it implies the gap property GGap itself (Pouw.PearlC.W1Stop.gGap_of_withStop)
     Entry("pouw-gamma-per-coin", "assumption",
-          "Pearl-C's γ-gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
+          "Pearl-C's gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
-          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
-          "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
+          "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − g) at the gap g "
+          "is at most δ(q, N)", "PoUW gap per coin", "conjectured"),
     # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
     # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
     # and its sm_120 instances) read the verifier's clock in the cost model
@@ -314,7 +311,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
           "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
           "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
-    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
@@ -525,7 +522,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on under option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "

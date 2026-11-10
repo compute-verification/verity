@@ -7,11 +7,11 @@ import all Init.Data.String.Defs
 import all Init.Data.Array.DecidableEq
 
 /-!
-# Two runs of the firewall's prover alike in shape
+# Two runs of the ZK server's prover alike in shape
 
 The loop's release runs each rep's frame on the rep's scheduled rounds at placeholder inputs (a zero level 0 of the
 statement's shape, zero salts for levels ≥ 1), and the deployed frame checks the device against the scheduled rounds at
-the tape's. Both are the firewall's own prover (`Finish.repPiop`,
+the tape's. Both are the ZK server's own prover (`Finish.repPiop`,
 `Finish.repOpening`) run at two inputs of one shape, and the frame's state reads a round's shape alone (`FrameShape`), so
 what is left is that the two runs send rounds of one shape. The prover is generic in its monad, so the comparison is
 too:
@@ -1024,7 +1024,7 @@ section Skel
 
 open _root_.Flock.Firewall.Skeleton (RecM recAsks padsFrames)
 
-/-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins drawn, rounds of one shape. -/
+/-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins flipped, rounds of one shape. -/
 def RecP (h h' : ByteArray × ℕ) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
   s.2 = s'.2 ∧ RoundsAt s.1 s'.1 ∧ s.1[0]? = some h ∧ s'.1[0]? = some h'
 
@@ -1248,7 +1248,7 @@ commitments of one shape. -/
 def TabAlike (t t' : _root_.Flock.Firewall.Finish.Tab) : Prop :=
   t.st = t'.st ∧ t.sch = t'.sch ∧ t.tPad = t'.tPad ∧ t.g.size = t'.g.size ∧ CapAlike t.cm0 t'.cm0
 
-/-- **Two level 0s the loop draws at one `m`**, of packed tables of one size, give tables of one shape, or are both
+/-- **Two level 0s the loop samples at one `m`**, of packed tables of one size, give tables of one shape, or are both
 refused. -/
 theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
     {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l)

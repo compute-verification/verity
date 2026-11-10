@@ -38,7 +38,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 # The compiled verifier's scope refusals
 
 At `deployRec` the inner session's record and the V* sessions' records are run messages, so the recursion's shape and
-draw conditions are not on the statement: the compiled verifier checks them when each V* session decides, on the
+sample conditions are not on the statement: the compiled verifier checks them when each V* session decides, on the
 statement the prover staged. This file proves those refusals from the shipped code.
 
 * **Shape.** A staged V* statement holds the verifier's own inner shape (`--rec-inner`) and the inner statement's files
@@ -46,10 +46,10 @@ statement the prover staged. This file proves those refusals from the shipped co
   `RecCoins.checkAtC3`, on what `x` carries (`checkAtC3_staged`); `readX` has already run `RecVStar.statements` on that
   shape. So a session decision the compiled verifier doesn't refuse has the setup's checks accept the statement's inner
   shape (`RecScope.accepts`, on `readOf`).
-* **Draw.** At a decision, a record without a draw fails the custody checks (`checks_recordDraw`: `drawEq` against the
-  statement's draw, and `ProvedScope.drawLaw` refuses a draw-less statement), and the verdict's full-draw refusal
+* **Sample.** At a decision, a record without a sample fails the custody checks (`checks_recordDraw`: `drawEq` against the
+  statement's sample, and `ProvedScope.drawLaw` refuses a draw-less statement), and the verdict's full-draw refusal
   (`fullDrawO`, `RecSetup.fullDraw`) runs under the staged statement's inner shape, which is `x`'s. So the record's
-  draw passes `RecScope.fullDrawOk`, hence is `DrawRecord.Full` (`RecScope.fullDrawOk_iff`).
+  sample passes `RecScope.fullDrawOk`, hence is `DrawRecord.Full` (`RecScope.fullDrawOk_iff`).
 
 `decide_scope` is the two at one session decision; `decide_inScope` puts them, with the dense form below, in
 `RecScope`'s statement: `InScope` of what the verifier reads with the decided records (`RecScope.inScope_iff`).
@@ -227,9 +227,9 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
         rw [← hsrc, filesOf, hpj]
         exact ⟨rfl, rfl, rfl⟩
 
-/-! ## The draw at a decision -/
+/-! ## The sample at a decision -/
 
-/-- **The custody checks refuse a record without a draw**: its draw must be the statement's (`drawEq`), and a
+/-- **The custody checks refuse a record without a sample**: its sample must be the statement's (`drawEq`), and a
 statement without one is refused (`ProvedScope.drawLaw`). -/
 theorem checks_recordDraw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
@@ -257,7 +257,7 @@ variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Cl
 /-- **The compiled verifier refuses a session decision out of scope.** Where session `s`'s outer verifier decides on
 the final message `f`, the compiled verifier answers other than `.rej` only where the setup's checks accept the inner
 shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` and
-`RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record draws every unit of its population (`RecScope.fullDrawOk` under that shape:
+`RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record samples every unit of its population (`RecScope.fullDrawOk` under that shape:
 `ProvedScope.drawLaw` in the custody checks, then `RecSetup.fullDraw`). -/
 theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
@@ -334,7 +334,7 @@ def Decided (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (st : St
 
 /-- **The decided records are in scope**: for records `recs`, at least one, each the final record of a session
 decision of `x` that the compiled verifier doesn't refuse, what the verifier reads of `x` with those records is in
-`InScope`: the inner shape candidate 3's and dense, and every draw `DrawRecord.Full` (`RecScope.inScope_iff`). -/
+`InScope`: the inner shape candidate 3's and dense, and every sample `DrawRecord.Full` (`RecScope.inScope_iff`). -/
 theorem decide_inScope (H : Claims.Msg → Claims.Msg) {r : XR} (hr : readX x = some r) {recs : List String}
     (hne : recs ≠ []) (hd : ∀ rec ∈ recs, Decided H IV st x rec) :
     Claims.Recursion.InScope (RecScope.toStmt { readOf r with records := recs }) := by

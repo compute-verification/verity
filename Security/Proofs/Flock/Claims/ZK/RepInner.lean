@@ -38,14 +38,14 @@ import Proofs.Flock.Claims.ZK.FinishSrc
 # The cut rep's inner proof returns on its coins alone
 
 Answered by `asksCut`, the inner proof sends four bodies (`ε`, the batching coins, `β`, the query coins), and its only
-refusal past them reads the coin `β`. The firewall's `innerP` also stops on a batched constraint that fails and commits
-to `τ`, neither of which sends; the cut's `innerCut` does neither. So where the firewall's inner proof returns, the
+refusal past them reads the coin `β`. The ZK server's `innerP` also stops on a batched constraint that fails and commits
+to `τ`, neither of which sends; the cut's `innerCut` does neither. So where the ZK server's inner proof returns, the
 cut's returns from a log of the same size, with a log of the same size, whatever either reads.
 
 * **Steps** (`fw_coined`, `fw_sampleVecP`, `fw_throw_bind`, `fw_lift_pure_bind`): a step whose return reads only the
   log's size returns the same on both sides; two batching squeezes of nonzero sizes both send one body; a throw on the
   left returns nothing; a pure step on the left sends nothing.
-* **`innerP_cut_fw`**: the firewall's inner proof and the cut's, from logs of one size.
+* **`innerP_cut_fw`**: the ZK server's inner proof and the cut's, from logs of one size.
 -/
 
 @[expose] public section
@@ -96,8 +96,8 @@ theorem fw_lift_pure_bind {S : γ → δ → Prop} {a : α} {f : α → TMW PS �
   rw [bind_go (x := StateT.lift (pure a)) rfl]
   exact h
 
-/-- **The cut's inner proof returns where the firewall's does**: answered by `asksCut`, from logs of one size, where
-the firewall's `innerP` at SHA-512 returns, `innerCut` from any source, commitment, `final_c` and constraints returns,
+/-- **The cut's inner proof returns where the ZK server's does**: answered by `asksCut`, from logs of one size, where
+the ZK server's `innerP` at SHA-512 returns, `innerCut` from any source, commitment, `final_c` and constraints returns,
 with a log of the same size. -/
 theorem innerP_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h : ByteArray → ByteArray) (lay : Zk.PadLayout) (p : PadsZk)
     (ic ic' : InnerCommit) (finalC finalC' : F128) (src : RepSrc) (cons cons' : Array (String × Zk.Lin))

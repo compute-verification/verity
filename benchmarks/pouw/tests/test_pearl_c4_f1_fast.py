@@ -1,4 +1,4 @@
-"""`f1_fast`, the verifier's vectorised F1′: its noise law is the reference's to float rounding, and its evaluation
+"""`f1_fast`, the verifier's vectorised F1′: its noise distribution is the reference's to float rounding, and its evaluation
 of C (certified modal byte, 4-lookup lower bound on p_t, safe-side charge for uncertified blocks) is the rule's
 (`pearl_c4.change_probabilities`) to float rounding on every row checked, with R1's decisions unchanged."""
 from __future__ import annotations

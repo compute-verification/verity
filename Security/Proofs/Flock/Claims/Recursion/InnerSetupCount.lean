@@ -53,10 +53,10 @@ accepts, and it holds for every hash `h`, not only SHA-512 (`innerSetupCalls_le_
 
 * `Stmt.setupTablesWith`'s calls are at most `innerB = 12 + 1024 · perRow 17`, where `perRow K = (K + 3) · 2^K`
   (`innerTables_cost`), from `SetupCount.setupHidden_cost` at the circuit's ports (at most `1024`), the public file's
-  shared-row tables (at most `2^17` rows each) and the drawn population (at most `2^17`);
+  shared-row tables (at most `2^17` rows each) and the sampled population (at most `2^17`);
 * those three are functions of the files alone, whatever the hash (`SetupValues`), so the bounds the verifier
   establishes at SHA-512 hold at `h`: the ports from `checkInRange`'s regions (`read_setup_in`, `regions_size`), and
-  the rows and the files' statement's `n`, which the draw's population is (`Layout.drawn_spec`), from
+  the rows and the files' statement's `n`, which the sample's population is (`Layout.drawn_spec`), from
   `RecBudget.innerRows` (`checkShape_rows`);
 * `innerB = 12 + 5 · 2^29 ≤ 2^32` (`innerB_le`).
 
@@ -84,7 +84,7 @@ theorem innerB_le : innerB ≤ 2 ^ 32 := by
   norm_num
 
 /-- **`Stmt.setupHiddenWith`'s calls at the inner statement, in any hash**: at most `10 + 1024 · perRow 17`, where at
-SHA-512 the drawn statement (`hst`) has at most `1024` regions and the undrawn one (`hst'`) at most `2^17` instances
+SHA-512 the sampled statement (`hst`) has at most `1024` regions and the unsampled one (`hst'`) at most `2^17` instances
 and `2^17` rows in each shared-row table. -/
 theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : ByteArray} {d : Json} {co co' : Coins}
     {pa pa' : Option Json} {pr pr' : Option ByteArray} {st st' : Stmt} (ht : tags.typed = false)

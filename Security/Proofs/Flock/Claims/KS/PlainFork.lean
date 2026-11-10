@@ -192,7 +192,7 @@ theorem not_opensAtL_nul {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List U
 open Flock FlockSoundness.Discharge
 open Lean (Json)
 
-/-- The decoders `plainAdv` reads: right, at the verdict at the draw, for accepting with no level-0 opening off `C`
+/-- The decoders `plainAdv` reads: right, at the verdict at the sample, for accepting with no level-0 opening off `C`
 unless it self-clashes. -/
 abbrev PlainHDec {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level)
     (rest : List Accounting.Level) (ext : ℕ) (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -256,7 +256,7 @@ def PlainAlignQ {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (l
       _ (plainSimAt L m k0 l₀ l₁ rest ext hsch hm hlay I d x opn hdec hw P ω C u)
 
 /-- **The live fork event at the concrete simulator**: the live outcomes at live coins `r₁` and `r₂` decode, at the
-verdict at the draw, to outputs with `ForkEvL` at rep `r`'s level `ℓ + 1`. -/
+verdict at the sample, to outputs with `ForkEvL` at rep `r`'s level `ℓ + 1`. -/
 def PlainLiveFork {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
@@ -400,7 +400,7 @@ theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainFo
 /-! ## At `VK keep`
 
 The concrete simulator's fork advantage at every `keep`: `plainSimK keep`, the runs of `VK keep` and the verdict at the
-draw `plainVerdictAtK keep`. The originals read `plainVerdictAt`, which `plainVerdictAtK id` is not definitionally, so
+sample `plainVerdictAtK keep`. The originals read `plainVerdictAt`, which `plainVerdictAtK id` is not definitionally, so
 they stay beside these. -/
 
 /-- The decoders `plainAdvK keep` reads (`PlainHDec` at `plainVerdictAtK keep`). -/

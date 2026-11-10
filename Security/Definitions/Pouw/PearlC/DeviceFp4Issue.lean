@@ -5,8 +5,8 @@ public import Definitions.Pouw.PearlC.DeviceFp4
 /-!
 # Pearl-C4's prices on sm_120 at the issue-bound FP32 price (definitions only, staged)
 
-`Fp4Prices.sm120` prices Pearl-C4's FP32 operations at the measured in-loop 8.38 FP8 units. γ's price rule also
-computes γ at the issue-bound 8.00 (`Prices.sm120`'s FADD), at the prices this file holds, in FP4 units (an FP8 unit is
+`Fp4Prices.sm120` prices Pearl-C4's FP32 operations at the measured in-loop 8.38 FP8 units. The gap's price rule also
+computes g at the issue-bound 8.00 (`Prices.sm120`'s FADD), at the prices this file holds, in FP4 units (an FP8 unit is
 2):
 * a BF16 MAC is 4;
 * `fs = 5429/50 = 108.58`, made up of:
@@ -56,8 +56,8 @@ record, and at `1047/125` the in-loop one. -/
 def Fp4Prices.sm120At (fadd : ℚ) (p : Fp4ScalePath) : Fp4Prices :=
   ⟨4, 64 + p.fixed + p.fp32Ops * fadd / 8 + 2 * fadd + 16, 2 * fadd + fadd / 4⟩
 
-/-- **Pearl-C4's γ at an FP4 record** under the cap `ρ`: `1 − (399/400)/ω` with `ω = wrefFp4/((1 − ρ)·creditFp4)`. -/
-def gammaFp4 (d : Fp4Device) (ρ : ℚ) (s : Shape) : ℚ :=
+/-- **Pearl-C4's gap at an FP4 record** under the cap `ρ`: `1 − (399/400)/ω` with `ω = wrefFp4/((1 − ρ)·creditFp4)`. -/
+def gapFp4 (d : Fp4Device) (ρ : ℚ) (s : Shape) : ℚ :=
   1 - (1 - 1 / 400) / (wrefFp4 d s / ((1 - ρ) * creditFp4 d s))
 
 end Pouw.PearlC

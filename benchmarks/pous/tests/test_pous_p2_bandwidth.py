@@ -156,7 +156,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
 
 def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_path) -> None:
     """The verifier's plan, sent with its registration, is what the prover reads and commits: the toy's units 0, 1 and
-    4 to 6, every receipt drawn, accepted with those receipts alone."""
+    4 to 6, every receipt sampled, accepted with those receipts alone."""
     reg = B.toy(tmp_path / "toy")
     doc = json.loads((tmp_path / "toy" / "registration.json").read_text())
     assert doc["plan"] == [[0, reg.blocks]]

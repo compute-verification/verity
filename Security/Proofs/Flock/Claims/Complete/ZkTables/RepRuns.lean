@@ -49,7 +49,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.Trace
 /-!
 # The masked prover's rep: its round count
 
-* `zkSchedule_q`: every level of a `--zk` schedule draws queries.
+* `zkSchedule_q`: every level of a `--zk` schedule samples queries.
 * `rep_rounds`: given level 0's verifier premise (`Level0.Verifier`), a masked rep that returns records `repRoundsT`
   rounds. The verifier's masked Ligerito, on the prover's rounds, ends where the prover's did (`Level0.Verifier`),
   which is `k_0 + 7 + 11 R` rounds on (`zkLigeritoWith_pos`), and the inner proof adds four.

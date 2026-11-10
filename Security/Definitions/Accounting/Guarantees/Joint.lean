@@ -13,10 +13,10 @@ coins is at most the three errors summed (`Joint`). Because every step fits the 
 holds for the other accounts being beyond a residual on every one of its audit's own coins: F·T − W_cert of work,
 BW·T − Q_cert of reads and M − S_cert of capacity on average (`CovertResidual`).
 
-Both bound an account's worst case over its audit's own coins, not its charge at the coins drawn. Outside the error, in
+Both bound an account's worst case over its audit's own coins, not its charge at the coins flipped. Outside the error, in
 an accepted run, `Joint` says each account reaches its certificate on some coin of its audit, and `CovertResidual` that
 some coin of each audit leaves the other accounts within its residual. A device could do little charged work and a lot
-of covert work on a few of the compute coins. The per-run reading, at the coins drawn, is `JointPerRun` and
+of covert work on a few of the compute coins. The per-run reading, at the coins flipped, is `JointPerRun` and
 `CovertResidualPerRun` (`Definitions.Accounting.Guarantees.PerRun`).
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Joint`).
@@ -31,8 +31,8 @@ open Accounting
 /-- **The joint guarantee.** On any device and any run of a joint audit on it whose compute, bandwidth and capacity
 audits have their guarantees at certificates `W`, `Q` and `S` with errors `εW`, `εQ` and `εS`, the probability over the
 three audits' coins that every audit accepts and some audit's account is below its certificate on every one of the
-audit's own coins (at the other audits' coins drawn) is at most `εW + εQ + εS`. This bounds the account's worst case
-over its audit's own coins, not its charge at the coin drawn; that per-run reading is not claimed yet. -/
+audit's own coins (at the other audits' coins flipped) is at most `εW + εQ + εS`. This bounds the account's worst case
+over its audit's own coins, not its charge at the coin flipped; that per-run reading is not claimed yet. -/
 def Joint : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW] [Nonempty ΩQ]
     [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (W Q S εW εQ εS : ℝ),
@@ -44,7 +44,7 @@ def Joint : Prop :=
 one of the three audits, the other accounts are beyond its residual on every one of the audit's own coins (work beyond
 `F·T − W` over the compute window, reads beyond `BW·T − Q` over the bandwidth window, or more than `M − S` bits of
 device memory on average over the capacity window) is at most `εW + εQ + εS`. Outside that probability, some coin of
-each audit leaves the other accounts within its residual, not necessarily the coin drawn: a device could do little
+each audit leaves the other accounts within its residual, not necessarily the coin flipped: a device could do little
 charged work and a lot of covert work on a few of the compute coins. A per-run reading is not claimed yet. -/
 def CovertResidual : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]

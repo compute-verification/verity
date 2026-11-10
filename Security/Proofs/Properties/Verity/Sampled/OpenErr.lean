@@ -13,7 +13,7 @@ public import Proofs.Properties.Verity.Sampled.OpenEmpty
 An opening's node costs the coupling two terms: the opening's gap and its empty class (`openGap`, `openEmpty`, in
 `Proofs.Properties.Verity.Sampled.CoinMap`). Both are read off one partition, the rounds of the leaf's fiber
 (`TreeOpenable`) by the coins they release, and one bound covers their sum: the partition's class error (`classErr`).
-Over the draw of the leaf, the class error at the release the prover picks after seeing the leaf is within twice the
+Over the sample of the leaf, the class error at the release the prover picks after seeing the leaf is within twice the
 real leaf's distance from an ideal one, so one hiding swap per opened leaf pays for both terms.
 
 * **A pick's preimages** (`pickIn_eq_iff`, `card_pickIn_eq`, `sum_tsub_card_pickIn_le`): `pickIn S` hits each element
@@ -23,13 +23,13 @@ real leaf's distance from an ideal one, so one hiding swap per opened leaf pays 
   the class is empty is at most `classErr`: each class's excess `J·|S u| - N`, plus `N` per empty class, over `|Q|·N`.
 * **Within the leaf's distance** (`core_le`, `classNum_le`, `mul_classErr_le`): a fiber's class error, weighted by
   the fiber's size, is at most the fiber's distance from the ideal fiber, whose classes are uniform.
-* **One hiding swap** (`avg_iSup_classErr_le`, `avg_iSup_classErr_le_hm96`): over the leaf's draw, the class error at
+* **One hiding swap** (`avg_iSup_classErr_le`, `avg_iSup_classErr_le_hm96`): over the leaf's sample, the class error at
   the worst release is at most `2·δ₁`, where `δ₁` bounds the real leaf's distance from an ideal one at every event of
-  the leaf and the rest of the draw (for hm96's leaves, `Claims.Hm96Hiding` through `ideal_leaf_swap`).
+  the leaf and the rest of the sample (for hm96's leaves, `Claims.Hm96Hiding` through `ideal_leaf_swap`).
 * **At an opening's node** (`openGap_add_openEmpty_le`): the node's gap plus its empty class is at most its class
   error, wherever every round of the fiber releases some `bits u`.
 * **At the deployed releases** (`injective_roundBits`, `injective_linkBits`, `openGap_add_openEmpty_le_round`): a
-  round's bits determine its `m` challenges and a link's bits its two rounds', at every `m`, and a draw's first `m`
+  round's bits determine its `m` challenges and a link's bits its two rounds', at every `m`, and a sample's first `m`
   coins are a round's release (`opened_eq_roundBits`, in `Proofs.Properties.Verity.Sampled.OpenEmpty`), so a round's
   opening is within its class error.
 -/
@@ -455,7 +455,7 @@ theorem prCoin_pair_eq {Ω Ys Λ : Type} [Fintype Ω] [Fintype Ys] [DecidableEq 
         Fintype.card (Ω × Ys) := by
   rw [prCoin_eq_card, card_filter_pair L t ht G]
 
-/-- **Events of a release under its law**: a map whose means are those of `bits` gives every event of it the
+/-- **Events of a release under its sampling design**: a map whose means are those of `bits` gives every event of it the
 probability of the event of `bits`. -/
 theorem prCoin_law {Ω Q R : Type} [Fintype Ω] [Fintype Q] {P : Ω → R} {bits : Q → R}
     (hlaw : ∀ g : R → ℝ≥0∞, avg (fun ω => g (P ω)) = avg fun u => g (bits u)) (A : R → Prop) :
@@ -479,9 +479,9 @@ theorem avg_comp_le {Xs Λ : Type} [Fintype Xs] [DecidableEq Λ] (L : Xs → Λ)
   rw [Finset.sum_congr rfl hc, Finset.sum_const, nsmul_eq_mul, mul_left_comm]
   exact mul_le_mul_right (h ℓ) _
 
-/-- **One hiding swap per leaf**: a leaf `L (ω, y)` of the draw `ω` and the salt `y`, within `δ₁` of an ideal leaf
-`LI z` at every event of the draw and the leaf (`hswap`), and releases `P i ω` of the draw, each distributed as an
-injective `bits i` of a uniform `u` (`hlaw`). Over the draw and the salt, the class error of the leaf's fiber
+/-- **One hiding swap per leaf**: a leaf `L (ω, y)` of the sample `ω` and the salt `y`, within `δ₁` of an ideal leaf
+`LI z` at every event of the sample and the leaf (`hswap`), and releases `P i ω` of the sample, each distributed as an
+injective `bits i` of a uniform `u` (`hlaw`). Over the sample and the salt, the class error of the leaf's fiber
 partitioned by the release, at the worst release `i`, is at most `2·δ₁`. -/
 theorem avg_iSup_classErr_le {Ω Ys Zs Λ ι : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ys] [Nonempty Ys] [Fintype Zs]
     [Nonempty Zs] [DecidableEq Λ] (L : Ω × Ys → Λ) (LI : Zs → Λ) {δ₁ : ℝ≥0∞}

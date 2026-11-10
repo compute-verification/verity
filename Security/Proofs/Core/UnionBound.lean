@@ -51,7 +51,7 @@ The probability over the product that some protocol fails is then at most the su
 * `union_bound_update`: each protocol `a` fails with at most `δ a` over its coordinate `own a`, at every value of the
   other coins; some protocol fails with at most `∑ δ a`. `union_bound_product` is the independent case, each failure
   event reading only its own coordinate.
-* `union_bound_past`: the adaptive form, coins drawn in sequence, each step's failure at most `δ t` conditionally on
+* `union_bound_past`: the adaptive form, coins flipped in sequence, each step's failure at most `δ t` conditionally on
   the coins before it.
 * `union_bound_monitoringPeriod`: over a monitoring period's periods, each period's protocols in
   `union_bound_update`'s form: `∑_j ∑_a δ j a`. `union_bound_monitoringPeriod_with` adds one more event bounded over the
@@ -115,7 +115,7 @@ theorem pr_le_of_update [∀ i, Nonempty (Ω i)] (i : I) (E : ((j : I) → Ω j)
   rw [key]
   exact h _
 
-/-- **The union bound over the product of the protocols' coins.** Protocol `a` draws coordinate `own a` of the coins
+/-- **The union bound over the product of the protocols' coins.** Protocol `a` samples coordinate `own a` of the coins
 and fails (`Bad a`, an event on all of them) with probability at most `δ a` over its coordinate, at every value of the
 other coins. Then some protocol fails with probability at most `∑ a, δ a`. -/
 theorem union_bound_update {A : Type} [Fintype A] [∀ i, Nonempty (Ω i)] (own : A → I)
@@ -133,7 +133,7 @@ theorem union_bound_product [∀ i, Nonempty (Ω i)] (Bad : (i : I) → Ω i →
     pr (fun ξ : (i : I) → Ω i => ∃ i, Bad i (ξ i)) ≤ ∑ i, δ i :=
   union_bound_update id (fun i ξ => Bad i (ξ i)) δ fun i ξ => by simpa using h i
 
-/-- **The union bound over a monitoring period's periods.** Period `j`'s protocol `a` draws coordinate `own j a` and
+/-- **The union bound over a monitoring period's periods.** Period `j`'s protocol `a` samples coordinate `own j a` and
 fails with probability at most `δ j a` over it, at every value of the other coins (so a period may adapt to every other
 period's coins). Then some protocol of some period fails with probability at most `∑ j, ∑ a, δ j a`. -/
 theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)] (own : J → A → I)
@@ -146,7 +146,7 @@ theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i
   exact (pr_mono fun _ ⟨j, a, hb⟩ => ⟨(j, a), hb⟩).trans this
 
 /-- **A monitoring period with one more event**, bounded over the whole product (`pr F ≤ η`), such as every period's
-draw accepting (`FlockSoundness.Audit.Law.pooled_escape`, carried over by `pr_restrict_le`): that event or some
+sample accepting (`FlockSoundness.Audit.Law.pooled_escape`, carried over by `pr_restrict_le`): that event or some
 protocol of some period failing has probability at most `η + ∑ j, ∑ a, δ j a`. -/
 theorem union_bound_monitoringPeriod_with {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)]
     (F : ((i : I) → Ω i) → Prop) {η : ℝ} (hF : pr F ≤ η) (own : J → A → I)
@@ -176,7 +176,7 @@ theorem pr_le_of_past [∀ i, Nonempty (Ω i)] (t : I) (E : ((i : I) → Ω i) �
     (h : ∀ past, pr (fun rest => E ((splitPast t).symm (past, rest))) ≤ δ) : pr E ≤ δ :=
   pr_le_of_split (splitPast t) E ((pr_nonneg _).trans (h (Classical.arbitrary _))) h
 
-/-- **The adaptive union bound.** The coins are drawn in the order of `I`, and step `t` fails (`Bad t`, an event on
+/-- **The adaptive union bound.** The coins are flipped in the order of `I`, and step `t` fails (`Bad t`, an event on
 all the coins) with probability at most `δ t` over its own and the later coins, conditionally on the coins before it.
 Then some step fails with probability at most `∑ t, δ t`. -/
 theorem union_bound_past [∀ i, Nonempty (Ω i)] (Bad : I → ((i : I) → Ω i) → Prop) (δ : I → ℝ)

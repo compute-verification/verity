@@ -1,4 +1,5 @@
-"""Target-family preflight: PRECHECK_FAIL_TARGET_FAMILY by name, WAIVED only by name."""
+"""Target-family preflight: PRECHECK_FAIL_TARGET_FAMILY by name, WAIVED only by name. The row's run of it before the Build is
+`test_row_setup`'s."""
 from __future__ import annotations
 
 import json
@@ -7,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 
 from verity_vllm import target_family as tf
 
@@ -145,7 +145,7 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     bs = tmp_path / "build_summary.json"
     bs.write_text(json.dumps({"step": {"target": {"compute_capability": [9, 0]}}}))
     out = tmp_path / "target_family.json"
-    env = {**os.environ, "PYTHONPATH": f"{TREE}:{TREE / 'vllm-poc'}"}
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), str(TREE / "vllm-poc"), os.environ.get("PYTHONPATH")]))}
     env.pop("TARGET_FAMILY_WAIVER", None)
     r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--no-device",
                         "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env=env, cwd=TREE)
@@ -161,21 +161,6 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     r3 = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--out", str(out)],
                         capture_output=True, text=True, env={**env, "CUDA_VISIBLE_DEVICES": ""}, cwd=TREE)
     assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
-
-
-def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):
-    from tests.pipeline.test_row import _row
-    r = _row(tmp_path, "--stages", "build,match")
-    seen = []
-    for step in ("precheck_identity", "shape", "admission", "build", "match"):
-        monkeypatch.setattr(r, step, lambda step=step: seen.append(step))
-    monkeypatch.setattr(r, "target_family", lambda *a, out: seen.append(("target_family", r.stages, a)) or
-                        (3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"))
-    assert r.run() == 3
-    assert seen == ["precheck_identity", "shape", ("target_family", "build,match", ())]
-    assert "precheck-target FAIL" in (tmp_path / r.row / "stages.txt").read_text()
-    can = (TREE / "verity_vllm" / "ops" / "canary.sh").read_text()
-    assert 'TARGET_FAMILY_WAIVER=${TARGET_FAMILY_WAIVER:-"canary $TAG"}' in can
 
 
 def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):

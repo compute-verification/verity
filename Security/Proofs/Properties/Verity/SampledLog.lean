@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled
-public import SampledProofs.ChallengerSession
+public import Spot.ChallengerSession
 public import Std.Tactic.Do
 
 /-!
@@ -9,8 +9,8 @@ public import Std.Tactic.Do
 
 The facts the reads of the release log rest on, for `Verity.Sampled.readLog` (`coinsRead`'s line reading: a coin
 tree's line its own release, `treeStep`, and the other lines in pairs, a root's line, `rootOf`, and its coin's release)
-and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the draw's family after the
-registration's digest, `chunks` cuts the draw's coins, and a coin tree's line answers no family's frame
+and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the sample's family after the
+registration's digest, `chunks` cuts the sample's coins, and a coin tree's line answers no family's frame
 (`treeStep_frame`). `logRead` is `coinsRead`'s read, by its own name (`coinsRead_eq_logRead`).
 
 `BEq Json` and `Json.parse` are `partial`, so no proof can read a field off a `Json` comparison v2 makes, or see that a
@@ -27,7 +27,7 @@ namespace Verity.Sampled
 
 open Lean (Json)
 open Std.Do
-open SampledProofs.Challenger
+open Spot.Challenger
 
 /-! ## Reading the verifier's monadic functions -/
 
@@ -86,13 +86,13 @@ theorem opt_spec {α : Type} (x : Option α) : ⦃⌜True⌝⦄ x ⦃⇓? _ => �
 
 theorem specOf_spec (j : Json) : ⦃⌜True⌝⦄ specOf j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem toOption_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x.toOption ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
-theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ SampledProofs.nat? j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
+theorem nat_spec (j : Json) : ⦃⌜True⌝⦄ Spot.nat? j ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem findIdx_spec {α : Type} (p : α → Bool) (l : List α) : ⦃⌜True⌝⦄ l.findIdx? p ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 theorem findIdxA_spec {α : Type} (p : α → Bool) (l : Array α) : ⦃⌜True⌝⦄ l.findIdx? p ⦃⇓? _ => ⌜True⌝⦄ :=
   opt_spec _
 theorem getElem?_spec {α : Type} (l : List α) (i : Nat) : ⦃⌜True⌝⦄ l[i]? ⦃⇓? _ => ⌜True⌝⦄ := opt_spec _
 
-/-! ## Counting the draw's coins -/
+/-! ## Counting the sample's coins -/
 
 /-- The pairs of `ls` whose root's line shows family `label` after `after` (`rootOf`). -/
 def countFresh (label : String) (after : ByteArray) : List String → Nat
@@ -107,12 +107,12 @@ def chunks : Nat → ByteArray → List (List Bool)
 /-! ## The read with v2's own tests -/
 
 /-- **The device's log as v2's check reads it, with v2's own tests**: `coinsRead`'s read, with each coin tree's line
-read by the tests `SampledProofs.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
-sessions' records as `SampledProofs.OneStageZk.treesHeld` reads them (`recordsOn`). -/
+read by the tests `Spot.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
+sessions' records as `Spot.OneStageZk.treesHeld` reads them (`recordsOn`). -/
 def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let (p, c, e) ← (caseOf s).toOption
   let (_, label) ← p.base.challenger
-  let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
+  let ξ ← (_root_.Spot.OneStageZk.coinsOf p c e).toOption
   let lines ← (linesOf e).toOption
   readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
 

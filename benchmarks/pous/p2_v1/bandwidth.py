@@ -16,7 +16,7 @@ PoUS's, and the decode never reads it). `registration --layout` writes it into t
 **The step.** Each pass of the session is one engine step's weight reads: every tensor of the store, in block order, from
 its segment files onto the device (`full.Segments`, kernels' reader) and through kernels' staging decode
 (`stage.decode_matrix`) into a staging buffer, as a forward step reads them. The decode reads each chunk's rows from
-`stage.Store.decode_rows`, whose attached sketch (`store.sketch`, `Sketch.read`) sketches those same device rows under
+`stage.EncodedRows.decode_rows`, whose attached sketch (`store.sketch`, `Sketch.read`) sketches those same device rows under
 the pass's seed just before they go to the decode kernel (`Sketch.add`: π of each block by an exact int8 matmul against its four offsets' signs, summed into
 its unit's σ), so the receipts are of the bytes the decode read. Blocks of no tensor up to the plan's last unit (the
 head's last unit's tail) are read and sketched alone, so every unit of the plan is covered. Then y = SHA512(prefix ‖
@@ -33,9 +33,9 @@ the one the session ended with), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor decodes layer L's tensors, and the
-receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`). `--cache`
+receipts of the units they hold are from what was read, so a sample that lands there is rejected (`receipt`). `--cache`
 is another: every pass after the session's first reads nothing of the store and replays the first pass's σ from its
-cache under the pass's seed, so a draw of a later pass is rejected (`receipt`).
+cache under the pass's seed, so a sample of a later pass is rejected (`receipt`).
 
 **The case.** The verifier sends the session's core case before its answer (`p2_party`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
@@ -209,7 +209,7 @@ def receipts_of(torch: Any, seed: bytes, sigma: Any, first: int = 0, chunk: int 
 class Sketch:
     """One pass's σ of every unit, `units` of them, on `device`: `add(rows, j0)` sketches the device rows of blocks
     `j0 ..` ([n, 2056] uint8, as stored) into their units' σ, each block's π against its offset's sign columns, and
-    `read` is `stage.Store.decode_rows`'s hook to it; `seen` counts each unit's blocks sketched, four when the pass
+    `read` is `stage.EncodedRows.decode_rows`'s hook to it; `seen` counts each unit's blocks sketched, four when the pass
     covered it."""
 
     def __init__(self, torch: Any, seed: bytes, rows: int, units: int, device: Any) -> None:
@@ -515,7 +515,7 @@ class Engine:
                         sk.add(rows[j0 - p.blocks.start:j0 - p.blocks.start + self.chunk], j0)
                 else:
                     t = p.tensor
-                    store = S.Store(self.lay, rows, t.first_block, self.lib, chunk=self.chunk)
+                    store = S.EncodedRows(self.lay, rows, t.first_block, self.lib, chunk=self.chunk)
                     store.sketch = sk
                     w = torch.empty(t.n, t.k, dtype=torch.int8, device=self.device)
                     S.decode_matrix(store, t.layer, t.name, w)
@@ -565,7 +565,7 @@ class Prover:
 
     def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray, cheat: bool) -> int:
         """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store (not on a pass that `cheat`s)
-        and their y to hashlib: the plan's first, its last and `spot` drawn from the seed."""
+        and their y to hashlib: the plan's first, its last and `spot` sampled from the seed."""
         plan, rows = self.engine.plan, self.registration.rows
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))
         positions = sorted({0, plan.length - 1, *rng.integers(0, plan.length, self.spot).tolist()})

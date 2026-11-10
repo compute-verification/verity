@@ -9,7 +9,7 @@ import Mathlib.Basic.ENNReal.Real
 The actual-circuit model's rows B3 and Mbw, stated over the runs of a strategy causal from every tick (`CausalFrom`)
 rather than over an abstract device of the bandwidth audit's game. The strategy maps the store (for Mbw, the store and
 `z`) and the oracle to a run; the chip is the location `X`, the window is `[t₀, t₀ + T)`, and the chip commits to `τ` of
-what it did in the window, the tags the verifier checks at `s` blocks drawn uniformly. The hypotheses are the model's
+what it did in the window, the tags the verifier checks at `s` blocks sampled uniformly. The hypotheses are the model's
 constraints on such a strategy:
 - the chip's state at `t₀` is at most `M` bits (memory) and fixed by the store, or by the store and `z`, before the
   seed (`hpre`: the oracle doesn't reach it);

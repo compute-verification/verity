@@ -3,6 +3,7 @@ module
 public import Definitions.Nci.Guarantees.Remote
 public import Proofs.Nci.Dampener
 public import Proofs.Nci.Escape
+public import Proofs.Nci.Cut
 
 /-!
 # Proofs of the compute dampener, remote protocol
@@ -13,8 +14,9 @@ whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLa
 identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
 `escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
 sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `DampenerRemote` reads the residual's
-hypothesis outside both events as `DampenerThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, and sums the
-sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
+hypothesis outside both events as `DampenerThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, bounds the
+declared computation by its count verdict (`Nci.Cut.SecurityProofs.CountHE`, read at `ρ = C/X`: `declaredShare_div`),
+and sums the sources with no memory cap (`sources_le_at`, unmonitored compute at efficiency `MFU₀`) into both the efficiency and the
 hardware-multiple forms (`remote_core`); the union of the two events has probability at most the sum of theirs
 (`prob_or_le`), so the complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ`
 summing to 1 (`prob_add_not`).
@@ -217,7 +219,7 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
     (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
-      a * unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ := by
+      a * unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ := by
   have hS : 0 < C + U := by linarith
   have hκi : κ * κ⁻¹ = 1 := mul_inv_cancel₀ hκ.ne'
   have hSi : (C + U) * (C + U)⁻¹ = 1 := mul_inv_cancel₀ hS.ne'
@@ -227,10 +229,10 @@ theorem sources_le_at {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC 
     linear_combination (-(κ * W / 2)) * hCi
   have hB : 0 ≤ a * κ * U / 2 + κ * C / 2 * residualShare W C + C / ρ + κ * χ * (C + U) / 2 - M := by
     linarith
-  have key : a * unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ -
+  have key : a * unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ -
       efficiency κ M C U =
       2 / κ / (C + U) * (a * κ * U / 2 + κ * C / 2 * residualShare W C + C / ρ + κ * χ * (C + U) / 2 - M) := by
-    simp only [declaredShare, unmonitoredShare, efficiency]
+    simp only [declaredShare, unregisteredShare, efficiency]
     linear_combination
       (-(a * U * (C + U)⁻¹ + C * residualShare W C * (C + U)⁻¹ + χ * (C + U) * (C + U)⁻¹)) * hκi +
       (-(residualShare W C + 2 * κ⁻¹ * ρ⁻¹ + χ)) * hSi
@@ -259,14 +261,14 @@ theorem remote_core {κ C U W ρ χ a M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 
     (ha1 : a ≤ 1) (hM0 : 0 < M) (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ a * κ * U / 2)
     (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ) (hx : Mx ≤ κ * χ * (C + U) / 2) :
     efficiency κ M C U ≤
-        unmonitoredShare C U + (1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
-      remoteDampener a (unmonitoredShare C U)
-          ((1 - unmonitoredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
+        unregisteredShare C U + (1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ ∧
+      remoteDampener a (unregisteredShare C U)
+          ((1 - unregisteredShare C U) * residualShare W C + declaredShare κ ρ C U + χ) ≤
         hardwareMultiple a κ M C U := by
   have h := sources_le_at hκ hC hU hM hu hr hd hx
   have hS : 0 < C + U := by linarith
-  have hs0 : 0 ≤ unmonitoredShare C U := div_nonneg hU hS.le
-  have h2 : a * unmonitoredShare C U ≤ unmonitoredShare C U := by
+  have hs0 : 0 ≤ unregisteredShare C U := div_nonneg hU hS.le
+  have h2 : a * unregisteredShare C U ≤ unregisteredShare C U := by
     have := mul_le_mul_of_nonneg_right ha1 hs0
     linarith
   have hη : 0 < efficiency κ M C U := by
@@ -282,12 +284,30 @@ theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
   unfold residualShare
   linear_combination (ε + L + θ) * hCi
 
+/-- The declared share at `ρ = C/X` gates a counted multiplication is `X`'s share of all compute at peak,
+`(2/κ) X/(C + U)`. -/
+theorem declaredShare_div {κ C U X : ℝ} (hC : 0 < C) (hU : 0 ≤ U) :
+    declaredShare κ (C / X) C U = efficiency κ X C U := by
+  have hS : C + U ≠ 0 := (by linarith : 0 < C + U).ne'
+  have hC0 : C ≠ 0 := hC.ne'
+  unfold declaredShare unregisteredShare efficiency
+  rcases eq_or_ne X 0 with rfl | hX
+  · simp
+  rcases eq_or_ne κ 0 with rfl | hκ
+  · simp
+  field_simp
+  ring
+
+/-- The declared counted multiplications against a bound `X`, in the form `remote_core` reads: `M_d ≤ C/(C/X)`. -/
+theorem declared_le_div {C X Md : ℝ} (hC : 0 < C) (h : Md ≤ X) : Md ≤ C / (C / X) := by
+  rwa [div_div_cancel₀ hC.ne']
+
 theorem DampenerRemote : Guarantees.DampenerRemote := by
-  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T
-    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp
-    hB hthr hW hsize hM0 hM hu hres hx
-  have hdecl : (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
-    declared_le hα hbw hba hdd hcomp hB hthr hW hsize
+  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx d c k n γ V _ _ _
+    Wd val βw βx b hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hβw hβx hb
+    hcomp hval hshare hHard hExp hM0 hM hu hres hx
+  have hdecl : (Wd.N : ℝ) ≤ C / (C / Cut.workHE n k (βw * βx) b Wd.O) :=
+    declared_le_div hC (Cut.SecurityProofs.CountHE γ V d Wd val c k n βw βx b hβw hβx hb hval hshare hHard hExp hcomp).1
   refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
       (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)
@@ -304,9 +324,10 @@ theorem DampenerRemote : Guarantees.DampenerRemote := by
         κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) :=
       mul_le_mul_of_nonneg_left (by linarith) hκ.le
     linarith
-  obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ω)) (by exact_mod_cast hM ω) (hu ω) hr
+  have hMω : M ω ≤ Mu ω + Mr ω + Wd.N + Mx ω := hM ω
+  obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ω)) (by exact_mod_cast hMω) (hu ω) hr
     hdecl (hx ω)
-  rw [residualShare_sub hC] at h1 h2
+  rw [residualShare_sub hC, declaredShare_div hC hU] at h1 h2
   exact ⟨h1, h2⟩
 
 end Nci.SecurityProofs

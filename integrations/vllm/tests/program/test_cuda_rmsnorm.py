@@ -49,13 +49,13 @@ def test_target_selectors_keep_batch_invariant_definitions_and_bind_default_laun
     pure_spec = TG.rmsnorm_spec(default, N, 1e-5, M)
     fused_spec = TG.rmsnorm_fused_spec(default, N, 1e-5, M=M)
     assert pure_spec.base_id == "RMSNormCudaVector8_v1" and pure_spec.bindings["BLOCK"] == pure
-    assert fused_spec.base_id == "RMSNormFusedCudaVector8_v1" and fused_spec.bindings["BLOCK"] == fused
+    assert fused_spec.base_id == "RMSNormFusedCudaVector8_v3" and fused_spec.bindings["BLOCK"] == fused
 
 
-@pytest.mark.parametrize("cls", [TW.RMSNormCudaVector8Twin, TW.RMSNormFusedCudaVector8Twin])
+@pytest.mark.parametrize("cls", [TW.RMSNormCudaVector8Twin, TW.RMSNormFusedCudaVector8Twin, TW.RMSNormFusedCudaVector8BatchedTwin])
 @pytest.mark.parametrize("eps", [1e-5, 1e-6])
 def test_numpy_twins_match_word_definitions_on_random_and_special_words(cls, eps: float) -> None:
-    rng = np.random.default_rng(0xCADA + (cls is TW.RMSNormFusedCudaVector8Twin))
+    rng = np.random.default_rng(0xCADA + (cls is not TW.RMSNormCudaVector8Twin))
     for kind in ("gauss", "wide", "special", "extreme", "subnormal", "boundary"):
         rep = TW.check_instances(cls, lambda _rng: {"N": 72, "EPS": eps, "BLOCK": 4}, rng, 1, (kind,))
         assert rep["status"] == "pass" and not rep["mismatches"], rep
@@ -72,7 +72,7 @@ def test_boolean_v2_has_the_word_v1_view_and_matches_it(fused: bool, block: int)
         r = TW.rand_bf16(rng, 4 * N, "special").reshape(4, N).astype(np.uint64)
         target = bind(BN.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=block, RSQRT=bind(BM.RsqrtApprox))
         got = np.asarray(BS.evaluate_words(target, x, r, w), np.uint64).reshape(4, -1)
-        word = bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=block)
+        word = bind(C.RMSNormFusedCudaVector8V1, N=N, EPS=EPS, BLOCK=block)
         expect = TW.RMSNormFusedCudaVector8Twin(word)([x[0], r[0], w[0]])
     else:
         target = bind(BN.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=block, RSQRT=bind(BM.RsqrtApprox))

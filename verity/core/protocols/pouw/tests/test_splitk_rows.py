@@ -14,7 +14,7 @@ from verity.ml.protocols.pouw.circuit import h1zy as Z
 
 def test_the_pinned_vectors_are_the_chunk_rows():
     """``vectors/splitk_rows.json`` is `splitk_rows_vectors.vectors()`: ``a/14336@0`` over 64 rows (n = 4, 256 leaves of
-    1794 words, binding the window) and ``b/6144`` over 64 rows (n = 2, 128 leaves of 1538 words, binding none), every
+    1794 words, binding the execution phase) and ``b/6144`` over 64 rows (n = 2, 128 leaves of 1538 words, binding none), every
     leaf's words' SHA-512, row digest and frame leaf, and each value's domain and root."""
     got = V.vectors()
     assert json.loads(V.OUT.read_text()) == got

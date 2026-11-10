@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     leaf families they do not reach, at small statics."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.ml.commitments.gates.embedding import read
     from verity.ml.definitions.registry import boolean_fp8_moe
 
     return [
@@ -48,6 +49,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                          DOT=BG.HopperE4m3MmaV2Dot32)),
         ("MoeExpertFp8GemmW_v2/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8GemmWV2, E=3, K=32, N=40, G=32, KB=32, SWAP=True,
                                                     DOT=BG.HopperE4m3MmaV2Dot32)),
+        # each GEMM over the rows it reads itself, two experts (a one-level read): w13's one 32-byte row at the MMAv2 step, w2's
+        # two under SWAP_AB at the wgmma step; the served units repeat these parts at their widths
+        ("MoeExpertFp8ReadGemm_v1", lambda: bind(boolean_fp8_moe.MoeExpertFp8ReadGemmV1, READ=read(2, 16), K=32, N=1, G=32, KB=32,
+                                                 SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8ReadGemmW_v1", lambda: bind(boolean_fp8_moe.MoeExpertFp8ReadGemmWV1, READ=read(2, 32), K=32, N=2, G=32, KB=32,
+                                                  SWAP=True, DOT=BG.HopperE4m3QgmmaDot32)),
         # a w13 coordinate cut along K, over 3 experts: a middle chunk (an f32 in and out) and a last one (the bf16 word)
         ("MoeExpertFp8CoordinateChunk_v2/mmav2", lambda: bind(boolean_fp8_moe.MoeExpertFp8CoordinateChunkV2, E=3, K=64, G=32, KB=32,
                                                               SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32, FIRST=False, LAST=False)),

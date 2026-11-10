@@ -104,7 +104,7 @@ class RetentionOptions:
 
 
 def retention_record(opts: Any, com: Any) -> dict[str, Any]:
-    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their draws, and the pool."""
+    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their samples, and the pool."""
     r = opts.retention
     return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
             "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
@@ -217,7 +217,8 @@ def seal_of(opts: Any) -> dict[str, Any]:
     from verity_vllm.check.replay.driver import engine_facts_of_record
     from verity_vllm.pipeline import source_identity as SI
 
-    return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity(SI.TREE)["sha256"], "engine_of_record": engine_facts_of_record()}
+    return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity_of("the seal", SI.TREE)["sha256"],
+            "engine_of_record": engine_facts_of_record()}
 
 
 def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:

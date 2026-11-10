@@ -150,7 +150,7 @@ structure OpenOut (F : Type) where
 batched with one vector of independent coins. -/
 def opening (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
     Game (Option (OpenOut F)) := do
-  -- O2–O5 for every claim: the prover sends `s_k`, the verifier checks it and draws `r''_k`
+  -- O2–O5 for every claim: the prover sends `s_k`, the verifier checks it and samples `r''_k`
   let switched ← claims.mapM fun c => do
     let s ← recv (Fin 128 → F)                           -- O3
     let r'' ← draw (Fin 7 → F)                           -- O5

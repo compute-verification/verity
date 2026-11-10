@@ -39,7 +39,8 @@ theorem fold_eq_foldRef_layout {t : Tmpl} {mode : Mode} {lays : Array Lay} {alph
     (hfit : ∀ d, ∀ r ∈ (t.defs.getD d default).rows.toList, r.1 < (t.defs.getD d default).cols)
     (hf1 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + rho.size) (hf2 : lanes t lays (t.defs.size + 1) t.root ≤ 6 + r.size)
     {s : ℕ} (hs : s < 64) : of P[s]! = of P'[s]! :=
-  fold_eq_foldRef hP hP' ⟨hbound, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (hcall d hd i hi).2⟩ hins hcols
+  fold_eq_foldRef hP hP' ⟨hbound, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (hcall d hd i hi).2,
+      layouts_defPos (layoutM_layouts hL) hcall hsmall⟩ hins hcols
     hfit hf1 hf2 (layouts_defPos (layoutM_layouts hL) hcall hsmall) hroot hs
 
 theorem fold_eq_foldRef_wf {t : Tmpl} {mode : Mode} {lays : Array Lay} {alpha : F128} {lw rho r P P' : Array F128}

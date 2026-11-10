@@ -12,7 +12,7 @@ of the evidence agree, and so do the grids, the clock and the frame-size check t
 
 - `bytesOfBits_bitsOfBytes`: a payload's bits, read back as bytes, are the payload;
 - `unhex_eq`: the records check's hex decoder, which reads a string's characters into an array with no list between, is
-  C-Flock's `Flock.unhex`;
+  Flock's `Flock.unhex`;
 - `evidenceOf_toEvidence`: `Check.evidenceOf` is `Records.evidenceOf` with each payload read as its bits;
 - `expectedGridsOfBytes_eq`: window `w`'s grid of `expectedGridsOfBytes` is `Check.expectedGrid`'s of the link as v4 reads it
   (through `expectedGrids` and `RecordsGrid.expectedGrids_eq`);
@@ -87,7 +87,7 @@ private theorem foldl_push (l : List Char) (a : Array Char) : l.foldl Array.push
   | nil => simp
   | cons c l ih => simp [ih]
 
-/-- The records check's hex decoder is C-Flock's: the same bytes and the same refusals. -/
+/-- The records check's hex decoder is Flock's: the same bytes and the same refusals. -/
 theorem unhex_eq (s : String) : unhex s = Flock.unhex s := by
   rw [unhex_flock, unhex, String.foldl_eq_foldl_toList, foldl_push, Array.emptyWithCapacity_eq, Array.empty_append]
 

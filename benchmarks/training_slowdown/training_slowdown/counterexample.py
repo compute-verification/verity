@@ -7,7 +7,7 @@ A family is a directory a program writes during its run (`Family`, through `Harn
 - `<t>.enc`: E_t, everything the decoder reads beyond θ to rebuild step t's updated weights, declared imported computed
   values included (they travel in E_t and count in its bits).
 
-The checker (`check`) draws a sample of the declared steps from a live coin (`n_sample` of them), rebuilds each
+The checker (`check`) samples a sample of the declared steps from a live coin (`n_sample` of them), rebuilds each
 sampled step's updated weights and compares each, bit for bit, with the digest the harness logged when the step read it.
 A rebuild must cost at most c MACs: the larger of the plan's declared cost and the MACs the harness's counter sees the
 decode compute. Each declared step gets β_t = bits(E_t) / (updated MACs per token block). The family covers the steps

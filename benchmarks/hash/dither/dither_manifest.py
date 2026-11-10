@@ -1,16 +1,16 @@
-"""A dither-a-so -we window's manifest (`dither_so.SoWindow.end`): what an ended window binds, the manifest.json its end
+"""A dither-a-so -we execution phase's manifest (`dither_so.SoWindow.end`): what an ended execution phase binds, the manifest.json its end
 writes, and the verifier's check of it against the challenger's own run (`coins.check`).
 
-An ended window binds, in order: the epoch round (round 0, the tree over the B tables' roots), each step s's round (its
+An ended execution phase binds, in order: the execution-phase round (round 0, the tree over the B tables' roots), each step s's round (its
 root the tree over the round's leaves, each leaf the tree over that kind's per-call roots: a-step, admit-step, z-step,
 y-step and receipt-step, the last holding step s - D + 1's receipt-table roots), the final round (the tree over the
 tail's receipt-tail roots, each the tree over one tail step's receipt-table roots, steps S - D + 1 to S - 1), and the
-manifest root, the tree over every round root of the window in order, which the sampling coin follows.  manifest.json holds
-the window, every round's root, each step's round leaves and unit salt, the B roots, the final round's leaves, the
+manifest root, the tree over every round root of the execution phase in order, which the sampling coin follows.  manifest.json holds
+the execution phase, every round's root, each step's round leaves and unit salt, the B roots, the final round's leaves, the
 manifest root and the coins in `coins.check`'s form; each step's per-call roots go to a file beside it (`calls`, by
-sha512).  `check` recomputes every round root from the manifest's leaves (the epoch round from the B roots, the final
+sha512).  `check` recomputes every round root from the manifest's leaves (the execution-phase round from the B roots, the final
 round from the tail's leaves), the manifest root from those, and holds the challenger's run to them: the salt coin after
-the window's root, each round's coin after its root, the sampling coin after the manifest root, the session run from a
+the execution phase's root, each round's coin after its root, the sampling coin after the manifest root, the challenge phase served from a
 commit the host's pins log (``--pins``) records on the verifier's own first-parent history of main (``--main``).
 
     python dither_manifest.py check --manifest OUT/manifest-SESSION.json --challenger-out SESSION_DIR --ledger HEAD [...]
@@ -23,9 +23,13 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import dither_one as DO
 from dither_fused import CM, CO
+
+if TYPE_CHECKING:
+    from verity.core.protocols.spot.challenger import ChallengerKey
 
 SCHEMA = "verity/dither-so/window-manifest/v1"
 TAIL_KIND, FINAL_KIND, LATE_KIND, MANIFEST_KIND = "receipt-tail", "round-final", "round-late", "window-manifest"
@@ -84,7 +88,7 @@ def write(out_dir: str | Path, name: str, doc: dict, calls: bytes, calls_dir: st
 
 
 def expect(m: dict) -> dict:
-    """What the verifier recomputes from manifest `m` alone: every round root (the epoch round from the B roots, each
+    """What the verifier recomputes from manifest `m` alone: every round root (the execution-phase round from the B roots, each
     step's from its leaves, the final from the tail's leaves), the manifest root over them (the sampling coin's root), the
     unit salts as the manifest lists them, and where the recomputed roots differ from the manifest's own."""
     W, kinds, s0 = m["window"], m["round_kinds"], m["first"]
@@ -100,9 +104,9 @@ def expect(m: dict) -> dict:
             "manifest_root_listed": mroot.hex() == m["manifest_root"]}
 
 
-def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str], key=None,
-          period: str | None = None, root: bytes | None = None) -> dict:
-    """`coins.check` of the window's coins against the challenger's run, over the round roots and manifest root `expect`
+def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pins: list[str], main: list[str],
+          key: ChallengerKey | None = None, period: str | None = None, root: bytes | None = None) -> dict:
+    """`coins.check` of the execution phase's coins against the challenger's run, over the round roots and manifest root `expect`
     recomputes, with the host's pins log `pins` (its lines) and the verifier's first-parent history of main `main`;
     ``ok`` only when it passes and the recomputed roots are the manifest's."""
     m = json.loads(Path(manifest).read_text())
@@ -118,17 +122,18 @@ def check(manifest: str | Path, challenger_out: str | Path, heads: list[str], pi
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("check", help="an ended window's manifest against the challenger's own run")
+    c = sub.add_parser("check", help="an ended execution phase's manifest against the challenger's own run")
     c.add_argument("--manifest", required=True)
-    c.add_argument("--challenger-out", required=True, help="the session as the challenger's gate publishes it, or its out/")
+    c.add_argument("--challenger-out", required=True,
+                   help="the challenge phase as the challenger's gate publishes it, or its out/")
     c.add_argument("--ledger", action="append", required=True, help="a head of the auditor's ledger, once for each")
     c.add_argument("--pins", type=Path, required=True, help="the challenger host's pins log as infra published it, a "
                    "line a pin (its `challenger-pins head` label)")
     c.add_argument("--main", type=Path, required=True, help="the verifier's own `git rev-list --first-parent "
                    "origin/main`, a commit a line")
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1)")
-    c.add_argument("--period", help="the window's period, as the verifier knows it")
-    c.add_argument("--root", help="the window's root as the verifier recomputes it (128 hex digits)")
+    c.add_argument("--period", help="the execution phase's period, as the verifier knows it")
+    c.add_argument("--root", help="the execution phase's root as the verifier recomputes it (128 hex digits)")
     a = ap.parse_args(argv)
     key = CO.key_record(a.key_record) if a.key_record else None
     pins = [x for x in a.pins.read_text().split("\n") if x]

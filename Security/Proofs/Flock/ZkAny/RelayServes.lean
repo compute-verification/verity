@@ -19,7 +19,7 @@ the IO code's readings are the named trust `flock-relay-serves`, the worker's th
 * **`WorkerDeterministic`**: the model's worker gives the worker's round values, a function of the history.
 * `AnsPart`: what `LoopRead` asks of a slot beyond `LoopServe`'s clauses and the worker's values.
 * `loopRead_of_serve`: so a slot is read as the loop answers it (`LoopRead`) where its `AnsPart` holds and the model's
-  worker answers the `Finish` with the firewall's own message. `RelayAuditor`'s `loopReads_auditorV` gives `AnsPart` at
+  worker answers the `Finish` with the ZK server's own message. `RelayAuditor`'s `loopReads_auditorV` gives `AnsPart` at
   each slot where the auditor is `V*`, and so `LoopReads`.
 -/
 
@@ -147,7 +147,7 @@ theorem AnsPart.of_ctl {W Rr : Type} {M : LoopModel W Rr} {c : Nat} {e : Env} {k
   all_goals exact True.intro
 
 /-- **What the IO code serves at a slot is what the relay reads there**, where the slot's `AnsPart` holds (`hA`), the
-model's worker gives the worker's round values (`hw`), and it answers the `Finish` with the firewall's own message
+model's worker gives the worker's round values (`hw`), and it answers the `Finish` with the ZK server's own message
 (`hfw`). -/
 theorem loopRead_of_serve {W Rr : Type} {M : LoopModel W Rr}
     {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}

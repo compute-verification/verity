@@ -28,7 +28,7 @@ no frame and so hold at a holo shape:
   one rep that read no frame, and the claims the record answers, `claimsF` at the rep's values (as `run_of_frames`
   checks them). The ring switches' count, sizes and values are E's (`ringSwitch_of_residuals`, `decoded_rs_size`), and
   the claims' shapes the verifier run's points, sized without `NoEmpty` (`ofRounds_size`), which a holo rep's `h`
-  round, drawing no coins, breaks. G's proof file carries the messages at any shape (`msgs_proofOf`).
+  round, flipping no coins, breaks. G's proof file carries the messages at any shape (`msgs_proofOf`).
 * `unitSetup_of_from`, `setupOfVals_of_from`: the setup's part (`UnitSetup`) from `SetupRealizes` and `ShapeIs` at the
   run's statement and the values' setup and schedule (`SetupFrom`), with the schedule's model, the plain leaf's name
   and the extras at the link points (G's `ExtrasAre`).

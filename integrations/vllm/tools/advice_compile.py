@@ -5,9 +5,10 @@ Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prove
 sampling parameters, which advice v0 doesn't carry: they come with the request's certified I/O; a stand-in, see the TODO in
 `main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
-model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it), on
-that target at that execution, at the engine's tensor-parallel world and `--rank`, with the engine args class G states
-(`engine_of`), without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose server says it
+model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it) and
+its checkpoint dtype the one that config's `quantization_config` states (`checkpoint_dtype`), on that target at that execution,
+at the engine's tensor-parallel world and `--rank`, with the engine args class G states (`engine_of`; the whole φ is `phi_of`),
+without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose server says it
 filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 
     compiled.json     `Compiled.summary()`: the compiler digest, each request's Program digest and shape, each step's row refs
@@ -41,7 +42,7 @@ from pathlib import Path
 MANIFEST = "verity-vllm/served-window-programs/v1"
 #: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, the
 #: prefix cache), none of which a request Program reads
-REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "enable_prefix_caching")
+REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
@@ -68,12 +69,44 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
-    (`LLM.engine_record`'s ``engine_kwargs``); a ValueError for a rank the world doesn't have."""
-    kw = (meta.get("engine_record") or {}).get("engine_kwargs") or {}
+    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
+    (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
+    own order; a ValueError for a rank the world doesn't have."""
+    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
+
+    rec = meta.get("engine_record") or {}
+    kw = rec.get("engine_kwargs") or {}
     world = int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
-    return {"world": world, "rank": rank}, {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if "env_flags" in rec:
+        flags = rec["env_flags"] or {}
+        engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
+    return {"world": world, "rank": rank}, engine
+
+
+def checkpoint_dtype(hf_config: dict) -> str | None:
+    """The checkpoint dtype φ states (``model["dtype"]``, in `config.DTYPES`' names, as `predict.score` states a served row's from its
+    id), read from the pinned config's `quantization_config`: a block-FP8 checkpoint (``quant_method: fp8``, ``fmt: e4m3``) is
+    ``float8_e4m3fn``, the dtype `predict.dsa`'s domain requires. Any other config states none, and the decoder takes the dtype its
+    config's shape implies (bfloat16, or int8)."""
+    from verity_vllm.config import DTYPES
+
+    q = hf_config.get("quantization_config") or {}
+    return DTYPES["fp8"] if q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
+
+
+def phi_of(meta: dict, hf_config: dict, rank: int):
+    """The registration's φ (module docstring): the run's model at its pinned config ``hf_config``, with the checkpoint dtype that
+    config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's tensor-parallel world at ``rank`` with
+    the engine args class G states (`engine_of`, whose ValueError it raises)."""
+    from verity_vllm.program.predict.phi import Phi
+
+    tp, engine = engine_of(meta, rank)
+    dtype = checkpoint_dtype(hf_config)
+    return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config, **({"dtype": dtype} if dtype else {})},
+               target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
 
 
 def registered_seed(meta: dict) -> int:
@@ -135,7 +168,6 @@ def main() -> int:
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.build import Unexpressible
-    from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import (
         CAP_BITS,
         Registered,
@@ -172,11 +204,9 @@ def main() -> int:
         raise SystemExit(f"[advice-compile] {meta['model']}@{meta['revision']} is pinned in no checkpoint manifest")
     hf_config = json.loads(config.read_text())
     try:
-        tp, engine = engine_of(meta, a.rank)
+        phi = phi_of(meta, hf_config, a.rank)
     except ValueError as e:
         raise SystemExit(f"[advice-compile] {e}") from None
-    phi = Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config}, target=dict(meta["target"]),
-              execution=meta.get("execution") or "eager", tp=tp, engine=engine)
     cap = int(((reg_doc or {}).get("compiler") or {}).get("cap_bits") or CAP_BITS)
     try:
         seed = registered_seed(meta)

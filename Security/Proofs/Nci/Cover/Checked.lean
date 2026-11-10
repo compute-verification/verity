@@ -1,6 +1,6 @@
 module
 
-public import Properties.NciDesc.Cover
+public import Properties.Nci.Desc.Cover
 public import Proofs.Properties.Nci.Agrees
 public import Proofs.Properties.Nci.DescVerdict
 public import Proofs.Nci.Cover.Training
@@ -8,7 +8,7 @@ public import Proofs.Nci.Cover.Training
 /-!
 # A verdict of compliance carries the cover theorem's factor
 
-`CoverTrained` and `CheckedCoverTraining` are stated in `Properties.NciDesc.Cover`. `coverTrained` proves `CoverTrained`
+`CoverTrained` and `CheckedCoverTraining` are stated in `Properties.Nci.Desc.Cover`. `coverTrained` proves `CoverTrained`
 of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance at its rate (`Witnesses`)
 and `CoverTraining_rate`, multiplied out by `c`.
 

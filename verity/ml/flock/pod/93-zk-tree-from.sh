@@ -5,12 +5,12 @@
 #     -- bash verity/ml/flock/pod/93-zk-tree-from.sh
 # The challengers are challenger.sh's (benchmarks/live_challenger/serve.py on the Lean verifier's coins, a test LMS key and
 # a session secret outside $OUT). The statement is 91-plain-hidden.sh's (tests/plain_hidden.py: RoPE d64 at 32 instances,
-# hidden outputs, the verifier's own program and partition), each session drawing all 32 (--draw subset:32, as every
-# soundness claim is about a drawn session):
+# hidden outputs, the verifier's own program and partition), each session sampling all 32 (--draw subset:32, as every
+# soundness claim is about a sampled session):
 #   wrong-secret  serve --tree-from with another secret: the challenger refuses its hello and serve never serves
 #   tree-from     serve/prove --zk, the session's coin tree sampled and opened by the challenger (--tree-from with its
 #                 secret, --sessions 1); the challenger exits 0 once serve closes its session
-#   own-tree      serve/prove --zk without --tree-from: a coin tree drawn by the server, which no challenger released
+#   own-tree      serve/prove --zk without --tree-from: a coin tree sampled by the server, which no challenger released
 #   plain-tree    serve/prove without --zk on the keyed coin tree (FC_COINS=tree), sampled and opened by a second
 #                 challenger
 # and the audit of each session's record against its challenger's release log (challenger.sh's `challenger_audit` and
@@ -45,7 +45,7 @@ challenger_start "$CH" || exit 1
 log "challenger listening on $CHALLENGER"
 "$PY" -c 'import secrets; print(secrets.token_hex(32))' > "$W/wrong"
 
-served() {   # served NAME zk|plain SERVE_ARGS...: one loopback session drawing all 32 instances under $S/NAME, its prove's exit
+served() {   # served NAME zk|plain SERVE_ARGS...: one loopback session sampling all 32 instances under $S/NAME, its prove's exit
   local name=$1 mode=$2 srv port coins=${FC_COINS:-}; shift 2
   local -a zk=(--zk)
   [ "$mode" = plain ] && zk=() coins=tree

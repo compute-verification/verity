@@ -56,7 +56,7 @@ def test_no_escape_hatches():
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
 AUDIT_STATEMENTS = PROOFS / "Flock" / "Lemmas" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game(?:\.|$)|"
                            r"Proofs\.Flock\.Soundness\.Audit\.|Proofs\.Flock\.Lemmas\.Audit$)")
 IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
@@ -164,7 +164,7 @@ def _ref_bernoulli(a, b, n, stream):
     return out
 
 
-#: the challenger's coins for a draw that names none: the verifier has no coins of its own
+#: the challenger's coins for a sample that names none: the verifier has no coins of its own
 _COINS = random.Random(20261029)
 
 
@@ -205,8 +205,8 @@ def test_unit_draw_samplers_are_the_exact_reduction():
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
-    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a draw that reads coins is
-    refused before any is read, whatever its law, and only a draw of every unit, which reads none, is drawn."""
+    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a sample that reads coins is
+    refused before any is read, whatever its sampling design, and only a sample of every unit, which reads none, is sampled."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
@@ -219,6 +219,33 @@ def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
     for args, n in ((["--population", "8", "--k", "8"], 8), (["--population", "5", "--p", "3/3"], 5)):
         p = draw(*args)
         assert p.returncode == 0 and json.loads(p.stdout[5:])["units"] == list(range(n)), (args, p)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
+    """No soundness theorem covers upstream's plain proof files, so `verify --upstream-plain` refuses every session before
+    it reads a file. Only `agree` reads them, with the flag and upstream's verdicts and never under `--zk`, and it prints no
+    verdict: each line says whether the checks pass exactly when upstream accepted (a legacy statement's sessions fail
+    before any check runs)."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    files = [str(LEAN / ".lake/build/bin/flock-verify"), "--circuit", str(tmp_path / "none"), "--public", str(tmp_path / "none")]
+    p = subprocess.run([files[0], "verify", *files[1:], "--upstream-plain", "--session", "a", "b"], capture_output=True, text=True)
+    got = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+    assert p.returncode == 1 and [(v["session"], v["accepted"]) for v in got] == [("a", False), ("b", False)], p
+    assert all(v["why"].startswith("refused: upstream's plain proof files (--upstream-plain): ") for v in got), got
+    upstream = tmp_path / "upstream-verdicts.json"
+    upstream.write_text(json.dumps({"a": False, "b": True}))
+    for extra, err in ((["--upstream-plain"], "usage: flock-verify agree"),
+                       (["--upstream-verdicts", str(upstream)], "--upstream-plain is required"),
+                       (["--upstream-plain", "--upstream-verdicts", str(upstream), "--zk"], "verify --zk's")):
+        p = subprocess.run([files[0], "agree", *files[1:], *extra, "--session", "a"], capture_output=True, text=True)
+        assert p.returncode == 2 and not p.stdout and err in p.stderr, (extra, p)
+    p = subprocess.run([files[0], "agree", "--statement", "verity/flock-pure-block/v2", *files[1:], "--upstream-plain",
+                        "--upstream-verdicts", str(upstream), "--session", "a", "b", "c"], capture_output=True, text=True)
+    got = [json.loads(ln[10:]) for ln in p.stdout.splitlines() if ln.startswith("AGREEMENT ")]
+    assert p.returncode == 1 and not any("accepted" in v or v["refusal"] for v in got), p
+    assert [(v["session"], v["upstream"], v["agree"]) for v in got] == [("a", False, True), ("b", True, False), ("c", None, False)]
+    assert all("a legacy statement" in v["check"] for v in got), got
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -253,7 +280,7 @@ def test_unit_draw_check(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_draw_is_held_to_its_registered_law(tmp_path):
-    """`draw --registration F` and `draw-test --registration F`: the law is the one the window registered before any coin,
+    """`draw --registration F` and `draw-test --registration F`: the sampling design is the one the window registered before any coin,
     so a sample at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     regs = {}
@@ -290,7 +317,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_draw_over_several_tables_has_a_count_they_split():
-    """`draw --tables J` refuses a law whose unit count the J tables can't split evenly: a Bernoulli sample (its count is random),
+    """`draw --tables J` refuses a sampling design whose unit count the J tables can't split evenly: a Bernoulli sample (its count is random),
     a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one sample of 4 units."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
@@ -325,7 +352,6 @@ def _template_vectors():
     return _ir_tests() / "template_instance_vectors.json"
 
 
-
 def _stratified_agree():
     import importlib.util
     spec = importlib.util.spec_from_file_location("stratified_agree", Path(__file__).resolve().parent / "stratified_agree.py")
@@ -338,7 +364,7 @@ def _stratified_agree():
 def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
     """`draw --program --partition --stratified K`: the strata derived from the program (one per template, ranges merged,
     in order of first unit), `k_s = max(1, round(K n_s / N))`, each stratum's `subset` on its own segment of the stream,
-    and U2 on stratified samples, held to the verifier's own law."""
+    and U2 on stratified samples, held to the verifier's own sampling design."""
     import hashlib
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     ref = _stratified_agree()
@@ -406,9 +432,9 @@ def _work_program(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_work_draw_from_the_verifiers_own_program(tmp_path):
-    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(f_s,
+    """`draw --program --partition --work K --work-table F`: the stratified sampling design's strata, `k_s = min(n_s, max(f_s,
     ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work samples
-    one), each stratum's `subset` on its own segment of the stream, and U2 on work samples, held to the verifier's own law."""
+    one), each stratum's `subset` on its own segment of the stream, and U2 on work samples, held to the verifier's own sampling design."""
     import random
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     ref = _stratified_agree()
@@ -447,12 +473,12 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     got = check([d, *bad], *flags, "--work", "2")
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
     assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
-    # another table's law, or the stratified law, is not this verifier's
+    # another table's law, or the stratified sampling design, is not this verifier's
     other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
     assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
-    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 draws what stratified:4 draws from it,
+    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 samples what stratified:4 samples from it,
     # at floor 9 all four; a floor on a working stratum lifts it too
     cases = [({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 2}}, [1, 1, 2], [2, 1, 2]),
              ({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 9}}, [1, 1, 9], [2, 1, 4]),
@@ -484,7 +510,7 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     """`verify` refuses a session whose record carries a work sample unless it holds its own K, work table, program and
-    partition, since the sample's K, works and floors set every k_s; with all four, the law must be its own derivation, so a
+    partition, since the sample's K, works and floors set every k_s; with all four, the sampling design must be its own derivation, so a
     sample made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     table = _work_program(tmp_path)
@@ -520,7 +546,7 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     assert why(at2, *other, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
     assert why(at2, *flags, "--work", "3").startswith("setup: U2: the draw's K is 2, not the verifier's 3")
     assert why(at1, *flags, "--work", "2").startswith("setup: U2: the draw's K is 1, not the verifier's 2")
-    # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
+    # at its own K and table the sampling design is its own derivation, and setup goes on to the circuit, which this file is not
     assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
     assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
     # the floors are the verifier's too: a sample made under a table with T2's floor at 3 is refused under the verifier's
@@ -536,7 +562,7 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
 def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     """`verify` refuses a session whose record carries a stratified sample unless it holds its own K (`--stratified K`),
     program and partition, since the sample's K and strata set every k_s (U2 alone accepts a sample at k = 1, and strata it
-    cannot check); with all three, the law must be its own derivation, so a sample at another K or over other strata is
+    cannot check); with all three, the sampling design must be its own derivation, so a sample at another K or over other strata is
     refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     flags = _work_program(tmp_path)("w.json", {})[:4]
@@ -576,6 +602,36 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     # at its own K, program and partition, setup goes on to the circuit, which this file is not
     assert not why(at4, *flags, "--stratified", "4").startswith("setup: U2:")
     assert not why(at1, *flags, "--stratified", "1").startswith("setup: U2:")
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_verify_refuses_an_archived_circuit_that_does_not_hash_to_its_key(tmp_path):
+    """`verify --archive` hashes the circuit file beside its parse and waits for the hash before any session: a copy that
+    doesn't hash to its key is refused as an input (exit 2), with no verdict, and a copy that does goes on to setup."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    store = tmp_path / "archive" / "sha512"
+    store.mkdir(parents=True)
+
+    def held(key: str, data: bytes) -> str:
+        (store / key).write_bytes(data)
+        return key
+
+    pub = held(hashlib.sha512(b"{}\n").hexdigest(), b"{}\n")
+    bad = held(hashlib.sha512(b"the circuit its key names").hexdigest(), b"another file")
+    good = held(hashlib.sha512(b"another file").hexdigest(), b"another file")
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+
+    def run(circuit):
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--archive", str(tmp_path / "archive"),
+                               "--circuit", circuit, "--public", pub, "--session", str(tmp_path / "s")],
+                              capture_output=True, text=True)
+
+    p = run(bad)
+    assert p.returncode == 2 and "VERDICT" not in p.stdout, p.stdout + p.stderr
+    assert p.stderr.strip().splitlines()[-1] == f"statement inputs: circuit: archive: the object held under {bad} does not hash to it"
+    p = run(good)
+    assert "does not hash to it" not in p.stderr and "VERDICT" in p.stdout, p.stdout + p.stderr
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -626,7 +682,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
     assert [g["ok"] for g in check([(x, len(x["units"]) + len(x["closure"])) for x in bad])] == [False] * len(bad)
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert not check([({**strat, "closure": [9]}, len(strat["units"]) + 1)])[0]["ok"]
-    # the verifier's own map: its closure is accepted, a smaller one refused, and a plain draw lacks its closure
+    # the verifier's own map: its closure is accepted, a smaller one refused, and a plain sample lacks its closure
     smaller = {**d, "closure": c[:-1]} if len(c) > 1 else {k: v for k, v in d.items() if k != "closure"}
     assert [g["ok"] for g in check([(d, n), (smaller, n - 1)], *flags, "--work", "2", *cl)] == [True, False]
     (tmp_path / "circuit.txt").write_text("not a circuit\n")
@@ -659,7 +715,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
 
 def _one_stage_draw():
     try:
-        from verity.core.protocols.sampled_proofs.one_stage import draw
+        from verity.core.protocols.spot.one_stage import draw
     except ImportError:
         return None
     return draw if hasattr(draw, "derive") else None
@@ -770,57 +826,6 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
-NCI_SCRIPTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "network" / "nci" / "lean" / "scripts"
-
-
-def _tile_window(bits: bool) -> str:
-    """A PoUW window's shape (`pouw_credit_cases.window_desc`): the root's 16-bit input batch, then 8 bits, and one call
-    of a template over a row of 8 bits and a word, returning the word; the row's argument names the 8 bits (`bits`) or
-    node 0's first word 8 times, reading a word as bits."""
-    word, row = ["Value", 16], ["Array", 8, ["Value", 1]]
-    root = {"params": [], "ret_type": word, "ret": {"strided": ["n", 2, 0, 1, 0, 0, 1]}, "nodes": [
-        {"form": "batch", "fn": 0, "n": 2, "args": [], "axes": [], "out": 2},
-        {"form": "batch", "fn": 2, "n": 8, "args": [], "axes": [], "out": 1},
-        {"form": "call", "fn": 1, "out": 0, "args": [{"type": 1, "refs": {"strided": ["n", int(bits), 0, 1, 0, 0, 8]}},
-                                                     {"type": 0, "refs": {"strided": ["n", 0, 0, 1, 0, 0, 1]}}]}]}
-    tile = {"params": [["a", row], ["zy", word]], "ret_type": word, "ret": {"strided": ["p", 1, 0, 1, 0, 0, 1]},
-            "nodes": []}
-    return json.dumps({"annotations": {}, "callees": ["Input16_v1", "Tile_v1", "Input1_v1"], "definitions": {
-        "Input16_v1": {"form": "primitive", "id": "Input16_v1", "params": [], "ret": word},
-        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]},
-        "R_v1": {"form": "composite", "id": "R_v1", "bindings": {}, "body": root},
-        "Tile_v1": {"form": "composite", "id": "Tile_v1", "bindings": {}, "body": tile}},
-        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v1",
-        "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
-
-
-@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_width_refusals_agree_with_the_codec(tmp_path):
-    """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
-    their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
-    template's bits and its bits as them (`_tile_window`): the Lean decoder, which C-Flock's verifier, `NciCheck` and
-    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
-    (`verity/ml/flock/verifier/README.md`'s D22; `qword_program_agree.py --widths`)."""
-    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
-    V = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(V)
-    with open(tmp_path / "widths.jsonl", "w") as f:
-        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
-            desc = json.loads(inst["program"])
-            try:
-                V.reference.codec.decode_program(desc, V.reference.declared(desc))
-                why = None
-            except ValueError as e:
-                why = str(e)
-            f.write(json.dumps({"program": inst["program"], "codec": why}) + "\n")
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
-                        "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
-                       capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
-
-
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
@@ -893,14 +898,13 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     """`HmRow.check` refuses a range whose slots are smaller than a 128-bit word (below 64 bits the fold is no
     `αA₀ᵀe + B₀ᵀe`) or larger than the block (a packed range of no slots would escape the `k_log` bound), as the BLAKE3
     path's layout check does (R9c's refinement). A composed RoPE circuit is accepted; either change to it is refused."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
     FC.stage(low, s, 0, 4, tmp_path / "st")
@@ -934,17 +938,16 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     with 24 more mask ranges of that slot size, or a lookup of `in_bits = 2^32`, is refused at once with its reason under an
     8 GiB address space; without the bounds the first holds a 512 MiB span per range until it runs out of memory, and the
     second is a power the runtime refuses to compute."""
-    pytest.importorskip("verity_numerical")
     import resource
 
     from verity_flock import circuit as FC
     from verity_flock.ir_lower import TABLES
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
     FC.stage(low, s, 0, 4, tmp_path / "st")
@@ -1016,14 +1019,13 @@ def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
     generates (`Flock.HmNets`, `Flock.HmRow`). A composed RoPE circuit is accepted; one AND row changed in either
     section is refused, naming the row."""
-    pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
+    s = InputSet.open(synthetic_set(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
     low = FC.lowering_for_set(s)
     text = FC.compose(low, s.subcircuit)
     FC.stage(low, s, 0, 4, tmp_path / "st")

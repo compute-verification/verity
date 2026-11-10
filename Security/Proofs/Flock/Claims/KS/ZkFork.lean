@@ -331,7 +331,7 @@ def ZkLiveFork {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readabl
 end Gen
 
 /-- **The simulated fork is aligned with the masked fork rounds at the caps**: at every masked statement in scope that
-sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
+sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
 level-`ℓ + 1` table node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `ForkEvZ` (`ZkAlignQ`). -/
 def ZkForkAlign (x : Claims.Msg) : Prop :=
@@ -351,7 +351,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork is aligned with the masked fork rounds at the caps**: at every masked statement in scope that
-sets up at a draw, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
+sets up at a sample, every prover and tape, every table `j` and table of columns, at each tape the fork at rep `r`'s
 level-`ℓ + 1` table node against the simulated strategy after `Commit` is at most the fork after `zkRd j i` coins of
 `ForkEvZ` (`ZkAlignQ`). -/
 def ZkForkAlign (x : Claims.Msg) : Prop :=
@@ -368,7 +368,7 @@ def ZkForkAlign (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a draw, every
+/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a sample, every
 prover and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's
 coins whose decoded live outcomes have `ForkEvZ` collide among the verifier's calls in the two. -/
 def ZkForkClash (x : Claims.Msg) : Prop :=
@@ -392,7 +392,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a draw, every
+/-- **The live fork event's collision at the caps**: at every masked statement in scope that sets up at a sample, every
 prover and tape, every table `j` and table of full-width columns, two accepting runs of `P` at the masked simulator's
 coins whose decoded live outcomes have `ForkEvZ` collide among the verifier's calls in the two. -/
 def ZkForkClash (x : Claims.Msg) : Prop :=

@@ -43,7 +43,7 @@ The record a decision of `nextR` hands the verdict is the reader's (`recJ`), not
 `repLens` rounds, round `j` counting its schedule's coins (`recStreams`). So the decoded session's rep stream has the
 coins the live coins alone fix (`canonRounds`, `coins_of_decode`), stream by stream, not just in total. This is what the
 shipped recursion enforces of the inner record by check 5 (`RecVStar.innerCommits`/`repCoins` hold each rep stream's
-round count and coins to the coin server's, and `RecVStar.checkSchedule` the coin server's to the schedule).
+round count and coins to the challenger's live-coin part's, and `RecVStar.checkSchedule` the challenger's live-coin part's to the schedule).
 
 * `DecAt.rounds_canon`: rep `r` of table `i`'s coin rounds are `canonRounds` at rep `2 i + r`.
 * `DecAt.roundCount`: its round count is the schedule's (`repLens`).

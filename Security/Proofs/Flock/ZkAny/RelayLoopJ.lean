@@ -42,7 +42,7 @@ public import Proofs.Flock.Claims.ZK.FrameZK
 * **`loopKept_ctl`**, `loopKept_ctl_all`: `LoopJ` is kept at every slot that reads no model message.
   **`loopKept_hello`**: and at the `Hello`, whose round the model's run passes, where the model's coin check reads
   the setup's `Hello` at the relay's nonce. `liveBefore_one`: past the `Hello` every earlier round passed.
-  **`loopKept_commit`**: and at the `Commit`, where the worker's link is the firewall's own, below the `Finish`, the
+  **`loopKept_commit`**: and at the `Commit`, where the worker's link is the ZK server's own, below the `Finish`, the
   loop's level 0s for the session being those `Session.level0` drew (`LoopRead`), the model's requests the loop's and
   its frame taking the coins after the `Hello`.
 -/
@@ -210,9 +210,9 @@ theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Floc
   exact cap_root_build hb
 
 /-- **Past the session's `Commit` each level 0 bound to it is the one the loop drew for its table**: where the loop drew
-`ls` for the session (`DrawInv`: none bound to it yet, and the level 0s drawn for it `ls`'s), table `j`'s being
+`ls` for the session (`DrawInv`: none bound to it yet, and the level 0s sampled for it `ls`'s), table `j`'s being
 `Level0.ofDraws` at its statement's `m` on what the host and the operating system handed the loop for rep stream `2j`,
-the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one drawn for the table the
+the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one sampled for the table the
 `Commit` binds as `name`, the setup's table of that name (`commit_inv`). -/
 theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt}
     {R : _root_.Flock.Firewall.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.Firewall.Level0.Level0}
@@ -594,7 +594,7 @@ theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker
 
 /-- **`LoopJ` is kept at the `Commit`**: the session's slots took only the model's `Hello` before it, so no stream was
 seen; the updates between keep the session's stop; and every round before the model's next passed, before the link
-and after it, where the worker's link is the firewall's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`);
+and after it, where the worker's link is the ZK server's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`);
 and past it, at a level 0 bound to the session, the session's entry is linked to the history's link coins
 (`linkOn_commit`): that level 0 is a table's (`BuiltAt`), so the setup has a rep stream, whose sizes (`LoopJ.sizes`)
 put the setup's link points within `Frames.COIN_MAX` words; and, where the model's release requests the loop's

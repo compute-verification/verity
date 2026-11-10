@@ -127,7 +127,7 @@ class Cfg(tuple):
     only, and only where the tiles leave SMs idle, `splits_for`): their s32 sums meet in a workspace, exactly
     (`Lib.workspace`); 0: as many as fill the SMs (`auto_splits`)."""
 
-    def __new__(cls, tm: int, bn: int, ctas: int = 0, group: int = 8, cluster: int = 1, splits: int = 1):
+    def __new__(cls, tm: int, bn: int, ctas: int = 0, group: int = 8, cluster: int = 1, splits: int = 1) -> Cfg:
         if ((tm, bn) not in TILES or ctas < 0 or group < 1 or cluster not in (1, 2) or ctas == 1 and cluster == 2
                 or splits < 0 or splits != 1 and cluster != 1):
             raise ValueError(f"no such config: {tm}x{bn}:c{ctas}:g{group}:m{cluster}:k{splits}")
@@ -168,7 +168,7 @@ def default_cfg(m: int, n: int, k: int, sms: int = 132) -> Cfg:
 class Lib:
     """The cubin in torch's context on the current device: its kernels, their shared memory, the tensor maps."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.cubin = self.path.read_bytes()
         self.sha256 = hashlib.sha256(self.cubin).hexdigest()
@@ -227,7 +227,7 @@ class Lib:
             raise RuntimeError(f"{self.path}: no cluster of two fits ({threads} threads, {shared} bytes of shared memory)")
         return n.value
 
-    def _launch(self, f: vp, grid: int, threads: int, shared: int, param) -> None:
+    def _launch(self, f: vp, grid: int, threads: int, shared: int, param: C.Structure | C.c_uint64) -> None:
         params = (vp * 1)(C.addressof(param))
         self.ck("cuLaunchKernel", f, grid, 1, 1, threads, 1, 1, shared, vp(torch.cuda.current_stream().cuda_stream), params, None)
 
@@ -283,7 +283,8 @@ class Lib:
                                torch.zeros(units * (tm // 64) * 4, dtype=torch.int32, device=dev))
         return self.works[key]
 
-    def _params(self, xq, s_a, w, s_w, y, cfg: Cfg, clk=None) -> tuple[Params, int, int]:
+    def _params(self, xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+                cfg: Cfg, clk: torch.Tensor | None = None) -> tuple[Params, int, int]:
         """The launch's Params, its units and its grid."""
         m, k = xq.shape
         n = w.shape[0]
@@ -305,13 +306,15 @@ class Lib:
             p.clk = clk.data_ptr()
         return p, units, grid
 
-    def scaled_mm(self, xq, s_a, w, s_w, y, cfg: Cfg, clk=None) -> dict:
+    def scaled_mm(self, xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+                  cfg: Cfg, clk: torch.Tensor | None = None) -> dict:
         tm, bn, _, _, cl, _ = cfg
         p, units, grid = self._params(xq, s_a, w, s_w, y, cfg, clk)
         self._launch(self.fns[(tm, bn, cl)], grid, 128 * (tm // 64 + 1), smem(tm, bn), p)
         return {"grid": grid, "units": units, "cluster": cl, "splits": p.splits}
 
-    def reduce_mm(self, xq, s_a, w, s_w, y, rk, z, cfg: Cfg, flush: str, clk=None) -> dict:
+    def reduce_mm(self, xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+                  rk: torch.Tensor, z: torch.Tensor, cfg: Cfg, flush: str, clk: torch.Tensor | None = None) -> dict:
         tm, bn, _, _, cl, _ = cfg
         r = rk.shape[0]
         if not has_reduction(cfg, r, flush):

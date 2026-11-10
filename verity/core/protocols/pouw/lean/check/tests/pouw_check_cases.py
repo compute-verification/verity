@@ -1,11 +1,11 @@
-"""The difftest's cases: generated windows, each a `serve` case ``{"commitment": hex, "evidence": hex, "params": JSON}``.
+"""The difftest's cases: generated execution phases, each a `serve` case ``{"commitment": hex, "evidence": hex, "params": JSON}``.
 
-A case is an honest window (random grid bits, pinned tile template (`core_check.TILES`), ε, δ, range, level and fixed
+A case is an honest execution phase (random grid bits, pinned tile template (`core_check.TILES`), ε, δ, range, level and fixed
 length; the registration one-stage's record of it, the service's answer an acceptance of that registration with its
-profile and draw), then one mutation (`MUTATIONS`)
+profile and sample), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
 writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
-draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
+samples them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
 the refusal it aims at.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pouw_rounds_cases as RC
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.crypto import lms
 
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
@@ -34,9 +34,9 @@ def _hex(rng: random.Random, n: int = 64) -> str:
 
 def window_live(rng: random.Random, w: bytes, x: bytes, layout: tuple[tuple[str, int], ...] = Wd.SALT_FAMILIES,
                 reserved: bool = True, **end) -> tuple[dict, dict]:
-    """A live window's salt over its weights' root `w` and its activations' root `x`, as a live Pearl-C pass's
+    """A live execution phase's salt over its weights' root `w` and its activations' root `x`, as a live Pearl-C pass's
     (`pouw_pass_cases.honest_live`): a salt-only session S (of `layout`) of the auditor's challenger that its gate
-    reserved (unless not `reserved`) and opened on salt epoch k's root R = `salt.anchored_epoch_root(w, x, k)` and ended
+    reserved (unless not `reserved`) and opened on salt execution phase k's root R = `salt.anchored_epoch_root(w, x, k)` and ended
     complete (its end changed by `end`), S's salt coin released after R.  The verifier's ``live`` inputs
     (`core_check.LIVE`), and the answer's ``salt``: k, S's commitment, salt coin, its round-0 unit salt after R
     (`h1tile.live_salt`) and the gate's answer."""
@@ -54,7 +54,7 @@ def window_live(rng: random.Random, w: bytes, x: bytes, layout: tuple[tuple[str,
 
 
 def group(rng: random.Random, names: tuple[str, ...]) -> dict:
-    """A group of committed values' entries a window names (`core_check.WINDOW_VALUES`): ``{program, values}``, a
+    """A group of committed values' entries an execution phase names (`core_check.WINDOW_VALUES`): ``{program, values}``, a
     non-empty random subset of `names`, each entry naming its value, a random domain and root, and its rows' shape."""
     picked = sorted(rng.sample(names, rng.randint(1, len(names))))
     return {"program": f"torch-loop/mlp-w8a8-h{rng.choice([64, 128])}/seed{rng.randrange(4)}",
@@ -63,10 +63,10 @@ def group(rng: random.Random, names: tuple[str, ...]) -> dict:
 
 
 def honest(rng: random.Random, mode: str | None = None, weights: str | None = None, **live) -> dict:
-    """An honest window: the verifier's parameters, the registration, and the service's accepting answer.  Its check
+    """An honest execution phase: the verifier's parameters, the registration, and the service's accepting answer.  Its check
     item names coin mode `mode` (sometimes, at random, when None); its weights' root W is a ``W`` root (`weights`
     ``port``) or its registered weights' entries' (``registered``; at random when None, and then it registers no ``W``
-    root and its ``root_W`` item is null).  A live window's registration names the activations it committed before its
+    root and its ``root_W`` item is null).  A live execution phase's registration names the activations it committed before its
     salt (``window.activations``; a seeded one's sometimes), its parameters hold its salt session's inputs and its
     answer its salt (`window_live`, under `live`)."""
     bits = rng.randrange(5)
@@ -251,9 +251,9 @@ MUTATIONS = [
     ("salt-values-form", "record", "window.activations.program", 7), ("salt-two-w", None, None, None),
 ]
 NAMES = [m[0] for m in MUTATIONS]
-#: the mutations of a live window, and of a seeded one that brings a live window's salt or inputs
+#: the mutations of a live execution phase, and of a seeded one that brings a live execution phase's salt or inputs
 LIVE_NAMES = {n for n in NAMES if n.startswith(("live-", "salt-"))} - {"live-seeded", "salt-seeded"}
-#: the mutations whose honest live window's salt session is generated otherwise (`window_live`'s arguments)
+#: the mutations whose honest live execution phase's salt session is generated otherwise (`window_live`'s arguments)
 LIVE_ARGS = {"live-incomplete": {"complete": False}, "live-unreserved": {"reserved": False},
              "live-layout": {"layout": Wd.live_families(2)}}
 
@@ -391,8 +391,8 @@ def _flip(h: str) -> str:
 
 
 def instance(rng: random.Random, name: str = "honest") -> dict:
-    """An honest window from `rng`, then the mutation `name` (none for "honest"): a live window's mutation (`LIVE_NAMES`)
-    is of a live window, ``live-seeded`` and ``salt-seeded`` a seeded window's that brings a live window's inputs or
+    """An honest execution phase from `rng`, then the mutation `name` (none for "honest"): a live execution phase's mutation (`LIVE_NAMES`)
+    is of a live execution phase, ``live-seeded`` and ``salt-seeded`` a seeded execution phase's that brings a live execution phase's inputs or
     salt."""
     mode = "live" if name in LIVE_NAMES else "seeded" if name in ("live-seeded", "salt-seeded") else None
     case = honest(rng, mode, "port" if name == "record-no-w-root" else None, **LIVE_ARGS.get(name, {}))

@@ -18,12 +18,13 @@
   environment (the machine-path defaults live there); it is recorded as telemetry and never hashed.
 * **Subcommand options.**  Every ``verity-vllm`` subcommand takes one frozen dataclass whose fields are declared with
   :func:`option`; ``pipeline/cli.py`` is the only parser.  A subcommand refuses a command line by raising
-  :class:`UsageError`.
+  :class:`UsageError`, and what needs the team's run store refuses the same way on a tree without it (:func:`run_store`).
 """
 from __future__ import annotations
 
 import copy
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -33,6 +34,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from importlib import resources
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from verity_vllm import settings
@@ -68,6 +70,20 @@ def checkpoints_hf_home() -> str | None:
 
 class UsageError(ValueError):
     """A command line the subcommand refuses; ``pipeline/cli.py`` reports it as a usage error (exit 2)."""
+
+
+def run_store(module: str, entry: str) -> ModuleType:
+    """``module``, the team's run and store tool (``research``) or a module that runs it, loaded by name when ``entry`` needs it,
+    so nothing needs it at import time.  Where the tree leaves ``module`` out, ``entry`` is refused by name (:class:`UsageError`),
+    never skipped; a module missing from inside ``module`` is a broken environment and raises as itself."""
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError as e:
+        if not f"{module}.".startswith(f"{e.name}."):
+            raise
+        raise UsageError(f"{entry} is refused: {module} is not on this tree. The public release leaves out the run store (`research`), "
+                         "the tool that records the source identity and runs a row's stages as Attempts; in the team's tree, put "
+                         "tools/research/src on PYTHONPATH (verity-vllm row exports it)") from e
 
 
 def option(*flags: str, env: str | None = None, env_empty: bool = False, **kw: Any) -> Any:
@@ -305,6 +321,10 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
 
 
 #: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
+#: A move of it rewrites, in one change: the wheel URL, its sha256 and its readiness check in ``ops/pod_bootstrap.sh``; this name,
+#: which every workload file's ``engine.vllm`` states; benchmarks' ``VLLM_PIN`` (``verity_bench.vllm.presets``) and each benchmark
+#: spec's ``vllm_pin``; and PoUW's serving venv (``benchmarks/pouw/pearl_c_vllm/setup.sh``).  ``git grep`` of the old short sha
+#: lists the rest.
 VLLM = "d9105ea80"
 
 #: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`), the typed record
@@ -339,8 +359,9 @@ def _fetch(paths: list[Path]) -> None:
         rels = [os.path.relpath(p.resolve(), repo) for p in ps]
         env = settings.environ()
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
-        r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json", *rels],
-                           capture_output=True, text=True, env=env)
+        # absolute: fetch-fixtures reads a relative PATH from its working directory, not from --repo
+        r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json",
+                            *(str(p.resolve()) for p in ps)], capture_output=True, text=True, env=env)
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "

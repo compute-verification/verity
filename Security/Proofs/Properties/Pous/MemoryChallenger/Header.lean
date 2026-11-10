@@ -3,7 +3,7 @@ module
 public import Aesop.BuiltinRules
 public import Mathlib.Tactic.ToDual
 public import MemoryChallenger.Records
-public import Proofs.Properties.NetworkRecords.Bytes
+public import Proofs.Properties.NetworkCertifier.Records.Bytes
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
 import Mathlib.Algebra.Order.Group.Nat
 import Mathlib.Data.Finset.Attr

@@ -31,7 +31,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 `decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome flock-verify accepts, at table `j`:
 
-* `RecordsLiveJ` gives the record's draw `dj S`, the proof files, the link points, and table `j`'s root and streams.
+* `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `accepts_tables` sets table `j` up with setupH under `tagsAt` at `partDraw` of part `j`, which is `partJson (dj S)`;
   `DrawOkJ` gives its link points. So a `SetupJ` exists, and `planJ`'s table `j` is `stmtOf` of setupH's statement
   (`tableJ_of`, `model_eq_stmtOf`), with its `fast100` schedule and `PT_LOCAL`.

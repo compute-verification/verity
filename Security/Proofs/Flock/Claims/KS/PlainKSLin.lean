@@ -20,7 +20,7 @@ The plain record's KS chain with the cap terms linear: each cap slot's term is c
   `CpDep`. At a statement some run accepts it is `plain_accPr_le_rdAll` at the refuser's runs, with the read sets
   `rdAt` (what each run reads at a cap position) and the tables `capPlurRd` (the plurality single reading after the
   slot's fork round), averaged over the refuser's last coin (`Pr_refDraw`). The term on each tape is the one-run
-  event's chance at the abort law and each cap position's read-set chance, whose average is at most
+  event's chance at the abort distribution and each cap position's read-set chance, whose average is at most
   `k·Pr[BAbort] + W·(Pr[FC] + 1/(M+1))` (`Pr_one_le_PrBAbort`, `Pr_rdAt_le_capHit`, `Ex_capHits`): the schedule's top
   slot reads nothing (`plainRawLevelCols_top`), and the others are `CpDep`'s positions.
 * `plain_KSFlockLin`: `KSFlockLin` at SHA-512 at the trimmed record `deployPlainTrim` and `CpDep`, from
@@ -90,7 +90,7 @@ theorem sum_depIdx (x : Claims.Msg) (f : ℕ → ℕ → ℕ → ℝ) :
   exact sum3_range (fun ℓ => depLogLen x (ℓ + 1)) f
 
 open Classical in
-/-- **The deployed plain record's table bound at the abort law, linearly, at `CpDep`**, at the untrimmed instance over
+/-- **The deployed plain record's table bound at the abort distribution, linearly, at `CpDep`**, at the untrimmed instance over
 full-width tables: where no run accepts, the term `0`; elsewhere, on each tape, the chance that the run as it aborts
 ties a collision among its own calls and, at each cap position, that it reads there anything but the plurality single
 reading after the slot's fork round. The first averages to at most `Pr[BAbort]` (`Pr_one_le_PrBAbort`), and each

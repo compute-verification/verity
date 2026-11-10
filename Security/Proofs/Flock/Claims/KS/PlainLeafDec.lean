@@ -200,7 +200,7 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves**: `plain_hdecHAt` at `leafPlain` (`plain_hdecHUAtK_of` at `keep := id` and `wrPD`). -/
 theorem plain_hdecHUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

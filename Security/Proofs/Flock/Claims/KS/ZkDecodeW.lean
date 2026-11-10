@@ -41,19 +41,19 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 /-!
 # The deployed `--zk` decoders, with no witness-lane opening off the table
 
-`DecodeSC` at `--zk`, at the setup at the draw, with the level-0 event on the witness lanes (`OffW₀Z`, which
+`DecodeSC` at `--zk`, at the setup at the sample, with the level-0 event on the witness lanes (`OffW₀Z`, which
 `session_sound_of_table_accZ_w` reads). Where the deployed masked reader looks up no column of table `j` off `C`, every
 accepted output table `j`'s reps play to on the decoded tapes opens no level-0 position off `C` on a witness lane unless
 it self-clashes:
 
-* `ZkTxNoOff`: wherever the setup at the draw has table `j` with `Zk.schedule`'s schedule and the record decodes to a
+* `ZkTxNoOff`: wherever the setup at the sample has table `j` with `Zk.schedule`'s schedule and the record decodes to a
   session with table `j`'s two rep streams, the reader looks up no column off `C` in the reps' `zkRepColsOf` entries
   below level 0's `2^d`.
 * `not_offW_of_entries`: an output whose level-0 openings are those entries at its own cap (`OpensEntries`) opens no
   position off `C` on a witness lane without a self-clash, in a transcript with `ZkTxNoOff`
   (`Claims.Flock.exists_ne_of_zk_entries`).
 * `runsAtZCJ_live_offW`, `runsAtZCJH_live_offW`: `runsAtZCJ_live_entries` and `runsAtZCJH_live_entries` at that
-  verdict at table `j₀`, on the outcomes `verify --zk` accepts at the setup at the draw whose transcript has
+  verdict at table `j₀`, on the outcomes `verify --zk` accepts at the setup at the sample whose transcript has
   `ZkTxNoOff` at table `j₀`, at public and hidden outputs.
 * `decodes_of_runsOnZCJW`: a `RunsOnZCJW` gives the decoder table by table (`DecodesTable`) at any verdict its
   verdict implies; `DecodesTable.ok_of_plays`: such a decoder is right at every output its reps play to on the
@@ -77,7 +77,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **No column of table `j` off `C` in a transcript**: wherever the setup at the draw `d` has a table `j`, whose
+/-- **No column of table `j` off `C` in a transcript**: wherever the setup at the sample `d` has a table `j`, whose
 schedule is `Zk.schedule`'s, and the record decodes to a session with table `j`'s two rep streams, the deployed masked
 reader looks up no column off `C` in the reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams'
 rounds and table `j`'s proof files, below level 0's `2^d`. -/
@@ -107,7 +107,7 @@ theorem not_offW_of_entries {I : Inputs} {d : Lean.Json} {t : Exec.Transcript} {
     (Claims.Flock.exists_ne_of_zk_entries hs512 T cap out hN C _ _ hcap hver hent hoff hsc)
 
 /-- **`runsAtZCJ_live` with no witness-lane opening off `C` at table `j₀` unless it self-clashes**: on the outcomes
-`verify --zk` accepts at the setup at the law's draw whose transcript has `ZkTxNoOff` at table `j₀`, each table's
+`verify --zk` accepts at the setup at the sampling design's sample whose transcript has `ZkTxNoOff` at table `j₀`, each table's
 output is accepted and, at table `j₀` at its own cap, opens no level-0 position off `C` on a witness lane without a
 self-clash (`runsAtZCJ_live_entries`, `not_offW_of_entries`). -/
 theorem runsAtZCJ_live_offW (I : Inputs) (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
@@ -139,7 +139,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   {acc : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Prop}
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
-/-- **The decoder at the law's draws, table by table, from `RunsOnZCJW`**: right at a verdict `ok'` on the outcomes of
+/-- **The decoder at the sampling design's samples, table by table, from `RunsOnZCJW`**: right at a verdict `ok'` on the outcomes of
 `pL`, where each is in `acc` and its outputs of `ok` are accepted and of `ok'` (`decodes_of_runsOnZCJV`). -/
 theorem decodes_of_runsOnZCJW {ok : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts →
       Fin (planZ S R).length → OutZC 𝔽 D Sl → Prop}
@@ -248,7 +248,7 @@ def OkOffWJ {mPts : ℕ} (ts : List (TabZK 𝔽 mPts)) (j₀ : ℕ) (rootB₀ : 
     ¬ OffNoClashWZ ZkExec.hs512 (ts.get j) (Exec.capOfRoot rootB₀[j₀]!) (Claims.Flock.oracleOf C) out)
 
 /-- **The deployed live verdict, with no column of table `j₀` off `C`**: `verify --zk` accepts at the setup at the
-draw `d` at `wrS` (`AcceptsAt`), the deployed masked reader looks up no column of table `j₀` off `C` in what `wrS`
+sample `d` at `wrS` (`AcceptsAt`), the deployed masked reader looks up no column of table `j₀` off `C` in what `wrS`
 writes (`ZkTxNoOff`), and the outcome's `root_B[j₀]` is `rootB₀[j₀]`. -/
 def AccTxJ (I : Exec.Inputs) (d : Lean.Json) (j₀ : ℕ) (rootB₀ : Array ByteArray) {N : ℕ} (C : Fin N → List 𝔽)
     {J mPts : ℕ} (o : LiveOutJ J mPts) : Prop :=
@@ -271,7 +271,7 @@ theorem okOffW_of_entries {mPts n : ℕ} {Reg : Type} {ts : Finset (Fin n) → R
   exact hw.2 rfl hN
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the witness-lane verdict at table `j₀`**: where `verify
---zk` sets its session up at the empty draw `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and
+--zk` sets its session up at the empty sample `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and
 decoder `decD` at `tabsJ` of `zkTabs` are right at `OkOffWJ` on the outcomes of `AccTxJ` (`decodesTable_zkTabs` with
 `runsAtZCJ_live_offW`). -/
 theorem decodesTableW_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}

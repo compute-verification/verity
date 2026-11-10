@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # proof_throughput's prover point: sessions that each prove B coordinates of one workload's population, the B its loopback
-# `flock-circuit serve` draws at the session's Register by the stratified law (`serve --draw-law`, the law verify.sh's Lean
+# `flock-circuit serve` samples at the session's Register by the stratified sampling design (`serve --draw-law`, the sampling design verify.sh's Lean
 # verifier derives for itself), proved by Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
 # timed sessions. The coins are the challenger's keyed coin tree's (FC_COINS=tree: 70-class-sweep.sh gives the loopback verifier
 # its own challenger, pod/challenger.sh, and holds every session's record to the challenger's release log). The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
 # instance check run outside the lease; the lease covers the sessions alone. The timed sessions, the circuit, the population's
-# public file and the law go to the store as one bundle (out/bundle.json names it) for verify.sh, which runs the Lean verifier
+# public file and the sampling design go to the store as one bundle (out/bundle.json names it) for verify.sh, which runs the Lean verifier
 # on a CPU node and writes the point's contract result. This run's own result.json is the same contract result with the Lean
 # verifier not run.
 # Run from the verity tree on a GPU node, as a GPU host job (its CPUs at a GPU job's weight, the GPU taken by gpu-lease):
@@ -61,7 +61,7 @@ sha256sum "$BIN" | cut -d' ' -f1 > "$O/binary.sha256"
 ph build end
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/proof_throughput
 PT() { "$PYBIN" -m verity_proof_throughput "$@"; }
-# the population (the class sweep's PT_VU, PT_N) and the verifier's stratified law for B (law.json)
+# the population (the class sweep's PT_VU, PT_N) and the verifier's stratified sampling design for B (law.json)
 read -r PT_VU PT_N < <(PT population --workload "$WORKLOAD" --B "$B" --out "$O") && [ -n "${PT_N:-}" ] || { log "no such workload or B"; exit 1; }
 export PT_VU PT_N
 

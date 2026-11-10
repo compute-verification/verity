@@ -110,7 +110,7 @@ theorem ans_dec_deployed (rd : Msg → Option FinalP)
     (Function.leftInverse_invFun RecDeploy.coin_bytes_injective c)⟩
 
 /-- **`RecursiveKSCompiledAtRec` from the compiler's contract at the dense statements**, at every compiled record
-`recBoundAt` builds and every reader whose plain draws are in range (`hIn`): `ksCompiledOn_of` at `RecDeploy.DenseAt`
+`recBoundAt` builds and every reader whose plain samples are in range (`hIn`): `ksCompiledOn_of` at `RecDeploy.DenseAt`
 with its other premises at the deployment (`RecDeploy.ksFlockLin_R`, `flockArgKS_deployed`, `sessionsOfRec_deployed`,
 `ans_dec_deployed`, `DE`'s nonnegative table errors, F8, `RecDeploy.binds_deployed`, `listWithin_deployPlainTrim`),
 lifted to every statement by `ksCompiledOn_every`. -/
@@ -136,7 +136,7 @@ theorem recursiveKSCompiledAtRec_of_contract (b : RecDeploy.Brings) (L : Claims.
     (protoWFOfFlock _ _ FlockDeploy.KS.CpDep (ans_dec_deployed rd final wE w) hε) (RecDeploy.tableErrNonneg _ _ _)
 
 /-- **`Flock.Guarantees.RecursiveKSCompiledEvery` from the compiler's contract at the deployment's dense statements**
-(`ContractCompiledDense`, A1d): `recursiveKSCompiledAtRec_of_contract` at the deployed reader, whose plain draws are in
+(`ContractCompiledDense`, A1d): `recursiveKSCompiledAtRec_of_contract` at the deployed reader, whose plain samples are in
 range (`FlockDeploy.KS.plainRdInR`). -/
 theorem recursiveKSCompiledEvery_of_contract (hC : ContractCompiledDense) :
     _root_.Flock.Guarantees.RecursiveKSCompiledEvery :=

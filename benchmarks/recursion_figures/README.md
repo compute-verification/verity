@@ -2,7 +2,7 @@
 
 One recursive session's figures from a recursion bench result (`benchmarks/recursion_e2e`'s `recursion_e2e.json`, whose
 `session_times` hold each session step's wall and CPU seconds): its cost, its knowledge-soundness error and its stop-leak
-bound, for one window and pooled over a week, a month and a year (`wipe_monitoring.PERIODS`), over the reference
+bound, for one window and pooled over a week, a month and a year (`reporting.PERIODS`), over the reference
 datacenter and the world's compute (`benchmarks/census`), each with its basis: measured (the run), proved (the Lean
 theorem it reads and what that assumes) or scaled (a session a machine a window, each as this one). The
 knowledge-soundness error is κ + t·ε a session (κ and ε proved), pooled by the union bound as sessions·κ + T·ε against the

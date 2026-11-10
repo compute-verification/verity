@@ -47,7 +47,7 @@ leaves and challenge derivation), not with the expander.
   the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
   is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
   above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
-- **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
+- **The instantiation assumption is not accepted** (spec decision 8, deferred by default): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
 - So is SeqRoot: no 16,448-bit root, nor another computation with its effect on the challenged block, finishes within
@@ -138,10 +138,8 @@ ROOT_CALL_NS = 854_029
 the `Δ + RTT` that SeqRoot's 2× margin must stay under.  The certificate allows no such call within the deadline.  The
 single-core floor is the timing red team's Zen 5 at 5.7 GHz with full-rate IFMA, 2,060.845 cycles = 361.55 ns per
 squaring (`regate.py`) over the root's 16,486 squaring-equivalents, 5,960.54 µs; the measured 8-core speedup on one
-Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring (run r20260929-060834-0ec4,
-art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed).  So the cooperating root is 1,708,058.35 ns
-and half of it 854,029.18 ns (`note:20261004T2102Z-report-relay-p2-redteam-timing`,
-art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57)."""
+Zen 4 chiplet is 2,716.7 / 778.5 = 3.48966× per squaring.  So the cooperating root is 1,708,058.35 ns and half of it
+854,029.18 ns."""
 
 DELTA_NS = 500_000
 """Δ at the spec's operating point, 0.5 ms, with the verifier off the responder's node."""
@@ -340,9 +338,17 @@ def below(p: int, candidates) -> int:
 def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
     """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's streams: `K` is the first
     `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below `p`."""
-    nb, base = params.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
+    return sha512_keys_indexed(params, prefix, s, j)[:2]
+
+
+def sha512_keys_indexed(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int, int]:
+    """`sha512_keys` and which word of `stream(base, "t")` `t` is (the spec's `t_rejection_index`).  It reads only `w` and
+    `p`, so the spec's own params (`benchmarks/pous/p2_v1/reference.py`'s `Params`) take it as well."""
+    nb, base = params.w // 8, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", nb), "big")
-    return k, below(params.p, (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count()))
+    words = (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count())
+    i, t = next((i, x) for i, x in enumerate(words) if x < params.p)
+    return k, t, i
 
 
 def chacha_keys(params: P2Params, seed: bytes, j: int) -> tuple[int, int]:
@@ -522,4 +528,5 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
-           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
+           "wide_certificate"]

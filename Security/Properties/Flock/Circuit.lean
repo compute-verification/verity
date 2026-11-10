@@ -6,7 +6,7 @@ import Mathlib.Tactic.NormNum.Inv
 import Mathlib.Tactic.NormNum.Pow
 
 /-!
-# The circuit a registered C-Flock circuit file describes
+# The circuit a registered Flock circuit file describes
 
 The definitions the parsed circuit file's circuit is built from: the program of its units on Δ's source keys
 (`Placed.keyProg`, over a unit net `Net.ofRows` built, `Built`) and its returned outputs' bits (`Layout.outsOf`),

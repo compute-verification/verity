@@ -14,7 +14,7 @@ honest answer is more than the stored label.  Everything else is written once, h
    The memory challenger refuses any `k` or deadline that none of the scheme's certificates covers.  An accepted audit
    gives a `StorageProfile`: what the certificate says about the server, and what that rests on.
 
-Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme draws
+Every coin is flipped here through `verity.ml.randomness` (`setup.SALT_DOMAIN`, `audit.CHALLENGE_DOMAIN`), and a scheme samples
 none.  The claims a certificate rests on are ids in `verity.core.claims`' format (`claim`).
 """
 

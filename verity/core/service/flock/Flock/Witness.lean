@@ -14,7 +14,7 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the challenger's coin tree and the statement's
   partition object and program returns one table, and `Zk.schedule` accepts its `m`), `acceptsDescription`
   (`AcceptsDescription`, at each of the verifier's own registered reads), and with `--record` the recorded inner
-  session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full draw when it has one
+  session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full sample when it has one
   (`RecCoins.drawnSpec`, as check 5 decodes it). `accepts_stmt`'s line also prints the statement's
   partition finding, the verifier's own inner shape (`shapeOf`, `innerAt`), the number of V*'s outer statements over it
   (`outerPartsOf`, `outerParts`) and V*'s statements there (`RecVStar.statements`).
@@ -23,7 +23,7 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   sessions, with `flock-verify verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`, public outputs) and `tagsOkZHJ`
   (`ZkHidden.TagsOkZHJ`, hidden outputs, `ZkOuterR.hTags`), which no session meets both of, the statement check without
   and with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullDraw`
-  (the record's draw is the full draw `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
+  (the record's sample is the full sample `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
   (`ZkReg.AcceptsZKR`, with the statement's `m` and its schedule's level 0), and with `--rec-inner` `accepts_zkv`
   (`AcceptsZKV`: `acceptsZKRAt`, then `checkZKV`, V*'s statement check, whose refusal it prints apart as `check_stmt`).
 
@@ -37,7 +37,7 @@ namespace Flock.Witness
 open Lean (Json)
 
 /-- What `flock-verify verify --zk` reads besides the session directory, for one of V*'s sessions: `Exec.Inputs`'s
-fields but the work, stratified and closure inputs, which V*'s full draw reads none of, and the coins, which `--zk` sets. -/
+fields but the work, stratified and closure inputs, which V*'s full sample reads none of, and the coins, which `--zk` sets. -/
 structure Inputs where
   tags : Tags
   circuitFile : ByteArray
@@ -47,7 +47,7 @@ structure Inputs where
   partition : Option Json
   program : Option ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
+/-- A record's `unit_draw`, when it is a sample (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
   match JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
@@ -102,7 +102,7 @@ def scopeOk (I : Inputs) : V Circuit := do
   let c ← HmRow.parse (zkTags I) I.circuitFile I.tables
   if ProvedScope.scopeOk c then pure c else throw "scopeOk refuses the circuit"
 
-/-- The record's draw is the full draw over `n` units: `subset n` of the population `[0, n)`, every unit, no closure. -/
+/-- The record's sample is the full sample over `n` units: `subset n` of the population `[0, n)`, every unit, no closure. -/
 def fullDraw (n : Nat) (record : String) : V Unit :=
   match recordDraw record with
   | none => throw "the record has no draw"

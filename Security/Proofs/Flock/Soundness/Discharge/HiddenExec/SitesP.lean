@@ -12,12 +12,12 @@ set_option Elab.async false
 # The sites of a one-table hidden-output session at public inputs
 
 `Sites.lean` at the verifier's public inputs `own`, at the session's statement circuit `c` (`HmOut.parseStmt`, a
-templated file's committed circuit unrolled). A drawn table's acceptance (`TableHP.acc`) is its `Stmt.setupHidden … own`
+templated file's committed circuit unrolled). A sampled table's acceptance (`TableHP.acc`) is its `Stmt.setupHidden … own`
 run with its `SpecP` (`Hidden.setupHidden_specP`), the layout `Hidden.hidden_layoutP` gives, its unit slots' kept rows
 its flat twin's (`unitRowsFlatP`), and the table's statement `stmtOf` of it, the layout's block R1CS
 (`Integrate.model_eqW`).
 
-`sitesAtHP` holds each drawn unit's acceptance, template instance and block; every acceptance's statement circuit is the
+`sitesAtHP` holds each sampled proof block's acceptance, template instance and block; every acceptance's statement circuit is the
 session's (`sitesAtHP_parse`). So `ppHP`, `hConstHP` and `hZeroHP` are `ProgPlaces`, `hConst` and `hZero` for
 `Placed.keyProgP` at the hidden tables at `own`.
 -/
@@ -35,25 +35,25 @@ namespace TableHP
 
 variable {S : Finset (Fin n)} (x : TableHP I own mPts S)
 
-/-- A drawn table's `SpecP`, at its circuit's public input ports. -/
+/-- A sampled table's `SpecP`, at its circuit's public input ports. -/
 theorem specP : Hidden.SpecP I.tags I.circuitFile I.publicFile I.coins I.tables (some x.d) own
     (Hidden.setupHidden_specP x.h).choose x.st :=
   (Hidden.setupHidden_specP x.h).choose_spec
 
-/-- A drawn table's circuit is committed: `HmOut.parse`'s or `HmOut.parseTmpl`'s. -/
+/-- A sampled table's circuit is committed: `HmOut.parse`'s or `HmOut.parseTmpl`'s. -/
 theorem committed : Hidden.Committed I.tags I.circuitFile I.tables x.st.c := Hidden.committed_of_commit x.specP.parse
 
 include ht hcS in
-/-- **A drawn table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/
+/-- **A sampled table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/
 theorem unrolled_eq : HmOut.unrolled x.st.c = c :=
   Except.ok.inj ((FlockSoundness.parseStmt_of_commit ht x.specP.parse).symm.trans hcS)
 
 include ht hcS hv1 in
-/-- A drawn table's output rows are the statement circuit's (`outRowsS_of_unrolled`). -/
+/-- A sampled table's output rows are the statement circuit's (`outRowsS_of_unrolled`). -/
 theorem outRows : Hidden.Any.OutRowsS x.st.c :=
   outRowsS_of_unrolled ht x.committed (by rw [x.unrolled_eq ht hcS]; exact hv1.1)
 
-/-- **A drawn table's acceptance at `own`** (`TableH.acc`): its `Stmt.setupHidden … own` run and `SpecP`, with the
+/-- **A sampled table's acceptance at `own`** (`TableH.acc`): its `Stmt.setupHidden … own` run and `SpecP`, with the
 layout `Hidden.hidden_layoutP` gives and its unit slots' kept rows its flat twin's (`unitRowsFlatP`); the table's
 statement is the layout's block R1CS at the table's regions (`Integrate.model_eq`, and `TableHP.hT`). -/
 noncomputable def acc : AcceptedHP x.T.S where

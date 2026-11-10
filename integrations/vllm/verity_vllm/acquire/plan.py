@@ -51,7 +51,9 @@ ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "modu
                    "moe_block_stream": "moe_tap", "tp_rank_partials": "tp_tap",
                    "sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy",
                    "weights": "registered_input", "norm_scales": "norm_tap", "router_softmax": "router_tap", "vocab_range": "vocab_tap",
-                   "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap"}
+                   "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap", "run_values": "run_tap"}
+#: the routes whose members are one per (layer, step) geometry or position: one Value class per op_path, member `*`
+FOLDED_ROUTES = ("hidden_tap", "run_tap")
 MODULE_ROUTES = ("module_output", "module_input")                        # the routes whose sites are module boundaries (confirm_modules)
 HIDDEN_TAP_OF_FAMILY = {"fa2_hidden_m1_stream": "fa2.m1", "fa3_hidden_m1_stream": "fa3.m1"}   # hidden_tap route -> the kernel tap
 MOE_FAMILY = "moe_block_stream"
@@ -245,8 +247,8 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         fam = str(r.get("family") or "")
         op = str(r.get("op_path"))
         member = str(r.get("output_member", "out"))
-        if ROUTE_OF_FAMILY.get(fam) == "hidden_tap":
-            member = "*"                                          # the geometry name is per (layer, step); one Value class per tap site
+        if ROUTE_OF_FAMILY.get(fam) in FOLDED_ROUTES:
+            member = "*"
         key = (op, member, fam)
         v = out.get(key)
         if v is None:
@@ -330,6 +332,17 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
             refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
         else:
             refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the tap on")
+        return legal, refused
+
+    if route == "run_tap":
+        anchor = v.anchor
+        if anchor and rt.has_module(anchor):
+            legal.append(AcquisitionSite("native_tap", module, "*", "n/a", f"a value the served run decides for the Calls of module {anchor}: the "
+                              "attention source at its indexer (`commit.committer.run_values`; manifest `attention_module`)"))
+        elif anchor:
+            refuse("native_tap", module, "*", f"attention module {anchor} is not a module of the runtime tree")
+        else:
+            refuse("native_tap", module, "*", "the manifest row names no `attention_module` to anchor the run values on")
         return legal, refused
 
     if fam == MOE_FAMILY:

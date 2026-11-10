@@ -8,7 +8,7 @@ from typing import Any
 def _pouw_roots() -> list[Any]:
     """Pearl-C's tile check as Pearl-C4's at k = 128 (one promotion window): its templates on the H100's and sm_120's
     records and its roots on sm_120's; its hiding templates and roots on sm_120's, the hiding tile under -h3
-    (`Pc8TileHiddenH3`), and the served window's tile on its indexed side rows (`Pc8TileSide`); its hiding roots with the per-tile cap
+    (`Pc8TileHiddenH3`), and the served execution phase's tile on its indexed side rows (`Pc8TileSide`); its hiding roots with the per-tile cap
     (``Shape.cap``, `verity.ml.protocols.pouw.circuit.cap`) at k = 256 (two promotion windows) on sm_120's with
     one row a side; and its roots with the row units cut along k (`verity.ml.protocols.pouw.circuit.rowk`,
     ``Shape.row_k``) in two segments at k = 256 on sm_120's, plain and hiding."""

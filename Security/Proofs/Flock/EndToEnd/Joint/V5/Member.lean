@@ -9,19 +9,19 @@ public import Proofs.Flock.EndToEnd.Joint.V5.Session
 
 A strategy of the window's audit reads the sample and every earlier member's session before it plays member `k`'s, so
 member `k`'s session in the audit is its session played alone at `JointAuditV5.memberLaw`, whose coins are the sample's
-and the earlier sessions' drawn together, by `JointAuditV5.memberStrat`:
+and the earlier sessions' sampled together, by `JointAuditV5.memberStrat`:
 
 * `JointAuditV5.prob_member`: an event of member `k`'s part of the sample and its session's transcript has the same
   probability in the window's audit as in member `k`'s session played alone (`prob_seqG`, then `avg_prod_pi`
   over the sample's coins and, for each, the earlier sessions' coins);
 * `JointAuditV5.epsKs_memberLaw`, `JointAuditV5.link_memberLaw`: `ε_ks` and `ε_bind` read only member `k`'s part of the
-  sample, so they are the same at `memberLaw` as at `design k`, which draws the sample's coins alone;
+  sample, so they are the same at `memberLaw` as at `design k`, which samples the sample's coins alone;
 * `JointAuditV5.member_accepted_drawnWrong_le`: member `k`'s session in the window's audit accepts with a sampled proof
   block of its part incorrect with probability at most `ε_ks,k + ε_bind,k` at `design k`
   (`MemberV5.accepted_drawnWrong_le` at `memberLaw`).
 
 `JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
-and most drawn proof blocks have different link points (`mPtsOf_mono`).
+and most sampled proof blocks have different link points (`mPtsOf_mono`).
 -/
 
 @[expose] public section
@@ -93,7 +93,7 @@ theorem epsKs_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) :
       ENNReal.ofReal (ksStrictZ (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ S R) j (w.ms.get k).k (w.ms.get k).qF
         (w.ms.get k).qS / (1 - rateZ (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ S R) j (w.ms.get k).k))
 
-/-- The share of member `k`'s sampling design played alone whose draws read commit string `p` is `design k`'s. -/
+/-- The share of member `k`'s sampling design played alone whose samples read commit string `p` is `design k`'s. -/
 theorem readShare_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (p : (w.ms.get k).vb.Pos) :
     (Fintype.card (ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.memberLaw τ k) p) : ℝ) /
@@ -138,9 +138,9 @@ theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.lengt
   rw [← w.epsKs_memberLaw τ k, ← w.link_memberLaw τ k]
   exact (w.ms.get k).accepted_drawnWrong_le (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k) hCR hA2
 
-/-- **`hcls` from the registration's refusal**: if at every draw member `k`'s part holds between `lo k` and `hi k` of its
+/-- **`hcls` from the registration's refusal**: if at every sample member `k`'s part holds between `lo k` and `hi k` of its
 proof blocks, its record's count `kd / nTab I` lies between them too, and `lo k` and `hi k` give the same link points
-(the registration check refuses a member whose fewest and most drawn proof blocks don't), then every draw's part has the
+(the registration check refuses a member whose fewest and most sampled proof blocks don't), then every sample's part has the
 record's link points. -/
 theorem hcls_of_bounds {Reg : Type} {nJ : ℕ} (ms : List (MemberV5 Reg nJ)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law)

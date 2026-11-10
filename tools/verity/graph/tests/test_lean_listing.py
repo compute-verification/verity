@@ -199,6 +199,22 @@ def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
     assert len({r["task"] for r in ts["lean-lock:Sec/Proofs"]["reads"]}) == 7, "a proved_in outside the tree adds no package"
 
 
+def test_the_listers_share_one_reading_of_the_imports_while_every_file_it_read_is_unchanged(tmp_path):
+    tree = toy_tree(tmp_path / "tree", (ROOT / graph.SPEC).read_text(), FILES)
+    files = graph.tracked(tree)
+    first = lean_module.imports(tree, files)
+    assert lean_module.imports(tree, files) is first, "lean-module, lean-lock and lean-env read the headers once a listing"
+    (tree / "Sec/Proofs/C.lean").write_text("module\n\npublic import Definitions\n")
+    edited = lean_module.imports(tree, files)
+    assert "Sec/Proofs/D.lean" not in edited[2]["Sec/Proofs/C.lean"], "a header edited under the same files is read again"
+    assert edited == lean_module._imports(tree, files)
+    (tree / "Sec/Proofs/lean-audit.json").write_text(json.dumps({"guarantees": [], "roots": ["Proofs.G"]}))
+    rooted = lean_module.imports(tree, files)
+    assert "Sec/Proofs/H.lean" not in rooted[2] and "Sec/Proofs/H.lean" in edited[2], \
+        "and so is the tree after a lock's `roots` change"
+    assert rooted == lean_module._imports(tree, files)
+
+
 def test_one_env_per_toolchain_and_fetched_packages_each_module_reading_its_package_s(tmp_path):
     ts = listed(tmp_path, **OTHER_ENVS)
     assert sorted(i for i in ts if i.startswith("lean-env:")) == ["lean-env:Ext", "lean-env:Old", "lean-env:Sec"], \
@@ -286,14 +302,19 @@ def test_a_scope_that_isn_t_one_makes_no_graph(tmp_path, monkeypatch):
 def test_this_tree_s_modules_and_imports_are_those_the_lean_build_cache_keys():
     """On this checkout, whose packages no toy stands in for: the modules listed are those `module_keys.keys` keys from each
     package's default targets and lock roots, each importing what its key reads, so a task and the cache see one module
-    one way."""
-    pkgs, _owner, direct, _system, _env = lean_module.imports(ROOT, graph.tracked(ROOT))
+    one way. The cache alone keys no module that targets with different settings own (`module_keys.Package.owner`), nor
+    what imports one."""
+    pkgs, owner, direct, _system, _env = lean_module.imports(ROOT, graph.tracked(ROOT))
     keyed = {}
     for d in pkgs:
         ks = lean_module.mk.keys(ROOT / d, lean_module.mk.policy_roots(ROOT / d))
         keyed |= {os.path.relpath(k.package.file(m), ROOT): sorted(os.path.relpath(ks[i].package.file(i), ROOT)
                                                                    for i in k.imports) for m, k in ks.items()}
-    assert keyed == {f: list(edges) for f, edges in direct.items()}
+    unowned = {f for f, (d, mod) in owner.items() if f in direct and pkgs[d].lake.owner(mod) is None}
+    while more := {f for f, edges in direct.items() if f not in unowned and unowned & set(edges)}:
+        unowned |= more
+    assert keyed == {f: list(edges) for f, edges in direct.items() if f not in unowned}
+    assert len(unowned) < len(direct) // 100, "few enough that the cache still restores a build"
 
 
 @pytest.mark.slow

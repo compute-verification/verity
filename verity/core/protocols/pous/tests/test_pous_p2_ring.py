@@ -1,7 +1,7 @@
 """Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Definitions/Pous/Assumptions/P2.lean`), the
 test that `shape.conjectures` in `Security/lean-audit.json` and `Security/Properties/lean-audit.json` names for it and
 for `P2RingReducesToM1p`, which implies it: P2 in the ring model, with sequential reveal, accepts every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder with probability at
-most `δ + ε`. The same draws test the per-round form `P2RingRoundSecure`
+most `δ + ε`. The same samples test the per-round form `P2RingRoundSecure`
 (`test_p2_ring_round_secure_at_a_scaled_point`).
 
 The audit is `p2ring` as `Security/Definitions/Pous/P2/Cost.lean` defines it: a uniform odd labeling of `Z/p`
@@ -21,7 +21,7 @@ than a label), at `w = 184`, `p = 2^184 − 33` and 16 labels:
 
 A responder's answer to label `i` depends only on `i`, its state and the oracle (`Responder`), so given the sample
 `ω` it is accepted with probability exactly `(s_ω/B)^K`, `s_ω` the labels it answers right; the test averages that
-over seeded draws, and a responder inside the region whose average is above `δ + margin(TRIALS)` (Hoeffding, at
+over seeded samples, and a responder inside the region whose average is above `δ + margin(TRIALS)` (Hoeffding, at
 `1 − 10⁻⁹`) is a counterexample, which fails the test with the responder and the samples. Outside the region the test
 shows the known-false side as expected failures: the honest responder (it holds all of `C`), `PousP2Ring.tight`'s
 recomputation (`D = 2(n + 1)`) and `PousP2Ring.not_meetsOn_b19_k88`'s truncation one bit past the slack."""
@@ -52,7 +52,7 @@ RANDOM = 12
 
 
 def margin(n: int) -> float:
-    """How far above the bound an average of `n` draws' acceptance probabilities (each in `[0, 1]`) must be to be a
+    """How far above the bound an average of `n` samples' acceptance probabilities (each in `[0, 1]`) must be to be a
     counterexample with probability at least `1 − 10⁻⁹` (Hoeffding)."""
     return math.sqrt(math.log(1e9) / (2 * n))
 
@@ -347,8 +347,8 @@ def test_p2_ring_round_secure_at_a_scaled_point(case: Case):
     `2^27` labels, which the scaled point doesn't tell apart, with `1 − p = KEPT/B`: given the first `j` answers
     right, the next uniform challenge is answered right with probability at most `KEPT/B`, at every `j < K`. Given the
     sample `ω` a responder answers each challenge right with probability exactly `s_ω/B`, so over the samples the rate at
-    round `j` is `Σ (s_ω/B)^(j+1) / Σ (s_ω/B)^j`, and it is above `KEPT/B` only if some draw has `s_ω > KEPT`. That
-    sample would have to lie in the conjecture's `bad`, which at `ε₀ = 2^-137` shows up among `TRIALS` seeded draws with
+    round `j` is `Σ (s_ω/B)^(j+1) / Σ (s_ω/B)^j`, and it is above `KEPT/B` only if some sample has `s_ω > KEPT`. That
+    sample would have to lie in the conjecture's `bad`, which at `ε₀ = 2^-137` shows up among `TRIALS` seeded samples with
     probability at most `TRIALS·K·ε₀`, so the rate is compared with `KEPT/B` with no margin. The responders outside
     the region beat it, the side `RoundTests.lean` proves false (`round_tight`, `round_trunc`)."""
     r = case.responder

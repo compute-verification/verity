@@ -11,14 +11,14 @@ from pathlib import Path
 
 import pytest
 from test_rec_outer import BIN
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import program_digest
 
-POD = Path(__file__).resolve().parents[1] / "pod"
+REC_INNER = Path(__file__).resolve().parents[4] / "verity/ml/flock/pod/rec_inner.py"
 
 
 def _rec_inner():
-    spec = importlib.util.spec_from_file_location("rec_inner", POD / "rec_inner.py")
+    spec = importlib.util.spec_from_file_location("rec_inner", REC_INNER)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -68,7 +68,7 @@ def _window(src: Path, n: int, part: dict, d: Path) -> bytes:
 
 def test_an_inner_statement_past_the_verifiers_rows_is_refused_before_staging(tmp_path):
     """`stage` and `stage_window` refuse a population of more than `rec_budget.MAX_INNER_ROWS` units with
-    `RecBudget.innerRows`'s message, before they draw or write anything."""
+    `RecBudget.innerRows`'s message, before they sample or write anything."""
     from verity_flock import rec_budget as RB
 
     ri, n = _rec_inner(), RB.MAX_INNER_ROWS + 1

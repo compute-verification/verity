@@ -1,5 +1,5 @@
 """The wipe as a core protocol (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`): `wipe-protocol-test serve` against
-`wipe_protocol_case.test_answer` (the period hook's `outcome` behind the Lean's decoders) on drawn sessions at every batch
+`wipe_protocol_case.test_answer` (the period hook's `outcome` behind the Lean's decoders) on sampled sessions at every batch
 size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON edit or params of another server or
 session; and `wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
 segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill, a

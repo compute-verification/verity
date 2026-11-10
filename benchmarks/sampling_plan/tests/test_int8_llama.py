@@ -1,4 +1,4 @@
-"""The int8 row's replay (`int8_llama.py`): serving keeps only the requests' tokens and the weights, so a drawn unit's witness
+"""The int8 row's replay (`int8_llama.py`): serving keeps only the requests' tokens and the weights, so a sampled proof block's witness
 is rebuilt by re-running its request, and the replay grain is the window's requests, each one prompt of `context` tokens
 at `tokens_per_s`, every op's units split evenly over them."""
 
@@ -8,7 +8,7 @@ import pytest
 
 import int8_llama as L
 from inputs import I, MODELS
-from verity.core.protocols.sampled_proofs.optimize import ReplayGrain, replay_cost
+from verity.core.protocols.spot.optimize import ReplayGrain, replay_cost
 
 V = {k: i.value for k, i in I.items()}
 M = MODELS["llama-3.1-8b"]
@@ -25,7 +25,7 @@ def test_the_replay_grain_is_the_windows_requests_each_a_prompt_at_the_plain_rat
 
 
 def test_one_draw_reruns_one_request_and_proving_everything_reruns_the_window():
-    """One drawn unit re-runs its request; every unit drawn re-runs every request, the window's serving again."""
+    """One sampled proof block re-runs its request; every unit sampled re-runs every request, the window's serving again."""
     w = L.workload(V, L.WINDOWS["round"], M)
     costs = L.model(V, L.fitted(V), w["requests"])
     cands = L.forced(w, None)

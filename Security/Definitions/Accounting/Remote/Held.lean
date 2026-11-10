@@ -91,7 +91,7 @@ def entered (ω : Ω) (t : ℕ) : ℕ := (T.present ω (t + 1) \ T.present ω t)
 def planned (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p).card
 
 /-- The credited passes' wrong receipts of registered blocks. -/
-def wrong (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p \ T.correct ω p).card
+def incorrect (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p \ T.correct ω p).card
 
 /-- The snapshot: the registered blocks in node memory at each credited pass's start, summed over the passes. -/
 def held (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.mem ω (T.tick ω p)).card

@@ -6,8 +6,8 @@ public import Definitions.Pous.Game.Prob
 # The idealized computational model
 
 An `IdealModel` is an ideal primitive. `Ω` lists every possible primitive (every function `X → Y` for a random
-oracle, every permutation for an ideal permutation), and setup draws one uniformly. The trusted encoder and the
-unbounded preprocessor see the drawn `ω : Ω` whole; the decoder and the online responder see it only through
+oracle, every permutation for an ideal permutation), and setup samples one uniformly. The trusted encoder and the
+unbounded preprocessor see the sampled `ω : Ω` whole; the decoder and the online responder see it only through
 queries, `answer ω q`.
 
 An `OracleAlgorithm` is a parallel oracle machine. Each round sends a list of queries at once and continues on the list of
@@ -21,7 +21,7 @@ instead (the parallel-query model of depth-robust-graph proofs).
 
 namespace Pous
 
-/-- An ideal primitive: drawn uniformly from `Ω`, queried through `answer`. -/
+/-- An ideal primitive: sampled uniformly from `Ω`, queried through `answer`. -/
 structure IdealModel : Type 1 where
   /-- Every possible primitive. -/
   Ω : Type

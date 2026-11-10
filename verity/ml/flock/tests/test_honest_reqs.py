@@ -2,7 +2,7 @@
 ``firewall-honest-difftest`` of `verity/core/difftest`): for what an honest worker brings (`Flock.Firewall.Honest`), the
 requests `rec_live`'s encoder writes (`encode_req`, and `test_rec_live`'s frame writers for a round's content) are Lean's,
 byte for byte. On a real prover's recorded session the worker's data is read back out of its own requests (`honest_of`)
-and Lean writes those requests again, byte for byte, and they finish under `flock-firewall`; Hypothesis draws sessions
+and Lean writes those requests again, byte for byte, and they finish under `flock-firewall`; Hypothesis samples sessions
 around it, malformed ones included. `FirewallHonest` proves they finish for every schedule and every data that fits."""
 from __future__ import annotations
 
@@ -219,7 +219,7 @@ def recorded() -> tuple[dict, list[bytes]]:
     return FLAT_SCHEDULE, reqs
 
 
-# --- drawn sessions ------------------------------------------------------------------------------------------------------
+# --- sampled sessions ------------------------------------------------------------------------------------------------------
 
 #: a plain string (`plainStr`), its characters in the Basic Multilingual Plane, which the harness's JSON writes as one escape
 PLAIN = st.text(st.characters(min_codepoint=0x20, max_codepoint=0xFFFF, exclude_characters='"\\', exclude_categories=["Cs"]),
@@ -274,7 +274,7 @@ def _json(v) -> bool:
 
 
 SCHEDULES = [SCHEDULE, SCHEDULE2, FLAT_SCHEDULE]
-#: the schedules the firewall refuses that JSON without floats can write
+#: the schedules the ZK server refuses that JSON without floats can write
 REFUSED = [s for s in [*_bad_schedules(), {**SCHEDULE, "roots": {}}] if _json(s)]
 CASES = st.sampled_from(SCHEDULES).flatmap(lambda s: _honest(s).map(lambda h: {"schedule": s, "honest": h}))
 INPUTS = st.one_of(
@@ -306,7 +306,7 @@ def test_lean_honest_reqs_of_a_real_session_finish_under_the_firewall(server, bu
 
 
 def test_honest_reqs_is_rec_lives_encoding(server):
-    """Drawn sessions at `test_rec_live`'s schedule, the two-stream one and the flat selftest's: Lean's requests are
-    `rec_live`'s, byte for byte, and both refuse a schedule the firewall refuses or a worker's data that does not read."""
+    """Sampled sessions at `test_rec_live`'s schedule, the two-stream one and the flat selftest's: Lean's requests are
+    `rec_live`'s, byte for byte, and both refuse a schedule the ZK server refuses or a worker's data that does not read."""
     stats = D.run(PORT, examples=300, server=server)
     assert stats.outputs and stats.rejects

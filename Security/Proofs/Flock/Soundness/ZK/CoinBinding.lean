@@ -9,7 +9,7 @@ import Mathlib.Tactic.Set
 # Zero knowledge: the verifier's coin commitment is binding (T6)
 
 The one computational step of the public-circuit zero-knowledge proof (`docs/zk-proof-public.md` in the Project store, §4.1
-T6). The verifier commits to every coin of a session with a coin tree (`verity/ml/flock/live/src/coin_tree.rs`, C-Flock
+T6). The verifier commits to every coin of a session with a coin tree (`verity/ml/flock/live/src/coin_tree.rs`, Flock
 ZK), today the keyed `coin-tree/hm96-sha512/v2`: v1's tree with every hash under the session's nonce
 (`coin_opening_binding_keyed`). This file's model is v1's: per (stream, round), a block of coins is chained,
 `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})`; the round's digest is `x = H(ROUND ‖ stream ‖ round ‖ T_0)`; the leaf is the hm96 leaf

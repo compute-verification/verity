@@ -1,7 +1,7 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
 `streamed_wipe.py` and `verity.ml.crypto.lms`: the coins and their tree, the round records' root, the header and the
 signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message and
-egress count, each on drawn inputs that include what both sides must refuse (`test_verdict.py` and
+egress count, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
 `test_wipe_verdict.py` hold the verdicts)."""
 
 from __future__ import annotations
@@ -269,7 +269,7 @@ def wipe_message(v) -> str:
 
 
 def test_wipe_message(server):
-    """The signed message over drawn commitments (tier names past ASCII among them), batch records of either sign and
+    """The signed message over sampled commitments (tier names past ASCII among them), batch records of either sign and
     width, and fill times and egress of either sign; commitments `WipeParams` refuses and records past a field's width
     refused by both."""
     commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 4)

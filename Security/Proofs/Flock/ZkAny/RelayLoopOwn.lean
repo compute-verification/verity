@@ -129,7 +129,7 @@ open Loop LeanRelease in
 `round_unstop`, where the placeholder's schedule so far on the rep's coins, its rounds framed, is no longer than them,
 so that the round is the inner proof's (`progOf_own_step`): the frame's release of a device round against the
 scheduled round `r`, at a state alike the model's and at the model's configuration, leaves a state alike the loop's
-after the coins with any next coin, `r` at the inner proof's round 0 being the firewall's own round 0 at some
+after the coins with any next coin, `r` at the inner proof's round 0 being the ZK server's own round 0 at some
 `final_c'`. -/
 theorem round_unstop_own (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
@@ -182,7 +182,7 @@ theorem round_unstop_own (T : ZKMal.CoinLayer.TableData)
 open Loop LeanRelease in
 /-- **A rep's frame at the session's next round, at the model's state, past the rep's schedule**: as
 `roundRun_step`, where the placeholder's schedule so far on the rep's coins, its rounds framed, is no longer than them
-(`hle`) and the round is in the place of the scheduled round `rr`, the firewall's own round 0 at some `final_c'` at
+(`hle`) and the round is in the place of the scheduled round `rr`, the ZK server's own round 0 at some `final_c'` at
 the inner proof's round 0 (`hr0`): the model's coin step takes the round's coins (`roundRun_fed`), and where the next
 round is the same rep's (`hj`) the frame the session's next round finds is its run one round on, at the model's state
 for the history with `(v, a)` but for `stopped` (`round_unstop_own`, `roundRun_carry`). -/
@@ -254,7 +254,7 @@ open Loop LeanRelease in
 /-- **A rep's frame keeps `SameInv` from one round of the rep past its schedule to the next**: as `roundRun_same`,
 where the frame's schedule on its coins (`sched`, of one shape with the placeholder's) ends before the round
 (`hle`), so `placeOf` places it at the inner proof's own and the round is in the place of the frame's own inner round
-(`roundPlace_own_of`), the firewall's own round 0 at the inner proof's round 0, where the model has begun no inner round
+(`roundPlace_own_of`), the ZK server's own round 0 at the inner proof's round 0, where the model has begun no inner round
 (`answered_own0`, `innerSched_zero`): the model's coin step takes the round's coins (`roundRun_step_own`), and where
 the next round is the same rep's the frame the session's next request finds keeps `SameInv` at the history with the
 worker's message and the auditor's answer (`roundRun_step_own`, `roundRun_repInv`, `roundRun_coins`,

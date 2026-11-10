@@ -2,10 +2,11 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
-public import Proofs.Properties.NetworkCertifier.LinkWindow
+public import Proofs.Properties.NetworkCertifier.Check.LinkWindow
 public import Proofs.Core.Game.Tape
-import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.String.Defs
 
 /-!
 # The device's history at a play: the run that printed the play's log
@@ -17,7 +18,7 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
-  `LiveChallenger.open_tree` in `verity/core/protocols/sampled_proofs/challenger.py`), each line its value's
+  `LiveChallenger.open_tree` in `verity/core/protocols/spot/challenger.py`), each line its value's
   `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
   (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
 * **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
@@ -53,13 +54,15 @@ fixes from what the play fixed (`Deployment.setupOf`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
-open private pairs from SampledProofs.ChallengerSession
+open private pairs from Spot.ChallengerSession
 
 namespace Verity.Sampled.Device
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 open Properties.Challenger (History Run OpensOn)
 open Verity.Sampled.Lines (Canon PlainValue RootValue SpecValue HelloValue OpenValue Prints)
 
@@ -1071,12 +1074,12 @@ theorem printedRun_length (s : RunSetup) (log : List Release) : (printedRun s lo
 def pubOf (θ : ByteArray) : ByteArray := ((Binding.keyOf θ).map (·.pub)).getD .empty
 
 /-- **A deployment of the device**, at each of the parameters `θ`, from what a play fixed: the prover's request `a`,
-the device's log, the bytes `b` the prover's close left to the device and its draw `ρ` at the close. `run` is the
+the device's log, the bytes `b` the prover's close left to the device and its sample `ρ` at the close. `run` is the
 run's setup but for its key, its layout and its ledger lines, which `setupAt` sets: its session's id and host, its
 coins and salts by position where the play released none, how it ended and each line's time. `opens` are the auditor's
 ledger lines it signs before any coin, which the request fixes (the ledger's reserve and open, and the period's open),
 and `closes` the ones it signs at the close (the ledger's end and the period's close), at most `ledgerLines θ` of
-them in a play (`ledger_le`). `draws` are the bits it draws at the close, and `sign θ i m` its signature on `m` as its
+them in a play (`ledger_le`). `draws` are the bits it samples at the close, and `sign θ i m` its signature on `m` as its
 `i`-th in the play.
 
 A deployment opens only the auditor's live window: the window its ledger's open names (`OpensOn`'s `w`) is the one the

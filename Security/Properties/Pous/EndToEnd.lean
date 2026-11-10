@@ -4,7 +4,7 @@ public import PousCheck.Run
 public import Properties.Pous
 public import Properties.Pous.TimedAudit
 public import Properties.Pous.MemoryChallenger
-public import Properties.Identity
+public import Properties.Hash.Identity
 public import Definitions.Pous.Assumptions.P2
 public import Definitions.Pous.P2.Cost
 
@@ -27,18 +27,19 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
   every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
   and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
-* `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
-  model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
-  per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
-  coins drawn as the code draws them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
-  uniform bytes.
+* `EndToEndRing`, `EndToEndRingDeployed` and `DrawExact`, **in the ring model, with `ω` uniform**: P2's
+  square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random per-block keys (`p2ring`),
+  against a server that is a `Server S D Q L` of this module, with the memory challenger's coins flipped as the code
+  samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from uniform bytes. The honest
+  full-state server's lemmas, `HonestPassesRing` and `HonestPassesAccepts`, are in
+  `Security/Proofs/Pous/Lemmas/EndToEnd.lean`.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-host`) and the coins drawn online, after its state is fixed. It
+   host never restores an earlier copy: `trusted-host`) and the coins flipped online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
@@ -233,7 +234,7 @@ noncomputable def S : ℕ := sch.stateBound Params.ρ
 /-- The full state: all of `C`, `2^19 · 16,448` bits, more than `S`. -/
 def FULL : ℕ := 2 ^ 19 * 16448
 
-/-- `n` bytes, each uniform when drawn. -/
+/-- `n` bytes, each uniform when sampled. -/
 abbrev Bytes (n : ℕ) : Type := Fin n → Fin 256
 
 /-- The bytes, as the code holds them. -/
@@ -269,7 +270,7 @@ answer within `(D, Q, L)` (`RingBounded`: at most `D` rounds with a multiplicati
 operations, for every `ω`):
 
 * `pre W pp C ω` is all that survives setup, `S` bits, a function of `W`, `C` and the whole primitive (perfect
-  isolation); it is fixed before the memory challenger's coins are drawn (online coins);
+  isolation); it is fixed before the memory challenger's coins are flipped (online coins);
 * `step sc W pp j σ i` answers round `j`'s index `i` from the state `σ`, what is public (`W`, `pp`) and the one session
   commitment `sc` of the audit, returning the block and the next `S`-bit state.
 
@@ -299,7 +300,7 @@ def Passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : S
           (A.pre W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 x.1) =
         List.ofFn fun j => (sch.enc W x.1 ()).2 (I j)
 
-/-- **The draw's rejection sampling never rejects at `2^19` blocks (`ε_rs = 0`)**: `uniformOn (2^19)` on `DRAW_BYTES`
+/-- **The sample's rejection sampling never rejects at `2^19` blocks (`ε_rs = 0`)**: `uniformOn (2^19)` on `DRAW_BYTES`
 uniform bytes returns an index, and it is exactly uniform. Its word is `width (2^19) = 11` bytes, and `2^19` divides
 `2^88`, so no word is rejected. -/
 def DrawExact : Prop :=
@@ -356,19 +357,5 @@ def EndToEndRingDeployed : Prop :=
     Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
       ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
         pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
-
-/-- **Non-vacuity in the ring model, with `ω` uniform: the honest full-state server passes P2's audit.** At the full
-state (`FULL = 2^19 · 16,448` bits, more than `S`), a responder that keeps all of `C` and answers each index from it
-with no query at all (`RingBounded 0 0 0`) is accepted by `seqAcceptsOn` with probability 1, for every `W`. -/
-def HonestPassesRing : Prop :=
-  S < FULL ∧ ∃ (A₁ : Preprocessor sch FULL) (A₂ : SeqResponderOn sch FULL 0 0 0),
-    ∀ W, pr (seqAcceptsOn sch 105 W A₁ A₂) = 1
-
-/-- **Non-vacuity of `EndToEndRing`'s event, in the ring model, with `ω` uniform**: the honest full-state server, a
-`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id, binding and `W`: the code
-always builds the coin tree, and the draw never fails (`ε_rs = 0`, `DrawExact`). -/
-def HonestPassesAccepts : Prop :=
-  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
-    pr (Passes session binding W A) = 1
 
 end Pous.EndToEnd

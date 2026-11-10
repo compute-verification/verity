@@ -1,4 +1,4 @@
-"""The lifecycle over any scheme (here an NCP test instance): honest runs accepted, negative controls rejected, draws
+"""The lifecycle over any scheme (here an NCP test instance): honest runs accepted, negative controls rejected, samples
 work-weighted and reproducible, the lottery selecting by digest."""
 
 from __future__ import annotations

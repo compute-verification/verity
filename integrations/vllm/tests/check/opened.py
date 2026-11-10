@@ -45,7 +45,7 @@ def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id:
                  row_keys: dict[int, bytes] | None = None):
     """Commit `steps[s]` (tensors in acquisition order) as packed step blocks -> (committer, run commitment).  Tensors sit at 4-byte-aligned
     offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely).  `row_keys`,
-    another commit's step keys (`replay_row_keys`), commit its trees again; unset, every step draws a fresh key."""
+    another commit's step keys (`replay_row_keys`), commit its trees again; unset, every step samples a fresh key."""
     com = committer(retain, run_id)
     com.replay_row_keys = None if row_keys is None else dict(row_keys)
     C = com.chunk

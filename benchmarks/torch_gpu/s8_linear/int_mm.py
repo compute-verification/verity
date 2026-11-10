@@ -25,6 +25,7 @@ product reads only its own row of x. The epilogue is one of `EPILOGUES`:
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -33,6 +34,9 @@ try:
     import triton.language as tl
 except ImportError:
     triton = None
+
+if TYPE_CHECKING:
+    from triton.compiler import CompiledKernel
 
 #: the least K whose s8 x s8 sum can leave s32 (`gemm.S8_K_LIMIT`), and the Definition's k step: it binds only multiples
 K_LIMIT, K_STEP = 1 << 17, 32
@@ -75,7 +79,8 @@ if triton is not None:
         tl.store(y + i.to(tl.int64)[:, None] * n + j[None, :], word, mask=inside)
 
 
-def _fused(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor, out: torch.Tensor | None = None):
+def _fused(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor,
+           out: torch.Tensor | None = None) -> tuple[torch.Tensor, CompiledKernel]:
     m, n = acc.shape
     acc = acc if acc.stride(1) == 1 else acc.contiguous()
     y = torch.empty((m, n), dtype=torch.bfloat16, device=acc.device) if out is None else out

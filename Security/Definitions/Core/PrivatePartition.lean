@@ -19,7 +19,7 @@ none. The predicates add the rest of the draft's global ones:
 * the count (G6): `n` units, at most the padded count `Q.units`;
 * the caps (G7): each unit has at most `Q.maxGates` gates and reads at most `Q.maxInBits` bits from outside.
 
-The width rule holds for every unit, wrong or not, which is what bounds the bits that wrong units can leak.
+The width rule holds for every unit, wrong or not, which is what bounds the bits that incorrect proof blocks can leak.
 
 The commitment's proof checks the width rule once per Definition, not per unit. Its advice is a Call table, the circuit's
 computed gates grouped into root Calls with each Call's returned gates (`Calls`), and per Definition a cut, an owner per

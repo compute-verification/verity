@@ -26,10 +26,10 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # flock-verify's acceptance under either tag
 
-`setupTables_okH` and `setupTables_retainH` are e2e-exec's `setupTables_ok` and `setupTables_retain` under hidden outputs
+`setupTables_okH` and `setupTables_retainH` are `Exec.setupTables_ok` and `Exec.setupTables_retain` under hidden outputs
 (`hh : tags.hiddenOutputs = true`), by the same walk with `Stmt.setupHidden` for `Stmt.setupH`; `setupTables_okAny` and
 `setupTables_retainAny` put the two tags together through `setupOne`. The acceptance lemmas follow from them as
-e2e-exec's do from `setupTables_ok`, with no `hh`.
+`Discharge/Exec`'s do from `setupTables_ok`, with no `hh`.
 -/
 
 @[expose] public section
@@ -144,7 +144,7 @@ theorem setupTables_okAny : SetupTablesOkAny := by
       obtain ⟨d, hd⟩ := hall j hj
       exact ⟨d, (setupOne_public (tags := { tags with identity := tags.tableIdentity count j }) hh).trans hd⟩
 
-/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some draw
+/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some sample
 (the session's, for one table): `Exec.setupTables_setupH` without `hh`. -/
 theorem setupTables_setupOne
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =

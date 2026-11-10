@@ -15,7 +15,7 @@ reads it:
   public outcome (`outS`), and, at each compiled statement `x`, the session relation (`RS x`), the session's tape
   `NS x × ΩS x` and its simulator's coins `CS x` and program (`progS x`, given the session statement and outcome), the
   same at every session statement under `x`. Its zero knowledge (`ZkSess.ZK`) is `ZKOut` at each `x` within `ε_S`. The
-  composed prover draws its tapes, and the composed simulator its coins, before the outer statement fixes the session
+  composed prover samples its tapes, and the composed simulator its coins, before the outer statement fixes the session
   statements, so their types are `x`'s; `RS x` may restrict the session statements to those whose own types match.
 * **the layout** (`Sessions`): at `x`, `n x` sessions, session `i` at `xs x x_O i`, and `ko x` rounds in all, which the
   sessions' rounds make up at every outer statement (`Sessions.Shaped`, an equation, met by any number of sessions).
@@ -32,9 +32,9 @@ the session simulator's calls, so it is counted where the session simulator is.
 `GenericRecursiveSessionsZK` and `GenericRecursiveSessionsZKCost` are Z1 and Z1-cost at the release of a first part
 (`FirstPart`) and these sessions (`ZkRelease.ofSessions`).
 
-A proof system's simulator, Flock's server's among them, draws coins of a type its statement fixes, which a session
+A proof system's simulator, Flock's server's among them, flips coins of a type its statement fixes, which a session
 statement's commitments may change. `ZkSess.ofZKOut` is its session system at finite sets `Xs x` of the session statements
-each compiled statement admits: the session simulator under `x` draws one of the system's tapes for each statement in
+each compiled statement admits: the session simulator under `x` samples one of the system's tapes for each statement in
 `Xs x` and runs the system's simulator on its own statement's. `GenericSessionsOfZKOut` (Z1-L): that is zero knowledge
 per outcome within the system's own error, and `GenericSessionsOfZKOutCost` (Z1-L-cost) counted at the system's calls.
 

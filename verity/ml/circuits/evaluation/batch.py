@@ -72,7 +72,7 @@ def register_kernel(target: Target | str, fn: KernelFn, *, kernel: str = "numpy"
     """Register ``fn`` as kernel ``kernel`` of ``target`` (a Definition, a `ScalarReference`, or a Definition id).
     ``domain`` says in words which inputs it computes (the rest it declines); ``partial`` says it declines inputs the
     reference accepts (else it declines exactly those the reference rejects); ``sample(rng, n, params, **statics)``
-    optionally draws the inputs `self_check` uses.  Re-registering the same function is a no-op; a different one
+    optionally samples the inputs `self_check` uses.  Re-registering the same function is a no-op; a different one
     under the same (target, kernel) is an error, as for Definitions."""
     key = key_of(target)
     k = Kernel(key, kernel, fn, domain, version, sample, partial)

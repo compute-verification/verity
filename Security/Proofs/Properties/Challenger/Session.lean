@@ -36,7 +36,7 @@ namespace Properties.Challenger.Session
 
 open Lean (Json)
 open Std.Do
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be64_size_inj)
 open Properties.Pouw.LiveSalt.Coin (enc enc_length enc_split enc_inj taggedBytes tagged_ok taggedBytes_inj)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok except_spec none_spec
@@ -675,7 +675,7 @@ theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJ
   mvcgen [ChallengerClose.ofJson, -Spec.throw_Except, throw_spec]
   all_goals exact close_form (by assumption)
 
-/-- **A session `sessionOf` accepts from a draw's record is a run the device closed, its log that run's**, or the
+/-- **A session `sessionOf` accepts from a sample's record is a run the device closed, its log that run's**, or the
 finder outputs a break: the commitment, the roots and the session id `sessionOf` returns from the record's session
 files are a run's of the device under the key, a run its client closed, the roots the ones that run's own release log
 shows, and the session's log is that run's lines. -/
@@ -742,7 +742,7 @@ theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
     · exact .inr b
   · exact .inr b
 
-/-- **A session `sessionOf` accepts from a draw's record is a run the device closed**, or the finder outputs a break:
+/-- **A session `sessionOf` accepts from a sample's record is a run the device closed**, or the finder outputs a break:
 `sessionOf_run` without the log. -/
 theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : sessionOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
@@ -753,7 +753,7 @@ theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
   · exact .inl ⟨s, hs, hc, hid, he, hr⟩
   · exact .inr b
 
-/-- **A draw `drawCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
+/-- **A sample `drawCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
 commitment and the roots its segment's coins are read against are a run's of the device under the key, a run its client
 closed, the roots the ones that run's own release log shows. -/
 theorem drawCoins_session {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :

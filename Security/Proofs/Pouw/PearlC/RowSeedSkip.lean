@@ -20,7 +20,7 @@ supporting line: no statement those proofs read is proved here. It takes no TT_O
   with probability at most `(q + m)·ε`. The proof is by induction on the calls: splitting a uniform oracle at the first
   query (`card_split`) leaves the other answers uniform, and the rest of the program with that answer fixed
   (`QTree.fixAt`) makes one call fewer, a repeated query included. `qtree_union_bound_at` lets the bad sets depend on
-  the answer at one input that no bad set contains (the per-job draw), by conditioning on it.
+  the answer at one input that no bad set contains (the per-job sample), by conditioning on it.
 * **`ttOutRowSeed_skipClass`** (the ruling's item 5): under the named assumption `FragDraw` at `Λ = 100`, (C4) and
   (C6), an adversary program with at most `q` calls outputs a skip-class program on unit `u` that saves more than
   `(4096/11)·100 ≈ 37,236` units per row with probability at most `(q + m)/2^128`, `m` the unit's rows. Outside the
@@ -268,7 +268,7 @@ theorem card_union_bound [Fintype Q] [DecidableEq Q] [Fintype R] {α : Type} (t 
   push_cast at this
   exact this
 
-/-- **The union bound over an adaptive program's oracle draws** (the fragment-draw ruling's item 3). A program `t` makes
+/-- **The union bound over an adaptive program's oracle samples** (the fragment-draw ruling's item 3). A program `t` makes
 at most `q` oracle calls, and its result `a` names `m` final checks, the points `fin a i`, `i < m`. Each point `x` has a
 bad set `Bad x` of answers, of probability at most `ε`. Then the probability over a uniform oracle that some call's
 answer, or some final check's, lies in its point's bad set is at most `(q + m)·ε`. A point queried again is answered as
@@ -282,7 +282,7 @@ theorem qtree_union_bound [Fintype Q] [DecidableEq Q] [Fintype R] {α : Type} (t
   convert card_union_bound t q hq m fin Bad hε (fun x => card_le_of_pr_le (hB x)) using 1
 
 open Classical in
-/-- **The union bound with the bad sets read at a fixed point** `xJ` (the per-job draw): the bad sets `Bad z` may depend
+/-- **The union bound with the bad sets read at a fixed point** `xJ` (the per-job sample): the bad sets `Bad z` may depend
 on the answer `z = H xJ`, provided no answer at `xJ` itself is bad. Conditioning on `H xJ` leaves the other answers
 uniform, and the program with `xJ` answered `z` has no more calls. -/
 theorem qtree_union_bound_at [Fintype Q] [DecidableEq Q] [Fintype R] {α : Type} (t : QTree Q R α) (q : ℕ)

@@ -837,7 +837,7 @@ DEV void pf_to(const uint8_t* p, u32 pf) {
   if (pf == 2) asm volatile("prefetch.global.L2 [%0];" ::"l"(p));
   else pf_l1(p);
 }
-// a row's 4-byte cell c (from c0) at base + (c >> 7) stride + (c & 127) 4: O's row h of a tile (the tile's first cell,
+// a row's 4-byte output cell c (from c0) at base + (c >> 7) stride + (c & 127) 4: O's row h of a tile (the tile's first output cell,
 // stride N 4, c0 = h ROW / 4), or a prefix-sum row (stride 512 and c0 = 0: contiguous)
 struct CellRow {
   const uint8_t* base;
@@ -870,7 +870,7 @@ DEV void be_words(const uint4 v, u64* w) {
   w[0] = be64(v.x, v.y);
   w[1] = be64(v.z, v.w);
 }
-// Block b of a full-block row laid out in 128-cell rows of 4-byte cells: quarter q = q0 + b (32 cells, 128 bytes) at
+// Block b of a full-block row laid out in 128-cell rows of 4-byte output cells: quarter q = q0 + b (32 output cells, 128 bytes) at
 // p + (q >> 2) rs + (q & 3) 128 (CellRow's and ServedSrc's addresses, since c0 is a multiple of 32)
 struct QuarterSrc {
   const uint8_t* p;
@@ -886,7 +886,7 @@ struct QuarterSrc {
   }
   DEV void pf(u32 b) const { pf_to(at(b), pfm); }
 };
-// ServedSrc's block b of a full-block row: QuarterSrc's quarter, each cell plus sb_j ra_i + sa_i rb_j for the tile's row
+// ServedSrc's block b of a full-block row: QuarterSrc's quarter, each output cell plus sb_j ra_i + sa_i rb_j for the tile's row
 // i0 + (q >> 2) and columns j0 + (q & 3) 32 ... A prefix-sum row reads its tile's sums too, masked to 0 by z, so a warp whose
 // leaves straddle the two kinds doesn't diverge. ra .. sb are the call's (the kernel's parameters), so they hold no
 // per-thread registers across the compression.
@@ -955,7 +955,7 @@ struct NoMemRow {
   }
 };
 // A no-fold call's prefix-sum rows (S = 1) read from cuBLASLt's int32 D = X W'^T (m x N row-major), its low halves: the row's
-// 16-byte piece at off is cells c0 + off / 2 .. + 7 of the tile at base (one tile row's 8 adjacent cells, 32 bytes of D),
+// 16-byte piece at off is output cells c0 + off / 2 .. + 7 of the tile at base (one tile row's 8 adjacent output cells, 32 bytes of D),
 // the bytes V31Row reads from the tile-major prefix-sum buffer
 struct LtSrc {
   const int* base;
@@ -971,12 +971,12 @@ struct LtSrc {
     return make_uint4(__byte_perm(a.x, a.y, 0x5410), __byte_perm(a.z, a.w, 0x5410), __byte_perm(b.x, b.y, 0x5410),
                       __byte_perm(b.z, b.w, 0x5410));
   }
-  DEV void pf(u32 off) const {   // the next 128 row bytes: 64 cells, 256 bytes of D
+  DEV void pf(u32 off) const {   // the next 128 row bytes: 64 output cells, 256 bytes of D
     pf_to(reinterpret_cast<const uint8_t*>(at(off)), pfm);
     pf_to(reinterpret_cast<const uint8_t*>(at(off + 64)), pfm);
   }
 };
-// LtSrc's block b of a full-block row: half-row h = h0 + b (64 cells, 256 bytes of D) at p + (h >> 1) N + (h & 1) 64
+// LtSrc's block b of a full-block row: half-row h = h0 + b (64 output cells, 256 bytes of D) at p + (h >> 1) N + (h & 1) 64
 struct LtBlk {
   const int* p;
   u64 N;
@@ -1017,7 +1017,7 @@ struct LtRow {
   }
 };
 // A served call's rows (dither.Shape(o=True)): per tile its W prefix-sum rows (the prefix-sum buffer, W tile-segments a
-// tile), then its O rows: cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
+// tile), then its O rows: output cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
 // carries K tau_j; D = a' b'^T from cuBLASLt). One source for both kinds, so a warp whose leaves straddle them diverges only
 // in its loads; the pointers are the tile's first row and column. LIVE: D or the prefix-sum buffer is being written by the
 // kernel that reads it (RP 4's and 5's hash warps), so its loads are coherent (ld.ca), never the read-only path.
@@ -1103,9 +1103,9 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
 }
 // RP 4's and 5's hasher (wg_proto.cuh's H) on a served call's rows off .. off + lpo - 1 of each commit tile: row j of commit
 // tile ct is leaf ct lpt + off + j (off wrows: its O rows, in the GEMM of D; 0: every row, in the GEMM of the prefix sums,
-// which runs after it). Its chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the SHA-512 chunks hashed (all of
+// which runs after it). Its chaining value goes to xd[pos] and flag[pos] = execution phase << 10 | the SHA-512 chunks hashed (all of
 // them, or as many as the hash warps did before the consumers were done); FusedRow takes the leaf phase on from there, and
-// hashes from the first chunk whatever carries another epoch (rows no hash warp reached, a forged copy). A visit hashes at
+// hashes from the first chunk whatever carries another execution phase (rows no hash warp reached, a forged copy). A visit hashes at
 // most budget chunks on from the row's own flag (chunk, V31_HCHUNK: the hash warps' visits a row, 0 a row whole in one)
 constexpr u32 FUSED_EPOCHS = 1u << 22;
 struct FusedLeaves {
@@ -1156,7 +1156,7 @@ struct FusedRow {
 // commit_gpu's small path launches a CTA for every 128 leaves, and up to 5 of them sit on an SM, so a GEMM CTA launched
 // beside the commit waits for an SM to drain while the commit's next CTAs take each freed slot. salt_persist and
 // leaf_persist do the same work (salt_small's and leaf_small's, group by group) in at most cap CTAs an SM: a CTA claims
-// one of its SM's slots (claim[smid] = epoch << 8 | count, epoch new each launch) or leaves at once, and the claimants take
+// one of its SM's slots (claim[smid] = execution phase << 8 | count, execution phase new each launch) or leaves at once, and the claimants take
 // 128-leaf groups from ctl[0] until none are left. The last CTA out zeroes the counters for the next launch; launches that
 // share ctl run in one stream's order.
 struct Persist {
@@ -1423,7 +1423,7 @@ static CUtensorMap tmap(const void* p, int depth, int rows, int box_rows) {
   if (r != CUDA_SUCCESS) { fprintf(stderr, "cuTensorMapEncodeTiled: %d\n", int(r)); exit(3); }
   return m;
 }
-// wg_proto.cuh's TST store maps: rows of `cols` cells of es bytes, boxes of 128 bytes by 64 rows, SWIZZLE_128B
+// wg_proto.cuh's TST store maps: rows of `cols` output cells of es bytes, boxes of 128 bytes by 64 rows, SWIZZLE_128B
 static CUtensorMap tmap_st(const void* p, CUtensorMapDataType dt, int es, u64 cols, u64 rows) {
   CUtensorMap m;
   const cuuint64_t dims[2] = {(cuuint64_t)cols, (cuuint64_t)rows}, strides[1] = {(cuuint64_t)(cols * es)};
@@ -1565,7 +1565,7 @@ __global__ void ne_kernel(const int* a, const int* b, size_t n, unsigned long lo
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) c += a[i] != b[i];
   if (c) atomicAdd(out, c);
 }
-// FusedLeaves' flags of epoch e: out[0] the rows hashed whole (nblk chunks), out[1] the chunks hashed
+// FusedLeaves' flags of execution phase e: out[0] the rows hashed whole (nblk chunks), out[1] the chunks hashed
 __global__ void fused_count_kernel(const u32* a, size_t n, u32 e, u32 nblk, unsigned long long* out) {
   unsigned long long c = 0, nb = 0;
   for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x)
@@ -1738,7 +1738,7 @@ struct Lanes {
 // and committer): call c's commit runs on s1 beside call c + 1's compute on s0, and call c's values stay until call c + 2
 // is issued. Call c salts leaf pos prf_salt(Ks, off_c + pos) (dither.salts), Ks the params file's, set into C.ks on s1
 // ahead of its salt phase, so every Fill of a process commits on one s1. W' (and b') is formed again only when the
-// weight-side seeds (d_B, U, P) or B change, so weight coins drawn once a monitoring period form it once.
+// weight-side seeds (d_B, U, P) or B change, so weight coins flipped once a monitoring period form it once.
 static void ks_consts(const uint8_t* ks, u64* out) {   // C.ks, then C.ks_m8 (Consts' adjacent fields)
   words_of(ks, out, 8);
   u64 blk[16] = {}, st[8];
@@ -2069,7 +2069,7 @@ struct Fill {
     return FusedLeaves{r, xd[b], xf[b], xep[b], (u32)(every ? r.lpt : r.lpt - r.wrows), (u32)hchunk, (u32)(every ? 0 : r.wrows)};
   }
 #endif
-  // a call's FusedLeaves epoch: it wraps below FUSED_EPOCHS, and clears both copies' flags then (a cleared flag only
+  // a call's FusedLeaves execution phase: it wraps below FUSED_EPOCHS, and clears both copies' flags then (a cleared flag only
   // makes the leaf phase hash that row from its first chunk)
   u32 epoch(cudaStream_t st) {
     if (++xctr == FUSED_EPOCHS) {
@@ -2467,7 +2467,7 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
 // coins_w (d_B, U, the permutations), pad (the filler's pad), form_a, form_b (served: a' and b' with their sums, then X and
 // W' when W > 0), gemm (served: cuBLASLt's a' b'^T, then the protocol GEMM over k < W L), commit; call, one call serial
 // with the weight side a monitoring period's; ovl, back-to-back calls each committed beside the next call's compute, the
-// weight side a monitoring period's; ovl_w, the same with weight coins drawn every call;
+// weight side a monitoring period's; ovl_w, the same with weight coins flipped every call;
 // ovl_pad, the filler's call (the pad and every coin a call); ovl_nomem, ovl with each leaf's bytes made in registers
 // (NoMemRow: the commit's compressions without its loads); the commit's parts alone: salt (Ks and the salt phase), leaf
 // (the leaf phase and the levels above it), leaf_nomem (leaf on NoMemRow); sha, this build's raw compression rate
@@ -2754,7 +2754,7 @@ static int foreign() { return g_live && std::this_thread::get_id() != g_thread ?
 extern "C" {
 const char* v31_error() { return g_err.c_str(); }
 
-// A context for calls of m x n x k at noise period lp (L'), segments of L and leaf rows of row bytes, served calls (O
+// A context for calls of m x n x k at noise repeat length lp (L'), segments of L and leaf rows of row bytes, served calls (O
 // committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
 // (v31lib.Prover writes it), on CUDA device dev. Null on failure.
 void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {

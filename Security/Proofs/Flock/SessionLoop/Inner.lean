@@ -74,7 +74,7 @@ namespace LeanRelease
 /-- **`L₀` with the session loop's own rounds of the inner proof**, at the finish's rounds `fin` (rep stream `k`'s
 finish's live inner rounds at `x`, the witness, the tape and the history, as the finish hands them to the frame): past
 a rep's scheduled rounds, the loop's own round (`Loop.innerOf`), at the round's configuration as the loop's frames
-start its rep (`withFrames`' `cfg`: `L₀`'s draws at `Drive.start`'s layout and mask slot); elsewhere `L₀`'s. -/
+start its rep (`withFrames`' `cfg`: `L₀`'s samples at `Drive.start`'s layout and mask slot); elsewhere `L₀`'s. -/
 noncomputable def withInner (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
@@ -95,7 +95,7 @@ noncomputable def withInner (T : CoinLayer.TableData)
 
 end LeanRelease
 
-/-- **The session loop's own inner proof's round 0 is the firewall's**: at every tables `T`, release `L₀`, rep tables
+/-- **The session loop's own inner proof's round 0 is the ZK server's**: at every tables `T`, release `L₀`, rep tables
 `real` and finish rounds `fin`, `LoopInnerRound0` holds at `withInner T L₀ real fin`, with `final_c'` the finish's. -/
 def _root_.Flock.Guarantees.LoopInnerRound0Own : Prop :=
   ∀ (T : CoinLayer.TableData)
@@ -172,7 +172,7 @@ namespace Flock.SecurityProofs
 open Claims Claims.ZKMal Claims.ZKServer
 open _root_.Flock.Firewall.Frame (labelFrame wordBytes words)
 
-/-- **The session loop's own inner proof's round 0 is the firewall's**, at every finish: at a rep's first round past
+/-- **The session loop's own inner proof's round 0 is the ZK server's**, at every finish: at a rep's first round past
 its schedule, `withInner`'s round is `Frame.innerSched`'s round 0, the inner proof's label frame and `final_c'` between
 its headers, `final_c'` one word (16 bytes) of the finish's round 0. -/
 theorem LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own := by

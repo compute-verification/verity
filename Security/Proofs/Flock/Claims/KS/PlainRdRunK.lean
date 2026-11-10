@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.KS.PlainLeafKSK
 
 `PlainCapsDep`'s `plain_liveRow` (its `mem_rdAtK` is `PlainCapsDep`'s own), `PlainRawL`'s `plainOffL_le_rd` and `plain_accPr_le_rdL`, and
 `PlainRdRun`'s `plainRel_of`, `plain_accPr_le_rdRun` and `plain_accPr_le_rdAll`, over the verifier `VK keep`: the
-simulator at `plainSimK keep` and the verdict at the draw `plainVerdictAtK keep`.
+simulator at `plainSimK keep` and the verdict at the sample `plainVerdictAtK keep`.
 -/
 
 @[expose] public section

@@ -71,7 +71,7 @@ static_assert(EG_ROUNDS >= 1 && EG_ROUNDS <= 64, "EG_ROUNDS in 1..64");
 // Negative, so fgemm.cu's is_tb is false for them
 constexpr int DUO64 = -1, XIN = -2, XIN64 = -3, XIN13 = -4;
 // XIN's multipliers: pfill.cuh's key rule (odd, more than 2^8 from 0 mod 2^24, not ±1 mod 32) on the words mix32(seed ^
-// (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (the r9 reference draws them per tile from a SHA block;
+// (0x5A5A0000 + i)), i = 0, 1, ..., the first two that pass (the r9 reference samples them per tile from a SHA block;
 // either way two registers); XIN13's the first two that pass key_ok_r9
 __host__ __device__ inline bool xin_ok(uint32_t a) {
   const uint32_t m = a & 0xFFFFFFu, r = a & 31u;

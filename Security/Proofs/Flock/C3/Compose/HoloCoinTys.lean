@@ -32,7 +32,7 @@ coordinate is a vector there, where `coinTy 1` is a scalar.
   `holoCTs_succ`: coin `1 + j` is of form `j`.
 * `formTy_coinTy`: a form other than a vector of one coordinate types its coin as `coinTy` of its size (`formSize`).
   `holoForms_ne_one`: no form at `holoAt st hp` is one, for every inner statement and sparse parameters
-  (`ligForms_schedAt`: none of `fast100`'s schedules draws one).
+  (`ligForms_schedAt`: none of `fast100`'s schedules samples one).
 * `coinArr_roundWords`: at such a form every history round's coin is the coin step its words read as, which is what
   the map's `coin` reads off the history's prefix; `roundWords_one`: at a vector of one coordinate its words read as the
   coin, as `coinArr` reads them or as the vector of their words (`coinWords_vec`).
@@ -131,7 +131,7 @@ theorem sparseForms_ne_one (sh : FlockSoundness.Model.SparseShape) : some 1 ∉ 
 
 theorem ligForms_default : some 1 ∉ ligForms (default : FlockSoundness.Accounting.Schedule) := by decide
 
-/-- **`fast100`'s schedules draw no vector of one coordinate**, by evaluating `fast100` at each `m` below 36; past 35
+/-- **`fast100`'s schedules sample no vector of one coordinate**, by evaluating `fast100` at each `m` below 36; past 35
 it has none (`Schedule.lean:48`), and `schedAt` is the default. -/
 theorem ligForms_schedAt (m : ℕ) : some 1 ∉ ligForms (schedAt m) := by
   by_cases hm : m < 36
@@ -207,7 +207,7 @@ theorem kindCoinTys_append :
   | .msg _ :: σ, τ => kindCoinTys_append σ τ
   | .coin C :: σ, τ => congrArg (C :: ·) (kindCoinTys_append σ τ)
 
-/-- `n` rounds of `f`, each drawing one coin of form `s`. -/
+/-- `n` rounds of `f`, each sampling one coin of form `s`. -/
 theorem kindCoinTys_rounds (C : Type) (f : ℕ → List FlockSoundness.Discharge.Exec.Kind) (hf0 : f 0 = [])
     (hf : ∀ n, kindCoinTys (f (n + 1)) = C :: kindCoinTys (f n)) (s : Option ℕ) (hs : formTy s = C) :
     ∀ n, kindCoinTys (f n) = (List.replicate n s).map formTy

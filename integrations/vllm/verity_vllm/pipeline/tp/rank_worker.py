@@ -37,7 +37,7 @@ from typing import Any
 
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.engine.collectives import fused_norm as FN
-from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
+from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm import settings
 
@@ -1119,7 +1119,7 @@ class TP2CaptureWorkerExtension:
     def tp2_commit_open_population(self, *, k: int, salt: str, combined_root_hex: str, source_hex: str,
                                    claimed_root_hex: str | None = None) -> dict[str, Any]:
         """Openings sampled from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
-        this rank's map digest + salt, from the pair's identities coin `source_hex`, drawn after that root: `pipeline.commit_coins`;
+        this rank's map digest + salt, from the pair's identities coin `source_hex`, sampled after that root: `pipeline.commit_coins`;
         forced late step + one per family), opened against the rank's retained tree and verified
         with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
         binding counts as a failed opening (fail-closed)."""

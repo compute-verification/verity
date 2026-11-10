@@ -283,7 +283,7 @@ boundaries `j < k` at which the state is at most `S₀ = ⌊ρ·|C|⌋` bits (`l
 the share of low boundaries is not a time average: reading it as one needs a statement about when challenges arrive,
 which this one doesn't make (PoUS sends each challenge when the last answer arrives).
 
-It covers schedules `Sz` fixed in advance, before the coins and the challenges are drawn, and not schedules chosen from
+It covers schedules `Sz` fixed in advance, before the coins and the challenges are sampled, and not schedules chosen from
 the history. A server whose state size adapts to the challenges so far, or to the coins, is covered only through its
 padded schedule, `Sz j` the largest size it may hold at boundary `j` over every history, which counts fewer low
 boundaries. Adapting doesn't help a cheater pass, since later challenges are independent of the history, but a

@@ -3,9 +3,9 @@ module
 public import Flock.Field
 
 /-!
-# The coin server's record, in its own format
+# The challenger's live-coin part's record, in its own format
 
-`rec_live`'s coin server writes its record of a session (`public.json`) with `json.dumps(…, indent=1)`, its rounds
+`rec_live`'s live-coin part writes its record of a session (`public.json`) with `json.dumps(…, indent=1)`, its rounds
 first (`rec_live.record_bytes`). `recordW` writes those bytes, and `readRecord` is the record format's own total reader:
 the rounds, in the fixed keys, their fixed order and the fixed indentation, and nothing past them. `recordFullW` and
 `readFull` go on past the rounds to the link points: the record's kind and tops' format, the prover's Hello in its
@@ -172,7 +172,7 @@ def readCoin : P F128 := fun s => (readHex s).bind fun (bs, s) =>
 
 /-! ## Rounds -/
 
-/-- **A round of the coin server's record**, as `rec_live` writes it: its stream's name, its index on the stream, its
+/-- **A round of the challenger's live-coin part's record**, as `rec_live` writes it: its stream's name, its index on the stream, its
 salted tops (each a list of nodes), how many level-0 tops it absorbed, its commit strings, its coin count and the
 coins it drew. -/
 structure Round where
@@ -219,7 +219,7 @@ def readRound : P Round := fun s => do
 
 /-! ## The record -/
 
-/-- **The coin server's record**, as `rec_live.record_bytes` writes it: its rounds first, then `rest`, the bytes of the
+/-- **The challenger's live-coin part's record**, as `rec_live.record_bytes` writes it: its rounds first, then `rest`, the bytes of the
 record's other fields and its close, which the reader doesn't read. -/
 def recordW (xs : List Round) (rest : List UInt8) : List UInt8 :=
   [123, 10] ++ sp 1 ++ key "rounds" ++ listW 1 roundW xs ++ rest
@@ -312,7 +312,7 @@ def readHello : P Hello := fun s => do
   let s ← lit (10 :: (sp 1 ++ [125])) s
   pure ({ digests, flavor, m, points, profile, reps, rounds, tables }, s)
 
-/-- **The coin server's record up to its link points** (`rec_live.CoinServer.record`): its rounds, kind, tops'
+/-- **The challenger's live-coin part's record up to its link points** (`rec_live.CoinServer.record`): its rounds, kind, tops'
 format, the prover's Hello, and the link's level-0 tops (each table's nodes, `b ‖ c` each) and points. -/
 structure Record where
   rounds : List Round
@@ -323,7 +323,7 @@ structure Record where
   points : List F128
   deriving DecidableEq
 
-/-- **The coin server's record**, as `rec_live.record_bytes` writes it, up to its link points, then `rest`: the link's
+/-- **The challenger's live-coin part's record**, as `rec_live.record_bytes` writes it, up to its link points, then `rest`: the link's
 `y`, the record's streams, counts and end, and its close, which the reader doesn't read. -/
 def recordFullW (r : Record) (rest : List UInt8) : List UInt8 :=
   recordW r.rounds (fld 1 "kind" ++ strStr r.kind ++ fld 1 "tops" ++ strStr r.tops ++ fld 1 "hello" ++

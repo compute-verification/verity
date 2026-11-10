@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The skeleton at coverage f = 1 on one H200: run.py at the frozen shape with `e2e_h200.percall:$H1U`, every
 # served linear call's J10-R units through kernels' sm_90a build H1U (kraqwxsc, or kraq), receipts and z committed under
-# the step's salt key, sampled units held to the exact fallback. cwd = the source tree's root; the builds are sent, as
+# the step's salt key, sampled proof blocks held to the exact fallback. cwd = the source tree's root; the builds are sent, as
 # the SHA-512 engine's check held them:
 #
 #   research run --on H200_NODE --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \

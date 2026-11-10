@@ -22,7 +22,7 @@ the verifier's `CircuitFold.folded` at `lincheck`'s fold points. The rounds are 
 `Refine.forIn_rounds` shows the verifier's loop computes. The other `check` (Piop.lean:146) is the comb's width:
 `folded_size` reads it off level 3's `folded_eq` for a statement's circuit fold.
 
-`lincheck_coins` says which rounds `lincheck` draws its points from, `lincheck_of_residuals_dec` is the stage at a rep,
+`lincheck_coins` says which rounds `lincheck` samples its points from, `lincheck_of_residuals_dec` is the stage at a rep,
 and `lincheck_of_residuals` is it at a plain shape, where the comb w holds is the comb.
 -/
 
@@ -49,7 +49,7 @@ section CoinSource
 
 variable {α : Type} [Val α]
 
-/-- The lincheck's rounds draw one round each, its first coin the round's challenge. -/
+/-- The lincheck's rounds sample one round each, its first coin the round's challenge. -/
 theorem lcRounds_coins :
     ∀ (l : List (α × α)) (claim : α) (ts : Array F128) (k k' : Nat) (src : CoinSource) (claim' : α) (ts' : Array F128),
       lcRounds l claim ts k src = .ok ((claim', ts'), k') →
@@ -73,7 +73,7 @@ theorem lcRounds_coins :
         exact ⟨c', by rw [show k + (j + 1) = k + 1 + j by omega]; exact hc',
           by rw [show ts.size + (j + 1) = ts.size + 1 + j by omega]; exact he⟩
 
-/-- **The lincheck's coins.** The rounds `lincheck` draws its points from: `α`, `β`, one round per lincheck round, its
+/-- **The lincheck's coins.** The rounds `lincheck` samples its points from: `α`, `β`, one round per lincheck round, its
 challenge, then `r'`; and the points it hands on. -/
 theorem lincheck_coins {kLog : Nat} {M : Messages α} {zc : ZcPts α} {k k' : Nat} {src : CoinSource} {r1 : α}
     {lc : LcPts α} (h : lincheck kLog M zc k src = .ok ((r1, lc), k')) :
@@ -126,7 +126,7 @@ structure LcProofOf (M : Messages F128) (p : LincheckProof) : Prop where
   zp : p.zPartial = M.zp
 
 /-- The lincheck's rounds over F are the fold of `Refine.lStep` on round `j`'s messages and on coins `C` whose first
-entries are the challenges drawn. -/
+entries are the challenges sampled. -/
 theorem lcRounds_fold (rounds : Array (F128 × F128)) (C : Nat → Array F128) :
     ∀ (l : List (F128 × F128)) (i : Nat) (claim : F128) (ts : Array F128) (k k' : Nat) (src : CoinSource)
       (claim' : F128) (ts' : Array F128),

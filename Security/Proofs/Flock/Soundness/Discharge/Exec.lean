@@ -96,12 +96,12 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the
   same messages and coins are runs on the same tape (`repC_tape`);
 * `Pts`: a `setupH` statement's link points, `mPtsOf` of the circuit's `g` and the units it proves (`setupH_facts`),
-  for a drawn session the draw's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two draws
+  for a sampled session the sample's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two samples
   that prove as many units (`setupH_mPts_eq`);
-* `LiveOn`: `Live`'s refinement and headline with the decoder right at the law's draws only (`DecodesOn`,
+* `LiveOn`: `Live`'s refinement and headline with the decoder right at the sampling design's samples only (`DecodesOn`,
   `execRefines_on`, `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
-* `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
-  source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
+* `LawDraw`: every sample of the live stratified sampling design has `∑ s, k s` units, or is every unit where the run reads past the
+  source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a sample file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);
 * `SessionLDecisive`: some run of the salted batched session accepts (the all-zero run) and, on a plan with a table,
   some run rejects, and every message type is inhabited, so the session and the audit over it are decisive

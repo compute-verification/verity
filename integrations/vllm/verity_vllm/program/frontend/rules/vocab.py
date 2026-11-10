@@ -14,7 +14,7 @@ from typing import Callable
 from verity.ml.circuits.defs import bind as ir_bind
 from verity.ml.definitions.registry import act as _act
 from verity.ml.definitions.registry import b1, gemm_bias as _gemm_bias
-from verity.ml.definitions.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk as _dsa_topk
+from verity.ml.definitions.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk_mask as _dsa_topk_mask
 from verity.ml.definitions.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
 from verity.ml.definitions.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
 from verity.ml.definitions.registry.dsv4_decode_indices import gather_i32
@@ -143,7 +143,7 @@ PROFILE_B1_EAGER = Vocabulary(
         "rmsnorm": "target-selected norm: batch-invariant Triton RMSNormTriton_v1{N,EPS}, otherwise "
                    "RMSNormCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
         "rmsnorm_fused": "target-selected fused norm: batch-invariant generic RMSNormFusedCuda_v2{N,EPS}, otherwise "
-                         "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK} at the launch's block",
+                         "RMSNormFusedCudaVector8_v3{N,EPS,BLOCK} at the launch's block",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",
         "attention": "Attention_v1{T,NH,KVH,D}: FA2 causal GQA over [T][KVH][D] caches",
         "silu_mul": "SiluMul_v1{I}: vLLM _C.silu_and_mul",
@@ -153,9 +153,9 @@ PROFILE_B1_EAGER = Vocabulary(
         "rmsnorm_cuda": "RMSNormCudaVector8_v1{N,EPS,BLOCK}: _C.rms_norm's rms_norm_kernel<bf16, 8, 2, true> on one contiguous "
                         "row -- BLOCK threads each FMA-fold eight-element vectors t, t+BLOCK, ... from +0, CUB block reduce, "
                         "bf16_rn((f32(x) * rsqrtf(var/N + EPS)) * f32(w)) (registry.cuda_rmsnorm)",
-        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v1{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
+        "rmsnorm_fused_cuda": "RMSNormFusedCudaVector8_v3{N,EPS,BLOCK}: _C.fused_add_rms_norm's fused_add_rms_norm_kernel"
                               "<bf16, 8, true> -- the vectorised residual add kept as the second output, then the same "
-                              "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
+                              "BLOCK-thread reduction (its sum of squares as batches) and epilogue (registry.cuda_rmsnorm)",
     })
 
 # -- reference: NUMERIC's reference kinds (`verity/ml/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
@@ -355,6 +355,18 @@ def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     from verity.ml.definitions.registry import fa3_split as _f3s
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
+
+def _attention_head_lse(T, D, BN, DOT, INV, MASKED_FROM, PER):
+    from verity.ml.definitions.registry import fa3_split as _f3s
+    if PER is None:
+        return ir_bind(_f3s.AttentionHeadLse, T=T, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM)
+    return ir_bind(_f3s.AttentionHeadSplitLse, T=T, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
+
+
+def _merge_attn_states(NH, D):
+    from verity.ml.definitions.registry import merge_attn_states as _mas
+    return ir_bind(_mas.MergeAttnStates, NH=NH, D=D)
+
 # -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # the v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
@@ -472,11 +484,16 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
-           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked against the top-TOPK set,
-           # and the rows the same settings read
-           "dsa_topk_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKOrder, N=N, TOPK=TOPK),
-           "dsa_waksman_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaWaksmanOrder, N=N, TOPK=TOPK),
-           "dsa_waksman_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaWaksmanRows, N=N, K=TOPK, W=W, E=16),
+           # a row past TOPK keys (registry.dsa_topk_mask): the top-TOPK set as a mask of the logits, the concentrator's settings
+           # for it, and the rows it reads at them in ascending index order
+           "dsa_topk_mask": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMask, N=N, TOPK=TOPK),
+           "dsa_butterfly_settings": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaButterflySettings, N=N, K=TOPK),
+           "dsa_butterfly_rows": lambda N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRows, N=N, K=TOPK, W=W, E=16),
+           "dsa_butterfly_rows_pad": lambda T, N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRowsPad, T=T, N=N, K=TOPK, W=W, E=16),
+           # the batched form's long rows (`vllm_dsa.long_row_blocks`): the mask of a row of n keys at its block's N, and a token's
+           # latent cache row [kv_c | k_pe] as one Definition
+           "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
+           "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -496,6 +513,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_sparse_mla.SparseMla, T=T, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
            "sparse_mla_split": lambda T, NS, NH, DR, DV, BN, DOT, INV, SM_SCALE:
                ir_bind(_sparse_mla_split.SparseMlaSplit, T=T, NS=NS, NH=NH, DR=DR, DV=DV, BN=BN, DOT=DOT, INV=INV, SCALE=SM_SCALE),
+           # the dense-MHA prefill of a step with context (registry.fa3_split, registry.merge_attn_states): one head of FA3's output with
+           # its lse, split where a PER is given, and the merge of a token's context and suffix partials. `predict.dsa` asks for them.
+           "attention_head_lse": lambda T, D, BN, DOT, INV, MASKED_FROM, PER=None: _attention_head_lse(T, D, BN, DOT, INV, MASKED_FROM, PER),
+           "merge_attn_states": lambda NH, D: _merge_attn_states(NH, D),
            # [DSV4] DeepSeek-V4's mHC on the H200 (registry.mhc), per token. `rules/vllm_mhc.py` asks for them.
            "mhc_pre_broadcast": lambda HC, H, NS, TN, REPEAT, EPS, HC_EPS:
                ir_bind(_mhc.MhcPreBroadcast, HC=HC, H=H, NS=NS, TN=TN, REPEAT=REPEAT, EPS=EPS, HC_EPS=HC_EPS),
@@ -625,13 +646,19 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
-           "dsa_topk_order": "DsaTopKOrder_v1{N,TOPK}: the selection relation of a row of N > TOPK keys (cooperative_topk's "
-                             "histogram_4096_topk) -- 1 when a TOPK-slot order is a permutation of the top-TOPK set of the "
-                             "logits by convert_to_uint32_v2 key descending, then index ascending",
-           "dsa_waksman_order": "DsaWaksmanOrder_v1{N,TOPK}: the order a Waksman network of N rows reads its first TOPK outputs in at "
-                                "the run's settings (the indices 0..N-1 routed through it)",
-           "dsa_waksman_rows": "DsaWaksmanRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows a Waksman network of N rows routes to its "
-                               "first TOPK outputs at the run's settings (one Select and one Xor3 per word a switch)",
+           "dsa_topk_mask": "DsaTopKMask_v1{N,TOPK}: the top-TOPK set of a row of N > TOPK keys as N bits, by convert_to_uint32_v2 "
+                            "key descending, then index ascending (the set VERITY_DSA_TOPK=canonical's row lists in ascending index order)",
+           "dsa_butterfly_settings": "DsaButterflySettings_v1{N,K=TOPK}: the settings of an order-preserving concentrator of N rows "
+                                     "for a mask's members, computed from the mask",
+           "dsa_butterfly_rows": "DsaButterflyRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows the concentrator routes to its first TOPK "
+                                 "outputs at those settings, the mask's members in ascending index order (one Select and one Xor3 per "
+                                 "word a switch)",
+           "dsa_butterfly_rows_pad": "DsaButterflyRowsPad_v1{T,N,K=TOPK,W,E=16}: DsaButterflyRows_v1{N} over a row's T history rows "
+                                     "and then N - T pad rows, the history and the pad two arguments",
+           "dsa_topk_mask_counted": "DsaTopKMaskCounted_v1{N,TOPK}: DsaTopKMask_v1's set of the first n of N scores, n an i32 "
+                                    "argument, so the rows of a block of the batched form share one N",
+           "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
+                             "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",
@@ -649,6 +676,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                          "query token's NH heads over its T selected [kv_c | k_pe] rows -- the k16 wgmma chain over [q_rope | q_nope], "
                          "AttnBlock_v4's online softmax over BN-key blocks last to first, AttentionHead_v4's epilogue",
            "sparse_mla_split": "SparseMlaSplit_v1{T,NS,NH,DR,DV,BN,DOT,INV,SCALE=SM_SCALE}: FA3 sparse MLA at the token's default split count",
+           "attention_head_lse": "AttentionHeadLse_v1{T,D,BN,DOT,INV,MASKED_FROM}: one head of FA3's dense prefill row over T keys with "
+                                 "its lse (return_softmax_lse); with PER, AttentionHeadSplitLse_v1, its splits combined with the lse",
+           "merge_attn_states": "MergeAttnStates_v1{NH,D}: vLLM's merge_attn_states of one token's NH heads, the context's and the "
+                                "suffix's partial outputs by their lse",
            "mhc_pre_broadcast": "MhcPreBroadcast_v1{HC,H,NS,TN,REPEAT,EPS,HC_EPS}: layer 0's mHC pre on the embedding -- DeepGEMM's TF32 "
                                 "hc-prenorm GEMM over fn_broadcast in NS splits, the mixes, Sinkhorn and the fused RMS norm",
            "mhc_residual_broadcast": "MhcResidualBroadcast_v1{HC,H}: layer 0's embedding copied to the HC streams",

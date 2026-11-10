@@ -64,8 +64,9 @@ Implementations:
 
 - `p2-v1-gpu`: P2 v4 (`verity/core/protocols/pous/README.md`, "P2"), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
-  - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, the RFC
-    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (`VECTORS_SHA512`);
+  - `reference.py`: the scheme on the CPU in its own setup framing (the counter-mode SHA-512 keys and the maps, both
+    `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.core.protocols.pous.verifier`'s; v4's leaves and the
+    mode-0 audit derivation on `verity.ml.randomness`), pinned by `vectors.json` (`VECTORS_SHA512`);
     `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
@@ -168,7 +169,7 @@ test signer, so `pous-run-protocol --test serve` answers it. It times the Lean a
 accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_case.sh`'s `MEM_GB` default
 allows for.
 
-`wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
+`wipe_resume/` runs the red team's resume attack on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
 `D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
 it next to honest, naive-cheat and broken-premise provers (`K` on the developer's node, an undeclared tier), all judged by the

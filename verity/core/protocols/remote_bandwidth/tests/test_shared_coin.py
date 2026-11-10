@@ -22,7 +22,7 @@ SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_
 
 
 def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.SessionCoins]:
-    """Parameters of `windows` windows drawn `g` a coin, and a challenger in this process committed to their coins."""
+    """Parameters of `windows` windows sampled `g` a coin, and a challenger in this process committed to their coins."""
     p = params(windows=windows, groups_per_coin=g, **kw)
     return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), appends=APPENDS, per_coin=g)
 
@@ -123,7 +123,7 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
 
 def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(store) -> None:
     """Three draws over four windows leave at least one window of each sample with none: its close accepts it, a verify
-    of it is refused, and its record counts none drawn, the reading of its own share."""
+    of it is refused, and its record counts none sampled, the reading of its own share."""
     p, c = shared(store, 4, samples=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
     clock.now = s.deadline(7) + 1

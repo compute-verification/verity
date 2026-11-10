@@ -39,9 +39,9 @@ import Mathlib.Topology.Sheaves.Init
 The loop's `Commit` carries each table's level-0 root that `Level0.ofDraws` drew for the session (`Session.relay`'s
 `commitFrame` of `Level0.ofSession`'s roots). Here that link is held to `LeanRelease.LinkIs` at the deployed tables:
 
-* `Loop.level0Of_root`: a drawn level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`).
+* `Loop.level0Of_root`: a sampled level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`).
 * **`LeanRelease.linkIs_ofLoop`**: at a `Live` statement, where the release's link is the loop's (`Loop.linkOf src`,
-  `Statement`) and `src` draws the tape's level 0 (`Loop.LinkLevel0`), the firewall's link is `linkMsg` (`LinkIs`), so
+  `Statement`) and `src` samples the tape's level 0 (`Loop.LinkLevel0`), the ZK server's link is `linkMsg` (`LinkIs`), so
   `LinkRoundEq` holds (`linkRoundEq_ofLoop`, by `linkRoundEq_of_linkIs`).
 * **`LeanRelease.linkRoundEq_ofLoopLink`**: that at `ofLoopLink`, whose link is the loop's by definition, at a statement
   in the masked scope with a witness (`Masked.live_of`).
@@ -58,7 +58,7 @@ open _root_.Flock (V F128 Stmt)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- A drawn level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`). -/
+/-- A sampled level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`). -/
 theorem Loop.level0Of_root {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array Stmt} {j : ℕ} {l : _root_.Flock.Firewall.Level0.Level0}
     (h : Loop.level0Of src x w ρ sts j = .ok l) : l.root = _root_.Flock.Firewall.Link.root l.toIn := by
@@ -87,7 +87,7 @@ theorem Loop.Level0Src.linkLevel0 {src : Msg → Flock.Wit →
 namespace LeanRelease
 
 /-- **The loop's link is the recheck's link message** at a `Live` statement, where the release's link is the loop's
-(`Loop.linkOf src`) and `src` draws the tape's level 0 (`Loop.LinkLevel0`). -/
+(`Loop.linkOf src`) and `src` samples the tape's level 0 (`Loop.LinkLevel0`). -/
 theorem linkIs_ofLoop
     (L₀ : LeanRelease Flock.Wit ((session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand))
     (src : Msg → Flock.Wit →
@@ -136,7 +136,7 @@ theorem linkRoundEq_ofLoop (vs : (session Loop.loopNr dataE).SwVals)
   linkRoundEq_of_linkIs Loop.loopNr vs _ x w (linkIs_ofLoop L₀ src real hL hx hs)
 
 /-- **`LinkRoundEq` at the loop's own frames and link**: at a statement in the masked scope with a witness, which is
-`Live` (`Masked.live_of`), where `src` draws the tape's level 0. -/
+`Live` (`Masked.live_of`), where `src` samples the tape's level 0. -/
 theorem linkRoundEq_ofLoopLink (vs : (session Loop.loopNr dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit ((session Loop.loopNr dataE).refP.Nonce × (session Loop.loopNr dataE).refP.Rand))
     (src : Msg → Flock.Wit →

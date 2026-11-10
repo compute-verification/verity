@@ -41,18 +41,18 @@ import Proofs.Flock.Claims.Recursion.VStar
 
 A V\* part's check is accepted, or its recorded calls collide with each other or with the compiled verifier's own
 SHA-512 evaluations at its V\* statement (`VStarB.PartChecksBV`; check 5's row commitments are among them). No witness
-records those evaluations, so the facts route 2C reads of V*'s parts escape to a collision among a draw's evaluations
-(`drawCalls`: its witnesses' recorded calls, the inner verifier's own at the draw's coins, `Deploy.callsAt`, and
+records those evaluations, so the facts route 2C reads of V*'s parts escape to a collision among a sample's evaluations
+(`drawCalls`: its witnesses' recorded calls, the inner verifier's own at the sample's coins, `Deploy.callsAt`, and
 `setupCalls` at the run's V\* statements):
 
-* `CallsLogCollAt`: `CallsLogColl` with the inner run's calls among those `callsAt` lists at the draw's coins (or a
+* `CallsLogCollAt`: `CallsLogColl` with the inner run's calls among those `callsAt` lists at the sample's coins (or a
   collision among them); `CallsLogColl.toAt` gives it, and at the deployed record it holds by construction
   (`RecDeploy.callsLogCollAt_deployRec`).
 
 * `VStarAcceptsV`, `InnerAcceptsCollAtV` and `ForksBindAtV` (with `forkCollV`): `VStarAccepts`, `InnerAcceptsCollAt`
   and `ForksBindAt` with that escape. Each old fact gives its twin (`VStarAccepts.toV`, `InnerAcceptsCollAt.toV`,
   `ForksBindAt.toV`): more calls hold a collision wherever fewer do.
-* `Pr_innerRejects_le_PrBinnerV_at`: a rejecting judged draw costs at most `Pr[B_I]` over the draws' evaluations
+* `Pr_innerRejects_le_PrBinnerV_at`: a rejecting judged sample costs at most `Pr[B_I]` over the samples' evaluations
   (`PrBinnerV`), which is at least `Pr[B_I]` (`PrBI_le_PrBinnerV`).
 -/
 
@@ -78,8 +78,8 @@ section Facts
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The inner verifier's calls are among those a finder searches at the draw, off a collision** (`CallsLogCollBy` at
-`Deploy.callsAt`): the recorded calls, the inner setup's and the inner verifier's own at the draw's coins. -/
+/-- **The inner verifier's calls are among those a finder searches at the sample, off a collision** (`CallsLogCollBy` at
+`Deploy.callsAt`): the recorded calls, the inner setup's and the inner verifier's own at the sample's coins. -/
 abbrev CallsLogCollAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   CallsLogCollBy H D I DO fun x r ws => D.callsAt H x r ws
 
@@ -92,12 +92,12 @@ theorem mem_callsAt_append {H : Msg → Msg} {D : Deploy Coin} {x : Msg} {r : Fi
     p ∈ D.callsAt H x r ws ++ L :=
   (List.mem_append.1 hp).elim (fun h => List.mem_append_left _ (mem_callsAt h)) (List.mem_append_right _)
 
-/-- The calls a finder searches at a draw are true where the recorded ones are: the rest are `H`'s answers. -/
+/-- The calls a finder searches at a sample are true where the recorded ones are: the rest are `H`'s answers. -/
 theorem callsAt_true_of {H : Msg → Msg} {D : Deploy Coin} {x : Msg} {r : Fin (D.V.k x) → Coin}
     {ws : List Flock.Wit} (h : ∀ e ∈ D.calls x ws, H e.1 = e.2) : ∀ e ∈ D.callsAt H x r ws, H e.1 = e.2 :=
   fun e he => (List.mem_append.1 he).elim (h e) (setup_true H _ e)
 
-/-- The calls a finder searches at a draw are true evaluations (`calls_true`, and `H`'s answers). -/
+/-- The calls a finder searches at a sample are true evaluations (`calls_true`, and `H`'s answers). -/
 theorem callsAt_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hT : CallsTrue H D I DO)
     (hN0 : CallsNil H D) (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
@@ -135,8 +135,8 @@ def InnerAcceptsCollAtV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
     (D.innerView H x r ws).out = .acc ∨
       ∃ u v, findColl (D.calls x ws ++ setupCalls H D (runVstar H D I P x ω r)) = some (u, v) ∧ Collision H u v
 
-/-- **A collision among two draws' evaluations at `Be`'s fork at round `j`**: `forkColl` over `drawCalls`, the calls
-the draws' witnesses record and the compiled verifier's own at their V\* statements. -/
+/-- **A collision among two samples' evaluations at `Be`'s fork at round `j`**: `forkColl` over `drawCalls`, the calls
+the samples' witnesses record and the compiled verifier's own at their V\* statements. -/
 def forkCollV [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (j : ℕ)
     (t : Ω × (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x × (EO D I DO decO).C x) :
@@ -144,8 +144,8 @@ def forkCollV [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner C
   ∃ u v, findColl (drawCalls H D I DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
       drawCalls H D I DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)) = some (u, v) ∧ Collision H u v
 
-/-- **`ForksBindAt` over the draws' evaluations**: at every draw of `Be`'s fork at round `j` where the inner views
-differ at message `j`, the two draws' evaluations collide (`forkCollV`). -/
+/-- **`ForksBindAt` over the samples' evaluations**: at every sample of `Be`'s fork at round `j` where the inner views
+differ at message `j`, the two samples' evaluations collide (`forkCollV`). -/
 def ForksBindAtV [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (x : Msg) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (Ω : Type) (P : Prover Ω) (j : ℕ)
@@ -175,7 +175,7 @@ theorem drawCalls_pair_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin
     ∀ e ∈ drawCalls H D I DO decO P x ω d ++ drawCalls H D I DO decO P x ω d', H e.1 = e.2 := fun e he =>
   (List.mem_append.1 he).elim (drawCalls_true hT hN0 ω d e) (drawCalls_true hT hN0 ω d' e)
 
-/-- A collision `forkColl` finds among the draws' recorded calls is one `forkCollV` finds among their evaluations. -/
+/-- A collision `forkColl` finds among the samples' recorded calls is one `forkCollV` finds among their evaluations. -/
 theorem forkCollV_of [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg}
     (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) {j : ℕ}
@@ -218,7 +218,7 @@ theorem innerAcceptsCollAtV_of_dense {H : Msg → Msg} {D : Deploy Coin} {I : In
   exact hD x s hs (hx s hs) Ω P ω r hg.1 ws (eoGives_outerHolds hg) (hT decO x Ω P ω r c ws hg)
 
 /-- **A rejected inner view is a collision among a fork's evaluations**, at every round `j`: where
-`InnerAcceptsCollAtV` holds, it is one among the judged draw's evaluations, which `B_I`'s fork at `j` searches too. -/
+`InnerAcceptsCollAtV` holds, it is one among the judged sample's evaluations, which `B_I`'s fork at `j` searches too. -/
 theorem Pr_innerRejects_le_forkV_at [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {x : Msg} (hA : InnerAcceptsCollAtV H D I DO x) (hT : CallsTrue H D I DO)
     (hN0 : CallsNil H D) (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] (P : Prover Ω) (j : ℕ) :
@@ -248,7 +248,7 @@ theorem PrFdevV_nonneg [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
   · exact Pr_nonneg _
   · exact le_rfl
 
-/-- **`B_I` over the draws' evaluations finds what `B_I` finds**: its fork searches more calls, all true. -/
+/-- **`B_I` over the samples' evaluations finds what `B_I` finds**: its fork searches more calls, all true. -/
 theorem PrBI_le_PrBinnerV [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) (decO : List (ℕ × Col) → List T)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
@@ -258,7 +258,7 @@ theorem PrBI_le_PrBinnerV [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} 
   · exact Pr_mono fun s hs => forkCollV_of (j := s.1) (t := s.2) hT hN0 hs
   · exact le_rfl
 
-/-- **A rejecting judged draw costs at most `Pr[B_I]` over the draws' evaluations**: it is a collision among every
+/-- **A rejecting judged sample costs at most `Pr[B_I]` over the samples' evaluations**: it is a collision among every
 fork's evaluations (`Pr_innerRejects_le_forkV_at`), so at most their average over the inner rounds, of which an
 accepted run shows one (`RoundsMargin`). -/
 theorem Pr_innerRejects_le_PrBinnerV_at [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}

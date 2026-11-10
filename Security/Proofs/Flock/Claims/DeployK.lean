@@ -60,7 +60,7 @@ open Flock Transcript FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
 /-! ## `fast100`'s schedules -/
 
-/-- Every `fast100` schedule is for `22 ≤ m`, draws a nonempty first point, has at least two levels, and queries each. -/
+/-- Every `fast100` schedule is for `22 ≤ m`, samples a nonempty first point, has at least two levels, and queries each. -/
 theorem fast100_rounds_ok {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
     22 ≤ m ∧ sch.n ≠ 0 ∧ 2 ≤ sch.levels.size ∧ ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0 := by
   have hm : m < 40 := by

@@ -98,7 +98,7 @@ def test_the_matmuls_are_in_declaration_order():
 
 
 def variants():
-    """(what changed, scheme, epoch): the base, and the base with exactly one thing changed."""
+    """(what changed, scheme, execution phase): the base, and the base with exactly one thing changed."""
     yield "base", "pearl-c-h100-v1", build()
     for name in SCHEMES:
         if name != "pearl-c-h100-v1":

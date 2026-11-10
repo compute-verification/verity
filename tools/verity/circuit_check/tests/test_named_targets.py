@@ -83,6 +83,22 @@ def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, mo
     assert held <= set(entry["reads"]["files"]), sorted(entry["reads"]["files"])
 
 
+@pytest.mark.slow
+def test_a_composites_lift_is_checked_and_stored_in_a_worker_of_its_own(tmp_path):
+    """``Lifted[ArgmaxStepF32_v1]_v2{ORD=0}`` checked as ``--all`` checks it: traced, in a worker forked for it, from a process of
+    its own.  Its check passes; what killed it was the worker's account of the check's reads afterwards (`cache.attributed`),
+    which a check run in process or untraced never makes: placing the ``digests`` pin its id was looked up in raised in the
+    on-demand ``Lifted[...]_v2`` family, which lifts primitives only (`test_targets`' cheaper test holds `sidecars.named`).
+    The check passes and its verdict is stored."""
+    target = "Lifted[ArgmaxStepF32_v1]_v2{ORD=0}"
+    r = subprocess.run([sys.executable, "-P", "-m", "circuit_check", target, "--cache", str(tmp_path / "cache"), "-j", "2", "-q",
+                        "--out", str(tmp_path / "report.json")], cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+    rep = json.loads((tmp_path / "report.json").read_text())
+    assert [t["target"] for t in rep["targets"] if t["failures"]] == [], rep["targets"]
+    assert (rep["cache"]["stored"], rep["cache"]["untraced"]) == (1, []), rep["cache"]
+
+
 def test_a_prebuild_that_fails_refuses_the_run_saying_why(tmp_path, monkeypatch, capsys):
     """A model that doesn't build ends the run before the tracer starts or any check runs, exit 2, with the prebuild's exit
     status and its error, which it writes here whole: a run that went on would compile the model in a check, untraced."""
@@ -173,6 +189,24 @@ def test_a_warning_is_printed_unchecked_apart_from_the_passes_and_counted(runs, 
     statuses = [cli._status(t) for t in (_target("A", 0, {}, warnings=by["F32Add_v1"]), _target("B", 0, {}),
                                           _target("C", 0, {}, failures=[{}], warnings=by["F32Mul_v1"]))]
     assert [s.strip() for s in statuses] == ["unchecked", "ok", "FAIL"]
+
+
+def test_each_target_is_classed_by_its_vectors_and_the_classes_are_counted_before_the_last_line(runs, monkeypatch, capsys):
+    """Every target's result is classed as it is made (`cli._one`, `checks.classified`): one no realization compared on a random
+    vector carries a warning, and a line before the last counts the targets of each class."""
+    def corr(*recs):
+        return {"correspondence": {"realizations": list(recs)}}
+
+    r = cli._one("definition", "X", lambda: {"definition": "X", **corr({"lowered": False}), "failures": [], "warnings": []})
+    assert [w["name"].split(":")[0] for w in r["warnings"]] == ["vectors/none X"] and cli._status(r).strip() == "unchecked"
+    by = {"F32Add_v1": corr({"compared": 6, "random": 2}), "F32Mul_v1": corr({"compared": 4, "random": 0})}
+    monkeypatch.setattr(cli, "run", lambda specs, opts, **kw: CK.report(
+        [cli._one("definition", s, lambda s=s: {"definition": s, **by[s], "failures": [], "warnings": []}) for s in specs], opts))
+    assert cli.main(["F32Add_v1", "F32Mul_v1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert [s for s in out if s.startswith("unchecked ")] == ["unchecked vectors/edge-only: 1 over 1 target(s)"]
+    assert out[-2] == "circuit-check: vectors a realization compared with the reference on: 1 random, 1 edge-only, 0 none"
+    assert "1 unchecked (warnings, which never fail) on 1 Definition(s)" in out[-1]
 
 
 def test_a_sidecar_names_the_targets_its_bindings_reach_in_its_module():

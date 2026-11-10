@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The hidden-read kill experiment (read_gadget.py): GemmCoordinate<K> class statements with and without two hidden Merkle reads
 # a template instance, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
-# session counts, each session drawing every unit (--draw subset:N); then Lean's flock-verify on each case's last session,
+# session counts, each session sampling every unit (--draw subset:N); then Lean's flock-verify on each case's last session,
 # which it refuses: the read gadget's circuit is composed here, not a Program's, and a session without the verifier's
 # program is outside what the soundness proof covers. Each case's sessions take their coin trees from its own
 # challenger (challenger.sh: serve --tree-from), and their records are held to its release log. Run from the verity tree

@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The masked live sessions' bound at the deployed decoders
 
-`ZkLiveAccJ` asks, at each prover, tape and table `C`, for decoders right at C-Flock ZK's padded tables (`hdec`) at a
+`ZkLiveAccJ` asks, at each prover, tape and table `C`, for decoders right at Flock ZK's padded tables (`hdec`) at a
 verdict that accepts table `j` with no level-0 opening off `C` unless it self-clashes (`_hok`). The deployed decoders
 (`opnD`, `decD`) are right at the verdict `accepted` (`ZkDecJ`), and so at that verdict on the live outcomes whose
 decoded table `j` has no such opening. So `ZkLiveAccJ` follows from the live sessions' bound at the deployed decoders,
@@ -47,7 +47,7 @@ which chooses no decoder (`ZkXferJ`):
 * `decodesTable_at`: a decoder right at `ok` on `pL` is right at `ok` and `Q` at table `j₀` on the live outcomes of
   `pL` whose table `j₀` reps play, on the decoded tapes, only to outputs of `Q`.
 * `OffNoClashZ`, `AccOffJ`, `OkOffJ`, `decodesOff_deploy`: an opening off `C` without a self-clash, the live outcomes
-  `verify --zk` accepts at the setup at the statement's draw at `wrS` whose decoded table `j` has none, the verdict
+  `verify --zk` accepts at the setup at the statement's sample at `wrS` whose decoded table `j` has none, the verdict
   `accepted` with none at table `j`, and the deployed decoders right there.
 * `ZkXferJ`, `zkLiveAccJ_of_xferJ`, `zk_KS_of_xferJ`: the live sessions' bound at the deployed decoders gives
   `ZkLiveAccJ` where some run accepts, so `Flock.KS` at the deployed masked record follows from it and `ExtendJ`, and
@@ -98,8 +98,8 @@ def OffNoClashZ {D Sl : Type} {mPts : ℕ} (Hs : Hashes 𝔽 D Sl) (T : TabZK �
   Off₀Z Hs T cap₀ C o ∧ ¬ SelfClashZ Hs T o
 
 /-- **The deployed live verdict, with no opening off `C` at table `j` unless it self-clashes**: `verify --zk` accepts
-at the setup at the draw `d` at `wrS` (`AcceptsAt`, which an accepting run of `Deploy.V` gives with no premise on its
-record's draw: `acceptsAt_wrS`), and every output table `j`'s reps play to on the tapes `decD` decodes, at the
+at the setup at the sample `d` at `wrS` (`AcceptsAt`, which an accepting run of `Deploy.V` gives with no premise on its
+record's sample: `acceptsAt_wrS`), and every output table `j`'s reps play to on the tapes `decD` decodes, at the
 openings `opnD` and the cap of the outcome's `root_B[j]`, has no level-0 opening off `C` at the cap of `rootB₀[j]`
 without a self-clash (`OffNoClashZ`). -/
 def AccOffJ (I : Exec.Inputs) (sts : Array Stmt) {mPts : ℕ} (n : ℕ) (T : ℕ → TabZK 𝔽 mPts) (d : Lean.Json)
@@ -122,7 +122,7 @@ def OkOffJ {mPts n : ℕ} (T : ℕ → TabZK 𝔽 mPts) {j : ℕ} (hj : j < n) (
   o.accepted = true ∧ (j' = finJ T hj → ¬ OffNoClashZ ZkExec.hs512 (T j) (Exec.capOfRoot rootB₀[j]!) C o)
 
 /-- **The deployed decoders are right at `OkOffJ` on `AccOffJ`** at a masked statement in scope that `Deploy.V` sets
-up at the draw `d` (`decodesTable_deploy`, `decodesTable_at`). -/
+up at the sample `d` (`decodesTable_deploy`, `decodesTable_at`). -/
 theorem decodesOff_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -147,7 +147,7 @@ theorem decodesOff_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 open Classical in
 /-- **The masked live sessions' bound at the deployed decoders**: `ZkLiveAccJ` with its decoders and verdicts fixed,
-at every masked statement in scope that `Deploy.V` sets up at a draw `d` and at least one table. At C-Flock ZK's padded
+at every masked statement in scope that `Deploy.V` sets up at a sample `d` and at least one table. At Flock ZK's padded
 tables `zkTabs`, every prover has escapes at injective fork rounds on accepted deployed runs, tied to collisions, such
 that at every tape and table `C` of full-width columns a mixture of live strategies with common roots `rootB₀` bounds
 the deployed runs accepting with no column off `C` by its acceptance with table `j` decoded with no opening off `C`
@@ -227,7 +227,7 @@ def ZkXferJ (x : Claims.Msg) : Prop :=
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **`ZkXferJ` gives `ZkLiveAccJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a draw (`acc_draw_of_setup`), and the deployed decoders are right at `OkOffJ` on `AccOffJ`
+carries a sample (`acc_draw_of_setup`), and the deployed decoders are right at `OkOffJ` on `AccOffJ`
 (`decodesOff_deploy`), whose verdict at table `j` accepts with no opening off `C` unless it self-clashes. -/
 theorem zkLiveAccJ_of_xferJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferJ x) :
     ZkLiveAccJ x := by

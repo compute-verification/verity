@@ -50,7 +50,7 @@ def test_picks_are_identical_across_ranks_and_stratified_by_site_kind_phase():
     assert len(pre["rows"]) == 4 and pre["rows_total"] == 40 and all(0 <= r < 40 for r in pre["rows"])
     dec = next(p for p in p0["picks"] if p["step"] != 0 and p["kind"] == "all_reduce")
     assert dec["rows"] == [0, 1, 2]
-    # a different seed draws different decode steps (with overwhelming probability over 3 sites x 5 steps)
+    # a different seed samples different decode steps (with overwhelming probability over 3 sites x 5 steps)
     q0 = XC.pick_strata(_layouts(0), 0, b"\x02" * 32, per_stratum=2, max_rows=4)
     assert [p["step"] for p in q0["picks"]] != [p["step"] for p in p0["picks"]] or [p["rows"] for p in q0["picks"]] != [p["rows"] for p in p0["picks"]]
 

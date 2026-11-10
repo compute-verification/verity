@@ -1,5 +1,5 @@
 """--retain device (`commit.committer.device_pool`): a window's committed values wait in a bounded device pool for its draw-gated
-release, which keeps exactly the drawn leaves, byte-equal to what --retain host keeps of them, and refuses any other leaf by name.
+release, which keeps exactly the sampled leaves, byte-equal to what --retain host keeps of them, and refuses any other leaf by name.
 The pool is a CPU tensor here; the windowed collector puts the same blocks on the GPU."""
 from __future__ import annotations
 

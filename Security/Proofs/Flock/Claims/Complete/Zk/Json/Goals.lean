@@ -56,7 +56,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 outputs (`Out64`), and two named hypotheses in place of `StmtOk` and
 `ProverOk`:
 
-* `StmtOkZk`: a non-empty `Σ`, a printable draw that decodes (`DrawOk`), the statement's draw the one it was set up at,
+* `StmtOkZk`: a non-empty `Σ`, a printable sample that decodes (`DrawOk`), the statement's sample the one it was set up at,
   and the verifier's `Hello` a JSON object whose `coins` is an object, printable with the prover's nonce put in (what
   the prover's `Hello` and R7 need). The keyed coin tree is `readyZk`'s. It holds at every good masked case
   (`stmtOkZk`, `Zk/Json/Stmt.lean`).
@@ -77,8 +77,8 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
-/-- **What the masked record needs of the statement**, at every good masked case: a non-empty `Σ`, a printable draw
-that decodes to the statement's instances, the statement's draw the one it was set up at, and the verifier's `Hello` a
+/-- **What the masked record needs of the statement**, at every good masked case: a non-empty `Σ`, a printable sample
+that decodes to the statement's instances, the statement's sample the one it was set up at, and the verifier's `Hello` a
 JSON object whose `coins` is an object, printable with the prover's nonce put in. -/
 def StmtOkZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : CaseZk H rel, 0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
@@ -207,7 +207,7 @@ theorem canonicalZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
   rw [hrec]
   exact check_printJ (good_recordObjZk ht _ hz ct rb _ streams o.proofs (good_draw hdraw))
 
-/-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
+/-- **The record's sample is the statement's**: the goal `DrawMatches`. -/
 theorem drawMatchesZk_goal (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : DrawMatchesZk H rel := by
   intro o

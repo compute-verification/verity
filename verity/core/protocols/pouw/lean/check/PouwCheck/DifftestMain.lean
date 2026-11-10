@@ -8,7 +8,7 @@ public import PouwCheck.VerifiedDifftest
 The port's functions (`PouwCheck.Difftest`'s, then `PouwCheck.CreditDifftest`'s and `PouwCheck.VerifiedDifftest`'s:
 `VerifiedDifftest.all`) behind `Difftest.respond`'s line protocol, which `tests/test_difftest.py` drives against
 `core_check.py`, `benchmarks/pouw/served_zk/of_record.py` runs as the challenger's checks of record and
-`credit._lean_verified` asks for a served window's statements' verdict (`credit-verified`), and one
+`credit._lean_verified` asks for a served execution phase's statements' verdict (`credit-verified`), and one
 more request, `{"fn": "coins", "input": n}`: `n` bytes of the operating system's randomness (`IO.getRandomBytes`, A3's
 `uniform/io-getrandombytes`), answered `{"output": HEX}`. PoUW's challenger (`pouw.coins.Challenger`,
 `pouw.window.live_challenger`, through `pouw.verifier.coins`) reads its entropy from here, so the Python never reads it

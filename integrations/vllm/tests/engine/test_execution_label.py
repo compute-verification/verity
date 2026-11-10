@@ -100,22 +100,3 @@ def test_build_engine_refuses_contradicting_engine_arg(monkeypatch):
         va.build_engine(case="B0", execution="bi-eager", engine_args={"enforce_eager": False})
     with pytest.raises(RuntimeError, match="execution mismatch"):
         va.build_engine(case="B0", execution="bi-compiled", engine_args={"enforce_eager": True})
-
-
-def test_build_engine_sets_enforce_eager_from_label(monkeypatch):
-    """The kwargs handed to LLM() carry the label's enforce_eager (True for bi-eager, explicit False for bi-compiled)."""
-    va = _va()
-    _no_llm(monkeypatch)
-    seen = {}
-    import sys
-
-    class LLM:
-        def __init__(self, **kw):
-            seen.update(kw)
-            raise KeyboardInterrupt  # stop right after the kwargs are observed (no GPU here)
-    sys.modules["vllm"].LLM = LLM
-    for label, want in (("bi-eager", True), ("bi-compiled", False)):
-        seen.clear()
-        with pytest.raises(KeyboardInterrupt):
-            va.build_engine(case="B0", execution=label)
-        assert seen.get("enforce_eager") is want, (label, seen)

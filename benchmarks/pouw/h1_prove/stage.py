@@ -1,7 +1,7 @@
 """stage.py K WORK: the H1 tile unit's statement circuit, built once, and each requested round staged on it (the prover's).
 
 The circuit (`h1unit.Shape(K).stager`, written once to WORK/circuit.txt) is the long step at K = 4096, so it is built while
-the window is served and drawn: once `run.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
+the window is served and sampled: once `run.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
 "calls"}``), the statement is bound to the window's Program and template-instance partition (`h1unit.Shape.window`), so
 the Lean verifier derives each instance's unit from its own copy of them. `run.py` then drops a request in WORK/requests/
 for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
 

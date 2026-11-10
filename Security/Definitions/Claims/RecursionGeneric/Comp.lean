@@ -95,7 +95,7 @@ def decProg (K : Comp Coin) (IV : Verifier Coin) (x : Msg) (r : Fin (K.V.k x) �
       (coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq r i.val) (IV.k (K.xI x)) [] [])
   | none => .ret ⟨[], .rej⟩
 
-/-- **The outer stage at a draw**: `E_O` at the draw's run coins and its own coins, then the inner view its output gives
+/-- **The outer stage at a sample**: `E_O` at the sample's run coins and its own coins, then the inner view its output gives
 (`decProg`). It is `outerStage` with the decoding a rerun program. -/
 def stage (K : Comp Coin) (IV : Verifier Coin) (x : Msg) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     RP (Fin (K.V.k x) → Coin) Seen :=

@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.ZK.Session
 
 A release of `J` tables stops at some outcome `s` (where it stopped), and the tables whose files left by then
 (`full s j`) show their views, the others their pre-final views (`Release.bytesAt`). A file leaves only behind its
-table's check (`Release.Gated`), so where it left the constraint holds at that table's drawn pads, and the view is the
+table's check (`Release.Gated`), so where it left the constraint holds at that table's sampled pads, and the view is the
 derived view there (`psi_realCore_at`). At each outcome the released bytes are then a tuple of independent per-table
 branches (`branch`): the derived view, distributed as `S_shvzk(x, e)` at any witness (`derived_sim`), or the pre-final
 view, distributed as the dummy's (Lemma A). `prCoin_pi_close` bounds the tuple by the simulator's (`Release.simAt`), and

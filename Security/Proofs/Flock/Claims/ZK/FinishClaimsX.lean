@@ -34,11 +34,11 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The firewall's rep reads the extra claims' coordinates alone
+# The ZK server's rep reads the extra claims' coordinates alone
 
 The ring switch reads a claim's coordinates `x` and nothing else (its value and skip weights go to the verifier), and the
-firewall's rep reads the extra claims only through the ring switch on `abcClaims ++ extras`. So two lists of extra
-claims with the same coordinates give one rep: the firewall's `claimsOf xs` and a session's extra claims at `xs`.
+ZK server's rep reads the extra claims only through the ring switch on `abcClaims ++ extras`. So two lists of extra
+claims with the same coordinates give one rep: the ZK server's `claimsOf xs` and a session's extra claims at `xs`.
 
 * `getElem!_x`: claim `k`'s coordinates are entry `k` of the coordinates, in range or not.
 * `FlockComplete.ringSwitchCut_x`: the ring switch at claims with the same coordinates is one run.
@@ -95,7 +95,7 @@ theorem ringSwitchCut_switchVec (io : FlockComplete.Asks M) (g : Array F128) {cs
   rw [e]
   exact FlockComplete.ringSwitchCut_x io _ hx
 
-/-- **`repFwC_claims_x`: the firewall's rep reads the extra claims' coordinates alone**: at extra claims with the same
+/-- **`repFwC_claims_x`: the ZK server's rep reads the extra claims' coordinates alone**: at extra claims with the same
 coordinates it is one run, so at `claimsOf xs` and at any claims at `xs`. -/
 theorem repFwC_claims_x (io : FlockComplete.Asks M) (hs : Hashes M) (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit) {E E' : Array Claim}

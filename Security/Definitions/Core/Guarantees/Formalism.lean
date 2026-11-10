@@ -10,7 +10,7 @@ Stated on core's circuit and partition (`Definitions.Core.Formalism`). Appendix 
 into NCI's coverings is `Nci.Guarantees.PartitionCovers`, and NCI's policy as a `(c, k)`-partition is
 `Nci.Guarantees.CompliesCK`. The serving blocks are inference blocks of at most `c_S` gates reading at most `k_S`, summed by
 `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`. The AND count `andSize`, in
-which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
+which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on Flock's circuits counts its AND gates
 and rows (`ToCircuitAnd`). Credit under the pinned lowering is at most the lowered circuit's size (`CreditSizeLe`).
 -/
 
@@ -34,11 +34,11 @@ number of operation gates of its lowered circuit. -/
 def CreditSizeLe : Prop :=
   ∀ (lower : RegisteredCircuit → Circuit) (d : RegisteredCircuit), creditSize lower d ≤ (lower d).size (lower d).computed
 
-/-- **C-Flock's AND gates are `IsAnd`.** On a C-Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
+/-- **Flock's AND gates are `IsAnd`.** On a Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
 NOT and input gates are not AND gates); `and a b` with `a ≠ b` is one; and so is a row `(⊕ a) ∧ (⊕ b)` with a gate `x`
 in `a` an odd number of times and in `b` an even number, and a gate `y` the other way round (the two XORs differ). -/
 def ToCircuitAnd : Prop :=
-  ∀ (B : FlockSoundness.Audit.Circuit) (g : Fin B.N),
+  ∀ (B : Verity.Boolean.Circuit) (g : Fin B.N),
     (B.toCircuit.IsAnd g → (∃ a b, B.op g = .and a b) ∨ ∃ a b, B.op g = .row a b) ∧
       (∀ a b, B.op g = .and a b → a ≠ b → B.toCircuit.IsAnd g) ∧
       ∀ a b x y, B.op g = .row a b → Odd (a.count x) → Even (b.count x) → Even (a.count y) → Odd (b.count y) →
@@ -51,7 +51,7 @@ run of the registered circuit, each inference block's extracted string has local
 def BlockDescription : Prop :=
   ∀ (R : Committed) (c k : ℕ), R.d.𝓘.IsCK R.d c k →
     ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (t a_blk : ℕ) (e : List Bool)
-      (y : Fin R.d.n → R.d.D.Transcript → List Bool),
+      (y : Fin R.d.n → R.d.D.Trace → List Bool),
       e.length ≤ a_blk → Evaluates M r t R e y →
       ∀ a, R.Honest a → ∀ u, LDL M t r (y u (R.d.D.eval a)) ≤ (k + Nat.clog 2 R.d.n + a_blk : ℕ)
 
@@ -61,14 +61,14 @@ def CountingSum : Prop :=
   ∀ (C : Circuit) (B : ℕ) (P : Partition C B) (V : Finset (Fin C.N)) (ω : Fin C.N → ℝ) (q : Fin B → ℝ),
     V ⊆ C.computed → (∀ u, ∑ v ∈ V ∩ P.gates u, ω v ≤ q u) → ∑ v ∈ V, ω v ≤ ∑ u, q u
 
-/-- **Theorem 3 (counting).** For a `(c, k)`-partition into `B` inference blocks, operation gates `V` with weights `ω` and
-an allowance `q > 0` that bounds every inference block's counted weight: `c · B ≥ (c / q) Σ_{v ∈ V} ω_v`, and relative to
-any reference of size `T₀ > 0`, the slowdown `c · B / T₀ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω_v`. Each inference block is priced at
-`c` gates, so the bound is on `c · B`, which is at least `|C|` (`CKSize`). -/
+/-- **Theorem 3 (counting).** For any partition into `B` inference blocks, each priced at `c` gates, operation gates `V`
+with weights `ω` and an allowance `q > 0` that bounds every inference block's counted weight:
+`c · B ≥ (c / q) Σ_{v ∈ V} ω_v`, and relative to any reference of size `T₀ > 0`, the slowdown
+`c · B / T₀ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω_v`. The draft states it of a `(c, k)`-partition, whose `c · B` is at least `|C|`
+(`CKSize`); the bound needs no more than the partition. -/
 def Counting : Prop :=
-  ∀ (d : RegisteredCircuit) (B c k : ℕ) (P : Partition d.D B), P.IsCK d c k →
-    ∀ (V : Finset (Fin d.D.N)) (ω : Fin d.D.N → ℝ) (q : ℝ), V ⊆ d.D.computed → 0 < q →
-      (∀ u, ∑ v ∈ V ∩ P.gates u, ω v ≤ q) →
+  ∀ (d : RegisteredCircuit) (B c : ℕ) (P : Partition d.D B) (V : Finset (Fin d.D.N)) (ω : Fin d.D.N → ℝ) (q : ℝ),
+    V ⊆ d.D.computed → 0 < q → (∀ u, ∑ v ∈ V ∩ P.gates u, ω v ≤ q) →
       (c : ℝ) / q * ∑ v ∈ V, ω v ≤ (c * B : ℕ) ∧
         ∀ T₀ : ℝ, 0 < T₀ → (c : ℝ) / (T₀ * q) * ∑ v ∈ V, ω v ≤ slowdown c B T₀
 

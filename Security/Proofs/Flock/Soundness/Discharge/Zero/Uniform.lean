@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 /-!
 # `hZero` at the circuit's program (e2e, untyped statements)
 
-The untyped statement `Stmt.setupH` accepted places a template instance (`upv` stacked copies of the unit net) at each drawn unit's site
+The untyped statement `Stmt.setupH` accepted places a template instance (`upv` stacked copies of the unit net) at each sampled proof block's site
 (`Placed.Sites`, `Placed.progPlaces`), and Δ copies into each stacked input the column `Aliased.copyPos` names.
 - `copyPos_zero`: at a stacked input that reads the zero (`ZeroIn`), that column is a unit slot's forced-zero row.
 - `stack_zero_block`, `accepted_zero_block`: so in every block of a satisfying witness the input carries 0
@@ -186,7 +186,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → 
   {one : Fin k} {hone : ∀ u x, ins u x ≠ one}
 
 /-- **`hZero` for the circuit's program at the accepted statements' sites.** The program of `n` units of the circuit's template instance
-rows (`Placed.uniform`), each drawn unit placed at its site (`si`: its template instance and block in its table's
+rows (`Placed.uniform`), each sampled proof block placed at its site (`si`: its template instance and block in its table's
 accepted untyped statement, whose circuit file parses to `c`) with the program's own instance (`Const.Prog.instC`):
 every column on the zero gate carries 0 in every satisfying witness, when every input the program wires to the zero gate
 reads the zero (`hzer`). -/

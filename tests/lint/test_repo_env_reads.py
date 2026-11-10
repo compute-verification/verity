@@ -1,6 +1,6 @@
 """Direct environment reads in every tracked Python file outside ``integrations/vllm/`` and ``archive/``, held to
-``allowlists/repo_env_reads.json``: S1 of the quality rollout, so no area adds one
-while its owner builds the settings registry that declares each variable once.
+``allowlists/repo_env_reads.json``, so no area adds one while its owner builds the settings registry that declares each
+variable once.
 
 The integration has its own settings rule (P7, ``integrations/vllm/tests/lint/test_p07_declared_inputs.py``) and ``archive/``
 is kept but not developed, so neither is held here (``LEFT_OUT``).  A read is ``os.environ[...]``, ``os.environ.get(...)``,

@@ -15,7 +15,7 @@ and answers adaptively, as the table localization lays out, read bit by bit. Sen
 any number `e` of bits that depend on the seed. Every bit the chip reads from a side source still comes in over the
 side link and counts against `L`, with the certified stream's `ρ`. Its on-chip state and device memory are still laid
 out from the store before the seed and the stream, device memory hears only the chip's reads, rebuilding is still the
-codec's inverse at `c_enc` a word, and the sample is still drawn after the output.
+codec's inverse at `c_enc` a word, and the sample is still sampled after the output.
 
 `RealizesRateInteractive` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit such a device
 plays.

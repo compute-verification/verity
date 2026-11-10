@@ -1,5 +1,5 @@
-"""The synthetic input sets Flock's public tests read without the generator (`verity/ml/flock/tests/synthetic_sets.py`):
-each is the set :func:`generate.generate` writes for one (subcircuit, n, seed), with the provenance that names the run
+"""The synthetic input sets Flock's public tests read (`verity/ml/flock/tests/synthetic_sets.py`):
+each is the set `verity_flock.synthetic.generate` writes for one (subcircuit, n, seed), with the provenance that names the run
 (:data:`UNRUN`) cleared, so the same code writes the same bytes. A set lives under ``<subcircuit id>/`` in :data:`FIXTURES`,
 and its manifest's recipe is what names it, rewrites it and finds it: the template, its parameters, the samplers (with what
 they record of ``bind``'s other arguments, attention's key range ``T`` or a tiled GEMM's ``tile``), n and the seed.
@@ -18,8 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
-from verity_numerical.bench import generate as G
 from verity_flock import subcircuit_templates as TM
+from verity_flock import synthetic as SY
 
 FIXTURES = Path(__file__).resolve().parents[5] / "verity" / "ml" / "flock" / "tests" / "fixtures" / "synthetic_sets"
 #: the provenance fields a run fills in, cleared in a committed set
@@ -57,7 +57,7 @@ def write(sub: TM.Subcircuit, n: int, seed: int, root: Path = FIXTURES) -> Path:
             raise ValueError(f"{dst} holds {held['template']} {held['parameters']} {held['samplers']}, not {_recipe(sub)}: "
                              f"two recipes share the place")
     with tempfile.TemporaryDirectory() as tmp:
-        made = Path(G.generate(sub, n, seed, tmp, provenance=UNRUN)["path"])
+        made = Path(SY.generate(sub, n, seed, tmp, provenance=UNRUN)["path"])
         shutil.rmtree(dst, ignore_errors=True)
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(made, dst)

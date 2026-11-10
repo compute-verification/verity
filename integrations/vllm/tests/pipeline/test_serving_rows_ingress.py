@@ -15,7 +15,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import b1 as B1
 from verity.ml.windows import interface as IF
 
-FN = bind(B1.ResidualAdd, N=8)
+FN = bind(B1.BiasAdd, N=8)
 T = descriptor_id(FN)
 #: rows 10 .. 14 of each request: their two argument groups (``n``: a committed member of row j, ``p``: the weights) and steps;
 #: rows 0 .. 9 are the layers before, outside the window

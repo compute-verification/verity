@@ -210,7 +210,7 @@ def midstates(row: int) -> dict[str, int]:
 
 def reference(m: int, n: int, k: int, lp: int, L: int, row: int, kind: str) -> tuple[Counter, Counter]:
     """(the reference's compressions by category, the model's of the same hashes) for one call through dither.py: its seeds,
-    the coins the device draws, its values (any bytes: the layout fixes the hashing) under the value root, and A's
+    the coins the device samples, its values (any bytes: the layout fixes the hashing) under the value root, and A's
     operand root for a served call. A domain's id, a constant of its shape, isn't counted."""
     o, a = KINDS[kind]
     sh = dither.Shape(m, n, k, lp, L, row, o=o)

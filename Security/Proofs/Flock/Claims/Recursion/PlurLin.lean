@@ -44,12 +44,12 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The plurality, linearly: a link finder in place of two forks
 
-`Pr_plur_sq_le` bounds a draw's miss of the plurality by the root of two disagreeing draws, and every `√` in the
+`Pr_plur_sq_le` bounds a sample's miss of the plurality by the root of two disagreeing samples, and every `√` in the
 recursion's `γe` comes from it. This file bounds the same miss linearly, by a finder whose loop the honest finder can
-run: draw `u`; if `g u`, draw `u₁ … u_M` until the first where `g` holds, and succeed if its `f` differs from `f u`
+run: sample `u`; if `g u`, sample `u₁ … u_M` until the first where `g` holds, and succeed if its `f` differs from `f u`
 (`firstDiffers`). Its success is exactly `Σ_u [g u]·Pr[g ∧ f ≠ f u]·G_M`, with `q·G_M = 1 − (1 − q)^M` at `q = Pr[g]`
 (`Pr_firstDiffers`, `geomS_mul`), so a miss costs at most the link plus `q(1 − q)^M ≤ 1/(M+1)` (`Pr_plur_link`). The
-finder's expected cost is at most twice one draw's (`Ex_linkCost_le`), so under `ExpectedCR` at it the miss is at most
+finder's expected cost is at most twice one sample's (`Ex_linkCost_le`), so under `ExpectedCR` at it the miss is at most
 `2·E[c]/2^256 + 1/(M+1)` (`Pr_plur_ecr`): no root, and `M` is the finder's to choose.
 -/
 
@@ -82,7 +82,7 @@ theorem Ex_if_zero {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] 
   funext a
   by_cases h : p a <;> simp [h]
 
-/-- **The first of `M` draws where `g` holds has `f` other than `a`.** -/
+/-- **The first of `M` samples where `g` holds has `f` other than `a`.** -/
 def firstDiffers (g : U → Prop) (f : U → Msg) (a : Msg) : (M : ℕ) → (Fin M → U) → Prop
   | 0, _ => False
   | M + 1, us => (g (us 0) ∧ f (us 0) ≠ a) ∨ (¬ g (us 0) ∧ firstDiffers g f a M (Fin.tail us))
@@ -131,7 +131,7 @@ theorem mul_pow_le_inv {q : ℝ} (h1 : q ≤ 1) (M : ℕ) : q * (1 - q) ^ M ≤ 
   rw [le_div_iff₀ (by positivity)]
   nlinarith [key M, mul_nonneg ht (sub_nonneg.2 h1)]
 
-/-- The first of `M + 1` draws and the rest. -/
+/-- The first of `M + 1` samples and the rest. -/
 def splitFirst (M : ℕ) : (Fin (M + 1) → U) ≃ U × (Fin M → U) where
   toFun us := (us 0, Fin.tail us)
   invFun p := Fin.cons p.1 p.2
@@ -146,7 +146,7 @@ theorem Ex_splitFirst {M : ℕ} (F : U → (Fin M → U) → ℝ) :
     Ex (fun us : Fin (M + 1) → U => F (us 0) (Fin.tail us)) = Ex fun u => Ex fun vs => F u vs :=
   (Ex_equiv (splitFirst M) (fun p : U × (Fin M → U) => F p.1 p.2)).trans (Ex_prod _)
 
-/-- **The loop finds a differing draw with probability `Pr[g ∧ f ≠ a]·G_M`** at `r = 1 − Pr[g]`. -/
+/-- **The loop finds a differing sample with probability `Pr[g ∧ f ≠ a]·G_M`** at `r = 1 − Pr[g]`. -/
 theorem Pr_firstDiffers [Nonempty U] (g : U → Prop) (f : U → Msg) (a : Msg) :
     ∀ M, Pr (firstDiffers g f a M) = Pr (fun u => g u ∧ f u ≠ a) * geomS (1 - Pr g) M
   | 0 => by
@@ -175,8 +175,8 @@ theorem Pr_firstDiffers [Nonempty U] (g : U → Prop) (f : U → Msg) (a : Msg) 
           show _ = _ * (1 + (1 - Pr g) * geomS (1 - Pr g) M)
           ring
 
-/-- **Off the plurality, at most the link and the geometric tail**: a draw where `g` holds misses the plurality at most
-as often as the link finder (a draw `u` where `g` holds, then `M` draws, the first of them where `g` holds differing
+/-- **Off the plurality, at most the link and the geometric tail**: a sample where `g` holds misses the plurality at most
+as often as the link finder (a sample `u` where `g` holds, then `M` samples, the first of them where `g` holds differing
 from `f u`) succeeds, plus `1/(M+1)`. Linear, where `Pr_plur_sq_le` is squared. -/
 theorem Pr_plur_link (g : U → Prop) (f : U → Msg) (M : ℕ) :
     Pr (fun u => g u ∧ f u ≠ plur g f) ≤
@@ -252,7 +252,7 @@ theorem Ex_loopCost [Nonempty U] (g : U → Prop) (c : U → ℕ) :
     show _ = _ * (1 + (1 - Pr g) * geomS (1 - Pr g) M)
     ring
 
-/-- **The link finder costs at most two draws in expectation** (Wald): one draw, then `G_M` more where `g` holds,
+/-- **The link finder costs at most two samples in expectation** (Wald): one sample, then `G_M` more where `g` holds,
 and `Pr[g]·G_M ≤ 1`. -/
 theorem Ex_linkCost_le [Nonempty U] (g : U → Prop) (c : U → ℕ) (M : ℕ) :
     Ex (fun p : U × (Fin M → U) => (linkCost g c M p : ℝ)) ≤ 2 * Ex (fun u => (c u : ℝ)) := by
@@ -282,7 +282,7 @@ def linkFinder [Nonempty U] (M : ℕ) (out : U × (Fin M → U) → Option (Msg 
   cost := cost
 
 /-- **Off the plurality under `ExpectedCR`, linearly**: where the link's success names a SHA-512 collision and its
-declared cost is at most `linkCost` (one draw's `c`, then the loop's), a draw where `g` holds misses the plurality with
+declared cost is at most `linkCost` (one sample's `c`, then the loop's), a sample where `g` holds misses the plurality with
 probability at most `2·E[c]/2^256 + 1/(M+1)`. -/
 theorem Pr_plur_ecr [Nonempty U] (H : Msg → Msg) (g : U → Prop) (f : U → Msg) (c : U → ℕ) (M : ℕ)
     (out : U × (Fin M → U) → Option (Msg × Msg)) (cost : U × (Fin M → U) → ℕ)
@@ -298,9 +298,9 @@ theorem Pr_plur_ecr [Nonempty U] (H : Msg → Msg) (g : U → Prop) (f : U → M
     hcr.trans (div_le_div_of_nonneg_right hc (by positivity))
   linarith [Pr_plur_link g f M]
 
-/-- **Off the plurality at each coin prefix, linearly**: over a tape and a draw, the draw's `f` misses the plurality
-over the draws with its first `j` coins at most as often as the link at the fork at `j` succeeds (a tape, a prefix
-`r`, then `M + 1` draws with `r`'s first `j` coins), plus `1/(M+1)`: `Pr_plur_link` at each prefix, averaged. Linear,
+/-- **Off the plurality at each coin prefix, linearly**: over a tape and a sample, the sample's `f` misses the plurality
+over the samples with its first `j` coins at most as often as the link at the fork at `j` succeeds (a tape, a prefix
+`r`, then `M + 1` samples with `r`'s first `j` coins), plus `1/(M+1)`: `Pr_plur_link` at each prefix, averaged. Linear,
 where `Pr_plur_fork` is a root. -/
 theorem Pr_plur_fork_lin {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω] [Nonempty Ω]
     [Fintype C] [Nonempty C] {N : ℕ} (j : ℕ) (g : Ω → (Fin N → Coin) × C → Prop) (f : Ω → (Fin N → Coin) × C → Msg)

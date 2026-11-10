@@ -38,7 +38,7 @@ def test_tail_split():
 
 
 def test_a_tiny_audit_exactly():
-    """N = 6 units, 4 of 3 nonzeros and 2 of 10; K = 3 drawn; menu pow2 = {4, 16}; B = 2. Checked against all 20 draws."""
+    """N = 6 units, 4 of 3 nonzeros and 2 of 10; K = 3 sampled; menu pow2 = {4, 16}; B = 2. Checked against all 20 samples."""
     units = [P.Unit("a", "t", 4, 3, 3), P.Unit("b", "t", 2, 10, 10)]
     pop = [3] * 4 + [10] * 2
     draws = list(combinations(range(6), 3))
@@ -49,7 +49,7 @@ def test_a_tiny_audit_exactly():
     e = P.evaluate(6, 3, units, P.menu_pow2(units), 2)
     assert e["buckets"] == 2 and e["actual_mean"] == pytest.approx(16)
     assert (e["zpad"], e["pad_mean"], e["round_extra"]) == pytest.approx((1.5, 2.2, 0.7))
-    # public: 3 of a (2 sessions of 4), 2 of b (1 session of 16); pad_q's floor: at least 1 of a drawn
+    # public: 3 of a (2 sessions of 4), 2 of b (1 session of 16); pad_q's floor: at least 1 of a sampled
     assert (e["sessions_public"], e["public"], e["hide_extra"], e["pad_q"]) == pytest.approx((3, 3.0, 0.8, 16.0))
     assert e["sessions_mean"] == pytest.approx(1.2 + 0.8)
 

@@ -9,7 +9,7 @@ public import Proofs.Flock.ZkAny.RelayWorker
 # The relay's model frames at the model's run, from the session's first request
 
 `envPre_withInner` gives `EnvPre` wherever `LoopP` at `LoopJ` holds, given that each of the run's messages is the
-deferred release's (`LoopModel.Own`), its first the `Hello` at the relay's nonce and the worker's link the firewall's
+deferred release's (`LoopModel.Own`), its first the `Hello` at the relay's nonce and the worker's link the ZK server's
 own. Here `LoopP` holds at the session's first request, the first two are read off the model's run of the deferred
 server against `V*`, and the link off the deployed worker (`LoopModel.link_deployed`):
 
@@ -24,7 +24,7 @@ server against `V*`, and the link off the deployed worker (`LoopModel.link_deplo
   of the inner proof over `withoutCross` (Rust's checks are the worker's, so `CrossPasses` holds by definition), at the
   model's run of the deferred server against the relay's auditor as `V*` (`auditorV`, with at least the schedule's
   model slots as rounds) whose worker is the deployed worker (`deployedWk`), which answers the link and the `Finish`
-  with the firewall's own message, where the relay's nonce is the tape's, the relay serves its requests as its IO code
+  with the ZK server's own message, where the relay's nonce is the tape's, the relay serves its requests as its IO code
   reads with the auditor's answers (`RelayServes`) and the model's worker gives the worker's round values
   (`WorkerDeterministic`): what `relay_zkOut_env` reads at each randomness.
 * **`relayPre_run`**: so the relay's model frames are the model's messages, encoded (`relayPre_of_env`).
@@ -137,7 +137,7 @@ on `src`, whose `cross` passes every value as Rust's checks are the worker's (`L
 `envPre_withInner`'s premises on the loop (`hsrc`, `hfin`, `hS`, `hlive`), where the model's run is the deferred
 server's against the relay's auditor `A` as `V*` (`auditorV`, `hτ`), of at least as many rounds as the schedule has
 model slots (`hK`; `audK`'s rounds are those), its worker the deployed worker (`hdw`, `LeanRelease.deployedWk`), which
-answers the link and the `Finish` with the firewall's own message, giving the worker's round values `rv`
+answers the link and the `Finish` with the ZK server's own message, giving the worker's round values `rv`
 (`WorkerDeterministic`), and the relay's nonce is the tape's (`hn`): at every requests the worker sends and
 every answer of the auditor at the setup `spec`, `sts` (`hs`, `hb`), where at the session's first request the loop's
 frames hold no rep of the session and the session's slots took none of the model's messages, and the relay serves its

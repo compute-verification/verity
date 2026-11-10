@@ -1,6 +1,6 @@
-"""The staging decode's CPU parts: the store's layout as p2_v1's fixture gives it, the stream's bytes laid out as
-the store's W, the scatter of decoded rows into a staging buffer, P2's reference decode of one block (pinned to the
-spec's deployment vector), the fixture's toy store through the staging path under P2's reference, and the GEMM's twin
+"""The store's load's CPU parts: the store's layout as p2_v1's fixture gives it, the stream's bytes laid out as
+the store's W, the scatter of decoded rows into a load buffer, P2's reference decode of one block (pinned to the
+spec's deployment vector), the fixture's toy store through the load path under P2's reference, and the GEMM's twin
 against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`."""
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def model(width: int, layers: int, heads: int, ff: int, vocab: int = 256) -> lis
 
 def layout_doc(tensors: list[tuple[str, int, int, int]], per_segment: int = 1 << 16) -> dict:
     """A layout in the fixture's format by its rules: each tensor from a block boundary, back to back by blocks; each
-    layer's staging buffer from 0, every tensor at a multiple of 256."""
+    layer's load buffer from 0, every tensor at a multiple of 256."""
     rows, block, layer, staging = [], 0, None, 0
     for name, i, n, k in tensors:
         if i != layer:
@@ -58,7 +58,7 @@ def stream_manifest(width: int = 64, mlp: int = 256, layers: int = 2) -> dict:
     """A small weights-stream manifest with the frozen shape's tensor order (one query head, one KV head of 64)."""
     rows, at = [], 0
 
-    def add(name, shape, size):
+    def add(name: str, shape: list[int], size: int) -> None:
         nonlocal at
         rows.append({"name": name, "offset": at, "nbytes": size, "shape": shape})
         at += size
@@ -76,7 +76,7 @@ def stream_manifest(width: int = 64, mlp: int = 256, layers: int = 2) -> dict:
     return {"tensors": rows, "stream_bytes": at}
 
 
-def test_blocks_of():
+def test_blocks_of() -> None:
     assert L.blocks_of(0, 0) == range(0)
     assert L.blocks_of(0, 1) == range(0, 1)
     assert L.blocks_of(2053, 2) == range(0, 2)
@@ -86,9 +86,9 @@ def test_blocks_of():
         L.blocks_of(-1, 2)
 
 
-def test_store_layout_at_the_frozen_shape():
+def test_store_layout_at_the_frozen_shape() -> None:
     """The frozen layout's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
-    262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
+    262,401 and 785,158 of it and load offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
     68,011,580 over 2,043 blocks."""
     lay = L.store_layout(layout_doc(model(16384, 52, 256, 65536)), PREFIX)
     assert (lay.params.segments, lay.params.blocks) == (1038, 68_026_368)
@@ -110,7 +110,7 @@ def test_store_layout_at_the_frozen_shape():
         lay.tensor(0, "gate")
 
 
-def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts():
+def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts() -> None:
     doc = layout_doc(model(64, 2, 1, 64), per_segment=11)
     lay = L.store_layout({"layout": doc}, PREFIX)
     assert lay.params.blocks_per_segment == 11 and lay.layer(2)[0].name == "lm_head.weight"
@@ -129,12 +129,12 @@ def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts():
 
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
-def test_layout_doc_is_the_toys():
+def test_layout_doc_is_the_toys() -> None:
     toy = json.loads((TOY / "toy.json").read_text())["layout"]
     assert layout_doc(model(64, 2, 1, 64), per_segment=11) == {k: toy[k] for k in layout_doc([]).keys()}
 
 
-def test_payloads_are_the_streams_bytes_block_aligned():
+def test_payloads_are_the_streams_bytes_block_aligned() -> None:
     doc = stream_manifest()
     lay = L.store_layout(layout_doc(model(64, 2, 1, 256)), PREFIX)
     src = L.Weights.of(doc)
@@ -158,7 +158,7 @@ def test_payloads_are_the_streams_bytes_block_aligned():
 
 
 @pytest.mark.parametrize("case", range(40))
-def test_scatter_matches_the_payload_stream(case):
+def test_scatter_matches_the_payload_stream(case: int) -> None:
     rng = random.Random(case)
     n = rng.choice([1, 2, 3, 7])
     j0 = rng.randrange(0, 50)
@@ -186,7 +186,7 @@ def test_scatter_matches_the_payload_stream(case):
     assert np.array_equal(out.numpy(), want)
 
 
-def test_flat_views_any_dtype():
+def test_flat_views_any_dtype() -> None:
     w = torch.zeros(3, 4, dtype=torch.int8)
     S.flat(w).fill_(0x80)
     assert (w == -128).all()
@@ -196,7 +196,7 @@ def test_flat_views_any_dtype():
         S.flat(torch.zeros(4, 4).t())
 
 
-def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run():
+def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run() -> None:
     calls: list[str] = []
     ts = S.timed(lambda: calls.append("fn"), 2, torch.device("cpu"), lambda: calls.append("before"), warmup=1)
     assert calls == ["fn", "before", "fn", "before", "fn"] and len(ts) == 2
@@ -204,20 +204,20 @@ def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run():
     assert len(S.timed(lambda: calls.append("fn"), 3, torch.device("cpu"))) == 3 and calls == ["fn"] * 3
 
 
-def deployment_vector():
+def deployment_vector() -> tuple[bytes, int, bytes, bytes]:
     v = next(v for v in VECTORS["vectors"] if v["id"] == "p2-v4/w16448/0")
     prefix = L.R.expand_prefix(bytes.fromhex(v["setup_salt"]), L.SPEC, bytes.fromhex(v["model_commitment"]))
     j = int(v["segment"]) * L.PARAMS.blocks_per_segment + int(v["block"])
     return prefix, j, bytes.fromhex(v["c"]), bytes.fromhex(v["m"])
 
 
-def test_check_blocks_holds_the_spec_vector():
+def test_check_blocks_holds_the_spec_vector() -> None:
     prefix, j, c, m = deployment_vector()
     assert m[:L.LEAD] == bytes(L.LEAD)
     assert L.check_blocks(L.PARAMS, prefix, j, c, m[L.LEAD:]) == []
 
 
-def test_check_blocks_refuses_what_the_store_refuses():
+def test_check_blocks_refuses_what_the_store_refuses() -> None:
     prefix, j, c, m = deployment_vector()
     [(at, why)] = L.check_blocks(L.PARAMS, prefix, j, S.P_BYTES, m[L.LEAD:])
     assert at == j and "not below p" in why
@@ -227,7 +227,7 @@ def test_check_blocks_refuses_what_the_store_refuses():
     assert len(L.check_blocks(L.PARAMS, prefix, j, flipped, m[L.LEAD:])) == 1
 
 
-def test_twin_is_the_definition():
+def test_twin_is_the_definition() -> None:
     gen = torch.Generator().manual_seed(7)
     M, N, K = 5, 4, 64
     x = torch.randint(-128, 128, (M, K), dtype=torch.int8, generator=gen)
@@ -243,7 +243,7 @@ def test_twin_is_the_definition():
     assert np.array_equal(words.reshape(-1), want)
 
 
-def test_twin_counts_a_changed_word():
+def test_twin_counts_a_changed_word() -> None:
     gen = torch.Generator().manual_seed(3)
     M, N, K = 6, 8, 32
     x = torch.randint(-128, 128, (M, K), dtype=torch.int8, generator=gen)
@@ -256,7 +256,7 @@ def test_twin_counts_a_changed_word():
     assert got["mismatches"] == 1 and got["first"][0]["m"] == 3 and got["first"][0]["n"] == 5
 
 
-def test_bf16_rn_is_round_to_nearest_even():
+def test_bf16_rn_is_round_to_nearest_even() -> None:
     f = torch.tensor([1.0, 1.00390625, 1.01171875, -2.5, 0.0, 3.0e38, float("inf")], dtype=torch.float32)
     want = f.to(torch.bfloat16).view(torch.int16).to(torch.int32) & 0xFFFF
     assert torch.equal(G.bf16_rn(f), want)
@@ -264,12 +264,12 @@ def test_bf16_rn_is_round_to_nearest_even():
 
 class RefKernels:
     """P2's reference (`reference.decode` under `reference.keys_after`) behind `p2_v1.gpu.Kernels`'s interface, on the
-    CPU. A row at or above p decodes to zeros, so refusing it is left to the staging decode's own screen."""
+    CPU. A row at or above p decodes to zeros, so refusing it is left to the store's load's own screen."""
 
-    def __init__(self, lib_dir, build_dir, params, prefix):
+    def __init__(self, lib_dir: str, build_dir: str, params: L.R.Params, prefix: bytes) -> None:
         self.params, self.prefix, self.device = params, bytes(prefix), torch.device("cpu")
 
-    def decode(self, c, first=0):
+    def decode(self, c: torch.Tensor, first: int = 0) -> torch.Tensor:
         out = torch.zeros_like(c)
         for i in range(c.shape[0]):
             v = int.from_bytes(bytes(c[i].numpy()), "big")
@@ -279,13 +279,13 @@ class RefKernels:
                 out[i] = torch.frombuffer(bytearray(m), dtype=torch.uint8)
         return out
 
-    def raised(self):
+    def raised(self) -> int:
         return 0
 
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
-def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
-    """The toy's C* through `decode_layer` under P2's reference: each layer's staging buffer by its digest, each negative
+def test_toy_store_stages_as_the_fixture_says(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The toy's C* through `decode_layer` under P2's reference: each layer's load buffer by its digest, each negative
     block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
     import layer
 
@@ -301,13 +301,13 @@ def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
 class XorKernels:
     """A stand-in for `p2_v1.gpu.Kernels` on the CPU, its own inverse: block j's payload XOR a keystream of (prefix, j),
     its two lead bytes XOR a hash of (prefix, j, the row's payload before and after), so a corrupt row or other keys
-    decode wider than the payload, as P2's do. The driver's plumbing (store, scatter, screen, staging, GEMM check) runs
+    decode wider than the payload, as P2's do. The driver's plumbing (store, scatter, screen, load, GEMM check) runs
     without the GPU library. Not P2."""
 
-    def __init__(self, lib_dir, build_dir, params, prefix):
+    def __init__(self, lib_dir: str, build_dir: str, params: L.R.Params, prefix: bytes) -> None:
         self.prefix, self.device = bytes(prefix), torch.device("cpu")
 
-    def decode(self, c, first=0):
+    def decode(self, c: torch.Tensor, first: int = 0) -> torch.Tensor:
         out = c.clone()
         for i in range(c.shape[0]):
             key = self.prefix + (first + i).to_bytes(8, "big")
@@ -321,11 +321,11 @@ class XorKernels:
 
     encode = decode
 
-    def raised(self):
+    def raised(self) -> int:
         return 0
 
 
-def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
+def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
     lay = L.store_layout(layout_doc(model(64, 2, 1, 256), per_segment=11), PREFIX)
     blocks = lay.blocks(1)
@@ -336,7 +336,7 @@ def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
     rows = kern.encode(torch.cat([torch.zeros(len(blocks), L.LEAD, dtype=torch.uint8),
                                   torch.from_numpy(w).view(-1, L.PAYLOAD)], dim=1), blocks.start)
     buf = torch.full((lay.staging_bytes(1),), 0xA5, dtype=torch.uint8)
-    S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf)
+    S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), 1, buf)
     at = 0
     for t in lay.layer(1):
         assert not buf[at:t.staging_offset].any()
@@ -349,13 +349,13 @@ def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
     bad = rows.clone()
     bad[o.first_block + o.blocks - 1 - blocks.start] = kern.encode(m, o.first_block + o.blocks - 1)[0]
     with pytest.raises(S.StoreError) as e:
-        S.decode_layer(S.Store(lay, bad, blocks.start, "unused"), 1, buf)
+        S.decode_layer(S.EncodedRows(lay, bad, blocks.start, "unused"), 1, buf)
     assert e.value.flags == S.PADDING
     with pytest.raises(ValueError):
-        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf[:-1])
+        S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), 1, buf[:-1])
 
 
-def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatch):
+def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import check
     import layer
 
@@ -415,8 +415,8 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
 
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
-def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypatch):
-    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files stages each layer to
+def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files loads each layer to
     toy.json's digest under P2's reference; a setup of another commitment, layout, parameters or salt is refused, and so
     is a segment unfinished or not the SHA-512 its JSON records."""
     import layer
@@ -448,7 +448,7 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypa
         assert bytes(rows.numpy()) == L.segment_rows(root, lay.spec, blocks.start, len(blocks)) \
             == c_star[blocks.start:blocks.stop].tobytes()
         buf = torch.full((lay.staging_bytes(i),), 0xA5, dtype=torch.uint8)
-        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), i, buf)
+        S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), i, buf)
         assert hashlib.sha512(buf.numpy().tobytes()).hexdigest() == sha
     s = (lay.blocks(0).stop - 1) // bps
     L.segment_path(root, s, "c").write_bytes(bytes(bps * L.ROW))
@@ -459,9 +459,10 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypa
         layer.EncodedStore(root, lay, lay.blocks(0), setup).rows(lay.blocks(0))
 
 
-def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path, monkeypatch):
+def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
     """An encoded store's segment files (rows by the stand-in codec under the prefix of `draw_salt(coin, commitment)`)
-    through the driver with no stream file: each staged tensor held to the weights manifest's SHA-256, the scales and the
+    through the driver with no stream file: each loaded tensor held to the weights manifest's SHA-256, the scales and the
     padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
     weights, an unfinished segment; a tensor whose digest differs fails the run."""
     import layer
@@ -529,7 +530,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path, monkey
         layer.main(args)
 
 
-def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw():
+def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw() -> None:
     import check
 
     lay = L.store_layout(layout_doc(model(64, 2, 1, 256), per_segment=11), PREFIX)
@@ -543,7 +544,7 @@ def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw():
                                                                    for j in (t.first_block, t.block_range.stop - 1)})
 
 
-def test_layer_set():
+def test_layer_set() -> None:
     import full
 
     assert full.layer_set("0-2,5", 5) == {0, 1, 2, 5} and full.layer_set("3", 3) == {3}
@@ -580,9 +581,9 @@ def toy_stream(doc: dict) -> tuple[dict, bytes]:
 
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
-def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypatch):
+def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's C* as an encoded store through `full.py` under P2's reference: every tensor of every layer and the head
-    staged and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
+    loaded and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
     channels against the twin and the Definition; `check.py --sample` on each tensor's blocks against P2's reference,
     which finds one changed byte of W. Refused or failed: a tensor whose digest differs, a manifest with no digests or a
     stream tensor of another shape, a segment not its SHA-512 or not done."""
@@ -663,7 +664,7 @@ def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypa
         full.main(run + ["--out", str(tmp_path / "o4")])
 
 
-def test_every_kept_path_has_a_reason_in_keep_json():
+def test_every_kept_path_has_a_reason_in_keep_json() -> None:
     """session.sh keeps each node path under keep.json's owner and expiry with that path's reason; a `keep PATH WHAT`
     whose WHAT has no reason would keep nothing."""
     keep = json.loads((HERE / "keep.json").read_text())

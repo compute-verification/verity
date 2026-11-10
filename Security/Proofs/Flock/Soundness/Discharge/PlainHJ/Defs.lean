@@ -17,17 +17,17 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# One plain sampled session of `J` hidden-output tables: the plan, the draws and the openings
+# One plain sampled session of `J` hidden-output tables: the plan, the samples and the openings
 
 `flock-verify verify --plain-tables --session-tables J` (no `--zk`) at hidden outputs: `Stmt.setupTables` sets table `j`
-up with `Stmt.setupHidden` under `tagsAt` at its draw `Composed.drawJ`. These are `PlainJ/Defs.lean`'s plan pieces with
+up with `Stmt.setupHidden` under `tagsAt` at its sample `Composed.drawJ`. These are `PlainJ/Defs.lean`'s plan pieces with
 the one-table hidden-output tables (`HiddenExec.TableH`, `DrawSetupH`) in place of `Integrate.Table`, at the plain inputs
 `PlainJ.inputsPJ I j`, as `ZkHidden.tableShHJ` takes them at the `--zk` inputs:
 
 * `tablePHJ`, `planPHJ`, `tabPHJ`: table `j`'s hidden-output table with the inputs it is set up on (its `DrawSetupH`'s
   table at table `j`'s inputs, else a reference setup `x₀`'s refused table at table 0's), the plan of `nTab I` tables,
-  and each drawn unit's table (`partOf`).
-* `DrawOkPHJ`, `opnPHJ`: the coin server's draw at each table, and table `j`'s openings, with `setupHidden` for
+  and each sampled proof block's table (`partOf`).
+* `DrawOkPHJ`, `opnPHJ`: the challenger's live-coin part's sample at each table, and table `j`'s openings, with `setupHidden` for
   `setupH`.
 -/
 
@@ -50,8 +50,8 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at draw `S`, under hidden outputs**, with the inputs it is set up on: the table flock-verify sets up at
-table `j`'s inputs and draw when it sets one up, and otherwise the reference setup `x₀`'s refused table at table 0's
+/-- **Table `j` at sample `S`, under hidden outputs**, with the inputs it is set up on: the table flock-verify sets up at
+table `j`'s inputs and sample when it sets one up, and otherwise the reference setup `x₀`'s refused table at table 0's
 inputs. -/
 noncomputable def tablePHJ (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableH I' mPts (partS I (dj S) S j) :=
@@ -71,7 +71,7 @@ theorem tablePHJ_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
   unfold tablePHJ
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **Table `j` where flock-verify sets it up**: at a `DrawSetupH` of table `j`'s inputs and draw, `tablePHJ` is the
+/-- **Table `j` where flock-verify sets it up**: at a `DrawSetupH` of table `j`'s inputs and sample, `tablePHJ` is the
 table of one with the same statement. -/
 theorem tablePHJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
     (x : DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :
@@ -79,7 +79,7 @@ theorem tablePHJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
       tablePHJ dj x₀ S j = ⟨inputsPJ I j, y.table⟩ :=
   ⟨Classical.choice ⟨x⟩, Except.ok.inj ((Classical.choice ⟨x⟩).h.symm.trans x.h), tablePHJ_set dj x₀ ⟨x⟩⟩
 
-/-- **The hidden-output plan of `J` tables**: at draw `S`, table `j` is `tablePHJ … S j`'s table, for every
+/-- **The hidden-output plan of `J` tables**: at sample `S`, table `j` is `tablePHJ … S j`'s table, for every
 registration. -/
 noncomputable def planPHJ : Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j => (tablePHJ dj x₀ S j).2.T
@@ -87,7 +87,7 @@ noncomputable def planPHJ : Finset (Fin n) → Reg → List (TabSpec mPts) :=
 theorem planPHJ_length (S : Finset (Fin n)) (R : Reg) : (planPHJ (Reg := Reg) dj x₀ S R).length = nTab I :=
   List.length_ofFn
 
-/-- Each drawn unit is in the table it is drawn into (`partOf`). -/
+/-- Each sampled proof block is in the table it is sampled into (`partOf`). -/
 noncomputable def tabPHJ : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planPHJ (Reg := Reg) dj x₀ S R).length :=
   fun S _ u => Fin.cast List.length_ofFn.symm (partOf I (dj S) u.val)
 
@@ -98,10 +98,10 @@ theorem tabOfPHJ_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
 
 end Plan
 
-/-! ## The coin server's draws, and table `j`'s openings -/
+/-! ## The challenger's live-coin part's samples, and table `j`'s openings -/
 
-/-- **The coin server's draw at `S`, at `J` hidden-output tables** (`PlainJ.DrawOkPJ` with `setupHidden` for
-`setupH`): each table's draw proves the drawn units it is given (`partS`), and setupHidden sets each table up at it
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables** (`PlainJ.DrawOkPJ` with `setupHidden` for
+`setupH`): each table's sample proves the sampled proof blocks it is given (`partS`), and setupHidden sets each table up at it
 with `mPts` link points. -/
 def DrawOkPHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
@@ -110,7 +110,7 @@ def DrawOkPHJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S :
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 
 /-- **Table `j`'s openings at hidden outputs** (`PlainJ.opnPJ` with `setupHidden`): `opnOf` at the statement
-setupHidden sets up under table `j`'s tags at its draw, and its `fast100` schedule, on proof files `2j` and `2j + 1`. -/
+setupHidden sets up under table `j`'s tags at its sample, and its `fast100` schedule, on proof files `2j` and `2j + 1`. -/
 noncomputable def opnPHJ (I : Inputs) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (dj : Finset (Fin n) → Lean.Json) (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray)
     (j : Fin (plan S R).length) : Opens 𝔽 Dig × Salts (List UInt8) :=

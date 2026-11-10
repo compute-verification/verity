@@ -75,7 +75,7 @@ theorem cast_coin_heq {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : 
   obtain rfl := coin_k_eq eg
   rfl
 
-/-- Equal strategies of equal games sending a message then drawing a coin agree after the message, at a coin. -/
+/-- Equal strategies of equal games sending a message then sampling a coin agree after the message, at a coin. -/
 theorem heq_snd_coin {M C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : M → C → Game β}
     (e : Game.send M (fun m => @Game.coin β C iF iN (k m)) = Game.send M (fun m => @Game.coin β C iF' iN (k' m)))
     {s : Strategy (Game.send M fun m => @Game.coin β C iF iN (k m))}

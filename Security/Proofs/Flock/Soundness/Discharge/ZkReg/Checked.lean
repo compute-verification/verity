@@ -27,12 +27,12 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 # The registered check at an accepted `--zk --registered` outcome
 
 `checked_of_accepts`: at an outcome `verify --zk --registered F` accepts, the shadow layout's registered reads that are
-the verifier's own at the outcome's draw (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
-The one table's statement is setupH's at the record's draw `d`, over `HmRow.drawn c pub d` (`setupH_drawn`);
+the verifier's own at the outcome's sample (`OwnReads`) are `Checked` at the outcome's registration, through `regPaths`.
+The one table's statement is setupH's at the record's sample `d`, over `HmRow.drawn c pub d` (`setupH_drawn`);
 `checkRegistered` accepting it is `Registered.check` accepting it (`checkRegistered_ok`), at a circuit naming each port
-once (`dupName_of_checkRegistered`, `names_once_of_dupName`), which opens each drawn
+once (`dupName_of_checkRegistered`, `names_once_of_dupName`), which opens each sampled
 instance's row of each of `own`'s ports at the position `own` gives for its unit, through the path the header gives
-(`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The drawn
+(`check_tables`, `checkPort_at`: `FlockProofs.Registered.check_ok` keeping the positions and paths). The sampled
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the layout's
 registered leaf at `(u, q)`.
 -/
@@ -159,7 +159,7 @@ theorem checkPort_at {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- **The registered reads are checked at every accepted outcome.** At an outcome `verify --zk --registered F`
-accepts (`own` F's ports), each registered read of the shadow layout that is the verifier's own at the outcome's draw
+accepts (`own` F's ports), each registered read of the shadow layout that is the verifier's own at the outcome's sample
 (`OwnReads`) has its registered leaf open the root `own` holds at the position `own` gives, through `regPaths`. -/
 theorem checked_of_accepts (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))

@@ -73,7 +73,7 @@ open Claims
 /-- A verifier whose steps accept whatever they read accepts at the first round and calls `H` nowhere. -/
 theorem stepWith_acc {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
     (hv : ∀ as, vnext as = .ret .acc) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), 0 < n →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), 0 < n →
       (stepWith H P x ω vnext n hist as t).out = .acc ∧ (stepWith H P x ω vnext n hist as t).vLog = t.vLog
   | 0, _, _, _, h => absurd h (Nat.lt_irrefl 0)
   | _ + 1, _, _, _, _ => by simp [stepWith, hv, OC.eval]
@@ -98,7 +98,7 @@ section Acc
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- At a statement with no witness, a prover that never aborts against a verifier that accepts at its first round
-fails `E^rep` at every draw. -/
+fails `E^rep` at every sample. -/
 theorem prBadAbort_acc (H : Msg → Msg) (I : Inner Coin W) (x : Msg) (hv : ∀ as cs, I.V.next x as cs = .ret .acc)
     (hk : 0 < I.V.k x) (hx : ∀ w, ¬ I.R x w) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A]
     (P : Prover Ω) :

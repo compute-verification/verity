@@ -18,11 +18,11 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# One `--zk` sampled session: the draw's tables as `Coined` tables
+# One `--zk` sampled session: the sample's tables as `Coined` tables
 
-* `CoinedSetup`, `coinedOf`, `CoinedOK`, `CoinedOfSetup`: the `--zk` table of a draw as `ZkView`'s `Coined` tables at the
+* `CoinedSetup`, `coinedOf`, `CoinedOK`, `CoinedOfSetup`: the `--zk` table of a sample as `ZkView`'s `Coined` tables at the
   executable's leaves, at each coin vector, and the structural facts Lemma B reads of them.
-* `ZkViewAt`: the view statement the composed headline proves at each draw; `ZkViewAtReg`, at the witnesses whose
+* `ZkViewAt`: the view statement the composed headline proves at each sample; `ZkViewAtReg`, at the witnesses whose
   registered values are the public ones.
 -/
 
@@ -58,7 +58,7 @@ noncomputable def treeEquiv {a b : ℕ} (f : Fin a ⊕ Fin b → ℕ) : Fin a �
 
 /-- **A `--zk` table as `ZkView`'s tables**: the statement (its witnesses `Witness S.m` are the tables' witnesses), the
 hidden-value and value-list types, the type of the other coins, the sizes, the mask slot's word indices, the `Coined`
-table at each coin vector (its leaves the executable's: `Coined.tab`), and C-Flock ZK's level-0 padding data (the
+table at each coin vector (its leaves the executable's: `Coined.tab`), and Flock ZK's level-0 padding data (the
 level-0 message's `cols` and, at each coin vector, the opened positions `pos`) that `padOnto_M1` reads. -/
 structure CoinedSetup where
   S : Statement
@@ -135,7 +135,7 @@ def wordBit {m : ℕ} (w : Fin (2 ^ m) → ZMod 2) (x v : ℕ) : ZMod 2 := if h 
 noncomputable def eqLane {k : ℕ} (p : Fin k → F256) (l : ℕ) : FlockLevel3.GF256 :=
   ∏ i : Fin k, if l.testBit i.val then FlockLevel3.GF256.of (p i) else 1 + FlockLevel3.GF256.of (p i)
 
-/-- **The draw's other sizes** (`withMask` sets the rest): a region claim per region and link point, `2^k₀` witness lanes of `2^cols`
+/-- **The sample's other sizes** (`withMask` sets the rest): a region claim per region and link point, `2^k₀` witness lanes of `2^cols`
 words, level 0's `2^logLen − t_pad` positions nobody opens, the pads but `h_ab` and the triple's `x, y, w` (`PadIdx`'s
 `Fin 4`) exposed, and the pads code's `n − Q` positions a rep doesn't open. -/
 def szOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : ZkView.Sizes where
@@ -164,7 +164,7 @@ theorem fa_lt (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     Zk.PadLayout.lc, Zk.PadLayout.fc, Zk.PadLayout.fb, Zk.PadLayout.fa]
   omega
 
-/-- **The draw's `--zk` table's refinement**: levels ≥ 1's salts, `VLOf` value lists, `RestOf`'s coins (both reps'
+/-- **The sample's `--zk` table's refinement**: levels ≥ 1's salts, `VLOf` value lists, `RestOf`'s coins (both reps'
 level-0 queries, opened as `S = Q⁰ ∪ Q¹`, and the pads queries, as positions), the sizes and the pads layout's sizes. -/
 noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (maskWordsOf st).length Tz.t where
   Hi := HiOf Tz
@@ -180,11 +180,11 @@ noncomputable def bodyOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedBody Tz.S (m
   padN := padNOf Tz st
   padQueries := fun r ρ => (List.ofFn (ρ.qP r)).map fun w => w.lo.toNat % padNOf Tz st
 
-/-- **The draw's `--zk` table as `Coined` tables**: over `Tz.S` at `bodyOf`'s types and coins, with `RANK_POINTS` claim points over
+/-- **The sample's `--zk` table as `Coined` tables**: over `Tz.S` at `bodyOf`'s types and coins, with `RANK_POINTS` claim points over
 the mask slot's words (`maskWordsOf st`) and `innerOf`'s inner-proof fields, reading their coins (`β`, `ρ`, the rank
 check's weights `eq(p_k, x)`; `embed` the inclusion of F128 in F256). Level 0: `cols` from the table's level 0, the
 opened positions `padPos` of the coins' queries below `2^(cols+1)`, its code at a position `x` the message columns
-`X̂_j(ω^x)` (`j < 2^cols`) and C-Flock ZK's padding columns `κ·X̂_i + X̂_{2^cols+i}` at `κ = PAD_C`, at the opened positions and at
+`X̂_j(ω^x)` (`j < 2^cols`) and Flock ZK's padding columns `κ·X̂_i + X̂_{2^cols+i}` at `κ = PAD_C`, at the opened positions and at
 the others (`unPos`). Each rep's pads code (`codeAt`, at `X = p + 1`): pad `i` contributes `X^i` at its layout index
 (`padIdx`), padding symbol `j` contributes `X^(len + j)`, at the opened pads positions `padPos` of the queries below `n`
 and at the others; each tree's positions at their tree indices (`treeEquiv`). The claims' ring-switch messages from the
@@ -248,11 +248,11 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
     points := fun c => pointsOf c.rest
     rOuter := fun c r => List.ofFn (c.rest.rOuter r) }
 
-/-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and C-Flock ZK's padding constant
-`κ`: C-Flock ZK's level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at
+/-- **The structural facts Lemma B reads**, of a `CoinedSetup` at the arithmetic `A` and Flock ZK's padding constant
+`κ`: Flock ZK's level-0 padding geometry (`cols ≤ 40`, `t_pad ≤ 2^cols`, at most `t_pad` opened positions), and at
 every coin vector the honest prover doesn't refuse (`Admits`): the opened positions distinct and inside `2^(cols+1)`,
 the table reads its coins (`β`, `ρ`, the rank check's weights `eq(p_k, x)` and `embed` the inclusion of F128 in F256),
-the rank check, C-Flock ZK's padding columns `Gp`, each rep's `W^r` bijective, the pads onto, `β ≠ 0`, and the inner
+the rank check, Flock ZK's padding columns `Gp`, each rep's `W^r` bijective, the pads onto, `β ≠ 0`, and the inner
 relation at every valid witness whose registered values are the public ones. -/
 def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : Prop :=
   C.cols ≤ 40 ∧ C.z.tpad ≤ 2 ^ C.cols ∧ C.z.nS ≤ C.z.tpad ∧
@@ -269,8 +269,8 @@ def CoinedOK (A : Arith 𝔽 FlockLevel3.GF256) (κ : 𝔽) (C : CoinedSetup) : 
       (∀ r, (C.T c).tab.β r ≠ 0) ∧
       ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w
 
-/-- **The session's tables satisfy Lemma B's facts** (proved: `coinedOf_setup`): at every draw `verify --zk` sets up (`y`), the
-`Coined` tables of the draw's `--zk` table at its executable statement (`coinedOf P (tablesAtZK dj y₀ S R) y.x.st`) are over
+/-- **The session's tables satisfy Lemma B's facts** (proved: `coinedOf_setup`): at every sample `verify --zk` sets up (`y`), the
+`Coined` tables of the sample's `--zk` table at its executable statement (`coinedOf P (tablesAtZK dj y₀ S R) y.x.st`) are over
 the table's statement, check rank over the `RANK_POINTS` claim points at the statement's mask words (`maskWordsOf`), have
 other coins, and are `CoinedOK` at `execArith` and `PAD_C`. -/
 def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
@@ -287,8 +287,8 @@ def CoinedOfSetup (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finse
 coin vector the honest prover doesn't refuse (`Admits`), for any encoding `enc` of the view (the proof files) and any
 event `E`, the real view at any valid witness `w` and `S_shvzk`'s at any `w0` are within `2·|Hid|·δ₁`, both ways.
 
-This is honest-verifier zero knowledge at fixed coins. It covers a verifier that chooses its coins because the coin
-server commits every coin at `Hello`, before the prover's first message (`coin_tree.rs`), and the prover checks each
+This is honest-verifier zero knowledge at fixed coins. It covers a verifier that chooses its coins because the challenger's
+live-coin part commits every coin at `Hello`, before the prover's first message (`coin_tree.rs`), and the prover checks each
 opening against that commitment before it uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)`
 (`keyed-cr`). No statement here models that commitment yet. -/
 def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=

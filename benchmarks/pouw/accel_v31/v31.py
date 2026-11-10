@@ -10,8 +10,8 @@ noise of whole operands (`CallNoise`), X and W' (`form`), the prefix sums T_s an
 their bytes in `dither.values_buffer`'s layout (`fill_buffer`) and a filler's pad (`pad_rows`). A served call commits
 T_1 .. T_{S-1} and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
 
-The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
-of K) and runs the proof block's checks in the clear on the opened rows, a stand-in for its C-Flock --zk proof: the rows
+The verifier opens q proof blocks sampled by the check coin (an output cell uniformly, then s with probability its segment's share
+of K) and runs the proof block's checks in the clear on the opened rows, a stand-in for its Flock --zk proof: the rows
 against the root, T_s - T_{s-1} against the segment's X W'^T mod 2^16, and at a served call's s = S, O against
 (A + d_A)(B + d_B)^T mod 2^32 and T_{S-1} against X W'^T over k < (S - 1) L. The operand rows A[i] and B[j] are taken in
 the clear.
@@ -65,7 +65,7 @@ def bits(seed: bytes, tag: str, rows: range, k: int) -> np.ndarray:
 
 def noise(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
     """V's (tag "V") or U's ("U") rows `rows` (len(rows) x L', each on -NOISE .. NOISE), as `dither.noise_a` and
-    `noise_b` draw them: row r's words are chunks r L' / 16 .. (L' a multiple of 16)."""
+    `noise_b` sample them: row r's words are chunks r L' / 16 .. (L' a multiple of 16)."""
     per = lp // 16
     w = np.frombuffer(chunks(seed, tag, (r * per + b for r in rows for b in range(per))), dtype="<u4").astype(np.uint64)
     return (((w * np.uint64(2 * NOISE + 1)) >> np.uint64(32)).astype(np.int64) - NOISE).reshape(len(rows), lp)
@@ -191,7 +191,7 @@ def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: CallNoise, skip: int |
 
 
 def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None) -> bytes:
-    """dither.values_buffer: per tile, its T_1 .. T_W (u16) and then its O (u32), cells row-major, little-endian."""
+    """dither.values_buffer: per tile, its T_1 .. T_W (u16) and then its O (u32), output cells row-major, little-endian."""
     tm, tn = f.m // TILE, f.n // TILE
     w = T[:f.W].astype("<u2").reshape(f.W, tm, TILE, tn, TILE).transpose(1, 3, 0, 2, 4).reshape(tm * tn, -1)
     parts = [w.view(np.uint8)]
@@ -214,7 +214,7 @@ def fill_params(f: Fill, ks: bytes) -> bytes:
 
 
 def fill_picks(f: Fill, coin: bytes, q: int) -> list[tuple[int, int, int]]:
-    """q proof blocks (i, j, s) from a check coin: a cell uniformly, then s with probability its segment's share of K."""
+    """q proof blocks (i, j, s) from a check coin: an output cell uniformly, then s with probability its segment's share of K."""
     picks = []
     for b in range(q):
         r = int.from_bytes(hashlib.sha512(coin + b.to_bytes(8, "big")).digest(), "big")
@@ -225,7 +225,7 @@ def fill_picks(f: Fill, coin: bytes, q: int) -> list[tuple[int, int, int]]:
 
 
 def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s: int, ans: dict) -> str | None:
-    """A no-fold proof block's checks in the clear (the stand-in for its C-Flock --zk proof; None: passed): the opened rows
+    """A no-fold proof block's checks in the clear (the stand-in for its Flock --zk proof; None: passed): the opened rows
     (`Fill.opened`) against the root; for s < S (or a filler's s = S), T_s - T_{s-1} against the segment's X W'^T mod 2^16
     (PouwDitherBlock); for a served call's s = S (PouwDitherLast), O against (A + d_A)(B + d_B)^T mod 2^32 and T_{S-1}
     against X W'^T over k < (S - 1) L mod 2^16. ans: {"rows": {pos: (row, salt, path)}, "A": A's row i (the pad's when
@@ -374,7 +374,7 @@ def commit_labels(r: dict) -> str:
 
 def cmd_fill_table(a: argparse.Namespace) -> int:
     """`v31 fill-bench`'s JSON lines: gamma of Dither's no-fold call overlapped (a served call's, or a filler's), over
-    cuBLASLt and CUTLASS, with the weight side a monitoring period's (ovl), a call's (weight coins drawn every call: ovl_w)
+    cuBLASLt and CUTLASS, with the weight side a monitoring period's (ovl), a call's (weight coins flipped every call: ovl_w)
     and the filler's pad (ovl_pad), ovl with the commit's loads left out (ovl_nomem: its compressions on bytes made in
     registers; wrong roots, timing only), the GEMM's tensor duty (cuBLASLt's time over the call's period, per-call weight
     coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-". Then wgmma.linear's

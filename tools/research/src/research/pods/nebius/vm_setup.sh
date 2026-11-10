@@ -77,7 +77,7 @@ mountpoint -q /workspace || mount /workspace
 install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetch /workspace/research /workspace/ramlock \
   /workspace/cache /workspace/cache/uv /workspace/cp
 
-# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
+# TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB, so a few at once would fill it
 install -d -m 1777 -o root -g root /workspace/tmp
 # the check cache (~/.cache/verity-check, a busy node's Lean build trees: 150 GB and more) lives on /workspace as well; on the
 # root disk a Security build filled it mid-run. A real directory there is the node's live cache: it is moved with its slots
@@ -106,7 +106,7 @@ done
 
 echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
-# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote, INF-55).
+# gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote).
 # The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
 # vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
 install -d -m 755 /etc/vy
@@ -132,8 +132,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 # python3-numpy: `python3 tools/verity/lean/check.py --update` runs PoUW's vector generators, which import numpy, under that
-# python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
-# Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
+# python3. python3.12-dev and build-essential: Triton compiles cuda_utils.c against Python.h at a vLLM engine's first start
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
 # The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
 # kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel

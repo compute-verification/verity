@@ -1,10 +1,11 @@
 """``pearl-c-nvfp4-v0`` (`pearl_c4`), with MXFP4 as its contrast line: the casts, the noise lines, the noise atom, the clean-up's
 algebra, the chain's exactness on the domain (which the design's argument turns on), the accounting, the per-row rules and
-debit, the work law through `pearl_c_work`, and the pinned vectors."""
+debit, the work sampling design through `pearl_c_work`, and the pinned vectors."""
 
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import itertools
 import json
@@ -84,7 +85,7 @@ def test_block_scales():
 
 def test_nvfp4_blocks_keep_the_sign_of_minus_zero():
     """`fp32.mul(−0, r)` is −0, so a −0 word's code is 0x8 and a +0 word's 0x0. The Lean's `nvf4Block` pins the same
-    block (`DeviceFp4Gamma.nvf4Block_signedZero`)."""
+    block (`DeviceFp4Gap.nvf4Block_signedZero`)."""
     d = [0x80000000, P.f32_bits(1.0)] + [0] * 13 + [0x80000000]
     assert F.quantize(F.NVFP4, d) == ([8, 7] + [0] * 13 + [8], [0x23])
 
@@ -182,7 +183,7 @@ def test_domain_and_registry():
     with pytest.raises(KeyError):
         get("pearl-c-mxfp4-v0")
     mx = F.PearlC4("mxfp4", hashing="h0")
-    assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
+    assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gap0 is None
     s.check(Matmul(0, Shape(64, 1024, 128), 0))
     s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
     # n = 64, an MQA unit of one 64-wide KV head, would need B-OVF's 5.7% and is not claimed
@@ -304,7 +305,7 @@ def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
 @pytest.mark.parametrize("clause", [None, "finite", "admit"])
 def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
-    asks each of the tile's weight rows to pass the protocol's `weightOK` (`Fp4Sem.RowOK`). One row per clause: a
+    asks each of the tile's weight rows to pass the protocol's `fixedOK` (`Fp4Sem.RowOK`). One row per clause: a
     non-finite word (Lean's `rowOK4_nonFinite`), and every 8th word `2¹²⁶`, which `RowAdmit4` refuses since β is not
     finite (`pc4Sem_squaresOverflow`). The word clause's widened-BF16 half holds of every opened row, which is BF16 words
     (`parse_row`); `test_row_passes_asks_finite_widened_bf16_words` checks it on `row_passes`. The tile beside it, whose
@@ -359,16 +360,16 @@ def test_row_rules_and_debit(fmt):
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
     clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
-    # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare draws (a trace, under
+    # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare samples (a trace, under
     # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
-    # share; MXFP4 chains hold identity atoms on some draws (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
+    # share; MXFP4 chains hold identity atoms on some samples (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
     assert clean.total == clean.forming + clean.identity + clean.split and (fmt != "nvfp4" or clean.identity == 0)
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every sample: salt-dead (x[2] at
-    # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
+    # 3ρ reaches code 0.5 on the extreme sample, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
     d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096, e, e)
@@ -674,9 +675,9 @@ def atom_words(c: int, e, ae: int, at) -> list[int]:
 
 @pytest.mark.parametrize("fmt", FMTS)
 def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
-    """The law against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
+    """The sampling design against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
     words, so its p_t is enumerable.  `change_probabilities_exact`' p_t at the block's modal byte is 1 − the most common
-    code value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no
+    code value's share of the atom's words there, to 1e-12 (the sampling design leaves out the atom's one RZ rounding, which moves no
     word across a cell edge here), and 0 on salt-dead codes."""
     f = F.FORMATS[fmt]
     x, e, at = two_draw_row()
@@ -691,7 +692,7 @@ def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
 
 
 def test_the_modal_byte_is_the_realised_bytes_mode():
-    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line drawn afresh: the
+    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line sampled afresh: the
     most frequent realised byte."""
     f, rng = F.NVFP4, random.Random(3)
     x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
@@ -1075,7 +1076,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
 
 
 def test_the_work_law_audits_pearl_c4_under_h3():
-    """The work law on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
+    """The work sampling design on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
     and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
     whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
     prover gives up nothing (`volunteer`)."""
@@ -1146,27 +1147,56 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
         W.UnitRecord(u, 20, K, (3,), (), (3,))
 
 
+#: A salt key under which `lifecycle`'s A row 15 passes the per-row rules but its F1′ passes R1's bound (about 0.8% of
+#: keys put an honest row there).
+R1_ROW_15_KEY = bytes.fromhex("d9e961187e3be9353349a07b9a22359e0586881919c91ee714ad84f07c92a8e6")
+
+
+def failures(s, epoch, prover, tr, splits, records) -> set[str]:
+    return {v.reason for v in CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.verdicts if not v.ok}
+
+
 def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
-    """`volunteer`, the honest prover's remedy: on a scheme whose debit puts tile position 7 at 20 units per word against a
-    cap of 1 per credited word, it gives up A row 7 (not a column, which leaves the tile over), and the audit then
-    accepts; without it the tile fails."""
+    """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose debit puts tile position 7 at 20
+    units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
+    `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
+    over), and the audit accepts; without it the tile fails.  Declared without the transcript, row 15 is credited and
+    fails R1 whatever `volunteer` gives up, and giving up both rows passes V-EX's count cap, one A row at m = 32."""
 
     class Heavy(F.PearlC4):
         def tile_cap(self, record, ops, rows, cols):
             return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
 
     s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
-    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
-    splits = {9: W.Split(K)}
-    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
+    splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
+    declare = functools.partial(CW.declare, s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    records = declare(transcript=tr)
+    assert records == [W.UnitRecord(u, 20, K, (3, 15), ())]
     va, vb = CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
     assert (va, vb) == ({3: [7]}, {})
-    fixed = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
-    assert CW.audit(s, epoch, prover, tr, splits, fixed, E.challenger(), 8).audit.accepted
-    tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
-    ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
+    assert failures(s, epoch, prover, tr, splits, declare(transcript=tr, voluntary_a=va, voluntary_b=vb)) == set()
+    tile = s.tiles(u.shape)[0]
+    ctx = Context(epoch.salt, u, tr.activation_roots[0], epoch.weight_roots[9])
     ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
-    assert "exceeds the cap" in CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
+    assert CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops) == \
+        "the replayed debit 320 exceeds the cap 224 (ρ·the credited cells' credit)"
+    assert CW.check_opened(s, declare(voluntary_a=va)[0], tile, rows_a[:16], rows_b, ops) == \
+        "A row 15 is credited but its own debit passes R1's bound (ρ·its cell credit)"
+    assert CW.check_records(epoch, splits, declare(voluntary_a={3: [7, 15]})) == \
+        "matmul 3: more voluntary rows than V-EX allows (⌈m/64⌉ = 1 of A, ⌈n/64⌉ = 1 of B)"
+
+
+def test_volunteer_leaves_r1s_rows_to_the_declaration():
+    """At the same salt key on the plain scheme, R1 excludes A row 15, no tile is over the cap, and `volunteer` gives
+    up nothing."""
+    s = F.PearlC4("nvfp4", k_min=128, tile=(16, 16), n_min=16)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=R1_ROW_15_KEY)
+    splits = {9: W.Split(K)}
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 15), ())]
+    assert CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
+    assert failures(s, epoch, prover, tr, splits, records) == set()
 
 
 def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
@@ -1184,7 +1214,7 @@ def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
 def test_b_tilde_is_keyed_by_this_jobs_salt():
     """D-SK: B̃'s noise is keyed by the job's salt (seed-B = keyed(salt ‖ root_b)), so B̃ exists only once the salt
     does, and the salt-free base split is two-sided.  The verifier forms B̃ itself from that seed, so a prover whose B̃
-    was formed under another epoch's salt, or under none, fails the checked values of a drawn tile in the work law."""
+    was formed under another epoch's salt, or under none, fails the checked values of a sampled tile in the work sampling design."""
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}

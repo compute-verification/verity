@@ -4,7 +4,7 @@
 
 ε_skip = (honest work a cheater can skip) / (the cheater's unavoidable work), the brief's definition.
 Each component of honest work is classified per design as unavoidable (a
-transcript Verify recomputes, a commitment, a draw, noise the cheater must expand, a value a check recomputes from the
+transcript Verify recomputes, a commitment, a sample, noise the cheater must expand, a value a check recomputes from the
 transcript) or skippable (unchecked: the strip of a low-rank noise, a product served plain, the vector work only a
 served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the sample), which makes every strip,
 every served output and everything derived from it free unless a check recomputes it from the transcript.
@@ -104,10 +104,10 @@ RATES = {
     "c_apv_serve": 4.4 / 128,  # a cell: the served f's 4.4 warp instructions a 128-cell tile
     "t_quant": 0.56e-12,     # s an element, plain activation quantizer (commit_gpu: +23 ms at 8 x 4K, 40.8 G elements)
     "t_dither": 0.48e-12,    # s an element, the dither's bits (egemm: qdither - qplain 0.016 ms, 8192 x 4096)
-    "t_wedit": 0.86e-12,     # s a weight element a draw, W' = W + U written (egemm: wedit 0.0144 ms, 4096 x 4096)
+    "t_wedit": 0.86e-12,     # s a weight element a sample, W' = W + U written (egemm: wedit 0.0144 ms, 4096 x 4096)
     "t_xcommit": 1.10e-12,   # s an operand element, SHA-512 tile leaves R = 128 (commit_gpu: +45 ms at 8 x 4K)
     "receipt_commit": 0.016,  # of plain prefill time, S = 128 (commit_gpu)
-    "draws": 0.019,           # of plain prefill time, 0.3 ms simulated draws at 8 x 4K (commit_gpu)
+    "draws": 0.019,           # of plain prefill time, 0.3 ms simulated samples at 8 x 4K (commit_gpu)
     "tokens_per_draw": 32768,  # prefill stage set a GPU (stage_cost's recommendation)
     "softmax": 0.25,     # estimate: exp, max, sum and P's quantize per (query head, key) against 256 MACs a pair; MUFU at
                          # 16 a SM a clock against 1014 MACs gives 0.25 of the attention's tensor time (range 0.12-0.5)
@@ -144,7 +144,7 @@ def decode_step(name: str, ctx: int, rates: dict = RATES) -> dict:
 
 #: The served model's components. The first four are the registry's PRODUCTS (`COMP`), each noised as its design's
 #: `[noise]` names. Every design derives each stage's operand by C1′ from the previous stage's served output (the
-#: epilogue and quantizer are checked) and serves decode edited, under one σ a request drawn once the circuit and its
+#: epilogue and quantizer are checked) and serves decode edited, under one σ a request sampled once the circuit and its
 #: inputs are committed, so softmax and forming are never skippable and no pass is deferred.
 COMPONENTS = ("linears", "lm_head", "QKᵀ", "P·V", "softmax", "forming", "noise, commitments, draws")
 COMP = {"linears": "linears", "lm_head": "lm_head", "QKᵀ": "qk", "P·V": "pv"}
@@ -194,8 +194,8 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     """Per component, a token-layer: honest int8 products, the skippable ones, honest seconds, skippable seconds and plain
     int8 seconds, each product noised as `noise` (a design's `[noise]`) says. Prefill adds a checked leaf's vector work
     that only the served output needs, in the tensor–scalar model (`TS_EPS`; pv's `pv_ts`, P in blocks of `block` keys,
-    P V's honest seconds then plain int8 × pv_ts's γ), with no downstream check assumed. The exception is co32c's
-    recombination, which `TS_EPS` leaves out, so against honest's time these shares are short of it (the module
+    P V's honest seconds then plain int8 × pv_ts's ratio, 1 + γ), with no downstream check assumed. The exception is
+    co32c's recombination, which `TS_EPS` leaves out, so against honest's time these shares are short of it (the module
     docstring). Prefill also adds the peel's sums (`t_vsum`, free at a one-hot P row) and served epilogue
     (`t_apv_serve`). With `checked` the peel's
     served output is checked downstream, so the cheater pays its 4th IMMA (`tail_pv_served`) and epilogue; the
@@ -342,7 +342,7 @@ def ts_best(hon: tuple, cheat: tuple, routes: list) -> tuple[float, float]:
 def pv_ts(name: str, ctx: int, block: int, sink: bool = True, fold: float = TS_FOLD,
           x: float = X_BITSLICED) -> tuple[float, float]:
     """pv's P V in a prefill of ctx tokens with P in blocks of `block` keys (0: one block): (ε_skip with the served
-    output free, γ over plain int8), each query block's tile weighed (past 256 every 8th, weighted 8, as
+    output free, honest over plain int8, 1 + γ), each query block's tile weighed (past 256 every 8th, weighted 8, as
     checked_strip). Each block of P is its own unit (scale, T words, Ycum digits, served output); with `sink` key 0 is
     one more, priced as a unit of depth 32 (the arms' p_sink)."""
     s = MODELS[name]
@@ -374,8 +374,8 @@ def pv_block_point(name: str, ctx: int, d: Design, block: int, rates: dict = RAT
     pv = next(p for p in ps if p.component == "P·V")
     secs, skip = sum(p.seconds for p in ps), sum(p.seconds_skip for p in ps)
     return {"model": name, "ctx": ctx, "design": d.name, "block": block,
-            "eps_pv": pv.seconds_skip / (pv.seconds - pv.seconds_skip), "gamma_pv": pv.seconds / pv.plain,
-            "pv_share": pv.seconds / secs, "eps": skip / (secs - skip), "gamma": secs / sum(p.plain for p in ps)}
+            "eps_pv": pv.seconds_skip / (pv.seconds - pv.seconds_skip), "gamma_pv": pv.seconds / pv.plain - 1,
+            "pv_share": pv.seconds / secs, "eps": skip / (secs - skip), "gamma": secs / sum(p.plain for p in ps) - 1}
 
 
 PV_BLOCKS = (0, 256, 512, 1024)
@@ -480,7 +480,7 @@ def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path =
       whose `sums` is vfold) and served epilogue (`c_apv_serve`) are vector instructions at one an issue cycle;
     - a one-sided strip, its 2L executed products at ♭'s price a MAC;
     - a TS leaf's skippable vector work, prefill only: TS_EPS of TS_CHEAT (co32c, cohalf), and pv's gap `pv_ts` at
-      16 cycles a plain MMA times its γ.
+      16 cycles a plain MMA times its ratio, 1 + γ.
 
     Off sm_120 every count is sm_120's for the same kernel source, except the peel's where SASS has the device's own.
     B_♭ is the words plus the reading's n^s_♭; the non-GEMM kernels are left out of it, as D3's n_♭ leaves them.
@@ -547,14 +547,14 @@ class Summary:
 def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, block: int = 0,
             checked: bool = False, credit: str = "honest", vector: str = "") -> Summary:
     """ε_skip = skippable / (honest - skippable), by int8 products and by honest seconds, whole and per component (each
-    component's skippable share over the same whole denominator); γ = honest / plain int8 time. With credit "floor",
-    eps_time is Corollary D3's instead (`floor_eps` on sm_120 at `vector`): the skippable work at its model price over
-    ♭'s bound B_♭; honest's time above it is γ's."""
+    component's skippable share over the same whole denominator); γ = honest / plain int8 time − 1, the honest
+    overhead. With credit "floor", eps_time is Corollary D3's instead (`floor_eps` on sm_120 at `vector`): the skippable
+    work at its model price over ♭'s bound B_♭; honest's time above it is γ's."""
     ps = parts(name, ctx, phase, d.noise, rates, block, checked)
     macs, secs = sum(p.macs for p in ps), sum(p.seconds for p in ps)
     skip_m, skip_t = sum(p.macs_skip for p in ps), sum(p.seconds_skip for p in ps)
     rows = [{"component": p.component, "mac_share": p.macs / macs, "eps_mac": p.macs_skip / (macs - skip_m),
-             "eps_time": p.seconds_skip / (secs - skip_t), "gamma": p.seconds / p.plain if p.plain else None}
+             "eps_time": p.seconds_skip / (secs - skip_t), "gamma": p.seconds / p.plain - 1 if p.plain else None}
             for p in ps]
     eps_time = skip_t / (secs - skip_t)
     if credit == "floor":
@@ -565,15 +565,15 @@ def summary(name: str, ctx: int, phase: str, d: Design, rates: dict = RATES, blo
         gemm = sum(p.seconds for p in ps if p.component in COMP)
         gamma = decode_gamma(name, ctx, gemm, rates)
     else:
-        gamma = secs / sum(p.plain for p in ps)
+        gamma = secs / sum(p.plain for p in ps) - 1
     return Summary(name, ctx, phase, d.name, skip_m / (macs - skip_m), eps_time, gamma, rows, credit)
 
 
 def decode_gamma(name: str, ctx: int, gemm: float, rates: dict = RATES) -> float:
-    """Honest decode step / plain decode step (DRAM-bound, `decode_step`): the edited step adds the GEMMs' compute where
-    it exceeds the DRAM time it hides under, and the operand commitments."""
+    """Decode's honest overhead γ, honest step / plain step − 1 (DRAM-bound, `decode_step`): the edited step adds the
+    GEMMs' compute where it exceeds the DRAM time it hides under, and the operand commitments."""
     st = decode_step(name, ctx, rates)
-    return (st["step"] + max(gemm - st["gemm_dram"], 0) + rates["decode_commit"] * st["step"]) / st["step"]
+    return (max(gemm - st["gemm_dram"], 0) + rates["decode_commit"] * st["step"]) / st["step"]
 
 
 def design_skip(d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "") -> Summary:
@@ -613,7 +613,7 @@ def component_table(name: str, ctx: int, phase: str, ds: list[Design], rates: di
         cells = []
         for q in sums.values():
             row = q.rows[i]
-            g = f", γ {row['gamma']:.2f}" if row["gamma"] else ""
+            g = f", γ {row['gamma']:.2f}" if row["gamma"] is not None else ""
             cells.append(f"{100 * row['eps_mac']:.3g}% / {100 * row['eps_time']:.3g}%{g}")
         lines.append(f"| {comp} | {100 * sums[ds[0].name].rows[i]['mac_share']:.3g}% | " + " | ".join(cells) + " |")
     lines.append("| **whole** | 100% | " + " | ".join(
@@ -674,7 +674,8 @@ def main(argv: list[str] | None = None) -> int:
         Path(a.md).write_text(text + "\n")
     if a.json:
         sums = [summary(m, c, ph, d) for m in MODELS for c in CONTEXTS for ph in PHASES for d in ds]
-        Path(a.json).write_text(json.dumps({"rates": RATES, "designs": {
+        # v2: each "gamma" is the honest overhead, honest / plain − 1 (the unversioned output before it held the ratio)
+        Path(a.json).write_text(json.dumps({"schema": "verity-pouw/eps-budget/v2", "rates": RATES, "designs": {
             d.name: {"noise": d.noise, **asdict(skips[d.name])} for d in ds}, "skip": [asdict(q) for q in sums],
             "pv_blocks": pvs, "decode_zero_weight_gap": {f"{m}/{c}": decode_dram(m, c) for m in MODELS
                                                          for c in CONTEXTS}}, indent=1) + "\n")

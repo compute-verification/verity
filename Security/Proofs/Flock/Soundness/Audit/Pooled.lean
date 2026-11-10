@@ -5,12 +5,12 @@ public import Definitions.Flock.Audit.Law
 import Proofs.Flock.Soundness.Audit.Law
 
 /-!
-# The pooled escape: wrong units that escape every period's draw
+# The pooled escape: incorrect proof blocks that escape every period's sample
 
 A monitoring period is `T` periods, each audited by a fresh uniform `kd`-subset of the same `N` units
 (`Law.subset N kd`), independent of the past. An adaptive adversary (`Pooled`) fixes period `t`'s wrong set `W_t` from
-the draws before `t`, before draw `t` is made. It escapes when no period's draw hits its wrong set (`Pooled.Escapes`),
-and its total is `Σ_t |W_t|` (`Pooled.total`), the wrong units that went unaudited over the monitoring period, pooled.
+the samples before `t`, before sample `t` is made. It escapes when no period's sample hits its wrong set (`Pooled.Escapes`),
+and its total is `Σ_t |W_t|` (`Pooled.total`), the incorrect proof blocks that went unaudited over the monitoring period, pooled.
 
 * `pooled_escape_prod`: when period `t`'s set has at least `w_t` units whatever the history, the adversary escapes
   with at most `∏_t C(N − w_t, kd)/C(N, kd)`, each period's own `subset_escape`.
@@ -23,7 +23,7 @@ and its total is `Σ_t |W_t|` (`Pooled.total`), the wrong units that went unaudi
 These are in `prCoin`. No theorem states them in `Claims.Pr` or at `δ` (with `q = kd/N`, since
 `(1 − q)^M ≤ e^{−qM}`, the total reaches `ln(1/δ)/q` on an escape with probability at most `δ`).
 
-Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset draws. Period `t`'s escape is
+Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset samples. Period `t`'s escape is
 adapted and its wrong set predictable (`Pooled.adapted_escapes`, `Pooled.predictable`), and given any history period
 `t` escapes with `subset_escape` of its wrong set (`Pooled.escape_update`): `pooled_escape_prod` is
 `Periods.prCoin_forall_le_prod` at those escapes, and `pooled_escape` is `Periods.prCoin_forall_sum_le_pow` at the
@@ -45,11 +45,11 @@ namespace Law
 
 variable {N kd : ℕ}
 
-/-- The draws before period `t`. -/
+/-- The samples before period `t`. -/
 def past {α : Type} {T : ℕ} (ω : Fin T → α) (t : Fin T) : Fin t → α :=
   fun i => ω (Fin.castLE t.isLt.le i)
 
-/-- **An adaptive adversary over a monitoring period**: before period `t`'s draw, from the draws before `t`, period
+/-- **An adaptive adversary over a monitoring period**: before period `t`'s sample, from the samples before `t`, period
 `t`'s wrong set. -/
 abbrev Pooled (N kd : ℕ) (hk : kd ≤ N) (T : ℕ) : Type :=
   (t : Fin T) → (Fin t → (subset N kd hk).Ω) → Finset (Fin N)
@@ -62,25 +62,25 @@ variable {hk : kd ≤ N} {T : ℕ}
 def wrong (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) : Finset (Fin N) :=
   A t (past ω t)
 
-/-- Every period's draw misses its wrong set. -/
+/-- Every period's sample misses its wrong set. -/
 def Escapes (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) : Prop :=
   ∀ t, Disjoint (ω t).1 (A.wrong ω t)
 
-/-- The wrong units over the monitoring period, pooled, `Σ_t |W_t|`. -/
+/-- The incorrect proof blocks over the monitoring period, pooled, `Σ_t |W_t|`. -/
 def total (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) : ℕ :=
   ∑ t, (A.wrong ω t).card
 
-/-- Period `t`'s wrong set is fixed before draw `t`. -/
+/-- Period `t`'s wrong set is fixed before sample `t`. -/
 theorem predictable (A : Pooled N kd hk T) :
     Periods.Predictable (Ω := fun _ => (subset N kd hk).Ω) fun t ω => A.wrong ω t :=
   fun t _ _ h => congrArg (A t) (funext fun i => h _ (show (Fin.castLE t.isLt.le i).val < t.val from i.isLt))
 
-/-- Period `t`'s escape reads the draws up to `t`. -/
+/-- Period `t`'s escape reads the samples up to `t`. -/
 theorem adapted_escapes (A : Pooled N kd hk T) :
     Periods.Adapted (Ω := fun _ => (subset N kd hk).Ω) fun t ω => Disjoint (ω t).1 (A.wrong ω t) :=
   fun t ω ω' h => congrArg₂ (fun x y => Disjoint (Subtype.val x) y) (h t le_rfl) (A.predictable.adapted t ω ω' h)
 
-/-- Given any history, period `t` escapes with its draw's escape of its wrong set. -/
+/-- Given any history, period `t` escapes with its sample's escape of its wrong set. -/
 theorem escape_update (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) :
     prCoin (fun a => Disjoint (Function.update ω t a t).1 (A.wrong (Function.update ω t a) t)) =
       (subset N kd hk).escape (A.wrong ω t) := by
@@ -92,7 +92,7 @@ theorem escape_update (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω
 end Pooled
 
 /-- A wrong-set map on whole runs that doesn't look ahead, as a `Pooled` adversary: the history is padded with an
-arbitrary draw, which `W t` doesn't read. -/
+arbitrary sample, which `W t` doesn't read. -/
 noncomputable def Pooled.ofAdapted {hk : kd ≤ N} {T : ℕ}
     (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N)) : Pooled N kd hk T :=
   fun t h => W t fun i => if hi : i.val < t.val then h ⟨i.val, hi⟩ else Classical.arbitrary _
@@ -144,7 +144,7 @@ theorem pooled_escape_prod {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (w :
     rw [A.escape_update, subset_escape]
     exact ENNReal.div_le_div_right (Nat.cast_le.2 (Nat.choose_le_choose kd (Nat.sub_le_sub_left (hw t _) N))) _
 
-/-- **The pooled escape.** An adaptive adversary escapes every period's draw with at least `M` wrong units over the
+/-- **The pooled escape.** An adaptive adversary escapes every period's sample with at least `M` incorrect proof blocks over the
 monitoring period, pooled, with probability at most `(1 − kd/N)^M`. -/
 theorem pooled_escape {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (M : ℕ) :
     prCoin (fun ω => A.Escapes ω ∧ M ≤ A.total ω) ≤ (1 - (kd : ℝ≥0∞) / N) ^ M :=

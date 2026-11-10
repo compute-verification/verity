@@ -15,7 +15,7 @@ public import Proofs.Flock.Soundness.ZK.RealLeaves
   (`AgreesWhere`) that a simulator matches; where it fails only the cut leaves, which another matches. The bytes
   (`gated`) are then simulated per outcome by the two (`gatedSim`). Nothing reads the values beyond these premises,
   which an instance proves at every witness.
-* `PerOutcome.le_sum`, `PerOutcome.le_card`: summed over outcomes, the bound is `|St|` times the simulator that draws
+* `PerOutcome.le_sum`, `PerOutcome.le_card`: summed over outcomes, the bound is `|St|` times the simulator that samples
   its outcome uniformly, plus `Σ_s ε s`: the `Pr_real ≤ a · Pr_sim + ε` form at `a = |St|`.
 * `PerOutcome.le_leak`: the leakage form `Pr_real ≤ |St| · (Pr_sim + ε)`, `log₂ |St|` bits, for an `ε` above every
   `ε s`.

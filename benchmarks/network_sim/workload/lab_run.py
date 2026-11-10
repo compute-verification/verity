@@ -46,7 +46,7 @@ modeled under (`calibrate_run`).
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
 records show it: the timing. N2's served verdict on each block's link (`n2_verdicts`): each link-window's published
 records, their heads signed by a stand-in certifier (the lab's proxy signs nothing), through the proof system's stream
-on live coins and N2's verifier of record, so the counts only. And the answers against the Program evaluated in one
+on live coins and N2's verifier, so the counts only. And the answers against the Program evaluated in one
 process.
 
 **Tampering** (`--tamper BLOCK:MODE`): `late` holds the block's first response past every δ of Σ_sync, which the
@@ -614,8 +614,8 @@ def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: 
     """N2's served verdict on each block's link (`service.LinkWindows` with the served profile of the block's (F, F_in)
     and the run's windows): each window's two records as the proxy published them, their heads signed under the block's
     name by a stand-in certifier (an LMS key of the deployed N = 64, W = 1 sampled from a seed, in a zero session: the
-    lab's proxy signs nothing), committed, registered, drawn and delivered on the challenger's live coins, and checked by
-    N2's verifier of record under the window's declared sync; then the link's network verdict, the AND over its windows.
+    lab's proxy signs nothing), committed, registered, sampled and delivered on the challenger's live coins, and checked by
+    N2's verifier under the window's declared sync; then the link's network verdict, the AND over its windows.
     A window without both records ends the registrations, so it and every later window are refused. `served_counts` is
     the served counts' check alone on each window registered. The verdicts are computed after the run, on the host, with
     no proof to time: the stream's clock is held at 0, so no outcome is late."""

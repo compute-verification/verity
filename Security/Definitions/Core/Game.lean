@@ -70,7 +70,7 @@ instance instMonad : Monad Game where
 /-- The prover sends a message of type `M`. -/
 def recv (M : Type) : Game M := .send M .ret
 
-/-- The verifier draws a uniform coin from `C`. -/
+/-- The verifier flips a uniform coin from `C`. -/
 def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
 
 /-- Relabel the output. -/

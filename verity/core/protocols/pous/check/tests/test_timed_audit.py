@@ -1,6 +1,6 @@
-"""`timed_audit.py`: `pous-timed-audit` gives `memory_challenger.verdict`'s verdict on every generated record and its
-negative controls, a difference is reported, on the deployment's record (eight segments, twenty audits) and on the strict
-memory challenger's own documents; and a replay names what a run's record lacks."""
+"""`timed_audit.py`: `pous-timed-audit` gives the memory challenger's `timed_audit.verdict`'s verdict on every generated
+record and its negative controls, a difference is reported, on the deployment's record (eight segments, twenty audits)
+and on the strict memory challenger's own documents; and a replay names what a run's record lacks."""
 
 from __future__ import annotations
 
@@ -71,13 +71,14 @@ def test_the_deployments_record_agrees_from_its_files():
 
 
 def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
-    """`memory_challenger.py --strict`'s document of `p2-16448/v4` at its registered point (one segment) against a responder
-    whose labels match the leaves (but for the indices `wrong` picks, answered with zeros), with its ready file and leaves."""
+    """The memory challenger's `timed_audit.py --strict`'s document of `p2-16448/v4` at its registered point (one
+    segment) against a responder whose labels match the leaves (but for the indices `wrong` picks, answered with zeros),
+    with its ready file and leaves."""
     import hashlib
 
     sys.path.insert(0, str(ta.ROOT / "benchmarks" / "pous"))
     from band_gpu import harness as H
-    from band_gpu import memory_challenger as live
+    from verity.core.devices.memory_challenger import timed_audit as live
 
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash

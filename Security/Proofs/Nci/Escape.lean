@@ -83,7 +83,7 @@ theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β �
 `q ∈ (0, 1]`, with each faulty block skipping `w_b ∈ [0, B]`, the declared work that identity `j`'s faulty blocks
 accepted before its first detection (`escaped`) skip is at most `((1 − q)/q) B` in expectation.
 
-Each faulty block is caught with probability at least `q` whatever came before, its coins live and drawn independently,
+Each faulty block is caught with probability at least `q` whatever came before, its coins live and sampled independently,
 so the number an identity runs before its first detection is stochastically dominated by a geometric variable with mean
 `∑_{k ≥ 1} (1 − q)^k = (1 − q)/q`: it runs `k` or more with probability at most `(1 − q)^k`. The proof is the same
 count in Wald's form, over the outcomes with no independence beyond that premise: the identity's faulty blocks with no

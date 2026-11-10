@@ -2,7 +2,8 @@
 
 `verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
-neighbours, and two pinned ones (θ with an input bound per run, refused, and θ the registered input, accepted), and
+neighbours, and three pinned ones (θ with an input bound per run, refused, θ the registered input, accepted, and a
+declaration with a constant gate, accepted), and
 `scripts/nci_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
 `lean-audit.json`): `NciCheck/DifftestMain.lean` checks every instance with `NciCheck.check` and fails on any difference.
@@ -42,7 +43,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.Difft
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,337 instances and the reference's results on them, byte for byte as the record pins them."""
+    """All 4,338 instances and the reference's results on them, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", str(vectors.total())]
@@ -94,9 +95,13 @@ def test_the_reference_on_a_declaration_worked_by_hand():
 
 
 def test_the_pinned_instances_get_their_results():
-    """The data's last two lines: θ holding b, bound per run, is refused (`theta-not-registered`), and θ of the
-    registered a alone gets its verdict. The difftest holds `NciCheck.check` to these results."""
+    """The data's last three lines: θ holding b, bound per run, is refused (`theta-not-registered`), θ of the
+    registered a alone gets its verdict, and so does the declaration with a constant gate, which reads nothing (a
+    `Const<w>` primitive, the deployed spelling). The difftest holds `NciCheck.check` to these results."""
     pins = vectors.pinned()
-    assert [p["theta_kind"] for p in pins] == ["all", "registered"]
+    assert [p["theta_kind"] for p in pins] == ["all", "registered", "registered"]
+    defs = json.loads(pins[-1]["instance"]["program"])["definitions"]
+    assert [k for k in defs if k.startswith("Const")] == ["Const8[0x2a]_v1"]
+    assert defs["Const8[0x2a]_v1"] == {"form": "primitive", "id": "Const8[0x2a]_v1", "params": [], "ret": ["Value", 8]}
     for p in pins:
         assert reference.check(p["instance"]) == p["expect"]

@@ -3,7 +3,7 @@
 ``commit``), the census itself in the store (``source``): per proof-block Definition its count in one request of the served
 workload over every rank (``prefill``: the prefill step of ``prompt_len`` tokens; ``decode``: the ``decode_steps`` decode
 steps), its output bits, its estimated ANDs (an upper bound: leaves lowered once, nothing shared or folded), its served MACs,
-the bytes of the rows it opens and its block's log2 as C-Flock stages it; and, by row family, the rows no cut fits
+the bytes of the rows it opens and its block's log2 as Flock stages it; and, by row family, the rows no cut fits
 (``gaps``: their Definitions, rows per phase, ANDs and why), which no candidate covers.
 
 Each Definition is one candidate (`optimize.Candidate`), its own op type with the one cut the census took: its units the
@@ -19,7 +19,7 @@ import argparse
 import json
 from pathlib import Path
 
-from verity.core.protocols.sampled_proofs.optimize import Candidate
+from verity.core.protocols.spot.optimize import Candidate
 
 CARD = Path(__file__).with_name("glm53_blocks.json")
 QUANTITIES = ("blocks", "out_bits", "ands", "macs", "row_bytes")

@@ -13,7 +13,7 @@ Admission stays with the scheduler: the holder wraps the executor's ``execute_mo
 scheduled tokens it pulls every rank's calls so far (`RankExtension.h1rank_rows`, an RPC queued behind the earlier steps,
 so it returns once they have run on every rank), takes them in index order, closing each round whose last linear is in,
 then admits the step (`H1Run.admit`): one round a step, its root over every rank's calls before its coin, which only the
-holder draws. The salt and key reach the ranks before the first forward (`Holder._push`). The pull blocks the engine
+holder samples. The salt and key reach the ranks before the first forward (`Holder._push`). The pull blocks the engine
 core until the previous step has run everywhere, so steps don't overlap in a pipeline under H1.
 
 With ``served`` (`pouw_h1_served.Served`) the window's registered tables are the holder's: step s's A table of K holds
@@ -44,7 +44,7 @@ from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.sampled_proofs.challenger import LiveRecord
+from verity.core.protocols.spot.challenger import LiveRecord
 
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks
@@ -346,7 +346,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     installed, the window's salt from ``coins`` (an in-process `pouw.coins.Challenger`, as `pouw._install_h1` without a
     challenger) over every rank's weight roots, or opened by ``opener`` at round 0 (the challenger's), and the executor's
     ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`; when ``coins`` are
-    given, the window's draw coin is an in-process draw session's of ``rounds``' epoch (`window.draw_challenger`). A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
+    given, the window's sampling coin is an in-process sample session's of ``rounds``' epoch (`window.draw_challenger`). A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
     (`pouw_h1_served.Served`, without the period's `Weights` or a registry) registers the window's tables from the rows
     the ranks ship; ``commit`` (with ``served``, at PP 1, the engine's ``worker_extension_cls`` `COMMIT_EXTENSION`)
     puts the Commit on every rank, its keywords `acquire.h1_commit.RankCommit.h1rank_commit`'s, and ``served``'s tap is the

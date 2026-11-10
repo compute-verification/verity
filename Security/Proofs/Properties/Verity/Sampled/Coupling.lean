@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Messages
 whose finders are `msgFinder` and `recordFinder`, so `couplingTarget_of_noMiss` applies by `rfl`), from three bounds on
 the plays the sampled verdict accepts, cut by a property `P` of the play, the one the check's read of the device's log
 is held to (the binding's `Logged`: the log the check read is the device's), and by a property `Q` of the play at each
-commitment and strategy, the one the digest v2's draw answers is held to (the strategy's own, `afterAt`):
+commitment and strategy, the one the digest v2's sample answers is held to (the strategy's own, `afterAt`):
 
 * **(a), the binding** (`LoggedBound`): an accepted play `P` doesn't hold of is at most as likely as the read finder's
   collision plus the forger's forgery. It is the binding's bound (`Binding.logged_le_withBinding`, from its pointwise
@@ -20,7 +20,7 @@ commitment and strategy, the one the digest v2's draw answers is held to (the st
   clause).
 * **(b), the logged coupling** (`LoggedCoupling`): an accepted play that the cut holds of, on a tape that misses at no
   round and not at the record (`NoMiss`), is at most as likely as the live audit's acceptance at the projected
-  strategy, plus the hiding term. Its pieces are the draw, the rounds and the messages at their cuts, at the projection
+  strategy, plus the hiding term. Its pieces are the sample, the rounds and the messages at their cuts, at the projection
   the constructions give.
 
 The three meet by the union bound on the tape (`noMiss_le_of_logged`): an accepted play that misses nowhere either is

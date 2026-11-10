@@ -125,7 +125,7 @@ theorem recursiveKSEveryAtRec_of_dense (b : RecDeploy.Brings) (L : Claims.Recurs
     (RecDeploy.tableErrNonneg _ _ _) hε
 
 /-- **`RecursiveKSEveryAtRec` from `RecoversLinkOn` at the dense statements and F7's contract there**, at every
-compiled record `recBoundAt` builds and every reader whose plain draws are in range (`hIn`): `RecoversLinkOn`'s other
+compiled record `recBoundAt` builds and every reader whose plain samples are in range (`hIn`): `RecoversLinkOn`'s other
 premises hold at the deployment, namely L1 (`compositionKS`), `KSFlockLin` at `DE`
 (`RecDeploy.ksFlockLin_R`), each outer session's KS (`outerKS_of_flockKS` at `FlockDeploy.KS.zk_KS_outer` and the
 sessions' facts), the sessions' and `DE`'s nonnegative table errors, the record's inner statement, answers that decode
@@ -164,7 +164,7 @@ theorem recursiveKSEveryAtRec_of_recovers (b : RecDeploy.Brings) (L : Claims.Rec
 
 /-- **`Flock.Guarantees.RecursiveKSEvery` from `RecoversLinkOn` at the dense statements and F7**
 (`ContractDense`), at the deployment's records and values: `recursiveKSEveryAtRec_of_recovers` at the deployed
-reader, whose plain draws are in range (`FlockDeploy.KS.plainRdInR`). `RecoversLinkOn` there is F9a from F6's three
+reader, whose plain samples are in range (`FlockDeploy.KS.plainRdInR`). `RecoversLinkOn` there is F9a from F6's three
 term comparisons. -/
 theorem recursiveKSEvery_of_recovers
     (hR : ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)

@@ -53,7 +53,7 @@ def _jsonl(path: Path) -> list[dict]:
 
 
 def cmd_population(a) -> int:
-    """The point's population and draw law: ``law.json`` (the verifier's stratified law for B, ``serve --draw-law``) in
+    """The point's population and sampling design: ``law.json`` (the verifier's stratified sampling design for B, ``serve --draw-law``) in
     ``--out``; prints the VU Definition and n_max, the class sweep's PT_VU and PT_N."""
     w = workload(a.workload)
     if not 1 <= a.B <= w.n_max:

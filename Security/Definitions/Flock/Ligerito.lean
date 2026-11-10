@@ -87,12 +87,12 @@ def consValue (A : Arith F K) (α : List F) (ch : List K) (C : Oracle F) (pos : 
   ((pos.zipIdx).map fun (p, j) =>
     A.embed (eqList α j) * foldColumn A ch fun ℓ => C ℓ p).sum
 
-/-- Draw a `K` coin: one `sample_f128_vec(2)` squeeze `(w₀, w₁) ↦ w₀ + w₁·u` (`Flock.Field`). -/
+/-- Sample a `K` coin: one `sample_f128_vec(2)` squeeze `(w₀, w₁) ↦ w₀ + w₁·u` (`Flock.Field`). -/
 def drawK (A : Arith F K) : Game K := do
   let w ← draw (Fin 2 → F)
   pure (A.ofLimbs (w 0) (w 1))
 
-/-- `k` folding rounds (`Flock.Ligerito` step 4, and each recursive round): draw `r`, set `s ← q(r)`, read
+/-- `k` folding rounds (`Flock.Ligerito` step 4, and each recursive round): sample `r`, set `s ← q(r)`, read
 the next message. Returns the challenges, the claim and the round polynomial. -/
 def foldRounds (A : Arith F K) : ℕ → K → Quad K → Game (List K × K × Quad K)
   | 0, s, q => pure ([], s, q)

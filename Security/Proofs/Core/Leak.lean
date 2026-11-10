@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Recursion.Hybrid
 # The leak of a run released cut at a public position
 
 A prover `P'` that releases `P`'s run cut at one of `|pos x|` public positions (`CutsOf`) leaks at most
-`log₂ |pos x|` bits beyond `P`'s zero knowledge (`ZKmalRLeak`, `zkmalRLeak_of_cuts`). Its simulator draws the position
+`log₂ |pos x|` bits beyond `P`'s zero knowledge (`ZKmalRLeak`, `zkmalRLeak_of_cuts`). Its simulator samples the position
 uniformly, runs `P`'s and cuts its transcript there (`leakyAt`): an event of `P'`'s transcript is one at some cut of
 `P`'s, so the union bound over the positions gives `|pos x|` times the leaky simulator's probability.
 -/

@@ -55,10 +55,10 @@ fold (`staged_comb`). Check 5 takes the inner session's extra claims and comb fr
 which is the deployed one as the algebra reads it (`innerSetup_same`), and the extra claims at its record's link
 points, which are `pointsOf` the first coin:
 
-* the record's link points are the coin server's: `RecVStar.innerLink` refuses others (`innerLink_points`, `held_eq`);
-* the coin server's record read in its own format holds them (`RecSetup.checkReads`), and the reader reads that record
+* the record's link points are the challenger's live-coin part's: `RecVStar.innerLink` refuses others (`innerLink_points`, `held_eq`);
+* the challenger's live-coin part's record read in its own format holds them (`RecSetup.checkReads`), and the reader reads that record
   back off the first coin (`Drawn`);
-* the record decodes at a spec of two points of the files' `m_pts`, whatever full draw it carries (`drawnSpec_shape`),
+* the record decodes at a spec of two points of the files' `m_pts`, whatever full sample it carries (`drawnSpec_shape`),
   as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
 -/
 
@@ -149,7 +149,7 @@ theorem points_of_flat {α : Type} (d : α) {P : Array (Array α)} {n m : ℕ} {
   rw [hrowp, e1, e3] at e
   exact e.symm
 
-/-! ## The link points, as the record and the coin server's transcript hold them -/
+/-! ## The link points, as the record and the challenger's live-coin part's transcript hold them -/
 
 theorem mapError_ok {ε ε' α : Type} {x : Except ε α} {g : ε → ε'} {a : α} (h : x.mapError g = .ok a) :
     x = .ok a := by
@@ -184,7 +184,7 @@ theorem getArr_ok {q : Lean.Json} {a : Array Lean.Json} (h : q.getArr? = .ok a) 
   subst h
   rfl
 
-/-- **The inner session's record's link points are the coin server's**: `RecVStar.innerLink` reads the record's
+/-- **The inner session's record's link points are the challenger's live-coin part's**: `RecVStar.innerLink` reads the record's
 `link.points` as hex coins and refuses them unless they are the transcript's (`lk.points`). -/
 theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink} {j l : Lean.Json}
     (hj : Flock.JsonParse.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
@@ -244,7 +244,7 @@ theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : L
 /-! ## The inner session check 5 loads -/
 
 /-- **What `Inner.load` reads its extra claims at**: the files' statement's, at the link points of the record decoded
-at the spec its draw gives (`Files.drawnSpec`). -/
+at the spec its sample gives (`Files.drawnSpec`). -/
 theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     (h : RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec st specD sess, f.stmt unit = .ok (spec, st) ∧ f.drawnSpec spec st = .ok specD ∧
@@ -269,8 +269,8 @@ theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
     cases hsp
     exact ⟨_, _, hs, by assumption, by assumption, rfl⟩
 
-/-- **The record decodes at two link points of the files' `m_pts`**: without a draw at the files' spec, and at a draw
-that proves every unit in order (the only one `drawnSpec` takes) at the drawn statement's, whose `nbl` is the files'
+/-- **The record decodes at two link points of the files' `m_pts`**: without a sample at the files' spec, and at a sample
+that proves every unit in order (the only one `drawnSpec` takes) at the sampled statement's, whose `nbl` is the files'
 (`drawn_same`). -/
 theorem drawnSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
     (h : f.drawnSpec spec' st' = .ok specD)
@@ -341,7 +341,7 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   have hins := (setupO_some hsu).1
   obtain ⟨hc, ms, _, _, _, hxO, -, -⟩ := hsh
   subst hxO
-  -- the coin server's record, its link points the first coin's
+  -- the challenger's live-coin part's record, its link points the first coin's
   obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins
   rw [hr] at hxr
   cases hxr
@@ -400,7 +400,7 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   rw [← hstLe] at hext
   obtain ⟨hst', hspec'⟩ := files_stmt hstm
   obtain ⟨hDp, hDm⟩ := drawnSpec_shape hdS hst' hspec'
-  -- the decoded link points are the coin server's, so the first coin's
+  -- the decoded link points are the challenger's live-coin part's, so the first coin's
   have hdec' : Record.decode specD record = .ok sess := by rw [← hrec]; exact hdec
   obtain ⟨j, l, -, hj, hl, -⟩ := Claims.Bridge.Custody.decode_ok hdec'
   obtain ⟨rp, hrp, hh⟩ := innerLink_points hj (fld_val hl) hlk

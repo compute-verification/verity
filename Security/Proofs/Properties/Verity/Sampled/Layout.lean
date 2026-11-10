@@ -12,7 +12,7 @@ statement's, for any record, so the session alone fixes the layout, before any p
 
 * **The session `--zk` sets up** (`Live.tables`, `SetsUp.spec_tables`, `SetsUp.setup_one`): for any record, its tables
   are the statement's one table, `Σ` is a SHA-512 digest, its rounds are retained, it has two link points, and it
-  digests a round's bytes as `A.dg` does (`SetsUp.spec_dg`). The plan has one table at every draw and registration
+  digests a round's bytes as `A.dg` does (`SetsUp.spec_dg`). The plan has one table at every sample and registration
   (`SetsUp.J_eq`).
 * **The layout** (`slotAt`, `Live.layout`): round 0 is the link's opening, and round `2k + r + 1` is round `k` of the
   table's rep `r` stream. It is injective (`Live.layout_injective`), its round 0 is the link's (`Live.layout_link`),
@@ -69,7 +69,7 @@ theorem SetsUp.setup_one {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
   have h := Verity.Sampled.setup_one A.hTags hA.count hs
   ⟨hA.spec_tables hs, h.2.1, h.2.2.1, h.2.2.2, hA.spec_dg hs⟩
 
-/-- **The plan has one table at every draw and registration**, wherever v2 sets `A` up. -/
+/-- **The plan has one table at every sample and registration**, wherever v2 sets `A` up. -/
 theorem SetsUp.J_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     (S : Finset (Fin A.n)) (R : A.Reg) : A.J S R = 1 := by
   show (ZkHidden.planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length = 1
@@ -131,7 +131,7 @@ theorem Live.layout_rep (A : Live) {j : Fin A.rounds} {t k : ℕ} {r : Fin 2} (h
     t = 0 ∧ j.val = 2 * k + r.val + 1 :=
   slotAt_eq_rep h
 
-/-- **The layout's rep rounds are below the plan's tables**, at every draw and registration, wherever v2 sets `A` up. -/
+/-- **The layout's rep rounds are below the plan's tables**, at every sample and registration, wherever v2 sets `A` up. -/
 theorem SetsUp.layout_lt {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     (S : Finset (Fin A.n)) (R : A.Reg) : ∀ j t r k, A.layout j = .rep t r k → t < A.J S R := by
   intro j t r k h
@@ -145,7 +145,7 @@ theorem Live.layout_covers (A : Live) {K : ℕ} (hK : 2 * K + 1 ≤ A.rounds) (r
     ∀ k < K, ∃ j, A.layout j = .rep 0 r k := fun k hk =>
   ⟨⟨2 * k + r.val + 1, by have := r.isLt; omega⟩, slotAt_rep k r⟩
 
-/-- **The layout has a slot for each of the plan's tables' rep streams' first `n` rounds**, at every draw and
+/-- **The layout has a slot for each of the plan's tables' rep streams' first `n` rounds**, at every sample and
 registration, wherever v2 sets `A` up and the session has at least `2K + 1` rounds for some `K ≥ n`. -/
 theorem SetsUp.layout_covers {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {S : Finset (Fin A.n)} {R : A.Reg} (t : Fin (A.J S R)) {K : ℕ} (hK : 2 * K + 1 ≤ A.rounds) (r : Fin 2) {n : ℕ}
@@ -157,7 +157,7 @@ theorem SetsUp.layout_covers {V : Vocab d α} {θ : ByteArray} {F : Array ByteAr
   rw [ht]
   exact A.layout_covers hK r k (by omega)
 
-/-- **The layout has a slot for each of a rep stream's first `n` rounds** at every draw and registration, wherever v2
+/-- **The layout has a slot for each of a rep stream's first `n` rounds** at every sample and registration, wherever v2
 sets `A` up and `n` is at most the `2^roundsLog` rounds a stream of the session's coin tree holds (`Live.rounds_tree`). -/
 theorem SetsUp.layout_covers_tree {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (hA : SetsUp V θ F A) {S : Finset (Fin A.n)} {R : A.Reg} (t : Fin (A.J S R)) (r : Fin 2) {n : ℕ}
@@ -166,7 +166,7 @@ theorem SetsUp.layout_covers_tree {V : Vocab d α} {θ : ByteArray} {F : Array B
 
 /-! ## The stream names -/
 
-/-- **The plan's tables are the session's**: at every draw and registration, wherever v2 sets `A` up, table `t` is the
+/-- **The plan's tables are the session's**: at every sample and registration, wherever v2 sets `A` up, table `t` is the
 statement's. -/
 theorem SetsUp.tables_at {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {S : Finset (Fin A.n)} {R : A.Reg} (t : Fin (A.J S R)) : A.tables[t.val]? = some A.I.tags.table := by

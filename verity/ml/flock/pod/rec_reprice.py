@@ -1,6 +1,6 @@
 """85-rec-reprice's inner statement program (``85-rec-reprice.sh``): ``N`` instances of ``GemmCoordinate_v2{K, DOT}``, the
 population program of that template (`one_stage.partition.population_program`, instance i is unit i), cut by
-``Q_template_instance`` v0, as `rec_inner.stage` binds pod 80's RoPE d64 statement: the law's strata are the template's
+``Q_template_instance`` v0, as `rec_inner.stage` binds pod 80's RoPE d64 statement: the sampling design's strata are the template's
 instances and every unit is an instance of the circuit's own template, which Lean's verifier derives from the program.
 ``K`` and ``N`` come from the environment.
 
@@ -12,7 +12,7 @@ commits under its writer's output salt, and each a row of the link table V*'s li
     python -m verity_flock.class_statement --program-module rec_reprice.py:program --partition q-template-instance ...
                                          the inner statement, staged over that program
     python rec_reprice.py partition DIR  the verifier's copies beside DIR's circuit.txt: the partition object META binds
-                                         (partition.json), its program (program.json) and the full draw over them
+                                         (partition.json), its program (program.json) and the full sample over them
                                          (rec_live.full_draw, draw.json), over `chain_program` with REC_LINKS=1;
                                          prints the bindings
     python rec_reprice.py stage-chain DIR
@@ -29,16 +29,16 @@ import os
 import sys
 from pathlib import Path
 
-DOT = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 SPEC = "q-template-instance"
 
 
 def template():
-    """``GemmCoordinate_v2{K, DOT}``: the Definition each unit of the inner statement is one instance of."""
-    from circuit_check import targets as TG
+    """``GemmCoordinate_v2{K, DOT}`` at Hopper's step (`gemm.GEMM_HOPPER`): the Definition each unit of the inner statement is one
+    instance of."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
 
-    TG.load_registries()
-    return TG.definition(f"GemmCoordinate_v2{{K={int(os.environ['K'])},DOT={DOT}}}")
+    return bind(G.GemmCoordinate, K=int(os.environ["K"]), **G.GEMM_HOPPER)
 
 
 def population() -> int:
@@ -47,7 +47,7 @@ def population() -> int:
 
 
 def program():
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     return P.population_program(template(), population())
 
@@ -76,11 +76,11 @@ def chain_program():
 
 
 def partition(d: Path, prog=None) -> dict:
-    """The partition object, program and full draw the inner statement in ``d`` binds, written beside it; refused unless META
+    """The partition object, program and full sample the inner statement in ``d`` binds, written beside it; refused unless META
     binds exactly that partition and program and the population is the statement's ``N`` units, and at an ``N`` the
     verifier refuses (`rec_budget.inner`). ``prog``: the program (default `chain_program` under REC_LINKS=1, else
     `program`)."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_flock import rec_budget as RB
     from verity_flock import rec_live as RL
@@ -108,7 +108,7 @@ def partition(d: Path, prog=None) -> dict:
 
 def chain_lanes(units, cl, tp, seed: str) -> tuple[list, list, list]:
     """Every unit's lanes in population order, each reading its writer's output as the program wires it, over root inputs
-    drawn once from ``seed`` (BF16 words of normal samples, so no product overflows); every row identity the instance's own."""
+    sampled once from ``seed`` (BF16 words of normal samples, so no product overflows); every row identity the instance's own."""
     import numpy as np
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU
@@ -136,7 +136,7 @@ def chain_lanes(units, cl, tp, seed: str) -> tuple[list, list, list]:
 def stage_chain(d: Path) -> dict:
     """The wired inner statement (`chain_program`) staged into ``d`` with every instance's own rows, its links file and its
     partition's files; the staging's record."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits import partition_object as PO
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU

@@ -71,7 +71,7 @@ def DIdealFloor : Prop :=
         Z.epsJl Fl lam p (δ - S * (δbind + nπ * δzk)) S) ≤ δ
 
 /-- **Lemma C (the compiler).** In 𝒫_samp(u, s, Q), whose ideal game's share is a round's deficient, wrong and
-adaptive work share and whose check is the drawn units' proofs, under (I1)–(I6) as in `DIdeal`, (C1)–(C3) with (I8)
+adaptive work share and whose check is the sampled proof blocks' proofs, under (I1)–(I6) as in `DIdeal`, (C1)–(C3) with (I8)
 as `ProofsSound`, and any `Λ > 0` bounding the round's saving per unit of detection (`RoundGame.BudgetAt Λ`, Λ's
 definition): for every certificate `π`, outside an event of probability at most `δ`, every accepted run satisfies
 (2.7) with `ε_sample = (Λ − 1/ln(1/p))·(ln(1/δ′)/S)·κ(π)` subtracted in the first factor. This is Lemma C(b), at a

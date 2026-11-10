@@ -7,12 +7,12 @@ public import Proofs.Flock.Bridge.Count
 /-!
 # V5's assembly (`Bridge.AssemblyTargetV5`, proved)
 
-`Assembly.lean` at the verifier's public inputs, under the law the verifier draws under from the registration, which
+`Assembly.lean` at the verifier's public inputs, under the sampling design the verifier samples under from the registration, which
 `PopMatches` puts on the registration's strata (`Bridge.lawOn_drawsUnder`): outside `RelS` at `δ` the faulty population
 slots' `P_a` is at most `δ` (`pa_partOf_window`), and `EndToEndHiddenV5` at those proof blocks bounds the event, since
 each is a proof block faulty on the registration with canonical openings, so wrong, as a proof block right in that sense
 is not faulty (`FaultyRightTargetC`, with its transport from `TransportsLiveV5` at the wires `constsOfP` doesn't fix).
-Inside `RelS` the event is empty. No count of faulty slots enters, so the bound holds at every law `Bridge.LawOn`
+Inside `RelS` the event is empty. No count of faulty slots enters, so the bound holds at every sampling design `Bridge.LawOn`
 admits.
 
 `constsOfP_isInput`: `constsOfP` fixes only input gates, the constant, the zero and the public gates, each below

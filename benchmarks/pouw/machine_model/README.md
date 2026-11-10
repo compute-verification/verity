@@ -305,7 +305,7 @@ record, never to compare designs. `solve` prints τ, the price vectors' real-tim
 - **γ**: honest's time a useful MMA over the plain GEMM's model time: measured when the design runs the profile's
   kernel, else the measured kernel's time plus the model's difference between the design and that kernel, else the
   model's alone.
-- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose production reads no
+- **q***: the fewest lane instructions, past the fold, of a right fresh committed word whose computation reads no
   data-dependent address. Assumed, never measured (`ScalarRoute`, `Accounting.Assumptions.TS`). `--q`, default 8.
 - **q*_T, b_T**: a table word's lane instructions, and the bytes it reads from its memory level. `data/table.toml`,
   `--lookup-q`, `--lookup-bytes`.

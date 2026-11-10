@@ -12,7 +12,7 @@ public import Definitions.Accounting.Capacity
 public import Definitions.Accounting.CoinFlow
 public import Definitions.Accounting.Carrier
 public import Definitions.Accounting.Compose
-public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.ComposeMonitoringPeriod
 public import Definitions.Accounting.Confidence
 public import Definitions.Accounting.CostModel
 public import Definitions.Accounting.Device
@@ -36,6 +36,8 @@ public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
 public import Definitions.Accounting.Slowdown
 public import Definitions.Accounting.Pouw
+public import Definitions.Accounting.PouwWitness
+public import Definitions.Accounting.NetWitness
 public import Definitions.Accounting.PouwWork
 public import Definitions.Accounting.RateAudit
 public import Definitions.Accounting.RateAuditDeployed
@@ -48,6 +50,7 @@ public import Definitions.Accounting.RateAuditSketch
 public import Definitions.Accounting.RateAuditSketchDeployed
 public import Definitions.Accounting.RateAuditSketchInteractive
 public import Definitions.Accounting.RateAuditSketchLayout
+public import Definitions.Accounting.ReadUnit
 public import Definitions.Accounting.Remote
 public import Definitions.Accounting.Remote.Deployed
 public import Definitions.Accounting.Requirement
@@ -78,11 +81,13 @@ the lock's `layers` lists what they may import:
   registered circuit are proved over); `Requirement` (what a registered circuit needs of a device's memory).
 * **The joint audit.** `Joint` (a joint audit's run, and what each audit's guarantee says about it); `PerRun` (per-run
   audits); `JointPeriod` and `JointBridge` (a period audited by every subprotocol, and each subprotocol's per-period
-  guarantee read as its account); `JointLive` (a period as a causal game, its claims on a fixed extractor's values);
+  guarantee read as its account); `NetWitness` (the period run the network certifier's bridge fails at); `JointLive`
+  (a period as a causal game, its claims on a fixed extractor's values);
   `JointBlocks` and `Wipe` (server blocks, each opened by a memory wipe, and the streamed-label wipe on the device
-  model).
+  model); `ReadUnit` (a unit that returns one row of a registered table at an index another unit picks, and what
+  binds it to that row).
 * **Each audit's game.** The compute audit: `Pouw` and `PouwWork` (PoUW's game, and its work on one node of the actual
-  circuit), `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
+  circuit), `PouwWitness` (the run its witnesses fail at), `Compose` and `ComposeMonitoringPeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
   and over a monitoring period), `HMu` and `CoinFlow` (the receipt-luck premise H-μ⁺ and a Program's coin flow),
   `Served`, `Filler`, `BoundReceipt` and `BoundSketch` (receipts bound to the matmul), and `TS`, `Headline` and
   `HeadlineDc` (the tensor–scalar model and the headline instances' exact data). The capacity audit: `Capacity`,
@@ -99,11 +104,11 @@ named.
 
 * `Joint`, `CovertResidual` (`Joint.lean`): on any device, the probability that the compute, bandwidth and capacity
   audits all accept while some account is below its certificate, or beyond its residual, is at most `εW + εQ + εS`.
-* `JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive` (`JointLive.lean`): the joint guarantee over one
+* `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive` (`JointLive.lean`): the joint guarantee over one
   period, over `m` periods and over `B` server blocks with the memory wipes that open them, as one causal game over the
   five subprotocols' per-period guarantees.
 * `ComputeOfPouw` (`Pouw.lean`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.
-* `Compose.CircuitCredit` (`Compose.lean`) and `ComposePeriod.CircuitCreditPeriod` (`ComposePeriod.lean`): PoUW's
+* `Compose.CircuitCredit` (`Compose.lean`) and `ComposeMonitoringPeriod.CircuitCreditPeriod` (`ComposeMonitoringPeriod.lean`): PoUW's
   credit on a registered circuit it compiles, over one execution phase and over a monitoring period's accepted prefix.
 * `TS.Sm90SheetHeadline` (`HeadlineDc.lean`, proved in `HeadlineDc/Sm90.lean`) and `TS.Sm120SheetHeadline`
   (`Headline.lean`, proved in `Headline/Sm120.lean`): the headline at H200's and sm_120's data sheets.

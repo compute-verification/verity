@@ -371,7 +371,7 @@ end Session
 /-! ## At the masked simulator -/
 
 /-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
+that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
 strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
 def ZkSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
@@ -392,7 +392,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
-that sets up at a draw, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
+that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
 strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
 def ZkSlotAlign (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)

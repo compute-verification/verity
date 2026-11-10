@@ -5,7 +5,7 @@ A row unit's checks pass `--public-inputs`, a form flock-verify refuses until it
 REFUSED, its anchor controls too (a refused statement is never accepted, so they say nothing of the anchors), and passes
 when not accepted, an honest check only with the refusal as its reason. A plain tile is refused once every check has
 passed, its output row holding two output ports, a form the proof does not cover: its honest checks pass only with a
-refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session drawn, but a
+refusal as their reason (REFUSED). A hiding tile's rows (row-seg/v1, row/v2) are covered and its session sampled, but a
 tile is no Program's: the verifier holds no descriptor (`--program`), so its honest checks pass only refused for that
 alone, once every check has passed (`NO_PROGRAM`). Every other tile check passes only when a check rejects it.
 Under HZ_STAGE_ONLY=1 nothing is proved or verified, so a config is `stage_only` and its `all_pass` and `lean_checks` are null."""

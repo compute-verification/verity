@@ -1,6 +1,6 @@
 """Pearl-C's tile check as a Program (``pearl-c-h100-v1``, ``pearl-c-sm120-v1``, and the unpromoted sm_120 record): forming
 v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof blocks as `pc4` cuts Pearl-C4's, so sampled proofs can
-establish a drawn tile's checked words (C̃ and U) and its rows' admission without the verifier reading a row.
+establish a sampled tile's checked words (C̃ and U) and its rows' admission without the verifier reading a row.
 
     template              one instance per        reads                                   computes and returns
     Pc8RowB{K,DEV}        row j of B              B_j, E_B,j, F_B, F_A, G                  B̃_j's codes, P_B,j, ok

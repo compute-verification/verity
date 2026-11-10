@@ -19,7 +19,7 @@ audit's outcome gives it and the event that runs the later sessions' simulators 
 `residual` where the honest run reaches the session (`step_le`). Hybrid `M` is the honest run (`hyb_M`), and hybrid `0`
 the composed simulator (`hyb_zero`), since the framing's messages are functions of the statement and the history.
 
-* `Ex_resample`, `Pr_resample`: resampling one coordinate keeps the law; `Pr_le_resample`: a hybrid step from two
+* `Ex_resample`, `Pr_resample`: resampling one coordinate keeps the sampling design; `Pr_le_resample`: a hybrid step from two
   resamplings.
 * `pre`, `pre_succ`: the honest run's first sessions; where it goes on after session `j`'s start, the next session is
   `A`'s run against `residual`. `pre_congr`: the first `j` sessions read only the first `j` slots.
@@ -79,8 +79,8 @@ theorem simAt_of {St : Type} {S : SimOut St} {C : Type} {xS : Msg} (h : Nonempty
 
 /-! ## Resampling one coordinate -/
 
-/-- **Resampling keeps the law**: where `(a, b) ↦ (u a b, v a)` is an involution, drawing `a`, then `b` fresh in place
-of `v a`, draws `u a b` uniformly. -/
+/-- **Resampling keeps the sampling design**: where `(a, b) ↦ (u a b, v a)` is an involution, sampling `a`, then `b` fresh in place
+of `v a`, samples `u a b` uniformly. -/
 theorem Ex_resample {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (u : α → β → α) (v : α → β)
     (h1 : ∀ a b, u (u a b) (v a) = a) (h2 : ∀ a b, v (u a b) = b) (f : α → ℝ) :
     (Ex fun a => Ex fun b => f (u a b)) = Ex f := by
@@ -212,7 +212,7 @@ end ZkCompiled
 abbrev askOf {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (x : Msg) (θ : Θ) (as : List Msg) : Out :=
   ((Vs.next x as θ).eval H).1
 
-/-- **One hybrid step**: where resampling one coordinate keeps the law on each side, a bound at each fixed rest of the
+/-- **One hybrid step**: where resampling one coordinate keeps the sampling design on each side, a bound at each fixed rest of the
 coordinates is a bound on average. -/
 theorem Pr_le_resample {α β γ : Type} [Fintype α] [Fintype β] [Nonempty β] [Fintype γ] [Nonempty γ]
     (u : α → β → α) (v : α → β) (h1 : ∀ a b, u (u a b) (v a) = a) (h2 : ∀ a b, v (u a b) = b)

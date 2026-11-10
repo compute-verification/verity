@@ -64,7 +64,7 @@ theorem refS_eq (t : Tmpl) (lays : Array Lay) (pt : FoldPt) (hR : pt.rT = Tmpl.h
 
 theorem rowLow_e (pt : FoldPt) (hT : pt.rhoT = Tmpl.halves pt.rho) {β al : ℕ} {as : Array ℕ} {k : ℕ}
     (h6 : 6 ≤ β + al) (hL : β + al - 6 ≤ pt.rho.size) (hk : as.getD k 0 < 2 ^ β) (H P : ℕ) :
-    of (Tab.rowLow pt false (2 ^ al) (2 ^ β) as (eqHalf pt.rho 0 (β + al - 6)) k P) *
+    of (Tab.rowLow pt false (2 ^ al) (2 ^ β) as (eqHalf pt.rho 0 (β + al - 6)).at k P) *
         hiE pt (β + al - 6) H (P / 2 ^ al) =
       of (pt.e (as.getD k 0 + 2 ^ β * (H * 2 ^ al + P))) := by
   rw [e_chunk pt hT h6 hL hk]
@@ -72,7 +72,7 @@ theorem rowLow_e (pt : FoldPt) (hT : pt.rhoT = Tmpl.halves pt.rho) {β al : ℕ}
 
 theorem rowLow_e_sum (pt : FoldPt) (hT : pt.rhoT = Tmpl.halves pt.rho) {β al a : ℕ} {as : Array ℕ} {k : ℕ}
     (h6 : 6 ≤ β) (hL : β + al - 6 ≤ pt.rho.size) (ha : a < 2 ^ β) (H P : ℕ) :
-    of (eLow pt β a) * (of (Tab.rowLow pt true (2 ^ al) (2 ^ β) as (eqHalf pt.rho (β - 6) al) k P) *
+    of (eLow pt β a) * (of (Tab.rowLow pt true (2 ^ al) (2 ^ β) as (eqHalf pt.rho (β - 6) al).at k P) *
         hiE pt (β + al - 6) H (P / 2 ^ al)) =
       of (pt.e (a + 2 ^ β * (H * 2 ^ al + P))) := by
   rw [e_chunk_sum pt hT h6 hL ha, mul_assoc]
@@ -170,7 +170,7 @@ theorem half_ok {pt : FoldPt} {rho : Bool} {lo n : ℕ} {st st' : SplitSt} {T : 
     · subst he
       simp at hT
       exact hT.symm
-    · rw [if_neg (by simpa using he)] at hT
+    · rw [ite_eq_right (by simpa using he)] at hT
       exact hq key T (by rwa [HashMap.get?_eq_getElem?])
 
 end FlockSoundness.TmplFold

@@ -88,7 +88,7 @@ def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
 
 @st.composite
 def runs(draw, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None = None) -> Run:
-    """An honest run: a setup at a drawn reduced point, the memory challenger's session over its `C*` (some rounds late, some
+    """An honest run: a setup at a sampled reduced point, the memory challenger's session over its `C*` (some rounds late, some
     answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id.
     With `stores`, a strategy of honest setups `(q, W, salt, C*)`, the setup is one it samples and `C*` its encoding, which
     the setup protocol accepts (the run's `setup_of`); else `C*` is labels of no setup."""
@@ -163,7 +163,7 @@ def _other_geometry(r: Run, x: int) -> Run:
     return _point(r, params=P2.P2Params(w, c0, q.blocks_per_segment, q.segments))
 
 
-#: One edit of a run, `(run, x) -> run`, `x` a drawn natural.
+#: One edit of a run, `(run, x) -> run`, `x` a sampled natural.
 RUN_MUTATIONS = [
     lambda r, x: _setup(r, blocks=r.setup.blocks + 1 + x % 3),
     lambda r, x: _setup(r, blocks=0),
@@ -289,7 +289,7 @@ server = D.server_fixture(port(st.none()))
 
 
 def _any(edits: list) -> st.SearchStrategy:
-    """One of `edits`, about evenly: `sampled_from` draws early entries far more often than late ones."""
+    """One of `edits`, about evenly: `sampled_from` samples early entries far more often than late ones."""
     return st.integers(0, 2 ** 32).map(lambda i: edits[i % len(edits)])
 
 
@@ -307,7 +307,7 @@ def documents(rs: st.SearchStrategy | None = None) -> st.SearchStrategy:
 
 @pytest.mark.slow
 def test_run_agrees(server):
-    """The outcome on drawn runs: accepted ones, each refusal of the check's order, verdict reasons, and malformed input."""
+    """The outcome on sampled runs: accepted ones, each refusal of the check's order, verdict reasons, and malformed input."""
     stats = D.run(port(documents()), examples=400, server=server)
     assert stats.outputs > 250 and stats.rejects > 20, stats
 
@@ -407,7 +407,7 @@ def test_the_deployed_check_agrees_from_its_files(tmp_path):
     parameters): `PousCheck.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of
     whose answers is not its label, the honest run under another designated id and the honest run against a verifier's list
     that holds another key only; `pous-run` refuses an id that is not lowercase hex and a session that carries keys of its
-    own. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a drawn point, is the deployed point under
+    own. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a sampled point, is the deployed point under
     `SCHEMES`, in Lean."""
     exe = D.build(LEAN, "pous-run")
     another = hashlib.sha512(b"another deployed session").digest()[:32]

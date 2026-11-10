@@ -53,7 +53,7 @@ the tables' level-0 caps (`honestPR_first`), and each cap is a function of its l
 * `commitsPZk_caps`: at `SHA-512` and `hm96-sha512/v1`, each table's level-0 cap is layer `d − cap` of the tree of
   `MerkleScheme.hm96Sha512.leaf` over `encodeRowsZk`'s rows under the tape's level-0 salts.
 * `encodeRowsZk_entry`: a row's entry at position `q` and lane `l`, as the model writes a level-0 column: the lane's
-  message encoded at `ω_q` (`X̂_c(ω_q)`), plus its `t_pad` padding coefficients on C-Flock ZK's padding columns
+  message encoded at `ω_q` (`X̂_c(ω_q)`), plus its `t_pad` padding coefficients on Flock ZK's padding columns
   (`fOf_padF`, `ZkExec.padAt_eq` at `c₀ = PAD_C`).
 * `sessionPZk_go_head`: once the schedules and the level-0 commitments return, the pure masked session's first body
   is the link message of the caps, whatever the session does after its coin.

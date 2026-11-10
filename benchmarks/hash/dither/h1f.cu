@@ -27,7 +27,7 @@ struct H1F {
 };
 
 // flags: F_DUMP copies y rows < m to ydump; F_NW_TILES and F_NW_UNITS are the gate's no-write control (no z, A slot or
-// scale write and no slot clear; no receipt write), y still written, so serving goes on while the transcript is not
+// scale write and no slot clear; no receipt write), y still written, so serving goes on while the trace is not
 enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4 };
 
 struct H1FStep {
@@ -172,7 +172,7 @@ __global__ void __launch_bounds__(32 * NW, UNITS ? 3 : 4) h1f_k(const H1F* __res
 }
 
 // one served linear call: xq [M, K] s8 and sa [M] f32 (row_quant's), w [N, K] s8 and sw [N] f32 (the layer's), y [M, N]
-// bf16 (the call's output); F, S, seeds and out the window's (device).  units: the receipts' call's unit count, or 0 when
+// bf16 (the call's output); F, S, seeds and out the execution phase's (device).  units: the receipts' call's unit count, or 0 when
 // this launch computes no receipts.
 extern "C" int h1f_launch(const H1F* F, const H1FStep* S, int t, int n, int k, int units, const int8_t* xq, const float* sa,
                           int M, const int8_t* w, const float* sw, void* y, const u64* seeds, u32* out, cudaStream_t stream) {

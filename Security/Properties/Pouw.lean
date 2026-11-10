@@ -16,10 +16,10 @@ completeness, proved beside it. Each is a `Prop`, and `Proofs.Properties.Pouw` p
 The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 multiply-adds (an FP8 tile), ε = 1/2, and δ
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.
 
-What a property assumes is in its statement. The draw's (`DrawMisses`) is not: the miss probability it bounds is the
-one of `K′` indices drawn uniformly without replacement from `[0, N)`, which is what the proof system's live draw is
-under its named assumptions (the operating system's bytes are uniform, `UniformRandomBytes`, and the service draws a
-uniform subset of them); nothing here models the draw.
+What a property assumes is in its statement. The sample's (`DrawMisses`) is not: the miss probability it bounds is the
+one of `K′` indices sampled uniformly without replacement from `[0, N)`, which is what the proof system's live sample is
+under its named assumptions (the operating system's bytes are uniform, `UniformRandomBytes`, and the service samples a
+uniform subset of them); nothing here models the sample.
 -/
 
 @[expose] public section
@@ -83,7 +83,7 @@ def LevelsCount : Prop :=
   ∀ bits (lo hi : Int) k, levels? bits lo hi = .ok k → LevelsCounted bits lo.toNat hi.toNat k
 
 /-- The served grid's sizes: 304 levels for 1 to 2⁴⁰ tiles, 161 for 2¹⁰ to 2³⁰; the window's one public output, its
-level, so takes at most 9 bits, within a proof unit's 16. -/
+level, so takes at most 9 bits, within a proof block's 16. -/
 def LevelsServed : Prop :=
   levels gridBits 1 (2 ^ 40) = 304 ∧ levels gridBits (2 ^ 10) (2 ^ 30) = 161 ∧ levels gridBits 1 (2 ^ 40) ≤ 2 ^ 9
 
@@ -116,7 +116,7 @@ def WorkAtRefuses : Prop := ∀ bits (ℓ : Int) w, Work.at? bits ℓ = .ok w �
 def LevelsRefuses : Prop :=
   ∀ bits (lo hi : Int) k, levels? bits lo hi = .ok k → 1 ≤ lo ∧ 1 ≤ hi ∧ k = levels bits lo.toNat hi.toNat
 
-/-! ## The draw (L3) -/
+/-! ## The sample (L3) -/
 
 /-- `kPrime` answers only on its domain. -/
 def KPrimeRefuses : Prop :=
@@ -129,12 +129,12 @@ def KPrimeLeast : Prop :=
     let q := 1 - missShare eps credited n w
     1 ≤ k ∧ k ≤ n.toNat ∧ (k < n.toNat → q ^ k ≤ δ) ∧ ∀ j, 1 ≤ j → j < k → δ < q ^ j
 
-/-- The chance that `k` indices drawn uniformly without replacement from `[0, N)` all miss a set of `B` of them. -/
+/-- The chance that `k` indices sampled uniformly without replacement from `[0, N)` all miss a set of `B` of them. -/
 def missProb (N B k : Nat) : Rat :=
   ((List.range k).map fun i => ((N - B - i : Nat) : Rat) / ((N - i : Nat) : Rat)).foldl (· * ·) 1
 
 /-- A wrong set of `B` of the window's `n` tiles that holds a share `ε` of its credited work (each tile does at most `w`,
-so `ε·credited ≤ B·w`) is missed by all `k` drawn tiles with chance at most `δ`. -/
+so `ε·credited ≤ B·w`) is missed by all `k` sampled tiles with chance at most `δ`. -/
 def MissBounded (eps δ : Rat) (credited n w : Int) (B k : Nat) : Prop :=
   B ≤ n.toNat → eps * credited ≤ B * w → missProb n.toNat B k ≤ δ
 
@@ -147,7 +147,7 @@ def servedK (δ : Rat) (ℓ : Nat) : Nat :=
   let w := Work.at gridBits ℓ
   ((kPrime (1 / 2) δ (w.credited * 4096) w.n 4096).toOption).getD 0
 
-/-- The served draw's sizes: 4 tiles for the 8192-tile window at δ = 1/10, and over every level for 1 to 2⁴⁰ tiles
+/-- The served sample's sizes: 4 tiles for the 8192-tile window at δ = 1/10, and over every level for 1 to 2⁴⁰ tiles
 (0 to 303) at most 5 at δ = 1/10 and 48 at δ = 2⁻⁴⁰. -/
 def KPrimeServed : Prop :=
   (kPrime (1 / 2) (1 / 10) (8192 * 4096) 9216 4096).toOption = some 4 ∧

@@ -61,7 +61,7 @@ def KNOWN_SCHEMES : Schemes := SCHEMES ++ TEST_SCHEMES
 
 /-- Python's `repr` of a string, for the scheme in a reason: single quotes unless the string holds `'` and no `"`; `\`,
 the quote, `\t \n \r` escaped, other ASCII controls and DEL as `\xhh`. Characters past ASCII are written as they are,
-which is Python's `repr` for the printable ones (all a difftest draws). -/
+which is Python's `repr` for the printable ones (all a difftest samples). -/
 def pyRepr (s : String) : String := Id.run do
   let q := if s.contains '\'' && !s.contains '"' then '"' else '\''
   let hex2 := fun (n : Nat) =>

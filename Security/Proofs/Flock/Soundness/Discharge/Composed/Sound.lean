@@ -27,11 +27,11 @@ For any live prover `τ` of a public-output one-table `--zk` session,
 program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's
 `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with `δ_tree = 0`
 (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to flock-verify's acceptance
-by `zk_headline_exec_on`. `RunsZC` at the law's draws is `ZkExec.runsZC_live`, from the tags (`TagsOk`), the coin
-server's record of the live session (`RecordsLiveZK`) and its draw at each of the law's draws (`DrawOkZK`).
+by `zk_headline_exec_on`. `RunsZC` at the sampling design's samples is `ZkExec.runsZC_live`, from the tags (`TagsOk`), the challenger's
+live-coin part's record of the live session (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`DrawOkZK`).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
-it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the law's draws). It reads neither
+it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the sampling design's samples). It reads neither
 `hash-derived-key` nor `PadNonvanishing`, nor the session's `Coined` tables: those are the zero-knowledge half's.
 
 `tagsOk_circuit967b8d06`: the citation of its tag hypotheses. Under `--statement verity/flock-circuit@967b8d06` with
@@ -71,12 +71,12 @@ theorem zk_session_sound
     {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the challenger's draw at each of the law's draws
+    -- the challenger's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)

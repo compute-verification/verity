@@ -11,7 +11,7 @@ claim fails is at most `a`'s error at the strategy (`Vocab.error`: its published
 its collision term, where its finder meets `FinderCR` and its forger `Unforgeable`). It is `Vocab.Target k a` without
 the commit phase's file check and `k`'s acceptance as a `same` composition, so each target follows from it, one family
 at every composite and subprotocol (`Vocab.sound_of`, in `Proofs.Properties.Verity.Subprotocols`; at remote's three,
-`Vocab.sampledProofsSound_of`, `pouwSound_of` and `inferenceOnlySound_of`).
+`Vocab.spotSound_of`, `pouwSound_of` and `inferenceOnlySound_of`).
 
 `SoundnessOfComponents` is `SoundnessOf` from those bounds: at every composite, each of its subprotocols' bound at its
 component gives `Vocab.SoundnessAt`, with the errors summed over the composite's subprotocols (`subprotocols k`). A
@@ -48,7 +48,7 @@ def TargetFor (acc : Exchange → Prop) (k : Verity.Registration.Composite) (a :
 
 end Vocab
 
-/-- **Soundness at every composite's verifier of record, from its subprotocols' bounds at their components.** On any
+/-- **Soundness at every composite's verifier, from its subprotocols' bounds at their components.** On any
 device, for any names `V` the subprotocols define and any composite `k`, if each of `k`'s subprotocols meets its bound
 at its compiled component at `k` in the causal game, then at all parameters, committed files and commitments and for
 every strategy, the probability that `k`'s compiled verifier accepts files that passed the commit phase's check while

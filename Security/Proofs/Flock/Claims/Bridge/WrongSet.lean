@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The claims' faulty set inside the game's wrong set
+# The claims' incorrect set inside the game's wrong set
 
 `Claims.Sampling.faulty` counts the slots of the claims' partition whose proof block no interior makes correct on the
 witness's openings; `FlockSoundness.Discharge.ZkLink.wrongRegZ` counts the game's units not right on the registration at
@@ -61,7 +61,7 @@ namespace FlockSoundness.Discharge.ZkLink.WrongSet
 open Game Model Accounting Audit ZkSession
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] {mPts : ℕ}
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}

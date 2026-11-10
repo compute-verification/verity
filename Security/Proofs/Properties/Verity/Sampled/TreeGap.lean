@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 The leftover hash lemma at hm96-sha512 (`CROnly.hm96_sha512_sum`) bounds by `2^-257` the mean, over a uniform key of
 2047 symbols of `ZMod 2`, of the hiding gap of the key's Hankel product beside any salt hash with at most `2^512`
-values. A coin tree draws its key and its salts as bits, so the bound applies once its gap is read over `ZMod 2`:
+values. A coin tree samples its key and its salts as bits, so the bound applies once its gap is read over `ZMod 2`:
 
 * **Reindexing the bits** (`boolZ`, `bitsZ`, `hidingGap_comp_equiv`, `hidingGap_tree`, `sum_hidingGap_tree`): the gap
   reads its salts only up to a bijection, so at the key `treeKey κ` the gap of the tree's mask and salt hash is the

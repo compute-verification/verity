@@ -45,7 +45,7 @@ rows and salts, `τ` and its salt, the pads' opened columns and salts) included,
 each named here, none a premise of a guarantee:
 
 * **`Loop.FinRepErased`**: the run from the views returns, with the same transcript, a proof equal to `p` up to
-  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEq`.
+  `eraseZ`: `Masked.swSrcE_repCut` at the views' source, the views' values tied to the history's by `LiveRoundEqOwn`.
 * **`Loop.FinRepFinal`**: where it returns so, the final-only data agree (`Masked.FinalEq`).
 * **`Loop.FinRepXs`**: the extra claims from the views have the request's coordinates (`Drive.extras`), so as many
   claims as `claimsOf`.
@@ -61,10 +61,10 @@ namespace Flock.Firewall.Finish
 
 open Flock
 
-/-- The firewall's proof file is the session's encoder's. -/
+/-- The ZK server's proof file is the session's encoder's. -/
 theorem encZk_view (sh : Shape) (p : Zk.ZkProof) : encZk sh p = FlockSoundness.Discharge.ZkView.encZk sh p := rfl
 
-/-- The firewall's file shape is the session's. -/
+/-- The ZK server's file shape is the session's. -/
 theorem shapeZk_view (st : Setup) (sch : Flock.Schedule) (n : ℕ) : shapeZk st sch n = FlockComplete.shapeZk st sch n := rfl
 
 end Flock.Firewall.Finish

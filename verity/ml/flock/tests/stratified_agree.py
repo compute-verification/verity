@@ -1,21 +1,21 @@
-"""The Lean verifier's stratified draw against core's (`verity.core.protocols.sampled_proofs.one_stage.draw`, and `Stratified`).
+"""The Lean verifier's stratified sample against core's (`verity.core.protocols.spot.one_stage.draw`, and `Stratified`).
 
-For each program (A4 P6's six-template population, as core's draw test builds it, and small and random programs):
+For each program (A4 P6's six-template population, as core's sample test builds it, and small and random programs):
 
-- the law: `flock-verify draw --program P --partition Q --stratified K` against `draw.derive`, and the population against
+- the sampling design: `flock-verify draw --program P --partition Q --stratified K` against `draw.derive`, and the population against
   `partition.units`;
 - the units on a given stream: against `reference_draw`, the sampler of record written out here (each stratum's
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
 - the sample: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
-- U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted draw;
-- one sample over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
+- U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted sample;
+- one sample over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same sample where both
   take it and the same refusal where both refuse;
-- on a small program, each unit's inclusion frequency over draws on fresh streams from the operating system against
-  `k_s / n_s`; given no stream, Lean draws only a law of every unit and refuses any other (the verifier has no coins of
+- on a small program, each unit's inclusion frequency over samples on fresh streams from the operating system against
+  `k_s / n_s`; given no stream, Lean samples only a sampling design of every unit and refuses any other (the verifier has no coins of
   its own);
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
-Needs core's stratified draw on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
+Needs core's stratified sample on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff
 everything agrees.
 """
 from __future__ import annotations
@@ -96,7 +96,7 @@ def _lines(p: subprocess.CompletedProcess, tag: str) -> list:
 
 
 def _mutations(good: dict, rng: random.Random) -> list[tuple[str, dict]]:
-    """Mutations of an accepted stratified sample, each a change U2 or the law check should see (or not)."""
+    """Mutations of an accepted stratified sample, each a change U2 or the sampling design check should see (or not)."""
     def m(f):
         d = json.loads(json.dumps(good))
         f(d)
@@ -145,7 +145,7 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=20260927)
     a = ap.parse_args()
     from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P
+    from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P
 
     rng = random.Random(a.seed)
     out = a.out or Path(tempfile.mkdtemp(prefix="stratified-agree-"))
@@ -171,7 +171,7 @@ def main() -> int:
         n = P.units(prog, q)
         flags = ["--program", str(desc), "--partition", str(part)]
         for k in ks:
-            law = D.derive(prog, q, D.parse_law(f"stratified:{k}"))
+            law = D.derive(prog, q, D.parse_design(f"stratified:{k}"))
             need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in law["strata"])
             src = os.urandom(need)
             (out / "stream.bin").write_bytes(src)
@@ -242,10 +242,10 @@ def main() -> int:
                 core_refuses = True
             if p.returncode == 0 or not core_refuses:
                 bad.append((label, k, "k out of range not refused"))
-    # the frequency check: each unit's inclusion over draws on fresh streams against k_s / n_s
+    # the frequency check: each unit's inclusion over samples on fresh streams against k_s / n_s
     prog = P.mixed_population_program([(T[0], 3), (T[1], 5), (T[0], 2)])
     q = P.template_instances_query([P.template_id(T[0]), P.template_id(T[1])])
-    law = D.derive(prog, q, D.parse_law("stratified:4"))
+    law = D.derive(prog, q, D.parse_design("stratified:4"))
     (out / "freq.desc").write_bytes(canonical_json(encode_program(prog)))
     (out / "freq.partition.json").write_text(json.dumps(P.partition(prog, q)))
     need = sum(2 * s["k"] * width(sum(h - l for l, h in s["units"])) + 64 for s in law["strata"])

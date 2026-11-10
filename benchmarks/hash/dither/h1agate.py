@@ -29,26 +29,31 @@ import os
 import statistics
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+
+from verity_config.settings import of  # noqa: E402
 
 import h1c as H1CM  # noqa: E402
 from h1c import H1C, unwords  # noqa: E402
 from h1cgate import POISON, Step, cpu_calls, linears  # noqa: E402
-from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 T, MX = 64, 72
 
 
 class Calls:
-    """The 128 calls' operands and the A tables' window and step buffers."""
+    """The 128 calls' operands and the A tables' execution-phase and step buffers."""
 
-    def __init__(self, lib: H1C, st: Step, dev, mx: int = MX):
+    def __init__(self, lib: H1C, st: Step, dev: torch.device, mx: int = MX) -> None:
         self.lib, self.st, self.L = lib, st, len(st.lin)
         self.tb = C.sizeof(H1CM._Tab)
         self.words = lib.lib.h1c_a_words(st.t)
@@ -80,7 +85,7 @@ class Calls:
         if rc:
             raise RuntimeError(f"h1c_a_step returned {rc}")
 
-    def run_calls(self, ws=None) -> None:
+    def run_calls(self, ws: Sequence[int] | None = None) -> None:
         st, cs = self.st, torch.cuda.current_stream().cuda_stream
         for w, (_, _, k) in enumerate(st.lin):
             if ws is not None and w not in ws:
@@ -232,7 +237,7 @@ def timing(c: Calls, reps: int) -> list[dict]:
     return rows
 
 
-def stamps(c: Calls, m: int, ws=(0, 2, 3), reps: int = 5) -> dict:
+def stamps(c: Calls, m: int, ws: Sequence[int] = (0, 2, 3), reps: int = 5) -> dict:
     """h1c_a_call2_k's or h1c_a_call3_k's phases (h1c_a_stamps) for calls ws alone at m live rows, in us from the first block's start: each
     block's segments, x, leaves and arrival, the last block's levels; the call's CUDA-event time beside them."""
     blocks = c.st.t // 4
@@ -278,7 +283,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", default=None, help="unused (sbench.sh's SBENCH_SCRIPT passes it)")
     ap.add_argument("--reps", type=int, default=9)
-    ap.add_argument("--t", default=str(T), help="the window's slots (each A table's rows), one or more: 64,256")
+    ap.add_argument("--t", default=str(T), help="the execution phase's slots (each A table's rows), one or more: 64,256")
     ap.add_argument("--forms", default="0", help="h1c_a_form values, each gated, then each timed, in this process")
     a = ap.parse_args()
     out = Path(a.out)

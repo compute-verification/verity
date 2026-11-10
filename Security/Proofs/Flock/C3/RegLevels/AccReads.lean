@@ -23,12 +23,12 @@ checked its statement (`checkAcc_of_checkStmt`):
   (`accReads_recOpen`: the table's level `l`'s unit `u` reads row `u / q · n + opensBelow l + u % q`;
   `accReads_recOpenStacked`: R's level `l`'s unit `u` reads row `2 · n + opensBelow' l + u`; `getElem?_accRow`);
 * `accPort_of_checks`, `accPort_of_checkStmt`: so `own`'s entry of each name has `acc0`'s registration and those reads;
-* `accRead_drawn`: at a drawn unit, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
+* `accRead_drawn`: at a sampled proof block, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
   of its name, so the reads file names the column's port and the read's port has `acc0`'s registration; its position
-  is `accReads`' row at the drawn statement's label of the unit (`idx`, which `OwnReadsHJ` reads), not at the unit;
-* `readsOwn_of_hown`: V*'s sessions draw every unit (`VLaw.live`, `execOS_subset_full_mem`), so at an accepted outcome
+  is `accReads`' row at the sampled statement's label of the unit (`idx`, which `OwnReadsHJ` reads), not at the unit;
+* `readsOwn_of_hown`: V*'s sessions sample every unit (`VLaw.live`, `execOS_subset_full_mem`), so at an accepted outcome
   the session's game reaches (`Reached`) `OwnReadsHJ` holds at every registered read: its port is `own`'s entry of its
-  name, read at the drawn statement's label of the unit (`AtLabel`; `HmRow.drawn` labels unit `u` with the registered
+  name, read at the sampled statement's label of the unit (`AtLabel`; `HmRow.drawn` labels unit `u` with the registered
   population's `units.indices` at `u`, which no check here holds to `u`);
 * `accRead_of_checked`: so at such an outcome of a session whose statements the verifier checked (`ChecksAccepted`), the
   read is also at `accReads`' row of the unit's label;
@@ -254,7 +254,7 @@ theorem accPort_of_checkStmt {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tab
   obtain rfl : s' = s := Option.some.inj (hs'.symm.trans (hj ss hss))
   exact accPort_of_checks hacc hrd hl hw hnm hpa hpn
 
-/-! ## At a drawn unit -/
+/-! ## At a sampled proof block -/
 
 section Drawn
 
@@ -263,14 +263,14 @@ open FlockSoundness.Discharge.ZkReg (LiveAcceptsZKR)
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- An outcome the session's game reaches: the registration sent, the law's draw at some coins, and the transcript the
+/-- An outcome the session's game reaches: the registration sent, the sampling design's sample at some coins, and the transcript the
 session writes there (`ZkOuter.game`'s outcomes, `prob_auditLive_liveOfZJ_mono`'s). -/
 def Reached (o : Reg' × Finset (Fin nv) × Exec.Transcript) : Prop :=
   ∃ ω R' x, o = (R', Lv.draw ω, zo.wr (Lv.draw ω) R' x)
 
-/-- **A drawn unit's registered read of a level's `acc` (`acc_out`) column, from `OwnReadsHJ`** (`zo.hown`) and the
+/-- **A sampled proof block's registered read of a level's `acc` (`acc_out`) column, from `OwnReadsHJ`** (`zo.hown`) and the
 verifier's checks of the session's statement `s` (`accPort_of_checks`): the reads file names the column's port, and the
-read's port has `acc0`'s registration; its position is `accReads`' row at some index (the drawn statement's label of
+read's port has `acc0`'s registration; its position is `accReads`' row at some index (the sampled statement's label of
 the unit, `OwnReadsHJ`'s). -/
 theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
@@ -311,8 +311,8 @@ variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintyp
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
-/-- **`reads` reads `pos` at the drawn statement's label of unit `u`** (`OwnReadsHJ`'s position): at the draw the
-transcript `tr` records, `u`'s table's drawn statement labels `u` with `idx.getD (D.proved.idxOf u.val) 0`
+/-- **`reads` reads `pos` at the sampled statement's label of unit `u`** (`OwnReadsHJ`'s position): at the sample the
+transcript `tr` records, `u`'s table's sampled statement labels `u` with `idx.getD (D.proved.idxOf u.val) 0`
 (`Registered.unitIndices`), which `loadPublic` holds only to ascending; the verifier's label check holds it to `u`
 (`accRead_at_unit`). -/
 def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coin)) (R₂ : Reg₂)
@@ -324,9 +324,9 @@ def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.
       .ok dp ∧ Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos)
 
-/-- **`OwnReadsHJ`'s conclusion at every unit, from `hown`**: V*'s sessions draw every unit (`VLaw.live`, the full draw,
+/-- **`OwnReadsHJ`'s conclusion at every unit, from `hown`**: V*'s sessions sample every unit (`VLaw.live`, the full sample,
 `execOS_subset_full_mem`), so at an accepted outcome a session's game reaches (`Reached`) every registered read is a
-drawn unit's: its port is `own`'s entry of its name, read at the unit's label (`AtLabel`). -/
+sampled proof block's: its port is `own`'s entry of its name, read at the unit's label (`AtLabel`). -/
 theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {R : Reg} {ω : L.Ω} {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o}
     (h : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) (j : Fin (vstarCount F.ish))
@@ -378,7 +378,7 @@ theorem accRead_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {ro
 
 /-- **`OpenKeysS`' reads-file conjuncts at the unit's own row**: where moreover the verifier's checks at candidate 3
 pass at the outcome's own transcript (`ChecksC3`, which the event's `ChecksVR` states there), its label check
-(`RecVStar.checkLabels`) labels the drawn unit `u` with itself (`PubRows.label_of_checked`), so the read
+(`RecVStar.checkLabels`) labels the sampled proof block `u` with itself (`PubRows.label_of_checked`), so the read
 `accRead_of_checked` puts at `u`'s label is at `accReads`' row (the next one) of `u`. -/
 theorem accRead_at_unit {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json}

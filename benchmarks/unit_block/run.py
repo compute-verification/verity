@@ -1,6 +1,6 @@
-"""A word primitive's Boolean version as one C-Flock proof block, built (`verity_flock.class_statement.UnitStager`): the select
+"""A word primitive's Boolean version as one Flock proof block, built (`verity_flock.class_statement.UnitStager`): the select
 alone, the unit's slot of 2^`unit_log` witness bits, and the whole block with its rows' hm96 openings, `circuit.compose`'s ranges
-in 2^`k_log` bits, each against C-Flock's proved range of 2^`circuit.K_MAX` (27).
+in 2^`k_log` bits, each against Flock's proved range of 2^`circuit.K_MAX` (27).
 
     uv run benchmarks/unit_block/run.py WORD [--first V,V,...] [--stage N] --scratch DIR --out DIR
 

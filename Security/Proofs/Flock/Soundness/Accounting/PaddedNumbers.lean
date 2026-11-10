@@ -9,13 +9,13 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Accounting.Fast100
 
 /-!
-# The numbers with C-Flock ZK's padded level 0
+# The numbers with Flock ZK's padded level 0
 
 `padTableError` bounded rationally (`padTableError_le_up`), as `tableError` is in `Fast100`:
 `√ρ'` by a rational upper bound `s̄` with `ρ' ≤ s̄²` (`padQueryError_le`), and the padded code's
 MCA numerator by a crude closed form (`padMcaA_le`; its terms sit below 2^-200).
 
-At C-Flock ZK's values (`verity/ml/flock/live/PROTOCOL.md` §7 item 6, the verifier's `Zk.queries0`: level-0
+At Flock ZK's values (`verity/ml/flock/live/PROTOCOL.md` §7 item 6, the verifier's `Zk.queries0`: level-0
 query counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31` and 218 at `m = 32..35`, padding
 `t = 2q₀`, a pair of extra lanes per rep), every table is sound to `2^-205` at `η = 1/200` for every statement
 shape in range, at every `m` the verifier serves (`padTableError_le_m1`). The rational checks run in Lean's
@@ -184,7 +184,7 @@ def padRepUp (s : Schedule) (t e : ℕ) (sbar : ℚ) : ℚ :=
       (piopNumMax s.m (l₀.padListBound t) : ℚ) / 2 ^ 128 + padMidUp l₀ l₁ t e sbar + ligUp (l₁ :: rest)
   | _ => 1
 
-/-- The link term with the padded list, rationally, over the covered statements. -/
+/-- The binding error with the padded list, rationally, over the covered statements. -/
 def padLinkUp (s : Schedule) (t : ℕ) : ℚ :=
   (s.levels.headD default).padListBound t * 1024 * (64 / 2 ^ 128) ^ 2
 
@@ -224,9 +224,9 @@ theorem padTableError_le_up (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
   have h2 := padRepError_le m k0 l₀ l₁ rest ext t e sbar hp hs st hst
   nlinarith
 
-/-! ## C-Flock ZK's values -/
+/-! ## Flock ZK's values -/
 
-/-- C-Flock ZK's level-0 query count at `m` (live `PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
+/-- Flock ZK's level-0 query count at `m` (live `PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
 `fast100`'s 218. -/
 def m1Queries₀ : ℕ → ℕ
   | 25 => 277
@@ -235,10 +235,10 @@ def m1Queries₀ : ℕ → ℕ
   | 28 | 29 | 30 | 31 => 219
   | _ => 218
 
-/-- C-Flock ZK's schedule at `m`: `fast100` with level 0's query count for the padded rate. -/
+/-- Flock ZK's schedule at `m`: `fast100` with level 0's query count for the padded rate. -/
 def m1Schedule (m : ℕ) : Schedule := ((fast100 m).getD default).withQueries₀ (m1Queries₀ m)
 
-/-- C-Flock ZK's padding at `m`: `t = 2q₀`, every distinct level-0 position the session opens. -/
+/-- Flock ZK's padding at `m`: `t = 2q₀`, every distinct level-0 position the session opens. -/
 def m1Pad (m : ℕ) : ℕ := 2 * m1Queries₀ m
 
 /-- The rational upper bounds on `√ρ'` at `25 ≤ m ≤ 35` (eight digits, rounded up). -/
@@ -297,7 +297,7 @@ theorem padRate_le_sq (l : Level) (t : ℕ) (sbar : ℚ)
   push_cast
   linarith
 
-/-- C-Flock ZK's schedule at `m` has two levels or more, and its padded level 0 and its levels meet the
+/-- Flock ZK's schedule at `m` has two levels or more, and its padded level 0 and its levels meet the
 conditions of the rational bounds and of the soundness theorem: one check, run in the kernel. -/
 def m1Facts (m : ℕ) : Bool :=
   let s := m1Schedule m
@@ -326,12 +326,12 @@ theorem m1Facts_spec {m : ℕ} (h : m1Facts m = true) :
 theorem m1Schedule_m : ∀ m, 25 ≤ m → m ≤ 35 → (m1Schedule m).m = m := fun m h1 h2 =>
   (m1Facts_spec (m1Facts_all m h1 h2)).2.1
 
-/-- C-Flock ZK's padded level 0 meets the rational bounds' conditions. -/
+/-- Flock ZK's padded level 0 meets the rational bounds' conditions. -/
 theorem m1_padNumOK : ∀ m, 25 ≤ m → m ≤ 35 →
     PadNumOK ((m1Schedule m).levels.headD default) (m1Pad m) (m1SqrtUp m) := fun m h1 h2 =>
   (m1Facts_spec (m1Facts_all m h1 h2)).2.2.1
 
-/-- C-Flock ZK's padded level 0 meets the soundness theorem's conditions. -/
+/-- Flock ZK's padded level 0 meets the soundness theorem's conditions. -/
 theorem m1_padOK : ∀ m, 25 ≤ m → m ≤ 35 →
     PadOK ((m1Schedule m).levels.headD default) (m1Pad m) := fun m h1 h2 =>
   (m1Facts_spec (m1Facts_all m h1 h2)).2.2.2.1
@@ -404,7 +404,7 @@ theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt,
   have h := m1Facts_spec (m1Facts_all m h1 h2)
   exact padRepError_nonneg_of (m1Schedule m) st (m1Pad m) 2 (m1SqrtUp m) h.1 h.2.2.1 h.2.2.2.2
 
-/-- **The soundness number with C-Flock ZK's padded level 0**, `25 ≤ m ≤ 35`: at most `2^-205` per
+/-- **The soundness number with Flock ZK's padded level 0**, `25 ≤ m ≤ 35`: at most `2^-205` per
 table, for every statement shape in range. -/
 theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt, st.InRange →
     padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by

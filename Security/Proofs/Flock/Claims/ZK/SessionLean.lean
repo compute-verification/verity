@@ -62,7 +62,7 @@ transport's trusts on them are theorems:
 
 **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` at that release, with the transport's other trusts
 (`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side as before. What it still reads of the loop is that it
-runs at `x`'s setup: the loop sets up from the auditor's draw (`Hello.Setup.setup`), which is `x`'s where `x` reads
+runs at `x`'s setup: the loop sets up from the auditor's sample (`Hello.Setup.setup`), which is `x`'s where `x` reads
 (`FlockDeploy.Ins.setup`).
 -/
 
@@ -690,7 +690,7 @@ theorem Flock.zk_server_lean_loop
       (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) Ok)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
-    (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hEf : LeanRelease.FillRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :

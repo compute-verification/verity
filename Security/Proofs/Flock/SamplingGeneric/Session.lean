@@ -11,11 +11,12 @@ public import Proofs.Flock.SamplingGeneric.Split
 /-!
 # The sampled compiler: a sampled proof block's session
 
-At an accepted run, a sampled proof block's extraction (`Compiled.unitExt`) is `A`'s extractor at the block's session,
-each of its reruns the compiled verifier's run with the session's rounds replaced (`place`), seen as the session's view
+At an accepted run, a session's extraction (`Compiled.sessWit`, at the session's first sampled block) is `A`'s extractor
+at the block's session, each of its reruns the compiled verifier's run with the session's rounds replaced (`place`),
+seen as the session's view
 (`serve`, `viewing`). Here its success (`Compiled.Found`) is bounded from `A`'s knowledge soundness (`Arg.KS`), its
 rounds (`Arg.wf`) and the contract's `runs` and `fixed` (`RunsFixed`, which `Compiled.Sessions` and
-`CompiledTwo.Sessions` both give): `Claims.Sampling`'s `SessionKS_of` with Flock's `E^rep` replaced by `A`'s extractor.
+`CompiledTwo.Sessions` both give).
 
 * `served_eval`, `found_of`: under `runs`, the served extraction is `A`'s extractor against the session's prover `P'`
   at the session's coins, since the session's coins of the placed coins are the placed ones (`coinsOf_place`, `A`
@@ -113,8 +114,8 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- The contract's `fixed` and `runs`, which are all the sessions' bound reads of it, so a contract with another draw
-law (`CompiledTwo.Sessions`) gives the bound too. -/
+/-- The contract's `fixed` and `runs`, which are all the sessions' bound reads of it, so a contract with another sampling
+design (`CompiledTwo.Sessions`) gives the bound too. -/
 structure RunsFixed (H : Msg → Msg) (L : Compiled Coin A) : Prop where
   fixed : ∀ x r u, u ∈ L.checked x r →
     L.rounds x u ⊆ L.stage2 x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r

@@ -82,7 +82,7 @@ def deployed(n: int, L: int, count: int | None = None, seed: int = 0) -> list[tu
     """Keys that meet `DuoQuadKeysOk` at every position, the deployed schedules' shape at a small width: a rotation
     2 <= r <= n - 3 at each position that matters (r = 1 leaves no odd multiplier that isn't -1 mod 2^r), and odd
     multipliers (a0, a1) alternating, each not -1 modulo two to the previous position's rotation. Every assignment, or
-    `count` of them drawn with `seed`."""
+    `count` of them sampled with `seed`."""
     m = L - 1
     jobs = []
     for rots in itertools.product(range(2, n - 2), repeat=m):

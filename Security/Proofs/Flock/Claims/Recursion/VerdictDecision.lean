@@ -62,7 +62,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
   (D : DecAt rd x ms cs)
 
 /-- **The session's points are the reader's**, at every decision: the record the verdict decodes substitutes the
-points the reader draws at the first coin. -/
+points the reader samples at the first coin. -/
 theorem points : D.sess.points = pointsOf D.spec D.d.c₁ :=
   (FlockDeploy.decodeJWith_sub _ D.decode).1
 

@@ -41,7 +41,7 @@ KEEP = [r"^Kernel Name$", r"^ID$", r"^NVTX", r"^Grid Size$", r"^Block Size$", r"
         r"^sm__cycles_active\.avg$", r"^gpc__cycles_elapsed\.max$"]
 
 
-def _num(v: str):
+def _num(v: str) -> int | float | str:
     t = v.replace(",", "").strip()
     try:
         return int(t)
@@ -70,7 +70,7 @@ def summary(raw: Path) -> list[dict]:
     return out
 
 
-def run(a) -> int:
+def run(a: argparse.Namespace) -> int:
     import numpy as np
     import torch
 

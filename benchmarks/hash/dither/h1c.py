@@ -1,6 +1,6 @@
-"""`h1c.cu` from torch: the served window's tables, `served_h1/commit.py`'s format bit for bit, built on the device.
+"""`h1c.cu` from torch: the served execution phase's tables, `served_h1/commit.py`'s format bit for bit, built on the device.
 
-    lib = H1C("libh1c.so", key)                  # the window's 64-byte key (the salts'); hm96's byte tables go up once
+    lib = H1C("libh1c.so", key)                  # the execution phase's 64-byte key (the salts'); hm96's byte tables go up once
     st = lib.set([Tab(...), ...])                # one launch set: its device table and buffers, allocated once
     lib.build(st, step)                          # domains, segments, leaves, levels on the current stream; step (1,) int32
     st.root(i)                                   # table i's root: 8 int64 big-endian words, a device view
@@ -20,19 +20,24 @@ import ctypes as C
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "pouw" / "served_h1"))
 
 import commit as CM  # noqa: E402
+from verity_config.settings import of  # noqa: E402
+
 from verity.ml.commitments import identity as ID  # noqa: E402
 from verity.ml.commitments import rowleaf as RL  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import merkle_depth  # noqa: E402
-from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 U64_8, U64_16 = C.c_uint64 * 8, C.c_uint64 * 16
@@ -63,12 +68,12 @@ def words(b: bytes) -> np.ndarray:
     return np.frombuffer(b, dtype=">u8").astype("<u8").view("<i8").copy()
 
 
-def unwords(w) -> bytes:
+def unwords(w: torch.Tensor | ArrayLike) -> bytes:
     a = w.cpu().numpy() if isinstance(w, torch.Tensor) else np.asarray(w)
     return a.view("<u8").astype(">u8").tobytes()
 
 
-def _bytes_into(arr, b: bytes) -> None:
+def _bytes_into(arr: C.Array[C.c_uint8], b: bytes) -> None:
     if len(b) > len(arr):
         raise ValueError(f"{len(b)} bytes into {len(arr)}")
     for i, x in enumerate(b):
@@ -88,7 +93,7 @@ class Dom:
             f[k] = a * s + b
         return CM.domain(f, self.count, self.kind)
 
-    def template(self):
+    def template(self) -> tuple[bytes, list[bytes], list[tuple[int, int]], bytes]:
         f, sent = dict(self.fields), {}
         for i, (k, ab) in enumerate(self.splice.items()):
             v = 987654321012345 + 1111 * i
@@ -127,7 +132,7 @@ class Tab:
     rbw: int = 0
 
 
-def dead_x(rows: list[bytes], dev) -> torch.Tensor:
+def dead_x(rows: list[bytes], dev: torch.device) -> torch.Tensor:
     """`Tab.xd` for dead rows holding `rows` (row r the bytes of every dead block's row r): each one's x,
     `rowleaf.sha512_row_seg_digest`, as 8 big-endian words a row."""
     xs: dict[bytes, bytes] = {}
@@ -138,7 +143,7 @@ def dead_x(rows: list[bytes], dev) -> torch.Tensor:
 class Set:
     lvf: int | None = None      # its own level schedule (`H1C.set`); None the build's H1C_LVF
 
-    def __init__(self, tabs: list[Tab], dev):
+    def __init__(self, tabs: list[Tab], dev: torch.device) -> None:
         self.tabs, self.n = tabs, len(tabs)
         blobs, offs = [], {}
 
@@ -224,7 +229,7 @@ class Union:
     build of the union writes what the sets' own builds write.  No table's root may go into a union table's levels
     (h1c_build hashes a set's leaves before any root is written)."""
 
-    def __init__(self, sets: list[Set], dev):
+    def __init__(self, sets: list[Set], dev: torch.device) -> None:
         self.sets, self.tabs = sets, [t for st in sets for t in st.tabs]
         self.n = sum(st.n for st in sets)
         levels = [(st.level.data_ptr(), st.level.data_ptr() + 8 * st.level.numel()) for st in sets]
@@ -244,7 +249,7 @@ class Tail:
     `levels` writes rnd's roots into pinned host memory too, then its launch's number: `root(i)` spins on that number,
     so the host reads the root once the launch has written it, with no copy and no wait on the stream."""
 
-    def __init__(self, c: H1C, mid: Set, rnd: Set, host_root: bool = False):
+    def __init__(self, c: H1C, mid: Set, rnd: Set, host_root: bool = False) -> None:
         lib = c.lib
         if not hasattr(lib, "h1c_tail") or not lib.h1c_tail_words():
             raise RuntimeError("this h1c library has no h1c_tail (an H1C_HB=1 H1C_NMID=1 build has)")
@@ -284,7 +289,7 @@ class Tail:
 
 
 class H1C:
-    def __init__(self, path: str, key: bytes, dev=None):
+    def __init__(self, path: str, key: bytes, dev: torch.device | None = None) -> None:
         dev = dev or torch.device("cuda")
         self.lib = C.CDLL(path)
         self.lib.h1c_build.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p]

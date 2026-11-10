@@ -21,8 +21,8 @@ public import Proofs.Flock.Claims.Aggregate
 * `E_O` fails only where some session's extraction fails on the accepted run (`Compiled.eo_bad_session`: `collect`
   gives none at a session that gives none, and witnesses outside `R_O` come from a session whose witness is outside
   `A`'s relation), so its failure is at most the sum over sessions (`Compiled.PrBad_le_sum`).
-* A session's extraction, on the forks of a draw at the session's first round, is `A`'s extractor against the session
-  prover after the draw's earlier messages (`Compiled.sessionProg_eval`, from `Runs`), at the statement the draw's
+* A session's extraction, on the forks of a sample at the session's first round, is `A`'s extractor against the session
+  prover after the sample's earlier messages (`Compiled.sessionProg_eval`, from `Runs`), at the statement the sample's
   staging rounds fix, whose shape is the session's (`Shapes`); so it fails at most as `A`'s does there, within the
   session's bounds (`Bounded`; `Compiled.prefix_bad_le`, the fork's coins and `E_O`'s coins read uniformly).
 * Averaged over prefixes, Jensen moves the average under the root; the session's round guesses are among the compiled
@@ -60,7 +60,7 @@ namespace Compiled
 
 variable {Coin : Type} [Inhabited Coin] {A : Arg Coin}
 
-/-! ## One session at a draw -/
+/-! ## One session at a sample -/
 
 /-- Session `s`'s staged statement in the run at coins `r`. -/
 def stmtAt (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ)
@@ -213,7 +213,7 @@ theorem eo_bad_session (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : 
   obtain ⟨hacc, hbad⟩ := h
   have he : (L.EO.eval H P x ω r₀ c).1 = ((collect ((List.finRange (L.nS x)).map fun s =>
       L.sessionProg x r₀ s (L.stmtAt H P x ω s r₀) (c s))).eval H (run H P L.V x ω)).1 := by
-    simp only [Extractor.eval, EO, RP.eval, Trace.seen, hacc, ↓reduceIte]
+    simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hacc, ↓reduceIte]
     rfl
   rcases ho : (L.EO.eval H P x ω r₀ c).1 with _ | ws
   · rw [he] at ho
@@ -363,8 +363,8 @@ theorem sPrB_mul_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) 
   · rw [zero_mul]
     exact Finset.sum_nonneg fun j _ => Pr_nonneg _
 
-/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A draw's prefix is a fork of
-a draw (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
+/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A sample's prefix is a fork of
+a sample (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
 round guesses (`Fits`). -/
 theorem Ex_sPrB_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) :

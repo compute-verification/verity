@@ -22,8 +22,8 @@ import Proofs.Flock.Soundness.Refine.Plays
 # The inner proof's runs
 
 `zk_inner_plays`: `Zk.verifyInner` on seven rows refines the model's compiled inner proof. After `final_c'` (absorbed,
-no coin), the executable draws `ε`, absorbs `[ρ, σ]`, draws the ten batching coins (seven rows and the triple's
-three), absorbs `τ`'s commitment, draws `β`, absorbs `Y` and draws the `Q` query words; the model draws and receives the
+no coin), the executable samples `ε`, absorbs `[ρ, σ]`, flips the ten batching coins (seven rows and the triple's
+three), absorbs `τ`'s commitment, samples `β`, absorbs `Y` and samples the `Q` query words; the model samples and receives the
 same, in order. What follows the last coin is checks only (`forIn_keeps`). `zk_inner_coins` is the four rounds read,
 and `innerGameC_plays` the model's run on them, which records each query's position from the fourth round's coin.
 -/

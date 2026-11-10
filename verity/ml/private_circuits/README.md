@@ -10,7 +10,7 @@ how a private circuit is hidden: circuit hiding is recursion (Flock's `--hide`).
   other index reads 0. So every bit string describes a private circuit, the Definition is total and no description has a
   cycle.
 - `interpret`: the private circuit run gate by gate, the reference the Definition agrees with; `pad` fits a smaller private
-  circuit to a class without changing its outputs; `arguments` gives a netlist and its data as the unit's four inputs.
+  circuit to a class without changing its outputs; `arguments` gives a private circuit and its data as the unit's four inputs.
 - `build` and `traced`: the unit over `forms`, and the Boolean Definition traced from it; `and_count` is its AND count in
   closed form, about 2 N_IN + G ANDs per gate of the private circuit.
 

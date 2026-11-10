@@ -41,15 +41,15 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
 /-!
-# The firewall's seven constraints as `SwRows`
+# The ZK server's seven constraints as `SwRows`
 
-`FinishSwTau.swSrcE_innerSrc_rows` asks that the firewall's constraints at `repCut_fw`'s `hinner` be the worker's
+`FinishSwTau.swSrcE_innerSrc_rows` asks that the ZK server's constraints at `repCut_fw`'s `hinner` be the worker's
 view's first seven rows (`SwRows`): seven constraints, each of the layout's length, with `rowsSwE`'s coefficients.
 `FinishTau.tauFw` gives the coefficients as whole forms (`ofZk`), `FinishTau.tauFw_at_coef` by coefficient with level
 0's lengths; the replay's lengths are its own.
 
 * `Composed.replay_asz`: `Zk.replay`'s three constraints and its `ab` and `c` values have the layout's length.
-* `Composed.fwCons_asz`: so, where level 0's two rows do too, the firewall's constraints (the replay's, the two
+* `Composed.fwCons_asz`: so, where level 0's two rows do too, the ZK server's constraints (the replay's, the two
   ring-switch rows and level 0's) are seven, each of the layout's length.
 * **`Masked.swRows_of`**: at those, constraints that are `rowsSwE`'s first seven as whole forms are `SwRows`.
 * **`Masked.swRows_coef`**: the same by coefficient, level 0's lengths `nE + 4`, the inner layout's.
@@ -83,7 +83,7 @@ theorem replay_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : B
   · rw [hcv]
     simp [ZerocheckMasked.fcL, Zk.Lin.masked]
 
-/-- **The firewall's constraints are seven, each of the layout's length**: the replay's three, the two ring-switch
+/-- **The ZK server's constraints are seven, each of the layout's length**: the replay's three, the two ring-switch
 rows on its `ab` and `c` values, and level 0's two, where those have the layout's length. -/
 theorem fwCons_asz {st : Setup} {lay : Zk.PadLayout} {p : Flock.Proof} {root : ByteArray} {t t' : Flock.Transcript}
     {rp : Zk.Replayed} (hm : 14 ≤ st.m) (h : Zk.replay st lay p root t = .ok (rp, t')) (ss : Array (Array F128))
@@ -158,7 +158,7 @@ open FlockSoundness.Refine (fOf)
 
 namespace Masked
 
-/-- **The firewall's constraints as `SwRows`**: where the replay returned (`hm`, `hrp`) and level 0's two rows have the
+/-- **The ZK server's constraints as `SwRows`**: where the replay returned (`hm`, `hrp`) and level 0's two rows have the
 layout's length, constraints whose first seven rows are `rowsSwE`'s as whole forms (`ofZk`, as `tauFw` gives them)
 are `SwRows`. -/
 theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
@@ -179,7 +179,7 @@ theorem swRows_of (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.
   obtain ⟨hsz, hasz⟩ := Composed.fwCons_asz hm hrp ss hl
   exact ⟨hsz, hasz, fun k i => congrArg (fun l => ZkSession.Lin.coef l i) (hrow k.val k.isLt)⟩
 
-/-- **The firewall's constraints as `SwRows` by coefficient**: `swRows_of` where the first seven rows are `rowsSwE`'s
+/-- **The ZK server's constraints as `SwRows` by coefficient**: `swRows_of` where the first seven rows are `rowsSwE`'s
 coefficient by coefficient (as `tauFw_at_coef` gives them), level 0's two of `nE + 4`, the inner layout's length. -/
 theorem swRows_coef (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)

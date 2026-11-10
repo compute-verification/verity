@@ -55,8 +55,8 @@ record `deployRec IVStar scope {b with rd := L.readers}`. What holds of them the
   statement of the shape with a part.
 * **What the route reads of it holds** (`StagedB`, `stagedB_deployRec`): `vstarAccepts_bound` reads `VstarShowsB` only
   at an accepted run's first `k_I + kS` pairs. `StagedB` is that, the bound layout's `VStar.Staged`, and at `deployRec`
-  it holds as `staged_deployRec` does, at the coin server's transcript read by a reader (`showsTr`, `cmtTr`) wherever
-  that reader reads it back before the last round at an accepted run (`ReadsBackB`, which the coin server's record
+  it holds as `staged_deployRec` does, at the challenger's live-coin part's transcript read by a reader (`showsTr`, `cmtTr`) wherever
+  that reader reads it back before the last round at an accepted run (`ReadsBackB`, which the challenger's live-coin part's record
   meets: it records no last round) and `HeldB` pins the layout's rounds. Route 2C reads `StagedB` for `VstarShowsB`,
   with `RunPairs` proved (`runPairs_deployRec`): `ksLin2_route_staged`, and `ksLin2_deployed_parts` with the staging
   discharged (`KSLin2Staged`).
@@ -398,7 +398,7 @@ theorem vstarAccepts_bound_staged {W Col T : Type} (H : Msg → Msg) (I : Claims
   · exact Or.inl hd
   · exact Or.inr (Claims.Recursion.VStar.coll_of_sub htrue (fun _ h => h) hd)
 
-/-- **`StagedB` at `deployRec`**: as `staged_deployRec`, at the coin server's transcript read by `untr` (`showsTr`,
+/-- **`StagedB` at `deployRec`**: as `staged_deployRec`, at the challenger's live-coin part's transcript read by `untr` (`showsTr`,
 `cmtTr`), wherever `untr` reads it back before the last round at an accepted run (`ReadsBackB`) at the compiled
 statements of the shape, at a layout whose rounds `HeldB` pins to the inner verifier's. -/
 theorem stagedB_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)

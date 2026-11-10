@@ -39,7 +39,7 @@ import Proofs.Flock.Claims.KS.PlainSlackFit
 # The plain chain from the concrete simulator's parts, at `VK keep`
 
 `PlainStep`'s abort and `PlainParts`' chain at every `keep`: the simulator `plainSimK keep P`, the runs of `VK keep` and
-the verdict at the draw `plainVerdictAtK keep`. At `keep := id` the statements read `VK id`, which is `V false`
+the verdict at the sample `plainVerdictAtK keep`. At `keep := id` the statements read `VK id`, which is `V false`
 (`VK_id`), but `plainVerdictAtK id` decodes through `decodeWithK id` and compares rounds up to their digests, so the
 originals stay beside these rather than becoming their wrappers.
 
@@ -61,7 +61,7 @@ open Lean (Json)
 
 /-! ## The abort -/
 
-/-- **The verdict at the draw refuses an outcome without proof files, at every `keep`** (`not_plainVerdictAt_nil`'s
+/-- **The verdict at the sample refuses an outcome without proof files, at every `keep`** (`not_plainVerdictAt_nil`'s
 proof at `wrPDK`). -/
 theorem not_plainVerdictAtK_nil (keep : Bool → Bool) (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mPts : ℕ}
     (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) :
@@ -91,7 +91,7 @@ theorem plainSimAbortAtK (keep : Bool → Bool) (x : Claims.Msg) : PlainSimAbort
 
 /-! ## The two parts -/
 
-/-- **A live outcome decoded at the verdict at the draw, with a property `Q` of table 0's output, at `keep`**
+/-- **A live outcome decoded at the verdict at the sample, with a property `Q` of table 0's output, at `keep`**
 (`plainDecQ` at `plainVerdictAtK keep`). -/
 def plainDecQK (keep : Bool → Bool) {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) (T : TabSpec mPts)
     (I : Exec.Inputs) (d : Json) {M : ℕ} (C : Fin M → List 𝔽) (rootB₀ : Array ByteArray)
@@ -194,7 +194,7 @@ def PlainSimForkLeK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=
 /-! ## The chain -/
 
 open Classical in
-/-- **The concrete simulator at the verdict at the draw, from its clash and its fork bound, at `keep`**
+/-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound, at `keep`**
 (`plainSimWrPAtD_of_parts`'s proof at `plainSimK keep`). -/
 theorem plainSimWrPAtD_of_partsK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}

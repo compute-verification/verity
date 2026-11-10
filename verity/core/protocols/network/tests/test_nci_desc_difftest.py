@@ -1,11 +1,12 @@
 """The difftest of the description-sized inference-only check (`NciCheck.Desc`) against the unrolled one: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 4,009 declarations divided into IUs of
+`verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py` writes 4,010 declarations divided into IUs of
 root nodes (six on a composite keyed with an input id, which is no input node, two on a gate reading a nested scan's
 carry, one past `NciCheck.Desc.walkBound`'s limit, four on a scan of no iterations, twelve on whole members of a batch
 returning leaves of two arguments they share, 335 whose references name leaves of other widths than their types give
-them, `E_REINTERPRET`, or are their well-typed neighbours, then two pinned: θ with an input bound per run, refused, and
-θ the registered one, accepted), each expanded gate by gate where it is well-formed, and `scripts/nci_reference.py`'s
+them, `E_REINTERPRET`, or are their well-typed neighbours, then three pinned: θ with an input bound per run, refused,
+θ the registered one, accepted, and a declaration with a constant gate, accepted), each expanded gate by gate where it
+is well-formed, and `scripts/nci_reference.py`'s
 `check_desc` on each.
 `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/DescDifftestMain.lean`
 fails unless `NciCheck.Desc.check` gives Python's result on every instance and `NciCheck.check`'s on every expansion. As
@@ -47,7 +48,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescD
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,009 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 4,010 instances, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -165,8 +166,9 @@ def test_the_mistyped_ones_are_reinterpretations():
 
 
 def test_the_pinned_instances_get_their_results():
-    """The data's last two lines, `difftest_vectors.pinned()`'s: θ holding an input node bound per run is refused
-    (`theta-not-registered`), and θ of the registered one alone gets its verdict, which the unrolled check gives too."""
+    """The data's last three lines, `difftest_vectors.pinned()`'s: θ holding an input node bound per run is refused
+    (`theta-not-registered`), and θ of the registered one alone gets its verdict, on the declaration worked by hand and
+    on the one with a constant gate, which the unrolled check gives too."""
     for p in vectors.vectors.pinned():
         assert reference.check_desc(p["instance"]) == p["expect"]
         assert reference.check(reference.expand(p["instance"])) == p["expect"]

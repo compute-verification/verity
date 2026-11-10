@@ -228,7 +228,7 @@ theorem Accounting.TS.Lanes.knownOf_okKnown (P : LanePub) (salts : String → By
       ("pub", #[(PouwWindow.Lanes.pubRow P.salt P.position P.roots l.val, salts "pub")])], rfl⟩
 
 open Accounting.TS.Checked Accounting.TS.Lanes in
-/-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
+/-- **A leaf's 33 linked Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
 `Accounting.TS.Group.group_soundAt` at `leafLayer` and its 33 statements, at the known content of the path's public
 inputs (`knownOf`, which names `o0`), the ports read in full at the layout (`PouwWindow.Lanes.readFull`), the leaf
 verifier's check of each file at `ownOf` (`roots`, `place`) and of the tile (`PouwWindow.Lanes.Tile.check`, its group

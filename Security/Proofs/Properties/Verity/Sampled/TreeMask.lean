@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.OpenEmpty
 at every key, where `Hm.bitL_mask` has it at the pinned key only: the executable's loop is a fold over the output's bits
 (`sha512_mask_eq`), each step setting its own bit and keeping the others (`MaskInv`, `maskInv_step`).
 
-* **A coin tree's mask** (`treeMy_eq_hankel`): `treeMy key y`, the mask of a draw's salt under the key `key` as bits, is
+* **A coin tree's mask** (`treeMy_eq_hankel`): `treeMy key y`, the mask of a sample's salt under the key `key` as bits, is
   `CROnly.hankel` of the key's bits applied to the salt's bits over `ZMod 2`.
 * **At a sampled key** (`treeMy_treeKey`): at the key `treeKey κ` of the device's 2047 bits `κ`, it is the Hankel
   product of `κ` itself, the mask whose hiding gap `CROnly.hm96_sha512_sum` averages over the key.

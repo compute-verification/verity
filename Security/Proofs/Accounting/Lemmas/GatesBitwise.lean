@@ -35,7 +35,7 @@ open Accounting.Gates
 (`8 ∣ n`), inside `EncodeChainHardness`'s floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), at every `ε < 1`,
 every `B` and every `E ≥ 1`, with `72·(k + 2)·n/8 < p` (room for that many distinct words below `p`), the conjecture
 `EncodeChainHardness F k B E ε` fails: a restricted circuit with no budgeted gate and no run input computes
-`72·(k + 2)·n/8 + 1` distinct words on every draw at no more than `72·(k + 2)·n/8` units. Every guarantee that takes
+`72·(k + 2)·n/8 + 1` distinct words on every sample at no more than `72·(k + 2)·n/8` units. Every guarantee that takes
 it as a hypothesis at such an `F` and `k` (p1024 at `k = 3` among them) holds vacuously. -/
 def EncodeChainRefuted : Prop :=
   ∀ (F : Field) (k B E εnum εden : ℕ), εden ≤ 2 ^ 64 * εnum → εnum < εden → 0 < k → 2 ^ 66 ≤ F.p →

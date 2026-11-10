@@ -21,7 +21,7 @@ collision (`sq_reveal_miss_le`), and by Jensen over the coins before the node th
   its cut, a message other than the most likely one there.
 * `DigestCut.forkG`, `DigestCut.forkS`: the play up to its cut, then two independent continuations, with the messages
   they reveal.
-* `CoinTape`: a uniform tape for a strategy's plays, which gives the play its law (`expect_tape`, `pr_tape`). A fork's
+* `CoinTape`: a uniform tape for a strategy's plays, which gives the play its sampling design (`expect_tape`, `pr_tape`). A fork's
   tape is the two-continuation finder, a `Claims.Finder` at a SHA-512 budget on every coin (`DigestCut.finder`).
 * `DigestCut.miss_le`, `DigestCut.missP_le`: the miss is at most the square root of the finder's success; at
   `cr/sha-512` (`Claims.StrictBirthday`) at the budget `q`, at most `√(q²/2^513)` (`DigestCut.missP_le_strict`).
@@ -300,7 +300,7 @@ end DigestCut
 /-! ## A uniform tape for a strategy's plays -/
 
 /-- **A uniform tape for the plays of `s` in `g`**: at each coin, the coin and a tape for each of its continuations. A
-uniform tape gives the play its law (`expect_tape`). -/
+uniform tape gives the play its sampling design (`expect_tape`). -/
 def CoinTape : (g : Game α) → Strategy g → Type
   | .ret _, _ => PUnit
   | .send _ k, s => CoinTape (k s.1) s.2
@@ -345,7 +345,7 @@ theorem sum_pi_eval {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀
   simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, Nat.cast_mul]
   rw [← Finset.mul_sum, mul_comm (Fintype.card (T c) : ℝ), mul_div_mul_left _ _ hR]
 
-/-- **A uniform tape gives the play its law**: the average over tapes of `f` at the output is `f`'s expectation. -/
+/-- **A uniform tape gives the play its sampling design**: the average over tapes of `f` at the output is `f`'s expectation. -/
 theorem expect_tape (f : α → ℝ) : ∀ (g : Game α) (s : Strategy g),
     (∑ x : CoinTape g s, f (CoinTape.run g s x)) / Fintype.card (CoinTape g s) = expect f g s
   | .ret a, _ => by
@@ -371,7 +371,7 @@ theorem pr_tape (p : α → Prop) (g : Game α) (s : Strategy g) :
     Claims.Pr (fun x : CoinTape g s => p (CoinTape.run g s x)) = expect (ind p) g s := by
   classical
   rw [← expect_tape]
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   congr 1
   rw [Finset.natCast_card_filter]
   exact Finset.sum_congr rfl fun x _ => by unfold ind; split_ifs <;> simp_all

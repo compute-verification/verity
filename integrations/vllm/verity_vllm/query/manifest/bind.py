@@ -42,6 +42,10 @@ each step's events in four passes; the k-th event of a name in the step is occur
 A row whose Values are rows r0.. of the runtime tensor (`runtime_rows`) binds like any other; the binding map starts each request's
 entry at row r0 of its share (`runtime_place`).
 
+A request-owned row (`format.RUN_FAMILY`: a value the served run decides for one request, `<op_path>/<member>`) binds only by its label,
+never a tuple slot; when several requests' rows spell it at one step (two rows at one position of one layer), occurrence k binds it for
+the k-th of them in the step's row order (`owners`), the order the collector commits its rows in.
+
 An event no pass binds is an extra: a source label keeps itself as its identity (no manifest row has it), a tuple slot binds member
 `""`, which no row has.  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
 every missing or doubly bound identity.  What stays by name, each with its reason: a source's declared label (the tap knows which
@@ -54,7 +58,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity_vllm.query.manifest.format import batch_launch_shortfall, promoted_observation
+from verity_vllm.query.manifest.format import RUN_FAMILY, batch_launch_shortfall, promoted_observation
 
 __all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "runtime_place", "source_ports", "split_name"]
 
@@ -140,6 +144,7 @@ class Binder:
         self.requests: dict[int, dict[tuple[str, str, int], dict[str, tuple]]] = defaultdict(dict)
         self.promoted: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
         self.narrowed: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
+        self.owned: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
         #: engine step -> (op_path, member, invocation) -> {request: the first row of the runtime tensor its Values are (`runtime_rows`)}
         self.offsets: dict[int, dict[tuple[str, str, int], dict[str, int]]] = defaultdict(dict)
         for row in rows:
@@ -155,6 +160,8 @@ class Binder:
                     self.promoted[st].add(key)
                 if r.get("narrowed_of"):
                     self.narrowed[st].add(key)
+                if r.get("family") == RUN_FAMILY:
+                    self.owned[st].add(key)
                 if r.get("runtime_rows"):
                     self.offsets[st].setdefault(key, {})[_request(r, declared or {})] = int(r["runtime_rows"][0])
         self._by_op: dict[int, dict[str, list[tuple[str, str, int]]]] = {}
@@ -212,11 +219,27 @@ class Binder:
             self._spelt.setdefault((step, key), {})
         return self._spelt[(step, key)]
 
+    def owners(self, step: int, bound: Sequence[tuple[str, str, int, str]], request_rows: Sequence[tuple[str, int, int]] | None) -> list[str | None]:
+        """The request each of `step`'s events (`bound`, `bind`'s) is the value of when its identity is request-owned (module docstring),
+        else None: occurrence k of the identity is the k-th of the requests whose rows spell it, in the step's request row order
+        (`request_rows`, the binding map's), then by name.  All None for a step without `request_rows` (one request)."""
+        step = int(step)
+        owned, spelt = self.owned.get(step, ()), self.requests.get(step, {})
+        at = {q: i for i, (q, _lo, _hi) in enumerate(request_rows or ())}
+        seen: Counter = Counter()
+        out: list[str | None] = []
+        for op, member, k, _how in bound:
+            key = (op, member, k)
+            ranked = sorted(spelt[key], key=lambda q: (at.get(q, len(at)), q)) if request_rows and key in owned and key in spelt else []
+            out.append(ranked[seen[key]] if seen[key] < len(ranked) else None)
+            seen[key] += 1
+        return out
+
     def bind(self, step: int, names: Sequence[str]) -> list[tuple[str, str, int, str]]:
         """The identity each event of `step` binds, as (op_path, member, invocation, how); how = `consumer-input` | `port` | `label` |
         `slot` | `unbound`."""
         step = int(step)
-        rows = self.rows.get(step, {})
+        rows, owned = self.rows.get(step, {}), self.owned.get(step, ())
         out: list[tuple[str, str, int, str] | None] = [None] * len(names)
         taken = set(self.promoted.get(step, ()))
         seen: Counter = Counter()
@@ -241,6 +264,8 @@ class Binder:
                     slots[(op, k)][slot] = i
             elif label in self.ports:
                 declared[(op, self.ports[label])].append((i, k, label))
+            elif (op, label, 0) in owned and k < len(self.requests[step][(op, label, 0)]):
+                out[i] = (op, label, 0, "label")
             elif (op, label, k) in rows and (op, label, k) not in taken:
                 out[i] = (op, label, k, "label")
                 taken.add((op, label, k))
@@ -257,7 +282,7 @@ class Binder:
                     taken.update([v[j] for v in each.values()] if each else [c])
         ops, narrowed = self._ops(step), self.narrowed.get(step, ())
         for (op, k), sl in slots.items():
-            left = [c for c in ops.get(op, []) if c[2] == k and c not in taken and c not in narrowed]
+            left = [c for c in ops.get(op, []) if c[2] == k and c not in taken and c not in narrowed and c not in owned]
             order = sorted(sl)
             pairs = list(zip(order, left)) if order == list(range(len(left))) else [(0, left[0])] if len(left) == 1 and 0 in sl else []
             for slot, c in pairs:

@@ -3,7 +3,7 @@ What a statement keeps without parsing its own output. The keyed coin tree a ses
 `SessionSpec.coinTree`) is the setup's coins' (`Coins.tree?`), which is what the setup's `Hello` names
 (`CoinTree.ofHello (helloOf …)`): the tree's spec for `.tree`, none for a seed's. The public header is
 kept as `Flock.norm` of what `JsonParse.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
-puts the draw in, and the same canonical bytes (`publicDigest` hashes those).
+puts the sample in, and the same canonical bytes (`publicDigest` hashes those).
 -/
 module
 

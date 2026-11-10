@@ -27,11 +27,11 @@ reading it could then write any word. What bounds `K` is that the accumulator en
   two grid points that differ only in lane `j`), more than `m + r` contributing lanes make a word dense, when every
   free value depends on at most `r` lanes, and more than `2m` contributing lanes of `t − t'` make two words apart.
   A finite checker verifies them from witness pairs.
-* **`LegacyGamma`**: with honest price `a` per checked word, `DistinctLive(ε)` and a fraction `μ` of coverable words,
+* **`LegacyGap`**: with honest price `a` per checked word, `DistinctLive(ε)` and a fraction `μ` of coverable words,
   `γ ≤ ε + μ·(a − c)/a`.
 
 **Scope.** `AccIn` with `LaneFns` covers cheap instructions whose multiplicands are lane words. A
-legacy `mma` reading computed registers is outside it, and `LegacyGamma` bounds `γ` only over `AccIn` programs.
+legacy `mma` reading computed registers is outside it, and `LegacyGap` bounds `γ` only over `AccIn` programs.
 `Pouw.Dimension.H100Frag` extends the lemma to computed multiplicands. It is cited only against adversaries whose cheap
 tensor-core multiplicands meet the named hypothesis `FragLanes` (`DenseWritesFragLanes`, `Pouw.Dimension.H100Cite`). At
 Round 8's loop-free prices, where the H100 SXM's legacy k8 costs 32.00 and `H32` holds, none of this is needed
@@ -128,7 +128,7 @@ def ApartCert : Prop :=
 under `FloorTc a c` with `c ≤ a ≤ 2c`, if the live distinct checked words split into dense words `T₁`, pairwise
 apart, and coverable words `T₂` (`DistinctLive(ε)`: `|T₁| + |T₂| ≥ (1 − ε)·n`, with `|T₂| ≤ μ·n`), every program
 matching them on `S` has `γ = 1 − cost/(a·n) ≤ ε + μ·(a − c)/a`. -/
-def LegacyGamma : Prop :=
+def LegacyGap : Prop :=
   ∀ (a c : ℕ) (pr : Prices100), FloorTc a c pr → c ≤ a → a ≤ 2 * c → 0 < a →
     ∀ (G : Type) (F D : Set (G → ℚ)), (∀ q : ℚ, (fun _ : G => q) ∈ F) → (0 : G → ℚ) ∈ D →
     ∀ (S : Set G) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (G → ℚ)) (P : List (Op100 G)) (ts : List (G → ℚ))

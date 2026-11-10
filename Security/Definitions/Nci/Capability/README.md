@@ -24,7 +24,7 @@ min-cut theorem (`Security/README.md`, Start here); the bounds here bound what a
 | Certificate | | `Nci.Capability.Consumers.Upstream` | every required gate reaches, inside the region, what the finishing gates read |
 | Overlap weights | ω | `Nci.Capability.Consumers.OverlapWeights` | per-consumer weights summing to at most 1 over the regions holding any gate |
 | Weighted total | Ω | | the counted work at its weights, such as the consumers' ω; with every weight 1, the plain count |
-| Per-block cap | q | | the most of the weighted total one block can do |
+| Block yield | q | | the most of the weighted total one block can do |
 | Coverage | Core, Ω_*, T_max, η | `Nci.Assumptions.CoversEfficientMethods` | cheap successful methods carry at least Ω_* covered work |
 
 ## The shape of every bound
@@ -119,7 +119,7 @@ candidate sufficient condition, not part of the repertoire.
 | Import or recompute | certificate, weights | finished ≤ k + recomputed | `Nci.Guarantees.ImportOrRecompute` | proved |
 | Recompute by gates | weights | recomputed ≤ c/g | `Nci.Guarantees.RecomputeByGates` | proved |
 | Recompute by state | budget | recomputed = 0 | `Nci.Guarantees.RecomputeByState` | proved |
-| Counting | a per-block cap | \|C\| ≥ c·Ω/q | `Verity.Guarantees.Counting` | proved |
+| Counting | a block yield | \|C\| ≥ c·Ω/q | `Verity.Guarantees.Counting` | proved |
 | Coverage floor | coverage | Pr[success below the floor] ≤ η | `Nci.Guarantees.CapabilityFloor` | proved |
 
 `HeldBudget` takes an evaluator of at most a_blk bits per held selection. With one evaluator for every selection, the
@@ -138,7 +138,7 @@ covered structure is two gates, and a one-gate guess lacks it and reaches the ta
 
 ## Standard assemblies
 
-| Information | Structure | Per-block cap |
+| Information | Structure | Block yield |
 |---|---|---|
 | update hardness, either measure | uses, recomputing priced out | served weight ≤ k |
 | none | uses, recomputing by gates | served weight ≤ k + c/g |

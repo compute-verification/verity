@@ -149,8 +149,8 @@ class WeightField:
 @dataclass(frozen=True)
 class WitnessParam:
     """Row i consumes the next leaves, as many as its parameter has, of request `keys[i]`'s `name` witness parameter
-    (`Profile.witnesses`), allocated in issue order: a value of the run no input states and the circuit checks rather than computes
-    (the Marlin align's key per pair, the GPU's sorted position).  No device view."""
+    (`Profile.witnesses`), allocated in issue order: a value of the run no input states and the circuit checks rather than computes.
+    No device view."""
 
     name: str
     keys: tuple[str, ...]
@@ -350,7 +350,7 @@ class Profile:
     registered_values: bool = False
     # the `weights` Record `weight_field` paths index, when the profile states it (else `analytic.weights_type` over `config`)
     weights_type: Any = None
-    # the witness parameters `WitnessParam` operands read, one per request and name (the Marlin align's `schedule`)
+    # the witness parameters `WitnessParam` operands read, one per request and name
     witnesses: tuple[str, ...] = ()
 
 

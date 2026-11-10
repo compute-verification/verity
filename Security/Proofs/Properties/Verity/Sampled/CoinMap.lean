@@ -76,7 +76,7 @@ theorem avg_sum_comm {C E : Type} [Fintype C] [Fintype E] (f : C → E → ℝ�
   exact Finset.sum_comm
 
 open Classical in
-/-- **A written coin's shortfall below uniform**: the total variation between the uniform coin's law and the law of
+/-- **A written coin's shortfall below uniform**: the total variation between the uniform coin's law and the sampling design of
 `w c d` at a uniform `c` and a uniform coin `d`. -/
 noncomputable def shortfall {P C : Type} [Fintype P] [Fintype C] (w : P → C → C) : ℝ≥0∞ :=
   ∑ e : C, ((Fintype.card C : ℝ≥0∞)⁻¹ - avg fun c : P => avg fun d : C => if w c d = e then 1 else 0)
@@ -814,7 +814,7 @@ theorem mem_classOf_iff {lg : β → List Release} (hE : RecordsLog lg E) (o o' 
   rw [classOf, Finset.mem_filter, opened_eq hE o o' d]
   exact and_iff_right (Finset.mem_univ d)
 
-/-- **The class is nonempty where the draw is released there**: a round some description of the node releases as
+/-- **The class is nonempty where the sample is released there**: a round some description of the node releases as
 `bits` is in the class of each. -/
 theorem classOf_nonempty {lg : β → List Release} (hE : RecordsLog lg E) (o o' : OpeningAt E g') {bits : List Bool}
     (d' : o'.Openable) (h : TreeDraw.opened d'.1 o'.n = bits) : (o.classOf bits).Nonempty :=
@@ -1101,11 +1101,11 @@ theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m →
 /-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
 `srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
 theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
-    _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
-      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) := by
+    _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) := by
   have h : coinBytes m 64 (srcCoins A hL ω) = srcEquiv hL (A.src ω) := (coinBytesEquiv m 64).symm_apply_apply _
-  have key : ∀ {L L' : ℕ} (h : L = L') (f : Fin L → Fin 256), _root_.Properties.SampledProofs.bytesOf f =
-      _root_.Properties.SampledProofs.bytesOf fun j : Fin L' => f (Fin.cast h.symm j) := by
+  have key : ∀ {L L' : ℕ} (h : L = L') (f : Fin L → Fin 256), _root_.Properties.Spot.bytesOf f =
+      _root_.Properties.Spot.bytesOf fun j : Fin L' => f (Fin.cast h.symm j) := by
     intro L L' h f
     subst h
     rfl

@@ -28,6 +28,12 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
   `credit.commit_of` reads it. `pouw_h1.calls_root` binds its digest (`credit.calls_root`), so the sampling coin follows it.
+* **A named record** (`pouw_h1.H1Run`'s ``commit_record``): in place of the tap's, the window names a record that
+  reuses its tables, one-stage's registration of the window's audited circuit. At the close the window's registration
+  W (`registration`), a v2 record of its own entries, goes into the prover's log, and the named record is chained right
+  after W and registers each of the window's tables under the Commit's name with W's entry of it (`reused`), so ROOTS1
+  holds it as it holds the tap's. The audited circuit's side (`reuse`): its tables are W's (`shape`: one K, the same
+  calls each round), each the rows its proof blocks make salted as H1 salted W's (`Reused`), refused unless W's root.
 * **The serving process's own check** (`roots1`, at the window's close): each step's A table of each K and each round's
   input-ids table is the Commit's value of the same rows (`credit._arow`'s rule), the tap refused nothing, and each
   prefill row's input id is its request's prompt token (`ids_reason`, until Served.lean's layer-0 tie holds it in core).
@@ -36,14 +42,17 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Iterator, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.pouw import weights as Wt
+from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
+from verity_vllm.protocols.pouw.h1 import names as NM, registered as NR
+from verity_vllm.protocols.pouw.h1.words import ids_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
 SCHEME, ROOT_BYTES = step_rows.NAME, 64
@@ -53,6 +62,10 @@ IDS_PORT = PORT_NAMES[0]
 #: the credit refusal of every call of a window whose tables aren't the Commit's values (``details.roots1``)
 UNTIED = ("credit: a-not-the-commits: a call's A table or a round's input-ids table is not the Commit's value of its "
           "rows, or a step's input ids are not its requests' prompt tokens (details.roots1)")
+#: ``commit_record(run)``: at the window's close, once its tables are fixed, the window's registration (`registration`,
+#: chained into the prover's log) and the record reusing its tables that the window names as its Commit record (`named`);
+#: it raises when it has none
+CommitRecord = Callable[[Any], tuple[Mapping[str, Any], Mapping[str, Any]]]
 
 
 def site(module: str) -> str:
@@ -245,6 +258,18 @@ def digest(commit: str) -> bytes:
     return got[0]
 
 
+def _tables(run: Any) -> Iterator[tuple[int, Any, str, list[int] | None]]:
+    """The window's tables credit holds to the Commit's values (`credit._arow`), each round's A table of each K and then
+    each round's input-ids table: its round, its registered tree (None when it has none), the Commit's name of it and,
+    for an A table, the round's calls of its K."""
+    served = run.served
+    layout = {"calls": served.calls, "linears": served.linears, "m": served.m}
+    for s, k, calls in CR.step_tables(layout, served.steps):
+        yield s, served.registered.get(served.a_table(calls[0])), CR.commit_rows(s, k), calls
+    for s in range(run.steps):
+        yield s, served.ids.get(s), CR.commit_ids(s), None
+
+
 def untied(run: Any) -> str | None:
     """Why the window's tables aren't the Commit's values (`credit._arow`'s rule, on the serving process's own trees): a
     tap that refused, a step's A table of K that isn't the Commit's `credit.commit_rows` of its round and K, or a round's
@@ -254,20 +279,161 @@ def untied(run: Any) -> str | None:
         return f"roots1: the Commit's tap refused: {'; '.join(tap.refused[:4])}"
     if served.refused or served.program is None:
         return "roots1: the window's served trees were refused, so no table is the Commit's"
-    layout = {"calls": served.calls, "linears": served.linears, "m": served.m}
-    for s, k, calls in CR.step_tables(layout, served.steps):
-        v, name = served.a_table(calls[0]), CR.commit_rows(s, k)
-        mine, got = served.registered.get(v), tap.values.get(name)
-        if mine is None or got is None or not _same(mine.entry(), got):
-            at = tap.where.get(name, {})
-            return (f"roots1: round {s}'s A table {v} of calls {calls} is not the Commit's {name} ({at.get('sites')} at "
-                    f"engine steps {at.get('steps')}): its rows are not the ones the Commit acquired")
-    for s in range(run.steps):
-        mine, got = served.ids.get(s), tap.values.get(CR.commit_ids(s))
-        if mine is None or got is None or not _same(mine.entry(), got):
-            return (f"roots1: round {s}'s input-ids table is not the Commit's {CR.commit_ids(s)}: its step's input ids "
+    for s, mine, name, calls in _tables(run):
+        got = tap.values.get(name)
+        if mine is not None and got is not None and _same(mine.entry(), got):
+            continue
+        if calls is None:
+            return (f"roots1: round {s}'s input-ids table is not the Commit's {name}: its step's input ids "
                     "are not the ones the Commit acquired" + (", round 0's its prompts' tokens" if s == 0 else ""))
+        at = tap.where.get(name, {})
+        return (f"roots1: round {s}'s A table {served.a_table(calls[0])} of calls {calls} is not the Commit's {name} "
+                f"({at.get('sites')} at engine steps {at.get('steps')}): its rows are not the ones the Commit acquired")
     return None
+
+
+def registration(run: Any, previous: str | None = None) -> dict[str, Any]:
+    """The window's registration W at its close: a ``verity/registration/v2`` record of its served trees' entries
+    (`pouw_h1_served.Served.entries`: its tables' and weights' roots, each domain binding the window Program and its
+    open root) under the window Program, with what the served trees refused, chained after ``previous``, the digest of
+    the prover's last record (`registration.digest`; None for its first). It is the one-stage log's record whose
+    tables a named Commit record reuses (`reused`)."""
+    served = run.served
+    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
+            "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused)},
+            "registered": served.entries(), "previous": previous}
+
+
+def reused(run: Any, window: Any, record: Any) -> str | None:
+    """Why ``record`` can't be the window's Commit record in place of its tap's, its tables reused from ``window``: the
+    window's served trees were refused, ``window`` isn't the window's own registration (`registration`), ``record``
+    isn't a record credit reads as a Commit record (`credit.commit_of`) chained right after ``window`` (its
+    ``previous`` the digest of ``window``), or it doesn't register each of the window's A tables and input-ids tables
+    once under the Commit's name (`credit.commit_rows`, `credit.commit_ids`) with the root, domain and leaf count of
+    ``window``'s entry of it, ROOTS1's rule (`credit._arow`). None when it can be."""
+    served = run.served
+    if served.refused or served.program is None:
+        return "the window's served trees were refused, so it has no tables a Commit record can reuse"
+    if not isinstance(window, Mapping) or dict(window) != registration(run, window.get("previous")):
+        return ("the window's registration is not its own: a verity/registration/v2 record of the window's served "
+                "trees' entries under its Program and open root (pouw_h1_commit.registration)")
+    if not isinstance(record, Mapping):
+        return "the named record is not a JSON object"
+    try:
+        got, why = CR.commit_of(canonical_json(dict(record)).hex())
+    except (TypeError, ValueError) as e:
+        return f"the named record has no canonical JSON: {e}"
+    if why is not None:
+        return f"the named record is not a Commit record credit reads: {why[1]}"
+    previous = REG.digest(window)
+    if record.get("previous") != previous:
+        return (f"the named record's previous is not the window registration's digest {previous[:16]}…: it is chained "
+                "right after the registration whose tables it reuses")
+    theirs: dict[Any, list[Mapping[str, Any]]] = {}
+    for e in got[1]:
+        theirs.setdefault(e.get("value"), []).append(e)
+    for s, mine, name, calls in _tables(run):
+        table = f"A table {served.a_table(calls[0])}" if calls is not None else "input-ids table"
+        if mine is None:
+            return f"the window registers no round {s}'s {table}, so no Commit record reuses it as {name}"
+        entries = theirs.get(name, [])
+        if len(entries) == 1 and _same(mine.entry(), entries[0]):
+            continue
+        how = "twice" if len(entries) > 1 else "not" if not entries else "at another root, domain or leaf count"
+        return (f"the named record registers {name} {how}: credit holds it to round {s}'s {table} as the window's "
+                "registration commits it, registered once with that entry's root, domain and leaf count (ROOTS1)")
+    return None
+
+
+@dataclass(frozen=True)
+class Reused(G.Registered):
+    """A table of the window's registration W as a registered value of the audited circuit (`reuse`): W's rows, salts and
+    tree of it, under W's entry's domain ``domain_id``, by the circuit's name of it, so its entry is W's entry but in name.
+    W's entry names its domain by id alone (round 0's input ids bind the window's session, which W doesn't hold), so it
+    has no `domain` to recompute."""
+
+    domain_id: bytes = b""
+
+    @property
+    def domain(self) -> Any:
+        raise ValueError(f"{self.value}: a table reused from the window's registration has W's domain id "
+                         f"{self.domain_id.hex()[:16]}… and no binding to recompute it from (`entry`)")
+
+    def entry(self) -> dict[str, Any]:
+        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
+                **G.width_entry(self.word_bits), "domain": self.domain_id.hex()}
+
+
+def shape(layout: Mapping[str, Any], steps: int) -> tuple[int, int, int]:
+    """The audited circuit's tables (`window_class.Tables`) of H1's window Program of ``layout`` (its meta's, `served.
+    write_program`) over its ``steps`` rounds: ``(K, M, calls)``, its one K, its M rows a call and its calls of K a round.
+    ValueError unless every round's A tables are one K's, the same calls a round, a row one leaf (`weights.chunks`)."""
+    got = CR.step_tables(dict(layout), steps)
+    if not got or len(got) != steps or len({(k, len(cs)) for _s, k, cs in got}) != 1:
+        raise ValueError(f"H1's window Program's A tables {[(s, k, len(cs)) for s, k, cs in got]} (round, K, calls) over its "
+                         f"{steps} rounds are not one K's with the same calls each round, the tables the audited circuit reads")
+    k, calls = got[0][1], len(got[0][2])
+    if Wt.chunks(k) != 1:
+        raise ValueError(f"K = {k}: an A row of {Wt.chunks(k)} leaves, and the audited circuit reads a quantizer's row as one")
+    return k, int(layout["m"]), calls
+
+
+def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key: bytes,
+          rows_of: Callable[[str, int, np.ndarray], np.ndarray]) -> dict[str, Reused]:
+    """The audited circuit's tables (`shape`) as its registered values, each W's table of it (``window``, the window's
+    registration, `registration`): round s's A table ``<prefix>a/<K>@<s>`` as `credit.commit_rows` of (s, K), and its
+    input-ids table ``<prefix>ids@<s>`` as `credit.commit_ids` of s. Each holds the rows ``rows_of(name, rows, empty)``
+    gives (the rows the circuit's proof blocks make of it, every other row ``empty``: zero codes of scale 0, an id
+    `words.EMPTY_ID`), salted as H1 salts W's (H1's ``key``, at the table's `names.nonce` or `names.IDS_NONCE` + s),
+    under W's entry's domain. ValueError unless each is W's entry of it in root, leaves and words: the proof blocks don't
+    make the table H1 committed, so the window's registration can't reuse it."""
+    k, m, _calls = shape(layout, steps)
+    theirs = {e.get("value"): e for e in window.get("registered") or () if isinstance(e, Mapping)}
+    tables = [(CR.commit_rows(s, k), f"{NM.PREFIX}a/{k}@{s}", NM.nonce(cs[0], "a"), m * len(cs),
+               np.zeros(k // 2 + 2, np.uint16)) for s, _k, cs in CR.step_tables(dict(layout), steps)]
+    tables += [(CR.commit_ids(s), f"{NM.PREFIX}ids@{s}", NM.IDS_NONCE + s, m, ids_words([], 1)[0]) for s in range(steps)]
+    out: dict[str, Reused] = {}
+    for name, h1, nonce, n, empty in tables:
+        e = theirs.get(h1)
+        if e is None or not isinstance(e.get("domain"), str):
+            raise ValueError(f"the window's registration registers no {h1}, which the audited circuit reads as {name}")
+        words = np.ascontiguousarray(rows_of(name, n, empty), dtype=np.uint16)
+        dom = bytes.fromhex(e["domain"])
+        bcs, levels = NR._numpy(words, key, nonce, None, dom)
+        got = out[name] = Reused(program=str(window.get("program")), value=name, words=int(words.shape[1]),
+                                 word_bits=G.WORD_BITS, rows=NR.Rows(words, n), salts=NR.Salts(key, nonce, n), bcs=bcs,
+                                 levels=levels, schema=G.SCHEMA_V2, domain_id=dom)
+        if (got.root.hex(), got.leaves, got.words, G.WORD_BITS) != (e.get("root"), e.get("leaves"), e.get("words"),
+                                                                     e.get(G.WIDTH_KEY, G.WORD_BITS)):
+            raise ValueError(f"{name}: the rows the audited circuit's proof blocks make of it are not the window's "
+                             f"registration's {h1} (root {got.root.hex()[:16]}… for {str(e.get('root'))[:16]}…, "
+                             f"{got.leaves} rows of {got.words} words for {e.get('leaves')} of {e.get('words')}): the model "
+                             "didn't make the table H1 committed, or H1's key is another")
+    return out
+
+
+def named(run: Any) -> tuple[str | None, dict[str, Any]]:
+    """The Commit record ``run``'s ``commit_record`` names at the window's close (`pouw_h1.H1Run.finish`), its canonical
+    JSON in hex as `credit.commit_of` reads it, and what the run records of it (``details.commit_record``): the digests
+    of the window's registration and of the record; else None and why it can't be the window's (`reused`), or how
+    ``commit_record`` failed. A failure of any other type is recorded in ``run`` as that refusal, as `bind` records one,
+    and raised."""
+    try:
+        window, record = run.commit_record(run)
+        why = reused(run, window, record)
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError) as e:   # the window's refusal, not the server's
+        why = f"{type(e).__name__}: {e}"
+    except BaseException as e:
+        run.commits["commit"], run.details["commit_record"] = None, _unnamed(f"{type(e).__name__}: {e}")
+        raise
+    if why is not None:
+        return None, _unnamed(why)
+    return canonical_json(dict(record)).hex(), {"named": True, "registration": REG.digest(window),
+                                                "record": REG.digest(record)}
+
+
+def _unnamed(why: str) -> dict[str, Any]:
+    return {"named": False, "reason": why[:500]}
 
 
 def ids_reason(run: Any, tap: CommitTap) -> str | None:
@@ -297,10 +463,27 @@ def ids_reason(run: Any, tap: CommitTap) -> str | None:
 
 
 def record_of(run: Any) -> str | None:
-    """With the Commit in ``run``'s engine (its ``served``'s tap), the Commit's record in hex (`CommitTap.hex`)."""
+    """The window's Commit record in hex: with ``commit_record``, the one `bind` named (None before it, or when it named
+    none); else, with the Commit in ``run``'s engine (its ``served``'s tap), the tap's (`CommitTap.hex`)."""
+    if run.commit_record is not None:
+        return run.commits.get("commit")
     if run.served is None or run.served.tap is None:
         return None
     return run.served.tap.hex(run.served)
+
+
+def bind(run: Any) -> str | None:
+    """Bind the window's Commit record into ``run``'s commitment at its close (`pouw_h1.H1Run.finish`, before its
+    `calls_root`): ``commit_record``'s (`named`, what the run records of it in ``details.commit_record``), else its
+    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no draw coin and,
+    once its transcript is written, raises it as ValueError. Else None."""
+    if run.commit_record is not None:
+        run.commits["commit"], run.details["commit_record"] = named(run)
+        if run.commits["commit"] is None:
+            return f"{run.entry}: the window names no Commit record: {run.details['commit_record']['reason']}"
+    elif (commit := record_of(run)) is not None:
+        run.commits["commit"] = commit
+    return None
 
 
 def roots1(run: Any) -> dict[str, Any]:
@@ -331,5 +514,6 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
     return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
 
 
-__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitTap", "Sites", "UNTIED", "calls_root", "committed", "digest", "ids_reason", "record_of",
-           "roots1", "site", "untied"]
+__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind", "calls_root",
+           "committed", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused", "roots1", "shape", "site",
+           "untied"]

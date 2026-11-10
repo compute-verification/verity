@@ -7,7 +7,7 @@ public import Definitions.Core.Blocks
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
 In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
-drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
+sampled after the bytes it answers and the evidence last; its claims are read off the run it ends in
 (`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
 (`PeriodLive.finder`, `PeriodLive.collides`).
@@ -23,8 +23,8 @@ the probability that some subprotocol accepts while its claim fails is at most t
   certifier);
 * `JointPeriodLiveECR`: the same in the one adversary form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
-* `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
-* `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block
+* `JointPooledLive`: `m` periods read off one game's run, each over its own circuit;
+* `JointPooledBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block
   (`Verity.Wipe`), read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`),
   and each block's memory term on the run.
 
@@ -82,7 +82,7 @@ after the coins of the periods before it, so a period may adapt to them), whose 
 guarantees over `G`, period `j`'s at certificates `c j` and errors `err j`, each a function of the strategy: at every
 strategy `s`, the probability that some subprotocol of some period accepts while its claim fails is at most
 `∑_j ∑_a err_{j,a}(s)`. -/
-def JointHorizonLive : Prop :=
+def JointPooledLive : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (m : ℕ) (C : Fin m → Verity.Circuit) (O : Type) (G : Verity.Game O)
     (r : (j : Fin m) → PeriodLive d α (C j) G) (c : Fin m → Certificates)
     (err : Fin m → Audit → Verity.Game.Strategy G → ℝ≥0∞),
@@ -107,7 +107,7 @@ holds there, the seed and the spot reads on the run's outcome, with the strategy
   and `StreamedWipeMeetsFamily`);
 * at every strategy `s` the run's coins at boundary `b` are the wipe's (`Verity.Wipe.OfRun.Preserves`): on the run,
   the foreign content the device holds there, the seed and the spot reads are uniform and independent, as the wipe's
-  game draws them;
+  game samples them;
 * over `G` at every strategy `s`, block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory
   exceeds `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with
   probability at most `δ_PoUS b s`.
@@ -119,11 +119,11 @@ $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{Wipe},b}(s) 
 `ε_Wipe,b(s)` the survivor bound's error at the run's moves at boundary `b`. On the run, the wipe's event at a fraction
 `f`, more than `f · fill + 2λ` bits plus the unfilled state kept, is inside that event wherever
 `foreignBits b ≤ f · fill + 2λ` (`Accounting.SecurityProofs.Live.prob_survives_of_survivorBound`).
-**Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that draws its foreign content with
+**Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that samples its foreign content with
 the wipe's coins meets it at every strategy (`Verity.Wipe.OfRun.drawn_preserves`); a run whose foreign content is the
 prover's, a function of what came before the boundary, does not. The state a block carries across a wipe (the KV cache,
 committed before the wipe and re-read after it) is outside the integrity bound. -/
-def JointHorizonBlocksLive : Prop :=
+def JointPooledBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
     (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (σ : Fin B → ℝ)
     (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞)

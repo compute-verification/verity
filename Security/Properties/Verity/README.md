@@ -30,7 +30,7 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 
 | Subprotocol | Target | Compiled check | Remote | Onsite |
 |---|---|---|---|---|
-| sampled proofs | `SampledProofsSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`SampledProofs.OneStageZk`) or the recursive audit, as its parameters' `form` names; one-stage v1 is refused by name | yes | yes |
+| SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes |
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` | yes | yes |
 | the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` | | yes |
@@ -68,11 +68,11 @@ In this order:
 - **The five period subprotocols** (sampled proofs, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `Security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
-- **Sampled proofs** at the recursive configuration: `Verity.Recursive.sampledProofsRecursive`
+- **Sampled proofs** at the recursive configuration: `Verity.Recursive.spotRecursive`
   (`Security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
-  verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `sampledProofsRecursive_of_ks`
+  verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
   (`Security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
-  `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SampledProofsSound`.
+  `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SpotSound`.
 - **The others** are hypotheses of the theorem. Each subprotocol's own guarantee, in its own form, is in
   [the guarantees to read first](../../README.md#the-guarantees-to-read-first).
 
@@ -81,9 +81,9 @@ In this order:
 The targets are the theorem's only hypotheses. Three kinds of assumption enter beside them, by their lock names:
 
 - **SHA-512 collision resistance**, `Claims.ExpectedCR` (`ecr/sha-512`, `Security/Definitions/Core/Interaction.lean`;
-  `Security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` bounds the
-  finder's collision probability at the published `ε_cr` at its budget of SHA-512 calls (`Vocab.finder_calls`), and
-  where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
+  `Security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` is
+  `Claims.ExpectedCR` there, which bounds the finder's collision probability at `ε_cr`, its budget of SHA-512 calls
+  over `2^256` (`Vocab.crBound`, `Vocab.finder_calls`), and where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
   `ecr/sha-512` gives at their own budgets (`Vocab.finderCR`), and a second file with a registered digest enters the
   same way (`Vocab.fileFinder`, `Vocab.publicFinder`).
 - **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512`,

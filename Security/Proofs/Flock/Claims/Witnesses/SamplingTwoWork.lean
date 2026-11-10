@@ -37,25 +37,25 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # Compute credit is not certified with deferred interiors
 
-Two-stage sampling commits only the replay blocks' boundaries at serve time and each drawn replay block's interior after
-the draw, and `RTwo` reads a trace only off the interiors: two boundary traces that agree there are in it together
+Two-stage sampling commits only the replay blocks' boundaries at serve time and each sampled replay block's interior after
+the sample, and `RTwo` reads a trace only off the interiors: two boundary traces that agree there are in it together
 (`Claims.Sampling.rTwo_congr`). So what `CompilerKSTwo` certifies holds whether or not the interiors were ever
-computed: work skipped at serve time and done late, for the drawn replay blocks only, passes as the work done in full.
+computed: work skipped at serve time and done late, for the sampled replay blocks only, passes as the work done in full.
 The toy here is an explicit instance, at a binding commitment.
 
-* `notNotStmt`: the program `x ↦ ¬¬x` (gate `0` the input, `1 = ¬0`, `2 = ¬1` returned), drawn `all`, with the proof
+* `notNotStmt`: the program `x ↦ ¬¬x` (gate `0` the input, `1 = ¬0`, `2 = ¬1` returned), sampled `all`, with the proof
   blocks `{0}`, `{1}`, `{2}` (`notNotPt`) and the replay blocks `{0}`, `{1, 2}` (`notNotPρ`, first stage `all`, `k = 1`),
   gate `1` its replay block's interior. It is in both scopes (`inScope_notNot`, `inScopeTwo_notNot`).
 * `notNotCm`: the commitment whose openings of `x ↦ ¬¬x`'s values at `true` pass, which binds (`notNotCm_binds`).
 * `fullW` opens all three values; `lateW` only the input and the returned gate, what serving commits, with the work of
-  `¬x` never done. Both have footprint zero (`notNot_footprint`); `fullW`'s one-stage faulty set is empty and `lateW`'s
+  `¬x` never done. Both have footprint zero (`notNot_footprint`); `fullW`'s one-stage incorrect set is empty and `lateW`'s
   is `{1, 2}` (`fullW_faulty`, `lateW_faulty`).
 * `deferred_not_credited`: at `δ = 0`, `RTwo` takes both, and the one-stage relation `R` takes `fullW` and refuses
   `lateW`.
 
 `R` reads every proof block's committed values. With the interiors committed at serve time, as a serve-time commitment
 of every proof block's values does, the proof blocks are the replay blocks, the design is one-stage, and `CompilerKS`
-at `R` applies: skipped work is a faulty proof block.
+at `R` applies: skipped work is an incorrect proof block.
 -/
 
 @[expose] public section
@@ -67,7 +67,7 @@ open Claims.Sampling
 /-- `x ↦ ¬¬x`: the input, its negation and the negation of that, returned. -/
 def notNotProg : Prog := ⟨[.input, .not 0, .not 1], [2]⟩
 
-/-- The program, drawn `all`. -/
+/-- The program, sampled `all`. -/
 def notNotStmt : AuditStatement := ⟨[], notNotProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
 /-- The proof blocks `{0}`, `{1}`, `{2}`: one class of one stratum. -/
@@ -207,7 +207,7 @@ theorem notNot_footprint (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notN
       Option.some.inj ((show replayOf notNotPt notNotPρ 2 = some 1 by decide).symm.trans hρ)
     exact ⟨[2], [1, 2], rfl, rfl, notNot_correct2 s1 s2⟩
 
-/-! ## The one-stage faulty sets -/
+/-! ## The one-stage incorrect sets -/
 
 theorem notNot_notFaulty0 (H : Msg → Msg) {w : Wit} (h0 : w.val H notNotCm notNotStmt 0 = some true) :
     ¬ Faulty H notNotCm notNotStmt notNotPt w 0 := by

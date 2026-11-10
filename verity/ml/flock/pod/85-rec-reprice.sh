@@ -9,13 +9,13 @@
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings; STAGE=0: neither, the caller filled
 #                data/$TAG/stage: circuit.txt, inst-N.bin, pub-N.bin, partition.json, program.json and draw.json, and with
-#                an own-partition file there the later steps keep its partition, program and draw; REC_LINKS=1: the wired
+#                an own-partition file there the later steps keep its partition, program and sample; REC_LINKS=1: the wired
 #                inner statement, rec_reprice.py stage-chain, with its links file links.json beside)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's ZK server: salted tree tops, the schedule of the statement's public
-#                shape, rec_live --schedule-for; every coin the challenger's coin tree, drawn at Hello and opened round by
+#                shape, rec_live --schedule-for; every coin the challenger's coin tree, sampled at Hello and opened round by
 #                round, rec_live --coin-tree (from TREE_FROM) with the prover, its statement and its replay under INNER_COINS; Register
-#                answered with the verifier's full draw, rec_live.full_draw over the
+#                answered with the verifier's full sample, rec_live.full_draw over the
 #                inner statement's program and partition, data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's
 #                replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
@@ -68,7 +68,7 @@
 #      LEAN_JOBS= LEAN_MEM_GB=48 (lean: verifications at once, default LEAN_MEM_GB / 5 up to the job's cores)
 #      REC_CIRCUIT_CACHE=$FLOCK_WORK/rec-circuits (V*'s circuit texts kept per shape, rec_circuits.py; empty: none kept)
 #      GPU_MAX_MIN=10 GPU_MEM_GB=32 (each prove's lease)  GPU_PREEMPTIBLE=1 (empty: not preemptible)  GPU_TRIES=3
-#      GPU_LEASE= (the lease command; default the queue's for this node)
+#      GPU_LEASE= (the lease command; a queued --gpu-host job's runner sets its node's; a prove refuses without one under GPU=1)
 #      GPU_ON= (the GPUs a lease may take, gpu-lease --on: a NUMA node's, beside the job's taskset)
 #      SHIP=1 (build: the binaries also into out/ship, each named by its cache key, for a node that builds nothing)
 #      PREBUILT=DIR (another node's out/ship, e.g. research run --send's inputs/: each binary copied into its cache, and a
@@ -85,8 +85,8 @@
 #              empty: none)
 #      REC_COINS=0 (oprove, lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
-#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree drawn and opened there, rec_live
-#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws them, rec_live --tree-test-os,
+#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree sampled and opened there, rec_live
+#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples them, rec_live --tree-test-os,
 #              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
 #              TREE_FROM=local: the challenger started on this node beside the run (pod/challenger.sh: its key and session
 #              secret in a scratch directory none of the prover's), its records under out/inner/challenger, and
@@ -194,16 +194,8 @@ export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${
 # verifier's own tree
 INNER_COINS="FC_COINS=tree FC_COIN_STREAMS=sparse/rep0,sparse/rep1,stacked/rep0"
 export REC_CIRCUIT_CACHE=${REC_CIRCUIT_CACHE-$FW/rec-circuits}
-# the lease command: GPU_LEASE, else the queue's own for this node (infra/cluster's submit.wrappers: node 1's pool where its tool
-# and pool file are, else gpu-lease's default)
-if [ $GPU = 0 ]; then LEASE=(); elif [ -n "${GPU_LEASE:-}" ]; then read -ra LEASE <<< "$GPU_LEASE"; else mapfile -t LEASE < <(python3 - <<'EOF'
-import os, sys
-sys.path.insert(0, "infra/cluster/src")
-from cluster.submit import GPU_LEASE, GPU_LEASE_N1, N1_LEASE_ENV
-pool = dict(e.split("=", 1) for e in N1_LEASE_ENV)["GPU_LEASE_ALLOWED_FILE"]
-print(*(["env", *N1_LEASE_ENV, GPU_LEASE_N1] if os.access(GPU_LEASE_N1, os.X_OK) and os.path.exists(pool) else [GPU_LEASE]), sep="\n")
-EOF
-); fi
+# the lease command: GPU_LEASE, which a queued --gpu-host job's runner sets to its node's
+read -ra LEASE <<< "${GPU_LEASE:-}"
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 # links_at DIR: the verifier's links file of a wired statement staged in DIR (REC_LINKS=1), which serve, replay and statement
@@ -223,6 +215,8 @@ on_gpu() {
   local d=$1 pre=${GPU_PREEMPTIBLE-1}; shift
   : > $d/prove.err
   if [ $GPU = 0 ]; then "$@" 2> $d/prove.err; return $?; fi
+  [ ${#LEASE[@]} -gt 0 ] || { echo "REFUSED: GPU=1 proves under a lease and GPU_LEASE names no lease command (a queued --gpu-host" \
+    "job's runner sets it): set GPU_LEASE, or GPU=0" | tee $d/prove.err >&2; return 2; }
   gpu_mib $d & local s=$!
   "${LEASE[@]}" 1 --wait ${GPU_ON:+--on $GPU_ON} --max-min ${GPU_MAX_MIN:-10} --mem-gb ${GPU_MEM_GB:-32} ${pre:+--preemptible} -- "$@" 2> $d/prove.err
   local rc=$?
@@ -358,7 +352,7 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
     mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
   fi
   # TREE_FROM=local: the challenger exits once rec_live closed its session; every session's coins are its tree's, as the
-  # challenger's signed release log shows it sampled and opened them after what rec_live's coin server recorded
+  # challenger's signed release log shows it sampled and opened them after what rec_live's live-coin part recorded
   # (rec_inner.py tree-held), into out/inner/tree-held.json
   if [ $own = 1 ]; then
     TREE_FROM=local
@@ -568,9 +562,9 @@ fold_build() {
 }
 
 # stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
-# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full draw over it proves every unit of the
+# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
 # statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
-# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
+# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its size class as its template,
 # which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
 # (FLOCK_OWN_ROWS): Lean covers a shared-row public file only in a registered --zk session (ProvedScope.sharedRowsOk), and
 # the population program's instances share no row, so the rows committed are the same. REC_LINKS=1: the wired chain

@@ -4,6 +4,7 @@ public import Definitions.Pouw.PearlC.Sha512
 import all Init.Data.List.Basic
 import all Init.Data.String.Defs
 public import Definitions.Pouw.Assumptions.LeadCommit
+public import Proofs.Hash.Witnesses
 public import Mathlib.Tactic.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -50,7 +51,7 @@ keyed verifier's acceptance (`Hash.Keyed.accepts`), at one instance under the sp
 (`Pouw.PearlC.Sha512.digest`): a window key of 64 bytes, a live salt, a key leaf over 192 salt bytes, and one instance,
 a two-leaf frame-v3 subtree whose public digest is the keyed hash of its root node.
 
-* `keyed_leaf_binds_honest`: when a drawn unit's proofs open exactly the honest committer's values (rank 0's and rank
+* `keyed_leaf_binds_honest`: when a sampled proof block's proofs open exactly the honest committer's values (rank 0's and rank
   1's, each with its sibling, under the window's key and key-leaf salt), both premises hold (`SubtreeLayout`,
   `SaltDerivation`), and the keyed verifier accepts the honest opening at rank 0.
 * `keyed_leaf_binds_nontrivial`: when every opening is accepted (the premises dropped), two different values at rank 0
@@ -122,16 +123,6 @@ theorem keyed_leaf_binds_honest :
   · unfold Keyed.accepts
     exact ⟨by decide, by simp [depth_two], rfl⟩
 
-theorem not_collisionIn {H : Msg → Digest} {xs ys : List Msg} (hs : xs ⊆ ys)
-    (hn : (ys.map fun m => (H m).bytes).Nodup) : ¬ CollisionIn H xs := by
-  rintro ⟨x, hx, y, hy, hxy, he⟩
-  exact hxy (List.inj_on_of_nodup_map hn (hs hx) (hs hy) he)
-
-theorem mask_nil : Hm96.mask [] [] = List.replicate 64 0 := by
-  have hb : ∀ t, Hm96.bit [] t = false := fun t => by simp [Hm96.bit]
-  simp only [Hm96.mask, Hm96.maskBit, hb, List.filter_false, List.foldl_nil, Bool.false_eq_true, if_false]
-  decide +kernel
-
 /-- **`Binds`' nontrivial witness**: with every opening accepted, the values `[0]` and `[1]` opened at rank 0 of one
 instance, under one key and key-leaf salt and with no siblings, are different, and the messages those openings hashed
 (the key leaf's salt message and leaf message, and each value's keyed message) have pairwise different SHA-512
@@ -142,14 +133,14 @@ theorem keyed_leaf_binds_nontrivial :
         Keyed.hashed SHA512 ks₀ salt₀ D₀ 0 (Tree.leafMsg D₀ 0 "row" [1]) [])) := by
   rintro (h | h)
   · exact absurd h (by decide)
-  refine not_collisionIn (ys := [Hm96.saltPrefix ++ [],
+  refine Hash.SecurityProofs.not_collisionIn (ys := [Hm96.saltPrefix ++ [],
     Hm96.leafPrefix SHA512 [] ++ Hm96.commitString SHA512 [] ks₀ [],
     Keyed.msg ks₀ salt₀ (Tree.leafMsg D₀ 0 "row" [0]), Keyed.msg ks₀ salt₀ (Tree.leafMsg D₀ 0 "row" [1])]) ?_ ?_ h
   · intro z hz
     simp only [Hm96.hashed, Keyed.hashed, Keyed.climb, List.mem_append, List.mem_cons, List.nil_append,
       List.not_mem_nil, or_false] at hz ⊢
     tauto
-  · simp only [Hm96.commitString, mask_nil]
+  · simp only [Hm96.commitString, Hash.SecurityProofs.mask_zero [] [] (by simp)]
     decide +kernel
 
 end Pouw.Salt

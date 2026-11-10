@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.KS.LevelsAll
 
 A live self-clash past level 0 is two openings of one position to different columns among one rep's level-`ℓ`
 openings, at the pendings the reps' decoded tapes play to. Where `verify` accepts a transcript recording the outcome at
-the setup at the draw, those tapes play to the deployed reps' pendings, whose later requests are levels `1, …, R` in
+the setup at the sample, those tapes play to the deployed reps' pendings, whose later requests are levels `1, …, R` in
 order at the positions of their query rounds' coins (`rep_refines_reqs`), so their output's level-`ℓ` openings are the
 rep's `plainLevelColsOf` entries at the transcript's proof files (`accepts_opensLDK`), and the clash is two of those
 entries at one position with different columns. At the concrete simulator, where `P`'s run accepts, the outcome is the
@@ -26,7 +26,7 @@ coins only.
 * `plainLevelColsOf_ok`, `plainLevelColsOf_ge`: the reader's level-`ℓ` rows at a proof that decodes, and none past the
   schedule.
 * `slotOpensL_entriesAt`, `slotOpensL_level`: a rep's level-`ℓ` openings are the reader's level-`ℓ` entries.
-* `accepts_reqsDK`, `accepts_opensLDLfK`: at flock-verify's acceptance through `keep` at a draw value, each rep's
+* `accepts_reqsDK`, `accepts_opensLDLfK`: at flock-verify's acceptance through `keep` at a sample value, each rep's
   recorded caps and request at level `ℓ ≥ 1`, and each table's recorded caps and level-`ℓ` openings at a model leaf as
   its reps' proofs' recursive caps and `plainLevelColsOf` entries; `accepts_opensLDK` at `leaf512`; `accepts_reqsD`,
   `accepts_opensLD` at `keep := id`.
@@ -37,7 +37,7 @@ coins only.
   `laterClash_wrPDH`: so the self-clash past level 0 there is two of one rep's level-`ℓ` entries at one position with
   different columns; `laterEntriesClashK_of` at `leaf512`. `laterEntriesAt_iff_K_id`, `laterEntriesClash_iff_K_id`:
   the `K` forms at `keep := id`.
-* `plain_laterEntriesAtK_of`, `plain_laterEntriesHLfAtK_of`: those at the statement's draw, at `plainTab`;
+* `plain_laterEntriesAtK_of`, `plain_laterEntriesHLfAtK_of`: those at the statement's sample, at `plainTab`;
   `plain_laterEntriesHAtK_of` at hm96; `plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterClashAt`,
   `plain_laterClashHAt` at `wrPD`.
 * `rawLevelCols_plain`: an accepted plain run's level-`ℓ` rows are its reps' `plainLevelColsOf` entries.
@@ -370,7 +370,7 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **Two of one rep's level-`ℓ` entries at one position with different columns**, in the transcript `t` at the setup
-at the draw `d`: at its one table, that table's `fast100` schedule and one of its record's rep streams there, two of
+at the sample `d`: at its one table, that table's `fast100` schedule and one of its record's rep streams there, two of
 the rep's `plainLevelColsOf` entries at `t`'s proof file, at the shape `TxNoOffAt` reads, open one position to
 different columns. -/
 def LaterEntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
@@ -385,7 +385,7 @@ def LaterEntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop 
         t.proofs[r]! ℓ ∧ a ≠ b
 
 /-- **Rep `r`'s recorded caps and later openings in `out` are the deployed rep's**, in the transcript `t` at the setup
-at the draw `d`: at its one table, that table's `fast100` schedule (`sch` as the model's), rep `r`'s record stream and
+at the sample `d`: at its one table, that table's `fast100` schedule (`sch` as the model's), rep `r`'s record stream and
 `t`'s proof file decoded at the shape `TxNoOffAt` reads, `out`'s caps for rep `r` are the proof's recursive caps, and
 its level-`ℓ` openings, at every level `ℓ ≥ 1`, are the rep's `plainLevelColsOf` entries. -/
 def LaterEntriesAt (sch : FlockSoundness.Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript)
@@ -471,7 +471,7 @@ theorem laterEntriesClash_of {sch : FlockSoundness.Accounting.Schedule} {I : Exe
 
 open DecodeZL Integrate in
 /-- **At the deployed plain decoders, the reps' recorded caps and later openings are the deployed reps'**, at one
-table: where `verify` at `keep` accepts a transcript `t` recording `o` at the setup at the draw `dj S` (`hrl`), two
+table: where `verify` at `keep` accepts a transcript `t` recording `o` at the setup at the sample `dj S` (`hrl`), two
 pendings the reps' decoded tapes play to (`hp`) record, in the output at `o`'s cap and openings, each rep's proof's
 recursive caps, and open at each level `ℓ ≥ 1` the rep's `plainLevelColsOf` entries at the setup's table, its
 `fast100` schedule and `t`'s proof file (`accepts_opensLDK`). -/
@@ -595,7 +595,7 @@ theorem laterEntries_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs}
 
 open DecodeZL Integrate in
 /-- **A self-clash past level 0 at the deployed plain decoders is a clash of one rep's level-`ℓ` entries**, at one
-table: where `verify` accepts what `wrPD` writes for `o` at the setup at the draw `dj S`, two pendings the reps' decoded
+table: where `verify` accepts what `wrPD` writes for `o` at the setup at the sample `dj S`, two pendings the reps' decoded
 tapes play to (`hp`), whose output at `o`'s cap and openings has one rep's two level-`ℓ` openings of one position to
 different columns (`hcl`), give two of that rep's `plainLevelColsOf` entries at the setup's table, its `fast100`
 schedule and `wrPD`'s proof file at one position with different columns (`laterEntries_wrPD`). -/
@@ -779,8 +779,8 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw**: `laterEntries_wrK_of` at the
-statement's draw `d` and no drawn unit, as `plain_clash₀AtK_of` is `clash₀_wrK_of` there. -/
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample**: `laterEntries_wrK_of` at the
+statement's sample `d` and no sampled proof block, as `plain_clash₀AtK_of` is `clash₀_wrK_of` there. -/
 theorem plain_laterEntriesAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -823,8 +823,8 @@ theorem plain_laterEntriesAtK_of (keep : Bool → Bool)
   rw [e] at he
   exact he
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under a leaf form
-`F`**: `laterEntries_wrKHLf_of` at the statement's draw `d` and no drawn unit. -/
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under a leaf form
+`F`**: `laterEntries_wrKHLf_of` at the statement's sample `d` and no sampled proof block. -/
 theorem plain_laterEntriesHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -869,8 +869,8 @@ theorem plain_laterEntriesHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
   rw [e] at he
   exact he
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
-`laterEntries_wrKH_of` at the statement's draw `d` and no drawn unit; `plain_laterEntriesHLfAtK_of` at `hm96`. -/
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
+`laterEntries_wrKH_of` at the statement's sample `d` and no sampled proof block; `plain_laterEntriesHLfAtK_of` at `hm96`. -/
 theorem plain_laterEntriesHAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -891,7 +891,7 @@ theorem plain_laterEntriesHAtK_of (keep : Bool → Bool)
   plain_laterEntriesHLfAtK_of keep AtDraw.LeafForm.hm96 hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl
     hacc pend' hp
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw**: `plain_laterEntriesAtK_of` at
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample**: `plain_laterEntriesAtK_of` at
 `keep := id` and what `wrPD` writes for `o`. -/
 theorem plain_laterEntriesAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -911,7 +911,7 @@ theorem plain_laterEntriesAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pars
     rest ext hsch hm hlay o (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o))
     ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp r hr
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw**: `laterEntriesClash_of` at
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample**: `laterEntriesClash_of` at
 `plain_laterEntriesAt`. -/
 theorem plain_laterClashAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -930,7 +930,7 @@ theorem plain_laterClashAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
   laterEntriesClash_of (plain_laterEntriesAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay o hacc pend' hp)
     hcl
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under hm96 leaves**:
 `plain_laterEntriesHAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
 theorem plain_laterEntriesHAt {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s)
@@ -952,7 +952,7 @@ theorem plain_laterEntriesHAt {x : Claims.Msg} {s : Claims.Flock.Stmt}
     l₁ rest ext hsch hm hlay o (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o))
     ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp r hr
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw, at hidden outputs under hm96
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under hm96
 leaves**:
 `laterEntriesClash_of` at `plain_laterEntriesHAt`. -/
 theorem plain_laterClashHAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)

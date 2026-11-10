@@ -8,7 +8,7 @@ public import CoreProtocol.Ratio
 /-!
 # The Site in code
 
-The spec's `Verity.Site` (`Security/Definitions/Core/Site.lean`) as code, on Lean core and C-Flock's canonical JSON and
+The spec's `Verity.Site` (`Security/Definitions/Core/Site.lean`) as code, on Lean core and Flock's canonical JSON and
 SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`), the check each entry passes
 (`Registration.Entry.refusal`), and the views the protocols read. Its log holds site entries only; the spec's
 declarations of a day's circuit are the registration log's (`Core.Registration`). Its checks are the spec's, clause for
@@ -82,7 +82,7 @@ abbrev Figure : Type := {q : Rat // 0 ≤ q}
 /-- The larger of two figures. -/
 def Figure.max (a b : Figure) : Figure := if a.1 ≤ b.1 then b else a
 
-/-- The operand class of a tensor-core MAC (`Verity.OperandClass`): int8 operands drawn uniformly over [-128, 127],
+/-- The operand class of a tensor-core MAC (`Verity.OperandClass`): int8 operands sampled uniformly over [-128, 127],
 [-2, 1], [0, 3] or [0, 15], or the one value 0. -/
 inductive OperandClass
   | uniformS8

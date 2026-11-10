@@ -40,7 +40,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 /-!
-# The plain-leaf decoders at the draw, at the parsed record
+# The plain-leaf decoders at the sample, at the parsed record
 
 `PlainLeafDecK` at `wrPDJK` and `plainVerdictAtJK` (`plain_hdecHUAtJK`). `TagsOkHU` and `plain_setupHiddenU` are
 `PlainLeafDecK`'s.
@@ -286,7 +286,7 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves, at a record writer**: `plain_hdecHLfAtK_ofJ` at `LeafFormJ.plain`. -/
 theorem plain_hdecHUAtK_ofJ (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -317,7 +317,7 @@ theorem plain_hdecHUAtK_ofJ (keep : Bool → Bool)
     hwr
 
 open Classical Discharge.Tables Claims.Bridge.PlainDraw in
-/-- **The deployed plain decoders are right at `plainTab` for the verdict at the draw, at hidden outputs and plain
+/-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtJK keep` for `plainVerdictAt` (`plain_hdecHUAtK_ofJ` at
 `wrPDJK`). -/
 theorem plain_hdecHUAtJK (keep : Bool → Bool)

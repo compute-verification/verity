@@ -17,7 +17,7 @@ to `2^25` blocks (`ObligationOfRoundSecure`), and to `2^27` under the widened co
 (`ObligationOfRoundSecureWide`). `ObligationDemo` is the demo's memory term at `1038·2^16` blocks, outside the first
 range, and `ObligationDemoWide` its 105-read window's bound under the widened one; `ObligationWide320` bounds a
 320-read window by `2^-20` at every block count of the widened range. Over a uniform offset a block's code has one
-distribution for every content fixed before the offset is drawn (`P2ContentAbsorbs`).
+distribution for every content fixed before the offset is sampled (`P2ContentAbsorbs`).
 
 The game has one snapshot per window: a store that changes between a window's rounds is outside every statement here.
 A window certifies the state bound at some boundary, not at each: below `S₀` at `m` of its `k` boundaries passes with
@@ -45,7 +45,7 @@ def SnapshotFresh : Prop :=
 /-- **A block's offset absorbs its content.** In P2's ring model, for every labeling `φ`, mask `K` and contents `v`,
 `v₀`, some bijection `σ` of the offsets carries each offset `τ` to one under which `v₀`'s code is `v`'s:
 `encBlock φ K τ v = encBlock φ K (σ τ) v₀`. So over a uniform offset, a block's code has the same distribution for every
-content fixed before the offset is drawn.
+content fixed before the offset is sampled.
 
 Frozen (no-function): an identity of the abstract P2 encoder in the ring model, not the deployed code. -/
 def P2ContentAbsorbs : Prop :=
@@ -87,7 +87,7 @@ snapshot (`snap`) are correct with probability at most `(1 − p)^m + k·ε₀`,
 is at most `S₀ = ⌊ρ·|C|⌋` bits.
 
 What the other tags' keys stand for: earlier versions of the snapshot's blocks and blocks it doesn't hold, so this
-covers the weights as a payload fixed before the ring is drawn, and a prover that uses everything it saw of earlier
+covers the weights as a payload fixed before the ring is sampled, and a prover that uses everything it saw of earlier
 versions' keys. The range is the conjecture's.
 
 Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and

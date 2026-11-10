@@ -27,7 +27,7 @@ games branch only on the schedule, so each of them has a run at any claim, polyn
 coins of the right sizes (`foldRoundsC_any`, `foldRoundsZK_any`, `drawKs_any`, `twoOodC_any`,
 `queryAndBatchPadC_any`, `ligTailC_any`, `ligeritoPadZC_any`); and its Ligerito verdict is not a reject, since the last
 recursive round records a query. What the executable gives is the coins: every round it consumes issued the number of
-coins the model draws there (`fold_coins`, `lane_coins`, `queryLevel0_bind`).
+coins the model samples there (`fold_coins`, `lane_coins`, `queryLevel0_bind`).
 -/
 
 @[expose] public section
@@ -69,7 +69,7 @@ theorem ex_drawOne {iF : Fintype 𝔽} {iN : Nonempty 𝔽} {f : 𝔽 → Game �
 
 theorem ex_drawK {f : 𝕂 → Game β} {ms : List Msg} {cs : List (Array F128)} (c : Array F128) (hc : c.size = 2)
     (h : ∀ r, ∃ b, Plays fOf (f r) ms cs b) : ∃ b, Plays fOf (Model.drawK execArith >>= f) ms (c :: cs) b := by
-  have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+  have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
     unfold Model.drawK
     exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
   obtain ⟨b, hb⟩ := h _
@@ -314,7 +314,7 @@ theorem lane_coins {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (K : �
         rw [show t.k + (j + 1) = t₁.k + j by omega, ← hr]
         exact this
 
-/-- Level 0's queries draw `q` query coins and `⌊log₂(q − 1)⌋ + 1` consistency coins. -/
+/-- Level 0's queries sample `q` query coins and `⌊log₂(q − 1)⌋ + 1` consistency coins. -/
 theorem queryLevel0_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Level} {cap : Array ByteArray}
     {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Flock.Transcript} {b : β}

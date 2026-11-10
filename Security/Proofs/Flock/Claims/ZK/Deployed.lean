@@ -106,7 +106,7 @@ theorem SetupTable.ok {C : Composed.CoinedSetup} (h : SetupTable C) :
   obtain ⟨_, P, Tz, st, hwf, hr, hS, M, hdm, hW, rfl⟩ := h
   exact ⟨(Composed.coinedOf_setup_of P Tz st hwf hS M hdm).2.2.2.2.2, Composed.coinedOf_reg P Tz st hwf hr hS hW⟩
 
-/-- **Each table of the hidden-output session's plan is a table the session sets up**, at every draw `verify --zk` sets
+/-- **Each table of the hidden-output session's plan is a table the session sets up**, at every sample `verify --zk` sets
 that table up (`zk_session_viewHJ`'s tables). -/
 theorem setupTable_planZHJ {mPts n : ℕ} {Reg : Type} (P : Composed.LigProver) (I : Exec.Inputs)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}

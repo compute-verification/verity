@@ -21,7 +21,7 @@ file defines what the compiler takes and what its theorem reads; `Statements.lea
   knowledge term the audit pays: at one sampled proof block, the worst, averaged over the sample.
 * `Trials`: the extractor rerun for one position, which defines the committed trace (a plurality of what the trials read
   there, `Trials.Plurality`), the link finders (`Trials.CR`, ecr/sha-512 at them) and the binding term
-  (`Trials.bindErr`, `ε_bind`), with the transfer from the link term to the trials (`Trials.Transfers`).
+  (`Trials.bindErr`, `ε_bind`), with the transfer from the binding error to the trials (`Trials.Transfers`).
 * `JointExtractor`: the textbook form of knowledge soundness, an extractor that is a game played after the judged session,
   with a relation on witnesses (`JointExtractor.KnowledgeSound`). It gives an `Extractor` and `Trials` with no slack
   (`toExtractor`, `toTrials`; `Flock.Guarantees.GenericSampledKSJoint`).
@@ -95,7 +95,7 @@ namespace Extractor
 variable {PS : ProofSystem n Reg} (Ex : Extractor PS B)
 
 /-- **The two terms cover acceptance**: at every sampled proof block incorrect in a trace, the session accepts with
-probability at most the knowledge term plus the link term against that trace, from every session strategy. -/
+probability at most the knowledge term plus the binding error against that trace, from every session strategy. -/
 def Covers (Correct : Reg → B.Trace → Fin n → Prop) : Prop :=
   ∀ S R (τ : Strategy (PS.session S R)) u (X : B.Trace), u ∈ S → ¬ Correct R X u →
     prob (· = true) (PS.session S R) τ ≤ Ex.ks S R τ u + Ex.link S R τ u X
@@ -144,8 +144,8 @@ than `x` there (`LinkFinder.errAt`), and `0` at a position no sample reads. -/
 noncomputable def errOf (R : Reg) (τ : Cont L Reg PS.session R) (c : B.Pos) (x : B.Val) : ℝ :=
   if h : Tr.Read c then errAt (Tr.T R τ c h) (Tr.sT R τ c h) (Tr.rd R τ c) x else 0
 
-/-- **The transfer from the link term to the trials**: for every prover state, every rule that picks a sampled proof
-block before the session's first coin and every trace `X`, the link term at the picked proof block, averaged over the
+/-- **The transfer from the binding error to the trials**: for every prover state, every rule that picks a sampled proof
+block before the session's first coin and every trace `X`, the binding error at the picked proof block, averaged over the
 sample, is at most `Σ_c wt_c (errOf_c(X c) + slack)/(1 − ρ)`. -/
 def Transfers (Ex : Extractor PS B) : Prop :=
   ∀ (R : Reg) (τ : Cont L Reg PS.session R) (tgt : L.Ω → Option (Fin n)) (X : B.Trace),

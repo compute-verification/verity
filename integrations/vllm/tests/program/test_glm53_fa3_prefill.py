@@ -133,6 +133,22 @@ def test_the_served_split_heuristic_at_glm53_per_rank(lengths, static, expected)
     assert fa3_model.num_splits(lengths, NH, KVH, D, num_sms=132) == expected
 
 
+@pytest.mark.parametrize("rows,keys,static,expected", [
+    ([300], [1500], 5, [5]), ([1600], [448], 5, [1]), ([600, 1000], [700, 1000], 2, [1, 2]),
+    ([257, 300, 400, 500], [1, 79, 80, 81], 1, [1, 1, 1, 1]), ([340], [1200], 5, [5]), ([257], [1791], 5, [5]),
+])
+def test_the_context_launchs_split_plan_counts_its_keys(rows, keys, static, expected):
+    """A dense prefill's context launch (`run_prefill_context_chunk`) is FA3 non-causal over each sequence's context keys: the
+    static bound's n-blocks and per-head KV bytes count the longest context, the m-blocks the longest query, and each sequence
+    splits by its own keys.  The causal plan of the same rows is unchanged, and a non-causal launch off head 256 refused."""
+    assert fa3_model.split_plan(rows, NH, KVH, D, num_sms=132, seqlens_k=keys) == (static, expected)
+    assert fa3_model.split_plan([300, 1200], NH, KVH, D, num_sms=132) == (3, [1, 2])
+    with pytest.raises(ValueError, match="a non-causal launch at head dim 128"):
+        fa3_model.split_plan(rows, NH, KVH, 128, num_sms=132, seqlens_k=keys)
+    with pytest.raises(ValueError, match="2 sequences' query rows, 1 sequences' keys"):
+        fa3_model.split_plan([1, 2], NH, KVH, D, num_sms=132, seqlens_k=[3])
+
+
 def test_the_devices_split_quotient_is_the_exact_one_at_glm53_per_rank():
     """`blocks_per_sm = ceilf(total * 1.1f * 8 / 132)` with `/` as `div.full.ftz.f32`: MUFU.RCP(132) is one ulp below 1/132, so the device's
     quotient never rounds up past the IEEE one, and its ceiling is the IEEE ceiling for every total blocks count up to 4000."""

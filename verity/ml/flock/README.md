@@ -15,7 +15,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
     (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block backends (BLAKE3 row
     digests, not in the Lean verifier).
-  - `partition_units.py`: every unit class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
+  - `partition_units.py`: every size class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
@@ -23,13 +23,18 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
     the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
     Lean's `Tmpl.layoutM`), which the verifier covers only in the form `ProvedScope.scopeOkT` states; `tables.py`
-    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
+    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a size class of
     any partition as a `verity/flock-circuit` statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
-    template, the flat unit never built, its outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
+    template, or a table read's as the verifier builds it, `read_tmpl.py`'s `flock-read-tmpl V H`, the flat unit never built, its
+    outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
     backend sweep's work lists; `circuit_bench.py`,
     `flock-circuit`'s sweep.
-  - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell
-    registration.
+  - `proof_server.py`: SPOT's proof server. It runs one long-lived `flock-circuit prove --zk --stream -` per GPU and
+    one `serve --zk --queue -` per block type; a session's verdict of record runs off the provers' path.
+  - `instance_file.py`: a spine input set's range as the instance file (`flock-pure-instances/v1`) a cell's prover and verifier
+    read, with its frame-v3 statement commitments.
+  - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`, `instances.py`: the benchmark sweeps, statement negatives, cell
+    registration and the bench's frozen input sets.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
   `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session. Under `--zk` with

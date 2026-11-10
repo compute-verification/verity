@@ -8,18 +8,18 @@ public import Proofs.Flock.SessionLoop.TakenVals
 /-!
 # The deployed worker, and Rust's checks as the worker's
 
-The ZK server passes a worker's value at the link and the `Finish` only where it is the firewall's own message
-(`LeanRelease.ownMsg`), and the relay sends the firewall's own there: the firewall computes the link and the `Finish`
+The ZK server passes a worker's value at the link and the `Finish` only where it is the ZK server's own message
+(`LeanRelease.ownMsg`), and the relay sends the ZK server's own there: the ZK server computes the link and the `Finish`
 itself, and the worker sends only the frame rounds' device rounds. So the model's worker is built from a device's
-rounds at the frame rounds and the firewall's own message at every other round:
+rounds at the frame rounds and the ZK server's own message at every other round:
 
 * `LeanRelease.deployedWk`: the worker built so at a device `dv`.
 * `LeanRelease.kindAt_link`, `LeanRelease.kindAt_finish`: the link and the `Finish` are no frame rounds.
 * `LeanRelease.honestWk_deployed`, `Loop.valsWk_deployed`: the honest worker and the worker that sends the scheduled
-  rounds with `vs`'s values are built so, at their devices (`ownMsg_withDevice`: the firewall's own message doesn't read
+  rounds with `vs`'s values are built so, at their devices (`ownMsg_withDevice`: the ZK server's own message doesn't read
   the device).
 * **`LoopModel.link_deployed`**, **`LoopModel.finish_deployed`**: where the model's worker is `deployedWk` at some
-  device, it answers the link and the `Finish` with the firewall's own message.
+  device, it answers the link and the `Finish` with the ZK server's own message.
 
 Rust's checks on a worker's rep (`LeanRelease.cross`: the worker failing, the device's level-0 root, the masking
 cross-checks, the end check on the returned proof and the constraints on the pads) run in `flock-circuit` on the
@@ -41,7 +41,7 @@ namespace Claims.ZKServer
 namespace LeanRelease
 
 /-- **The deployed worker** at the device `dv`: at a frame round `dv`'s value (the device round, with whether it is the
-firewall's stand-in), at every other round the firewall's own message (`ownMsg`), which the firewall computes and sends
+ZK server's stand-in), at every other round the ZK server's own message (`ownMsg`), which the ZK server computes and sends
 itself. -/
 def deployedWk {W R : Type} (L : LeanRelease W R) (dv : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (h : List (Msg × Msg)) (s : ℕ) : Option L.toSrv.Val :=
@@ -81,7 +81,7 @@ theorem honestWk_deployed {W R : Type} (L : LeanRelease W R) :
       some (L.ownMsg x w ρ h, false)
     rw [ite_eq_right hk]
 
-/-- **The firewall's own message doesn't read the device.** -/
+/-- **The ZK server's own message doesn't read the device.** -/
 theorem ownMsg_withDevice {W R : Type} (L : LeanRelease W R)
     (d : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg) (x : Msg) (w : W) (ρ : R)
     (h : List (Msg × Msg)) : (L.withDevice d).ownMsg x w ρ h = L.ownMsg x w ρ h :=
@@ -131,7 +131,7 @@ end Loop
 
 namespace Relay
 
-/-- **The deployed worker answers the link with the firewall's own message**: where the model's worker is
+/-- **The deployed worker answers the link with the ZK server's own message**: where the model's worker is
 `deployedWk` at some device. -/
 theorem LoopModel.link_deployed {W Rr : Type} {M : LoopModel W Rr} {dv : M.L.toSrv.Worker}
     (hwk : M.wk = M.L.deployedWk dv) (h : List (Msg × Msg)) (hl : h.length = 1) :
@@ -139,7 +139,7 @@ theorem LoopModel.link_deployed {W Rr : Type} {M : LoopModel W Rr} {dv : M.L.toS
   rw [hwk]
   exact M.L.deployedWk_own dv (by rw [hl]; exact M.L.kindAt_link M.x)
 
-/-- **The deployed worker answers the `Finish` with the firewall's own message**: where the model's worker is
+/-- **The deployed worker answers the `Finish` with the ZK server's own message**: where the model's worker is
 `deployedWk` at some device. -/
 theorem LoopModel.finish_deployed {W Rr : Type} {M : LoopModel W Rr} {dv : M.L.toSrv.Worker}
     (hwk : M.wk = M.L.deployedWk dv) (h : List (Msg × Msg)) (hl : h.length = M.L.last M.x) :

@@ -1,4 +1,4 @@
-"""The sampling plan for an int8 row under Flock (`verity.core.protocols.sampled_proofs`), Llama-3.1-8B or Qwen3-8B: the
+"""The sampling plan for an int8 row under Flock (`verity.core.protocols.spot`), Llama-3.1-8B or Qwen3-8B: the
 fitted cost model, the cuts the generator finds, the frontier of ε against the verification overhead B, the break-even
 granularity by window, ε and commitment regime, the frontier's sensitivity to its inputs, the tensors committed at more
 than one scale, and the weight classes' weights at each target.
@@ -13,8 +13,8 @@ the proving, the units' commitments, the witnesses' replay and the zero-work sub
 accounting, its one measured term (`commit_floor`) and nothing else.
 
 Replay: serving keeps only the requests' tokens and the weights (a commitment is a hash, and the Commit retains no value), so
-a drawn unit's witness is rebuilt by re-running its request, one 2K prompt, from its committed tokens through every layer at
-the plain rate: the `request` replay grain, met when the draw holds any of its units.  A request's values depend on its
+a sampled proof block's witness is rebuilt by re-running its request, one 2K prompt, from its committed tokens through every layer at
+the plain rate: the `request` replay grain, met when the sample holds any of its units.  A request's values depend on its
 own tokens alone (the served engine is batch-invariant), so no co-scheduled request is re-run with it.
 
     uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
@@ -33,9 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, leaf_chain, observations,  # noqa: E402
                     s8_coord_ands, serve_rows, tree_chain)
 
-from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.spot.candidates import Shape, cuts, pressure  # noqa: E402
+from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
+from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            ReplayGrain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)

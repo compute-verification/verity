@@ -46,7 +46,7 @@ def test_period0_is_five_real_legs_and_a_wipe_elsewhere() -> None:
 
 def test_integrity_bounds_are_the_profiles_count_bound() -> None:
     """The integrity line at δ is `profile.Stratified`'s count bound (Lean's `countBound`): the largest K with
-    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units drawn, 99 wrong) it is 99, where the copy this replaced said 98."""
+    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units sampled, 99 wrong) it is 99, where the copy this replaced said 98."""
     at = _load("block-record-r1-window10")["legs"]["integrity"]["at"]
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
     q = {"symbol": "integrity bound", "value": 0, "unit": "wrong units", "of": 100, "drawn": 1}
@@ -156,7 +156,7 @@ def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_ans
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
 
 
-def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() -> None:
+def test_remote_composes_spot_and_pouw_alone_its_other_legs_dropped() -> None:
     """Remote's product: sampled proofs and PoUW accepted on the block's server, no onsite leg run, compose with the onsite
     legs named dropped, neither missing nor in the error sum, and are undecided until the remote check answers; as
     onsite's the same legs miss four. The remote check's answer decides it, and an onsite answer is refused. A record of

@@ -201,7 +201,7 @@ theorem rsClaims_spec (M : Messages α) :
       · rw [Array.getElem?_append_right (by simp), show k + (j + 1) = k + 1 + j by omega]; simpa using h2
       · rw [Array.getElem?_append_right (by simp)]; simpa using h3
 
-/-- **Ring switching's coins.** The rounds `ringSwitch` draws from: `r''_k` for each claim, then the batching coins
+/-- **Ring switching's coins.** The rounds `ringSwitch` samples from: `r''_k` for each claim, then the batching coins
 `γ`; and what it returns. -/
 theorem ringSwitch_spec {M : Messages α} {claims : Array (AClaim α)} (hn : claims.size ≠ 0) {k k' : Nat}
     {src : CoinSource} {rsr : Array α} {rs : RsPts α} (h : ringSwitch M claims k src = .ok ((rsr, rs), k')) :

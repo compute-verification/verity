@@ -48,7 +48,7 @@ NaN, so the subnormal prescale is never taken and the FTZ polynomial is libdevic
 
     current = score + bias (add.f32), a NaN made -1e30 (0xF149F2CA)
     six slots: the expert of the largest current, the lowest index among equals (``tl.max``, then ``redux.sync.min.s32`` of the
-               indices that equal it: `RouterArgmaxStep_v1`'s strict scan, as no current is NaN or -0), its score (a sum of the
+               indices that equal it: `ArgmaxStepF32_v1`'s strict scan, as no current is NaN or -0), its score (a sum of the
                score and zeros, which is the score), and its current set to -inf (so a row with fewer than six currents above
                -inf picks an expert again)
     sum = ((w0 + w4) + w2) + ((w1 + w5) + w3)                     ``tl.sum`` of the eight slots, slots 6 and 7 +0
@@ -74,7 +74,7 @@ from verity.ml.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.ml.definitions.registry import act, b1
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry.moe import F32GtStrict, MoeRouterPick, RouterArgmaxStep, _array, _lane0_sum
+from verity.ml.definitions.registry.moe import ArgmaxStepF32, F32GtStrict, MoeRouterPick, _array, _lane0_sum
 from verity.ml.definitions.registry.prims import BF16, F32, I32
 from verity.ml.definitions.registry.topp_word_gates import NvLogfV2
 
@@ -234,12 +234,12 @@ def Dsv4SqrtSoftplus(B, S, x):
 
 
 def _first_max(B, s: list, c0, c1):
-    """The lowest index of the largest of s (no NaN): `RouterArgmaxStep_v1`'s scan over s[1 .. E-2], then the last step's index."""
+    """The lowest index of the largest of s (no NaN): `ArgmaxStepF32_v1`'s scan over s[1 .. E-2], then the last step's index."""
     if len(s) == 1:
         return c0
     carry = tuple_of(s[0], c0, c1)
     if len(s) > 2:
-        carry = B.scan(RouterArgmaxStep, carry, xs=(_array(s[1:-1]),))[0]
+        carry = B.scan(ArgmaxStepF32, carry, xs=(_array(s[1:-1]),))[0]
     return B.call(P.SelectI32, B.call(F32GtStrict, s[-1], carry[0]), carry[2], carry[1])
 
 

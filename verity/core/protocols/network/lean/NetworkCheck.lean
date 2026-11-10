@@ -25,7 +25,7 @@ as bytes, is v4's read as bits. `NetworkCheck.Period` is onsite's communication 
 (`verity/certifier/v0`, the `network-period` executable): a period's link-windows, either proved by N2 and certified
 with their clocks (the clock form) or the network certifier's own rows, registered under its one schedule and read by
 the scan (the rows form), beside its compute audits, and the bound `K` on what left the site, held to its Python mirror
-by `tests/test_network_period_protocol.py`. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
+by `tests/test_network_period_protocol.py`. Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
 `Flock.Canon`, and `Flock.Public`'s frame-v3 hash), the core protocol interface, the certifier program and the LMS port.
 -/
 
@@ -33,6 +33,6 @@ by `tests/test_network_period_protocol.py`. Code: it imports only Lean, C-Flock'
 
 /-!
 `NetworkCheck.LinkWindow` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
-the `link-window` function of `network-records verdicts`). Beyond the above it imports C-Flock's `Flock.Hm96` and core's
+the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
 -/

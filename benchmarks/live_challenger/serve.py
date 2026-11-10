@@ -1,4 +1,4 @@
-"""The proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor host (`verity.core.protocols.spot.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
@@ -12,7 +12,7 @@ log signed when the session ends.
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first, at `lms.DEPLOYED` (about 1.1G SHA-512 hashes over `--keygen-workers`) or at `--params W,H` (tests).  A key inside
   `--out` is refused, since a run's `out/` is published.
-- **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
+- **The coins** are the operating system's bytes as the Lean verifier reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
   answer starts no session, and neither does one whose source no claim instance names (`challenger.served_claim`: A3's
   is `uniform/io-getrandombytes`).
@@ -64,10 +64,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.core.protocols.sampled_proofs import remote  # noqa: E402
-from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+from verity.core.protocols.spot import remote  # noqa: E402
+from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
                                                              served_claim)
-from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import verifier as V  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"

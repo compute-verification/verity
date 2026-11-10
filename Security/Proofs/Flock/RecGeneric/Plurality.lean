@@ -16,19 +16,19 @@ The inner stage's failure, where every outer extraction succeeds (`Claims.PrBadG
 against the inner protocol's own verifier:
 
 * `P_O` (`Comp.innerPO`), at the inner statement, sends at inner round `j` before the last, on the inner coins so far,
-  the message that the inner views of `E_O`'s draws with those coins first open most often there (`Comp.opAtE`), over
-  the draws where `E_O` gives witnesses in `R_O` (`Comp.GivesRO`). At the last round it sends the last message of the
+  the message that the inner views of `E_O`'s samples with those coins first open most often there (`Comp.opAtE`), over
+  the samples where `E_O` gives witnesses in `R_O` (`Comp.GivesRO`). At the last round it sends the last message of the
   most frequent class (`Comp.clsO`: what the inner extractor reads of the view opened, and the set of the inner
-  verifier's calls), so draws whose last messages differ but are one view to the inner extractor count as one
-  (`Comp.fAt`, `Comp.opAtO`). Its run at a draw is kept where `E_O` gives witnesses in `R_O`, the inner view accepts,
-  and the draw agrees with `P_O` at every inner round (`Comp.keepDO`); there it accepts, the inner protocol opens it as
+  verifier's calls), so samples whose last messages differ but are one view to the inner extractor count as one
+  (`Comp.fAt`, `Comp.opAtO`). Its run at a sample is kept where `E_O` gives witnesses in `R_O`, the inner view accepts,
+  and the sample agrees with `P_O` at every inner round (`Comp.keepDO`); there it accepts, the inner protocol opens it as
   the inner view opened, and its calls are the inner view's, where the inner verifier's last step reads no last coin
   (`Proto.LastCoinFree`, `Comp.runO`).
 * Every outer extraction succeeding, `E_O` gives witnesses outside `R_O` at no rerun (`Comp.OutRO`, by `Replays`), so
   the served runs are those aborted there (`Comp.servedG`), which `E^rep` at the inner protocol reads as `P_O`'s
-  aborting runs off the draws that disagree with `P_O` (`Comp.BadO`, `Comp.servedO_rel`).
+  aborting runs off the samples that disagree with `P_O` (`Comp.BadO`, `Comp.servedO_rel`).
 * The inner stage fails at most as `E^rep` at the inner protocol against `P_O`'s aborting runs, plus `N_I` times one
-  draw's chance to be bad, plus a judged draw whose inner view rejects (`Comp.PrBadGood_le`).
+  sample's chance to be bad, plus a judged sample whose inner view rejects (`Comp.PrBadGood_le`).
 
 Port of `Claims.Recursion.Bound.PrBadGood_le_merged` to any compiled verifier, outer extraction and server.
 -/
@@ -55,8 +55,8 @@ theorem firstCoins_extend {Coin : Type} [Inhabited Coin] {m n : ℕ} (hn : m ≤
 
 /-- A view opened where it accepts, as a trace, and aborted elsewhere: what `E^rep` at the inner protocol sees of
 it. -/
-def Server.openT (S : Server) (v : Seen) : Trace :=
-  if v.out = .acc then ⟨(S.openView v).msgs, [], [], .acc⟩ else abortTrace
+def Server.openT (S : Server) (v : Seen) : Transcript :=
+  if v.out = .acc then ⟨(S.openView v).msgs, [], [], .acc⟩ else abortTranscript
 
 /-- **A view and its opening accept alike**, and an accepted view's opening is the view opened. -/
 theorem Server.openT_rel (S : Server) (v : Seen) :
@@ -65,9 +65,9 @@ theorem Server.openT_rel (S : Server) (v : Seen) :
   · have e : S.openT v = ⟨(S.openView v).msgs, [], [], .acc⟩ := ite_eq_left h
     rw [e]
     exact ⟨⟨fun _ => rfl, fun _ => h⟩, fun _ => S.openView_eq_of_acc h⟩
-  · have e : S.openT v = abortTrace := ite_eq_right h
+  · have e : S.openT v = abortTranscript := ite_eq_right h
     rw [e]
-    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTrace, Trace.seen] at h'⟩, fun h' => absurd h' h⟩
+    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTranscript, Transcript.seen] at h'⟩, fun h' => absurd h' h⟩
 
 namespace Comp
 
@@ -79,7 +79,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`replayOC` returns the replayed run's view**: from `n` rounds left, the history `hist` and the trace `t`, with as
 many prover messages sent as the history holds. -/
 theorem stepWith_replayOC (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : List Msg) (cs : ℕ → Coin) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (sent : List Msg) (t : Trace), hist.length = sent.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (sent : List Msg) (t : Transcript), hist.length = sent.length →
       ((replayOC IV xI as cs n sent t.msgs).eval H).1 =
         (stepWith H (replay as) xI () (fun as' => IV.next xI as' ((List.range as'.length).map cs)) n hist sent
           t).seen
@@ -106,7 +106,7 @@ theorem replayOC_eval (H : Msg → Msg) (IV : Verifier Coin) (xI : Msg) (as : Li
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **The inner view's rerun program returns the inner view**, against any runs. -/
 theorem decProg_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin)
-    (o : Option K.WO) (run₂ : (Fin (K.V.k x) → Coin) → Trace) :
+    (o : Option K.WO) (run₂ : (Fin (K.V.k x) → Coin) → Transcript) :
     ((K.decProg IV x r o).eval H run₂).1 = K.dec IV H x r o := by
   cases o with
   | none => rfl
@@ -117,7 +117,7 @@ theorem decProg_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x :
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem stage_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg)
-    (run₂ : (Fin (K.V.k x) → Coin) → Trace) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
+    (run₂ : (Fin (K.V.k x) → Coin) → Transcript) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     ((K.stage IV x d).eval H run₂).1 = ((Claims.outerStage K.EO (K.dec IV H) x d).eval H run₂).1 := by
   rw [Comp.stage, (RP.eval_bind H run₂ _ _).1, decProg_eval, outerStage_eval]
 
@@ -155,35 +155,35 @@ section Plurality
 
 variable (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg)
 
-/-- `E_O` gives witnesses in `R_O` at the draw. -/
+/-- `E_O` gives witnesses in `R_O` at the sample. -/
 def GivesRO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
   ∃ w, K.wits H P x ω d = some w ∧ K.RO x w
 
-/-- `E_O` gives witnesses outside `R_O` at the draw: where every outer extraction succeeds, no rerun shows it. -/
+/-- `E_O` gives witnesses outside `R_O` at the sample: where every outer extraction succeeds, no rerun shows it. -/
 def OutRO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
   ∃ w, K.wits H P x ω d = some w ∧ ¬ K.RO x w
 
-/-- The message the inner view at a draw opens at inner round `j`. -/
+/-- The message the inner view at a sample opens at inner round `j`. -/
 noncomputable def oMsg (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) (j : ℕ) : Msg :=
   ((S.openView (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d))).msgs.map Prod.fst).getD j []
 
 /-- **The plurality opening at inner round `j`**, on the inner coins `l` so far: the message that the inner views of
-`E_O`'s draws with those coins first open most often there, over the draws where `E_O` gives witnesses in `R_O`. -/
+`E_O`'s samples with those coins first open most often there, over the samples where `E_O` gives witnesses in `R_O`. -/
 noncomputable def opAtE (ω : Ω) (j : ℕ) (l : List Coin) : Msg :=
   plur (fun u : (Fin (K.V.k x) → Coin) × K.EO.C x => K.GivesRO H P x ω (fork j (preCoins l) u.1, u.2))
     (fun u => K.oMsg I S H P x ω (fork j (preCoins l) u.1, u.2) j)
 
-/-- The draw's openings agree with the plurality at every inner round before the last. -/
+/-- The sample's openings agree with the plurality at every inner round before the last. -/
 def AgreesE (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
   ∀ j, j + 1 < I.V.k (K.xI x) → K.oMsg I S H P x ω d j = K.opAtE I S H P x ω j ((List.range j).map (coinSeq d.1))
 
-/-- **A draw's class**: what the inner extractor reads of its inner view (the inner protocol's openings of it opened),
+/-- **A sample's class**: what the inner extractor reads of its inner view (the inner protocol's openings of it opened),
 and the set of the inner verifier's calls in its run. -/
 noncomputable def clsO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : List I.Op × Finset (Msg × Msg) :=
   (I.opens (S.openView (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d))),
     (K.viewCalls (S.IVStar I.V I.ans) H P x ω d).toFinset)
 
-/-- **A draw of the class `c` at the inner coins `l` before the last round**: `E_O` gives witnesses in `R_O` there, the
+/-- **A sample of the class `c` at the inner coins `l` before the last round**: `E_O` gives witnesses in `R_O` there, the
 inner view accepts, its openings agree with the plurality before the last round, its inner coins before the last are
 `l`, and its class is `c`. -/
 def Rep (ω : Ω) (l : List Coin) (c : List I.Op × Finset (Msg × Msg)) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
@@ -192,18 +192,18 @@ def Rep (ω : Ω) (l : List Coin) (c : List I.Op × Finset (Msg × Msg)) (d : (F
     K.AgreesE I S H P x ω d ∧ (List.range (I.V.k (K.xI x) - 1)).map (coinSeq d.1) = l ∧ K.clsO I S H P x ω d = c
 
 open Classical in
-/-- **A class's last message**: the last message one draw of the class opens, `[]` where the class has none. -/
+/-- **A class's last message**: the last message one sample of the class opens, `[]` where the class has none. -/
 noncomputable def repMsg (ω : Ω) (l : List Coin) (c : List I.Op × Finset (Msg × Msg)) : Msg :=
   if h : ∃ d, K.Rep I S H P x ω l c d then K.oMsg I S H P x ω (Classical.choose h) (I.V.k (K.xI x) - 1) else []
 
-/-- **What `P_O` reads of a draw at inner round `j`**: its opening there before the last round, and at the last its
-class's last message (`repMsg`), so two draws of one class with one set of inner coins before the last read alike. -/
+/-- **What `P_O` reads of a sample at inner round `j`**: its opening there before the last round, and at the last its
+class's last message (`repMsg`), so two samples of one class with one set of inner coins before the last read alike. -/
 noncomputable def fAt (ω : Ω) (j : ℕ) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Msg :=
   if j + 1 < I.V.k (K.xI x) then K.oMsg I S H P x ω d j
   else K.repMsg I S H P x ω ((List.range (I.V.k (K.xI x) - 1)).map (coinSeq d.1)) (K.clsO I S H P x ω d)
 
 /-- **`P_O`'s message at inner round `j`**, on the inner coins `l` so far: the plurality of what `fAt` reads at `j` of
-`E_O`'s draws with those coins, over the draws where `E_O` gives witnesses in `R_O`. Before the last round it is the
+`E_O`'s samples with those coins, over the samples where `E_O` gives witnesses in `R_O`. Before the last round it is the
 plurality opening (`opAtE`); at the last, the last message of the plurality class. -/
 noncomputable def opAtO (ω : Ω) (j : ℕ) (l : List Coin) : Msg :=
   plur (fun u : (Fin (K.V.k x) → Coin) × K.EO.C x => K.GivesRO H P x ω (fork j (preCoins l) u.1, u.2))
@@ -214,47 +214,47 @@ answers (`decC`) and sends `opAtO` there. -/
 noncomputable def innerPO (decC : Msg → Coin) : Prover Ω :=
   ⟨fun _ hist ω => .ret (K.opAtO I S H P x ω hist.length (hist.map fun h => decC h.2))⟩
 
-/-- The draw agrees with `P_O` at every inner round, as `fAt` reads it. -/
+/-- The sample agrees with `P_O` at every inner round, as `fAt` reads it. -/
 def AgreesO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
   ∀ j < I.V.k (K.xI x), K.fAt I S H P x ω j d = K.opAtO I S H P x ω j ((List.range j).map (coinSeq d.1))
 
-/-- **A draw `P_O`'s runs don't show**: `E_O` gives witnesses in `R_O` there, and its openings disagree with `P_O`. -/
+/-- **A sample `P_O`'s runs don't show**: `E_O` gives witnesses in `R_O` there, and its openings disagree with `P_O`. -/
 def BadO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
   K.GivesRO H P x ω d ∧ ¬ K.AgreesO I S H P x ω d
 
 open Classical in
-/-- `P_O`'s run at a draw is kept where `E_O` gives witnesses in `R_O`, the inner view accepts, and its openings agree
+/-- `P_O`'s run at a sample is kept where `E_O` gives witnesses in `R_O`, the inner view accepts, and its openings agree
 with `P_O`. -/
 noncomputable def keepDO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Bool :=
   decide (K.GivesRO H P x ω d ∧ (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)).out = .acc ∧
     K.AgreesO I S H P x ω d)
 
-/-- **`P_O`'s run at a draw, as it aborts**: at the draw's inner coins, unless `keepDO` refuses it. -/
-noncomputable def innerFO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
+/-- **`P_O`'s run at a sample, as it aborts**: at the sample's inner coins, unless `keepDO` refuses it. -/
+noncomputable def innerFO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
   if K.keepDO I S H P x ω d then
     run H (K.innerPO I S H P x decC) I.V (K.xI x) ω (firstCoins (I.V.k (K.xI x)) d.1)
-  else abortTrace
+  else abortTranscript
 
-/-- **`P_O`'s aborts**: a run at the inner coins `ρ` and the abort coins `a` is kept as `keepDO` keeps the draw they
+/-- **`P_O`'s aborts**: a run at the inner coins `ρ` and the abort coins `a` is kept as `keepDO` keeps the sample they
 extend to. -/
 noncomputable def keepAO (ω : Ω) (ρ : Fin (I.V.k (K.xI x)) → Coin) (a : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     Bool :=
   K.keepDO I S H P x ω (extendDraw (ρ, a))
 
 open Classical in
-/-- The served run at a draw, aborted where `E_O` gives witnesses outside `R_O`. -/
-noncomputable def servedG (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
-  if K.OutRO H P x ω d then abortTrace
+/-- The served run at a sample, aborted where `E_O` gives witnesses outside `R_O`. -/
+noncomputable def servedG (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
+  if K.OutRO H P x ω d then abortTranscript
   else servedRun H (Claims.outerStage K.EO (K.dec (S.IVStar I.V I.ans) H) x) (run H P K.V x ω) d
 
 /-- `servedG` opened (`Server.openT`): what `E^rep` at the inner protocol sees where `E*`'s inner stage sees the served
 run. -/
-noncomputable def servedO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
+noncomputable def servedO (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
   S.openT (K.servedG I S H P x ω d).seen
 
 open Classical in
-/-- `P_O`'s aborting run at the bad draws, `servedO` elsewhere. -/
-noncomputable def mixO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Trace :=
+/-- `P_O`'s aborting run at the bad samples, `servedO` elsewhere. -/
+noncomputable def mixO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) : Transcript :=
   if K.BadO I S H P x ω d then K.innerFO I S H P x decC ω d else K.servedO I S H P x ω d
 
 /-- **An accepted run whose inner view rejects**, at the tape, the compiled verifier's coins and `E_O`'s: `E_O` gives
@@ -265,7 +265,7 @@ def InnerRejectsO (t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x) : Prop :=
 variable {K I S H P x}
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- At a draw where `E_O` gives witnesses whose inner view opens to the messages `ms`, the draw's openings are `ms`'. -/
+/-- At a sample where `E_O` gives witnesses whose inner view opens to the messages `ms`, the sample's openings are `ms`'. -/
 theorem oMsg_eq {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.WO} (hw : K.wits H P x ω d = some w)
     {ms : List (Msg × Out)} (hov : S.openView (K.view (S.IVStar I.V I.ans) H x d.1 w) = ⟨ms, .acc⟩) (j : ℕ) :
     K.oMsg I S H P x ω d j = (ms.map Prod.fst).getD j [] := by
@@ -301,13 +301,13 @@ theorem keepDO_true {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.
   exact hacc
 
 omit [Nonempty Coin] in
-/-- **On a kept draw, `P_O`'s run accepts, opens as the inner view opened, and makes only calls of the inner view's
+/-- **On a kept sample, `P_O`'s run accepts, opens as the inner view opened, and makes only calls of the inner view's
 run**: it sends at each round before the last what the inner view opens there, and at the last the last message of a
-draw `ρ` of its class (`repMsg`), whose inner view opens alike before the last round (`AgreesE`) and whose inner coins
-are the draw's but the last. The inner verifier answers each earlier round as `Open(V, S)` does (the round's coin's
+sample `ρ` of its class (`repMsg`), whose inner view opens alike before the last round (`AgreesE`) and whose inner coins
+are the sample's but the last. The inner verifier answers each earlier round as `Open(V, S)` does (the round's coin's
 bytes, which `decC` reads back), and decides the last as at `ρ`, accepting with `ρ`'s calls, since its last step reads
-no last coin (`Proto.LastCoinFree`). So it sees `ρ`'s inner view opened, which the inner protocol opens as the draw's,
-and its calls are among `ρ`'s inner view's, whose set is the draw's: one class. -/
+no last coin (`Proto.LastCoinFree`). So it sees `ρ`'s inner view opened, which the inner protocol opens as the sample's,
+and its calls are among `ρ`'s inner view's, whose set is the sample's: one class. -/
 theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
     (d : (Fin (K.V.k x) → Coin) × K.EO.C x) {w : K.WO} (hw : K.wits H P x ω d = some w) (hRO : K.RO x w)
     (hacc : (K.view (S.IVStar I.V I.ans) H x d.1 w).out = .acc) (ha : K.AgreesO I S H P x ω d) :
@@ -463,7 +463,7 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
   · have hseen : (run H (replay (S.opened os last)) I.V (K.xI x) () (firstCoins (I.V.k (K.xI x)) d.1)).seen =
         S.openView (K.view (S.IVStar I.V I.ans) H x ρ.1 w') := by
       rw [hov']
-      simp only [Trace.seen, h1, h2]
+      simp only [Transcript.seen, h1, h2]
       congr 1
       refine List.map_congr_left fun j hj => ?_
       rw [List.mem_range] at hj
@@ -479,9 +479,9 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
     exact List.mem_toFinset.1 h'
 
 omit [Nonempty Coin] in
-/-- **Off the bad draws, `P_O`'s aborting run accepts where the gated served run opened does, and the inner protocol
-opens the two alike there**: a draw where `E_O` gives up, gives witnesses outside `R_O`, or gives witnesses whose inner
-view rejects aborts at both, and at a kept draw `P_O`'s run opens as the inner view opened (`runO`). -/
+/-- **Off the bad samples, `P_O`'s aborting run accepts where the gated served run opened does, and the inner protocol
+opens the two alike there**: a sample where `E_O` gives up, gives witnesses outside `R_O`, or gives witnesses whose inner
+view rejects aborts at both, and at a kept sample `P_O`'s run opens as the inner view opened (`runO`). -/
 theorem servedO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
     (d : (Fin (K.V.k x) → Coin) × K.EO.C x) (hb : ¬ K.BadO I S H P x ω d) :
     ((K.servedO I S H P x ω d).seen.out = .acc ↔ (K.innerFO I S H P x decC ω d).seen.out = .acc) ∧
@@ -513,16 +513,16 @@ theorem servedO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c
     refine ⟨?_, fun _ => h1.symm⟩
     rw [S.openView_out]
     exact ⟨fun _ => h2, fun _ => hacc'⟩
-  · have e2 : K.innerFO I S H P x decC ω d = abortTrace := by
+  · have e2 : K.innerFO I S H P x decC ω d = abortTranscript := by
       unfold Comp.innerFO
       rw [ite_eq_right hk]
-    have e1 : K.servedO I S H P x ω d = abortTrace := by
+    have e1 : K.servedO I S H P x ω d = abortTranscript := by
       unfold Comp.servedO Comp.servedG
       by_cases hout : K.OutRO H P x ω d
       · rw [ite_eq_left hout]
-        exact ite_eq_right (by simp [abortTrace, Trace.seen])
+        exact ite_eq_right (by simp [abortTranscript, Transcript.seen])
       rw [ite_eq_right hout, servedRun_seen, outerStage_eval]
-      change S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)) = abortTrace
+      change S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)) = abortTranscript
       refine ite_eq_right fun hacc => hk ?_
       obtain ⟨w, hw⟩ : ∃ w, K.wits H P x ω d = some w := by
         rcases hw : K.wits H P x ω d with _ | w
@@ -539,7 +539,7 @@ theorem servedO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c
 
 omit [Nonempty Coin] in
 /-- **The mixed run and `P_O`'s aborting run accept alike, and the inner protocol opens them alike where they accept**:
-they are one run at the bad draws, and `servedO_rel` elsewhere. -/
+they are one run at the bad samples, and `servedO_rel` elsewhere. -/
 theorem mixO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
     (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     ((K.mixO I S H P x decC ω d).seen.out = .acc ↔ (K.innerFO I S H P x decC ω d).seen.out = .acc) ∧
@@ -560,17 +560,17 @@ theorem abortRun_eqO (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω
   have hc : firstCoins (I.V.k (K.xI x)) (extendDraw t).1 = t.1 := firstCoins_extend hn t.1 t.2.1
   unfold abortRun Comp.keepAO
   show (if K.keepDO I S H P x ω (extendDraw t) = true then
-      run H (K.innerPO I S H P x decC) I.V (K.xI x) ω t.1 else abortTrace) =
+      run H (K.innerPO I S H P x decC) I.V (K.xI x) ω t.1 else abortTranscript) =
     K.innerFO I S H P x decC ω (extendDraw t)
   unfold Comp.innerFO
   rw [hc]
 
 /-- **The inner stage fails where `E^rep` at the inner protocol fails against `P_O`'s aborting runs, at a bad rerun, or
-where the judged draw's inner view rejects**: where every outer extraction succeeds, `E_O` gives witnesses outside
+where the judged sample's inner view rejects**: where every outer extraction succeeds, `E_O` gives witnesses outside
 `R_O` at no rerun (`Replays`), so `E*`'s inner stage sees the gated served runs (`servedG`), and at the inner protocol's
-openings what `E^rep` there sees of them opened (`erep_rel₂`), which off the bad draws accept as `P_O`'s aborting runs
-and open alike (`servedO_rel`, through the mixed run `mixO`); the judged draw is `P_O`'s accepted run where its inner
-view accepts, and its statement parses (`Refuses`). A bad rerun costs `N_I` times one draw's
+openings what `E^rep` there sees of them opened (`erep_rel₂`), which off the bad samples accept as `P_O`'s aborting runs
+and open alike (`servedO_rel`, through the mixed run `mixO`); the judged sample is `P_O`'s accepted run where its inner
+view accepts, and its statement parses (`Refuses`). A bad rerun costs `N_I` times one sample's
 (`Pr_exists_rerun_draws`), and `E^rep` at `P_O`'s aborting runs over their own coins is `Inner.PrBadAbort` at the inner
 protocol (`unifMap_extendDraw`, `InnerRounds`). -/
 theorem PrBadGood_le (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)

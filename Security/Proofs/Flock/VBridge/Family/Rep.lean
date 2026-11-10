@@ -101,7 +101,7 @@ theorem resParams_of_check {c : Flock.Circuit} (h : RecResiduals.check c = .ok (
     rw [hn, startsWith_resUnitName] at h
     cases h
 
-/-- A parsed circuit V* is drawn over has a unit per VU: its unit range counts `g · upv` slots, a power of two when the
+/-- A parsed circuit V* is sampled over has a unit per VU: its unit range counts `g · upv` slots, a power of two when the
 unit returns the outputs (`scopeOk`). -/
 theorem upv_pos {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables = .ok c) (hs : Layout.scopeOk c = true) : 0 < c.upv := by
@@ -527,7 +527,7 @@ def HZeroL : Prop :=
           (layers F.zs dg N k Rw R ω t R₂ τ (F.sess p)) hj (partBase S ns nv + e) = false
 
 /-- **The rep's coins fit the verifier's schedule.** At an accepted outer proof, `verifierRows` accepts each rep's
-coins and extra claims: its rounds have the sizes the shape's schedule draws and there are `claims - 2` extra claims
+coins and extra claims: its rounds have the sizes the shape's schedule samples and there are `claims - 2` extra claims
 (`verifierRows_schedule`); established from the table's files (`TableFiles.Valid`: the stream's `RepTape` and the
 session's extra claims, as for `HFiles`). -/
 def HFit : Prop :=

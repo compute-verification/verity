@@ -126,7 +126,7 @@ def _sig_segment(S):
 Sha512RowSegSegment = _part(
     "Sha512RowSegSegment", ("M",), _sig_segment, lambda C, S, *e: segment_hash(C, S.M, e[:8], e[8]),
     "sha512/row-seg/v1's segment hash from its prefix's midstate cv: SHA-512 continued over the segment's M bits as "
-    "ceil(M / 8) bytes with zero fill, padded as a 128 + ceil(M / 8)-byte message")
+    "ceil(M / 8) bytes with zero fill, padded as a 128 + ceil(M / 8)-byte message", calls=True)
 
 
 def _segments(n_bits: int) -> list[int]:
@@ -140,7 +140,7 @@ def _sig_outer(S):
 
 Sha512RowSegOuter = _part(
     "Sha512RowSegOuter", ("N_BITS",), _sig_outer, lambda C, S, *e: outer_hash(C, S.N_BITS, e),
-    "sha512/row-seg/v1's outer hash: SHA-512(Q(N_BITS) || d_0 || ... || d_(s-1)) from Q's midstate")
+    "sha512/row-seg/v1's outer hash: SHA-512(Q(N_BITS) || d_0 || ... || d_(s-1)) from Q's midstate", calls=True)
 
 
 def _signature(S):

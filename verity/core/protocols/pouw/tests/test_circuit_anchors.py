@@ -1,5 +1,5 @@
 """The anchored inputs' anchors (`verity.ml.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
-and refuses a repeated call index in a window or across a salt's windows; a tile check's are public input regions, their
+and refuses a repeated call index in an execution phase or across a salt's execution phases; a tile check's are public input regions, their
 values unpacked into whole words."""
 from __future__ import annotations
 
@@ -180,9 +180,9 @@ def test_a_window_refuses_a_repeated_call_index():
 
 
 def test_a_salt_s_windows_share_no_call_index():
-    """A call's noise key reads the salt and its call index, so a call index names one call across every window of a
-    salt: a later window that lists one an earlier window listed is refused before its ledger opens, a window under
-    another salt is refused, and the next window's forwards start after the last one used."""
+    """A call's noise key reads the salt and its call index, so a call index names one call across every execution phase of a
+    salt: a later execution phase that lists one an earlier execution phase listed is refused before its ledger opens, an execution phase under
+    another salt is refused, and the next execution phase's forwards start after the last one used."""
     call = F.call(32, 64, 32)
 
     def receipt(*forwards, salt=call.salt):

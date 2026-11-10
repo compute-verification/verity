@@ -11,7 +11,7 @@ public import Proofs.Flock.ZkAny.RelayLoopOwn
 
 * `roundPlace_l0`: a round `roundPlace` places is on a session's entry whose table has a level 0 bound for the
   session.
-* **`repJ_round`**: at a frame round of the deployed loop (`LoopModel.Deployed`), where the model's draws are the
+* **`repJ_round`**: at a frame round of the deployed loop (`LoopModel.Deployed`), where the model's samples are the
   tables the loop's level 0 give once the session's entry is the setup's and its level 0 are the ones the loop drew,
   the round's own rep has `RepJ` at the session's next request and the model's coin step takes the round's coins: at
   its stream's first round by `repJ_same_first` or `repJ_next_first`, past it by `repJ_same` within the rep's
@@ -55,7 +55,7 @@ theorem roundPlace_l0 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {
 
 open Loop LeanRelease in
 /-- **`loopKept_round`'s `hcur` at the deployed loop**: at the loop's own frames (`LoopModel.Deployed`), `real`
-answering the loop's own tables (`hR`), and the model's draws at each rep the table its level 0 gives wherever the
+answering the loop's own tables (`hR`), and the model's samples at each rep the table its level 0 gives wherever the
 session's entry is the setup's and its level 0 the ones the loop drew (`hreal`): at a frame round of `stream`, table
 `i`'s rep `r`'s, the round's rep has `RepJ` at the session's next request and the model's coin step takes the round's
 coins, whichever stream's round comes next. The round's coins are the model's (`RoundFacts.coins`), its place,

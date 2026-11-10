@@ -24,7 +24,7 @@ open scoped ENNReal
 
 variable {M : IdealModel}
 
-/-- **A setup check** for a scheme: its coins `Ξ`, drawn uniformly after the server's output, and the predicate
+/-- **A setup check** for a scheme: its coins `Ξ`, sampled uniformly after the server's output, and the predicate
 `accepts W pp C ξ f`: accept `(pp, C)` as the encoding of the committed `W` under coins `ξ`, reaching the primitive
 through `f`. -/
 structure SetupCheck (sch : Scheme M) : Type 1 where

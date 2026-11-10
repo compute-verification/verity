@@ -49,7 +49,7 @@ import shlex
 import subprocess
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -61,6 +61,7 @@ from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program.sampling_event import program_sampler_construction
+from verity_vllm.query.manifest.format import RUN_FAMILY, RUN_PARAM, canonical_identity
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
 DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
@@ -1084,6 +1085,53 @@ def fold_worker(a: Options) -> int:
           f"unknown_roots={len(doc['unknown_roots'])}  rss={doc['max_rss_gb']} GB"
           + (f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else ""), file=sys.stderr)
     return 0
+
+
+# ---------------------------------------------------------------------------------------------------------
+# the root's `run` Inputs
+# ---------------------------------------------------------------------------------------------------------
+
+def run_input_bindings(address_map: dict, identities: list[dict], *, rank: int = 0) -> dict:
+    """Each request's `run` Input batches of the workload root, bound to the committed `run_values` identities of the required
+    manifest (`identities`, `RUN_FAMILY`, rank `rank`).  `run` (`RUN_PARAM`) is a Record of one `Array<leaves, Value<1>>` per field, so
+    the root holds it as one Input batch per field in field order (`workload.request_component`), `request[<id>].run[<k>]` (`run`
+    alone for one field), whose gates `WorkloadProgram.address_map` gives; field k is the request's row whose `leaves` are the k-th
+    of its `run`, and its batch has one gate a leaf.  A request whose rows don't tile its `run` batch by batch, or whose rows the map
+    has no `run` for, is refused by name and binds nothing.
+    -> {"bindings": [{request_id, input, field, gates, identity, engine_step}], "refused": [str]}"""
+    batches: dict[str, list[tuple[int, str, int, int]]] = defaultdict(list)
+    for r in address_map["requests"]:
+        for i in r["inputs"]:
+            name = str(i["name"])
+            if name == RUN_PARAM or (name.startswith(RUN_PARAM + "[") and name.endswith("]") and name[len(RUN_PARAM) + 1:-1].isdigit()):
+                k = int(name[len(RUN_PARAM) + 1:-1]) if name != RUN_PARAM else 0
+                batches[f"r{int(r['index'])}"].append((k, str(i["global"]), int(i["gates"][0]), int(i["gates"][1])))
+    fields: dict[str, list[dict]] = defaultdict(list)
+    for row in identities:
+        if row.get("family") == RUN_FAMILY and int(row.get("rank", 0)) == rank:
+            fields[str(row["request_id"])].append(row)
+    bindings: list[dict] = []
+    refused: list[str] = []
+    for rid in sorted(set(batches) | set(fields), key=lambda q: (len(q), q)):
+        rows = sorted(fields.get(rid, ()), key=lambda x: int(x["leaves"][0]))
+        held = sorted(batches.get(rid, ()))
+        if not held:
+            refused.append(f"{rid}: {len(rows)} run values and no `{RUN_PARAM}` Input in the address map")
+            continue
+        spans = [(int(x["leaves"][0]), int(x["leaves"][1])) for x in rows]
+        sizes = [(k, b - a) for k, _p, a, b in held]
+        tiled = len(spans) == len(held) and [k for k, _ in sizes] == list(range(len(held)))
+        lo = 0
+        for (a, b), (_k, n) in zip(spans, sizes):
+            tiled = tiled and a == lo and b - a == n
+            lo = b
+        if not tiled:
+            refused.append(f"{rid}: its run values' leaves {spans} don't tile its `{RUN_PARAM}` Input batches {sizes} (field k, one gate a leaf)")
+            continue
+        for row, (k, param, a, b) in zip(rows, held):
+            bindings.append({"request_id": rid, "input": param, "field": f"{row['op_path']}/{row['output_member']}", "gates": [a, b],
+                             "identity": canonical_identity(row), "engine_step": row.get("engine_step")})
+    return {"bindings": bindings, "refused": refused}
 
 
 _JSON_PRIMS = frozenset((str, int, float, bool, type(None)))

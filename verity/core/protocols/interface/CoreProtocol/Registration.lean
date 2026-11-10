@@ -17,7 +17,7 @@ names the whole log. An entry is one of three kinds, each under its own versione
 * **site** (`verity/registration/site/v1`): the Site's own registration entry (`Core.Site.Registration.Entry`), the
   sheets, locations and links it adds to the Site (`Core.Site`), its JSON, digest and check the Site's.
 * **information** (`verity/registration/information/v1`): the items it registers, each once in the log (`Item.key`):
-  θ, each registered value (weights, initial state, tables) by its committed root, and the builder `B` that compiles
+  θ, each registered value (weights, initial state, tables) by its committed root, and the registered compiler `B` that compiles
   advice into the circuit (its digest, its advice's format and its public cap `ℓ` on one declaration's advice, in
   bits). Registration registers the site, θ and `B`, not the circuit `B` builds; a subprotocol's Program and
   parameters, and the proof system, are that protocol's public verifier parameters, not registration.
@@ -37,8 +37,8 @@ entry by `previous` and then `duplicate-information`, no item registered twice, 
 `duplicate-declaration`, no day declared twice. A site entry's checks hold of an information entry or a declaration
 whenever they held of the log before it, which it adds no hardware to.
 
-A component reads its view of the log by projection (`View`): the Site, θ's values, the builder and the days' declared
-circuits, at the head. As a
+A subprotocol reads its view of the log by projection (`View`): the Site, θ's values, the registered compiler and the days'
+registered circuits, at the head. As a
 core protocol (`protocol`, `verity/registration/log/v1`) the log is the commitment, its head the digest, and the
 parameters the auditor's own: the composite and the Site's auditor (`Core.Site.Registration.Auditor`: its data sheets,
 the tolerance it allows a sheet's figures around their estimates, and its devices' keys).
@@ -71,7 +71,7 @@ structure Theta where
   checkpoint : Option String := none
   deriving DecidableEq, Repr
 
-/-- The builder `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
+/-- The registered compiler `B`: its digest, the format of the advice it compiles, and its public cap `ℓ` on one declaration's
 advice, in bits. -/
 structure Builder where
   digest : String
@@ -84,12 +84,12 @@ inductive Item
   | builder (b : Builder)
   deriving DecidableEq, Repr
 
-/-- What an item registers, which the log registers once: each θ value by its name, and one builder. -/
+/-- What an item registers, which the log registers once: each θ value by its name, and one registered compiler. -/
 def Item.key : Item → String
   | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
 
-/-- A day's declared circuit: the day, by its index among the monitoring period's days, the digest of the circuit's
+/-- A day's registered circuit: the day, by its index among the monitoring period's days, the digest of the circuit's
 program as hex, and its block Definitions by descriptor key. -/
 structure Declared where
   day : Nat
@@ -281,10 +281,10 @@ def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) St
     | some r => .error (s.entries, r)
     | none => .ok (s.add e)) (State.empty c)
 
-/-! ## Views: what a component reads of the log -/
+/-! ## Views: what a subprotocol reads of the log -/
 
-/-- What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder, and
-the days' declared circuits in order. -/
+/-- What a subprotocol reads of an accepted log, at its head: the Site, θ's registered values in order, the registered
+compiler, and the days' registered circuits in order. -/
 structure View where
   site : Site
   theta : List Theta
@@ -301,7 +301,7 @@ def State.view (s : State) : View :=
 /-- θ's registered value named `value`. -/
 def View.value? (v : View) (value : String) : Option Theta := v.theta.find? (·.value == value)
 
-/-- **Day `day`'s declared circuit**, the spec's `Verity.Registration.declared`: the one declaration of the day in an
+/-- **Day `day`'s registered circuit**, the spec's `Verity.Registration.declared`: the one declaration of the day in an
 accepted log, or `none` when the log declares no circuit for it. A window of that day runs its program. -/
 def View.declared? (v : View) (day : Nat) : Option Declared := v.declarations.find? (·.day == day)
 
@@ -353,7 +353,7 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
 /-- **The registration log's check** as a core protocol, `verity/registration/log/v1`: the parameters are the auditor's
 (`{"auditor": AUDITOR, "composite"}`, the auditor as `Core.Site.Registration.Auditor.ofJson` reads it), the commitment
 is the log (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the
-check passes, making public its view (`View.toJson`: its site, θ, builder, declarations and head) and keeping its
+check passes, making public its view (`View.toJson`: its site, θ, registered compiler (`builder`), declarations and head) and keeping its
 length, and rejects the first entry the check refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII
 without DEL as not ASCII. It is never undecided. -/
 def protocol : Protocol where
@@ -481,7 +481,7 @@ private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0"
   some (0, .site .unknownRef)
 #guard refusal .remote [site ⟨[], locs.take 2 ++ [{ id := "node1", kind := .host, parent := some "node0" }], []⟩] ==
   some (0, .site .kind)
--- θ's weights registered twice, and a second builder; another θ value is a new item
+-- θ's weights registered twice, and a second registered compiler; another θ value is a new item
 #guard refusal .onsite (entries ++ [information (items.take 1)]) == some (3, .duplicateInformation)
 #guard refusal .onsite (entries ++ [information (items.drop 2)]) == some (3, .duplicateInformation)
 #guard refusal .onsite (entries ++ [information [.theta { weights with value := "tables" }]]) == none

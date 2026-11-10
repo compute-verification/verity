@@ -46,7 +46,7 @@ value layer is the extractor's and not the committed tree's, and `RelOfRows` fai
 A served root is covered when the service registers its tree as a port of `own` before the session's statement and coin,
 with the prover's commit-time opening as the registrant's (`RowsSession.ServedRegistered`: unit `u`'s opening reads
 exactly `u`'s rows at the ports `own` names, through `own`'s first port of that name, at the position it gives `u`).
-`Flock.Guarantees.ServedRowsLinked` says that then, at every accepted outcome, a drawn unit whose rows are right at its
+`Flock.Guarantees.ServedRowsLinked` says that then, at every accepted outcome, a sampled proof block whose rows are right at its
 owned reads (`RowsAt`) has the committed tree's row at each served read.
 
 `RowsSession.xv_eq_of_rowsAt` gives it from `OwnReadsHJ` at the outcome, and `OwnReadsHJ` at `ServedRegistered` is
@@ -77,7 +77,7 @@ def ownPort (q : Fin s.c.ports.size) : _root_.Flock.Registered.Port :=
 /-- **Unit `u`'s served roots are registered** (owner: the proof system, which registers each served tree a relation
 reads as a port of `own` before the session's statement and coin): `rdU u` reads exactly `u`'s rows at the ports `own`
 names, each through `own`'s first port of that name (`ownPort`), at the position that port gives `u` in every table
-draw that proves it. -/
+sample that proves it. -/
 def ServedRegistered (u : Fin s.n) : Prop :=
   (∀ p, (s.rdU u).isRead p ↔
       ∃ q : Fin s.c.ports.size, p = .inl (u, q) ∧ ∃ pt ∈ s.own, pt.name = s.c.ports[q].name) ∧
@@ -113,8 +113,8 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Classical
 
-/-- **C-Flock's rows link at served roots.** At a C-Flock session (`RowsSession`), at every outcome of its live audit
-(draw `S`, registration `R`, the record `wr` writes) that flock-verify `--zk --registered` accepts, a drawn unit `u`
+/-- **Flock's rows link at served roots.** At a Flock session (`RowsSession`), at every outcome of its live audit
+(sample `S`, registration `R`, the record `wr` writes) that flock-verify `--zk --registered` accepts, a sampled proof block `u`
 whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads exactly its rows at the ports `own`
 names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`) has, on each of its wires at a served
 read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's row's. Acceptance names each port of

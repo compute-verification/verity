@@ -699,7 +699,7 @@ class AttentionTwin(Twin):
 FAMILIES: dict[str, type[Twin]] = {cls.base_id: cls for cls in (GemmTwin, BiasAddTwin, EmbeddingTwin, TokenSelectTwin, SiluMulTwin,
                                                                 RoPETwin, RMSNormTritonTwin, RMSNormFusedTwin, AttentionTwin)}
 FAMILIES.update(CNR.twin_families(Twin, rand_bf16, RANDOM_KINDS))
-RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin = (
+RMSNormCudaVector8Twin, RMSNormFusedCudaVector8Twin, RMSNormFusedCudaVector8BatchedTwin = (
     FAMILIES[k] for k in CNR.TWIN_DEFINITIONS)
 DEFINITIONS = {"Gemm_v1": b1.Gemm, "BiasAdd_v1": b1.BiasAdd, "Embedding_v1": b1.Embedding, "TokenSelect_v1": b1.TokenSelect,
                "SiluMul_v1": b1.SiluMul, "RoPE_v1": b1.RoPE, "RMSNormTriton_v1": b1.RMSNormTriton,
@@ -751,7 +751,7 @@ def _mismatch(m: tuple) -> dict:
 
 def check_instances(cls: type[Twin], statics_of: Callable[[np.random.Generator], dict], rng: np.random.Generator, n: int,
                     kinds: tuple[str, ...]) -> dict:
-    """`n` random instances of twin family `cls` (statics drawn per instance, `kinds` in turn), each compared with the
+    """`n` random instances of twin family `cls` (statics sampled per instance, `kinds` in turn), each compared with the
     reference by core `self_check`; an instance the twin declines is counted under its reason."""
     rep: dict[str, Any] = {"n": 0, "n_declined": 0, "statics": [], "kinds": Counter(), "mismatches": [], "words": 0}
     for i in range(n):

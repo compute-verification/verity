@@ -120,7 +120,7 @@ def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monk
     q = RT.parse(["bash", "integrations/vllm/verity_vllm/ops/run_row_v2.sh", "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4",
                   "--required-classes", "module_out"], stage="commit")
     assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None
-    # a value that is itself a flag list is a value (the R19 admit fix (a) commit flags), not a bare `--commit-args` switch
+    # a value that is itself a flag list is a value (commit flags), not a bare `--commit-args` switch
     c = RT.parse(_argv("commit", "--commit-args", "--bounded-staging --retain-exclude hidden_m1", "--pairs", "3"), stage="commit")
     assert c["commit_args"] == "--bounded-staging --retain-exclude hidden_m1" and c["pairs"] == "3"
     assert RT.parse(_argv("commit", "--commit-args", "--pairs", "3"), stage="commit")["commit_args"] is True   # a real switch stays one
@@ -287,8 +287,8 @@ PINNED = {"hw.family": "l40s", "torch": "2.9.0", "vllm": "0.11.0"}
 def pinned_probes(monkeypatch):
     """The probes behind the key conditions answer as an L40S host with the workload interpreter's torch and vllm: `hw.family`
     (nvidia-smi) and the vLLM Tools' own `tool.vllm.<stage>.torch|vllm` (a `$PY` subprocess). Each probe gives None when it
-    times out, so on a loaded machine one of two identical requests could see None and get another derivation (train T640's
-    `check` on vy-nebius-1, 1 Oct 2026). Pinned to values, not None, so a caller that skips a probe gets another derivation."""
+    times out, so on a loaded machine one of two identical requests could see None and get another derivation.
+    Pinned to values, not None, so a caller that skips a probe gets another derivation."""
     from research import env as E
     monkeypatch.setattr(E, "_nvidia_smi", lambda: {"hw.sku": "NVIDIA L40S", "hw.count": 1, "hw.vram_mb": 46068, "rt.driver": None, "rt.cuda": None})
     for stage in ("build", "match", "commit", "replay"):

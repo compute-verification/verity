@@ -6,7 +6,7 @@ public import Definitions.Pous.Model.M1
 /-!
 # Model M1 on P2's exact domain `[0, p)`
 
-P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. `permsp B w p` draws `B` independent uniform permutations of
+P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. `permsp B w p` samples `B` independent uniform permutations of
 `Fin p`. They act on `w`-bit strings through the numeric value (bit `i` has weight `2^i`): values `< p` move, and
 values `≥ p` (the tail `[p, 2^w)`) are fixed. Queries and answers are `w`-bit strings, so `Scheme`, the audit game and
 `Meets` apply unchanged.

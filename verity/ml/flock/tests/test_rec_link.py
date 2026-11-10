@@ -169,7 +169,7 @@ def test_the_unit_commits_its_ports_as_five_rows_of_whole_sha512_blocks(ub, pb):
 
 @pytest.mark.slow
 def test_the_link_part_stages_over_the_inner_rows_and_a_forged_row_does_not_hold(tmp_path, monkeypatch):
-    """`rec_vstage.link_part` over a drawn population (`rec_vstage.drawn_rows`) of three units, unit u + 1's input row u
+    """`rec_vstage.link_part` over a sampled population (`rec_vstage.drawn_rows`) of three units, unit u + 1's input row u
     reading unit u's output: the part composes (its rows whole blocks), its table is the registered value ``rec-links`` its
     statement names (``rec-links.txt``), every row's openings climb to the verifier's roots and the unit gives them, and the
     forgery's first row names a writer whose output is not its reader's row. About a minute: only `circuit.compose`, after

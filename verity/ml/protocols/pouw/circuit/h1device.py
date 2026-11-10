@@ -1,4 +1,4 @@
-"""H1's device records: the hardware facts an H1 window (`h1window`, the `eps1-sm120-h1fx1` tile) is built and served on, one a
+"""H1's device records: the hardware facts an H1 execution phase (`h1window`, the `eps1-sm120-h1fx1` tile) is built and served on, one a
 GPU architecture. `h1window.h1_tile` takes one by its architecture (``arch``), binds its tiles' exact accumulator with the
 record's s8 binding and refuses a contraction outside the record's domain.
 
@@ -6,7 +6,7 @@ record's s8 binding and refuses a contraction outside the record's domain.
   in `silicon.instructions`) and binds it with `ops.boolean.gemm.s8_gemm`, which gives the registered
   `BlackwellS8ImmaDot32_v2` for every card whose step is that function and refuses any other. sm_90's step,
   `HOPPER_SM90_S8_K32`, is sm_120's under Hopper's name (the H200's ``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32 agree
-  with it word for word on the H200), so an sm_90 window's Program is the sm_120 one's, byte for byte, and a served
+  with it word for word on the H200), so an sm_90 execution phase's Program is the sm_120 one's, byte for byte, and a served
   path registers the same trees on either card.
 * **The domain** is the contractions the record's kernels serve, beyond what the Definitions refuse themselves (32 | K and
   K < 2^17, `ops.gemm.S8_K_LIMIT`). sm_90's is Dither's h1u units (`benchmarks/hash/dither/h1u.cu`, gated on an H200 at
@@ -15,7 +15,7 @@ record's s8 binding and refuses a contraction outside the record's domain.
   K served is 512. On that domain m = `segment.n_digits`(K / 32) is 2 or 3, the digits h1u's one stream recombines. h1u
   issues ``mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32`` without ``.satfinite``; below 2^17 no partial sum of s8 x s8
   products from a zero accumulator leaves s32 (`integer.exact_k_limit`), so it agrees with the clamped step word for word.
-  sm_120's record states no domain: its windows keep the Definitions' own refusals, as before records existed.
+  sm_120's record states no domain: its execution phases keep the Definitions' own refusals, as before records existed.
 * **The sheet.** Each record holds the device's data-sheet facts with their sources: SMs, the clock its tensor peaks are
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
   one). sm_90's are the machine model's H200 sheet (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose

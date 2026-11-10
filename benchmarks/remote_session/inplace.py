@@ -11,7 +11,7 @@ map        a pass's plan (any `receipts.Plan` over the regions) to each position
 pass       its sketch-sha512 receipts on tensor cores, each chunk read through the map, and `receipts.tree`'s leaves
            (the last one short), padding and levels hashed behind them as they are read (`rs_mapped_pass`), leaf c's
            salt `device.store_salt(key, seed, c)`; the pass keeps its levels from h0 up
-opening    the 2^h0-leaf subtree a drawn position falls in, recomputed under the pass's seed and plan from the store as
+opening    the 2^h0-leaf subtree a sampled position falls in, recomputed under the pass's seed and plan from the store as
            it is when it opens (`rs_mapped_receipts`, then reader.cu's `rb_leaves`, `rb_pads` and `rb_tree`), and the
            path's levels from h0 up from the pass
 ~~~

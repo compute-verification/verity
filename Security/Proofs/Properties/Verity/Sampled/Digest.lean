@@ -5,16 +5,16 @@ public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Composition
 
 /-!
-# Sampled proofs' coupling: the digest v2's draw answers
+# Sampled proofs' coupling: the digest v2's sample answers
 
-v2 draws at the coins its challenger releases after the digest sampled proofs' case commits (`draw_after`). That digest
+v2 samples at the coins its challenger releases after the digest sampled proofs' case commits (`draw_after`). That digest
 is the prover's: the commitment fixes it before any coin only as one entry of the list of digests `bind` hashes into it
 (`BindsAt`, `Core.Composition.bind`), and the cases are sent at the close. So it is fixed where the commitment is, at
 the play's start, by the SHA-512 of a message (`bindMessage`) the play reveals only at its close: a cut of the period's
 game (`bindCut`, a `Verity.Game.DigestCut`) whose revealed messages have one SHA-512, since each play binds its list
 into the one commitment (`bind_hash_eq`).
 
-* **The clause** (`SampledDigest`, `afterAt`): v2 draws at `afterAt σ`, sampled proofs' entry in the list whose message
+* **The clause** (`SampledDigest`, `afterAt`): v2 samples at `afterAt σ`, sampled proofs' entry in the list whose message
   is the one `σ`'s plays most likely reveal at the cut (`bindMode`). An accepted play that doesn't miss at the cut
   meets it (`sampledDigest_of_noMiss`).
 * **The finder** (`bindFinder`, `Constructions.withBind`): the cut's two-continuation finder, `σ`'s play on two
@@ -91,12 +91,12 @@ theorem mapM_entry {β γ : Type _} {f : β → Option γ} :
         · obtain ⟨y, hy, e⟩ := mapM_entry hl x hx
           exact ⟨y, List.mem_cons.2 (Or.inr hy), e⟩
 
-/-- **v2 draws at the digest sampled proofs' case commits**: where composite `k` accepted what the prover sent and
-v2's case in it accepts at the draw `dr`, the digests the commitment binds (`BindsAt`), keyed by distinct ids, give
+/-- **v2 samples at the digest sampled proofs' case commits**: where composite `k` accepted what the prover sent and
+v2's case in it accepts at the sample `dr`, the digests the commitment binds (`BindsAt`), keyed by distinct ids, give
 sampled proofs `dr`'s digest. -/
 theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
+    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
     (hcase : V2Case k s a b e) (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) :
     ∃ ds, BindsAt k s ds ∧ (ds.map Prod.fst).Nodup ∧ (VStar.Recursive.Sampled.PROTOCOL, dr.after) ∈ ds := by
   obtain ⟨-, hc, -, -, hdr, -⟩ := hacc
@@ -119,9 +119,9 @@ theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e 
   · obtain ⟨y, hy, hfy⟩ := mapM_entry hds' x hx
     have hdg : Properties.Composition.digestOf x.1 x.2.2.commitment = some c.digest := by
       rw [hx1]
-      show Properties.Composition.digestOf _root_.SampledProofs.OneStage.protocol x.2.2.commitment = _
+      show Properties.Composition.digestOf _root_.Spot.OneStage.protocol x.2.2.commitment = _
       unfold Properties.Composition.digestOf
-      rw [show _root_.SampledProofs.OneStage.protocol.commitment x.2.2.commitment = .ok c from hc]
+      rw [show _root_.Spot.OneStage.protocol.commitment x.2.2.commitment = .ok c from hc]
       rfl
     have hid : x.1.id = VStar.Recursive.Sampled.PROTOCOL := (congrArg (·.id) hx1).trans rfl
     simp only [hdg, Option.map_some, Option.some.injEq, hid] at hfy
@@ -217,7 +217,7 @@ noncomputable def bindMode (σ : Strategy (V.game θ F c)) : Claims.Msg :=
 
 /-! ## The clause -/
 
-/-- **v2 draws at the digest `after`**: in every v2 case what the prover sent composite `k` accepts, the draw answers
+/-- **v2 samples at the digest `after`**: in every v2 case what the prover sent composite `k` accepts, the sample answers
 `after`. -/
 def SampledDigest (s : Verity.Sent) (after : ByteArray) : Prop :=
   ∀ a b e p c ev ξ dr, V2Case k s a b e → V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr →
@@ -242,7 +242,7 @@ theorem afterAt_spec {σ : Strategy (V.game θ F c)} (h : ∃ dg, DigestAt V k �
   rw [afterAt, dite_eq_left h]
   exact h.choose_spec
 
-/-- **An accepted play that doesn't miss at the commitment's cut draws at `afterAt`**: its message is the most likely
+/-- **An accepted play that doesn't miss at the commitment's cut samples at `afterAt`**: its message is the most likely
 one, so its digests are those of `afterAt`'s play (`eq_of_bindMsg`), which give sampled proofs one digest. -/
 theorem sampledDigest_of_noMiss (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x)) (hn : ¬ (bindCut V k θ F c).missOn σ x) :
@@ -262,7 +262,7 @@ theorem sampledDigest_of_noMiss (σ : Strategy (V.game θ F c)) (x : CoinTape (V
 
 /-! ## The finder and the bound -/
 
-/-- **The clause's bound at a budget**: a play of the period's game whose sampled verdict accepts and whose draw doesn't
+/-- **The clause's bound at a budget**: a play of the period's game whose sampled verdict accepts and whose sample doesn't
 answer `afterAt σ` is at most as likely as the square root of the commitment's cut's two-continuation finder's success,
 at any budget `q`. -/
 theorem prob_not_sampledDigest_le (σ : Strategy (V.game θ F c)) (q : ℕ) :
@@ -305,7 +305,7 @@ noncomputable def Constructions.withBind {V : Vocab d α} (K : Constructions V) 
   { K with bindFinder := Verity.Sampled.bindFinder V k, bind_calls := Verity.Sampled.bindFinder_calls V k }
 
 /-- **(a') at the clause**: at constructions whose bound digests' finder is `bindFinder`, the coupling's digest bound
-holds at the session `A` and the clause that v2 draws at `afterAt` (`DigestBound`). -/
+holds at the session `A` and the clause that v2 samples at `afterAt` (`DigestBound`). -/
 theorem digestBound_of (K : Constructions V) (hK : K.bindFinder = bindFinder V k) (A : Live) (θ : ByteArray)
     (F : Array ByteArray) :
     DigestBound V k K A θ F fun c σ o => SampledDigest k o.sent (afterAt V k θ F c σ) := fun c σ => by

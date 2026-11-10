@@ -20,8 +20,9 @@ The indexer's per-token work (`deepseek_v32/attention.py`, `model_executor/layer
 5. The top-2048 selection: prefill `ops.top_k_per_row_prefill` (`topKPerRowPrefill<512, false>`, sampler.cu:846-878), decode
    `cooperative_topk` on H200 (num_rows <= 64, sparse_attn_indexer.py:615-642; else `persistent_topk`).  A row of at most 2048 keys
    takes each kernel's shortcut (sampler.cu:388-412, cooperative_topk.cuh:494-501): `DsaTopKShortRow_v1`.  A longer row is a radix
-   selection whose output order the kernels leave to their atomics: the order is a value and `dsa_topk.DsaTopKOrder` checks in
-   gates that it is a permutation of the top-2048 set under its tie rule.
+   selection whose order the kernels leave to their atomics; it is served under the DSA top-k plugin's canonical row
+   (`VERITY_DSA_TOPK=canonical`, which rewrites it to the top-2048 set in ascending index order), and the order is a value that
+   `dsa_topk.DsaTopKLongRow` checks in gates is that set, under its tie rule, in that order.
 
 The ue8m0 quantisation (`_fp8_ue8m0_quantize`, kernels.py:50-60), in the PTX of both Triton kernels:
 
@@ -418,7 +419,7 @@ def DsaTopKShortRow(B, S, n):
     """The selection of a row of at most TOPK keys: slot i holds i when i < len, else -1 (signed; a length of 0 or less is all -1).
     Prefill (`topKPerRowPrefill`, sampler.cu:388-412) has len = rowEnd - rowStart and writes indices from the row's start; decode
     (`cooperative_topk`, cooperative_topk.cuh:494-501) clamps a negative length at 0.  A row of more than TOPK keys is the radix
-    selection, whose order is a value `dsa_topk.DsaTopKOrder` checks."""
+    selection, whose order is a value `dsa_topk.DsaTopKLongRow` checks."""
     return Coll(Array(S.TOPK, I32), concat([w.refs for w in topk_short(word_ops(B), S.TOPK, n)]))
 
 

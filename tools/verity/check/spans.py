@@ -1,5 +1,5 @@
 """trace/v1 spans over a check run: `spans.jsonl` beside `steps.jsonl`, the queryable summary layer the watcher and the
-dashboard read (the observability report's section 2; the first slice of the job schema).
+dashboard read.
 
 One span is one JSON line.  The shape is frozen (a contract the watcher builds against; change no field):
 

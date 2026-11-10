@@ -138,7 +138,7 @@ def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
 /-- **`statistical-hiding` (open in Lean): the memory challenger's coin commitments hide its indices, up to `ε`.**
 `com s c I` is what the challenger publishes about the indices `I` before a session `s`, from its fresh coins `c`
 (for the deployed code, `Pous.EndToEnd.coinView`: the coin tree's root and its hm96 key). For every session, and every
-event `E` of a quantity `a` drawn independently of the coins and indices (a server's whole view apart from them), the
+event `E` of a quantity `a` sampled independently of the coins and indices (a server's whole view apart from them), the
 event holds with the published commitment and the indices it commits to at most `ε` more often than with the
 commitment to independent indices `I'`. Unbounded `E`: the hiding is statistical.
 

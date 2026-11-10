@@ -667,7 +667,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
 
     def run(cmd, **kw):
@@ -734,6 +734,29 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
         os.close(fd)
 
 
+def test_a_small_check_passes_lane_waiters_ahead_that_only_memory_keeps_from_starting(tmp_path, monkeypatch):
+    """A 400-448 GB run at the head of the line waited on memory while 7 slots sat idle, and every small
+    check behind it waited too. A waiter asking at most BACKFILL_MAX_GB doesn't count a lane waiter ahead whose ask exceeds the
+    memory free now; one with no ask, one that would fit, and a priority waiter still hold the line."""
+    line = tmp_path / SLOT.LINE
+    line.mkdir()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "448")
+    big, bfd = SLOT.join(tmp_path, who=SLOT.asker())
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "16")
+    small, sfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(small) == 1, "without a free figure the line is first come, first served"
+    assert SLOT.ahead(small, free_gb=300) == 0, "a 448 GB head that 300 GiB free can't start doesn't hold the line"
+    assert SLOT.ahead(small, free_gb=500) == 1, "a head that would fit keeps its turn"
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    plain, pfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(plain, free_gb=300) == 1, "a waiter with no ask (the small one ahead) always counts"
+    train, tfd = SLOT.join(tmp_path, priority=True, who={"mem_gb": 900})
+    late, lfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(late, free_gb=300) == 3, "a priority waiter is never passed"
+    for fd in (bfd, sfd, pfd, tfd, lfd):
+        os.close(fd)
+
+
 def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
     """The lowest train's check goes ahead of the checks of trains above it that came first, since only it can land next.
     drive ranks a train's check by its members above `main`."""
@@ -742,7 +765,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
     lane, la = SLOT.join(tmp_path)
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
-    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
+    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the after-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
     waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
@@ -759,7 +782,7 @@ def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_rank", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -865,7 +888,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -889,7 +912,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -904,7 +927,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert not sent("--on", "vy-nebius-1")
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
-    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
     assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
     assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
@@ -1134,9 +1157,9 @@ def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp
 def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_check_counts_every_one(tmp_path, monkeypatch, capsys):
     """A free train slot (mem=300) would read a negative net behind pool checks that reserve 279 GB each and use 25 and 5,
     and wait until someone shrank their reservations by hand. A
-    `--priority` waiter (a train's check, drive's post-landing run) counts another job at what it holds, already out of
+    `--priority` waiter (a train's check, drive's after-landing run) counts another job at what it holds, already out of
     memory_gb, and another priority check's reservation in full; a lane's check still counts every reservation. Each check's own
-    reservation is its slot's whole mem= in research.mem's GB: the post-landing run's 601.3 GB on n2 was slot a's mem=560."""
+    reservation is its slot's whole mem= in research.mem's GB: the after-landing run's 601.3 GB on n2 was slot a's mem=560."""
     proc = tmp_path / "proc"
     for pid, gib in ((100, 25), (300, 5), (200, 50)):                          # a research run, pool check p0, another train
         (proc / str(pid)).mkdir(parents=True)

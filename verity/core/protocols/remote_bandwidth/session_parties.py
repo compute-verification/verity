@@ -9,7 +9,7 @@ verifier -> prover     Hold {registration}; per pass Run {t, i, challenge} + the
 ~~~
 
 The verifier's session is `period.session`'s, so its case is one `RemoteAudit.Protocol` replays. Its coins source gives
-the period's live secret and the registration's nonce, drawn once. Its clock times each event of the log:
+the period's live secret and the registration's nonce, sampled once. Its clock times each event of the log:
 
 - a root's receive at the root's arrival (`Received.at`), which `audit.AuditRun.receive` holds to its window's deadline,
   and the registration's `not_before_ns` at the payload root's;

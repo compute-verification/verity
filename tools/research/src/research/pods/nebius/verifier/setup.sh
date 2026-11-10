@@ -1,5 +1,5 @@
 #!/bin/bash
-# vy-verifier-setup GATE_KEYS TUNNEL_KEYS [--lock]: the verifier's auditor host's accounts and state (vy-auditor-1; INF-179), as
+# vy-verifier-setup GATE_KEYS TUNNEL_KEYS [--lock]: the verifier's auditor host's accounts and state (vy-auditor-1), as
 # root, safe to rerun. benchmarks/live_verifier/host.py says what runs there and why; /etc/vy/verifier.json is the host's
 # configuration (its challenger and each audited node's capacities, deploy.toml's).
 #

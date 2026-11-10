@@ -1,4 +1,4 @@
-"""The differential test of core's Lean, the verifier of record, against the Python that mirrors it (`README.md` in this
+"""The differential test of core's Lean, the verifier, against the Python that mirrors it (`README.md` in this
 distribution's directory).
 
 A port is a Lean executable that answers one canonical JSON line per request, the Python it must agree with (`reference`),
@@ -12,15 +12,15 @@ and a Hypothesis strategy of inputs, invalid ones included. There are two kinds,
   per case. Lean and Python must agree on `verdict`, `commitment`, `public`, `profile` and `protocol` exactly; `reason` is
   not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 
-`run` keeps one server process open, feeds both sides every input the strategy draws, and fails with a `Mismatch` on the
+`run` keeps one server process open, feeds both sides every input the strategy samples, and fails with a `Mismatch` on the
 first difference, shrunk by Hypothesis to a minimal input; a reference that raises something it doesn't declare, and a
-server that faults or dies, are differences too. A run is deterministic: Hypothesis draws from `seed` (`derandomize`, no
+server that faults or dies, are differences too. A run is deterministic: Hypothesis samples from `seed` (`derandomize`, no
 example database, no deadline) and from its own constants alone (`_no_local_constants`), so `run(port, examples=N,
 seed=S)` finds the same minimal input again whatever modules the process has loaded, and `replay(port, value)` compares
 one input. Nothing here reads a clock or times out (`tests/test_no_wall_clock.py`): a port whose Lean
 never answers hangs its test.
 
-A port names its verifier of record (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
+A port names its verifier (`of_record`): ``"python"`` until its protocol switches to its Lean by the friction
 skill's switching ruling, ``"lean"`` after (PoUW's switch is `verity/core/protocols/pouw/verifier.py`). Either way the
 two sides must agree; the side of record is the verdict a `Mismatch` holds the other to, and what a run's `Stats` count.
 
@@ -240,7 +240,7 @@ def _check_record(port: Port | ProtocolPort) -> None:
 class Port:
     """One ported function. `exe` is the server executable's path, or with `package` the name of a `lean_exe` of that Lake
     package, which `run` builds. `reference(value)` returns the expected output (canonical JSON's domain) or raises one of
-    `rejects`. `inputs` draws inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected.
+    `rejects`. `inputs` samples inputs, invalid ones included; `need_rejects=False` waives the check that some are rejected.
     `of_record` is the side of record (`RECORDS`)."""
 
     exe: str | Path
@@ -299,7 +299,7 @@ def _outcome(msg: Any, who: str) -> Outcome:
 class ProtocolPort:
     """A core protocol's port: its executable (`exe`, or a `lean_exe` of the Lake package `package`) run as `EXE serve`.
     `reference(case)` returns the outcome dict, all six fields (`verity_difftest.protocol.answer` builds one as
-    `Core.Protocol.case` does). `inputs` draws cases, `{"commitment": hex, "evidence": hex, "params": JSON}` and malformed
+    `Core.Protocol.case` does). `inputs` samples cases, `{"commitment": hex, "evidence": hex, "params": JSON}` and malformed
     ones (bad hex, params, evidence, missing fields); `need_rejects=False` waives the check that some aren't accepted.
     `of_record` is the side of record (`RECORDS`)."""
 
@@ -386,7 +386,7 @@ class Stats:
 
 @contextlib.contextmanager
 def _no_local_constants() -> Iterator[None]:
-    """Hypothesis also draws, at p = 0.05 per sample, constants it scrapes from every local module the process has loaded
+    """Hypothesis also samples, at p = 0.05 per sample, constants it scrapes from every local module the process has loaded
     (`providers._get_local_constants`, cached per constraint in `CONSTANTS_CACHE`), so a seeded run's samples moved when a
     module the reference imports gained a literal, or a test imported one first. Within this, it samples from its own
     constants alone. `tests/test_constants.py` pins the hook, so a Hypothesis upgrade that moves it fails there."""
@@ -404,7 +404,7 @@ def _no_local_constants() -> Iterator[None]:
 
 
 def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: Server | None = None) -> Stats:
-    """Draw `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
+    """Sample `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
     count the outcomes of the side of record by kind.  Hypothesis is imported here, so the server, `build` and `replay` run
     without it."""

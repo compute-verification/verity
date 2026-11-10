@@ -13,7 +13,8 @@ adaptive prover.
   except with δ at most M − 1 of the T wipes fail their bound.
 - **Per wipe** (`per_wipe`): every one of the T wipes meets its `foreign_bits` at once, except with T·`eps`.
 
-`short_sessions`, `PERIODS` and `DELTAS` are PoUB's too (`remote_bandwidth.monitoring`).
+`short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
+(`verity.core.protocols.reporting`).
 
 A wipe signed `UNCOUNTED` is vacuous until a network certifier counts its egress: `counted` recomputes its bound from a
 covered `wipe-egress/v1` record's `egress_mib` (`wipe_period.certify`, on the session's parameters in the answer's
@@ -34,11 +35,11 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.reporting import DELTAS, PERIODS
+
 from . import streamed_wipe as sw
 from . import wipe_period
 
-PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
-DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10 ** 6))
 FORMAT = "verity/wipe-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
@@ -170,8 +171,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["CADENCE_S", "DELTAS", "EGRESS", "EXCEPT", "FORMAT", "HBM", "PERIODS", "STATEMENT", "counted", "each", "main",
-           "memory", "params_of", "per_wipe", "pooled_step", "short_sessions", "table"]
+__all__ = ["CADENCE_S", "EGRESS", "EXCEPT", "FORMAT", "HBM", "STATEMENT", "counted", "each", "main", "memory", "params_of",
+           "per_wipe", "pooled_step", "short_sessions", "table"]
 
 if __name__ == "__main__":
     sys.exit(main())

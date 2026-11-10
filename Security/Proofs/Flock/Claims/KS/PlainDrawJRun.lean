@@ -40,7 +40,7 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!
-# The plain verdict at the draw from an accepting `nextJ` step
+# The plain verdict at the sample from an accepting `nextJ` step
 
 `plainVerdictAtJK` from the recursion's last step at the record's parsed value (`FlockDeploy.nextJ`). Its decision
 runs the plain verdict and custody's reading at the coin-substituted value `coinSubJ spec c₁ mids f.j`
@@ -55,7 +55,7 @@ runs the plain verdict and custody's reading at the coin-substituted value `coin
   `--public-inputs`, `verifyJWithMK id` accepting the substituted value and the proof files, and `checksAtJ` passing
   (`nextJ_decide`, `decisionAtJ`, through `decisionJF_eval`).
 * `recordsLiveAtDJK_of_checksJ`: custody at the substituted value gives `RecordsLiveAtDJK` of `viewOfJ`.
-* `plainVerdictAtJK_of_nextJ`: on an accepting `nextJ` step whose statement carries the draw `d`, where the deployed
+* `plainVerdictAtJK_of_nextJ`: on an accepting `nextJ` step whose statement carries the sample `d`, where the deployed
   plain reader looks up no column off `C` in the step's own parsed session (`TxNoOffAtJK` at
   `⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), `plainVerdictAtJK id` holds at the step's live outcome and its link's root.
   The reader's premise moves to what `wrPDJK` writes by `txNoOffAtJK_of_records`.
@@ -414,7 +414,7 @@ theorem map_congr_of_forall₂ {α β γ : Type} {R : α → β → Prop} {f : �
       map_congr_of_forall₂ hl fun a b hb h => H a b (List.mem_cons_of_mem _ hb) h]
 
 /-- **Custody at a parsed value gives `RecordsLiveAtDJK`**: where `checksAtJ` passes at `v` on a plain statement that
-sets up at its draw `d` with no `--public-inputs`, `v` and the proof files are a record of the step's live outcome
+sets up at its sample `d` with no `--public-inputs`, `v` and the proof files are a record of the step's live outcome
 (`viewOfJ`) at the setup at `d` through every `keep`: the decoder's rounds are `liveOfJ`'s in coin count, coins and
 bytes (`decodeJWithK_live`), and custody retains every live round's bytes, so they agree after `Round.erase`. -/
 theorem recordsLiveAtDJK_of_checksJ (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -462,8 +462,8 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **An accepting `nextJ` step gives the verdict at the draw**: at SHA-512, on a step whose statement carries the
-draw `d`, if the deployed plain reader looks up no column off `C` in the step's own parsed session at the setup at `d`
+/-- **An accepting `nextJ` step gives the verdict at the sample**: at SHA-512, on a step whose statement carries the
+sample `d`, if the deployed plain reader looks up no column off `C` in the step's own parsed session at the setup at `d`
 (`TxNoOffAtJK id` at `⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), `plainVerdictAtJK id` holds at the step's live outcome
 (`viewOfJ`, at any `mPts`) and its link's root. `verifyJWithMK id` accepts the step's session at the setup at `d`
 (`decideJ_sha512`, `setupAtD_plainInputs`), which records the outcome (`recordsLiveAtDJK_of_checksJ`), so it accepts

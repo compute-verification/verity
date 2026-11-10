@@ -61,7 +61,7 @@ model's release being the loop's own frames':
   `PlaceFacts` at the round's place.
 * `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
   below the `Finish` that the Lean frame passes. It becomes provable once the Rust crossing check is mirrored into the
-  Lean firewall code, which would fix `cross`. `OwnSched`: the inner proof's own place at a round of a stream seen is
+  Lean ZK server code, which would fix `cross`. `OwnSched`: the inner proof's own place at a round of a stream seen is
   the model's scheduled round, at each slot. `FreshStart`: at a stream's first round that goes out, the model's
   next-rep state is a masking state, at each slot.
 * **`answered_deployed`**: the model answers each frame round's slot's history of the deployed loop where the loop
@@ -84,7 +84,7 @@ code fixes, and `cross`'s contract (each check can only fail a round more) does 
 history, with no guard on the rounds before it: Rust stops a session at its first failing round, so a history with an
 earlier failing round is never run, and the Lean model of the release is free there. The unguarded form constrains the
 real Rust release no more than a guarded one. It becomes provable once the Rust crossing check is mirrored into the
-Lean firewall code, which would fix `cross`. -/
+Lean ZK server code, which would fix `cross`. -/
 def CrossPasses {W R : Type} (L : LeanRelease W R) : Prop :=
   ∀ (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) (v : Msg), L.kindAt x h.length = .masked →
     h.length < L.last x → L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false
@@ -99,7 +99,7 @@ open _root_.Flock.Firewall.Frames (Sessions Rep)
 open _root_.Flock.Firewall.Frame (Masker Place)
 
 /-- **The model's run is the deployed loop's**: its release is the loop's own frames' (`LeanRelease.ofLoop`) at the
-tables `T`, the release `L₀` and the tables' draws `real`, the statement sets up as `(s0, spec, sts)`, the setup's rep
+tables `T`, the release `L₀` and the tables' samples `real`, the statement sets up as `(s0, spec, sts)`, the setup's rep
 streams' names are distinct and two a table statement (what `helloOf_some` reads off a session's `Hello`), and the run
 has a message past its last round. -/
 structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
@@ -154,7 +154,7 @@ theorem roundPlace_prior_size {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.
   · exact hge
 
 /-- **The model's tables and salts are the loop's**, at the loop `σ` for session `sid`: at each rep `r` of each table
-`i` of the session's entry, the model's draws for rep stream `2 * i + r` (`real`) are the table the loop's level 0 for
+`i` of the session's entry, the model's samples for rep stream `2 * i + r` (`real`) are the table the loop's level 0 for
 the table gives, with the salts for levels ≥ 1 the loop holds for the rep wherever it holds some. -/
 def RealAt {T : ZKMal.CoinLayer.TableData}
     (M : LoopModel Claims.Flock.Wit

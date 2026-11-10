@@ -243,8 +243,11 @@ async def replay(port: int, model: str, requests: list[dict], t0: float, drain_u
     url = f"http://127.0.0.1:{port}/v1/completions"
     ended = {"stopped_ms": None}
     timeout = aiohttp.ClientTimeout(total=None, sock_read=300)
-    # A fresh connection per request: a reused keep-alive connection the server has just closed fails the request.
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0, force_close=True), timeout=timeout) as session:
+    # A fresh connection per request: a reused keep-alive connection the server has just closed fails the request. The
+    # first streamed line carries the prompt's token ids; aiohttp refuses a line over twice read_bufsize (LineTooLong),
+    # which its default 256 KiB puts at about 115k prompt tokens.
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0, force_close=True), timeout=timeout,
+                                     read_bufsize=2 ** 22) as session:
         tasks = []
         for q in requests:
             if (delay := t0 + q["at_s"] - clock()) > 0:

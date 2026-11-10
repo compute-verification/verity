@@ -48,7 +48,7 @@ activations bound `Λ = max(e, c_r · K / (4 dd b_w))`. -/
 def EntersAtMost {r : RegisteredCircuit} (T : Threading r) (e : ℕ) : Prop :=
   ∀ a, (T.M.filter fun g => T.act g = a).card ≤ e
 
-/-- **Each linked activation draws on at least `dd` activations of its own thread**: an activation computed from counted
+/-- **Each linked activation samples on at least `dd` activations of its own thread**: an activation computed from counted
 multiplications (`L.src a` nonempty) is computed from at least `dd` distinct activations of `a`'s thread, the fan-in
 `dd` of the activations bound. -/
 def DrawsAtLeast {r : RegisteredCircuit} {T : Threading r} (L : T.Links) (dd : ℕ) : Prop :=

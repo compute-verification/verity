@@ -19,11 +19,11 @@
   receipt folds take keys: seed_j and σ_R), and its noise from the seed; nothing else reads the salt. The
   salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
   u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
-  one-stage verifier fills itself, so the prover chooses none of them (`sampled_proofs.one_stage.registered`'s
+  one-stage verifier fills itself, so the prover chooses none of them (`spot.one_stage.registered`'s
   `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
   port's, an AROW row table's included, and the registered weights', which the verifier holds to the root it pinned
   before the salt, `one_stage.registration.check`'s `pinned`), `pouw.positions` after every unit of the log's earlier records
-  (`registered.log_base`, so no two records of a log share a position), and `pouw.salt` per window, filled by the
+  (`registered.log_base`, so no two records of a log share a position), and `pouw.salt` per execution phase, filled by the
   verifier. R7 refuses a record that registers any other commitment of them (`R7-supplied`); `Compiled.inputs` gives the
   leaves the verifier fills. A seed group is the calls committed together (`groups`; by default a site, one
   call: a batched call over a layer's heads and the batch is one site): one commitment fixes the noise of
@@ -36,7 +36,7 @@
   becomes `PouwRest_v1{FN=F}`, F without its dots, reading their z (`pouw.z`). A rest of no gate is inlined.
 * **Check** (`CompileError` with the rule's code): every seed group covers at least the scheme's `cover` units, and its
   dots of each kind with a `RowNoise` a grind term of at most `grind.FLAG` at `grind.T_BITS` (``cover``: past it, decode at
-  a small batch or a short prompt, the group's noise is a live window's per-round coin, not a seed's); no seed group
+  a small batch or a short prompt, the group's noise is a live execution phase's per-round coin, not a seed's); no seed group
   holds two calls one of which reads the other's output (``span``);
   no registered Call or matmul step is left outside a unit (``uncovered``);
   the salt reaches only the seed, through the units' salt port (``salt-flow``); each unit's seed reads the unit's own position
@@ -1091,22 +1091,22 @@ class Compiled:
     def positions(self, base: int = 0) -> list[int]:
         """`pouw.positions`' values: unit u's is ``base + u``. A salt seeds each (salt, position) once, so a verifier that runs
         the Program more than once under one salt gives each run its own range (``base``); the one-stage verifier's is
-        every unit of the log's earlier records (`sampled_proofs.one_stage.registered.log_base`)."""
+        every unit of the log's earlier records (`spot.one_stage.registered.log_base`)."""
         if base < 0 or base + len(self.units) > 1 << 64:
             raise ValueError(f"positions {base} .. {base + len(self.units) - 1} are no u64s")
         return [base + u.slot for u in self.units]
 
     def seeds(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[bytes]:
         """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``,
-        under the epoch's 64-byte `salt` (a certified epoch's, `audit.Epoch.certified`)."""
+        under the execution phase's 64-byte `salt` (a certified execution phase's, `audit.Epoch.certified`)."""
         _check_salt(salt)
         _check_roots(roots, len(self.groups))
         return [SD.seed(salt, p, *roots[self.group_of[u.site]]) for u, p in zip(self.units, self.positions(base))]
 
     def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
-        """The leaves of `pouw.salt` (the epoch's 64-byte salt, a certified epoch's), `pouw.positions` and `pouw.roots`
+        """The leaves of `pouw.salt` (the execution phase's 64-byte salt, a certified execution phase's), `pouw.positions` and `pouw.roots`
         (a pair per seed group), the arguments after the served ones: the rows the one-stage verifier fills
-        (`sampled_proofs.one_stage.registered.supplied_rows`) from the window's salt, the log's ``base`` and the roots
+        (`spot.one_stage.registered.supplied_rows`) from the execution phase's salt, the log's ``base`` and the roots
         the record names."""
         _check_salt(salt)
         _check_roots(roots, len(self.groups))

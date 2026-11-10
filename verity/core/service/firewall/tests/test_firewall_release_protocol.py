@@ -252,7 +252,7 @@ def test_a_record_its_slot_leaves_unreadable_releases_nothing(server, contract):
 @pytest.mark.slow
 def test_a_reference_without_the_slots_rule_is_caught(server, contract, monkeypatch):
     """Rule 2's orphan: a reference whose slot doesn't stop the session of a holder that died admits it again, on the
-    orphan itself and among drawn cases (at this seed the first orphan the sample reaches is past its 600th case)."""
+    orphan itself and among sampled cases (at this seed the first orphan the sample reaches is past its 600th case)."""
     orphan = _case([["open", "s", ["L0", "L1"], None, None], ["finish", "r0000"], ["slot", "r0000", "L0"]], "r0000", "L0", 0)
 
     @contextmanager

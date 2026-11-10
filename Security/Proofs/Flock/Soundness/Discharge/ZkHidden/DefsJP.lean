@@ -126,7 +126,7 @@ theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
 
 end Parts
 
-/-- **`verify --zk --public-inputs` sets table `j` up under its tags at its draw** (`setupOf_tableJH` at `own`). -/
+/-- **`verify --zk --public-inputs` sets table `j` up under its tags at its sample** (`setupOf_tableJH` at `own`). -/
 theorem setupOf_tableJHP {I : Inputs} {own : Option ByteArray} {record : String} {d : Lean.Json}
     {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = true) (hd : recordDraw record = some d)
@@ -281,7 +281,7 @@ variable {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Jso
   {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at draw `S`, at `own`** (`tableZHJ`): the table `verify --zk` sets up at table `j`'s inputs and draw
+/-- **Table `j` at sample `S`, at `own`** (`tableZHJ`): the table `verify --zk` sets up at table `j`'s inputs and sample
 when it sets one up, and otherwise the reference setup `y₀`'s refused table. -/
 noncomputable def tableZHJP (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
@@ -294,7 +294,7 @@ noncomputable def planZHJP : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) :
 theorem planZHJP_length (S : Finset (Fin n)) (R : Reg) : (planZHJP (Reg := Reg) dj y₀ S R).length = nTab I :=
   List.length_ofFn
 
-/-- Each drawn unit is in the table it is drawn into (`partOf`). -/
+/-- Each sampled proof block is in the table it is sampled into (`partOf`). -/
 noncomputable def tabZHJP : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZHJP (Reg := Reg) dj y₀ S R).length :=
   fun S R u => Fin.cast (planZHJP_length dj y₀ S R).symm (partOf I (dj S) u.val)
 
@@ -304,7 +304,7 @@ theorem tabOfZHJP_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   rfl
 
 open Classical in
-/-- **The public hidden-output table at table `j`'s draw, at `own`**, with the inputs it is set up on. -/
+/-- **The public hidden-output table at table `j`'s sample, at `own`**, with the inputs it is set up on. -/
 noncomputable def tableShHJP (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableHP I' own mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
@@ -335,7 +335,7 @@ theorem tableZHJP_S (S : Finset (Fin n)) (j : Fin (nTab I)) :
     rw [dite_eq_right_of_eq_false (eq_false h)]
     rfl
 
-/-- The public plan at the same draws. -/
+/-- The public plan at the same samples. -/
 noncomputable def planShHJP : Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j => (tableShHJP dj y₀ S j).2.T
 
@@ -388,7 +388,7 @@ def recastAccHP {T T' : Model.Statement} (a : AcceptedHP T) (e : T = T') : Accep
 
 variable (hscope : Layout.scopeOkH c = true)
 
-/-- **The public plan's sites at `own`**: each drawn unit's acceptance, VU and block are its table's public table's. -/
+/-- **The public plan's sites at `own`**: each sampled proof block's acceptance, VU and block are its table's public table's. -/
 noncomputable def sitesShHJP : SitesHP (planShHJP (Reg := Reg) dj y₀) (tabShHJP dj y₀) where
   acc S R u _ := recastAccHP ((tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJP_typed dj y₀ ht S _) (tableShHJP_parse dj y₀ ht hcS S _)
@@ -473,7 +473,7 @@ theorem rsShHJP_computes : (rsShHJP dj y₀ ht hcS hscope hU hpi hpub (Reg := Re
     (sitesShHJP_bcSite dj y₀ ht hcS hscope hU hpi hpub)
     (keysRowP_of_scopeZ ht hcS hscope hU)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table at `own`**: `keyPlaceHP`'s place in the public table,
+/-- **Each sampled proof block's place in its hidden-output `--zk` table at `own`**: `keyPlaceHP`'s place in the public table,
 along `planZHJP_S`. -/
 noncomputable def placeZHJP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi))
@@ -513,9 +513,9 @@ theorem rsZHJP_computes : (rsZHJP dj y₀ ht hcS hscope hU hpi hpub (Reg := Reg)
 
 end Shadow
 
-/-! ## The coin server's draws, and the openings, at `own` -/
+/-! ## The challenger's live-coin part's samples, and the openings, at `own` -/
 
-/-- **The coin server's draw at `S`, at `J` hidden-output tables at `own`** (`DrawOkZKHJ` with `setupHidden … own`). -/
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables at `own`** (`DrawOkZKHJ` with `setupHidden … own`). -/
 def DrawOkZKHJP (I : Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
     (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),

@@ -137,8 +137,8 @@ Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.js
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 
 A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
-the tree whose bytes, listing or kind `lookup` takes of them, and, for reads of what the registries registered, every module
-the registries import (`registry_inputs`).
+the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as that path's
+(`probed`), and, for reads of what the registries registered, every module the registries import (`registry_inputs`).
 """
 from __future__ import annotations
 
@@ -2544,10 +2544,27 @@ def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
             probes |= got[2]
     # a code object's pseudo-file (``<frozen abc>``, ``<string>``) is no path of the tree
     out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed),
-                           "probes": sorted(p for p in probes - files if p not in ("", ".") and not p.startswith("<")),
+                           "probes": sorted(probed(root, (p for p in probes - files if p not in ("", ".") and not p.startswith("<")))
+                                            - files),
                            "registry": any(reads.get(k) for k in _REGISTRY)}
     if libs := reads.get("libs"):
         out["untracked"] = sorted(libs)
+    return out
+
+
+def probed(root: Path, probes: Iterable[str]) -> set[str]:
+    """Each of ``probes`` as the first of its ancestors that is no directory of the tree (`visible`'s), or as itself: nothing is
+    under a path that is no directory, so that path's kind holds the kind of every path under it, and changes when one is
+    there (a check asks for a ``digests`` pin of every Definition it checks, ``pins/digests/<id>.json``, while there is no
+    ``pins/digests``)."""
+    v = visible(root)
+    out: set[str] = set()
+    with internal():
+        for p in probes:
+            i = p.find("/")
+            while i > 0 and (p[:i] in v[1] if v is not None else (root / p[:i]).is_dir()):
+                i = p.find("/", i + 1)
+            out.add(p[:i] if i > 0 else p)
     return out
 
 
@@ -2665,17 +2682,36 @@ def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     got = attributed(fr, (), roots, sidecars=False)
     _INTERNAL.append(True)
     try:
-        root = _ROOT[0]
-        by_file: dict[str, str] = {}
-        for name, m in list(sys.modules.items()):
-            if (f := _module_file(m)) is not None:
-                by_file.setdefault(os.path.abspath(f), name)
-        mods = {name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(os.path.join(str(_HERE), ""))
-                and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}
+        mods, by_file = _tree_modules()
         units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
     finally:
         _INTERNAL.pop()
     return {**got, "modules": sorted(set(got["modules"]) | mods), "units": sorted(set(got["units"]) | units)}
+
+
+def modules_since(loaded: set[str]) -> dict[str, list[str]]:
+    """What a process forked from one that had loaded the modules ``loaded`` names adds to that one's `task_list_reads` beyond
+    the reads of the Definitions it built (`unit_reads`, `circuit_check.units`' builds apart): each in-tree module it imported
+    under a name ``loaded`` lacks.  The rest of its `task_list_reads` walks what every binding made, which the one it was
+    forked from walks too."""
+    _INTERNAL.append(True)
+    try:
+        return {"modules": sorted(_tree_modules(loaded)[0])}
+    finally:
+        _INTERNAL.pop()
+
+
+def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, str]]:
+    """Each in-tree module this process imported, by the first name it was loaded under, as the tree resolves that name, but
+    the checker's own (its key's `version`) and those ``loaded`` names; and that first name by each loaded module's file."""
+    root = _ROOT[0]
+    by_file: dict[str, str] = {}
+    for name, m in list(sys.modules.items()):
+        if (f := _module_file(m)) is not None:
+            by_file.setdefault(os.path.abspath(f), name)
+    own = os.path.join(str(_HERE), "")
+    return {name for f, name in by_file.items() if name not in loaded and _rel(f) is not None and not f.startswith(own)
+            and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}, by_file
 
 
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
@@ -2697,6 +2733,6 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "unit_reads", "untraced", "version", "warm"]
+__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup",
+           "modules_since", "pin_files", "probed", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
+           "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]

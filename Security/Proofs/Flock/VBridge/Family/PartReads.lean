@@ -122,7 +122,7 @@ def PartPortsOne : Prop :=
 record custody). **A part's registered read is at `own`'s entry of its port's name, at the position it gives the
 unit.** At every accepted outer proof, a registered read `(u, q)` of part `p`'s session (at a row port, `v` or `out`)
 has as its port an entry of `own` named as `q`, whose position for unit `u` is the read's. `ZkOuter.hown`
-(`OwnReads`) says it at the drawn outcomes, at the drawn statement's label of `u`, which is `u` at a part's units;
+(`OwnReads`) says it at the sampled outcomes, at the sampled statement's label of `u`, which is `u` at a part's units;
 acceptance of an arbitrary outcome does not give it, and `rd` is the family's field. -/
 def ReadsOwn : Prop :=
   ∀ R ω t R₂ τ o, Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o →

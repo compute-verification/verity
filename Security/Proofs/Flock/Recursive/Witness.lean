@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
 `Flock.Witness` evaluates, on recorded files, the predicates `RecursiveAudit`'s and `PublicAudit`'s events and premises
 state. Each check passing is the model's predicate holding, at `toExec I`, the model's inputs of the witness's:
 
-* `acceptsZKR_ok`: `ZkReg.AcceptsZKR`, the verifier of record's verdict on one of V*'s sessions;
+* `acceptsZKR_ok`: `ZkReg.AcceptsZKR`, the verifier's verdict on one of V*'s sessions;
 * `acceptsZKV_ok`: `Recursion.AcceptsZKV`, that verdict and `RecVStar.checkStmt` as V*'s statement `j`;
 * `verifiesVStar_ok`: the event's `VerifiesVStar`, from `acceptsZKV_ok` and `scopeZR_ok` at every session;
 * `scopeZR_ok`, `scopeZ_ok`: `FailClosed.ScopeZR`, the event's statement check and `Typable`'s, and `FailClosed.ScopeZ`,
@@ -31,7 +31,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
 * `tagsOkZHJ_ok`, `tagsOk_ok`: `ZkHidden.TagsOkZHJ`, `ZkOuterR.hTags`, and `DecodeZL.TagsOk`, the public-output one-table
   tags;
 * `scopeOk_ok`: the session's circuit as `ZkOuterR` parses it, and `Layout.scopeOk` of it, `VStmt.hscope`;
-* `fullDraw_ok`: the record's draw is the full `subset` draw of every unit of the population, `RecordCustody`'s;
+* `fullDraw_ok`: the record's sample is the full `subset` sample of every unit of the population, `RecordCustody`'s;
 * `acceptsStmt_ok`, `acceptsPublic_ok`: `Recursion.AcceptsStmt`, and `AcceptsPublic` at the verifier's own partition
   object and program;
 * `shapeOf_eq`, `outerStatementsAt_ok`: the printed inner shape is `innerAt`, and `outer_parts` is `outerStatementsAt`;
@@ -40,7 +40,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
   (`_hr := hr_inv_exp zr`).
 
 On `test_lean_witness.py`'s run the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
-verifier of record's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
+verifier's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
 the gate is witnessed under today's identity.
 -/
 
@@ -75,7 +75,7 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
 theorem setupOf_eq (I : Flock.Witness.Inputs) (r : String) :
     Flock.Witness.setupOf I r = Exec.setupOf (ZkExec.zkInputs (toExec I)) r := rfl
 
-/-- **The witness's verdict is the verifier of record's** (`ZkReg.AcceptsZKR`). -/
+/-- **The witness's verdict is the verifier's** (`ZkReg.AcceptsZKR`). -/
 theorem acceptsZKR_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.Port} {r : String} {p : Array ByteArray}
     (h : Flock.Witness.acceptsZKRAt (Flock.Witness.setupOf I r) own r p = .ok ()) :
     ZkReg.AcceptsZKR (toExec I) own ⟨r, p⟩ := by
@@ -160,7 +160,7 @@ theorem scopeOk_ok {I : Flock.Witness.Inputs} {c : Flock.Circuit} (h : Flock.Wit
   · rw [if_neg hs] at h
     simp [throw, throwThe, MonadExceptOf.throw] at h
 
-/-- **The witness's draw check**: the record's draw decodes to the full `subset n` draw over `[0, n)`, every unit and
+/-- **The witness's sample check**: the record's sample decodes to the full `subset n` sample over `[0, n)`, every unit and
 no closure. -/
 theorem fullDraw_ok {n : ℕ} {r : String} (h : Flock.Witness.fullDraw n r = .ok ()) :
     ∃ d D, Exec.recordDraw r = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.law = .subset n ∧ D.population = n ∧
@@ -249,7 +249,7 @@ theorem acceptsDescription_ok {st : Flock.Stmt} {own : Array Flock.Registered.Po
   exact fun rt hrt => ⟨own, hrt, h1⟩
 
 /-- **`PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e`**, for every `zr` the prover supplies: its type is
-`_hr`'s there, so `_hr := hr_inv_exp zr`. At every session `j`, reference setup `y₀`, draw `S'`, registration `R'` and
+`_hr`'s there, so `_hr := hr_inv_exp zr`. At every session `j`, reference setup `y₀`, sample `S'`, registration `R'` and
 table `i` of the hidden-output plan `ZkHidden.planZHJ`, `Zk.schedule` caps level 0's `logLen` at 23 at every `m` it
 accepts (`ZkHidden.hr_planZHJ_23`). The witness's `accepts_zkr` lines print each recorded session's level 0, whose
 `logLen` is under the cap. -/

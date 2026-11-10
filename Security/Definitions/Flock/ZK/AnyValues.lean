@@ -23,7 +23,7 @@ public regions makes true of every worker.
   it fails; and their simulator at each of the two outcomes.
 * `Table.Simulable`: the coins are non-degenerate for the table (`Rank`, `PadOnto`, `W^r` bijective, `PadsOnto`,
   `β^r ≠ 0`), so `S_shvzk`'s counting goes through; `Table.RegPublic w`: `w` carries the public region data.
-* `Table.HoldsAt w ω`: `w`'s values pass the inner constraint at the pads `ω` draws, each rep's `Σ_i λ_i·h_i = θ`.
+* `Table.HoldsAt w ω`: `w`'s values pass the inner constraint at the pads `ω` samples, each rep's `Σ_i λ_i·h_i = θ`.
 * `Table.Gated go w`: the check `go`, a function of the server's randomness alone, passes only where `HoldsAt` does.
 * `Table.release go w`: the released bytes, `gated` at the table's view and pre-final view.
 * `Release.bytesAt`, `Release.simAt`: the released bytes of a release of `J` tables at an outcome (where it stopped):
@@ -84,7 +84,7 @@ def Simulable : Prop :=
 /-- **`w` carries the public region data** (`H_reg`): its region claims' values are the public ones. -/
 def RegPublic (w : W) : Prop := T.sReg w = T.pubReg
 
-/-- **The constraint holds at `ω`**: `w`'s values pass each rep's inner constraint at the pads `ω` draws. -/
+/-- **The constraint holds at `ω`**: `w`'s values pass each rep's inner constraint at the pads `ω` samples. -/
 def HoldsAt (w : W) (ω : T.Rand) : Prop :=
   ∀ r : Fin 2, ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre
 
@@ -117,7 +117,7 @@ noncomputable def simAt (full : St → Fin J → Bool) (w₀ : Fin J → W) (s :
   fun j => if full s j then .inl ((T j).sim (w₀ j) (σ j).1) else .inr ((T j).preView (w₀ j) (σ j).2)
 
 /-- **Each table's file leaves only where its constraint holds**: at every randomness `ω`, wherever the outcome `out ω`
-releases table `j`'s file, `w j`'s values pass its inner constraint at its drawn pads. -/
+releases table `j`'s file, `w j`'s values pass its inner constraint at its sampled pads. -/
 def Gated (out : (∀ j, (T j).Rand) → St) (full : St → Fin J → Bool) (w : Fin J → W) : Prop :=
   ∀ ω j, full (out ω) j = true → (T j).HoldsAt (w j) (ω j)
 

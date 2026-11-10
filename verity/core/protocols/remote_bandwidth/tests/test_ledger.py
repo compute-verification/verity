@@ -72,7 +72,7 @@ def paced(store, p: audit.Params, plan=None):
 
 @pytest.fixture(scope="module")
 def k1(store):
-    """k = 1, five windows, the last the closing window, γ per fixed window of 1,000 ns, every receipt drawn: no
+    """k = 1, five windows, the last the closing window, γ per fixed window of 1,000 ns, every receipt sampled: no
     receipt is wrong."""
     s, prover, passes, clock, arrivals = paced(store, params(windows=5, samples=N, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
@@ -217,7 +217,7 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 def test_the_coin_commitments_hiding_is_charged(store) -> None:
     """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledDraw` reads none)."""
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledSample` reads none)."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
@@ -232,7 +232,7 @@ def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part
 
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
-    """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
+    """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
     than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and
@@ -362,7 +362,7 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
-    """With 7 of 20 receipts drawn a window, the pooled wrong receipts W are spread over the groups at
+    """With 7 of 20 receipts sampled a window, the pooled wrong receipts W are spread over the groups at
     v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
     s, prover, passes, clock, _ = paced(store, params(windows=5, samples=7, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))

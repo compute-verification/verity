@@ -105,7 +105,7 @@ theorem _root_.Flock.SecurityProofs.LoopInnerRound0Own_honest (hfix : Loop.Reach
 
 /-- **`LoopInnerRound0` rules out a release that releases nothing**: at the fixture's run, at the deployed tables and
 the loop's own tables, `LoopInnerRound0` fails at `LeanRelease.silent`, whose round at the inner proof's round 0 is
-empty, where the firewall's is the inner proof's label frame and `final_c'` between two 16-byte headers. -/
+empty, where the ZK server's is the inner proof's label frame and `final_c'` between two 16-byte headers. -/
 theorem _root_.Flock.SecurityProofs.LoopInnerRound0Own_nontrivial (hfix : Loop.ReachesInner) :
     ∃ (src : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×

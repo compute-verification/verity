@@ -23,7 +23,7 @@ stated on these objects.
   the string `bits X l`.
 * The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
   not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
-  C-Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
+  Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
 * **Credit** (`creditSize lower d`) is the AND count of the registered declared circuit under one public lowering,
   pinned at registration.
 * The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed in
@@ -74,26 +74,26 @@ def FanIn (C : Circuit) (a : ℕ) : Prop := ∀ g, (C.reads g).card ≤ a
 
 /-- The bits of a bundle of gates `l` in `X`, gate by gate in `l`'s order, each gate's value least significant bit
 first. On a Boolean circuit, one bit per gate. -/
-def bits (C : Circuit) (X : C.Transcript) (l : List (Fin C.N)) : List Bool :=
+def bits (C : Circuit) (X : C.Trace) (l : List (Fin C.N)) : List Bool :=
   l.flatMap fun g => List.ofFn fun i : Fin (C.w g) => (X g).getLsbD i
 
 /-- A value's least significant bit, in `ZMod 2`. -/
 def bitZ {n : ℕ} (x : BitVec n) : ZMod 2 := if x.getLsbD 0 then 1 else 0
 
 /-- Gate `g` computes an **affine** function over GF(2) of the gates it reads: its bit is a constant plus the XOR of the
-bits of some of them. On a Boolean circuit these are the gates of an XOR/NOT basis, which C-Flock proves for free. -/
+bits of some of them. On a Boolean circuit these are the gates of an XOR/NOT basis, which Flock proves for free. -/
 def Affine (C : Circuit) (g : Fin C.N) : Prop :=
   ∃ (S : Finset (Fin C.N)) (c : ZMod 2), S ⊆ C.reads g ∧ ∀ v, bitZ (C.op g v) = c + ∑ a ∈ S, bitZ (v a)
 
 /-- **An AND gate** of a Boolean circuit: an operation gate whose function of the gates it reads is not affine over
-GF(2). `Verity.Circuit`'s gate functions carry no tag, so AND is this predicate on the function. C-Flock's `and a b`
+GF(2). `Verity.Circuit`'s gate functions carry no tag, so AND is this predicate on the function. Flock's `and a b`
 (`a ≠ b`) and its rows `(⊕ a) ∧ (⊕ b)` whose two XORs differ are AND gates, and its XOR, NOT and input gates are not
 (`Verity.Guarantees.ToCircuitAnd`). -/
 def IsAnd (C : Circuit) (g : Fin C.N) : Prop := C.isInput g = false ∧ ¬ C.Affine g
 
 open Classical in
 /-- **The AND count** of the gates `S`, the number of AND gates among them: on `C.computed`, the circuit's
-multiplicative complexity, the gates C-Flock pays for. Credit (`creditSize`) and every reported count are stated in
+multiplicative complexity, the gates Flock pays for. Credit (`creditSize`) and every reported count are stated in
 `andSize`. Exclusion results are not converted to ANDs: they are reported as `N` counted operations (FP8 MACs, say),
 each labelled with that operation's canonical AND count, since converting them to ANDs of hidden work would need a
 ceiling on ANDs per resource unit over all programs, which is vacuous. All-gate counts (the `(c, k)`-partition, the
@@ -131,19 +131,19 @@ the monitored computation. -/
 structure Committed where
   trace : List (List Bool)
   d : RegisteredCircuit
-  val : d.D.Transcript
+  val : d.D.Trace
 
 namespace Committed
 
 variable (R : Committed)
 
 /-- A run of the registered circuit: its evaluation on inputs that agree with the registered values on `θ`. -/
-def Honest (a : R.d.D.Transcript) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
+def Honest (a : R.d.D.Trace) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
 /-- **`X` reads the commitments**: it holds the registered values on `θ`, and at each proof block's committed inputs
 and outputs outside `θ` (`Partition.committed` of the proof blocks) the committed value at the gate's position in the
 trace, as its bits. -/
-def Reads (X : R.d.D.Transcript) : Prop :=
+def Reads (X : R.d.D.Trace) : Prop :=
   R.Honest X ∧ ∀ g ∈ R.d.P.committed, g ∉ R.d.θ → ∃ i, R.d.pos g = some i ∧ R.trace[i]? = some (R.d.D.bits X [g])
 
 /-- **The compiler's output explains the committed trace**: no two of the proof blocks' committed gates outside `θ` take
@@ -156,7 +156,7 @@ def Explains : Prop := Set.InjOn R.d.pos ↑(R.d.P.committed \ R.d.θ) ∧ ∃ X
 /-- **Inference block `u` recomputed** from `R` and `X`: a registered gate takes its registered value, every
 other gate outside the inference block takes `X`'s value, and the inference block's gates are computed in order. On the
 inference block and its inputs, only `X`'s values on `in(I) \ θ` matter. -/
-def recompute (X : R.d.D.Transcript) (u : Fin R.d.n) : R.d.D.Transcript :=
+def recompute (X : R.d.D.Trace) (u : Fin R.d.n) : R.d.D.Trace :=
   R.d.D.run fun g => if g ∈ R.d.θ then some (R.val g) else if R.d.𝓘.unit g = some u then none else some (X g)
 
 end Committed
@@ -180,14 +180,14 @@ noncomputable def LDL {ρ : Type} (M : Decoder ρ) (t : ℕ) (r : ρ) (y : List 
 
 /-- The program Lemma 1 hands a decoder for inference block `u` of a run `X`: the evaluator `e`, the inference block's index,
 and the bits of its unregistered inputs in gate order. -/
-def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Transcript) (u : Fin R.d.n) : List Bool :=
+def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Trace) (u : Fin R.d.n) : List Bool :=
   e ++ indexCode u ++ R.d.D.bits X ((R.d.unregistered (R.d.𝓘.gates u)).sort (· ≤ ·))
 
 /-- **A fixed evaluator** `e` performs the extraction rule `y` within time `t` for every inference block: on inference block
 `u`'s program of any run `X`, `M` outputs the string `y u` extracts from inference block `u` recomputed from that program's
 contents. -/
 def Evaluates {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (R : Committed) (e : List Bool)
-    (y : Fin R.d.n → R.d.D.Transcript → List Bool) : Prop :=
+    (y : Fin R.d.n → R.d.D.Trace → List Bool) : Prop :=
   ∀ u X, M.run r (blockProgram R e X u) t = some (y u (R.recompute X u))
 
 end Verity

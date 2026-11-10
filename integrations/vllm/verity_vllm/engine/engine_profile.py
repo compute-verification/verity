@@ -262,6 +262,12 @@ def software_info(wheel_sha256: str | None, vllm_commit: str | None) -> dict[str
     }
 
 
+def breakable_cudagraph() -> bool:
+    """Whether this process's vLLM runs breakable CUDA graphs: ``VLLM_USE_BREAKABLE_CUDAGRAPH`` as vllm/envs.py parses it (``== "1"``),
+    which `VllmConfig._maybe_enable_breakable_cudagraph` sets for the architectures vLLM serves that way unless it is set."""
+    return env.snapshot().get("VLLM_USE_BREAKABLE_CUDAGRAPH") == "1"
+
+
 def effective_compilation(llm: Any) -> dict[str, Any]:
     vc = llm.llm_engine.vllm_config
     cc = vc.compilation_config
@@ -269,6 +275,8 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
         "mode": str(getattr(cc, "mode", None)),
         "cudagraph_mode": str(getattr(cc, "cudagraph_mode", None)),
         "enforce_eager": bool(vc.model_config.enforce_eager),
+        "breakable_cudagraph": breakable_cudagraph(),
+        "capture_sizes": sorted(int(s) for s in (getattr(cc, "cudagraph_capture_sizes", None) or [])),
         "model_runner": "v2" if vc.use_v2_model_runner else "v1",
         "custom_ops": list(getattr(cc, "custom_ops", [])),
         "optimization_level": int(getattr(vc, "optimization_level", -1)),

@@ -1,8 +1,7 @@
 module
 
 public import Batteries.Data.ByteArray
-public import Definitions.Flock.Game.Prob
-public import Definitions.Flock.Game.Seq
+public import Definitions.Flock.Game
 public import Proofs.Flock.Claims.KS.ForkSim
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,8 +34,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
 /-!

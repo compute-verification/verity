@@ -49,7 +49,7 @@ def _batch(topk, blocks, valid, *, TOPK, BS, NB):
 
 def indices(rng, shape, BS: int, NB: int) -> np.ndarray:
     """Top-k rows of words: each -1, another negative word, an index in the row (around its block edges and its last slot), and
-    in a quarter of the rows also draws over the int32 words, as uint32."""
+    in a quarter of the rows also samples over the int32 words, as uint32."""
     words = rng.integers(0, 1 << 32, shape, dtype=np.uint64).astype(np.int64)
     edges = np.asarray([0, 1, BS - 1, BS, NB * BS - 1, -1, -2, -BS, -(1 << 31)], dtype=np.int64)
     kind = rng.random(shape)

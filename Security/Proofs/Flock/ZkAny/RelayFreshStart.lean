@@ -11,8 +11,8 @@ after the history so far (`Loop.freshOf`) is a masking state. The loop readied t
 table's statement, name, level 0 and algebraic phase are there (`roundPlace_first_ok`), and the model's placeholder for
 the stream is one wherever the rep's frame starts at the table's statement (`Drive.start`):
 
-* `ofDraws_of_sizes`, `tab_of_drawn`: a level 0 is drawn at `m` from a packed table and draws of the sizes `m`'s
-  schedule takes, and one drawn at a statement's `m` gives a table where the statement commits under `hm96Sha512`.
+* `ofDraws_of_sizes`, `tab_of_drawn`: a level 0 is sampled at `m` from a packed table and samples of the sizes `m`'s
+  schedule takes, and one sampled at a statement's `m` gives a table where the statement commits under `hm96Sha512`.
 * `placeholder_of`: so the placeholder is one where the rep's frame starts and its zero level 0 gives a table.
 * `freshOf_of`: `Loop.freshOf` is a masking state where the placeholder and its algebraic phase are, rep 0's
   algebraic-phase coins being in at rep 1 and the frame's step taking them there (`Frame.step`'s `prior`).
@@ -50,7 +50,7 @@ theorem buildRows_size (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Arr
     (_root_.Flock.Firewall.Level0.build m lv tPad g extra pads salts).rows.size = 2 ^ lv.d := by
   exact linkRows_size _ _ _ _ _
 
-/-- **A level 0 is drawn at `m`** from a packed table and draws of the sizes `m`'s `--zk` schedule takes. -/
+/-- **A level 0 is sampled at `m`** from a packed table and samples of the sizes `m`'s `--zk` schedule takes. -/
 theorem ofDraws_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
     (hz : _root_.Flock.Zk.schedule m = .ok (s, tp)) {g : Array F128} {d : ByteArray}
     (hg : g.size = 2 ^ ((s.levels.getD 0 default).lanes + (s.levels.getD 0 default).cols))
@@ -61,7 +61,7 @@ theorem ofDraws_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
     pure, Except.pure]
   all_goals exact ⟨_, rfl⟩
 
-/-- **A level 0 drawn at a statement's `m` gives a table** where the statement commits under `hm96Sha512`. -/
+/-- **A level 0 sampled at a statement's `m` gives a table** where the statement commits under `hm96Sha512`. -/
 theorem tab_of_drawn {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {g : Array F128}
     {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
     (hl : _root_.Flock.Firewall.Level0.ofDraws stm.m g d = .ok l) :

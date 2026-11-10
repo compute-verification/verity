@@ -47,7 +47,7 @@ import Proofs.Pouw.Period.Accept
 # The lanes window's strata and law
 
 The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
+sample's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
 `Proofs.Pouw.Period.Accept` reads H1's items). Their loops, sorts and the template's digits are core's, so this module
 imports those in full. `Proofs.Pouw.Credit` reads the results from here: with core's definitions in full there, its
 `Nat.choose` bounds exceed their budget.

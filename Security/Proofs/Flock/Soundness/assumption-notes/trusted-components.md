@@ -9,7 +9,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
     closure into an empty environment (`leanchecker --fresh`).
     Both use Lean's own kernel; an independent one (nanoda, lean4lean) would remove this trust.
   - Numeric checks use `decide +kernel`, which is kernel evaluation. The development never uses `native_decide`.
-- **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in production;
+- **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in an audit;
   upstream's Rust verifier is a cross-check (the agreement job), not a second verifier. Proofs are about Lean
   definitions, not machine code.
   - **Mitigation:** the agreement tests of `verity/ml/flock/verifier/README.md`. The Rust implementation must reach the same verdict on the corpus
@@ -36,7 +36,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   `guarantees` and `reads`, and `../ASSUMPTIONS.md` for the named assumptions.
   - `guarantees`: each guarantee's signature as Lean prints it, with its named assumptions.
   - `reads`: per module, the definitions those statements depend on (followed through the `meaning` modules,
-    `FlockSoundness` and `FlockLevel3`), and which guarantees read them. Some are in proof files (`LinkSound.lean`,
+    `FlockSoundness` and `FlockLevel3`), and which guarantees read them. Some are in proof files (`BindSound.lean`,
     `CompiledSound.lean`, `CompiledLock.lean`).
   - The audit fails when a signature or a definition it reads changes, until `check.py --update` rewrites the record.
     A rewritten record is shown when it lands on `main`; nobody signs off and nothing

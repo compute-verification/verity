@@ -5,12 +5,12 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 /-!
 # The sample, then the link, then the other rounds, on the device's log
 
-The record's draw (`recordDraw_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
+The record's sample (`recordDraw_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
 `SampleLinkFirst` states on the device's log: no release of a coin of the sample's family after the registration's
-digest follows an opening, and the first opening is of the stream `SampledProofs.Challenger.TREE_SESSION`. It holds
+digest follows an opening, and the first opening is of the stream `Spot.Challenger.TREE_SESSION`. It holds
 where v2's case accepts and the log v2's check read is the device's, since v2's check accepts only where the challenger
 session's release log in v2's evidence, after its head, passes `sampleLinkFirst` at the parameters' challenger family
-and the registration's digest (`SampledProofs.OneStageZk.orderHeld`):
+and the registration's digest (`Spot.OneStageZk.orderHeld`):
 
 * **v2's refusal** (`checkBlobsAt_orderHeld`, `orderHeld_ok`): v2's check accepts only where its order refusal passed,
   and that refusal's scan is `sampleLinkFirst` (`sampleLinkFirst_check`).
@@ -18,7 +18,7 @@ and the registration's digest (`SampledProofs.OneStageZk.orderHeld`):
   (`sampleLinkFirst_readLog`), and the device's log has the read's frames and answers (`ofV2_frames`), which are all
   `SampleLinkFirst` reads (`sampleLinkFirst_congr`).
 * **At the sampled verdict** (`sampleLinkFirst_verdict`, `freshBefore_verdict`, `linkFirst_verdict`): in the forms the
-  record's draw and the first stop take.
+  record's sample and the first stop take.
 
 v2's check needs that refusal: nothing else it checks gives the order (`reads_interleave`). Besides the chain
 and the line count its signed close covers, which are the device's for whatever order it released in, v2 reads the
@@ -34,18 +34,18 @@ namespace Verity.Sampled
 
 open Lean (Json)
 open Verity.Game
-open SampledProofs.Challenger
+open Spot.Challenger
 open Properties.Challenger (Draws)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **Where v2's check accepts, its order refusal passed** (`SampledProofs.OneStageZk.orderHeld`). -/
-theorem checkBlobsAt_orderHeld {p : _root_.SampledProofs.OneStageZk.Params}
-    {c : _root_.SampledProofs.OneStage.Commitment} {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    {bs : _root_.Core.Blobs} {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    _root_.SampledProofs.OneStageZk.orderHeld p c e = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
+/-- **Where v2's check accepts, its order refusal passed** (`Spot.OneStageZk.orderHeld`). -/
+theorem checkBlobsAt_orderHeld {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
+    {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    _root_.Spot.OneStageZk.orderHeld p c e = .ok () := by
+  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
   dsimp only at h
   split at h
   · cases h
@@ -55,43 +55,43 @@ theorem checkBlobsAt_orderHeld {p : _root_.SampledProofs.OneStageZk.Params}
     obtain ⟨⟨⟩, ho, -⟩ := FlockSoundness.Refine.ebind_ok hr
     exact ho
 
-/-- `linesOf` is v2's check's read of its evidence's log (`SampledProofs.OneStageZk.linesOf`). -/
-theorem linesOf_check (e : _root_.SampledProofs.OneStageZk.Evidence) :
-    _root_.SampledProofs.OneStageZk.linesOf e = linesOf e := rfl
+/-- `linesOf` is v2's check's read of its evidence's log (`Spot.OneStageZk.linesOf`). -/
+theorem linesOf_check (e : _root_.Spot.OneStageZk.Evidence) :
+    _root_.Spot.OneStageZk.linesOf e = linesOf e := rfl
 
-/-- `sampleLinkFirstFrom` is v2's check's scan (`SampledProofs.Challenger.sampleLinkFirstFrom`). -/
+/-- `sampleLinkFirstFrom` is v2's check's scan (`Spot.Challenger.sampleLinkFirstFrom`). -/
 theorem sampleLinkFirstFrom_check (label : String) (after : ByteArray) (log : List String) :
-    ∀ opened pending, _root_.SampledProofs.Challenger.sampleLinkFirstFrom label after opened pending log =
+    ∀ opened pending, _root_.Spot.Challenger.sampleLinkFirstFrom label after opened pending log =
       sampleLinkFirstFrom label after opened pending log := by
-  have ho : ∀ l, _root_.SampledProofs.Challenger.openLine l = openLine l := fun _ => rfl
-  have hk : ∀ l, _root_.SampledProofs.Challenger.linkLine l = linkLine l := fun _ => rfl
-  have hr : ∀ l, _root_.SampledProofs.Challenger.rootOf l = rootOf l := fun _ => rfl
+  have ho : ∀ l, _root_.Spot.Challenger.openLine l = openLine l := fun _ => rfl
+  have hk : ∀ l, _root_.Spot.Challenger.linkLine l = linkLine l := fun _ => rfl
+  have hr : ∀ l, _root_.Spot.Challenger.rootOf l = rootOf l := fun _ => rfl
   induction log with
-  | nil => intro _ _; simp only [_root_.SampledProofs.Challenger.sampleLinkFirstFrom, sampleLinkFirstFrom]
+  | nil => intro _ _; simp only [_root_.Spot.Challenger.sampleLinkFirstFrom, sampleLinkFirstFrom]
   | cons l ls ih =>
     intro opened pending
     cases pending <;>
-      simp only [_root_.SampledProofs.Challenger.sampleLinkFirstFrom, sampleLinkFirstFrom, ho, hk, hr, ih]
+      simp only [_root_.Spot.Challenger.sampleLinkFirstFrom, sampleLinkFirstFrom, ho, hk, hr, ih]
 
-/-- `sampleLinkFirst` is v2's check's (`SampledProofs.Challenger.sampleLinkFirst`). -/
+/-- `sampleLinkFirst` is v2's check's (`Spot.Challenger.sampleLinkFirst`). -/
 theorem sampleLinkFirst_check (label : String) (after : ByteArray) (log : List String) :
-    _root_.SampledProofs.Challenger.sampleLinkFirst label after log = sampleLinkFirst label after log :=
+    _root_.Spot.Challenger.sampleLinkFirst label after log = sampleLinkFirst label after log :=
   sampleLinkFirstFrom_check label after log false none
 
-/-- **v2's order refusal, passed, holds its log in order**: where `SampledProofs.OneStageZk.orderHeld` passes, the
+/-- **v2's order refusal, passed, holds its log in order**: where `Spot.OneStageZk.orderHeld` passes, the
 parameters name the challenger's family `label` and the evidence's log reads as `lines`, `lines` after the head pass
 `sampleLinkFirst` at `label` and the registration's digest. -/
-theorem orderHeld_ok {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {e : _root_.SampledProofs.OneStageZk.Evidence} (h : _root_.SampledProofs.OneStageZk.orderHeld p c e = .ok ())
+theorem orderHeld_ok {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {e : _root_.Spot.OneStageZk.Evidence} (h : _root_.Spot.OneStageZk.orderHeld p c e = .ok ())
     {key : ChallengerKey} {label : String} (hch : p.base.challenger = some (key, label)) {lines : List String}
     (hl : linesOf e = .ok lines) : sampleLinkFirst label c.digest lines.tail = true := by
-  unfold _root_.SampledProofs.OneStageZk.orderHeld at h
+  unfold _root_.Spot.OneStageZk.orderHeld at h
   rw [hch] at h
   dsimp only at h
   rw [linesOf_check, hl, ok_bind] at h
   rw [← sampleLinkFirst_check]
   revert h
-  cases _root_.SampledProofs.Challenger.sampleLinkFirst label c.digest lines.tail
+  cases _root_.Spot.Challenger.sampleLinkFirst label c.digest lines.tail
   · intro h; cases h
   · intro _; rfl
 
@@ -107,12 +107,12 @@ theorem ofV2_frames :
     exact .cons ⟨h.1.1, h.1.2.1⟩ (ofV2_frames h.2)
 
 /-- **The device's log is in order where v2's case accepts**: where composite `k` accepted what the prover sent, v2's
-case in it accepts at the draw `dr` and the log v2's check read is the device's, the device's log releases the sample's
+case in it accepts at the sample `dr` and the log v2's check read is the device's, the device's log releases the sample's
 coins (of `dr`'s family, after `dr`'s digest) before every opening and opens the stream `TREE_SESSION` first, since
 v2's check passed its order refusal (`checkBlobsAt_orderHeld`, `orderHeld_ok`). -/
 theorem sampleLinkFirst_logged {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
-    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
+    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
     (hS : Verity.SameAccepts k x.sent) (hcase : V2Case k x.sent a b e)
     (hacc : V2Accepts (_root_.Core.Blobs.ofArray x.sent.blobs) a b e p c ev ξ dr)
     (hl : Binding.Logged Binding.readsV2 x) :
@@ -153,7 +153,7 @@ theorem sampleLinkFirst_verdict {V : Vocab d α} {k : Verity.Registration.Compos
   obtain ⟨rfl, rfl⟩ := hN a b e p c ev ξ dr hcase hacc
   exact sampleLinkFirst_logged hv.2.1 hcase hacc hl
 
-/-- **The sample's coins are released before every opening** (`SampleLinkFirst`'s first half, the record's draw's
+/-- **The sample's coins are released before every opening** (`SampleLinkFirst`'s first half, the record's sample's
 form), at the sampled verdict. -/
 theorem freshBefore_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)

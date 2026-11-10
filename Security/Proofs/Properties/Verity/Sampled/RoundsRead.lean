@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Stops
 # Each opening v2's read shows opens the round its stream's openings before it count
 
 v2's check reads the device's log from the lines of the challenger session's release log (`readLog`), and
-`SampledProofs.Challenger.coinTreesOf` reads the same lines as the coin trees the session sampled, accepting a line that
+`Spot.Challenger.coinTreesOf` reads the same lines as the coin trees the session sampled, accepting a line that
 opens a round of a tree's stream only where that round is the count of the stream's rounds the tree shows opened. The
 per-round bridge between the two:
 
@@ -42,7 +42,7 @@ per-round bridge between the two:
 namespace Verity.Sampled
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 
 /-! ## The lines that open a stream -/
 
@@ -1037,7 +1037,7 @@ theorem readLog_nodup {label : String} {after : ByteArray} {records : List Json}
     (hR : readLog label after records ξ lines = some log) : ∀ sp ∈ helloSpecs log, sp.streams.toList.Nodup := by
   intro sp hsp
   have hF := coinTreesOf_fold records hT
-  obtain ⟨t, ht, hspec⟩ := Properties.SampledProofs.SecurityProofs.forall₂_mem_right (readLog_specs hR hF) sp hsp
+  obtain ⟨t, ht, hspec⟩ := Properties.Spot.SecurityProofs.forall₂_mem_right (readLog_specs hR hF) sp hsp
   exact Lines.streams_nodup (specOf_streams_arr hspec)
     (treeFold_isTreeSpec hF (fun _ h => absurd h List.not_mem_nil) (Lines.trees_log hT).spec t ht)
 

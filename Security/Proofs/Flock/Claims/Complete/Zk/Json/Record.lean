@@ -146,7 +146,7 @@ theorem recordListZk_distinct (spec : SessionSpec) (h : ByteArray → ByteArray)
     (proofs : Array ByteArray) : Distinct (recordListZk spec h hz ct rootB points streams proofs) := by
   rcases dk_cases (specZ spec hz) with e | e <;> simp [recordListZk, recordList, e, toString]
 
-/-- **The masked record is printable** when the statement's draw is. -/
+/-- **The masked record is printable** when the statement's sample is. -/
 theorem good_recordObjZk {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (h : ByteArray → ByteArray)
     (hz : String) (ct : CoinTree.Spec) (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
     (proofs : Array ByteArray) (hd : Good (spec.unitDraw.getD Json.null)) :

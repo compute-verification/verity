@@ -3,7 +3,7 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
-        [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
+        [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order|tick [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
@@ -20,7 +20,9 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
 certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
-scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
+engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
+``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
 other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
@@ -72,8 +74,8 @@ writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, 
 `serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
-device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
-blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
+device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
+blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
@@ -253,6 +255,7 @@ class Server:
         self.model_root, self.clock = model_root or served_name, clock
         self.served = 0
         self.streaming: set[asyncio.StreamWriter] = set()      # responses whose head is written
+        self.stream_errors: dict[str, Any] = {"n": 0, "first": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -387,6 +390,14 @@ class Server:
         return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
                               user_of(req.raw), release, dict(times or {}))
 
+    def stream_error(self, adm: Admission, proto: Any, error: str) -> None:
+        """A stream the engine failed, in the server's record (``summary.json``'s ``stream_errors``: the count and the
+        first ten) and its log, whatever the protocol puts on the wire."""
+        self.stream_errors["n"] += 1
+        if len(self.stream_errors["first"]) < 10:
+            self.stream_errors["first"].append({"http_id": adm.http_id, "engine_id": adm.engine_id, "protocol": proto.name, "error": error})
+        print(f"SERVE-OPENAI stream error ({proto.name}) {adm.http_id}: {error}", file=sys.stderr, flush=True)
+
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
                           proto: Any = None, times: Mapping[str, float] | None = None) -> None:
         proto = proto or self.proto
@@ -422,7 +433,11 @@ class Server:
                 d = await deltas.get()
                 finished = d.finished
                 if d.error:
-                    writer.write(frame(sse(error_body(d.error, 500, "InternalServerError").decode())))
+                    self.stream_error(adm, proto, d.error)
+                    end = proto.error_end(d.error)
+                    if end is None:
+                        return
+                    writer.write(frame(end))
                     break
                 if not d.text and not d.token_ids and not n_out:
                     continue                                     # vLLM: no empty chunk before the first token
@@ -580,7 +595,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SH.arm_of(opts, llm, com, out)
+        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -665,7 +680,7 @@ def main(opts: Options) -> int:
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
         def stopped(final: bool) -> dict[str, Any]:
-            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+            got = {"final": final, "served": server.served, "stream_errors": server.stream_errors, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "tick": loop.gate.summary() if loop.gate is not None else None,
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
@@ -681,7 +696,7 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
-        if draws_dir is not None:                        # the pending seals have had their windows' draws
+        if draws_dir is not None:                        # the pending seals have had their windows' samples
             draws_dir.stop()
         if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
             arm.drain()

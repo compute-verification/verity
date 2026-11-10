@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.LinkFft
 /-!
 # The link round at the Lean recheck
 
-`Flock.Firewall.Link.root` is the code of record of the firewall's level-0 recheck: each table's
+`Flock.Firewall.Link.root` is the code of record of the ZK server's level-0 recheck: each table's
 level-0 root, committed again from the host's witness, the table's level-0 hiding and its level-0 salts: the root of
 record, which the session's link carries and `Firewall::new` holds the device's root to (live `PROTOCOL.md` §10.2; Rust
 commits nothing of level 0 that leaves). Here that function is held to the session's link.
@@ -18,11 +18,11 @@ commits nothing of level 0 that leaves). Here that function is held to the sessi
   salts (`rows_eq`, `LinkFft`: the FFT's rows are those rows); its tasks (`parRange`) split one map (`Link.parRange_eq`).
 * `swExeOf_inl`, `Masked.leafAt_swCutAt`: the switched prover's level-0 leaves are the honest prover's, whatever values
   the workers supply (`Coined.swContent_inl`): level 0 reads neither the values nor the moved pads.
-* `Masked.linkIn`, `Masked.linkMsg`: what the firewall hands `Flock.Firewall.Link` for table `j` at the tape (the packed
+* `Masked.linkIn`, `Masked.linkMsg`: what the ZK server hands `Flock.Firewall.Link` for table `j` at the tape (the packed
   table of the witness's traces at the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts),
   and the link message of the roots it answers. That message is round `0`'s encoding of the switched cut, at every
   coin vector and any values the workers supply (`Masked.enc0_swCutAt`, from `exeOf_inl` at `agrees0_exe`).
-* `LeanRelease.LinkIs`: the firewall's link is `linkMsg`, a named trust narrower than `LinkRoundEq`. It is a fact about
+* `LeanRelease.LinkIs`: the ZK server's link is `linkMsg`, a named trust narrower than `LinkRoundEq`. It is a fact about
   what the transport hands `Flock.Firewall.Link` and how it frames the roots, not about how a root is computed.
 * **`LeanRelease.linkRoundEq_of_linkIs`**: `LinkRoundEq` at the deployed session (`Masked.dataE`) from `LinkIs`.
 -/
@@ -139,11 +139,11 @@ theorem leafAt_swCutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.
 noncomputable abbrev dataE : TableData :=
   tableData PE (RoundPlan.stop (czExe PE) (encStop (encExe PE)) (finExe PE)) UE
 
-/-- **What the firewall hands `Flock.Firewall.Link` for table `j`** at the tape `t`: the table's `m`, its packed table
+/-- **What the ZK server hands `Flock.Firewall.Link` for table `j`** at the tape `t`: the table's `m`, its packed table
 at the witness's traces with the tape's mask words, and the tape's extra lanes, lane paddings and level-0 salts at the
 sizes level 0 of the table's `--zk` schedule takes (`Level0.drawSize`): each extra lane's first `2^cols` words, each of
 the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the `2^d` tree positions, and `0` or empty
-past them, as `Level0.toIn` reads a level 0 drawn at those sizes. -/
+past them, as `Level0.toIn` reads a level 0 sampled at those sizes. -/
 noncomputable def linkIn (x : Msg) (w : Claims.Flock.Wit) (t : UE.Tape) (j : Fin (jOf x)) :
     _root_.Flock.Firewall.Link.In where
   m := (stAt x j).m
@@ -228,7 +228,7 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 
 namespace LeanRelease
 
-/-- **The firewall's link is the recheck's link message**: after `Hello`'s answer, where the protocol has coins and the
+/-- **The ZK server's link is the recheck's link message**: after `Hello`'s answer, where the protocol has coins and the
 frame takes the answer's, the link is `linkMsg`, `Flock.Firewall.Link.root`'s roots of the tables the transport hands
 it. A named hypothesis, one of the transport's trusts, narrower than `LinkRoundEq`: what `flock-circuit`'s
 `Firewall::new` hands the Lean code (the host's packed table, the extra lanes, the lane paddings and the level-0 salts
@@ -240,7 +240,7 @@ def LinkIs (nr : Msg → ℕ → ℕ)
   ∀ (ν : (session nr dataE).Nonce) (t : (session nr dataE).Tape) (m₀ ρ₀ : Msg), 0 < refK x →
     L.refusesCoins x (ν, t) [(m₀, ρ₀)] = false → L.link x w (ν, t) [(m₀, ρ₀)] = linkMsg x w t
 
-/-- **`LinkRoundEq` at the deployed session from the Lean recheck**: where the firewall's link is `Link.root`'s
+/-- **`LinkRoundEq` at the deployed session from the Lean recheck**: where the ZK server's link is `Link.root`'s
 link message (`LinkIs`), it is the session's switched link at the tape, whatever values the workers supply
 (`enc0_swCutAt`: round `0` sees no refusal, `encStop_zero`, and is `enc0`, `encExe_zero`). -/
 theorem linkRoundEq_of_linkIs (nr : Msg → ℕ → ℕ) (vs : (session nr dataE).SwVals)

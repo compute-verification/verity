@@ -11,7 +11,7 @@ P2's maps are ring operations mod `p` (`sq`, its root `ρ`) mixed with operation
 (parity, and the mask `σ_K(r) = r ⊕ K`). This file models them so that the encoder's two roots can be charged in
 sequential multiplications, not in oracle queries.
 
-**The model `ringRO B w p`.** Setup draws, uniformly:
+**The model `ringRO B w p`.** Setup samples, uniformly:
 
 * an *odd labeling* `φ : Z/p ≃ [0, p)` with `φ(−x) = −φ(x)` (that is, `p − φ(x)` for `x ≠ 0`); every element is
   seen only as its label, a `w`-bit string below `p`;

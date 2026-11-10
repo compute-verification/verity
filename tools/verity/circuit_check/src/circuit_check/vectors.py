@@ -8,11 +8,16 @@ ones, all ones but the sign).
 
 Vector ``j < E`` sets every leaf to the ``j``-th edge of its width (all-NaN, all-inf, ...), so a specials rule is hit on every
 operand at once; the random vectors then sample each leaf as an edge word (1 in 4), a word near 1.0 in magnitude (1 in 4,
-floats only: arithmetic in the range serving sees) or a uniform word.
+floats only: arithmetic in the range serving sees) or a uniform word.  ``E`` is as many edges as fit, or fewer when the caller
+keeps room for random vectors (`circuit_check.checks.Options.random_floor`).
 
 A registered table a target reads (`TableProbe`: `tanh_rn` is 2^27 entries) is in no vector: every vector reads the program's
 own table as one `verity.ml.circuits.evaluation.RegisteredTable`, and the probes add vectors that read its first and last entries and the
 first and last of each region (`probe_entries`), never all of them; the record says how many words the vectors read.
+
+An operand over the input budget (a weight, `circuit_check.targets.LAZY_OPERANDS`) is sampled as `vectors` samples a parameter, its
+j-th edge in every leaf for an edge vector and seeded random words for the rest, but one vector at a time (`wide_words`), and
+read word by word as the gates ask for it, never held as ``n`` vectors.
 """
 from __future__ import annotations
 
@@ -70,11 +75,11 @@ def edge_count(params: Sequence[Type]) -> int:
     return max((len(edges(w)) for pt in params for w in set(pt.leaf_widths())), default=0)
 
 
-def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
+def vectors(params: Sequence[Type], n: int, seed: int, edge: int | None = None) -> list[np.ndarray]:
     """``n`` vectors of the parameters ``params`` in ``evaluate_batch`` layout (one array per parameter, leading batch axis):
-    the all-edge vectors first (as many as fit in ``n``), then random ones."""
+    the all-edge vectors first (``edge`` of them, default as many as fit in ``n``), then random ones."""
     rng = np.random.default_rng(seed)
-    E = min(n, edge_count(params))
+    E = min(n, edge_count(params) if edge is None else edge)
     out = []
     for pt in params:
         widths = np.asarray(pt.leaf_widths())
@@ -93,6 +98,29 @@ def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
                 a[E:, cols] = _random(rng, w, (n - E, len(cols)))
         out.append((a if dt.kind == "O" else a.astype(dt)).reshape((n, *type_shape(pt))))
     return out
+
+
+#: the leaves `wide_words` samples at once
+WIDE_CHUNK = 1 << 22
+
+
+def wide_words(pt: Type, i: int, edge_vectors: int, seed: int, param: int) -> Callable[[int], int]:
+    """Vector ``i`` of parameter ``param``, of type ``pt`` and one width, as a function of the leaf index: the ``i``-th edge of its
+    width in every leaf when ``i < edge_vectors``, else seeded random words (`_random`, seeded by ``seed``, ``param`` and ``i``),
+    sampled into one array of the parameter's leaves."""
+    w = pt.homogeneous_width()
+    if w is None or w > 64:
+        raise ValueError(f"{pt!r} is not of one width of at most 64 bits")
+    if i < edge_vectors:
+        ew = edges(w)
+        word = ew[i % len(ew)]
+        return lambda j: word
+    rng = np.random.default_rng([seed, param, i])
+    a = np.empty(pt.leaves, dtype=next(d for b, d in ((8, np.uint8), (16, np.uint16), (32, np.uint32), (64, np.uint64)) if w <= b))
+    for lo in range(0, pt.leaves, WIDE_CHUNK):
+        hi = min(lo + WIDE_CHUNK, pt.leaves)
+        a[lo:hi] = _random(rng, w, (1, hi - lo))[0]
+    return lambda j: int(a[j])
 
 
 def instance_args(params: Sequence[Type], arrays: Sequence[np.ndarray], i: int) -> list:
@@ -169,4 +197,4 @@ def table_instances(params: Sequence[Type], probe: TableProbe, n: int, seed: int
 
 
 __all__ = ["BF16", "E4M3", "E5M2", "FP16", "FP32", "FP64", "TableProbe", "edge_count", "edges", "flat", "instance_args", "integer_edges",
-           "probe_entries", "table_instances", "vectors"]
+           "probe_entries", "table_instances", "vectors", "wide_words"]

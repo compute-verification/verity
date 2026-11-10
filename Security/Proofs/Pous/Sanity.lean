@@ -5,6 +5,7 @@ public import Mathlib.Data.Fintype.Fin
 public import Mathlib.Logic.Equiv.Fin.Basic
 public import Mathlib.Tactic.NormNum
 public import Definitions.Pous.Guarantees
+public import Proofs.Pous.Prob
 
 /-!
 # Sanity theorems: the definitions are not vacuous
@@ -31,10 +32,6 @@ variable {M : IdealModel}
 section pr
 
 variable {α β : Type} [Fintype α] [Fintype β]
-
-theorem pr_def (P : α → Prop) [DecidablePred P] :
-    pr P = ((Finset.univ.filter P).card : ℝ≥0∞) / Fintype.card α := by
-  unfold pr; congr
 
 theorem pr_eq_one [Nonempty α] {P : α → Prop} (h : ∀ x, P x) : pr P = 1 := by
   classical

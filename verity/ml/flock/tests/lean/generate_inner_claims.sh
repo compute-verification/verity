@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate tests/fixtures/inner_claims.json: what the inner verifier's algebra reads from the statement, per rep of the
-# flat GEMM selftest's honest session (the fetched fixture hidden-outputs/flat/gemm-coordinate), from the Lean verifier of
-# record (tests/lean/InnerClaims.lean, interpreted: about half an hour). PACKAGE_DIR defaults to this checkout's
+# flat GEMM selftest's honest session (the fetched fixture hidden-outputs/flat/gemm-coordinate), from the Lean
+# verifier (tests/lean/InnerClaims.lean, interpreted: about half an hour). PACKAGE_DIR defaults to this checkout's
 # verity/core/service/flock; pass another checkout's to keep its Lake build directory apart. The fixture records the sha256 of each file
 # the dump depends on, which the tests compare with the tree.
 #   bash tests/lean/generate_inner_claims.sh [PACKAGE_DIR]

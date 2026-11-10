@@ -2,7 +2,7 @@
 `remote-audit-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
 coin, the window's samples, the verdict, or the rejection with its failure and draw), the outcome and the record.
 Recorded sessions (`ra_cases.SCENARIOS`) are honest ones and ones that each reach one of `audit.FAILURES` in the Lean;
-drawn ones are those with their events, fields and parameters edited, which reach the rest of the bookkeeping and the
+sampled ones are those with their events, fields and parameters edited, which reach the rest of the bookkeeping and the
 decoders' refusals."""
 
 from __future__ import annotations

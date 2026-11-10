@@ -10,22 +10,22 @@ public import Flock.Desc
 # The joint stratified bound over sampling blocks of several tables (trusted)
 
 `JointStratified` and `JointStratifiedHorizon` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
-parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof units, whose units the
-challenger's coins sample by one live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`): stratum
-`s` holds `n_s` of the sampling block's units, `k_s` of them are drawn uniformly without replacement, independently
-across strata, and the strata run over every table's units, so a table's subcircuits are strata of the one draw.
-`verify --zk --session-tables J` proves the drawn units in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
-`partS`); when the units are laid out table by table and every table's strata draw the same number of units, part `j` is
-table `j`'s own stratified draw. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified law);
+parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof blocks, whose units the
+challenger's coins sample by one live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`): stratum
+`s` holds `n_s` of the sampling block's units, `k_s` of them are sampled uniformly without replacement, independently
+across strata, and the strata run over every table's units, so a table's subcircuits are strata of the one sample.
+`verify --zk --session-tables J` proves the sampled proof blocks in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
+`partS`); when the units are laid out table by table and every table's strata sample the same number of units, part `j` is
+table `j`'s own stratified sample. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified sampling design);
 that the parts are proved and set up with the session's link points is flock-verify's own arithmetic
 (`ZkHidden.drawOkZKHJ_of_accepts_stratified`).
 
-`StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its law, as
-`Period`'s `SamplingBlock` is. Its wrong units are `wrongRegZ` in the committed transcript fixed at registration
+`StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its sampling design, as
+`Period`'s `SamplingBlock` is. Its incorrect proof blocks are `wrongRegZ` in the committed transcript fixed at registration
 (`XplurZC`). The bound is `JointStratified`'s, with the same budget and the same confidence set:
 
 * `JointStratifiedMT`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if flock-verify accepts, the
-  sampling block's wrong units `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
+  sampling block's incorrect proof blocks `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` over every stratum of every table, and their ANDs and their
   output bits are each at most the most any set in the confidence set holds (`StratifiedBlockMT.maxHarm`).
 * `JointStratifiedHorizonMT`, pooled: the same over a period of `T` such sampling blocks played by one adaptive prover,
@@ -33,12 +33,12 @@ that the parts are proved and set up with the session's link points is flock-ver
 
 `ε_ks` is the sampling block's knowledge term at the worst registration (`StratifiedBlockMT.epsKs`) and `ε_bind` its
 binding term `δ_link` (`StratifiedBlockMT.link`). The named assumptions are A3 (`uniform/io-getrandombytes`) for the
-draw's bytes, `live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and
+sample's bytes, `live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and
 `ecr/sha-512` (`LinkCRZC`) at the strategy each sampling block is played with (in a period, at every strategy it is
 played with on some run, `StratifiedMT.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratifiedMT`
 and `Flock.SecurityProofs.JointStratifiedHorizonMT` (`Joint/MT/Bound.lean`).
 
-C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
+Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
 
 @[expose] public section
@@ -51,12 +51,12 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **A sampling block of `J` tables whose draw is stratified**: one hidden-output `--zk` session of `nTab I` tables over
-`n` proof units, with every binder of `EndToEndHidden` but the prover and its law. Its statement (circuit descriptor,
-public file); its strata over every table's units, unit `u` in stratum `sub u`, `ks s` of stratum `s`'s units drawn, the
-executable strata `St` describing them (`Law.ExecStrata`); its record (draw files, session writer, reference setup at
-table 0, `∑ s, ks s / nTab I` drawn units a table); the verifier's byte sources, one per stratum; the verify command's
-tags; `live-verifier` at the stratified law (`hCust`); the count curve's parameters; and the knowledge finders' budgets
+/-- **A sampling block of `J` tables whose sample is stratified**: one hidden-output `--zk` session of `nTab I` tables over
+`n` proof blocks, with every binder of `EndToEndHidden` but the prover and its sampling design. Its statement (circuit descriptor,
+public file); its strata over every table's units, unit `u` in stratum `sub u`, `ks s` of stratum `s`'s units sampled, the
+executable strata `St` describing them (`Law.ExecStrata`); its record (sample files, session writer, reference setup at
+table 0, `∑ s, ks s / nTab I` sampled proof blocks a table); the verifier's byte sources, one per stratum; the verify command's
+tags; `live-verifier` at the stratified sampling design (`hCust`); the count curve's parameters; and the knowledge finders' budgets
 `qF`, `qS`. -/
 structure StratifiedBlockMT where
   n : ℕ
@@ -117,19 +117,19 @@ open Classical
 
 variable (w : StratifiedBlockMT)
 
-/-- The sampling block's draw: `Flock.Draw.drawWith`'s stratified draw on the challenger's coins, over every table's
+/-- The sampling block's sample: `Flock.Draw.drawWith`'s stratified sample on the challenger's coins, over every table's
 units. -/
 def L : Law w.n := Law.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
-/-- The stratified law the draw is held to under A3 (`Law.execOS_escape_le`): `ks s` of stratum `s`'s units, uniform
+/-- The stratified sampling design the sample is held to under A3 (`Law.execOS_escape_le`): `ks s` of stratum `s`'s units, uniform
 without replacement, independently across strata. -/
 def ideal : Law w.n := Law.stratified w.sub w.ks w.hks
 
-/-- The sampling block's audit as it runs: `EndToEndHidden`'s game at the stratified draw. -/
+/-- The sampling block's audit as it runs: `EndToEndHidden`'s game at the stratified sample. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
   auditLive w.L w.Reg (liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr)
 
-/-- The key program's partition into proof units. -/
+/-- The key program's partition into proof blocks. -/
 noncomputable def P := (keyProg w.D.unroll w.hU w.n).partition (Discharge.Layout.outsOf w.D.unroll w.hU w.n)
 
 /-- The public file's commitments. -/
@@ -137,8 +137,8 @@ noncomputable def vb :=
   (rsZHJ w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg)).bindingZ
   (rsZHJ_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg))
 
-/-- The model audit's strategy that a live strategy `τ` refines to: `EndToEndHidden`'s `σ`, with the draw at each
-accepted outcome from custody at the stratified law (`drawOkZKHJ_of_accepts_stratified`). -/
+/-- The model audit's strategy that a live strategy `τ` refines to: `EndToEndHidden`'s `σ`, with the sample at each
+accepted outcome from custody at the stratified sampling design (`drawOkZKHJ_of_accepts_stratified`). -/
 noncomputable def sim (τ : Strategy w.game) :=
   simZJ execArith hs512 (planZHJ w.dj w.y₀) w.I w.wr (opnAtZHJ (planZHJ w.dj w.y₀) w.I w.dj) w.dg
     (decAtZJ (planZHJ w.dj w.y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) w.N
@@ -148,7 +148,7 @@ noncomputable def sim (τ : Strategy w.game) :=
         fun ω R o hacc => drawOkZKHJ_of_accepts_stratified w.I w.ht (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks
           w.St w.hS w.Kd w.pop w.Lb w.src w.dj w.hCust.2 w.hCust.1 ω R o hacc)) τ
 
-/-- **The sampling block's wrong units** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
+/-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
 registration (`XplurZC`), as in `EndToEndHidden`. -/
 noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   wrongRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
@@ -163,17 +163,17 @@ noncomputable def link : ℝ≥0∞ :=
       (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L p) : ℝ) / Fintype.card w.L.Ω) *
     (2 * (w.t' * (1 + w.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * w.M) + w.k / (Real.exp 1 * w.Rw)) / (1 - w.ρ))
 
-/-- **The detection budget a wrong-unit set `B` spends**, `Σ_s k_s·x_s/n_s` over every stratum of every table, with
+/-- **The detection budget an incorrect set `B` spends**, `Σ_s k_s·x_s/n_s` over every stratum of every table, with
 `x_s` its units in stratum `s`. -/
 noncomputable def spend (B : Finset (Fin w.n)) : ℝ :=
   ∑ s, (w.ks s : ℝ) * (B.filter (w.sub · = s)).card / (Law.stratum w.sub s).card
 
-/-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the wrong-unit sets `B` the
-stratified draw misses with probability at least `δ`. -/
+/-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the incorrect sets `B` the
+stratified sample misses with probability at least `δ`. -/
 noncomputable def maxHarm (h : Fin w.n → ℕ) (δ : ℝ) : ℝ :=
   ⨆ B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.escape B}, ((∑ u ∈ B.1, h u : ℕ) : ℝ)
 
-/-- **`B` is within the sampling block's one budget at `δ`**: the stratified draw misses it with probability at least
+/-- **`B` is within the sampling block's one budget at `δ`**: the stratified sample misses it with probability at least
 `δ`, so it spends at most `ln(1/δ)` of the detection budget across every stratum of every table, and its ANDs and its
 output bits are each at most the most any set in the confidence set holds. -/
 def Within (δ : ℝ) (ands bits : Fin w.n → ℕ) (B : Finset (Fin w.n)) : Prop :=
@@ -183,14 +183,14 @@ def Within (δ : ℝ) (ands bits : Fin w.n → ℕ) (B : Finset (Fin w.n)) : Pro
 end StratifiedBlockMT
 
 /-- **The joint stratified bound, per sampling block of `J` tables.** For a sampling block as in `StratifiedBlockMT`,
-proved in `nTab I` tables, whose one live stratified draw takes `k_s` of the `n_s` units of each stratum `s` across the
+proved in `nTab I` tables, whose one live stratified sample takes `k_s` of the `n_s` units of each stratum `s` across the
 tables, every `δ > 0` and every per-unit weights `ands` (each unit's ANDs) and `bits` (its output bits), and every live
-prover `τ`, the probability that flock-verify accepts and the sampling block's wrong units `B` are not within its one
+prover `τ`, the probability that flock-verify accepts and the sampling block's incorrect proof blocks `B` are not within its one
 budget is at most
 $$\delta + \varepsilon_{ks} + \varepsilon_{bind}:$$
-outside it, an accepted sampling block's wrong units escape the stratified draw with probability at least `δ`, spend
+outside it, an accepted sampling block's incorrect proof blocks escape the stratified sample with probability at least `δ`, spend
 `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` across all its strata, and hold at most `maxHarm ands δ` ANDs and at most
-`maxHarm bits δ` output bits. Its named assumptions: A3 (`Assumptions.UniformRandomBytes`) for the draw's bytes,
+`maxHarm bits δ` output bits. Its named assumptions: A3 (`Assumptions.UniformRandomBytes`) for the sample's bytes,
 `live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
 (`LinkCRZC`) at `τ`. -/
 def JointStratifiedMT : Prop :=
@@ -204,8 +204,8 @@ def JointStratifiedMT : Prop :=
     prob (fun o => LiveAcceptsZK w.I o ∧ ¬ w.Within δ ands bits (w.wrongSet τ)) w.game τ ≤
       ENNReal.ofReal δ + w.epsKs + w.link
 
-/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, its wrong units
-(`StratifiedBlockMT.wrongSet`), and whether a drawn unit is one of them. -/
+/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, its incorrect proof blocks
+(`StratifiedBlockMT.wrongSet`), and whether a sampled proof block is one of them. -/
 structure BlockRecMT (W : ℕ → StratifiedBlockMT) where
   idx : ℕ
   accepted : Prop
@@ -216,13 +216,13 @@ namespace BlockRecMT
 
 variable {W : ℕ → StratifiedBlockMT}
 
-/-- The probability that the record's sampling block's stratified draw misses its wrong units. -/
+/-- The probability that the record's sampling block's stratified sample misses its incorrect proof blocks. -/
 noncomputable def escape (r : BlockRecMT W) : ℝ≥0∞ := (W r.idx).ideal.escape r.wrong
 
-/-- The detection budget the record's wrong units spend, `Σ_s k_s·x_s/n_s` over its sampling block's strata. -/
+/-- The detection budget the record's incorrect proof blocks spend, `Σ_s k_s·x_s/n_s` over its sampling block's strata. -/
 noncomputable def spend (r : BlockRecMT W) : ℝ := (W r.idx).spend r.wrong
 
-/-- The record's wrong units' total weight `Σ_{u ∈ B} h u`, with `h t` sampling block `t`'s per-unit weights. -/
+/-- The record's incorrect proof blocks' total weight `Σ_{u ∈ B} h u`, with `h t` sampling block `t`'s per-unit weights. -/
 def harm (h : (t : ℕ) → Fin (W t).n → ℕ) (r : BlockRecMT W) : ℕ := ∑ u ∈ r.wrong, h r.idx u
 
 end BlockRecMT
@@ -253,15 +253,15 @@ at `s`. -/
 def Plays (W : ℕ → StratifiedBlockMT) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
   PeriodPlays (fun t => (W t).game) 0 T s t τ
 
-/-- **The most harm in the period's confidence set**: the largest total weight over every choice of a wrong-unit set
-in each of the run's sampling blocks that their draws miss together with probability at least `δ`. -/
+/-- **The most harm in the period's confidence set**: the largest total weight over every choice of an incorrect set
+in each of the run's sampling blocks that their samples miss together with probability at least `δ`. -/
 noncomputable def maxHarm (W : ℕ → StratifiedBlockMT) (h : (t : ℕ) → Fin (W t).n → ℕ) (δ : ℝ)
     (l : List (BlockRecMT W)) : ℝ :=
   ⨆ B : {B : (i : Fin l.length) → Finset (Fin (W l[i].idx).n) //
       ENNReal.ofReal δ ≤ ∏ i, (W l[i].idx).ideal.escape (B i)},
     ((∑ i, ∑ u ∈ B.1 i, h l[i].idx u : ℕ) : ℝ)
 
-/-- **The run's wrong units are within the period's one budget at `δ`**: the sampling blocks' draws miss them together
+/-- **The run's incorrect proof blocks are within the period's one budget at `δ`**: the sampling blocks' samples miss them together
 with probability at least `δ`, so they spend at most `ln(1/δ)` of the detection budget across every stratum of every
 sampling block, and their ANDs and their output bits in all are each at most the most any choice in the period's
 confidence set holds. -/
@@ -274,16 +274,16 @@ def Within (W : ℕ → StratifiedBlockMT) (δ : ℝ) (ands bits : (t : ℕ) →
 end StratifiedMT
 
 /-- **The joint stratified bound over a period of sampling blocks of `J` tables, pooled.** In a period of `T` sampling
-blocks `W t` as in `StratifiedBlockMT`, each proved in its session's tables with a fresh live stratified draw, played by
+blocks `W t` as in `StratifiedBlockMT`, each proved in its session's tables with a fresh live stratified sample, played by
 one adaptive prover `s`, for every `δ > 0` and every per-unit weights `ands t` (each unit's ANDs) and `bits t` (its
-output bits), the probability that flock-verify accepts every sampling block and their wrong units are not within the
+output bits), the probability that flock-verify accepts every sampling block and their incorrect proof blocks are not within the
 period's one budget is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \varepsilon_{bind,t}):$$
-outside it, when every sampling block is accepted, their draws miss their wrong units together with probability at
-least `δ`, the wrong units spend `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)` across every stratum of every sampling
+outside it, when every sampling block is accepted, their samples miss their incorrect proof blocks together with probability at
+least `δ`, the incorrect proof blocks spend `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)` across every stratum of every sampling
 block, and their ANDs and output bits in all are at most the period's `maxHarm`. The sampling term is `δ` however many
 sampling blocks and tables the period has. Its named assumptions, at every sampling block: A3
-(`Assumptions.UniformRandomBytes`) for its draw's bytes, `live-verifier` (`StratifiedBlockMT.hCust`,
+(`Assumptions.UniformRandomBytes`) for its sample's bytes, `live-verifier` (`StratifiedBlockMT.hCust`,
 `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every strategy it is played with
 on some run (`StratifiedMT.Plays`). -/
 def JointStratifiedHorizonMT : Prop :=

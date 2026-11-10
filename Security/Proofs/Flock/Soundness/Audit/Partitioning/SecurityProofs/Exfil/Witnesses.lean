@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Audit.Law
 # Exfiltration: the witnesses' facts
 
 The statements of `Partitioning.Witness.exfiltration` and `Partitioning.Witness.refinement`, proved here so that the
-witness file can cite them. `Law.subset n n` draws every unit, so only the empty set escapes, and it certifies any
+witness file can cite them. `Law.subset n n` samples every unit, so only the empty set escapes, and it certifies any
 `ℓ ≥ 0` with the harm bound `0` and the count `0` (`certifies_full`). The rest is arithmetic: `locBits 4 1 = log₂ 5`,
 `locBits 4 2 = log₂ 11`, `(1/2)^{1/2} > 7/10`, and `1/2 ≤ ln 2 ≤ 1`.
 -/
@@ -19,7 +19,7 @@ namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 open Finset
 open scoped ENNReal
 
-/-- **Drawing every unit certifies any `ℓ ≥ 0`**, with the harm bound `0` and the count `0`. -/
+/-- **Sampling every unit certifies any `ℓ ≥ 0`**, with the harm bound `0` and the count `0`. -/
 theorem certifies_full (n : ℕ) (b : Fin n → ℕ) {δ ℓ : ℝ} (hδ : 0 < δ) (hℓ : 0 ≤ ℓ) :
     CertifiesLeak (Law.subset n n le_rfl) b δ ℓ := by
   have hzero : ∀ B : Finset (Fin n), B.Nonempty → (Law.subset n n le_rfl).escape B = 0 := by

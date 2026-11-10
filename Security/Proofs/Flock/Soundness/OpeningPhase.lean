@@ -3,13 +3,12 @@ module
 public import Definitions.Core.Game
 public import Definitions.Flock.Defs
 public import Mathlib.Algebra.MvPolynomial.Degrees
-public import Proofs.Flock.Soundness.Game.Union
+public import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Data.Nat.Bitwise
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Core.Game.Poly
 
 /-!
 # The opening phase: ring switching and batching (`Flock.Opening`)
@@ -135,7 +134,7 @@ theorem prCoin_eqSum_le [CharP F 2] {n : ℕ} (d : Fin (2 ^ n) → F) (u₀ : Fi
       = prCoin (fun r : Fin n → F => MvPolynomial.eval r (eqPoly d) = 0) := by
         congr 1; funext r; rw [eval_eqPoly]
     _ ≤ ((eqPoly d).totalDegree : ℝ≥0∞) / Fintype.card F :=
-        prCoin_mvEval_eq_zero_le _ (eqPoly_ne_zero d u₀ hd)
+        Verity.Game.prCoin_mvEval_eq_zero_le _ (eqPoly_ne_zero d u₀ hd)
     _ ≤ (n : ℝ≥0∞) / Fintype.card F := by
         gcongr; exact_mod_cast totalDegree_eqPoly_le d
 
@@ -161,7 +160,7 @@ theorem prCoin_batch_le {n : ℕ} (d : Fin n → F) (k₀ : Fin n) (hd : d k₀ 
   calc prCoin (fun γ : Fin n → F => ∑ k, γ k * d k = 0)
       = prCoin (fun γ : Fin n → F => MvPolynomial.eval γ Q = 0) := by
         congr 1; funext γ; rw [hevalQ]
-    _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := prCoin_mvEval_eq_zero_le _ hQ
+    _ ≤ (Q.totalDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_mvEval_eq_zero_le _ hQ
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
 

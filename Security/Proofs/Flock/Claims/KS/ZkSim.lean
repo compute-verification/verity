@@ -945,7 +945,7 @@ def ZkSimAbort {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mP
 
 end Gen
 
-/-- **The lockstep**: at every masked statement in scope that sets up, at C-Flock ZK's padded tables, and every prover
+/-- **The lockstep**: at every masked statement in scope that sets up, at Flock ZK's padded tables, and every prover
 `P` and its tape `ω`, the masked simulator simulates `P`'s accepting runs at `zkΦ`'s coins on the masked wire
 (`ZkSimRun`): its live outcome is the view of each record `P`'s run decides on. -/
 def ZkSimRunAt (x : Claims.Msg) : Prop :=
@@ -964,7 +964,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The lockstep**: at every masked statement in scope that sets up, at C-Flock ZK's padded tables, and every prover
+/-- **The lockstep**: at every masked statement in scope that sets up, at Flock ZK's padded tables, and every prover
 `P` and its tape `ω`, the masked simulator simulates `P`'s accepting runs at `zkΦ`'s coins on the masked wire
 (`ZkSimRun`): its live outcome is the view of each record `P`'s run decides on. -/
 def ZkSimRunAt (x : Claims.Msg) : Prop :=
@@ -981,8 +981,8 @@ def ZkSimRunAt (x : Claims.Msg) : Prop :=
 
 end Gen
 
-/-- **The abort**: at every masked statement in scope that sets up at a draw `d`, every prover and tape, every table
-`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the draw
+/-- **The abort**: at every masked statement in scope that sets up at a sample `d`, every prover and tape, every table
+`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the sample
 (`AccTxJ`) fails at the masked simulator's outcome (`ZkSimAbort`). -/
 def ZkSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
@@ -1001,8 +1001,8 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The abort**: at every masked statement in scope that sets up at a draw `d`, every prover and tape, every table
-`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the draw
+/-- **The abort**: at every masked statement in scope that sets up at a sample `d`, every prover and tape, every table
+`j` and table of full-width columns, where `P`'s masked run at `zkΦ`'s coins is rejected the live verdict at the sample
 (`AccTxJ`) fails at the masked simulator's outcome (`ZkSimAbort`). -/
 def ZkSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
@@ -1155,7 +1155,7 @@ end Gen
 
 open Classical in
 /-- **The simulated fork bounds the model's rewinding advantage**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
+sample, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
 each event (`zkAdvSim`) is at most the simulated fork at `zkΦ` at the event's round (`simForkPr` at the live fork
 `forkN`). -/
 def ZkSimForkLe (x : Claims.Msg) : Prop :=
@@ -1178,7 +1178,7 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **The simulated fork bounds the model's rewinding advantage**: at every masked statement in scope that sets up at a
-draw, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
+sample, every prover and tape, every table `j` and table of full-width columns, the masked simulator's fork advantage at
 each event (`zkAdvSim`) is at most the simulated fork at `zkΦ` at the event's round (`simForkPr` at the live fork
 `forkN`). -/
 def ZkSimForkLe (x : Claims.Msg) : Prop :=
@@ -1198,7 +1198,7 @@ def ZkSimForkLe (x : Claims.Msg) : Prop :=
 end Gen
 
 /-- **A self-clash at an accepting run's view is a column clash or a collision**: at every masked statement in scope
-that sets up, at its draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
+that sets up, at its sample `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
 at which `V true` accepts `P` deciding a record, a decoded self-clash of table `j` at the record's live outcome
 (`LiveSelfClashZ` at `viewOf`) gives two different columns the run's reps open at one position of some table, or a
 collision among the run's verifier calls. -/
@@ -1232,7 +1232,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **A self-clash at an accepting run's view is a column clash or a collision**: at every masked statement in scope
-that sets up, at its draw `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
+that sets up, at its sample `d`, every prover and tape, every table `j` and table of full-width columns, and every coins
 at which `V true` accepts `P` deciding a record, a decoded self-clash of table `j` at the record's live outcome
 (`LiveSelfClashZ` at `viewOf`) gives two different columns the run's reps open at one position of some table, or a
 collision among the run's verifier calls. -/

@@ -17,7 +17,7 @@ connections (a rep's start, and the finish's salts for levels ≥ 1, inner round
   (`Sessions.innerRound`) and proof file (`Sessions.file`), and a session's end (`closeOf`, `Frames.close`'s).
 * `frameAt`, `find_frameAt`: a rep's frame in the registry, as `Sessions.find` finds it; `find_key`: the frame found at
   a rep's key has that key.
-* `FreshRep`: a frame as `Frames.startRep` pushes it: its configuration and draws the start's, the rest unset.
+* `FreshRep`: a frame as `Frames.startRep` pushes it: its configuration and samples the start's, the rest unset.
 * `KeptStep`, `Kept`: every update but a put at the rep's key and its own session's end, with a start's frame fresh,
   and any run of them. `frameAt_kept`: those leave a rep's frame as it was. `frameAt_put_self`: a put at the rep's key
   leaves its frame that put.
@@ -90,7 +90,7 @@ def closeOf (R : Sessions) (sid : Nat) (roots : Array ByteArray) : Sessions :=
     files := R.files.filter fun (root, _, _) => !roots.contains root,
     inner := R.inner.filter fun (root, _, _) => !roots.contains root }
 
-/-- **A frame as `Frames.startRep` pushes it**: its configuration and draws the start's, its state the frame's start,
+/-- **A frame as `Frames.startRep` pushes it**: its configuration and samples the start's, its state the frame's start,
 no scheduled rounds, coins or opening yet. -/
 structure FreshRep (q : Rep) : Prop where
   st : q.st = {}
