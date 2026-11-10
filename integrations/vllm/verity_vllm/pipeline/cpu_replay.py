@@ -179,23 +179,9 @@ def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
-<<<<<<< 0941037006
-    """The weights tree a slim keep carries: under rows-sha512 never the registration's ``Kw`` (every weights leaf's
-    salt derives from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened),
-    and the bundle's bytes of those alone; a vllm-v1 tree, unsalted, as the bundle carries it."""
-    if tree_scheme(tree) != step_rows.NAME:
-        return tree
-||||||| merged common ancestors
-    """The weights tree a slim keep carries, which is published: under rows-sha512 never the registration's ``Kw`` (every weights leaf's
-    salt derives from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened),
-    and the bundle's bytes of those alone; a vllm-v1 tree, unsalted, as the bundle carries it."""
-    if tree_scheme(tree) != step_rows.NAME:
-        return tree
-=======
-    """The weights tree a slim keep carries, which is published: never the registration's ``Kw`` (every weights leaf's salt derives
+    """The weights tree a slim keep carries: never the registration's ``Kw`` (every weights leaf's salt derives
     from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
     bundle's bytes of those alone."""
->>>>>>> 7af4d24fca3e
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
     keys = {str(at[n]): tensor_key_of(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.get)}
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
@@ -203,19 +189,9 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
 
 
 def folded_root(tree: dict[str, Any]) -> str:
-<<<<<<< 0941037006
-    """The root the tree's tensor roots fold to under its scheme."""
-    S = step_rows if tree_scheme(tree) == step_rows.NAME else scheme
-    return S.weights_root(bytes.fromhex(tree["geo_digest"]), S.names_digest(tree["names"]), [bytes.fromhex(r) for r in tree["tensor_roots"]]).hex()
-||||||| merged common ancestors
-    """The root the tree's tensor roots fold to under its scheme."""
-    geo, nd, roots = bytes.fromhex(tree["geo_digest"]), scheme.names_digest(tree["names"]), [bytes.fromhex(r) for r in tree["tensor_roots"]]
-    return (step_rows.weights_root(geo, nd, roots) if tree_scheme(tree) == step_rows.NAME else scheme.weights_root(geo, nd, roots)).hex()
-=======
     """The root the tree's tensor roots fold to."""
     roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
     return step_rows.weights_root(bytes.fromhex(tree["geo_digest"]), step_rows.names_digest(tree["names"]), roots).hex()
->>>>>>> 7af4d24fca3e
 
 
 def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None, rw: Any = None,

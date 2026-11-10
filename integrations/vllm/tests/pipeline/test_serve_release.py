@@ -79,15 +79,14 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
             com.open_range(1, 0, 1)                 # no sample read step 1
 
 
-<<<<<<< 0941037006
-def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(cs, tmp_path):
+def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(tmp_path):
     """The seal holds the step-input port's committed positions to the rows the window ran, at every step
     (`serve_seal.port_positions`, and `seal_process`'s handoff): they are read just before the release, which still keeps
     only the draw's leaves."""
     from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
 
     pos = bytes(range(40, 48)) * 8
-    _host, rc, dev = committed(cs, extra={1: [(PORT_NAMES[1], pos)]})
+    _host, rc, dev = committed(extra={1: [(PORT_NAMES[1], pos)]})
     before = committed_raw(dev, 1, PORT_NAMES[1])
     assert before is not None and before[0] == pos
     draws = SL.Draws(("pouw",))
@@ -111,7 +110,7 @@ def test_a_released_window_seals_and_its_bundle_holds_exactly_the_draws_leaves(t
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline import serve_seal as SS
 
-    host, rc, dev = committed(R.NAME)
+    host, rc, dev = committed()
     dev.weights_tree, dev.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     down = (2, "model.layers.0.mlp.down_proj", 0, dev.chunk)
     draws = SL.Draws(("pouw",))
@@ -131,21 +130,10 @@ def test_a_released_window_seals_and_its_bundle_holds_exactly_the_draws_leaves(t
     assert OpenedReader(store, run)(*down) == host[2][base:base + dev.chunk]
 
 
-def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name(cs):
-    _host, rc, dev = committed(cs)
-    draws = SL.Draws(("sampled_proofs",))
-    draws.put(0, "sampled_proofs", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-||||||| merged common ancestors
-def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name(cs):
-    _host, rc, dev = committed(cs)
-    draws = SL.Draws(("sampled_proofs",))
-    draws.put(0, "sampled_proofs", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-=======
 def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name():
     _host, rc, dev = committed()
     draws = SL.Draws(("spot",))
     draws.put(0, "spot", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
->>>>>>> 7af4d24fca3e
     draws.release(0, dev)
     assert draws.refused(0, [(2, "model.layers.0.mlp.down_proj", 0, 1)], dev) == []
     lost = draws.refused(0, [(1, "runner.sampler", 0, 4), (2, "model.layers.0.mlp.down_proj", 0, 1)], dev)
@@ -169,14 +157,8 @@ def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_wa
     draws.put(0, "spot", [(0, "model.layers.9.mlp.down_proj", 0, 1)])
     with pytest.raises(KeyError, match="no committed member by that name"):
         draws.release(0, dev)
-<<<<<<< 0941037006
-    assert dev.released["discarded"].startswith("KeyError") and dev.released["kept_bytes"] == 0   # a window whose draws can't
+    assert dev.released["discarded"].startswith("KeyError") and dev.released["kept_bytes"] == 0   # a window whose samples can't
     assert dev.device_pool.held == 0                       # be read keeps nothing: never redrawn, so it would hold the pool forever
-||||||| merged common ancestors
-    assert getattr(dev, "released", None) is None          # a window whose draws can't be read is not released
-=======
-    assert getattr(dev, "released", None) is None          # a window whose samples can't be read is not released
->>>>>>> 7af4d24fca3e
     with pytest.raises(KeyError, match="did not commit"):
         SL.leaves_of(dev, [(9, "model.embed_tokens", 0, 1)])
 
@@ -226,8 +208,8 @@ def _waiting_take(pool, nbytes, key):
     return t, got
 
 
-def test_a_failed_run_ends_every_step_waiting_on_the_pool_by_name(cs):
-    _host, _rc, dev = committed(cs)
+def test_a_failed_run_ends_every_step_waiting_on_the_pool_by_name():
+    _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS, dev.device_pool)
     t, got = _waiting_take(dev.device_pool, dev.device_pool.capacity, "next window")
     draws.fail("the server failed: RuntimeError: boom")
@@ -239,8 +221,8 @@ def test_a_failed_run_ends_every_step_waiting_on_the_pool_by_name(cs):
     assert dev.device_pool.held == 0 and dev.released["discarded"].startswith("Refused")
 
 
-def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name(cs):
-    _host, _rc, dev = committed(cs)
+def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name():
+    _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS, dev.device_pool)
     held, cap = dev.device_pool.held, dev.device_pool.capacity
     t, got = _waiting_take(dev.device_pool, cap, "next window")
@@ -261,10 +243,10 @@ def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name(
     assert draws.discard(0, dev, "again") is None
 
 
-def test_a_window_whose_close_fails_is_discarded_not_waited_on(cs):
+def test_a_window_whose_close_fails_is_discarded_not_waited_on():
     from verity_vllm.pipeline.serve_commit import CommitWindows
 
-    _host, _rc, dev = committed(cs)
+    _host, _rc, dev = committed()
     draws, heard = SL.Draws(PROTOCOLS, dev.device_pool), []
     windows = SimpleNamespace(release=draws, _sealed=heard.append)
     rec = {"window": 4, "error": "RuntimeError: finalize failed"}
@@ -283,35 +265,13 @@ def opts(**retention):
 
 
 def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
-<<<<<<< 0941037006
     assert SL.retention_refusal(opts()) is None
     assert "--release-after" in SL.retention_refusal(opts(release_after=""))
     assert "needs --retain device and --seal" in SL.retention_refusal(opts(retain="host"))
-    assert "distinct protocol names" in SL.retention_refusal(opts(release_after="sampled_proofs,sampled_proofs"))
+    assert "distinct protocol names" in SL.retention_refusal(opts(release_after="spot,spot"))
     assert "distinct protocol names" in SL.retention_refusal(opts(release_after="a/b"))
     rec = SL.retention_record(opts(), SimpleNamespace())
-    assert rec["release_after"] == "sampled_proofs,pouw_h1" and rec["draws_dir"] == "OUT/draws"
-||||||| merged common ancestors
-    from verity_vllm.pipeline import serve_seal as SS
-
-    assert SS.retention_refusal(opts()) is None
-    assert "--release-after" in SS.retention_refusal(opts(release_after=""))
-    assert "needs --retain device and --seal" in SS.retention_refusal(opts(retain="host"))
-    assert "distinct protocol names" in SS.retention_refusal(opts(release_after="sampled_proofs,sampled_proofs"))
-    assert "distinct protocol names" in SS.retention_refusal(opts(release_after="a/b"))
-    rec = SS.retention_record(opts(), SimpleNamespace())
-    assert rec["release_after"] == "sampled_proofs,pouw_h1" and rec["draws_dir"] == "OUT/draws"
-=======
-    from verity_vllm.pipeline import serve_seal as SS
-
-    assert SS.retention_refusal(opts()) is None
-    assert "--release-after" in SS.retention_refusal(opts(release_after=""))
-    assert "needs --retain device and --seal" in SS.retention_refusal(opts(retain="host"))
-    assert "distinct protocol names" in SS.retention_refusal(opts(release_after="spot,spot"))
-    assert "distinct protocol names" in SS.retention_refusal(opts(release_after="a/b"))
-    rec = SS.retention_record(opts(), SimpleNamespace())
     assert rec["release_after"] == "spot,pouw_h1" and rec["draws_dir"] == "OUT/draws"
->>>>>>> 7af4d24fca3e
     draws, d = SL.release_of(opts(), tmp_path)
     assert draws.protocols == ("spot", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
     assert SL.release_of(opts(retain="host", release_after=""), tmp_path) == (None, None)

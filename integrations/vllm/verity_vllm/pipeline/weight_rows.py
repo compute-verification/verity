@@ -114,28 +114,9 @@ def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Seq
         for p, (param, positions, refs) in reads.items():
             v, part = values.get(param), "outs" if p in outs else "rows"
             if v is None:
-<<<<<<< 0941037006
-                raise ValueError(f"{m.key} {r.port} reads {r.param!r}: give its committed value, or no values at all")
-            at = r.source(np.arange(lo - r.at, lo - r.at + m.n)) // w
-            if CS.value_words(v) != w or not np.array_equal(CS.value_rows(v, at), np.asarray(d["rows"][r.port], dtype=np.uint16)):
-                raise ValueError(f"{m.key} {r.port}: the rows its units read aren't {r.param!r}'s committed rows {at[:4].tolist()}...")
-            d["rows"][r.port] = CS.ValueRows(v, tuple(int(x) for x in at))
-            entries.setdefault(m.key, {})[r.port] = {"value": v.value, "positions": [int(x) for x in at],
-                                                     "paths": [v.path(int(x)).hex() for x in at]}
-            roots[r.param] = v.root.hex()
-||||||| merged common ancestors
-                raise ValueError(f"{m.key} {r.port} reads {r.param!r}: give its committed value, or no values at all")
-            at = r.source(np.arange(lo - r.at, lo - r.at + m.n)) // w
-            if v.words != w or not np.array_equal(CS.value_rows(v, at), np.asarray(d["rows"][r.port], dtype=np.uint16)):
-                raise ValueError(f"{m.key} {r.port}: the rows its units read aren't {r.param!r}'s committed rows {at[:4].tolist()}...")
-            d["rows"][r.port] = CS.ValueRows(v, tuple(int(x) for x in at))
-            entries.setdefault(m.key, {})[r.port] = {"value": v.value, "positions": [int(x) for x in at],
-                                                     "paths": [v.path(int(x)).hex() for x in at]}
-            roots[r.param] = v.root.hex()
-=======
                 raise ValueError(f"{m.key} {p} reads {param!r}: give its committed value, or no values at all")
             at = np.asarray(positions, dtype=np.int64)[refs]
-            if v.words != dict(m.rows + m.outs)[p] or not np.array_equal(CS.value_rows(v, at), np.asarray(d[part][p], dtype=np.uint16)):
+            if CS.value_words(v) != dict(m.rows + m.outs)[p] or not np.array_equal(CS.value_rows(v, at), np.asarray(d[part][p], dtype=np.uint16)):
                 raise ValueError(f"{m.key} {p}: the rows its units {'wrote' if part == 'outs' else 'read'} aren't {param!r}'s "
                                  f"committed rows {at[:4].tolist()}...")
             if part == "outs":
@@ -144,7 +125,6 @@ def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Seq
                 d["rows"][p] = CS.ValueRows(v, tuple(int(x) for x in at))
             paths = {int(x): v.path(int(x)).hex() for x in positions}
             entries.setdefault(m.key, {})[p] = {"value": v.value, "positions": at.tolist(), "paths": [paths[int(x)] for x in at]}
->>>>>>> 7af4d24fca3e
         out.append(d)
     read = {r.param for r in registered.reads} | {t.param for t in registered.tables}
     return out, entries, {p: values[p].root.hex() for p in sorted(read) if p in values}, salts_of

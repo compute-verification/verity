@@ -88,7 +88,6 @@ from __future__ import annotations
 
 import collections
 import contextlib
-import functools
 import hashlib
 import weakref
 from dataclasses import dataclass, field
@@ -100,7 +99,6 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
-from verity.ml.protocols.pouw.circuit import h1tile as HT
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.spot.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json
@@ -115,14 +113,7 @@ from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.names import B_NONCE, IDS_NONCE, LIVE_NONCE, NONCE, PREFIX, RECEIPT_NONCE, nonce
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.served_program import (card_arch, declared, declared_layout, descriptor, layout,
-<<<<<<< 0941037006
                                                           unit_of, write_program)
-||||||| merged common ancestors
-from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
-                                                          unit_of, write_program)
-=======
-                                                          write_program)
->>>>>>> 7af4d24fca3e
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 

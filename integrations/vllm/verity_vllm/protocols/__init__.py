@@ -83,15 +83,9 @@ DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-<<<<<<< 0941037006
-CIRCUITS = {"pouw": "verity.core.protocols.pouw.circuit"}
+CIRCUITS = {"pouw": "verity.ml.protocols.pouw.circuit"}
 #: the sampled-proofs setting naming the executor whose sites the window's circuit is cut at (`refusals`)
 CUT = "cut"
-||||||| merged common ancestors
-CIRCUITS = {"pouw": "verity.core.protocols.pouw.circuit"}
-=======
-CIRCUITS = {"pouw": "verity.ml.protocols.pouw.circuit"}
->>>>>>> 7af4d24fca3e
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
 parse = config.parse_protocols
@@ -251,28 +245,18 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-<<<<<<< 0941037006
         if sites and sampled and not _has_circuit(name, scheme, out):
             if not getattr(mod, "cuts", lambda s: False)(scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
-                           f"so sampled proofs would trace it as the stock computation (refused until the option names one: "
+                           f"so SPOT would trace it as the stock computation (refused until the option names one: "
                            f"traced_as)")
             elif cut == entry:
                 cut_at = entry
             else:
-                out.append(f"{entry}: executes {', '.join(sites)}, and no Definition computes what it does there: sampled proofs "
+                out.append(f"{entry}: executes {', '.join(sites)}, and no Definition computes what it does there: SPOT "
                            f"takes it only in a window whose circuit is cut at its sites and reads the tables its calls commit "
                            f"(window_class.PearlTables), which the sampled-proofs setting '{CUT}' names ({{\"sampled-proofs\": "
                            f"{{\"{CUT}\": \"{entry}\"}}}})")
-||||||| merged common ancestors
-        if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
-            out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
-=======
-        if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
-            out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
->>>>>>> 7af4d24fca3e
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")

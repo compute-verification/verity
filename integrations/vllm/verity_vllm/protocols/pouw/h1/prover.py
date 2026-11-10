@@ -175,27 +175,14 @@ class _Job:
 class Writer:
     """`keep_call` off the serving thread: `keep` copies a call's rows, scales and records into a ring of ``bound`` bytes of
     host memory (pinned when CUDA is up, so a CUDA tensor's copy is queued on its device's current stream, behind what the
-<<<<<<< 0941037006
     stream has enqueued, and the caller never waits on the device), and ``threads`` threads of the writer's own write the
     calls' files from the ring, the bytes `keep_call` writes, each taking the next call in the order kept (a file's CRC and
     write release the GIL, so they overlap). A call's bytes stay in the ring until it and every call kept before it are
     written. The caller waits only while the ring is full: at most ``bound`` bytes are in flight (serve-openai's is a
     window's, `kept_bytes` of each of its calls). A window's directory is `open` on the writer until `wait` returns: once
-    every call kept there is written, raising OSError when any wasn't."""
-||||||| merged common ancestors
-    stream has enqueued, and the caller never waits on the device), and one thread of the writer's own writes each call's
-    file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
-    most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
-    directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
-    any wasn't."""
-=======
-    stream has enqueued, and the caller never waits on the device), and one thread of the writer's own writes each call's
-    file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
-    most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
-    directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
-    any wasn't. A failure the writer doesn't expect stops it, raised on its thread: that call and each call queued or kept
-    after it fail their windows, so no `wait` waits on a call the writer won't write."""
->>>>>>> 7af4d24fca3e
+    every call kept there is written, raising OSError when any wasn't. A failure the writer doesn't expect stops it,
+    raised on its thread: that call and each call queued or kept after it fail their windows, so no `wait` waits on a
+    call the writer won't write."""
 
     def __init__(self, bound: int, threads: int = 2) -> None:
         import torch

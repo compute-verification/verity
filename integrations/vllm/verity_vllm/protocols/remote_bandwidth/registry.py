@@ -52,17 +52,8 @@ from verity.core.protocols.remote_bandwidth.store import store_salt
 from verity.ml.circuits import requirement
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.merkle import Opening
-<<<<<<< 0941037006
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, ChainHead, Codec, Counters,
                                          Layout, PageLayout, PassCommitment, Receipt, RegionInfo, Segment, Source,
-||||||| merged common ancestors
-from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
-                                         PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
-                                         WindowRecord)
-=======
-from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, Codec, Counters, Layout,
-                                         PageLayout, PassCommitment, Receipt, Registration, RegionInfo, Segment, Source,
->>>>>>> 7af4d24fca3e
                                          Stale, WindowRecord)
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 

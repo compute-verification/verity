@@ -57,14 +57,8 @@ under ``leaves`` beside the record (``produced``) and each leaf Program's descri
 ``<file>.program.json``).
 
 ``statements``: after each W/c<call>/ and W/u<unit>-<statement>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly
-<<<<<<< 0941037006
-one session, all its instances drawn, its prover under the ZK server on those two files, ``h1_prove/drawn.sh``), the
+one session, all its instances sampled, its prover under the ZK server on those two files, ``h1_prove/drawn.sh``), the
 statements file: each call's `challenger.statement` (circuit, pub.bin, its
-||||||| merged common ancestors
-one session, all its instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
-=======
-one session, all its instances sampled), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
->>>>>>> 7af4d24fca3e
 session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_programs``, ``produced`` and those statements
 with each leaf statement's ``unit`` and ``statement``).
 
@@ -94,26 +88,12 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as Wt
-<<<<<<< 0941037006
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-||||||| merged common ancestors
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import produced as PR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-=======
 from verity.ml.protocols.pouw.circuit import h1tile as HT
 from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.one_stage import produced as PR
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.core.protocols.spot.one_stage import registered as G
->>>>>>> 7af4d24fca3e
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
                                                      leaf_rows, leaf_statement, operands, outputs_held, partials,

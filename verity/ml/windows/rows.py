@@ -119,22 +119,10 @@ INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || in
 
 @dataclass(frozen=True)
 class ValueRows:
-<<<<<<< 0941037006
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16- or
     32-bit leaves (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
     row), committed under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts
-    concatenated, when the caller has drawn them (`value_salts`), else drawn here."""
-||||||| merged common ancestors
-    """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
-    (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
-    under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts concatenated, when the
-    caller has drawn them (`value_salts`), else drawn here."""
-=======
-    """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
-    (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
-    under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts concatenated, when the
-    caller has sampled them (`value_salts`), else sampled here."""
->>>>>>> 7af4d24fca3e
+    concatenated, when the caller has sampled them (`value_salts`), else sampled here."""
     value: Any
     positions: tuple[int, ...]
     salts: bytes | None = field(default=None, repr=False, compare=False)

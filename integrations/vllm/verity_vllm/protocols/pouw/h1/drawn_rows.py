@@ -1,23 +1,9 @@
-<<<<<<< 0941037006
-"""A drawn H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
+"""A sampled H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
 read (`split_row`, `split_record`, `receipt_words`), the check that a rebuilt value is the tree the window registered
 (`held`), that a statement's every port is a registered read (`complete`) and that its outputs are the rows the window
 registered (`outputs_held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's
 operands at its place (`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each
 statement's rows, salts and ``--registered`` reads on credit's own file (`leaf_statement`)."""
-||||||| merged common ancestors
-"""A drawn H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
-read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt value is the tree the window registered
-(`held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's operands at its place
-(`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each statement's rows, salts and
-``--registered`` reads on credit's own file (`leaf_statement`)."""
-=======
-"""A sampled H1 unit's rows rebuilt from a served window's values, as `drawn` stages them: the word formats both of its forms
-read (`split_row`, `split_record`, `receipt_words`) and the check that a rebuilt value is the tree the window registered
-(`held`); and the lanes form's leaf statements (`leaf_lanes`): their rows (`leaf_rows`), a leaf's operands at its place
-(`operands`), its partials (`partials`), its call's receipts (`receipt_value`) and each statement's rows, salts and
-``--registered`` reads on credit's own file (`leaf_statement`)."""
->>>>>>> 7af4d24fca3e
 from __future__ import annotations
 
 from typing import Any, Sequence

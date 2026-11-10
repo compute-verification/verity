@@ -16,18 +16,8 @@ from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 
-<<<<<<< 0941037006
-CHUNK = 16
-GEO, GEO_V1 = bytes(range(64)), bytes(range(32))
-WK = bytes(range(64, 128))
-||||||| merged common ancestors
-CHUNK = 16
-GEO = bytes(range(32))
-WK = bytes(range(64, 128))
-=======
-GEO = bytes(range(32))
+GEO = bytes(range(64))
 WK = bytes(37 * i % 256 for i in range(64, 128))            # no run of the committed steps' bytes: a keep holding it holds the key
->>>>>>> 7af4d24fca3e
 RNG = np.random.default_rng(7)
 PARTS = {"model.layers.0.self_attn.q_proj.weight": RNG.integers(0, 1 << 16, (4, 8), dtype=np.uint16),
          "model.layers.0.self_attn.k_proj.weight": RNG.integers(0, 1 << 16, (2, 8), dtype=np.uint16),
@@ -63,19 +53,7 @@ def weights_tree(tensors: dict[str, tuple[str, np.ndarray]]) -> dict:
         entry = [name, dt, list(a.shape), int(raw.size)]
         roots.append(step_rows.tensor_root(GEO, i, entry, raw, WK))
         names.append(entry)
-<<<<<<< 0941037006
-    if commit_scheme == step_rows.NAME:
-        return step_rows.weights_tree(GEO, names, roots, WK)
-    return {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(GEO_V1, scheme.names_digest(names), roots).hex(),
-            "chunk": CHUNK, "geo_digest": GEO_V1.hex()}
-||||||| merged common ancestors
-    if commit_scheme == step_rows.NAME:
-        return step_rows.weights_tree(GEO, names, scheme.names_digest(names), roots, WK)
-    return {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(GEO, scheme.names_digest(names), roots).hex(),
-            "chunk": CHUNK, "geo_digest": GEO.hex()}
-=======
-    return step_rows.weights_tree(GEO, names, step_rows.names_digest(names), roots, WK)
->>>>>>> 7af4d24fca3e
+    return step_rows.weights_tree(GEO, names, roots, WK)
 
 
 @pytest.fixture
@@ -214,22 +192,8 @@ def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
         ckd.mkdir(exist_ok=True)
         (ckd / "config.json").write_text("{}")
         _safetensors(ckd / "model.safetensors", {name: ("I64", ck_table)})
-<<<<<<< 0941037006
-        raw = table.astype(np.int32).reshape(-1).view(np.uint8)
-        names, roots = [[name, "int32", [16, 6], int(raw.size)]], [CPU.tensor_root(raw, CHUNK)]
-        root = scheme.weights_root(GEO_V1, scheme.names_digest(names), roots).hex()
-        tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root, "chunk": CHUNK, "geo_digest": GEO_V1.hex(), "extra": {}}
-        return CPU.open_weights(bundle, tree, root, WR.CheckpointIndex(str(ckd), verify_shards=False), threads=1)
-||||||| merged common ancestors
-        raw = table.astype(np.int32).reshape(-1).view(np.uint8)
-        names, roots = [[name, "int32", [16, 6], int(raw.size)]], [CPU.tensor_root(raw, CHUNK)]
-        root = scheme.weights_root(GEO, scheme.names_digest(names), roots).hex()
-        tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": root, "chunk": CHUNK, "geo_digest": GEO.hex(), "extra": {}}
-        return CPU.open_weights(bundle, tree, root, WR.CheckpointIndex(str(ckd), verify_shards=False), threads=1)
-=======
         tree = weights_tree({name: ("int32", table.astype(np.int32))}) | {"extra": {}}
         return CPU.open_weights(bundle, tree, tree["root"], WR.CheckpointIndex(str(ckd), verify_shards=False), threads=1)
->>>>>>> 7af4d24fca3e
 
     words, wc = opened(table)
     assert wc["equal"] is True and wc["servable"] == wc["opened"] == 1, wc
