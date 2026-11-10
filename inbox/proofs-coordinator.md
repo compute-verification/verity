@@ -27984,3 +27984,37 @@ How I know, by group: `test_suites.py` 5 rows and `test_move_check.py` 1 row: ru
 - **The seven files and shell:** none of the seven is in #8639 and no shell file is [run: `git diff --name-only`].
 - **Other join PRs:** #8639 shares no file and has no conflict with #8619 `acd82e7861`, #8625, #8628, #8631, #8647 `335bb1affc`, #8641 `2038041501`, #8644 `e5394bb9cb` [run: `git merge-tree`], and adds no conflict to any of your 12 open PRs on `main` `d1c3ccf9e6`.
 - **Running** (cpu-3): `r20261110-115018-0a80`, check 3 on `52617b8858` with `--changed d1c3ccf9e6…`, in its slot since 11:55Z, **ETA 12:55Z** (the same 88 suites took over 55 min on the earlier head; that run, `r20261110-104001-4e0a` on `7491a4bbfc`, had 78 passed and 1 cached and none failed when I cancelled it at 11:40Z). Waiting for a slot: `r20261110-115111-381a` (one map on `52617b8858`) and `r20261110-115149-6cfd` (one map on `main` `d1c3ccf9e6`), for the count over the new `main`. Cancelled for their slots: `r20261110-113726-06db`, `r20261110-112522-09e9`. My next entry is "ready to mark at HEAD" or the red.
+
+## HOUSEKEEP, Tue 10 Nov 12:01Z: step 1 done: the third boundary set at `0d9a7b057e09` is in the notes (6,717 public after, 27 to public, 999 to private), with a fourth read on the staged tree (6,424, 13, 1,278); one correction to my 11:55Z entry
+
+**Correction first.** My 11:55Z entry said the `verity/protocols/pous` line of `test_after_lean.py` is in both ci's and memory-accounting's files. It is not: ci's file holds `READS_ONLY = {` and memory-accounting's holds the `verity/protocols/pous` line [re-read both files]. No line is in two lanes' files as of the notes at 11:56Z.
+
+**Where.** Notes commit `f8447a8e16`, `lanes/proofs/layout/public-boundary/`: the three lists with `-0d9a7b057e`, the same three with `-staged-3ce911415f`, the README rewritten for four sets, and `pub_lists.py` with `owners.py` (the lists' builder). The VM was replaced, so I rebuilt the set; it reproduces the counts I had before 11:13Z exactly.
+
+**Trees.** Today: `main` `a337d86e48`. Third set: my copy of the one map at `0d9a7b057e09` on `a337d86e48`, with that head's own mover. Fourth: `cursor/top-layout-staged-82b0` at `3ce911415f6d`. Command on each: `python3 tools/verity/check/public_boundary.py --json --root TREE` [run, about 16 s each].
+
+| tree | public after | private today, public after | public today, private after | open edges |
+|---|---|---|---|---|
+| today | 7,689 | | | 0 |
+| `54d44c398347` (second set) | 6,796 | 48 | 941 | 3,737 |
+| `0d9a7b057e09` (third set) | 6,717 | 27 | 999 | 3,729 |
+| staged `3ce911415f6d` | 6,424 | 13 | 1,278 | 3,463 |
+
+**Third set, by owner today.** To public, 27: compute-accounting 11, proofs 10, none 6 (files the map creates). To private, 999: proofs 805, circuits 152, vllm 16, benchmarks 13, memory-accounting 10, compute-accounting 3.
+
+**By the row behind each group** (`public_boundary.toml` after the map).
+- To public: proofs' 9 are the interface package, nested at `verity/flock/verifier/interface` under the group `flock`'s row `"verity/flock/verifier"` (`:31`), and proofs' tenth is `verity/core/devices/__init__.py` (the `needed` row `"verity/core"`, `:263`). 12 are the group `pouw`'s (`"verity/protocols/{profile.py,pouw}"`, `:39`): `benchmarks/pouw/receipts` 9, `benchmarks/pouw/clear` 2, one created `__init__.py`. 5 more are created `__init__.py`.
+- To private: 879 `ml`, 58 `flock`, 27 pulled in today by a `needed` row, 20 `shared`, 14 `benchmarks`, 1 `vllm`.
+
+**What differs from the set at `54d44c398347`.**
+- 21 fewer become public, all proofs', all of the group `flock`: sigma's 7, 13 pod files and `verity/ml/flock/verifier/tool.py`. The group's rows are now `"verity/flock/prover"` and `"verity/flock/verifier"` (`:30-31`), no longer `"verity/flock"` whole.
+- 58 more become private, all proofs', all public today in the group `flock`: 26 files of `verity/ml/flock/pod` and 32 of `verity/ml/flock/verifier` (to `verity/flock/agreement`). Both now sit outside the group's two rows. Your call whether the pod scripts and `agreement` are meant to leave the public set.
+- Nothing else differs: the 941 are all among the 999.
+
+**The staged tree is not the third set, and one row is why** (for VLLM-282; the row is not ours to write).
+- On `3ce911415f6d` 279 more files become private than at `0d9a7b057e09`: by owner compute-accounting 262, proofs 9, lean 4, network-accounting 3, memory-accounting 1. To private in all, 1,278: proofs 814, compute-accounting 265, circuits 152, vllm 16, benchmarks 13, memory-accounting 11, lean 4, network-accounting 3. To public, 13: proofs 10 (the same ten), 3 created.
+- The private group `protocols` (`public_boundary.toml:105` on the staged tree) reads `"{verity/protocols/pous,verity/protocols/poub/verifier,verity/protocols}"`. The third alternative is what the map's `[tokens]` row `"verity/core/protocols/network/" = "verity/protocols/"` (`layout_one_map.toml:527`) makes of `network`: it names every protocol. PoUW's verifier (203 files) and prover (58), public today in the group `pouw`, are private on the staged tree [computed: each matches the public row and this one, and the tool lists it private], with 18 more: proofs' identity package (7), the profile's `verity/protocols/pyproject.toml` and `reporting.py`, 6 accounting files under `Security/`, 3 of the certifier's.
+- This is the same wide token network-accounting found at `suites.py:210`. On my copy the older mover left the row as written, so it covered `verity/protocols/pous` only.
+- The private group `flock_bench`'s row, which matched nothing at `0d9a7b057e09`, names both files on the staged tree (`verity/flock/tool.py`, `verity/flock/agreement/tool.py`).
+
+**Next:** step 3, the slice-list entry.
