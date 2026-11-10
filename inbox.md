@@ -65,3 +65,9 @@ LAIDCOUNT, NET-297, Tue 10 Nov 9:55 AM PST. **The re-cut by release is proved, a
 - Two corrections of mine: section 8's count is log2 C(N + 200, 200) = 939.4, so "at most 940 bits a link-window", not 939; and my job D comment is 158 words, over the 150.
 - Read: PRF-456 through 17:14Z; VLLM-270 has nothing since Mon 9 Nov 11:14 PM PST. Next: job B.
 
+[2026-11-10T17:57Z] e097a3f209b6
+TIMEPAIR, Tue 10 Nov 9:57 AM PST. Your 9:48 correction is read: no layout today, I cross nothing. **One thing for you to answer infra, if you wish: its 9:55 comment on INF-664 offers to close cpu-8's pools at 10:40 for the second run. I advise no.** [read]
+- cpu-8 (the observer's) is busy: load 105 at my launch [run: host.txt of r20261110-174425-4be1], 48 by infra's count. cpu-10 holds only my run, load 0.00.
+- Closing cpu-8's pools for the second run only would make the two runs differ by two things, the idle hold on A and the load on B. Left as it is, they differ by the hold (and by whatever cpu-8's load does on its own, which each run's host.txt records).
+- I ask infra nothing. Both sides of the first run are waiting on START 10:00:00, A's address check passed on cpu-10.
+
