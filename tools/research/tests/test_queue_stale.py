@@ -62,13 +62,14 @@ def test_status_marks_an_unmarked_pr_idle_three_days_stale_by_its_head_and_its_l
 
 
 def test_status_reads_stale_days_from_drive_toml_at_main(world, monkeypatch, capsys):
-    """The command's own path: `stale_days` from drive.toml at `main`, and `stale`/`idle_since` in its JSON."""
+    """The command's own path: `stale_days` and `stale_keep` from drive.toml at `main`, and `stale`/`idle_since` in its JSON."""
     world.with_store_remote()
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(world.tmp / "store.toml"))
-    sha = world.change({DRIVE_FLAGS: 'on = ["m1"]\nstale_days = 3\nstale_close_days = 7\n'})
+    sha = world.change({DRIVE_FLAGS: 'on = ["m1"]\nstale_days = 3\nstale_close_days = 7\nstale_keep = [3]\n'})
     _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/main")
     world.gh.put(1, _at(world, monkeypatch, {"a.txt": "1\n"}, 1_000_000_000), ready=False)         # 2001: long idle
     world.gh.put(2, world.change({"b.txt": "2\n"}), ready=False)                                     # just now
+    world.gh.put(3, _at(world, monkeypatch, {"c.txt": "3\n"}, 1_000_000_000), ready=False)         # as idle, but kept
     monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
     assert Q.main(["status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo",
                    "o/r", "--store", str(world.tmp / "store")]) == 0
@@ -76,6 +77,7 @@ def test_status_reads_stale_days_from_drive_toml_at_main(world, monkeypatch, cap
     assert rows[1]["stale"] and rows[1]["idle_since"] == "2001-09-09T01:46:40Z"
     assert rows[1]["why"].startswith("stale, idle since 2001-09-09: "), rows[1]["why"]
     assert not rows[2]["stale"] and rows[2]["idle_since"] is None
+    assert not rows[3]["stale"] and rows[3]["idle_since"] is None
 
 
 def test_status_pulls_the_stores_labels_in_one_batch_however_many_prs_are_open(world, monkeypatch, capsys):

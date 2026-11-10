@@ -711,6 +711,44 @@ def test_the_evidence_of_an_attempt_is_fetched_once(world, monkeypatch):
     assert asked == [(h.q.workdir, ["r1", "r2"]), (h.q.workdir, ["r3"])]
 
 
+def test_a_failed_task_is_allowed_by_its_suites_row_or_by_each_circuit_failure_it_names_and_no_other_kind_is(world, monkeypatch):
+    """`Landing._task_allowed` under the tip's policy: a lean-suites task's failed suite by its report row (an expired allowance
+    covers nothing, and is named), a circuit-check task's when each failure it names, fewer than `CIRCUIT_NAMED`, has an
+    allowance, and nothing of any other kind."""
+    later, gone = "2030-06-01T00:00:00Z", "1970-01-01T00:00:01Z"
+    _move_main(world, {"tools/verity/check/policy.toml": _policy(("suite pkg", "ci", later), ("suite old", "ci", gone),
+                                                                 ("circuit-check fold/F01 Mul", "ci", later))})
+    h = Harness(world, monkeypatch)
+    h.q._clone()
+    h.q.fetch()
+    tip, d = _main(world), h.d
+    suites, row = {"kind": landing.SUITES_KIND, "id": "lean-suites:x"}, {"name": "pkg", "failed_tests": [], "beyond_tests": True}
+    assert d._task_allowed(tip, suites, {}, row).covered
+    old = d._task_allowed(tip, suites, {}, {**row, "name": "old"})
+    assert not old.covered and [a.id for a in old.expired] == ["suite old"]
+    circuit, mul = {"kind": "circuit-binding", "id": "circuit-binding:x"}, "fold/F01 Mul{n=3}"
+    assert d._task_allowed(tip, circuit, {"detail": {"failures": [mul]}}).covered
+    for failures in ([mul, "fold/F02 Add"], [mul] * landing.CIRCUIT_NAMED, []):
+        assert not d._task_allowed(tip, circuit, {"detail": {"failures": failures}}).covered, failures
+    assert not d._task_allowed(tip, {"kind": "lean-module", "id": "lean-module:x"}, {"detail": {"failures": [mul]}}).covered
+
+
+def test_a_paths_owner_is_its_longest_prefix_in_mains_registry_and_none_where_the_registry_cant_say(world, monkeypatch):
+    """`Landing._path_owner`, whom the loop's blame tells: the handle whose `owns` in `main`'s registry is the path's longest
+    prefix; none for a path nobody owns, or when the registry isn't JSON, holds no list of handles or a handle without a name."""
+    reg = {"handles": [{"handle": "ci", "owns": ["tools/research/"]}, {"handle": "infra", "owns": ["tools/research/src/x/"]}]}
+    _move_main(world, {".agents/skills/using-slack/registry.json": json.dumps(reg)})
+    h = Harness(world, monkeypatch)
+    h.q._clone()
+    h.q.fetch()
+    assert [h.d._path_owner(p) for p in ("tools/research/src/x/a.py", "tools/research/README.md", "verity/a.py")] == [
+        "infra", "ci", None]
+    for text in ("not json [", json.dumps({"handles": "ci"}), json.dumps({"handles": [{"owns": ["tools/"]}]})):
+        _move_main(world, {".agents/skills/using-slack/registry.json": text})
+        h.q.fetch()
+        assert Landing(h.q, on="m1")._path_owner("tools/research/README.md") is None, text
+
+
 # -- what the loop tells
 
 

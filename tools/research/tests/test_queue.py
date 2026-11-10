@@ -2030,6 +2030,76 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
     assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
+def test_review_records_a_verdict_at_an_open_prs_head_and_refuses_its_owner_and_its_ready_marks_author_whatever_the_case(
+        world):
+    """`research queue review N`: a PR the queue's branch doesn't hold takes the verdict at its head on GitHub, or at the head
+    ``sha`` names, as a `reviewed` label with its ref; its owning lane and the author of its ready mark write none, and a PR
+    neither held nor open takes none."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, old := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.store.add_label(label_target(2, world.gh.prs[2].head), vocab.READY, "true", "marker")
+    q, labels = world.queue(), StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(q, world.store, labels, 1, "land", "note:ci/x", "lane-9") == 0
+    (lab,) = world.store.labels(label_target(1, old), key=vocab.REVIEWED)
+    assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
+    world.gh.put(1, world.change({"a.txt": "2\n"}))
+    assert Q.review(q, world.store, labels, 1, "hold", "read the old head", "lane-9", sha=old) == 0
+    assert [x.value for x in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["land", "hold"]
+    for pr, by in ((1, "Lane-1"), (2, "MARKER")):
+        with pytest.raises(QueueError, match=f"#{pr} is {by}'s own PR"):
+            Q.review(q, world.store, labels, pr, "land", None, by)
+    assert world.store.labels(label_target(2, world.gh.prs[2].head), key=vocab.REVIEWED) == []
+    with pytest.raises(QueueError, match="#9 is neither on `next` nor open"):
+        Q.review(q, world.store, labels, 9, "land", None, "lane-1")
+
+
+def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_short_or_full_sha(world):
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q = world.queue()
+    q.sync()
+    old = world.gh.prs[1].head
+    world.gh.put(1, new := world.change({"a.txt": "2\n"}))
+    labels = StoreLabels(world.store, log=lambda s: None)
+    with pytest.raises(QueueError, match=f"GitHub has its head at {new[:12]}.*pass --sha"):
+        Q.review(q, world.store, labels, 1, "land", None, "lane-9")
+    assert Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha=new[:10]) == 0
+    assert Q.review(q, world.store, labels, 1, "hold", "old", "lane-9", sha=old[:10]) == 0
+    assert [lab.value for lab in world.store.labels(label_target(1, new), key=vocab.REVIEWED)] == ["land"]
+    assert [lab.value for lab in world.store.labels(label_target(1, old), key=vocab.REVIEWED)] == ["hold"]
+    with pytest.raises(QueueError, match="full 40-character SHA"):
+        Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha="0badc0de")
+    with pytest.raises(QueueError, match="neither #1's head"):                     # a mistyped full SHA
+        Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha=new[:12] + "0" * 28)
+    assert Q.review(q, world.store, labels, 1, "land", None, "lane-9", sha=new) == 0
+
+
+def test_review_with_signed_verdicts_refuses_a_verdict_it_cant_sign_and_writes_one_its_holder_signs(world):
+    """drive.toml's `signed_verdicts`: `review` writes through a signer, which refuses a verdict it can't sign while the flag
+    is on, and a verdict its handle's holder signed counts (`StoreLabels` with a verifier)."""
+    from research import labelauth
+    from research.queue import StoreLabels
+    from test_labelauth import OTHER, TS, _mint, _verifier
+
+    world.with_store_remote()
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    q, labels = world.queue(), StoreLabels(world.store, log=lambda s: None, verify=_verifier())
+
+    def down(nonce: str) -> str:
+        raise labelauth.AuthError("the Cursor identity socket is unavailable")
+
+    with pytest.raises(QueueError, match="isn't written: drive.toml's `signed_verdicts` is on at `main`, and it can't be signed"):
+        Q.review(q, labelauth.Signer(world.store, down, required=True, now=lambda: TS), labels, 1, "land", None, "proofs")
+    assert labels.reviews(1, world.gh.prs[1].head) == []
+    assert Q.review(q, labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS), labels, 1, "land", None, "proofs") == 0
+    assert [(lab.by, lab.value) for lab in labels.reviews(1, world.gh.prs[1].head)] == [("proofs", "land")]
+
+
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     """An ejection doesn't live only in the ejecting VM's queue state, where drive, on another VM, would rebuild `next` with
     the ejected PR."""
@@ -4758,6 +4828,14 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and why in capsys.readouterr().err
 
 
+def test_delegate_takes_an_agent_id_where_a_pr_number_goes(world, monkeypatch, capsys):
+    """`delegate AGENT` reaches `delegate`, which judges the agent id, rather than refusing it as a PR number."""
+    monkeypatch.chdir(world.dev)
+    argv = ["queue", "delegate", "bc-x", "--by", "ci", "--repo", "o/verity", "--store", str(world.tmp / "qs")]
+    assert research_main(argv) == 1
+    assert "'bc-x' isn't a Cursor agent id" in capsys.readouterr().err
+
+
 def test_research_queue_ready_and_judge_name_a_lane_never_merge_queue(world, monkeypatch, capsys):
     """Ready is the owner's word, and the merge gate refuses one by `merge-queue`: with no --by and no $RESEARCH_LANE, `ready`
     and `judge` refuse before writing anything; `eject` still defaults to merge-queue."""
@@ -5176,4 +5254,14 @@ def test_first_is_refused_naming_the_priority_file_which_holds_the_landing_order
                 "--store", str(world.tmp / "store"), "--first", "7,8"])
     assert e.value.code == 2 and not (world.tmp / "q").exists()
     assert Q.FIRST_RETIRED in capsys.readouterr().err
+
+
+def test_sync_takes_the_priority_file_it_is_given(world, monkeypatch):
+    seen = []
+    monkeypatch.setattr(Q.Queue, "sync", lambda self, dry_run=False: seen.append((self.priority_file, dry_run)))
+    monkeypatch.chdir(world.dev)
+    path = world.tmp / "priority"
+    assert Q.main(["sync", "--dry-run", "--priority-file", str(path), "--workdir", str(world.tmp / "q" / "verity"), "--remote",
+                   str(world.origin), "--repo", "o/r", "--store", str(world.tmp / "store")]) == 0
+    assert [(str(p), d) for p, d in seen] == [(str(path), True)]
 

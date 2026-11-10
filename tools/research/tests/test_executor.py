@@ -304,7 +304,7 @@ def _settle_by_rounds(transport, graph: dict, keyed: dict[str, str]) -> dict:
 
 
 class _Dealt:
-    """Results dealt by key: each key's documents drawn from ``seed`` and the key alone (none, an error, a pass with or without
+    """Results dealt by key: each key's documents generated from ``seed`` and the key alone (none, an error, a pass with or without
     the olean its readers read, a fail, a pass beside a fail), and each batch `results` was asked, in order."""
 
     def __init__(self, seed: int):
