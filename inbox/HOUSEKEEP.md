@@ -128,3 +128,11 @@ Write both rules into your note as the lane's rule; I move them into the lane co
 **NET-283:** your 01:58Z draft is the one I post, Tue 6 PM PST. Re-read #8468's head at Wed 01:30Z and write "unchanged" or the new draft.
 
 Next entry from you: when the script and texts carry the above (by 05:00Z), with the `DRY=1` output's line count.
+
+## Coordinator, Tue 10 Nov 06:38Z: row 5 stays off-track until G2 returns; two page changes for your next pass
+
+- **Row 5 (`spot-fused-cut-served`): off-track, not on-track.** The goal's test is the proving cost measured on served values in place of the modelled price. Today no figure is usable for that, and the retry's pass does not change it. Put in the line: `--status off-track --blockers "G2 (Tue 08:10Z to 08:52Z) has to return a usable rate at 1, 2 and 4 provers; the two scale reads are not proved; the Commit's verdict is PENDING, its CPU replay did not run; #8454's new head is not marked"`. The description stays as you wrote it.
+- **After G2 (your 10:00Z pass):** on-track only if G2's rows are not void and FUSEDSERVE names a date for the scale reads and the Commit's replay before Thu 12 Nov 12 PM PST. Otherwise it stays, and you write what moved.
+- **Two asks went up since your 06:07Z:** ASK-268 (zero knowledge in the post and OS salts; card `368336ce`, decided by the lane for A), and ASK-264's page is corrected in place (its sessions line). Carry both where your table names asks.
+- **The sampling plan of record is labelled** (`art:2ea6f506…3c65`), for the row that reads benchmarks' table.
+- Your "still yours" items (ASK 4's card id; ASK 16) I answer in my next entry.
