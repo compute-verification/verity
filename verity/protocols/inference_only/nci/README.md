@@ -9,9 +9,9 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the policies they are evaluated under (`calibrations.json`);
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
-Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
-(`Security/Definitions/Nci/Guarantees/Training.lean`).
+Nothing in `verity` reads this directory. The theorems it cites are in `security/`: `Nci.SecurityProofs.ThreadedTraining`
+(`security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
+(`security/Definitions/Nci/Guarantees/Training.lean`).
 
 The slowdown lower bound's numbers come from [`verity/protocols/inference_only/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
@@ -57,7 +57,7 @@ Nothing outside `benchmarks/` imports this directory (`tests/test_boundaries.py`
 - `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library, `algorithms.json`), and its tests
   load `tiers.py` and `slowdown.py` by path to hold rho's own arithmetic to theirs; rho's suite names each among its
   `inputs`;
-- the Lean lock (`Security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
+- the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
   statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
 - `fixtures/artifacts.json` registers `sources/` by this directory's path.
 

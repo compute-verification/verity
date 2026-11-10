@@ -187,7 +187,7 @@ binding error per audit.
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `GateRows.rows_sound` (`GateRows.lean`) | proved for the rows; not stated for a unit's committed values; the premises per template: the lowering comparison tests on samples, and the typed layout's proof (`Types.Dag.layout_sound`, `TmplValue.defComputes_of_layout`) once a template's rows are a checked layout's (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
-`python tools/verity/lean/check.py Security/Proofs` to check every declaration (`lean-audit.json`).
+`python tools/verity/lean/check.py security/Proofs` to check every declaration (`lean-audit.json`).
 
 ### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
 
