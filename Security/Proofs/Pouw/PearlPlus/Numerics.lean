@@ -4,7 +4,7 @@ public import Evaluate.Fp32
 public import Evaluate.TC.Dots
 public import Definitions.Pouw.PearlC.RowPrims
 public import Proofs.Pouw.PearlC.CoreOps
-public import Proofs.Properties.Evaluate
+public import Proofs.Properties.Core.Evaluate
 
 /-!
 # Pearl+'s bridge, the numerics: the check's FP32 add, square root and BF16 step are the semantics'

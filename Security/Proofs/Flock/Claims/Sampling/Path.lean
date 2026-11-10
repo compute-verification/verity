@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Binding
 public import Proofs.Flock.Verifier.Registered
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 
 /-!
 # The registered path check binds (frame-v3-sha512)

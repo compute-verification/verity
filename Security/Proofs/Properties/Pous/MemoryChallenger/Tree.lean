@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 
 /-!
 # The records tree binds its values

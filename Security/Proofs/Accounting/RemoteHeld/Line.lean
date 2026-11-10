@@ -3,10 +3,10 @@ module
 public import Proofs.Accounting.RemoteHeld.Window
 public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Accounting.RemoteHeld.Outside
-public import Proofs.Properties.RemoteAudit.Line
-public import Proofs.Properties.RemoteAudit.Pooled
-public import Proofs.Properties.RemoteAudit.Session
-public import Proofs.Properties.RemoteAudit.Shared
+public import Proofs.Properties.Accounting.Remote.Line
+public import Proofs.Properties.Accounting.Remote.Pooled
+public import Proofs.Properties.Accounting.Remote.Session
+public import Proofs.Properties.Accounting.Remote.Shared
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`), and memory held from it
@@ -27,7 +27,7 @@ Memory held follows from bits read under the device model (`heldAt_of_read`, ove
 blocks the passes read are the correct receipts of the trace of those passes alone, whose wrong receipts `ReadAt` holds
 to the line's W, and on it every stretch of the line credits what the trace held (`heldAt_of`):
 
-* the arithmetic link (`stretchBound`, `Proofs.Properties.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
+* the arithmetic link (`stretchBound`, `Proofs.Properties.Accounting.Remote.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
 * `heldOverWindow_of` bounds that by what the trace held over the span: the stretch's paced session is the record's
   (`recordPace`, `Paced`) from group `m·per` on, `spanStart` is its first group's end or coin, and the form's charge is
