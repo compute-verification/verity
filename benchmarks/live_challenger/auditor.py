@@ -303,7 +303,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 HERE = Path(__file__).resolve().parent
-TREE = HERE.parents[1]
+TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE))
 
 from verity.core.protocols.spot.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
