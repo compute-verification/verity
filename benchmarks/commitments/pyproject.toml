@@ -23,5 +23,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_commit_cost_benchmark.py"]
+tests = ["tests/test_commit_cost_benchmark.py", "tests/test_table_read_commit.py"]
 paths = ["benchmarks/commitments"]
