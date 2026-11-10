@@ -101,6 +101,10 @@
    "digest": "d389c19a2ddbe109cebd6de895b010c96712878d4b5604219783c0394c18faf0",
    "why": "The compiled verifiers whose sampled sessions are the proof system's honest runs among the first `K` slots, at an error covering theirs: the ones `CompilerComplete` is stated for. (met by `compilerComplete_honest`)"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+   "owner": "@proofs",
+   "why": "`CompilerHeadlineTwo` is stated at a compiled two-stage verifier that meets the committed form at two stages, which `CompilerKSRegTwo` proves at the contract's premises. (met by `compilerHeadlineTwo_honest`)"
+  },
   "Claims.ZKMal.RefSession.UnCausal": {
    "owner": "@proofs",
    "digest": "89ed8050e4e652dc3a78971a605b86e10dea446f111f2db071e4923ddda4df7e",
@@ -3850,6 +3854,30 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
     ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.MissTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -3953,6 +3981,9 @@
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
+   "Claims.SamplingGeneric.CompilerKSRegTwo": "Claims.SamplingGeneric.compilerKSRegTwo",
+   "Claims.SamplingGeneric.CompilerMissTwo": "Claims.SamplingGeneric.compilerMissTwo",
+   "Claims.SamplingGeneric.CompilerHeadlineTwo": "Claims.SamplingGeneric.compilerHeadlineTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
@@ -4201,6 +4232,18 @@
   "Claims.SamplingGeneric.compilerKSTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerHeadlineTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial"
   },
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
@@ -11908,6 +11951,9 @@
    },
    "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
   },
+  "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KSAt_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11923,6 +11969,9 @@
    },
    "type_hash": "3ce579edc550a7489aba9d13e5f6c39c62013d660319cdef679ea5ff381bdfa2"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11937,6 +11986,9 @@
     "reads": []
    },
    "type_hash": "4bad71657d26ec907352689f45442dbd782f32e32ed982af684bf697305d4c26"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.ZkArg.ZK_fails": {
    "owner": "@proofs",
@@ -12169,6 +12221,15 @@
    },
    "type_hash": "c988a93104be12490891b9c6f062bef07f7fc39a8bc0cca3901f23255751af48"
   },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.compilerKS": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerKS : Claims.SamplingGeneric.CompilerKS"],
@@ -12301,6 +12362,12 @@
    "type_hash": "265125fe0373eb291365875e0e60970f68ee5ece8acbb1e4a275bfa60e18fe84",
    "unfolded_hash": "fe205dc2f44b0a7d088bf33478098cd7bd13b7f888661ee7e4b31369f963c2f7"
   },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -12418,6 +12485,12 @@
     "reads": []
    },
    "type_hash": "2ee399e11183db0f7c3f301abcaf97a5683eac1f2825d864e2773d817b536a31"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
