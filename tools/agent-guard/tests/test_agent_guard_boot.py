@@ -41,7 +41,7 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
     git("commit", "-q", "-m", "old")
     git("push", "-q", "origin", "HEAD:old")
     shutil.copytree(ROOT / "tools/agent-guard", tmp_path / "ws/tools/agent-guard",
-                    ignore=shutil.ignore_patterns("__pycache__"))
+                    ignore=shutil.ignore_patterns("__pycache__", "*.md"))
     shutil.copytree(ROOT / ".cursor", tmp_path / "ws/.cursor")
     git("add", "tools", ".cursor")
     git("commit", "-q", "-m", "guard")
@@ -100,7 +100,7 @@ def test_boot_puts_the_hook_at_a_task_launched_agents_root_above_its_checkout(tm
     git("init", "-q", "--bare", "-b", "main", str(tmp_path / "origin.git"), cwd=tmp_path)
     git("clone", "-q", str(tmp_path / "origin.git"), str(tmp_path / "ws"), cwd=tmp_path)
     shutil.copytree(ROOT / "tools/agent-guard", tmp_path / "ws/tools/agent-guard",
-                    ignore=shutil.ignore_patterns("__pycache__"))
+                    ignore=shutil.ignore_patterns("__pycache__", "*.md"))
     shutil.copytree(ROOT / ".cursor", tmp_path / "ws/.cursor")
     git("add", "tools", ".cursor")
     git("commit", "-q", "-m", "guard")
