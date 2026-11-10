@@ -45,13 +45,10 @@ import exactlin as X
 import kbench
 import kgate
 
-<<<<<<< HEAD
-SASS_GATE = Path(__file__).resolve().parents[2] / "pouw/harness/sass_gate.py"
-=======
 if TYPE_CHECKING:
     from collections.abc import Callable
 
->>>>>>> origin/main
+SASS_GATE = Path(__file__).resolve().parents[2] / "pouw/harness/sass_gate.py"
 BKS = (128, 256, 512)
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
@@ -80,11 +77,7 @@ def log(out: Path, rec: dict) -> None:
 
 
 class Shape:
-<<<<<<< HEAD
-    def __init__(self, n: int, k: int, m: int, zy: bool = False):
-=======
-    def __init__(self, n: int, k: int, m: int) -> None:
->>>>>>> origin/main
+    def __init__(self, n: int, k: int, m: int, zy: bool = False) -> None:
         e = kgate.E()
         self.n, self.k, self.m = n, k, m
         self.copies = kbench.copies_for(n, k)
@@ -159,16 +152,10 @@ class Shape:
         return kgate.diff(self.y, self.y_last)
 
 
-<<<<<<< HEAD
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, extra: dict | None = None,
-          zy: bool = False) -> dict:
+def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock: Callable[[], int | None], phase: str,
+          extra: dict | None = None, zy: bool = False) -> dict:
     """Gate each config (with `zy` its zy path too), time the ones that pass together (interleaved), and check the last y
     after the replays."""
-=======
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock: Callable[[], int | None], phase: str,
-          extra: dict | None = None) -> dict:
-    """Gate each config, time the ones that pass together (interleaved), and check the last y after the replays."""
->>>>>>> origin/main
     fns, recs = {}, {}
     for cfg in cfgs:
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "cfg": str(cfg)}
@@ -206,7 +193,6 @@ def best(med: dict, top: int, skip: tuple[str, ...] = ()) -> list[X.Cfg]:
     return [X.Cfg.parse(c) for c, _ in sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])[:top]]
 
 
-<<<<<<< HEAD
 def cubins(out: Path, shape: Shape, cfg: X.Cfg) -> None:
     """`cfg`'s compiled plain and zy kernels at `shape` into OUT/cubins, one file per distinct binary."""
     (out / "cubins").mkdir(exist_ok=True)
@@ -227,12 +213,8 @@ def sass(out: Path) -> dict:
     return {"ok": p.returncode == 0, "rc": p.returncode, "cubins": [f.name for f in files]}
 
 
-def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock, tma: bool = False,
-         zy: bool = False, only: tuple[X.Cfg, ...] = ()) -> dict:
-=======
 def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock: Callable[[], int | None],
-         tma: bool = False) -> dict:
->>>>>>> origin/main
+         tma: bool = False, zy: bool = False, only: tuple[X.Cfg, ...] = ()) -> dict:
     from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
         triton_scaled_mm,
     )

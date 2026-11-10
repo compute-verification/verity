@@ -447,20 +447,12 @@ def ids(product: R.Product) -> str:
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
-<<<<<<< HEAD
-ONSITE = port("onsite", R.ONSITE, SEEN["onsite"])
-REMOTE = port("remote", R.REMOTE, SEEN["remote"])
+ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
+REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
 #: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
 #: no product)
-PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], serve=(ids(R.ONSITE), "serve"), package="onsite")}
-=======
-ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
-REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
-#: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
-PRODUCT = {p.id: port("product", p, SEEN[n], ONSITE_PACKAGE, serve=(ids(p), "serve"))
-           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
->>>>>>> origin/main
+PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
@@ -871,7 +863,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     for name, data in (("params", canonical(case["params"]).encode()), ("commitment", bytes.fromhex(case["commitment"])),
                        ("evidence", bytes.fromhex(case["evidence"]))):
         (tmp_path / name).write_bytes(data)
-    p = subprocess.run([D.build(PROTOCOLS / "remote", "remote-v1"), "check", tmp_path / "params", tmp_path / "commitment",
+    p = subprocess.run([D.build(REMOTE_PACKAGE, "remote-v1"), "check", tmp_path / "params", tmp_path / "commitment",
                         tmp_path / "evidence", *blobs, *files.values()], capture_output=True, text=True)
     got = json.loads(p.stdout)
     assert p.returncode == 2 and {k: v for k, v in got.items() if k != "reason"} == {
@@ -889,7 +881,6 @@ def test_onsite_agrees(onsite_server, recorded):
                                                        "two records", "one store", "two stores"))
 
 
-<<<<<<< HEAD
 @pytest.mark.slow
 def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
     """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
@@ -897,7 +888,7 @@ def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, r
     `test_onsite_agrees`'s seeded draw needn't reach)."""
     seen = collections.Counter()
     p = RejectingPort("onsite", reference(R.ONSITE, seen), composite(R.ONSITE, "generic-bandwidth"),
-                      package=PROTOCOLS / "onsite", need_rejects=False)
+                      package=ONSITE_PACKAGE, need_rejects=False)
     stats = D.run(p, examples=10, seed=0, server=onsite_server)
     assert stats.counts == {R.REJECT: 10} and seen["generic bandwidth"] == 10, (stats, dict(seen))
 
@@ -907,14 +898,7 @@ def test_product_names_only_the_composites():
     run), exactly the configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS`
     gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
     and the wipe (exit 64)."""
-    exe = D.build(PROTOCOLS / "onsite", "product")
-=======
-def test_product_names_only_the_two_composites():
-    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
-    and refuses every other set of their subprotocols and the wipe (exit 64)."""
     exe = D.build(ONSITE_PACKAGE, "product")
->>>>>>> origin/main
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
