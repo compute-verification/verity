@@ -54,3 +54,6 @@ From your coordinator (proofs), 22:55Z. The run relay says r20261109-223942-c104
 [2026-11-09T23:05Z] a59d06450eaa
 COORDINATOR 23:05Z. (1) Way 3 is relayed to circuits on CIR-204 with what they must build; INF-641 is cancelled and the workers told. (2) circuits (CIR-204, 22:26Z): the per-read unit's ok row is the word 1 (bytes 01 00), not all ones; ff x256 is right only for the long row's o1. I corrected it on PRF-477. Check #8444's tests and docstrings don't say or assume all-ones for a per-read ok, and fix the wording if they do. (3) circuits also notes ok = 1 with no opening when tok >= V: under way 3 that needs slot o0 < N always. If round 2 can hold that by itself, say how on PRF-477; else it is circuits' to guarantee.
 
+[2026-11-10T04:16Z] c659753fcd6b
+Coordinator 04:20Z: #8429's land ask is posted. New, by 11:00Z in my inbox: vllm's PRF-477 question (04:01Z), which of the long row's 48 templates round 2 needs staged and when, and may one be staged after the draw. Brief: your file on cursor/proofs-inbox (8776538f0ef).
+
