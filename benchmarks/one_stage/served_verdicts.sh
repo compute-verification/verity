@@ -667,9 +667,17 @@ pearl_period() {  # under PEARLPLUS_TIE with a gate, in serve(): $1 open (on PEA
           "and $([ -n "${DREG_DIGEST:-}" ] && echo "that record" || echo "no such record")"
       fi
     fi
-    out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period open "$D/pearlplus" \
-      --gate "$PEARLC_CHALLENGER_GATE" --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local}}" \
-      --circuit-record "$PEARLPLUS_CIRCUIT" "${signs[@]}" 2>&1) && PEARL_PERIOD=1
+    local open=("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period open "$D/pearlplus"
+      --gate "$PEARLC_CHALLENGER_GATE" --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local}}"
+      --circuit-record "$PEARLPLUS_CIRCUIT")
+    PEARL_PERIOD=
+    out=$("${open[@]}" "${signs[@]}" 2>&1) && PEARL_PERIOD=1
+    if [ -z "$PEARL_PERIOD" ] && [ "${#signs[@]}" -gt 0 ]; then  # a gate that takes none of the four refuses the open whole
+      say "PEARLPLUS-$(tail -1 <<< "$out" | cut -c1-600)"
+      say "PEARLPLUS-PERIOD signs no limits (SIGNED_LIMITS=1): the gate refused the open that asks it to sign them, so" \
+        "the period is opened without them, as a serve without SIGNED_LIMITS opens it"
+      out=$("${open[@]}" 2>&1) && PEARL_PERIOD=1
+    fi
   else
     [ "${PEARL_PERIOD:-}" = 1 ] || return 0
     out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period close "$D/pearlplus" \
@@ -1122,7 +1130,9 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # before serve-openai starts, and its open asks the gate to sign the policy's id (LIMITS_POLICY, default
 # verity/inference-only/v0, which names the limits' form and unit to the gate), these limits and the digest of the
 # deployment's first registration record, all four or none (`pearlplus-period open --policy --alpha --gamma
-# --registration`); PEARLPLUS-PERIOD says whether the gate's answer holds them. That record's roots need the loaded
+# --registration`); PEARLPLUS-PERIOD says whether the gate's answer holds them, and where the gate refuses that open
+# (a gate that takes none of the four refuses it whole) the period is opened without them and a line says so. That
+# record's roots need the loaded
 # engine's tables, so the open can't come before the endpoint, and a tied window reserves its salt session only at its
 # first step, so the period is open by then.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}

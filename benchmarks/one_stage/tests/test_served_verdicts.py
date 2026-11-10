@@ -3569,8 +3569,9 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
 def _serve_listening(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
     """`served_verdicts.sh serve` under PEARLPLUS_TIE with a gate, in a toy tree whose venv python notes each call: the
     class circuit and the policy (c 14, k 6) written, serve-openai listening until it is stopped, the weights registered
-    with a deployment record of digest ``d0...`` (refused under FAKE_REFUSES), and the load closing and sealing one
-    window. -> the exit status, the calls by name and the verdict lines."""
+    with a deployment record of digest ``d0...`` (refused under FAKE_REFUSES), the period's open refused where it asks
+    for a policy under FAKE_OLD_GATE, and the load closing and sealing one window. -> the exit status, the calls by name
+    and the verdict lines."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "integrations" / "vllm", bin_, venv):
         p.mkdir(parents=True)
@@ -3583,6 +3584,7 @@ case "$*" in
   *prove_path.py\\ weights-registration*) [ -z "$FAKE_REFUSES" ] || exit 2
     {out_of.format("--out|--deployment-record", '{"values": {}}')}
     printf '{{"roots": 0, "deployment": "%s"}}\\n' {"d0" * 64}; exit 0;;
+  *served_verdicts.py\\ pearlplus-period\\ open*--policy*) [ -z "$FAKE_OLD_GATE" ] && exit 0; echo PERIOD refused: old gate; exit 1;;
   *prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;;
   *serve-openai*) echo SERVE-OPENAI listening on 127.0.0.1:1; exec cat {tmp_path}/hold;;
   *serve_load.py*) echo w > {d}/windows.jsonl; echo s > {d}/seals.jsonl; exit 0;;
@@ -3611,7 +3613,8 @@ def test_signed_limits_opens_the_period_after_the_weights_and_before_the_first_r
     before the serve (α = k/c reduced, Γ = c) and that record's digest; the LIMITS and DEPLOYMENT-REGISTRATION lines say
     the period signs them. Without it the period opens before serve-openai starts and carries none of the four, as
     before. With SIGNED_LIMITS=1 and no deployment record, the period opens all the same, signing nothing, and a line
-    says why."""
+    says why; and where the gate refuses the open that carries the four (a gate that takes none of them), the refusal is
+    said and the period is opened again without them, so the window's salt session still has its period."""
     digest, calls = "d0" * 64, lambda p: (p / "calls").read_text().splitlines()
     signed = (f"--policy verity/inference-only/v0 --alpha 3/7 --gamma 14 --registration {digest}")
     flow = ["serve-phi", "class-circuit", "policy", "serve-openai", "weights-registration"]
@@ -3635,6 +3638,16 @@ def test_signed_limits_opens_the_period_after_the_weights_and_before_the_first_r
     assert names.index("pearlplus-period open") > names.index("weights-registration")
     assert any(x.startswith("PEARLPLUS-PERIOD signs no limits (SIGNED_LIMITS=1)") and x.endswith("the run has its limits "
                "and no such record") for x in lines), lines
+    rc, names, lines = _serve_listening(tmp_path / "old", {"SIGNED_LIMITS": "1", "FAKE_OLD_GATE": "1"})
+    opens = [c for c in calls(tmp_path / "old") if "pearlplus-period open" in c]
+    assert rc == 0 and len(opens) == 2 and opens[0].endswith(signed) and opens[1] == opens[0].removesuffix(f" {signed}")
+    at = [i for i, n in enumerate(names) if n == "pearlplus-period open"]
+    assert names.index("weights-registration") < at[0] < at[1] < names.index("serve_load.py")
+    said = [x for x in lines if x.startswith("PEARLPLUS-PERIOD")]
+    assert said[:2] == ["PEARLPLUS-PERIOD refused: old gate", "PEARLPLUS-PERIOD signs no limits (SIGNED_LIMITS=1): the gate "
+                        "refused the open that asks it to sign them, so the period is opened without them, as a serve "
+                        "without SIGNED_LIMITS opens it"], said
+    assert "pearlplus-period close" in names
 
 
 def test_under_pearlplus_tie_the_inference_only_policy_states_serve_phis_phi_cut_at_pearl_plus_linears(tmp_path):
