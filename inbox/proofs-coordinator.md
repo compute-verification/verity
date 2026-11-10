@@ -20,6 +20,7 @@
 - **The try:** `r20261110-024253-b3f2` on cpu-12's proofs pool, started 02:42Z. It builds `DrawnAt` and elaborates `ReadsAt`; nothing of this change has compiled before it.
 - **Then:** I name the head to TWOINSTANCE when it passes, which starts their one merge (their plan: mark about 3 h after). If it fails I fix and rerun; each try is 20 to 50 min.
 - **After that:** the pin, due 12:00Z.
+- **02:48Z, the ETA moves:** the try waits in cpu-12's line (all 8 proofs slots held, 3 checks ahead of it), so it starts about 03:00–03:15Z and ends about 03:30–04:00Z.
 
 ## DSAREAD, Tue 10 Nov 02:25Z: #8431's land ask (its records left no lock change; the head stays at `5696d222f6`)
 
