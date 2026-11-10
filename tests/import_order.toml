@@ -236,7 +236,6 @@ path = "verity/protocols/poub/verifier"
 loads = [
     "verity",
     "verity/commitments",
-    "verity/commitments/crypto",
     "verity/commitments/hm96",
     "verity/commitments/randomness",
     "verity/configuration",
@@ -247,6 +246,7 @@ loads = [
     "verity/protocols/poub/verifier/commitments",
     "verity/protocols/pous",
     "verity/protocols/pous/device",
+    "verity/protocols/pous/device/__init__.py",
     "verity/protocols/pous/verifier",
     "verity/spot",
     "verity/spot/device",
@@ -272,6 +272,7 @@ reaches = [
     "verity/protocols/poub/verifier/commitments",
     "verity/protocols/pous",
     "verity/protocols/pous/device",
+    "verity/protocols/pous/device/__init__.py",
     "verity/protocols/pous/verifier",
     "verity/spot",
     "verity/spot/device",
@@ -309,6 +310,37 @@ loaded_by = [
 ]
 
 [[trusted]]
+path = "verity/protocols/poub/verifier/remote_session"
+loads = [
+    "verity",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/protocols",
+    "verity/protocols/poub",
+    "verity/protocols/poub/verifier",
+    "verity/spot",
+    "verity/spot/device",
+]
+reaches = [
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/hardware",
+    "verity/protocols",
+    "verity/protocols/poub",
+    "verity/protocols/poub/verifier",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+    "verity/spot/verifier/profile.py",
+]
+
+[[trusted]]
 path = "verity/protocols/pous/device"
 loads = [
     "verity",
@@ -321,6 +353,7 @@ loads = [
     "verity/configuration/wire",
     "verity/protocols",
     "verity/protocols/pous",
+    "verity/protocols/pous/device/__init__.py",
     "verity/protocols/pous/verifier",
 ]
 reaches = [
@@ -335,8 +368,12 @@ reaches = [
     "verity/configuration/wire",
     "verity/protocols",
     "verity/protocols/pous",
+    "verity/protocols/pous/device/__init__.py",
     "verity/protocols/pous/verifier",
 ]
+
+[[trusted]]
+path = "verity/protocols/pous/device/__init__.py"
 
 [[trusted]]
 path = "verity/protocols/pous/device/challenger_party.py"
@@ -348,6 +385,7 @@ loads = [
     "verity/protocols",
     "verity/protocols/pous",
     "verity/protocols/pous/device",
+    "verity/protocols/pous/device/__init__.py",
     "verity/protocols/pous/verifier",
 ]
 reaches = [
@@ -363,6 +401,7 @@ reaches = [
     "verity/protocols",
     "verity/protocols/pous",
     "verity/protocols/pous/device",
+    "verity/protocols/pous/device/__init__.py",
     "verity/protocols/pous/verifier",
 ]
 
@@ -399,6 +438,7 @@ loads = [
     "verity/protocols",
     "verity/protocols/pous",
     "verity/protocols/pous/device",
+    "verity/protocols/pous/device/__init__.py",
 ]
 reaches = [
     "verity",
@@ -413,6 +453,7 @@ reaches = [
     "verity/protocols",
     "verity/protocols/pous",
     "verity/protocols/pous/device",
+    "verity/protocols/pous/device/__init__.py",
 ]
 
 [[trusted]]
