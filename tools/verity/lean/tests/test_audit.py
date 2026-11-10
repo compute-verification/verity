@@ -5993,7 +5993,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
 
 
 def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkeypatch):
-    """An unsealed audit (a control, a lean-changed scan, a stubbed test) hashes its replay keys from the live `.lake`, so
+    """An unsealed audit (a control, a stubbed test) hashes its replay keys from the live `.lake`, so
     a stored verdict a dependent's build could have tampered with would poison a later sealed run. With ``store`` false it
     may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
     entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""

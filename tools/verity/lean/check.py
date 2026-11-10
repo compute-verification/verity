@@ -4793,7 +4793,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     (a seal's or a batch's mapped search path) and ``digest`` (`Sealed.digest` or `Pipeline.digest`) make the replay read
     private copies rather than the live `.lake`, so no dependent's build can change what the kernel replays or what its
     key is keyed on. ``prefix`` goes before the command and ``held`` says the caller holds `_HEAVY_REPLAY` already
-    (`Pipeline`'s batches). ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test),
+    (`Pipeline`'s batches). ``store`` is false for an unsealed audit (a control, a stubbed test),
     whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
     can never poison a sealed run."""
     found = work / "replay.json"
@@ -5292,7 +5292,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
     ``seals`` (the run's seals) is taken before ``built`` is called, so every reader after it reads the seal's private
     copies and no dependent's build changes what the facts, the replay, the scans or the digests see (`Seals`); without
-    one (a control, a lean-changed scan or a stubbed test, none of which runs a dependent's build beside the audit) the
+    one (a control or a stubbed test, neither of which runs a dependent's build beside the audit) the
     readers read the live `.lake`. `main` always provides one, so the run's gate is always sealed.
     ``bookkeeping`` (a due date:
     `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
@@ -5902,7 +5902,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--facts-cache", type=Path, metavar="DIR", help="while judging each named package as usual, also store "
                     "its sealed facts document into DIR, keyed by that build (`facts_key`), with a sidecar `<facts_key>.json` "
                     "so a later reuse looks the document up by the key the current tree computes and refuses a tampered or "
-                    "stale one (`read_cached_facts`).  lean_changed's records step passes it")
+                    "stale one (`read_cached_facts`).  `lean_changed.py --records` passes it")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):

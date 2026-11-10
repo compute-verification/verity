@@ -26,7 +26,7 @@ each file under its path relative to its package (a module's is its name), never
 - `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
   `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
-  (the merge driver, the lean-changed step, the daily publish, ...), which the audit never reads: the scratch tree leaves them
+  (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
   out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
 scratch tree can't guard is a package reading beyond its directory by a relative path, which would find other files once it
@@ -185,7 +185,7 @@ FLAGS = ["--build", "--closure"]
 #: read of one fails the audit
 NOT_READ = {
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
-    "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
+    "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "run_daily.py": "the build cache's daily publish",
     "tool.py": "the store's declarations of the scheduled runs",
