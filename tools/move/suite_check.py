@@ -30,7 +30,10 @@ Rows decide 1 and 2. 3 is decided by rows only where one new directory holds all
 suite's inputs need an edit after the move, and the check prints the directories they would need.
 
 With no map it checks REF's tree as it is, which passes all three. Imports are read from the source (`import`, `from`),
-resolved under the first map's `[roots] old`; a module loaded by path or by name at run time is not seen."""
+resolved under the first map's `[roots] old`; a module loaded by path or by name at run time is not seen, and one imported
+where no test runs is. So 3 is wider than the read guard, and each finding says whether the import runs when a test file is
+imported (`at_import`: outside every function and `if TYPE_CHECKING:`), which the guard is sure to see. The last line
+says how many imports are outside their suite's inputs on REF already, which 3 counts none of."""
 from __future__ import annotations
 
 import argparse
@@ -74,7 +77,7 @@ class Imports:
         for p in m.files:
             if p.endswith(".py") and (name := L.module_name(p, self.roots)):
                 self.file.setdefault(name, p)
-        self.memo: dict[str, set[str]] = {}
+        self.memo: dict[tuple[str, bool], set[str]] = {}
 
     def resolve(self, name: str) -> str | None:
         while name:
@@ -83,18 +86,20 @@ class Imports:
             name = name.rpartition(".")[0]
         return None
 
-    def direct(self, f: str) -> set[str]:
-        if f in self.memo:
-            return self.memo[f]
+    def direct(self, f: str, at_import: bool = False) -> set[str]:
+        """The modules `f` imports; `at_import`: only by a statement that runs when `f` is imported (outside every function
+        and every `if TYPE_CHECKING:`)."""
+        if (f, at_import) in self.memo:
+            return self.memo[f, at_import]
         out: set[str] = set()
-        self.memo[f] = out
+        self.memo[f, at_import] = out
         try:
             tree = ast.parse(self.m.read(f) or "")
         except (SyntaxError, ValueError):
             return out
         me = L.module_name(f, self.roots) or ""
         pkg = (me if f.endswith("/__init__.py") else me.rpartition(".")[0]).split(".")
-        for node in ast.walk(tree):
+        for node in _runs_at_import(tree) if at_import else ast.walk(tree):
             if isinstance(node, ast.Import):
                 names = [a.name for a in node.names]
             elif isinstance(node, ast.ImportFrom):
@@ -107,17 +112,27 @@ class Imports:
             out |= {r for n in names if (r := self.resolve(n)) and r != f}
         return out
 
-    def reach(self, files: list[str]) -> dict[str, str]:
+    def reach(self, files: list[str], at_import: bool = False) -> dict[str, str]:
         """{module file: the file that imports it} for everything `files` import, directly or through an import."""
         seen: dict[str, str] = {}
-        todo = [(f, g) for f in files for g in self.direct(f)]
+        todo = [(f, g) for f in files for g in self.direct(f, at_import)]
         while todo:
             f, g = todo.pop()
             if g in seen:
                 continue
             seen[g] = f
-            todo += [(g, h) for h in self.direct(g)]
+            todo += [(g, h) for h in self.direct(g, at_import)]
         return seen
+
+
+def _runs_at_import(node: ast.AST):
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        if isinstance(child, ast.If) and "TYPE_CHECKING" in ast.dump(child.test):
+            continue
+        yield child
+        yield from _runs_at_import(child)
 
 
 def check(m: Moved) -> dict:
@@ -229,7 +244,7 @@ def check(m: Moved) -> dict:
             return posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
         return m.directory(path) or path
 
-    lost, loads = {}, {}
+    lost, loads, reached, outside = {}, {}, set(), {}
     for p in sorted(suites) if m.layouts else ():
         if p in archived:
             continue
@@ -237,6 +252,7 @@ def check(m: Moved) -> dict:
         now = [(posixpath.dirname(m.new[p]) or "." if why == "its directory" else reads(path)) for why, path in own]
         # a test file sent into this suite: what its suite's inputs cover today must land in this suite's
         for files, inputs in [(collects[p], own), *(([f], inputs_of(q)) for f, q in sent[p])]:
+            opened = imports.reach(files, at_import=True)       # what importing the test files imports
             for f, importer in sorted(imports.reach(files).items()):
                 if f in archived:
                     if importer not in archived:            # an archived module's own imports are not a suite's
@@ -244,16 +260,20 @@ def check(m: Moved) -> dict:
                         x["suites"] += [p] if p not in x["suites"] else []
                     continue
                 why, path = next(((w, path) for w, path in inputs if under(f, path)), (None, None))
+                reached.add((p, f))
+                if why is None:                             # outside the inputs today already: not the maps' doing
+                    outside.setdefault((p, f), {"suite": p, "module": f, "imported_by": importer, "at_import": f in opened})
                 if why is None or any(under(m.new[f], n) for n in now):
                     continue
                 rest = f[len(path):] if path != "." else "/" + f
                 lost.setdefault((p, f), {
                     "suite": p, "suite_lands": m.new[p], "module": f, "lands": m.new[f], "imported_by": importer, "covered_today_by": why,
+                    "at_import": f in opened,
                     "holds_it_after": m.new[f][: -len(rest)] if m.new[f].endswith(rest) and len(rest) < len(m.new[f])
                     else posixpath.dirname(m.new[f])})
     return {"orphans": orphans, "parted": parted, "inputs": list(lost.values()),
             "loads_archive": sorted(loads.values(), key=lambda x: x["module"]), "archived_with_code": with_code,
-            "sent_with_code": with_suite}
+            "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values())}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,6 +296,9 @@ def main(argv: list[str] | None = None) -> int:
           f"{len(suites_hit)} suites, {len(r['loads_archive'])} archived modules a test that stays imports "
           f"({len(r['archived_with_code'])} test files go to archive/ with their code, {len(r['sent_with_code'])} into "
           f"another suite with theirs)")
+    at_import = [x for x in r["inputs"] if x["at_import"]]
+    print(f"  of the {len(r['inputs'])}, {len(at_import)} in {len({x['suite'] for x in at_import})} suites are imported when a test "
+          f"file is: the read guard refuses those; the rest are imported inside a function, which a test may never reach")
 
     def show(title: str, groups: dict[str, list[str]]) -> None:
         for head, lines in sorted(groups.items()):
@@ -306,6 +329,10 @@ def main(argv: list[str] | None = None) -> int:
         needs[x["suite_lands"]].add(x["holds_it_after"])
     for suite, dirs in sorted(needs.items()):
         print(f"  {suite}: its inputs would also need {', '.join(sorted(dirs))}")
+    if r["reached"]:
+        today = r["outside_today"]
+        print(f"  not counted: {len(today)} of the {r['reached']} imports (a suite and a module its tests reach) are outside the "
+              f"suite's inputs on {m.ref[:12]} as it is, {sum(x['at_import'] for x in today)} of them imported when a test file is")
     return 1 if r["orphans"] or r["parted"] or r["inputs"] or r["loads_archive"] else 0
 
 
