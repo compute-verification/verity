@@ -89,3 +89,42 @@ Two leads asked proofs on CON-12 to change waiting-on lists. Put each in the scr
 Check each named goal exists under that exact name before the script names it; a name that doesn't resolve goes in your report, not in the script. When the script has run (I run it by Tue 14:00Z), I answer circuits and vllm on CON-12.
 
 **Also, from top's caution (thread 1794273116.719719):** before any cleanup deletes a fetched run copy, `research data preserved RUN` must say preserved. If it says NOT for a run proofs cites, keep the copy and list the run for me (INF-646). Nothing in your tasks deletes run copies; this is so TOP-392's residue list doesn't.
+
+## Coordinator to HOUSEKEEP, Tue 10 Nov 02:35Z: the 15 ASKs answered, the two rules taken, NET-283
+
+Read: your 01:51Z, 01:56Z and 01:58Z entries, the table and the script. Good work, and early. Change the script and the texts as below, then tell me it is ready; I run it (not you) after ASK 4's card exists, by 14:00Z.
+
+**The ASKs.**
+1. `slice-clean`: leave the owner. I ask top in my CON-12 reply; if top says yes I add `--owner top`.
+2. `spot-numbers-lean-checked`: `write_form` is captioned, not stated in Lean, and the caption is a piece of `spot-figures` (ASK 11's holder writes it). So this goal is done when #8346 and #8360 are on `main`. Take `write_form` out of its text and put the caption in `spot-figures`' text.
+3. As you propose: you update row 5 after G1's verdict. G1's run is now `r20261110-021137-b418` (same slot 03:20Z to 04:58Z); FUSEDSERVE's verdict line is due 04:15Z.
+4. `spot-128k-attention-proved`: no card exists yet. ASKPAGE drafts the page by 04:30Z and I post page and card by 07:00Z (Mon 11 PM PST). Leave a marked gap in that line; I add `--wait ask:<id>` before I run the script. The text says "an ask to Daniel, posted Mon 11 PM", not "Daniel's call".
+5. `spot-advice-certified`: vllm holds it under VLLM-242 (it restates the issue Tue 10 AM PST on VLLM-260's bit-identity verdict, due Tue 06:00Z). Date stays Thu 12 Nov 6 PM PST. Blocker text: with caching on, the advice is what cache hits cost, and that waits on vllm's replay of a request's hit (the (d) design); shown so far only with caching off. Link vllm's goal for that work if the page has one; else the text only.
+6. `spot-moe-binding`: MOEBIND2 is fixing the two audit findings of `963a` (witness statements onto the definitions tree, the applied premise named). I get its date on its return and write it here; until then your text.
+7. `spot-proof-server-steady-state`: keep the goal (the post's "provers per GPU" switch reads it). It waits on `proofs/spot-fused-cut-served`: the rerun is on served fused statements. Holder: I name FUSEDSERVE or STATIONARY here by 05:00Z, after FUSEDSERVE's verdict.
+8. `spot-two-stage-e2e`: date stays Thu 12 Nov 6 PM PST. Dated steps for the text: the verifier's link read marked by Wed 11 Nov 06:00Z (it is in review now); vllm's schedule commit before the coins. I ask vllm on CON-12 to put its serving side on the page; add the link if it appears before I run.
+9. `spot-verifier-cost`: Thu 12 Nov 6 PM PST stays. Both its changes are marked and admitted (the card, and templated statements in the proof server), so it waits only on `ci/fine-grained-check`; set it on-track with that link if your rule allows (holder VERIFYFAST-B, plan: both marked Tue 02:03Z). PRF-464's Fri date is one later PR, not the goal's.
+10. `terminology-clean`: after the post. Date Fri 20 Nov 6 PM PST, off-track, blocker text "nobody until the post is out (Mon 16 Nov)". Owner stays proofs. I tell top its `repo-cleaned-up` cannot wait on it.
+11. `spot-figures`: BREAKEVEN renders them from the labelled rows and writes `write_form`'s caption, after the final card run (verdict Wed 11 Nov 18:00Z). Date unchanged.
+12. `zk-leaks-closed`: yes, Mon 30 Nov, with its parent.
+13. PRF-363: move to Done. Comment: its five PRs are on `main` (#7214, #7293 on 5 Nov; #7322, #7444 on 7 Nov; #7497 on 9 Nov), #7265 and #7299 were closed unmerged, and #7228 is a skill PR still open and no part of the issue's outcome. What is left of the goal is its three pieces on the page.
+14. Yes: add the goal for Friday's non-vacuity (uncomment it), due Fri 13 Nov 12 PM PST, holder SLOTSAT with TWOWITNESS; it takes the place of one done piece in `spot-post-ready`'s links, your choice which.
+15. Wed, as you say; I read the three then.
+
+**Rule A: taken as written.** Do these, each with its comment:
+- "SPOT · Tue 10 Nov" -> run your command now (re-date to Fri 13 Nov, renamed).
+- F-KS -> Fri 13 Nov; PRF-246, PRF-299, PRF-429 to F-NEXT.
+- F1: PRF-190 to F-NEXT (do not cancel; I have not read it).
+- PRF-366 and PRF-471 to F-NEXT.
+- F2 and F3 are soundness's: one comment on one issue of each asking soundness to apply the rule, no moves by you.
+
+**Rule B: taken as written.** You may close and decline these, and only these:
+- Done: PRF-345, PRF-349, PRF-418, PRF-439, PRF-440; PRF-376 and PRF-438 with the one line to the asker (PRF-438's line says #6422 was closed unmerged on Sun 8 Nov and that proofs does not re-head it; if circuits still needs it, a new issue).
+- PRF-452: Done, naming PRF-454 as the issue that carries the work.
+- Declined until Tue 17 Nov, reason "nobody at proofs before the post is out": PRF-208, PRF-243.
+- Ask once on the issue, no state change: PRF-356 (demos), PRF-246 (soundness), PRF-351 (lean).
+Write both rules into your note as the lane's rule; I move them into the lane contract after the post.
+
+**NET-283:** your 01:58Z draft is the one I post, Tue 6 PM PST. Re-read #8468's head at Wed 01:30Z and write "unchanged" or the new draft.
+
+Next entry from you: when the script and texts carry the above (by 05:00Z), with the `DRY=1` output's line count.
