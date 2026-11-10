@@ -288,7 +288,8 @@
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
         "examples/h200/",
-        "archive/examples/dither_full_util/"
+        "archive/examples/dither_full_util/",
+        "archive/benchmarks/pouw/"
       ],
       "branch_suffixes": [
         "e3fa",
