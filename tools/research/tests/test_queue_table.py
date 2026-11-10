@@ -22,7 +22,7 @@ def test_a_quantile_interpolates_between_the_two_nearest_values():
 
 
 def test_a_run_ids_time_is_when_it_was_asked_for():
-    assert qt.rid_time("r20261110-201216-fd89") == qt.ts(at("20:12")) + 16
+    assert qt.rid_time("r20261110-201216-abcd") == qt.ts(at("20:12")) + 16
 
 
 def test_a_mark_is_the_first_true_after_the_last_false():
@@ -43,13 +43,13 @@ def test_a_verdict_is_the_first_land_and_a_newest_hold_is_a_hold():
 def test_a_drop_is_read_from_the_loops_reason():
     assert qt.drop_cause("on main") == "on main"
     assert qt.drop_cause("its base was dropped") == qt.drop_cause("its base failed") == "dropped base"
-    assert qt.drop_cause("#8328's ready mark was withdrawn") == "withdrawn mark"
+    assert qt.drop_cause("#12's ready mark was withdrawn") == "withdrawn mark"
     assert qt.drop_cause("failed: step lean-audit, step lean-suites") == "red"
-    assert qt.drop_cause("#8633 isn't taken now: ejected at 4ddfaf5c: candidate 3ddd53312267 fails pytest") == "red"
+    assert qt.drop_cause("#13 isn't taken now: ejected at 0a0a0a0a: candidate cccccccccccc fails pytest") == "red"
     # a hold whose text speaks of a withdrawn copy is still a hold
-    assert qt.drop_cause("#8488 isn't taken now: held by top (red in candidate 47f2: a withdrawn copy reads WITHDRAWN)") == "hold"
-    assert qt.drop_cause("ci dropped it by hand: its base 47f2c95d4548 is red") == "by hand"
-    assert qt.drop_cause("9328fef5a055's check ended in infra errors: the run beside its check registered no run") == "infrastructure"
+    assert qt.drop_cause("#14 isn't taken now: held by a lead (red in candidate dddd: a withdrawn copy reads WITHDRAWN)") == "hold"
+    assert qt.drop_cause("ci dropped it by hand: its base dddddddddddd is red") == "by hand"
+    assert qt.drop_cause("eeeeeeeeeeee's check ended in infra errors: the run beside its check registered no run") == "infrastructure"
     assert qt.drop_cause("something new") == "other"
 
 

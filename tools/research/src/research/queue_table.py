@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import statistics
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -36,12 +35,12 @@ LIVE = "/data/vqueue/live"
 #: nodes a run before a mark may go to besides the check nodes (`research run --on auto`)
 LANE_NODES = ("vy-nebius-cpu-3", "vy-nebius-cpu-8", "vy-nebius-cpu-10", "vy-nebius-cpu-12")
 REPO = "compute-verification/verity"
-#: Daniel's target: nine in ten PRs on `main` within two hours of the mark
+#: the target: nine in ten PRs on `main` within two hours of the mark
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
 #: the steps off the merge gate when the checkout's policy.toml can't be read: a candidate's verdict doesn't wait for them
 OFF_GATE = ("circuit-check", "ratchet-gate")
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
-STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "research/queue-table.json"
+STATE = Path.home() / ".research" / "queue-table.json"
 
 CONTROL_SCRIPT = r'''
 import json, re, sys
@@ -211,19 +210,19 @@ def _remote(machine: str, script: str, *args: str, timeout: float = 100) -> tupl
     """``script`` under the machine's python3, its last JSON line parsed; here when this is that machine (the control pod)."""
     local = machine == CONTROL and Path(LIVE).is_dir()
     cmd = ["python3", "-", *args] if local else [sys.executable, "-m", "research", "pods", "ssh", machine, "--", "python3", "-", *args]
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[1]),
-                                                                    os.environ.get("PYTHONPATH")])))
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[1]), env.get("PYTHONPATH")]))
     try:
         p = subprocess.run(cmd, input=script, capture_output=True, text=True, timeout=timeout, env=env)
     except subprocess.TimeoutExpired:
         return None, f"no answer in {timeout:g} s"
-    for line in reversed(p.stdout.splitlines()):
-        if line.startswith("{"):
-            try:
-                return json.loads(line), ""
-            except ValueError:
-                break
-    return None, (p.stderr or p.stdout).strip()[-200:] or f"rc {p.returncode}"
+    answer = next((line for line in reversed(p.stdout.splitlines()) if line.startswith("{")), None)
+    if answer is None:
+        return None, (p.stderr or p.stdout).strip()[-200:] or f"rc {p.returncode}"
+    try:
+        return json.loads(answer), ""
+    except ValueError as e:
+        return None, f"its answer is not JSON: {e}"
 
 
 def check_nodes(args: str) -> list[str]:
@@ -705,20 +704,30 @@ def render(rows: list[dict], doc: dict) -> str:
     return "\n".join(lines)
 
 
+def saved(path: Path) -> list[dict]:
+    """The readings of the nodes' CPU counters earlier runs saved in ``path``; none without the file, or with one that doesn't
+    parse (said on stderr)."""
+    if not path.is_file():
+        return []
+    try:
+        return [r for r in json.loads(path.read_text())["readings"] if "now" in r and "nodes" in r]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"research queue stats: {path} is unreadable ({e!r}); starting it again", file=sys.stderr)
+        return []
+
+
 def main(store_root=None, as_json: bool = False, sample_s: float = 5.0) -> int:
     doc = collect(store_root, sample_s)
-    try:
-        readings = json.loads(STATE.read_text())["readings"]
-    except (OSError, ValueError, KeyError, TypeError):
-        readings = []
+    readings = saved(STATE)
     rows = table(doc, earlier(readings, doc["now"]))
     readings = [r for r in readings if doc["now"] - r["now"] < 6 * 3600]
     readings.append({"now": doc["now"], "nodes": {n: {"stat": d["stat"]} for n, d in doc["nodes"].items()}})
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps({"readings": readings}))
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
+              file=sys.stderr)
     print(json.dumps({"at": doc["now"], "rows": rows, "errors": doc["errors"], "data": doc}, default=str) if as_json else render(rows, doc))
     return 0
 
