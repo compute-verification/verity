@@ -140,7 +140,7 @@
    "owner": "@network-accounting",
    "digest": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
   },
-  "Properties.RemoteAudit.Component.HonestSchedule": {
+  "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9"
   }
@@ -1065,44 +1065,44 @@
   "Firewall"
  ],
  "claims": {
-  "modules": ["Properties.RemoteAudit.Component"],
+  "modules": ["Properties.Accounting.Remote.Subprotocol"],
   "witnesses": {
-   "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": {
-    "fails": "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": {
+    "fails": "Properties.RemoteAudit.Subprotocol.acceptIsVerified_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
-     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
    },
-   "Properties.RemoteAudit.Component.LineHeldAtComponentBy": {
-    "fails": "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites"
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest",
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites"
     ]
    },
-   "Properties.RemoteAudit.Component.LineHeldBy": {
-    "fails": "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.LineHeldBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.lineHeld_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.lineHeld_honest",
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest"
+     "Properties.RemoteAudit.Subprotocol.lineHeld_honest",
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest"
     ]
    },
-   "Properties.RemoteAudit.Component.PublishedEpsFor": {
-    "fails": "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": {
+    "fails": "Properties.RemoteAudit.Subprotocol.publishedEps_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
-     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
    }
   },
   "not": {
-   "Properties.RemoteAudit.Component.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Component.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Component.LineHeldAtComponent": "a closed statement: the `LineHeldAtComponentBy` form at the deployed verifier (`Properties.RemoteAudit.Component.lineHeldAtComponent_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Component.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtComponent` reads in its event: an event, no claim",
-   "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Component.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtComponentBy` read in their event: an event, no claim",
-   "Properties.RemoteAudit.Component.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Component.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
+   "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "a closed statement: the `LineHeldAtSubprotocolBy` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
   }
  },
  "witnesses": {
@@ -1365,6 +1365,10 @@
   "Properties.Spot.SecurityProofs.tablesRegistered": {
    "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log": {
+   "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1887,7 +1891,7 @@
    "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
    "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
   },
-  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
+  "Properties.RemoteAudit.Subprotocol.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
    "unfolded_hash": "c3e7030030842c438bd0a9c7778bd2adf9bf6b52b3e440e0e729aa450b56c334"
@@ -2182,11 +2186,6 @@
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.Spot.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
-  "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit", "Properties.RemoteAudit"],
-   "except": [],
-   "why": "the schedule check (`RemoteAudit.Schedule`) and the verifier's layout (`sessionLayout`, where `checkOpening` checks each block under `Properties.RemoteAudit.receipterOf`) are stated against the code and the layout vocabulary they feed (`Definitions.Accounting.Schedule`), never a proof"
-  },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
    "except": [],
@@ -2196,11 +2195,6 @@
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
    "except": [],
    "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization and the H200's price (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
-  },
-  "Properties.Accounting.DeclaredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
-   "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and the verifier's layout (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
@@ -2465,7 +2459,7 @@
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.Accounting.Remote.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": ["Definitions.Accounting", "RemoteAudit", "Properties.Accounting.Remote"],
    "except": [],
    "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
@@ -7536,10 +7530,10 @@
    },
    "type_hash": "0f5109466e05f075d67d02887e9bd8af525c461822f0b9cd76df9c9f427222aa"
   },
-  "Properties.RemoteAudit.Component.acceptIsVerified_complete": {
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.acceptIsVerified_complete {p : RemoteAudit.Protocol.Params}",
+    "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete {p : RemoteAudit.Protocol.Params}",
     "  {reg : RemoteAudit.Registration} {e : RemoteAudit.Protocol.Evidence} {params : RemoteAudit.Session.Params} {g : Nat}",
     "  {coins appendCoins : Array ByteArray} {notBeforeNs : Nat} {events : Array RemoteAudit.Session.Event}",
     "  {rs : Array RemoteAudit.Session.Result} {s : RemoteAudit.Session.State} {sm : RemoteAudit.Session.Summary}",
@@ -7560,17 +7554,17 @@
    "assumptions": [],
    "type_hash": "efcb9c51bc87741c6efce9af7330064739e610b9510c874231cc40de86ce4f79"
   },
-  "Properties.RemoteAudit.Component.acceptIsVerified_honest": {
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.acceptIsVerified_honest (reg : RemoteAudit.Registration) :",
+    "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest (reg : RemoteAudit.Registration) :",
     "  And",
     "    (Exists fun params =>",
     "      Exists fun coins =>",
     "        And",
     "          (Eq",
-    "            (RemoteAudit.Protocol.sessionOf Properties.RemoteAudit.Component.honestParams",
-    "              Properties.RemoteAudit.Component.honestEvidence)",
+    "            (RemoteAudit.Protocol.sessionOf Properties.RemoteAudit.Subprotocol.honestParams",
+    "              Properties.RemoteAudit.Subprotocol.honestEvidence)",
     "            (Except.ok",
     "              { fst := params,",
     "                snd :=",
@@ -7580,38 +7574,38 @@
     "                        snd := { fst := List.nil.toArray, snd := { fst := 0, snd := List.nil.toArray } } } } }))",
     "          (Eq params.windows 2))",
     "    (Eq",
-    "      (RemoteAudit.Protocol.check Properties.RemoteAudit.Component.honestParams reg",
-    "        Properties.RemoteAudit.Component.honestEvidence)",
+    "      (RemoteAudit.Protocol.check Properties.RemoteAudit.Subprotocol.honestParams reg",
+    "        Properties.RemoteAudit.Subprotocol.honestEvidence)",
     "      (Core.Outcome.undecided \"the session has a window not yet verified\"))"
    ],
    "assumptions": [],
    "type_hash": "571cdd90f5466bbe4c739b798b4dc1aefdc4b0e6f9289775207a6c666304705a"
   },
-  "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial": {
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial :",
+    "Properties.RemoteAudit.Subprotocol.acceptIsVerified_nontrivial :",
     "  Not",
-    "    (Properties.RemoteAudit.Component.AcceptIsVerifiedFor fun x x_1 x_2 =>",
+    "    (Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor fun x x_1 x_2 =>",
     "      Core.Outcome.accept { eps := { num := 0, den := 1 }, qBytes := 0 } Lean.Json.null)"
    ],
    "assumptions": [],
    "type_hash": "e1b4399f73a54de8dad80d8b78c2d091b6e61483c370e98942e07384ea731a1e"
   },
-  "Properties.RemoteAudit.Component.lineHeldAtComponent_bites": {
+  "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeldAtComponent_bites :",
+    "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites :",
     "  Exists fun node =>",
     "    Exists fun r =>",
     "      Exists fun sm =>",
     "        Exists fun T =>",
     "          And",
     "            (Exists fun l =>",
-    "              Eq (Properties.RemoteAudit.Component.lineBy (fun x x_1 => Option.some sm) node r) (Except.ok l))",
-    "            (And (Properties.RemoteAudit.Component.ReadBy (fun x x_1 => Option.some sm) T Unit.unit node r)",
+    "              Eq (Properties.RemoteAudit.Subprotocol.lineBy (fun x x_1 => Option.some sm) node r) (Except.ok l))",
+    "            (And (Properties.RemoteAudit.Subprotocol.ReadBy (fun x x_1 => Option.some sm) T Unit.unit node r)",
     "              (Not",
-    "                (Properties.RemoteAudit.Component.ReadBy (fun x x_1 => Option.some sm)",
+    "                (Properties.RemoteAudit.Subprotocol.ReadBy (fun x x_1 => Option.some sm)",
     "                  { blocks := T.blocks, passes := T.passes, accepts := T.accepts, tick := T.tick, plan := T.plan,",
     "                    correct := T.correct,",
     "                    mem := fun x t => ite (instLTNat.lt t 10) Finset.univ Finset.instEmptyCollection.emptyCollection,",
@@ -7621,46 +7615,46 @@
    "assumptions": [],
    "type_hash": "478696fabfd57c52cb1f3617db82912246d6179fff2f90bcfa09671561662e25"
   },
-  "Properties.RemoteAudit.Component.lineHeldAtComponent_honest": {
+  "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeldAtComponent_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
+    "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
     "  (X Cm : Type) [Fintype X]",
     "  (prf : Fin node.draws → Pous.Bits κ → Accounting.Remote.Draw.Blocks Properties.RemoteAudit.Line.receiptMax)",
     "  (recs : Cm → Accounting.Remote.Draw.DrawCoins node.draws κ X → Properties.RemoteAudit.Line.Record)",
     "  (com : Accounting.Remote.Draw.DrawCoins node.draws κ X → Cm) (R : Accounting.Remote.Draw.Receipts node.draws κ X)",
     "  (passes : Nat) (tick : Accounting.Remote.Draw.DrawCoins node.draws κ X → Nat → Nat)",
-    "  (hS : Properties.RemoteAudit.Component.HonestSchedule node passes tick recs com) :",
+    "  (hS : Properties.RemoteAudit.Subprotocol.HonestSchedule node passes tick recs com) :",
     "  And",
     "    (Accounting.Remote.Held.Assumptions.Paced",
-    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "        (Properties.RemoteAudit.Line.played recs com))",
     "      (Properties.RemoteAudit.Line.recordPace node (Properties.RemoteAudit.Line.played recs com)))",
     "    (And",
     "      (Accounting.Remote.Held.Assumptions.Covers",
-    "        (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "        (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "          (Properties.RemoteAudit.Line.played recs com)))",
     "      (And",
     "        (Accounting.Remote.Held.Assumptions.SketchBoundAt",
-    "          (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "          (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "            (Properties.RemoteAudit.Line.played recs com))",
-    "          (Properties.RemoteAudit.Component.noOutside",
-    "            (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "          (Properties.RemoteAudit.Subprotocol.noOutside",
+    "            (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "              (Properties.RemoteAudit.Line.played recs com)))",
     "          0)",
     "        (And",
     "          (Accounting.Remote.Held.Assumptions.Covered",
-    "            (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "            (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "              (Properties.RemoteAudit.Line.played recs com))",
-    "            (Properties.RemoteAudit.Component.noOutside",
-    "              (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "            (Properties.RemoteAudit.Subprotocol.noOutside",
+    "              (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "                (Properties.RemoteAudit.Line.played recs com)))",
-    "            (Properties.RemoteAudit.Component.quietIngress (Accounting.Remote.Draw.DrawCoins node.draws κ X)))",
+    "            (Properties.RemoteAudit.Subprotocol.quietIngress (Accounting.Remote.Draw.DrawCoins node.draws κ X)))",
     "          (And",
     "            (Accounting.Remote.Held.Assumptions.IngressCounted",
-    "              (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "              (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "                (Properties.RemoteAudit.Line.played recs com))",
-    "              (Properties.RemoteAudit.Component.quietIngress (Accounting.Remote.Draw.DrawCoins node.draws κ X)) 0)",
+    "              (Properties.RemoteAudit.Subprotocol.quietIngress (Accounting.Remote.Draw.DrawCoins node.draws κ X)) 0)",
     "            (And",
     "              (∀ (c : Cm),",
     "                Accounting.Remote.Draw.Assumptions.Live",
@@ -7673,7 +7667,7 @@
     "                        Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
     "                    com)",
     "                  prf (fun x x_1 x_2 => 0)",
-    "                  (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick)",
+    "                  (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick)",
     "                    node (Properties.RemoteAudit.Line.played recs com))",
     "                  R)",
     "                (And",
@@ -7682,7 +7676,7 @@
     "                          Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
     "                      com)",
     "                    (Properties.RemoteAudit.Line.ofRecord",
-    "                      (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
+    "                      (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
     "                      (Properties.RemoteAudit.Line.played recs com)))",
     "                  (And",
     "                    (∀ (t : Fin node.draws),",
@@ -7703,56 +7697,56 @@
    "assumptions": [],
    "type_hash": "68119fc717399f6d07868180d563fe3cf533bbcb1def1480fec85ab10d48199e"
   },
-  "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial": {
+  "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial :",
+    "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_nontrivial :",
     "  Exists fun sm =>",
     "    Not",
-    "      (Properties.RemoteAudit.Component.LineHeldAtComponentBy (fun x x_1 x_2 x_3 x_4 => True) (fun x x_1 => True)",
+    "      (Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy (fun x x_1 x_2 x_3 x_4 => True) (fun x x_1 => True)",
     "        fun x x_1 => Option.some sm)"
    ],
    "assumptions": [],
    "type_hash": "8e9dfd782e77a8b94dc1f78b72c420e5cd9509465517c640acbc67e59b8be63d"
   },
-  "Properties.RemoteAudit.Component.lineHeld_honest": {
+  "Properties.RemoteAudit.Subprotocol.lineHeld_honest": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeld_honest (node : Properties.RemoteAudit.Line.Node) {Ω : Type} (passes : Nat)",
+    "Properties.RemoteAudit.Subprotocol.lineHeld_honest (node : Properties.RemoteAudit.Line.Node) {Ω : Type} (passes : Nat)",
     "  (tick : Ω → Nat → Nat) (rec : Ω → Properties.RemoteAudit.Line.Record)",
     "  (htick : ∀ (ω : Ω) (p : Nat), instLTNat.lt (tick ω p) (tick ω (instHAdd.hAdd p 1))) (ω : Ω) :",
     "  And",
     "    (Accounting.Remote.Held.Quiet",
-    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node rec)",
-    "      (Properties.RemoteAudit.Component.quietIngress Ω).counted ω)",
+    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node rec)",
+    "      (Properties.RemoteAudit.Subprotocol.quietIngress Ω).counted ω)",
     "    (Properties.RemoteAudit.Line.ReadAt",
-    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Component.honestTrace node passes tick) node rec) ω",
+    "      (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node rec) ω",
     "      node (rec ω))"
    ],
    "assumptions": [],
    "type_hash": "87ba3d81078c3784f4d7772aadb06966b0635eb04f4e8d5dba3139fe02a59b44"
   },
-  "Properties.RemoteAudit.Component.lineHeld_nontrivial": {
+  "Properties.RemoteAudit.Subprotocol.lineHeld_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.lineHeld_nontrivial :",
-    "  Exists fun sm => Not (Properties.RemoteAudit.Component.LineHeldBy (fun x x_1 => True) fun x x_1 => Option.some sm)"
+    "Properties.RemoteAudit.Subprotocol.lineHeld_nontrivial :",
+    "  Exists fun sm => Not (Properties.RemoteAudit.Subprotocol.LineHeldBy (fun x x_1 => True) fun x x_1 => Option.some sm)"
    ],
    "assumptions": [],
    "type_hash": "990c4c47d19df2f440fdc69fd16e30334c6e6657de1b6b6d75b2a5e29e6763d4"
   },
-  "Properties.RemoteAudit.Component.publishedEps": {
+  "Properties.RemoteAudit.Subprotocol.publishedEps": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Component.publishedEps : Properties.RemoteAudit.Component.PublishedEps"],
+   "signature": ["Properties.RemoteAudit.Subprotocol.publishedEps : Properties.RemoteAudit.Subprotocol.PublishedEps"],
    "assumptions": [],
    "type_hash": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789"
   },
-  "Properties.RemoteAudit.Component.publishedEps_nontrivial": {
+  "Properties.RemoteAudit.Subprotocol.publishedEps_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
-    "Properties.RemoteAudit.Component.publishedEps_nontrivial :",
+    "Properties.RemoteAudit.Subprotocol.publishedEps_nontrivial :",
     "  Not",
-    "    (Properties.RemoteAudit.Component.PublishedEpsFor fun x x_1 x_2 =>",
+    "    (Properties.RemoteAudit.Subprotocol.PublishedEpsFor fun x x_1 x_2 =>",
     "      Core.Outcome.accept { eps := { num := 0, den := 1 }, qBytes := 1 } Lean.Json.null)"
    ],
    "assumptions": [],
@@ -10995,6 +10989,24 @@
     ]
    },
    "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
+   "assumptions": [],
+   "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log_honest": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_honest : Pous.Period.PooledShortLog_honest"],
+   "assumptions": [],
+   "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_nontrivial : Pous.Period.PooledShortLog_nontrivial"],
+   "assumptions": [],
+   "type_hash": "918e7292201b0d4ec19a1ad0f4586c158a191610851dd27f0b67962dda2bbd0f"
   }
  },
  "shape": {
@@ -12232,7 +12244,7 @@
     "function": "RemoteAudit.checkOpening",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.publishedEps": {
+   "Properties.RemoteAudit.Subprotocol.publishedEps": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
@@ -12474,7 +12486,6 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, SampleIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and SampleIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): SampleIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) at the verifier's layout (Properties.RemoteAudit.sessionLayout) with SteeredLayout replaced by, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at J10-R's tile stratum s_T of the sampling block's stratified draw (N_p = |stratum sigma s_T|, padded with wordless fillers, K_d = k s_T), with PouwCheck.Credit.window as the verdict, H1's lucks 7/8 and 1/2, a = b = 1, wmax = 1 and Lambda = j10rRate (k s_T) rho = 8(1 + K rho)/(rho K) from SplitRateClosed (8 + 8/k s_T at the demo shape's rho = 1); the pin is pinnedAt, the unit's tile at its public-row noise and keys (#2352's pin, one description), from SaltIsLiveCoin; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, decided by lane (Asks for Daniel, Decided by lane, A: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340), each listed under assumptions: TileSampleIsCoin, a code fact once CMP-126's verifier draws the tiles inside the stratified draw (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin); TileServiceSound, a fact to prove (C-Flock's soundness at each drawn unit under live coins); SharedNoiseLucks, a claim, computational (Theorem O's one slot, its form FOLD-LUCK's, CMP-134); RegisteredBeforeDraw, as H1CheckedCreditPeriod's (a deployment gap). SaltIsLiveCoin as H1CheckedCreditPeriod's; UnitFixed to be made provable from the code (ASSUMPTION-AUDIT). TileStratumEscape, the stratum's hypergeometric escape of the tile coordinate, is a lemma to prove with STRATJOINT's per-stratum projection (LEAN-56). Proved from CircuitCreditPeriod at tileRun (Proofs.Pouw.PeriodJ10R).",
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises, for every prover strategy under DeviceModel and Instantiates, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw) at any price from any source game that credits words, at the source's error: the source's bound is a hypothesis over its own event, so no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field and the source game's acceptance a parameter), and the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list. Its premises are Accounting.Assumptions.WordCostsMacs and Accounting.Assumptions.HelpWithinCertifier, on the premises list; its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.credited_sound.",
@@ -12488,7 +12499,6 @@
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
-   "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round) and the honest strategy that keeps all of C and answers by lookup (honestStrategy), the device model DeviceModel holds at the deployed budget and the instantiation Instantiates holds for every audit under a 32-byte session id, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileSampleIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.drawnByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
@@ -12511,13 +12521,8 @@
    "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Nci.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
    "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols, a subset of onsite's: the union bound at remote's compiled verifier (Core.Remote.protocol, sameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW's window (PouwCheck.protocol) and the inference-only policy, all three committed to one record (Properties.Composition.AcceptSame), with the same claims, errors and Vocab; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved",
    "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
-   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest": "completeness: the honest lemma of CheckProofSystemSound: at H1's honest live-salt period of one window and one session (the instance its proof takes) the deployed check accepts every window on every path and the check layer is sound at 0, so its premise can hold where the check accepts",
-   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial": "completeness: the nontrivial lemma of CheckProofSystemSound: at H1's honest period of one window the deployed check accepts and publishes a drawn unit on every path, so with relations every opening fails, ServiceSound fails at 0",
    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": "frozen (no-function,world-unlisted): ServiceSound from ProofSoundAt, a union bound over each window's sessions of the deployed check's layer (Properties.Accounting.JointBridge.Sessions.checkLayer, PouwCheck.protocol.check's acceptance and Public.drawn): no deployed function's outcome is one hypothesis, its sound case is the named premise Accounting.Assumptions.TS.ProofSoundAt, and its conclusion is a Pouw.RelativeSecurity.prob event that shape.events does not list; no new premise",
    "Pous.Period.SecurityProofs.pooledShort_log": "frozen (premise): periodHeld pooled over a monitoring period of U windows, each window's joint run, audit and other audits' coins fixed before its own capacity coins (Pous.Period.FixedBefore) and its strategy any under the device model: the probability that at least M windows are accepted with no break and a certificate short of the held state (Pous.Period.ShortAccepted) is at most delta', for every z > 1 and every M >= ((z - 1) U (delta + eps_max) + log (1 / delta')) / log z (Pous.Period.CountMeets). Its event's acceptance is an abstract audit's (Pous.Period.Audits.Accepts) over an abstract joint run of the device model, and it takes periodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates, the certificate's fit in the ring game's state bound, Pous.Period.Fits) and FixedBefore, none of them under shape.premises. delta' is delta_PoUS, a public deployment parameter that no component publishes.",
-   "Pous.Period.SecurityProofs.pooledShort_log_honest": "completeness: the honest lemma of pooledShort_log: at 10,080 windows, each the honest period of periodHeldHonest (honestRun, honestStrategy) against an audit under a 32-byte session id (sidAudit), FixedBefore, the device model at the deployed budget, the instantiation and the certificate's fit (Pous.Period.Fits) hold, and M = 210 meets the bound at z = 2 and delta' = 2^-64 (Pous.Period.CountMeets)",
-   "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest": "completeness: the honest lemma of encardProgramRunsLeWindows: at a one-window, one-bucket configuration, the honest network certifier's record of one frame is among the sequences it counts",
-   "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial": "completeness: the nontrivial lemma of encardProgramRunsLeWindows: at the prediction that reads its rows off the advice, which accepts every sequence whose statuses are complete, two sequences of one bucket exceed its bound of one",
    "Properties.Pouw.PeriodJ10R.TileStratumAcceptProb": "unstated: proved in security_proofs by Properties.Pouw.PeriodJ10R.SecurityProofs.tileStratumAcceptProb (Proofs.Pouw.PeriodJ10R.Stratum): the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, since a uniform permutation's k-prefix misses B with C(N - |B|, k)/C(N, k) exactly (miss_eq), and that escape equals the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumAcceptProb_eq_proj). A lemma, not a premise: no guarantee states it, since its proof is security_proofs' and stratum is restated here until it moves to Definitions.",
    "Pous.Period.SecurityProofs.periodHeldCoins": "frozen (premise): periodHeld in the shared coin game (Verity.Game.prCoin over the memory challenger's hm96 coins and uniform streams, at any primitive), where the session, the device record and the schedule don't read the primitive (Pous.Period.ReadsNoPrimitive); it takes periodHeld's premises (P2RingAuditSecure, the device model Pous.Period.DeviceModel, the instantiation Pous.Period.Instantiates and the certificate's fit in the ring game's state bound, Pous.Period.Fits), none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldSha512": "frozen (premise): periodHeldCoins at the deployed memory challenger's streams (Pous.Period.challengerStreams: derive and stream, SHA-512 keyed by its 64-byte secret source), over the source and the hm96 coins, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests, the coin key and the streams' 105 · 64 blocks, to periodHeld's premises, none of them under shape.premises.",
@@ -24620,27 +24625,27 @@
     "Properties.Remote.VerifierOwn": "b8047d52e6c51899acde32a61fd3db1ea1cc80fff100c26bf680a0a3afa34729"
    }
   },
-  "Properties.RemoteAudit.Component": {
+  "Properties.RemoteAudit.Subprotocol": {
    "digest": "0048f21f8eef37307c2c945cf6153f75ea48fdb430983ea21a8f9a92f6a457ba",
    "definitions": {
-    "Properties.RemoteAudit.Component.AcceptIsVerified": "4b48a72479e07767c7c8ab4732a4b729d5e85ec4fe7bcb21e932804cf70e487a",
-    "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": "0c3f4a9da00275a23933b27e77d475a148a04ee1cb42c5a1f88363dcd501549d",
-    "Properties.RemoteAudit.Component.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
-    "Properties.RemoteAudit.Component.LineHeldAtComponent": "7e2b15037f08a7e1d467b79b5b8f2dafb3982874492f62a01265fe8d9ac70a06",
-    "Properties.RemoteAudit.Component.LineHeldAtComponentBy": "5453a8e9a27d5bddb36524e21dbeaa324cf720256ddafe81a3e59f30d35ecce2",
-    "Properties.RemoteAudit.Component.LineHeldBy": "9b36c86bf9f1b5e627c4e102fd97115abcffa49671acb740739627ef02bf7aad",
-    "Properties.RemoteAudit.Component.PublishedEps": "ee33731b02e913f1a7490a860417ca61c9da9b8c1201e872194f5cf4c1796096",
-    "Properties.RemoteAudit.Component.PublishedEpsFor": "babf79f313f17f66bc69c337c274e98d8290700277851e72a7f4a75083b20ca2",
-    "Properties.RemoteAudit.Component.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
-    "Properties.RemoteAudit.Component.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
-    "Properties.RemoteAudit.Component.honestEvidence": "21347928e2ccd4cff7a8a36ddfa234616064103b45c7160c03bbae7e42289a50",
-    "Properties.RemoteAudit.Component.honestParams": "f7f7d7f6403bf63d3c308a026cbbd4ddee5c527af0d0c5e10446cad36483240d",
-    "Properties.RemoteAudit.Component.honestTrace": "8cab1b1ed8145a02ebf4989a158cb820b4f8e636c56acfba6276fca5670cd601",
-    "Properties.RemoteAudit.Component.lineBy": "ccec17dd63bb3aa57e90638332f7a29998242db76a9f213ac1361b60739bcc0f",
-    "Properties.RemoteAudit.Component.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
-    "Properties.RemoteAudit.Component.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
-    "Properties.RemoteAudit.Component.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
-    "Properties.RemoteAudit.Component.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
+    "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "4b48a72479e07767c7c8ab4732a4b729d5e85ec4fe7bcb21e932804cf70e487a",
+    "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "0c3f4a9da00275a23933b27e77d475a148a04ee1cb42c5a1f88363dcd501549d",
+    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "7e2b15037f08a7e1d467b79b5b8f2dafb3982874492f62a01265fe8d9ac70a06",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": "5453a8e9a27d5bddb36524e21dbeaa324cf720256ddafe81a3e59f30d35ecce2",
+    "Properties.RemoteAudit.Subprotocol.LineHeldBy": "9b36c86bf9f1b5e627c4e102fd97115abcffa49671acb740739627ef02bf7aad",
+    "Properties.RemoteAudit.Subprotocol.PublishedEps": "ee33731b02e913f1a7490a860417ca61c9da9b8c1201e872194f5cf4c1796096",
+    "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "babf79f313f17f66bc69c337c274e98d8290700277851e72a7f4a75083b20ca2",
+    "Properties.RemoteAudit.Subprotocol.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
+    "Properties.RemoteAudit.Subprotocol.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
+    "Properties.RemoteAudit.Subprotocol.honestEvidence": "21347928e2ccd4cff7a8a36ddfa234616064103b45c7160c03bbae7e42289a50",
+    "Properties.RemoteAudit.Subprotocol.honestParams": "f7f7d7f6403bf63d3c308a026cbbd4ddee5c527af0d0c5e10446cad36483240d",
+    "Properties.RemoteAudit.Subprotocol.honestTrace": "8cab1b1ed8145a02ebf4989a158cb820b4f8e636c56acfba6276fca5670cd601",
+    "Properties.RemoteAudit.Subprotocol.lineBy": "ccec17dd63bb3aa57e90638332f7a29998242db76a9f213ac1361b60739bcc0f",
+    "Properties.RemoteAudit.Subprotocol.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
+    "Properties.RemoteAudit.Subprotocol.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
+    "Properties.RemoteAudit.Subprotocol.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
+    "Properties.RemoteAudit.Subprotocol.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
    }
   },
   "Properties.RemoteAudit.Line": {
