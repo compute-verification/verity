@@ -6,7 +6,9 @@ updated `lean-audit.json` is restored to the committed bytes by the next require
 explicit keep the record its author must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
 only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way. Two
-stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records."""
+stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records. The
+lean-changed step itself (`run`) runs over a stand-in spec, its prover and a stand-in `lake`: the prover's roots are built
+by name before the spec's guarantees are compared."""
 from __future__ import annotations
 
 import hashlib
@@ -14,6 +16,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -563,6 +566,119 @@ def test_a_lock_that_cant_be_read_names_no_prover_and_says_so(capsys):
         assert "s/lean-audit.json can't be read" in capsys.readouterr().err
     assert LC.provers("s", {"s/lean-audit.json": b'{"proved_in": ["../p", 1]}'}.get) == ["p"]
     assert LC.provers("s", {}.get) == [] and capsys.readouterr().err == ""
+
+
+#: `lake` over stand-in packages, as far as the step runs it. `lake build` leaves an `.olean` for each default target of
+#: the package's lakefile, and `lake build +M ...` one for each M. `lake env lean -c` and `lake env leanc` leave the file
+#: each would write. `lake env FACTS CONFIG` fails as Lean does on a root CONFIG names that has no `.olean` in this
+#: package, and otherwise writes the facts and canonical forms `$LAKE_FACTS/PACKAGE.json` holds.
+LAKE = r'''
+import json, os, sys, tomllib
+from pathlib import Path
+
+args, pkg = sys.argv[1:], Path.cwd()
+
+
+def olean(module):
+    return pkg / ".lake" / "build" / "lib" / "lean" / (module.replace(".", "/") + ".olean")
+
+
+if args[0] == "build":
+    with open(os.environ["LAKE_CALLS"], "a") as f:
+        f.write(f"{pkg.name}: {' '.join(args)}\n")
+    for m in [t[1:] for t in args[1:]] or tomllib.loads((pkg / "lakefile.toml").read_text())["defaultTargets"]:
+        olean(m).parent.mkdir(parents=True, exist_ok=True)
+        olean(m).touch()
+    print("Build completed successfully")
+elif args[1] == "lean":
+    Path(args[args.index("-c") + 1]).touch()
+elif args[1] == "leanc":
+    Path(args[-1]).touch()
+else:
+    config = json.loads(Path(args[-1]).read_text())
+    for m in config["roots"]:
+        if not olean(m).is_file():
+            print(f"uncaught exception: object file '{olean(m)}' of module {m} does not exist")
+            sys.exit(1)
+    facts = json.loads((Path(os.environ["LAKE_FACTS"]) / f"{pkg.name}.json").read_text())
+    Path(config["out"]).write_text(json.dumps(facts["facts"]))
+    Path(config["canon"]).write_text("".join(json.dumps(r) + "\n" for r in facts["canon"]))
+'''
+
+
+def test_a_prover_s_roots_beyond_its_default_targets_are_built_so_its_spec_s_guarantees_are_compared(tmp_path, monkeypatch,
+                                                                                                    capsys):
+    """`s`'s one guarantee is proved in `sp`, whose lock has a root of its own, `Sp.Alone`, that nothing under the
+    lakefile's default target imports. To read the guarantee `Facts.lean` imports every root of `sp`'s lock, so the step
+    builds them by name at `sp`'s turn, as the audit does. Left to the default target, `Facts.lean` found no `.olean` for
+    `Sp.Alone`, and `s`'s guarantees were skipped in a run that passed having compared none."""
+    def facts(modules: list[str], pins: dict) -> dict:
+        return {"offenders": [], "declared_axioms": [], "escapes": [], "modules": modules, "imports": {m: [] for m in modules},
+                "pins": pins, "oleans": [], "axioms": [], "lean": "v1", "declarations": 1}
+
+    def proved(definition: str) -> tuple[dict, list[dict]]:
+        """What `Facts.lean` reads in `sp` of `Sp.s_eq`, which reads the definition `s` (canonical form ``definition``)."""
+        pin = {"kind": "theorem", "module": "Sp", "axioms": [], "hypotheses": [], "signature": "theorem Sp.s_eq : s = 1",
+               "reads": [{"name": "s", "module": "S", "kind": "defn", "lines": [1, 1],
+                          "hash": hashlib.sha256(definition.encode()).hexdigest()[:16]}]}
+        return pin, [{"id": "pin:Sp.s_eq", "canon": "s = 1"}, {"id": "read:s", "canon": definition}]
+
+    # the record `check.py --update` writes for `s`: the guarantee as `sp` proves it, under `facts_of`'s hashes
+    pin, canon = proved("def s := 1")
+    sha = {r["id"]: hashlib.sha256(r["canon"].encode()).hexdigest() for r in canon}
+    recorded = pin | {"type_sha256": sha["pin:Sp.s_eq"], "reads": [pin["reads"][0] | {"sha256": sha["read:s"]}]}
+    lock = LC.AUDIT.judge({"roots": ["S"], "proved_in": ["../sp"], "guarantees": {"Sp.s_eq": {"owner": "@lean"}}},
+                          facts(["S"], {"Sp.s_eq": recorded}), {}, update=True)[1]
+    files = {
+        "s/lakefile.toml": 'name = "s"\ndefaultTargets = ["S"]\n', "s/lean-toolchain": "v1\n", "s/S.lean": "def s := 1\n",
+        "s/lean-audit.json": json.dumps(lock),
+        "sp/lakefile.toml": 'name = "sp"\ndefaultTargets = ["Sp"]\n', "sp/lean-toolchain": "v1\n",
+        "sp/lake-manifest.json": json.dumps({"packages": [{"name": "s", "type": "path", "dir": "../s"}]}),
+        "sp/lean-audit.json": json.dumps({"roots": ["Sp", "Sp.Alone"]}),
+        "sp/Sp.lean": "import S\ntheorem Sp.s_eq : s = 1 := rfl\n", "sp/Sp/Alone.lean": "import S\n",
+    }
+    root = tmp_path / "repo"
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    for m in (LC, LC.LA):
+        monkeypatch.setattr(m, "ROOT", root)
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda r=None: sorted(files))
+    monkeypatch.setattr(LC.LA.COMMON, "cores", lambda: 2)
+
+    # `lake` as `LAKE`, in a sandbox that only runs the command
+    lake, calls, read = tmp_path / "bin" / "lake", tmp_path / "lake.calls", tmp_path / "facts"
+    lake.parent.mkdir()
+    (tmp_path / "lake.py").write_text(LAKE)
+    lake.write_text(f'#!/usr/bin/env bash\nexec "{sys.executable}" "{tmp_path / "lake.py"}" "$@"\n')
+    lake.chmod(0o755)
+    passes = 'while [ "$1" != -- ]; do shift; done; shift; exec "$@"'
+    (tmp_path / "sandbox.sh").write_text(passes + "\n")
+    monkeypatch.setattr(LC, "SANDBOX", tmp_path / "sandbox.sh")
+    monkeypatch.setattr(LC, "UNSHARE", ["env"])
+    monkeypatch.setattr(LC, "READ_ONLY", passes)
+    monkeypatch.setattr(LC, "sandboxed", lambda: True)
+    monkeypatch.setenv("PATH", f"{lake.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("LAKE_CALLS", str(calls))
+    monkeypatch.setenv("LAKE_FACTS", str(read))
+    read.mkdir()
+    (read / "s.json").write_text(json.dumps({"facts": facts(["S"], {}), "canon": []}))
+    (read / "sp.json").write_text(json.dumps({"facts": facts(["Sp", "Sp.Alone"], {"Sp.s_eq": pin}), "canon": canon}))
+
+    cache, deps, tree = tmp_path / "cache", tmp_path / "deps", tmp_path / "tree"
+    assert LC.run(cache, deps, tree) == 0
+    out = capsys.readouterr().out
+    assert calls.read_text().splitlines() == ["sp: build", "sp: build +Sp +Sp.Alone", "s: build", "s: build +S"], \
+        "the prover first, each root of its lock by name, then the spec"
+    assert "lean-changed: s: its guarantees match their records" in out and "not compared here" not in out
+    assert "lean-changed: PASS: built 2 of the 2 package(s) whose audit misses; compared the guarantees of 1" in out
+    assert not (tree / "sp" / ".lake" / "lean-changed-facts").exists(), "a prover records no guarantee of its own to compare"
+
+    pin, canon = proved("def s := 2")
+    (read / "sp.json").write_text(json.dumps({"facts": facts(["Sp", "Sp.Alone"], {"Sp.s_eq": pin}), "canon": canon}))
+    assert LC.run(cache, deps, tree) == 1, "the comparison reads the prover's build: the definition changed, the record did not"
+    out = capsys.readouterr().out
+    assert "lean-changed: s: FAILED" in out and "guarantees: definitions in S that Sp.s_eq read changed (changed: s)" in out
 
 
 def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_path, monkeypatch, capsys):
