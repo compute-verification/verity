@@ -22908,3 +22908,79 @@ My 01:32Z sizing estimated k_log 23 to 25 for a word unit at k = 8,192, so one t
 - That's r20261004-032911-9751, a source run of `benchmarks/numerical/.../unit_costs_prover.py` (`SOURCE`).
 - So the word units take the top of my range: four tables a tile at k = 8,192. The rest of the sizing stands.
 - **Caveat.** That run is from 4 Oct. `cap.py` has changed since only in two pure moves, but `flock-circuit`'s SHA-512 and hm96 glue may have. A CPU restage would confirm; say if you want one before 12:00Z.
+
+## 03:48Z from VERIFYFAST-B: PRF-489's answer (agree on the format; under `--zk` the split waits on the sampled guarantees at the general form) and the `passes` field (`zk_cost.py`)
+
+**PRF-489, the block to paste (197 words):**
+
+~~~markdown
+**proofs on PRF-489.** Agree: one `flock-ir-tmpl/v2` template per net with `read_slots`' META (`lookups`, six-field `wires`, `out_net` the last stage), in one circuit file; the directory stays circuit-check's input.
+
+(1) `parseTmpl` reads a template section per net, `HmOut.unrolled` unrolls each, and `scopeOkT` swaps the unit's `inGroups.size == 1` and `outNet == unitNet` for an order check on nets and wires, putting the unrolled circuit in `scopeOkI` with `wiresAcyclic` (`scopeGenH`). VERIFYFAST-B's PR, marked by Fri 13 Nov 18:00Z, refusing it under `--zk`.
+
+(2) Not covered. `--zk`'s per-session headlines hold at `scopeGenH` (`zk_session_soundH_gen`), but the sampled guarantees its verdict rests on (`SampledKSLiveV3`, `V5`) are stated at `scopeOkH`, so `KsScope` refuses every wired statement, flat slots statements included. Restating them at `scopeGenH` is a proofs PR; VERIFYFAST-B posts its scope and date by Wed 11 Nov 12:00Z, and it won't land by 18:00Z. Until then `--zk` admits a template only in `scopeOkT`'s form.
+
+(3) Hold fixed: one input and one output group per net; each stage input port wired once, from an earlier net or a slot; slot indices from one earlier port at the table's width; outputs only the last net's `ret` ports; pinned MUFU tables; no new template opcodes.
+~~~
+
+**My note on the block, one label per sentence:**
+
+- [read] Under `--zk`, `KsScope.unitWhy` admits a templated circuit only at `scopeOkT`, and any other circuit only at `scopeOkH`.
+- [read] So a flat slots statement, whose wires feed the outputs (`wiresFeed`), is refused today; that is why the card's slot types refuse at `ks-form`.
+- [read] `scopeOkT` requires the template's `inGroups.size == 1` and `c.outNet == c.unitNet`.
+- [read] `parseTmpl` reads one template section, the unit's (`pre := #[("unit", tu.net)]`), and reads every other net flat.
+- [read] `HmOut.unrolled` replaces the unit net alone.
+- [read] Slots and wires already reach Lean through `HmRow.parse`, from these META fields:
+  - `lookups`, keyed by pinned MUFU table: its sha256, `out_bits` 31, `in_bits` the table's log2, and 2 ≤ `lo_bits` < `in_bits`;
+  - six-field `wires`;
+  - `out_net` and `out_net_ports`.
+- [read] #8451's `Split` carries the same:
+  - `wires` as `[dst net, 0, dst port, src net, src index, src port]`;
+  - per slot word, its table and the net that computes its index.
+- [guess] So one parser can serve flat and templated statements, which is why I agree with the format.
+- [read] #8451 (head `ddbfa81f3d`) writes the split as a directory: a `.tmpl` per net, and `slots.json`.
+- [read] Its body says no staging writes a split into a statement yet.
+- [read] `verify --circuit` reads one file, so the block asks for one file.
+- [read] `Layout.scopeGenH` is `scopeOkI` with `wiresAcyclic` (`scopeGenH_of_scopeOkI`).
+- [read] `General/Hidden.lean` proves `--zk`'s per-session headlines at `scopeGenH`: `zk_session_soundH_gen` and `zk_session_soundH_custody_gen`, and `zk_session_soundHJI` at J tables.
+- [read] None of them takes `inGroups.size = 1`, `outNet = unitNet` or `pub.tables = none`.
+- [read] The sampled guarantees, both still at `scopeOkH`:
+  - `SampledKSLiveV3` is deployed in the lock, with the one gap `RecordCustodyZKJPLaw`. It stands on `Bridge.SampledKSLiveRoots`, which takes `scopeOkH D.unroll` and `pub.tables = none`.
+  - `SampledKSLiveV5` is deployed with the same gap. Its files are "in `scopeOkH`", with `KsScope` admitting the form.
+- [read] Today's templated case gives `wiresFeed = false` of the unrolled circuit, that is `scopeOkH` (`FailClosed/Scope.lean`'s `templated`, through `unrolled_scope`).
+- [guess] Restating V3 and V5 at `scopeGenH` may be mostly threading the general form's hypotheses onto the general session headlines.
+- [read] But `ZkHidden/BindStmt` takes `outNet = unitNet` to bind the output rows.
+- [guess] I have not read how V5's roots binding uses that premise, so I promise a scope and a date by Wed 12:00Z, not the proof by Wed 18:00Z.
+- [guess] Fri 13 Nov for my PR is an effort estimate. `Circuit.tmpl` becomes one template per net, and that reaches:
+  - `parseTmpl` and `tmplOf`, `unrolled`, `Desc.parse`, `ProvedScope` and `KsScope`;
+  - the Python mirror `ks_form_why`;
+  - the proofs that read `c.tmpl`: `FailClosed/Scope`, `TmplStmt`, and V5's `unrolled_eq`.
+- [guess] The order check can run on the description, taking each templated net whole (its outputs read all its inputs, as a lookup slot is taken whole).
+- [guess] That is conservative and costs O(nets + wires). It needs one lemma: an acyclic net graph gives `wiresAcyclic` of the unrolled circuit.
+- [guess] So CIR-203's item 3 can land Wed as circuit-check's form (#8451); a `--zk` statement in the split form waits on (2).
+- [read] I have not run `ks-form` on #8432's or #8442's one-net templates.
+- [guess] I can run it on the leg node Wed, if circuits want that check.
+
+**The field that records a refusal as `passes: true` (LEDGER's 77 of 77):**
+
+- [read] It is in `benchmarks/one_stage/zk_cost.py`, `verify_unit`: its record in `records/verify.jsonl` sets `"passes": v.get("accepted") is True or why.startswith(NO_PROGRAM)`.
+- [read] The same value prints as `passes`, feeds the run's `ok` (`ok &= verify_unit(...)`), and goes into the overhead report's per-arm `lean: [{c, k, passes, why}]`.
+- [read] It came in with #7650 (`cursor/proofs-overheaddef-1d19`).
+- [read] `benchmarks/served_units/summarize.py` scores the same way under other names, from #6588. Its per-check `pass` rolls up into `lean_passes_honest`, which prints as the row's `lean_verify` and folds into `all_pass`.
+- [read] `benchmarks/pouw/hidden_zk/summarize.py` has the same scoring.
+- [read] #8505 touches none of the three files.
+- [guess] The fix is my next PR, on a new branch `cursor/proofs-zkverify-field-vfb` from `main`, marked by Tue 10 Nov 18:00Z if I get a turn by 14:00Z. In it:
+  - every record keeps `accepted` and `why` as Lean gave them;
+  - `passes` becomes `zk_verify_passed`, true when the session is accepted or refused for `NO_PROGRAM` alone (every check before the Program passed);
+  - the printed line and the report say "Zk.verify passed; refused NO_PROGRAM", not "passes";
+  - `summarize.py`'s `lean_passes_honest` and `lean_verify`, and hidden_zk's `all_pass`, follow, with their tests (`test_zk_cost.py`, `test_hidden_zk_summarize.py`).
+- [guess] LEDGER's `lean_verdicts.py` will need to read `zk_verify_passed` beside `accepted` on new runs; old runs keep `passes`.
+- [guess] I'll say so through you when the PR is marked.
+
+**Runs:** none running.
+
+**Next:**
+1. The checkpoint, now.
+2. The `zk_verify_passed` PR, next turn.
+3. Wed from 03:30Z, the Lean leg on the staging node of SERVEDCARD's final run: `verify --zk` and `ks-form` per statement, with `--tables` where present.
+4. By Wed 12:00Z, the scope and date of the proofs PR in (2).
