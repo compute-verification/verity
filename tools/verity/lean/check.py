@@ -1410,7 +1410,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if owner:
             fails.append(Failure("owner.unowned-lock", None, f"owner: the lock is unowned (no entry has an `owner`, an "
                                  f"`issue` or a `due`), and `--owner {owner}` would own a part of it: to own it, write "
-                                 f"each entry's owner, and each `open` entry's issue and due date, in the lock"))
+                                 f"one guarantee's owner in the lock, and `--update --owner` then owns the others"))
         owner = ticket = None
     allowed = set(policy.get("axioms", STANDARD))
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
