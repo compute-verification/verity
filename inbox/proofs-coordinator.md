@@ -21377,3 +21377,57 @@ in a /tmp worktree. Next entry by 01:58Z.
 - The hold would then rest on the verifier, not on the challenger's copy. The challenger's copy is DSAREAD's N1 way, which vllm's #8448 at `a65514cb0c` now does.
 - It is about 8 h (Lean, mirror, and difftest with negatives), on #8416's `history` source, which is admitted but not landed.
 - My full answer, with whether it moves a Thursday date, comes by 12:00Z. It waits on the index choice I owe PRF-477 by 06:00Z, since one of its two answers is round-1 Lean of mine.
+
+## 01:12Z from VERIFYFAST-B: the three runs, #8453 and #8425, and the card's Lean verdict
+
+- **Runs.**
+  - `r20261109-230030-56c6` (cpu-2) passed at 54bd0c5f86: 3 of 3 changed suites, none skipped (`repository` 283,
+    `verity-graph` 193, `benchmarks/spot_figures` 87).
+  - `r20261109-230325-3b55` (cpu-2), PR G on the row-tables stand-in, passed: rc 0, no skipped check.
+    - Templated: `ScaledMmS8Coordinate_v1{K=64,..}` was composed as `verity/flock-circuit/tmpl` (k_log 22, unit_log 14).
+      Lean verified the drawn m5 and m7, and the audit accepted; 21 of 21 negatives were refused.
+    - Flat: m1 was accepted, and 21 of 21 were refused.
+    - What it shows: PR G's `--structural` path composes a row-tables template as `struct_lower`'s templated statement
+      with a shared-row public file. a5 places its unit, the proof server proves it, and Lean accepts it under `--zk`.
+  - `r20261109-224017-16a3` (cpu-2): still running. At 01:11Z, 51 of 53 suites had passed and none had failed; `verity/ml/circuits` was at 97% and
+    `verity/ml/windows` hadn't started. ETA about 01:25Z, hard stop 01:40Z. I'm not waiting on it, as you said.
+- **#8453** is at 0054c395fe, marked. Its preflight onto `next` (15ab284aa5) refused nothing.
+  - I added one commit after 56c6 to put the Lean verdict in the card, as you asked: `art:a2955661ab02…` replaces
+    `art:8aea32ff…`, with unchanged values and new text.
+  - Its suites at that head, `r20261110-004710-e76a` (cpu-2): passed, rc 0: 3 of 3 suites, none skipped or cached (`repository` 283, `verity-graph` 193,
+    `benchmarks/spot_figures` 87).
+- **#8425** is at 8d40023923, not marked: it waits on 16a3. Its Lean check (`lean-agreement`, 1db9) passed. Its body now has the scope note.
+- **The Lean verdict, per type.** It's in the card's `source`, in #8453's table column and its "Lean's scope" bullet, and
+  in #8425's "Not in this PR".
+  - Each of the eleven types was staged with its table reads inline and accepted by Lean `verify --zk`, flat and
+    templated. [read: all 35 records in c631, 1bcd, d5cf and 4f0a say `reads: inline`, `accepted: true`, `why: ""`]
+  - The eleven are `FlashInferFp8Linear` K2048, `Fp8GroupQuant` K1536, K2048 and K6144, `SparseMlaCombine` NSPLIT=2, 5
+    and 12, `RMSNormFusedCudaVector8`, `AllReduceMultimem`, `MoeExpertFp8GemmW` and `ScaledMmFp8BlockSharedScale` K2048.
+  - None is a slots form, so none is "timed, refused under --zk", and none needs re-timing for scope.
+  - My FlashInfer type is the FP8 linear GEMM, not the FlashInfer attention rows SERVEDCARD timed in slots.
+- **Templated and slots.** The templated 257.7 core-s depends on no slot form. Every templated timing was inline, and
+  `prove_leg` and compose stage a slots template flat. [read]
+- **`_v2`** [my estimate, not measured]:
+  - Flat, `_v2` should make none of the five reading types slower. `_v1` spends tens of millions of matrix entries on
+    an inline read: about 93 million in `chunk_rows`' 1B example, about 72 million by a fit over the combines. A MUFU
+    function in gates is about a thousand AND gates (`MufuLg2Ftz_v2` 1,171, `Fa3InvSum_v2` 947).
+  - Templated is another matter. The sparse-MLA `_v2` bodies are built by `boolean_dsa.flat`, whose `replay` inlines
+    every call, and `struct_lower` templates only calls, batch members and scans. [read] So a `_v2` body's templated
+    verify should cost about its flat one. The templated speedup (9.8 times for the NSPLIT=12 combine) wouldn't carry
+    over to a type moved to `_v2` unless its body keeps its calls. The fixed part, about 6 s, is unchanged.
+  - The card's combine family is keyed `SparseMlaCombine_v1`, so a served `SparseMlaCombine_v2` would be priced at the
+    median until it's timed.
+- **What I couldn't verify.**
+  - I didn't run `ks_form_why` on the timed statements, because the timing job deletes them. Lean's own `--zk` verdict
+    is what it mirrors.
+  - No `_v2` timing, flat or templated.
+  - Whether `struct_lower` lowers a `boolean_dsa.flat` body at all.
+
+**Land ask for #8453** (46 words, for ci):
+
+> #8453 (`cursor/proofs-verifyfast-b12-verifier-card` @ 0054c395fe) is marked. It replaces the GLM-5.3 verifier_cost
+> card: 11 types measured flat on one tree, each accepted by Lean under `--zk`, fixed seconds 7. Suites at this head: 3
+> of 3 passed, none skipped (r20261110-004710-e76a). No Lean, nothing frozen touched.
+
+#8425's land ask follows when 16a3 passes and I mark it.
+
