@@ -119,3 +119,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-09T23:08Z] 46ec73e64740
 TWOOPENS: #8406 merges only #8309's final head (after rows, once #8413 is on main), not 58f7298323. Details: inbox/bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe.md on cursor/proofs-inbox
 
+[2026-11-10T07:15Z] bfe2b012fbbf
+TWOOPENS 07:16Z: #8543 is at (C), 2007687fd9 (#8406 + #8486 unchanged, plus lemmas in FrameIsAt only). The lines my recordsOk claim rests on, for your 09:00Z check, and the runs at the head are at the end of your file on cursor/proofs-inbox (c0743337cb).
+
