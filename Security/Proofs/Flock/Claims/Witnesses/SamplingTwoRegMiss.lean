@@ -47,7 +47,9 @@ theorem twoTwo_firstRate : twoTwo.FirstRate 1 := by
       have hv2 : v < 2 := by
         have := Finset.mem_range.1 (hT hv)
         omega
-      have hvw : v ∈ window 0 2 T := by simp [window, hv, hv2]
+      have hvw : v ∈ window 0 2 T := by
+        simp [window, hv]
+        omega
       rw [hw] at hvw
       simp at hvw
     subst hT0
