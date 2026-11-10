@@ -57,13 +57,25 @@ bytes (an HTTP head, a response id, an event of another size, an error body) fai
 any server's bytes in cells: a rehearsal's form, for a server that answers in another (vLLM's stock framing, say). Its
 parameters' digest is no id form's, and the period check reads only the id form's schedules.
 
+**The response cap** (`WardenParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
+in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
+reads each request's `max_tokens` from its first request cell, where `active.id_request` puts it
+(`active.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32 or exceeds the cap
+is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is padding, and
+it fails at once, as the client's other problems do. Every other request's response is held to its `max_tokens`: an
+egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives
+holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTiming.Guarantees.ResponseCapped`). The
+cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
+neither and keeps its digest.
+
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
-a server that hasn't ended by the last of `egress_cells` cells (limit), the server's connection failing (upstream), an
-egress cell out of the egress form (format), ingress past its bounds (ingress), a client cell of another kind than
-`DATA` or `END` (malformed). Its `FAIL` cell is in the slot of the next egress cell, and it is in the egress record.
+a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
+cap (limit), the server's connection failing (upstream), an egress cell out of the egress form (format), ingress past
+its bounds (ingress), a client cell of another kind than `DATA` or `END` (malformed), a request refused under the
+response cap (cap). Its `FAIL` cell is in the slot of the next egress cell, and it is in the egress record.
 Every `FAIL` is the same bytes: the reason is a frame of the network certifier's `fails` record (`reason_frame`),
 witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
-whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's two fail at once, and
+whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once, and
 are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`), as the active certifier's do.
 
@@ -114,8 +126,8 @@ from functools import cached_property
 from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
-                                                   precise_sleep)
+from verity.core.protocols.certifier.active import (DATA, HEADER, ID_DIGITS, MAX_TOKENS_AT, PAD, RUN_ID_BYTES,
+                                                   decode_frame, encode_frame, id_request_max_tokens, precise_sleep)
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
 from verity.core.protocols.certifier.io_tie import parse_cell
 from verity.core.protocols.certifier.pacer import Pacer, Report
@@ -125,9 +137,10 @@ PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the network certifier's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
-#: why a connection failed: the server's three, the client's two, then the server's out-of-form cell; only the `fails`
+#: why a connection failed: the server's three, the client's two, the server's out-of-form cell, then the client's
+#: request past the response cap (a schedule without one has the first six, `WardenParams.reasons`); only the `fails`
 #: record holds them
-REASONS = ("late", "limit", "upstream", "ingress", "malformed", "format")
+REASONS = ("late", "limit", "upstream", "ingress", "malformed", "format", "cap")
 #: what egress releases (the module docstring's egress form): the egress record's id-form cells, or any bytes
 EGRESS_FORMS = ("id", "bytes")
 #: the bytes the network certifier reads from a server at once
@@ -152,6 +165,8 @@ class WardenParams:
     egress_cells: int = 4096
     every: int = 1  # a slot stride's buckets: the Programs' boundaries are every `every` buckets of a window
     egress: str = "id"  # the egress form, one of `EGRESS_FORMS`
+    max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
+
 
     def __post_init__(self) -> None:
         for name in INTEGER_FIELDS:
@@ -164,6 +179,16 @@ class WardenParams:
             raise ValueError(f"a cell holds its {HEADER.size}-byte header and a byte")
         if self.window % self.every:
             raise ValueError(f"every ({self.every}) divides the window ({self.window}): a window is whole timesteps")
+        cap = self.max_tokens_cap
+        if cap is not None:
+            if type(cap) is not int or not 0 < cap < min(1 << 32, self.egress_cells):
+                raise ValueError(f"max_tokens_cap is a u32 from 1 to egress_cells − 1 ({self.egress_cells - 1}), "
+                                 f"not {cap!r}: a capped response's END is its egress cell max_tokens")
+            if self.egress != "id":
+                raise ValueError("a response cap counts id events, so its egress form is id")
+            if self.payload < MAX_TOKENS_AT + ID_DIGITS:
+                raise ValueError(f"a {self.cell_bytes}-byte cell doesn't hold an id request's max_tokens: "
+                                 f"under a response cap a cell is at least {HEADER.size + MAX_TOKENS_AT + ID_DIGITS} bytes")
 
     @property
     def program_slots(self) -> int:
@@ -175,6 +200,11 @@ class WardenParams:
     def window_programs(self) -> int:
         """A window's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
+
+    @property
+    def reasons(self) -> tuple[str, ...]:
+        """The `fails` record's reasons under this schedule: `REASONS`, without `cap` when it has no response cap."""
+        return REASONS if self.max_tokens_cap is not None else REASONS[:-1]
 
     @property
     def payload(self) -> int:
@@ -193,14 +223,16 @@ class WardenParams:
 
     @cached_property
     def digest(self) -> bytes:
-        """The 64 bytes each record head's `parameters` carries."""
-        return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(asdict(self) | {"kinds": sorted(KIND_NAMES),
-                                                                                  "reasons": list(REASONS)}))
+        """The 64 bytes each record head's `parameters` carries. A schedule without a response cap has neither the
+        cap nor its reason in what it hashes, so its digest is the one it had before the cap was a parameter."""
+        values = {k: v for k, v in asdict(self).items() if k != "max_tokens_cap" or v is not None}
+        return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(values | {"kinds": sorted(KIND_NAMES),
+                                                                            "reasons": list(self.reasons)}))
 
 
-#: `WardenParams`' integer fields, every one but `egress`: the schedule the period check reads (`scheduleOf`), whose
-#: egress form is the id form
-INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name != "egress")
+#: `WardenParams`' integer fields, every one but `egress` and `max_tokens_cap`: the schedule the period check reads
+#: (`scheduleOf`), whose egress form is the id form and which has no response cap
+INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", "max_tokens_cap"))
 
 
 def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
@@ -304,6 +336,8 @@ class _Connection:
     egress_ended: bool = False
     egress_cells: int = 0  # egress slots past s + D, released
     problem: str | None = None  # the client's: failed at the next slot
+    max_tokens: int | None = None  # under a response cap, its request's, read at its first request cell
+    refused: bool = False  # under a response cap, its request was refused (cap): no request cell is cut
     upstream: str | None = None  # the server connection's: failed at the first egress slot without a whole cell
     failed: str | None = None  # one of REASONS
     failed_at: int | None = None  # the egress cell of the FAIL
@@ -605,7 +639,12 @@ class Warden:
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
         out, sent, pad = [], [], _pad(c, B)
         for _ in range(r):
-            if c.ingress_end is not None:
+            if c.ingress_end is None and not c.refused and not c.ingress_cells and not sent and \
+                    self.params.max_tokens_cap is not None and (len(c.ingress) >= p or c.ingress_ended):
+                c.max_tokens = id_request_max_tokens(bytes(c.ingress[:p]))
+                if c.max_tokens is None or c.max_tokens > self.params.max_tokens_cap:
+                    c.refused, c.problem = True, c.problem or "cap"
+            if c.ingress_end is not None or c.refused:
                 out.append(pad)
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended):
                 sent.append(bytes(c.ingress[:p]))
@@ -655,7 +694,8 @@ class Warden:
                 kind = None
                 if c.egress_ended and not whole:
                     kind = END
-                elif c.egress_cells + 1 >= self.params.egress_cells:
+                elif c.egress_cells + 1 >= self.params.egress_cells or \
+                        (whole and c.max_tokens is not None and c.egress_cells >= c.max_tokens):
                     failed = "limit"
                 elif whole:
                     kind = DATA
@@ -766,7 +806,7 @@ class Warden:
             c.done.set_result(None)
         self.log.append({"ordinal": c.ordinal, "arrived": c.arrived, "admitted": c.admitted,
                          "ingress_end": c.ingress_end, "release": c.release, "ended": c.ended,
-                         "ingress_cells": c.ingress_cells,
+                         "ingress_cells": c.ingress_cells, "max_tokens": c.max_tokens,
                          "egress_cells": c.egress_cells, "bytes_in": c.bytes_in, "bytes_out": c.bytes_out,
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
@@ -778,11 +818,14 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to
     its `FAIL`, for a client's failure before then), then `DATA` in every slot, then one `END` or `FAIL`, then padding
     to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
-    In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. A window is accepted
-    when its three records are complete, its cells are the schedule's and the egress form's and no connection failed
-    in it. Each connection's entry has its buckets, cells, outcome, its failure's reason and the SHA-256 of each
-    direction's bytes."""
-    T, r, D = params.window, params.slots, params.delay
+    In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
+    schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
+    request cell as the network certifier read it: a request cut into cells has one at most the cap, its response at
+    most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
+    records are complete, its cells are the schedule's and the egress form's and no connection failed in it. Each
+    connection's entry has its buckets, cells, outcome, its failure's reason, its `max_tokens` under a response cap
+    (else None) and the SHA-256 of each direction's bytes; the verdict names the schedule's `max_tokens_cap`."""
+    T, r, D, cap = params.window, params.slots, params.delay, params.max_tokens_cap
     verdicts: dict[int, list[str]] = defaultdict(list)
     for record in [*ingress, *egress, *fails]:
         if not record.status.complete:
@@ -796,6 +839,8 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
                 except ValueError as e:
                     verdicts[record.window].append(f"fails bucket {record.window * T + b}: {e}")
                     continue
+                if why not in params.reasons:
+                    verdicts[record.window].append(f"fails bucket {record.window * T + b}: {why}, not this schedule's")
                 reasons[o].append((record.window * T + b, why))
     per: dict[int, dict[str, dict[int, list[tuple[int, bytes]]]]] = defaultdict(lambda: {"ingress": {}, "egress": {}})
     total = {"ingress": 0, "egress": 0}
@@ -861,6 +906,16 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
                 problems.append("its FAIL hasn't one reason, in its bucket")
         elif got:
             problems.append("it has a reason and no FAIL")
+        requested = [p for k, p in ing_cells if k in (DATA, END)]
+        max_tokens = None
+        if cap is not None and requested:
+            max_tokens = id_request_max_tokens(requested[0])
+            if max_tokens is None or max_tokens > cap:
+                problems.append(f"its request's max_tokens ({max_tokens}) is past the cap, and was released")
+            elif live.count(DATA) > max_tokens:
+                problems.append(f"its response has {live.count(DATA)} DATA cells, past its max_tokens ({max_tokens})")
+        if failed == "cap" and requested:
+            problems.append("it was refused (cap) after its request was released")
         data_in = b"".join(p for k, p in ing_cells if k in (DATA, END))
         data_out = b"".join(p for k, p in eg_cells if k in (DATA, END))
         ended = max(eg) if live and live[-1] in (END, FAIL) else None
@@ -870,7 +925,7 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
             verdicts[max(eg) // T].append(f"connection {o} failed closed ({failed}) at egress cell {failed_at}")
         connections.append({"ordinal": o, "admitted": s, "ingress_end": a, "ended": ended,
                             "egress_cells": len(live), "ingress_bytes": len(data_in), "egress_bytes": len(data_out),
-                            "failed": failed, "failed_at": failed_at,
+                            "failed": failed, "failed_at": failed_at, "max_tokens": max_tokens,
                             "ingress_sha256": hashlib.sha256(data_in).hexdigest(),
                             "egress_sha256": hashlib.sha256(data_out).hexdigest()})
     for o, got in reasons.items():
@@ -879,4 +934,4 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     windows = sorted({rec.window for rec in [*ingress, *egress, *fails]})
     out = [{"window": w, "accepted": not verdicts.get(w), "problems": verdicts.get(w, [])} for w in windows]
     return {"accepted": bool(out) and all(w["accepted"] for w in out), "windows": out, "connections": connections,
-            "cells": total}
+            "cells": total, "max_tokens_cap": cap}

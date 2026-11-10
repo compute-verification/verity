@@ -2038,6 +2038,15 @@ any other it fails the connection (`format`) in that cell's slot, and none of th
 never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an output, then `TRAILER`, so
 the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
+**The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
+network certifier reads each request's `max_tokens` from its first request cell (`active.id_request_max_tokens`) before
+cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
+cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
+request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
+certified response holds at most its request's `max_tokens` tokens, hence at most the cap
+(`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
+them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
+
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
 - **0 timing bits, at bucket resolution.**
@@ -2058,11 +2067,12 @@ the cut gives one event a `DATA` cell and the `END` holds the trailer; any other
   - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
     `egress_cells` + 1 outcomes.
   - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
-    last cell, a broken server connection, a cell out of the egress form, and the client's own two. The reason is a
+    last cell, a broken server connection, a cell out of the egress form, and the client's own three. The reason is a
     frame of the network certifier's `fails` record, in the bucket of the `FAIL`: witness, certified with the others
     and never on the wire. A server that departs from the form at cell i gives the client what a server late at cell
     i does, so `format` adds no outcome.
-  - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
+  - A failure the client causes (`ingress`, `malformed`, `cap`) fails at once, and only returns the client's own bits
+    to it. A server held to its request's `max_tokens` fails at a cell it chose, so the cap adds no outcome.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
 
