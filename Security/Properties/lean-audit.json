@@ -1263,9 +1263,9 @@
   },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "unfolded_hash": "b6e049d7bece4d5255fee34259703ec4015a0935b1ff77a782e42ecd6acdb852",
    "missing": "honest",
-   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
-   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
@@ -3013,7 +3013,7 @@
     "reads": []
    },
    "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
-   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
+   "unfolded_hash": "b6e049d7bece4d5255fee34259703ec4015a0935b1ff77a782e42ecd6acdb852"
   },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": {
    "owner": "@soundness",
@@ -21336,9 +21336,9 @@
    }
   },
   "Properties.Nci.Protocol": {
-   "digest": "8e855644c5b6dc2a7f89123e6840c1a2a78d14c3fa7d2ef845dc2a97c4bee516",
+   "digest": "2cc03866086be368b27012302700bf114a24e294cea6ed712b56b8e35c1e9193",
    "definitions": {
-    "NciCheck.Properties.ProtocolAccepts": "0bd402e98d2fc6dcf9a02ac44a29da8c0c52a312725be1161968b273ecebf2cc"
+    "NciCheck.Properties.ProtocolAccepts": "128123acdc39252bb609e82b6815c3b2e2966af91109c07617099be4873cf27c"
    }
   },
   "Properties.Nci.Threads": {
