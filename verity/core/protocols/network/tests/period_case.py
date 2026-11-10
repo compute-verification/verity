@@ -51,7 +51,9 @@ tied audits may be in the record form, each slot reading the scan's state at its
 record (`state-anchored`, `anchor_audit`), and a phase whose tied audit reads it elsewhere is refused
 (`state-misanchored`, `MISANCHORS`). Each is charged its free inputs with those reads held where its `SCAN_STATE` is
 the scan's state in every phase tied to it (`_charge`); a second audit tied to a phase, whose `SCAN_STATE` is another
-link-window's or none's, is charged them free (`state-unheld`). In the
+link-window's or none's, is charged them free (`state-unheld`). Those charges are a phase's whose scan is sampled in
+part: a scan with every unit proved (`Facts.whole`) is charged its slot entries once in their place, and no audit is
+read at the period's δ for it (`proved_whole` and `sampled_in_part` redraw a case's scans either way). In the
 clock form an audit may be in the record form (`audit-record`): its window's circuit record, wire order and the
 verifier's pins beside its Program (`record_audit`), its registration's window binding the record and recording each
 pin's root, a record whose wire reads a Boolean-profile writer's bits as 16-bit leaves accepted too
@@ -264,6 +266,14 @@ class Facts:
         strata = ((self.units, 0),) if self.strata is None else self.strata
         law = [PR.Stratum(f"s{j}", n, min(k, n)) for j, (n, k) in enumerate(strata)]
         return dataclasses.replace(self, delta=delta, wrong=PR.Stratified(law).count_bound(delta) if law else 0)
+
+    @property
+    def whole(self) -> bool:
+        """`Facts.whole`: every unit is drawn, none sampled: the draw takes each stratum whole and the strata hold
+        every unit. Read off the strata, never off `drawn`, a sum a stratum drawn past its size could bring to `units`
+        beside one drawn in part; no draw over at least one unit is not whole."""
+        strata = ((self.units, 0),) if self.strata is None else self.strata
+        return all(n <= k for n, k in strata) and self.units <= sum(n for n, _ in strata)
 
 
 def _exactly(j, keys: list[str], ctx: str) -> None:
@@ -1277,23 +1287,27 @@ def _facts_json(f: Facts) -> dict:
     return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
 
 
-def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None,
-           tied: list[int] | None = None) -> dict:
+def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, faulty: int | None = None,
+           tied: list[int] | None = None, entries: int | None = None) -> dict:
     """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
-    scan's, `per_unit` the wider instance's committed bits, `entries` the slot entry bits its tied audits' incorrect
-    proof blocks can set, `faulty_entries`, and `tied` those audits by index, `termsJson`'s)."""
+    scan's, `per_unit` the wider instance's committed bits, `faulty` the slot entry bits its tied audits' incorrect
+    proof blocks can set, `faulty_entries`, `tied` those audits by index and `entries` the slot entry bits it charges
+    once where every unit of it is proved, `termsJson`'s)."""
     return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
                              "free": free, "jitter": clog2(jitter ** steps)} | (
-        {} if entries is None else {"faulty_entries": entries}) | ({} if tied is None else {"tied": tied})
+        {} if entries is None else {"entries": entries}) | (
+        {} if faulty is None else {"faulty_entries": faulty}) | ({} if tied is None else {"tied": tied})
 
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, list[int]]] | None = None,
            charged: list[Facts] = ()) -> dict:
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs, its `β_w` and its tied audits by index;
-    None in the clock form), where a compute audit's own terms are in none, a tied audit's free inputs are in its
-    phase's `free` and its incorrect proof blocks in its `faulty_entries`, and a tied audit drawn in part, read at
-    `TIED_DELTA` (`charged`), is in the rows public's `charged` and its δ_i in `eps`."""
+    None in the clock form), where a compute audit's own terms are in none. A scan sampled in part has its tied audits'
+    free inputs in its phase's `free` and their incorrect proof blocks in its `faulty_entries`; a scan whose every unit
+    is proved (`Facts.whole`) is charged its slot entries once (`entries`, `Scan.terms`) in place of both, with no
+    minimum of the two charges. An audit drawn in part and tied to a scan sampled in part, read at `TIED_DELTA`
+    (`charged`), is in the rows public's `charged` and its δ_i in `eps`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1301,13 +1315,14 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, lis
         out = {"audits": units}
     else:
         s = p.scan
-        units = [_terms(s.free + t, s.steps, max(s.ingress, s.egress), f, p.jitter, b, tied)
+        units = [_terms(s.free + (0 if f.whole else t), s.steps, max(s.ingress, s.egress), f, p.jitter,
+                        0 if f.whole else b, tied, s.entries if f.whole else 0)
                  for f, t, b, tied in scans]
         schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "charged": [_facts_json(f) for f in charged],
                "held": list(HELD), "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
-                                + t.get("faulty_entries", 0) for t in units)
+                                + t.get("faulty_entries", 0) + t.get("entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
@@ -1338,16 +1353,11 @@ def check(p: Params, c: Commitment, e) -> tuple:
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
     if p.schedule is not None and not rows_wf(p.schedule, p.windows):
         findings.append(Finding(REJECT, rows_wf_refusal(p.schedule, p.windows)))
-    charged = {}
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
-        tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)
         try:
-            facts.append(f := _audit_check(i, audit, reg, a))
+            facts.append(_audit_check(i, audit, reg, a))
         except Finding as x:
             findings.append(x)
-        else:
-            if tied and f.drawn < f.units:
-                charged[i] = f.at(TIED_DELTA)
     if p.schedule is not None:
         findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
                      if not _wired(p, c.audits, reg)]
@@ -1361,6 +1371,11 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return UNDECIDED, findings[0].reason
     if p.schedule is None:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
+    # `partOf`: an audit is charged for the link-windows whose scans are sampled in part; a scan proved whole is
+    # charged its entries whatever its tied audits' draws
+    part = [reg for (f, _), reg in zip(scans, c.windows) if not f.whole]
+    charged = {i: f.at(TIED_DELTA) for i, f in enumerate(facts)
+               if _tied_in(c.audits, part, i) and f.drawn < f.units}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
     tied = [_tied_audits(c.audits, reg) for reg in c.windows]
@@ -1468,6 +1483,46 @@ def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta:
 
 def _refused(answer: dict, verdict: str) -> dict:
     return answer | {"profile": None, "public": None, "reason": f"the audit is {verdict}", "verdict": verdict}
+
+
+def _redrawn(case: dict, draw, windows: tuple[int, ...] | None) -> dict:
+    """A rows-form period's `case` with its link-windows' scans' answers (those at the positions `windows`; all of
+    them when None) drawn as `draw` gives for a scan of `n` units: its draw, the `k` units it draws and its bound, None
+    for the answer's own. The registrations stay as they are."""
+    e = json.loads(bytes.fromhex(case["evidence"]))
+    for j, w in enumerate(e["windows"]):
+        if windows is not None and j not in windows:
+            continue
+        a = w["answer"]
+        (lv,) = a["profile"]["levels"]
+        lv["draw"], k, bound = draw(lv["size"])
+        a["profile"]["drawn"] = {UNIT: k}
+        a["public"] = a["public"] | {"drawn": list(range(k)), "proved": list(range(k))} | (
+            {} if bound is None else {"bound": bound})
+    return case | {"evidence": D.canonical(e).encode().hex()}
+
+
+def proved_whole(case: dict, windows: tuple[int, ...] | None = None, stratified: bool = False) -> dict:
+    """A rows-form period's `case` with every unit of its link-windows' scans proved (`_redrawn`): each one's answer a
+    `subset` draw of all its units, or with `stratified` its two directions' strata each whole, with a bound of no
+    incorrect unit. The scans `build` draws are sampled at a drawn `k`, in part or whole by chance."""
+    def draw(n: int):
+        strata = [{"k": n // 2, "name": d.value, "size": n // 2} for d in (INGRESS, EGRESS)]
+        return ({"law": "stratified", "strata": strata} if stratified else {"subset": n}), n, 0
+    return _redrawn(case, draw, windows)
+
+
+def sampled_in_part(case: dict, windows: tuple[int, ...] | None = None) -> dict:
+    """A rows-form period's `case` with each of its link-windows' scans sampled in part (`_redrawn`): its answer a
+    `subset` draw of all but one of its units, with its own bound."""
+    return _redrawn(case, lambda n: ({"subset": n - 1}, n - 1, None), windows)
+
+
+def wholes(case: dict) -> list[bool]:
+    """Whether each link-window's scan of a rows-form period's `case` has every unit proved (`Facts.whole`), read off
+    its answer's draw."""
+    e = json.loads(bytes.fromhex(case["evidence"]))
+    return [_facts("", CC.integrity(w["answer"]["profile"]), w["answer"]["public"]).whole for w in e["windows"]]
 
 
 #: The schedule's fields that leave its rows' shape (B, S, T) as it is: a change to one changes only its digest.
