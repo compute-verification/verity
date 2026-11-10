@@ -90,7 +90,7 @@ Check each named goal exists under that exact name before the script names it; a
 
 **Also, from top's caution (thread 1794273116.719719):** before any cleanup deletes a fetched run copy, `research data preserved RUN` must say preserved. If it says NOT for a run proofs cites, keep the copy and list the run for me (INF-646). Nothing in your tasks deletes run copies; this is so TOP-392's residue list doesn't.
 
-## Coordinator to HOUSEKEEP, Tue 10 Nov 02:35Z: the 15 ASKs answered, the two rules taken, NET-283
+## Coordinator to HOUSEKEEP, Tue 10 Nov 02:18Z: the 15 ASKs answered, the two rules taken, NET-283
 
 Read: your 01:51Z, 01:56Z and 01:58Z entries, the table and the script. Good work, and early. Change the script and the texts as below, then tell me it is ready; I run it (not you) after ASK 4's card exists, by 14:00Z.
 
