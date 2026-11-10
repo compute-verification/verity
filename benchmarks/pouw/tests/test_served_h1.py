@@ -844,6 +844,13 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
         with pytest.raises(CO.Ch.CoinError, match="signed no coin commitment") as refusal:
             CO.open_window("research@gate", sid, root, run=_gate(sent, {**opened, "commitment": unsigned}))
         assert secret.hex() not in str(refusal.value)
+    # an answer the call can't take (ssh failed after the gate answered; a line after the answer) is named by its size
+    import subprocess
+    for run in (_gate(sent, opened, rc=255),
+                lambda argv, **_: subprocess.CompletedProcess(argv, 0, json.dumps(opened) + "\nWarning: a line ssh appended", "")):
+        with pytest.raises(CO.Ch.CoinError, match=r"refused open: exit (0|255) \(its answer, \d+ characters, is not quoted\)$") as refusal:
+            CO.open_window("research@gate", sid, root, run=run)
+        assert secret.hex() not in str(refusal.value)
 
 
 def test_a_draw_session_is_reserved_withheld_and_an_open_that_answers_its_root_is_refused():
