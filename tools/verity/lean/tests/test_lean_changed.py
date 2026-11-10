@@ -6,9 +6,7 @@ updated `lean-audit.json` is restored to the committed bytes by the next require
 explicit keep the record its author must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
 only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way. Two
-stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records. The
-lean-changed step itself (`run`) runs over a stand-in spec, its prover and a stand-in `lake`: the prover's roots are built
-by name before the spec's guarantees are compared."""
+stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records."""
 from __future__ import annotations
 
 import hashlib
