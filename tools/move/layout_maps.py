@@ -42,7 +42,7 @@ KINDS, each treated one way:
 - Python packages. A whole directory is one directory row; a directory several moves share gets one row a file (or a
   subdirectory). `[modules]` is what `layout.py` derives from `[paths]` and `[roots]`, so imports, dotted names and
   `-m` names follow the files. `layout.py` adds an empty `__init__.py` for each new package level a moved module needs
-  and no moved file brings (its "files created").
+  and no moved file brings (its "files created"; `--created FILE` lists them over all the maps).
 - Lake packages. Each moves whole, by a directory row at or above its root or a `[tokens]` row for it, so a lakefile's
   or a manifest's relative `path` to it follows. Lean module names don't change.
 - Distributions with their own `pyproject.toml`. The pyproject moves with its component and the distribution keeps its
@@ -50,6 +50,10 @@ KINDS, each treated one way:
   `pyproject.toml` (else its `__init__.py`, its `lakefile.toml`, else most of its files), so a reference to the
   directory follows that map.
 - Tests go with the component they belong to, by the same rule; plain files likewise.
+
+LINES `move_check.py` CANNOT EXPLAIN. A rewrite can be right and still not certify: a path written from neither the
+root nor the file's own directory. `--keep-in FILE` takes such lines per move, `{move: {file: [old paths]}}`, and each
+map then leaves them as written (`[rewrite] keep_in`), to fix by hand after the moves. Without it the maps rewrite them.
 
 ORDER. Each map names today's paths only, no map has a row at or under another map's row, and no destination lies
 under any map's row, so the files land the same in any order. Module names do not: a map that moves a package's
@@ -566,6 +570,9 @@ def render(fname, v, before):
               "include = [" + ", ".join(toml_str(x) for x in INCLUDE) + "]",
               *(["# a mention of an emptied package that is left after the other maps stays as written",
                  "keep_dotted = [" + ", ".join(toml_str(x) for x in v["keep_dotted"]) + "]"] if v["keep_dotted"] else []),
+              *(["# references left as written: the rewrite is right and `move_check.py` cannot explain it; each is a line to fix by hand",
+                 "keep_in = { " + ", ".join(f"{toml_str(f)} = [{', '.join(toml_str(x) for x in ps)}]"
+                                            for f, ps in v["keep_in"].items()) + " }"] if v["keep_in"] else []),
               "", "[modules]",
               "# the renames [paths] and [roots] imply (`layout.py --modules`)"]
     lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["modules"].items())]
@@ -578,12 +585,17 @@ def main():
     ap.add_argument("--data", default=os.path.join(HERE, "layout_maps.json"))
     ap.add_argument("--out", default=HERE, help="where the maps go (default: tools/move)")
     ap.add_argument("--targets", help="write the table of where each moved component goes here, tab-separated")
+    ap.add_argument("--keep-in", help="a JSON file {move: {file: [old paths]}}: references each map leaves as written "
+                    "(`[rewrite] keep_in`), for the lines a rewrite gets right and `move_check.py` cannot explain")
     ap.add_argument("--created", help="write here the `__init__.py`s `layout.py` creates over all the maps, one a line")
     a = ap.parse_args()
     repo = os.path.dirname(os.path.dirname(HERE))
     data = json.load(open(a.data))
     head = git(repo, "rev-parse", a.ref).strip()
     tracked = {p for p in git(repo, "ls-tree", "-r", "--name-only", "-z", a.ref).split("\0") if p}
+    keep_in = json.load(open(a.keep_in)) if a.keep_in else {}
+    if set(keep_in) - {m for m, _ in MOVES}:
+        die(f"--keep-in names moves that MOVES doesn't: {sorted(set(keep_in) - {m for m, _ in MOVES})}")
     notes = []
     owner = place(data, tracked, notes.append)
     dest = plan(data, owner, notes.append)
@@ -667,7 +679,8 @@ def main():
                 die(f"{move}: {p} -> {n}: its module {mo} would be renamed {lay.module(mo)}, not {mn}")
         reasons = [(o, n, w) for o, n, w in EXCEPT if any(holds(o, p) for p in mine)]
         maps[move] = {"what": what, "rows": rows, "tokens": tokens, "split": split, "modules": modules,
-                      "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "keep_dotted": keep_dotted}
+                      "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "keep_dotted": keep_dotted,
+                      "keep_in": {f: ps for f, ps in sorted(keep_in.get(move, {}).items()) if f in tracked}}
 
     # ---- across the maps: no row over another map's files or over a destination, Lake packages whole
     keys = [(m, k) for m in maps for k in maps[m]["rows"]]
