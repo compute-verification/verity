@@ -50,6 +50,19 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 `governance`, `integration-measures`, `efficiency-metrics`, `strategy-local`, `strategy-lowrank-sparse`,
 `strategy-gradient-free`, `strategy-reuse`, `capability-measures`, `rl-scaling`.
 
+## What loads it
+
+Nothing outside `benchmarks/` imports this directory (`tests/test_boundaries.py`). Three things outside it read it:
+
+- `benchmarks/rho` reads data files of this directory by path (the algorithm library, `algorithms.json`), and its tests
+  load `tiers.py` and `slowdown.py` by path to hold rho's own arithmetic to theirs; rho's suite names each among its
+  `inputs`;
+- the Lean lock (`Security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
+  statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
+- `fixtures/artifacts.json` registers `sources/` by this directory's path.
+
+Every command above prints; `figures.py` alone writes files, to the directory it is given.
+
 ## Rules for adding to it
 
 `tests/` enforce these through `catalog.problems()`:
