@@ -133,18 +133,6 @@ from .segment import edge_groups, edge_of, launch_of, segment_of
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
-<<<<<<< HEAD
-#: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
-SAMPLING_EPS = 1e-5
-#: a body's fields by their roles in `reads.READS`: the sampling parameters (`engine.step_trace.SAMPLING`) that leave a request's
-#: Program unchanged at these values, the ones a request's Program may read, and the ones that compute nothing
-_INERT = {f.name: f.inert for f in reads.body("inert")}
-_KNOWN = tuple(f.name for f in reads.body("inert", "finish", "policy"))
-_TRANSPORT = tuple(f.name for f in reads.body("prompt", "transport"))
-=======
-#: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
-CAP_BITS = 1 << 23
->>>>>>> origin/main
 
 
 @dataclass(frozen=True)
