@@ -33,9 +33,9 @@ unsampled. `RowsProgWired` says it accepts no link-window whose scan's `prog` is
 the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no link-window whose
-scan's answer names a tied Input other than the scan's `prog`, the one `RowsProgWired` is about: a run Input several
-proof blocks read, which one-stage's registration check lets through only named. Beside them, their
-nontrivial lemmas' objects: `RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedInputWiredOf`, the
+scan's answer names a tied Input other than the scan's `prog`, which is wired as `RowsProgWired` says: a tied Input
+is a run Input several proof blocks read, which one-stage's registration check lets through only named. Beside them,
+their nontrivial lemmas' objects: `RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedInputWiredOf`, the
 properties of any period check, and `acceptAllRows`, a check that accepts every period.
 -/
 
@@ -131,20 +131,22 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 One-stage's registration check refuses a run Input that several proof blocks read, unless its verifier names the Input
 tied: a later check then ties its rows to the registrations that computed them, and the answer's public outputs name
 each Input it let through (`rests_on_period_check`). If the check accepts a period in the rows form, each
-link-window's scan's answer names none, or the scan's `prog` alone (`tiedInputWired`): the one whose entry `scan/prog`
-the check holds to a compute audit's slot entries (`RowsProgWired`). It is a statement about the published name: that
-the name `prog` is the Input the entry `scan/prog` registers is one-stage's registration check's, and is not said
-here. -/
+link-window's scan's answer names none, or the scan's `prog` alone (`tiedInputWired`), and that link-window's
+`scan/prog` entry is wired to a compute audit's slot entries (`wired`, as `RowsProgWired` says): every tied Input an
+accepted scan names is the one this check ties. It is a statement about the published name: that the name `prog` is
+the Input the entry `scan/prog` registers is one-stage's registration check's, and is not said here. -/
 def RowsTiedInputWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (x : Window), e.windows[i]? = some x → tiedInputWired x.answer = true
+      ∀ (i : ℕ) (reg : Lean.Json) (x : Window), c.windows[i]? = some reg → e.windows[i]? = some x →
+        tiedInputWired x.answer = true ∧ wired p.audits s c.audits reg = true
 
 /-- `RowsTiedInputWired` of any period check. -/
 def RowsTiedInputWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (x : Window), e.windows[i]? = some x → tiedInputWired x.answer = true
+      ∀ (i : ℕ) (reg : Lean.Json) (x : Window), c.windows[i]? = some reg → e.windows[i]? = some x →
+        tiedInputWired x.answer = true ∧ wired p.audits s c.audits reg = true
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedInputWiredOf` must fail at for `RowsTiedSampled`,

@@ -390,7 +390,8 @@ theorem tiedInputChecks_getElem? {p : Params} {e : Evidence} {s : Schedule} {sd 
   simp [tiedInputChecks, hform, Array.getElem?_zipIdx, hx]
 
 theorem rowsTiedInputWired : RowsTiedInputWired := by
-  intro p c e pub prof h s sd scan hform i x hx
+  intro p c e pub prof h s sd scan hform i reg x hreg hx
+  refine ⟨?_, rowsProgWired p c e pub prof h s sd scan hform i reg hreg⟩
   have hmem := Array.mem_of_getElem? (tiedInputChecks_getElem? hform hx)
   unfold check at h
   split at h
@@ -418,10 +419,12 @@ def tiedAnswer (tied : Array Lean.Json) : Core.Answer :=
   { protocol := oneStage, verdict := .accept, reason := none, digest := none,
     published := some (Lean.Json.mkObj [(tiedKey, Lean.Json.arr tied)]), profile := none }
 
-/-- Its honest side: an answer that names the scan's `prog` alone rests on the tie the check holds, and so does one
-that names none: one with no public outputs, or with other keys only (a scan no two units of which read one row). -/
+/-- Its honest side: a link-window whose scan's `prog` is wired to the slot audit and whose answer names that `prog`
+alone has the property's conclusion, and so does an answer that names none: one with no public outputs, or with other
+keys only (a scan no two units of which read one row). -/
 theorem rowsTiedInputWired_honest :
-    tiedInputWired (tiedAnswer #[.str progParam]) = true ∧ tiedInputWired otherAnswer = true ∧
+    (tiedInputWired (tiedAnswer #[.str progParam]) = true ∧
+        wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true) ∧ tiedInputWired otherAnswer = true ∧
       tiedInputWired { otherAnswer with published := some (Lean.Json.mkObj [("bound", Lean.Json.num 0)]) } = true := by
   decide +kernel
 
@@ -432,14 +435,16 @@ theorem tiedAnswer_unwired :
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedInputWired`'s property** (its nontrivial lemma): such a
-check accepts a rows-form period of one link-window whose scan's answer names a second tied Input, which no check
-wires. -/
+check accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and whose answer
+names a second tied Input, which no check wires. -/
 theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows := by
   intro h
-  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+  let p : Params :=
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
   let x : Window := ⟨tiedAnswer #[.str progParam, .str "state"], #[], .rows #[]⟩
   have hw : tiedInputWired x.answer = true :=
-    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 x rfl
+    (h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow x
+      rfl rfl).1
   rw [tiedAnswer_unwired.1] at hw
   cases hw
 
