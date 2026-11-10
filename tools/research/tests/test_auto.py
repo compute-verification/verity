@@ -2,6 +2,7 @@
 small runs never wait behind two that hold all 48 of the share's cores for hours while cpu-1's cores sit idle."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import os
@@ -755,3 +756,34 @@ def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(
     assert main(["run", "--on", CPU1, "--project", "verity", "--accept-wait", "--", "true"]) == 2 and len(launched) == 7
     assert "--accept-wait is for --on auto" in capsys.readouterr().err
 
+
+def test_on_auto_counts_a_runs_limit_from_its_start_and_its_custody_key_outlasts_the_wait(tmp_path, monkeypatch, capsys, hold_25):
+    """A run that waits in a pool's line keeps its whole limit: the launcher gives its runner the pool's wait on top and the
+    slot the limit itself, which slot.py counts from the slot taken (here 40 min after the runner's start, on a clock the test
+    gives). The custody key is minted at launch, so by default it outlasts that sum: under the default lifetime a 150-min
+    run is refused for a `--timeout 23400` it never passed."""
+    from research.pods.nebius import slot_only
+
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: DOWN, CPU1: pool(*_held(5), waiters=7, minutes=29)})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--max-min", "150", "--", "pytest", "-q"]) == 3
+    assert "outlives the custody key" not in (err := capsys.readouterr().err)
+    assert "its custody key lives 8h, past the wait for a slot and the run after it" in err
+    assert main([*runs, "--max-min", "150", "--custody-ttl", "7h", "--", "pytest", "-q"]) == 3
+    assert main([*runs, "--", "pytest", "-q"]) == 3
+    assert [kw["custody_ttl"] for kw in launched] == ["8h", "7h", "6h"], "the sum's hours and one for the upload; a named one; the default"
+    command, limit = launched[0]["command"], 150 * 60
+    assert command[command.index("--run-max") + 1] == f"{limit}", "the slot gets the limit"
+    assert remote.flag_value(launched[0]["harness_args"], "--timeout") == f"{slot_only.POOL_WAIT_S + limit}", "the runner the wait too"
+    spec = importlib.util.spec_from_file_location("check_slot_of_the_tree", REPO / auto.SLOT_PY)
+    slot_py = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(slot_py)
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "status.json").write_text(json.dumps({"state": "running", "started_mono": 1000.0, "timeout_s": slot_only.POOL_WAIT_S + limit}))
+    for waited in (40 * 60, 0):
+        slot_py.limit_run(limit, "r0", str(run), mono=lambda: 1000.0 + waited)
+        assert json.loads((run / slot_py.RUN_TIMEOUT).read_text())["timeout_s"] == waited + limit, "its limit, from the slot taken"

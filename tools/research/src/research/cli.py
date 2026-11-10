@@ -289,7 +289,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
     ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime, <n>[s|m|h|d], a bare number in seconds "
                                                                        "(default 6h, at most 24h; it must outlast the run and its upload: a --timeout over "
-                                                                       "6h needs it, and one the --timeout outlives is refused)")
+                                                                       "6h needs it, and one the --timeout outlives is refused; a --pool run's default "
+                                                                       "also covers its wait for a slot)")
     ap.add_argument("--run-record", action="store_true",
                     help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
                          "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
@@ -372,6 +373,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             harness_opts = [*harness_opts, "--timeout", f"{wait_s + timeout:g}"]
             print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
                   f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
+            if ns.custody_ttl is None and ns.custody_r2 is not False and (ttl := _pool_custody_ttl(wait_s + timeout)):
+                ns.custody_ttl = ttl
+                print(f"research run: --pool {ns.pool}: its custody key lives {ttl}, past the wait for a slot and the run after it "
+                      "(--custody-ttl gives another)", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
             # beside the slot's once it ran, so a few waiting runs drove admission below zero; the slot takes the larger of its
@@ -645,6 +650,24 @@ CUSTODY_REPAIR = ("if the run outlives the key, publish its custody with a fresh
                   "`research data custody RUN --publish` (store README, custody)")
 
 
+def _custody_hours(timeout: float) -> int:
+    """The whole hours a custody key lives to outlast a run of ``timeout`` seconds and its upload, at most the cap's."""
+    return min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_CAP_S // 3600)
+
+
+def _pool_custody_ttl(total_s: float) -> str | None:
+    """The custody key's lifetime for a pool run that names none, where the default would refuse it. The key is minted at
+    launch, and ``total_s`` is the `--timeout` the launcher gives a pool run: its wait for a slot plus the run's own, a sum the
+    run never asked for. None where the default lifetime covers it, or no key does (past :data:`CUSTODY_TTL_CAP_S`, which
+    `_custody_ttl_problem` refuses with what to pass)."""
+    from research.store import credentials as C
+    from research.store.custody import DEFAULT_TTL
+
+    if total_s <= C.parse_ttl(DEFAULT_TTL) or total_s > CUSTODY_TTL_CAP_S:
+        return None
+    return f"{_custody_hours(total_s)}h"
+
+
 def _custody_ttl_warning(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """A launch whose ``--timeout`` is past :data:`CUSTODY_TTL_CAP_S`, with a key at the cap: allowed, and told the repair."""
     timeout = _harness_timeout(harness_opts)
@@ -672,7 +695,7 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
         return (f"--timeout {timeout:g} s is past the {CUSTODY_TTL_CAP_S // 3600} h a custody key lives at most: pass "
                 f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
     if timeout is not None and CUSTODY_TTL_CAP_S >= timeout > ttl:
-        hours = min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_CAP_S // 3600)
+        hours = _custody_hours(timeout)
         if custody_ttl:
             return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
                     f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
