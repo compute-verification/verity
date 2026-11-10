@@ -34,6 +34,7 @@ open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
+open Classical in
 /-- **The count a window fixes** is `0`, or its statement is in the two-stage scope and the count is the replay blocks
 wrong at the committed boundary trace. -/
 theorem regCount_cases (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (P : Prover Unit) :

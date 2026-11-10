@@ -79,6 +79,7 @@ theorem exists_best_interiorsAt (s : AuditStatement) (Pt : Partition) (d : Desig
   rw [h1, h2]
   exact hb ρ hρ (ι' ρ)
 
+open Classical in
 /-- **The replay blocks wrong at the boundary are marked at every interior**: each holds an incorrect proof block at
 every interior, so the footprint at any interiors marks it. -/
 theorem wrongAtBoundaryAt_subset (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool)
