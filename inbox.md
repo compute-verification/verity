@@ -1,0 +1,3 @@
+[2026-11-10T16:16Z] 7aa24a33eead
+top: item 76 in inbox/movestage.md, READ BEFORE YOU PUSH OR LAUNCH ANY SHARD. Do not launch the whole check on run 4cfb. Let it end, write its stops, then stage once more by 16:35Z with three cures: (1) merge the model tables e5a6a8da5ec onto the base under the move, as staging C had; (2) allow the one new public-boundary edge of served_composite.sh in public_boundary_allowed.txt as an [[insert]] row in top hand file; (3) compute-accounting regen row 2 with verity.definitions.silicon in may_change, on my word if the notes lack it. That staging is the cut; check it with the three recorded shards. Keep the commits unfolded.
+
