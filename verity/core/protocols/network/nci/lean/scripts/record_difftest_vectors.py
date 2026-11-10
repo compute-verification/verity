@@ -5,8 +5,8 @@ for `NciCheck/RecordDifftestMain.lean`.
 
 Writes two files under `DIR/record_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted", "spot",
 "rows", "count"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`NciCheck.Record`'s
-docstring), the record's wires as SPOT's `wires` piece reads them (`nci_record_reference.spot_instance`, from Python's
-own layout of each template; `null` where the reference refuses the case before its wires), some input rows of its
+docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, each template's rows and outputs
+Python's own layout of it; `null` where the reference refuses the case before its wires), some input rows of its
 units (`[template, port, unit, row]` each) and the count's limits (`{"table", "c", "k", "n"}`); and `python.jsonl`,
 `{"detail", "public", "kinds", "count"}`: `nci_record_reference`'s `check_detail`, `check`, `kinds` of those rows and
 `count`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in `lean-audit.json`).
@@ -17,14 +17,15 @@ two inference entries each with the slot digit anywhere among the digits; wires 
 reader's slot, cross slots or do either unit by unit, written unit by unit and merged into runs
 (`verity.ml.windows.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
-root the run's own record commits or another; and pins of most templates' Definitions, among other digests. About two
-in five are broken in one way, each refused at one stage (`BROKEN`). Then `shaped()`: circuits in the shape of a served
-class (`lowered`: a slot scan, an embedding read through a table opening, a norm, matmul rows over registered weights,
-an attention template per position reading every earlier position's rows by a cut, a mix, a selection and a token feed
-reading its own earlier units), at two slots and three positions and at the served class's four slots and 35, with the
-weights registered at the start of the deployment and with none, under another root, with the opening's root read
-dropped, with the opening's reader another Definition under the pinned one's name whose verdict is a constant 1, with a
-wire into the next slot, and with the order given beside the record.
+root the run's own record commits or another; and pins of most templates' Definitions, among other digests. Two in
+five are broken in one way, each refused at one stage (`BROKEN`, every way in turn, `WAYS`). Then `shaped()`:
+circuits in the shape of a served class (`lowered`: a slot scan, an embedding read through a table opening, a norm,
+matmul rows over registered weights, an attention template per position reading every earlier position's rows by a
+cut, a mix, a selection and a token feed reading its own earlier units), at two slots and three positions and at the
+served class's four slots and 35, with the weights registered at the start of the deployment and with none, under
+another root, with the opening's root read dropped, with the opening's reader another Definition under the pinned
+one's name whose verdict is a constant 1, with one wire from the next slot, and with the order given beside the
+record.
 
 Every wire of every case is one `NciCheck.Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -82,6 +83,10 @@ BROKEN = {
                "registered-keys"],
     "blocks": ["no-blocks", "slot-radix", "two-slots", "gap", "twice", "entry-template"],
 }
+#: each way with its stage: case `seed`, where it is broken, is broken in way `seed` modulo their number
+WAYS = [(stage, how) for stage, hows in BROKEN.items() for how in hows]
+#: the circuits a broken case tries for one that has what its way breaks
+TRIES = 40
 
 _PRIMS: dict[tuple, PrimitiveDefinition] = {}
 
@@ -201,7 +206,7 @@ class Circuit:
                "roots": self.roots, "openings": self.openings, **({"values": self.values} if self.values else {})}
         return json.loads(json.dumps({
             "format": IF.CIRCUIT, "name": self.name, "templates": [[t, n] for t, n in self.units.items()],
-            "program": digest, "cap": 1, "wires": [w.doc() for w in self.wires],
+            "program": digest, "wires": [w.doc() for w in self.wires],
             **({"cuts": self.cuts} if self.cuts else {}), **({"registered": reg} if self.registered else {}),
             **({"ingress": self.ingress} if self.ingress else {}),
             **({"order": [list(b) for b in self.order]} if self.order is not None else {}),
@@ -439,9 +444,10 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
     hidden row: `Scan` (one unit a slot, its state a registered read of `scan-state`, the phase's own input), `Embed`
     (a table opening at the token), `Norm`, `Gemm` (per position and slot, two rows of the query weights then four of
     the mixing weights), `Attn<v>` (one template a position, its keys every earlier position's query rows by a cut of
-    `v`), `Mix`, `Select` and `Feed` (the next position's token; its state its own earlier unit's). With `cross`, the
-    mix of one position reads the attention of the next slot; without `root_read`, no table read of the root; with
-    `forged`, `Embed` is another Definition under the same name, its verdict a constant 1 that reads no port."""
+    `v`), `Mix`, `Select` and `Feed` (the next position's token; its state its own earlier unit's). No wire crosses
+    slots; with `cross`, one does: the first slot's mix at the second position reads the next slot's attention. Without
+    `root_read`, no table read of the root; with `forged`, `Embed` is another Definition under the same name, its
+    verdict a constant 1 that reads no port."""
     c = Circuit(f"lowered{S}x{T}", S, T)
     E, v16 = 2, Value(16)
     row = Array(E, v16)
@@ -488,7 +494,9 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
         t = v - 1
         wire(attn[t], "q", gemm, "o0", [(h * S + s, t * G + 2 * s + h, 0, 1) for h in range(2) for s in range(S)])
         wire(attn[t], "k", gemm, "o0", [(h * S + s, 2 * s + h, G, v) for h in range(2) for s in range(S)])
-        wire(mix, "a", attn[t], "o0", [(t * S + s, (s + 1) % S if cross and t == 1 else s, S, 2) for s in range(S)])
+        if cross and t == 1:
+            wire(mix, "a", attn[t], "o0", [(t * S, 1, S, 2)])
+        wire(mix, "a", attn[t], "o0", [(t * S + s, s, S, 2) for s in range(cross and t == 1, S)])
     wire(mix, "g", gemm, "o0", [(t * S + s, t * G + 2 * S + 4 * s, 1, 4) for t in range(T) for s in range(S)])
     wire(mix, "res", norm, "o0", [(u, u, 0, 1) for u in range(T * S)])
     wire(select, "x", mix, "o0", [(u, u, 0, 1) for u in range(T * S)])
@@ -524,8 +532,8 @@ def shaped() -> list[dict]:
     its scan state's. With none registered, and with the run committing none, the weights' reads and the opening are
     fresh and the rate refuses (`nci`), the count `fresh`. Then at two slots and three positions: the query weights
     under another root than the run commits, the opening with no table read of its root, the opening's reader another
-    Definition under `Embed`'s name whose verdict is a constant 1, and a wire into the next slot, each refused the same
-    way; the order given beside the record, and a deployment whose first record is the run's own, each accepted."""
+    Definition under `Embed`'s name whose verdict is a constant 1, and one wire from the next slot, each refused the
+    same way; the order given beside the record, and a deployment whose first record is the run's own, each accepted."""
     out = []
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
         policy: dict = {}
@@ -550,7 +558,7 @@ def shaped() -> list[dict]:
             one("2x3 another root", lowered(S, T), 3, moved=("weights/query",))
             one("2x3 no root read", lowered(S, T, root_read=False), 4)
             one("2x3 a constant verdict", lowered(S, T, forged=True), 8)
-            one("2x3 a wire into the next slot", lowered(S, T, cross=True), 5)
+            one("2x3 one wire from the next slot", lowered(S, T, cross=True), 5)
             one("2x3 the order beside the record", lowered(S, T), 6, beside=True)
             one("2x3 the run's record first", lowered(S, T), 7, before=0)
     return out
@@ -624,28 +632,31 @@ def _slots(c: Circuit, w):
 
 
 def case(seed: int) -> dict:
-    """Case `seed`: below `COUNT` a random circuit with a random registration log, broken with probability 0.4 in one
-    of `BROKEN`'s ways; then `shaped()`'s."""
+    """Case `seed`: below `COUNT` a random circuit with a random registration log, two in five of them broken in the
+    way `WAYS` gives the seed, on the first of the seed's circuits that has what that way breaks; then `shaped()`'s."""
     if seed >= COUNT:
         return shaped()[seed - COUNT]
-    rng = random.Random(seed)
-    c = random_circuit(rng, seed)
-    roots = {p: _hex(rng) for p in c.params if rng.random() < 0.9}
-    held = {}
-    for p, n in c.params.items():
-        how = rng.choice(["held", "held", "held", "none", "root", "shape"])
-        if how == "none":
-            continue
-        w = rng.choice([d for d in range(1, n + 1) if n % d == 0])
-        held[p] = (roots.get(p, _hex(rng)) if how != "root" else _hex(rng), n // w + (how == "shape"), w)
-    desc = json.loads(c.program()[0])
-    pins = [ref.closure_digest(desc, t) for t in c.units if rng.random() < 0.7] + [_hex(rng) for _ in range(rng.randint(0, 2))]
-    rng.shuffle(pins)
-    made = finish(rng, c, held, roots, pins, before=rng.choice([0, 1, 2, 2, 3]), after=rng.choice([0, 0, 1]))
-    stage = rng.choice(sorted(BROKEN)) if rng.random() < 0.4 else None
-    how = rng.choice(BROKEN[stage]) if stage else None
-    if how and not _break(rng, made, how):
-        stage = how = None
+    stage, how = WAYS[seed % len(WAYS)] if random.Random(seed).random() < 0.4 else (None, None)
+    for attempt in range(TRIES):
+        rng = random.Random(TRIES * seed + attempt)
+        c = random_circuit(rng, seed)
+        roots = {p: _hex(rng) for p in c.params if rng.random() < 0.9}
+        held = {}
+        for p, n in c.params.items():
+            kind = rng.choice(["held", "held", "held", "none", "root", "shape"])
+            if kind == "none":
+                continue
+            w = rng.choice([d for d in range(1, n + 1) if n % d == 0])
+            held[p] = (roots.get(p, _hex(rng)) if kind != "root" else _hex(rng), n // w + (kind == "shape"), w)
+        desc = json.loads(c.program()[0])
+        pins = ([ref.closure_digest(desc, t) for t in c.units if rng.random() < 0.7]
+                + [_hex(rng) for _ in range(rng.randint(0, 2))])
+        rng.shuffle(pins)
+        made = finish(rng, c, held, roots, pins, before=rng.choice([0, 1, 2, 2, 3]), after=rng.choice([0, 0, 1]))
+        if how is None or _break(rng, made, how):
+            break
+    else:
+        raise AssertionError(f"case {seed}: none of its {TRIES} circuits has what {how!r} breaks")
     if rng.random() < 0.04:
         limits = made["case"]["count"]
         rng.choice([lambda: limits.pop(rng.choice(ref.LIMITS)), lambda: limits.update(table=[]),
