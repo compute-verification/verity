@@ -6,37 +6,39 @@ ordinals and release counter run on through it. Only what the records before b c
 open at b is cut there, and its request continues after b as an ordinary arrival: the same request with the ids
 already released appended to its prompt, and that many fewer tokens left.
 
-**The rule.** A request is *released* once its last request cell is in an ingress bucket, and N numbers the released
+**The stamps.** A request is *released* once its last request cell is in an ingress bucket, and N numbers the released
 requests in the order of those cells (by bucket, then as the ingress record holds them). For a request released
-before b, its response's
+before b, its response
 
-- e is the number of its id cells in egress buckets before b. A cell counts by the slot the schedule releases it in,
-  which is the bucket the egress record holds it in: never by when its bytes reached the certifier, by when or whether
-  the client read them, nor by what the server had computed by then (an id the server has sent whose slot is at or
-  after b doesn't count);
-- it is *finished* before b when an end cell of its (the network certifier's `END` or `FAIL`) is in a bucket before
-  b, when those e ids hold one of the deployment's end-of-sequence ids, or when e is its request's `max_tokens`;
-- it is *open* at b when it isn't finished before b.
+- has e id cells in egress buckets before b. A cell counts by the slot the schedule releases it in, which is the
+  bucket the egress record holds it in: never by when its bytes reached the certifier, by when or whether the client
+  read them, nor by what the server had computed by then (an id the server has sent whose slot is at or after b
+  doesn't count);
+- is *open* at b when no end cell of its (the network certifier's `END` or `FAIL`) is in an egress bucket before b.
 
-At b the certifier stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. Every part is read from
+At b the certifier stamps each open response (q, N, e), q its ordinal, in N order: `stamps`. A stamp is structural:
+the certifier reads its cells' kinds, ordinals and buckets, and no request field and no id. Every part is read from
 the records before b, so the stamps are a function of them and of b alone: no party chooses a stamp, no cell at or
 after b moves one, and a request whose cells straddle b has no N yet, so no stamp, and arrives after b as any request
 does. A session's first close, b = 0, has no stamp.
 
-**The continuation** of a stamped response (`continuations`) is its certified request with the first e released ids
-after its prompt and `max_tokens` − e in place of `max_tokens`: the pair (q, P + e) for a prompt of P ids, the token
-row prompt ‖ released ids, and its model, user, seed, temperature and top_p unchanged. e counts from the request's
-release, across every close before b, so the continuation at a later close is the same whether it is built from the
-request or from an earlier close's continuation (`resumed`), and the outputs a response adds between two closes are
-the difference of its two stamps. 0 < `max_tokens` − e ≤ `max_tokens` always: a response whose e reaches `max_tokens`
-is finished, never continued with nothing left, and one whose id cells before b outnumber its `max_tokens` is refused
-(`over`), so no continuation asks for more than its certified request did, whatever bound that was held to.
+**The continuations.** The reference reads what the records certify of each stamped response, its request and its e
+released ids, and splits them (`continuations`). One whose ids hold one of the deployment's end-of-sequence ids, or
+whose e is its request's `max_tokens`, is *finished*: it is stamped while its end cell isn't before b, and never
+continued. One whose e exceeds its `max_tokens` is refused (`over`). Every other one continues: its continuation is
+its certified request with the e released ids after its prompt and `max_tokens` − e in place of `max_tokens`, the pair
+(q, P + e) for a prompt of P ids, the token row prompt ‖ released ids, and its model, user, seed, temperature and
+top_p unchanged. e counts from the request's release, across every close before b, so the continuation at a later
+close is the same whether it is built from the request or from an earlier close's continuation (`resumed`), and the
+outputs a response adds between two closes are the difference of its two stamps. 0 < `max_tokens` − e ≤ `max_tokens`
+always, so no continuation asks for nothing, or for more than its certified request did, whatever bound that was held
+to.
 
 **Fail closed.** `check` holds the stamps a record carries to `stamps`' and refuses, by name: a stamp of a response
-that isn't open at b or was never released (`extra`), an open response with none (`missing`), a response stamped twice
-(`duplicate`), another N than the records' (`release`), another e (`count`), and the right stamps out of N order
-(`order`). Records the rule can't read are refused too (`records`, below), and a response past its `max_tokens`
-(`over`).
+that has an end cell before b or was never released (`extra`), an open response with none, finished or not
+(`missing`), a response stamped twice (`duplicate`), another N than the records' (`release`), another e (`count`), and
+the right stamps out of N order (`order`). Records the rule can't read are refused too (`records`, below), and a
+stamped response past its `max_tokens` (`over`).
 
 **The records.** `Response` is one released request and its response as certified records give them, whatever their
 form. `read` reads the network certifier's own records (`warden.py`'s schedule in the id egress form: `Record`s of
@@ -119,7 +121,7 @@ class Continuation(NamedTuple):
 
 
 class Edge(NamedTuple):
-    """A close's stamps and continuations, both in N order."""
+    """A close's stamps and the continuations of the stamped responses that aren't finished, both in N order."""
 
     stamps: tuple[Stamp, ...]
     continuations: tuple[Continuation, ...]
@@ -130,17 +132,25 @@ def released(r: Response, b: int) -> tuple[int, ...]:
     return tuple(x for t, x in r.cells if t < b)
 
 
-def is_open(r: Response, b: int, eos: Collection[int]) -> bool:
-    """Whether r is open at b (the module docstring's rule). Raises `Refused` (`over`) where its id cells before b
-    outnumber its request's `max_tokens`."""
+def is_open(r: Response, b: int) -> bool:
+    """Whether r is open at b: released before b, with no end cell in a bucket before b."""
+    return r.released < b and not (r.ended is not None and r.ended < b)
+
+
+def finished(r: Response, b: int, eos: Collection[int]) -> bool:
+    """Whether the ids of r released before b finish it: one of them is an end-of-sequence id, or they are its
+    request's `max_tokens`. Raises `Refused` (`over`) where they outnumber its `max_tokens`."""
     ids = released(r, b)
     if len(ids) > r.request.max_tokens:
         raise Refused("over", f"response {r.q} has {len(ids)} id cells before bucket {b}, past its max_tokens "
                               f"({r.request.max_tokens})")
-    if r.released >= b:
-        return False
-    ended = r.ended is not None and r.ended < b
-    return not (ended or len(ids) == r.request.max_tokens or any(x in eos for x in ids))
+    return len(ids) == r.request.max_tokens or any(x in eos for x in ids)
+
+
+def continues(r: Response, b: int, eos: Collection[int]) -> bool:
+    """Whether r continues after b: open at b and not finished. Raises `Refused` (`over`) as `finished` does, for a
+    response open at b."""
+    return is_open(r, b) and not finished(r, b, eos)
 
 
 def _checked(responses: Sequence[Response]) -> list[Response]:
@@ -158,18 +168,18 @@ def _checked(responses: Sequence[Response]) -> list[Response]:
     return out
 
 
-def stamps(responses: Sequence[Response], b: int, eos: Collection[int]) -> tuple[Stamp, ...]:
-    """The stamps at b, in N order: (q, N, e) of each response open at b, `eos` the deployment's end-of-sequence
-    ids."""
-    return tuple(Stamp(r.q, r.n, len(released(r, b))) for r in _checked(responses) if is_open(r, b, eos))
+def stamps(responses: Sequence[Response], b: int) -> tuple[Stamp, ...]:
+    """The stamps at b, in N order: (q, N, e) of each response open at b. It reads no request and no id."""
+    return tuple(Stamp(r.q, r.n, len(released(r, b))) for r in _checked(responses) if is_open(r, b))
 
 
 def continuations(responses: Sequence[Response], b: int, eos: Collection[int]) -> tuple[Continuation, ...]:
-    """The continuations at b, in N order: each stamped response's request with its released ids after its prompt and
-    `max_tokens` less their number."""
+    """The continuations at b, in N order, `eos` the deployment's end-of-sequence ids: each stamped response that
+    isn't finished, as its request with its released ids after its prompt and `max_tokens` less their number. Raises
+    `Refused` (`over`) for a stamped response past its `max_tokens`."""
     out = []
     for r in _checked(responses):
-        if is_open(r, b, eos):
+        if continues(r, b, eos):
             ids = released(r, b)
             out.append(Continuation(r.q, r.n, len(ids), r.request._replace(
                 prompt=r.request.prompt + ids, max_tokens=r.request.max_tokens - len(ids))))
@@ -177,27 +187,28 @@ def continuations(responses: Sequence[Response], b: int, eos: Collection[int]) -
 
 
 def resumed(r: Response, b: int, eos: Collection[int]) -> Response:
-    """A response open at b as the records after b give it against its continuation: the continuation's request,
-    released at b, and the id cells from b on. Its stamp at a later close counts only those, and its continuation
-    there is the one the response's own stamp gives."""
-    if not is_open(r, b, eos):
-        raise ValueError(f"response {r.q} isn't open at bucket {b}")
+    """A response that continues after b as the records after b give it against its continuation: the continuation's
+    request, released at b, and the id cells from b on. Its stamp at a later close counts only those, and its
+    continuation there is the one the response's own stamp gives."""
+    if not continues(r, b, eos):
+        raise ValueError(f"response {r.q} doesn't continue after bucket {b}")
     ids = released(r, b)
     return r._replace(released=b, cells=r.cells[len(ids):], request=r.request._replace(
         prompt=r.request.prompt + ids, max_tokens=r.request.max_tokens - len(ids)))
 
 
-def check(written: Sequence[Stamp], responses: Sequence[Response], b: int, eos: Collection[int]) -> None:
+def check(written: Sequence[Stamp], responses: Sequence[Response], b: int) -> None:
     """Holds the stamps a record carries at b to the records': raises `Refused`, by the module docstring's names,
-    unless `written` is `stamps(responses, b, eos)`."""
-    want = stamps(responses, b, eos)
+    unless `written` is `stamps(responses, b)`."""
+    want = stamps(responses, b)
     written = [Stamp(*s) for s in written]
     got, by_q = [s.q for s in written], {s.q: s for s in want}
     if len(set(got)) != len(got):
         raise Refused("duplicate", f"response {next(q for q in got if got.count(q) > 1)} is stamped twice")
     for s in written:
         if s.q not in by_q:
-            raise Refused("extra", f"response {s.q} is stamped and isn't open at bucket {b}")
+            raise Refused("extra", f"response {s.q} is stamped and isn't open at bucket {b}: it has an end cell "
+                                   "before it, or no release")
     for s in want:
         if s.q not in got:
             raise Refused("missing", f"response {s.q} is open at bucket {b} and has no stamp")
@@ -288,6 +299,7 @@ def read(params: W.WardenParams, ingress: Sequence[Record], egress: Sequence[Rec
 
 def edge(params: W.WardenParams, ingress: Sequence[Record], egress: Sequence[Record], b: int,
          eos: Collection[int]) -> Edge:
-    """The close at b on the network certifier's records: the stamps it writes and the continuations they give."""
+    """The close at b on the network certifier's records: the stamps it writes and the continuations they give,
+    `eos` the deployment's end-of-sequence ids."""
     responses = read(params, ingress, egress, b)
-    return Edge(stamps(responses, b, eos), continuations(responses, b, eos))
+    return Edge(stamps(responses, b), continuations(responses, b, eos))

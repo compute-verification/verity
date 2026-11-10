@@ -1,24 +1,29 @@
-"""The continuation rule (`continuation`) on the network certifier's own records: nine network-certifier-form id
+"""The continuation rule (`continuation`) on the network certifier's own records: ten network-certifier-form id
 requests and their responses of id events, ticked through the network certifier's ingress and egress
-(`scan_traffic.serve`: built traffic, nothing served) over four execution phases of T = 8 buckets, r = 2 cells a
-bucket, D = 3. At each close b the stamps are the open responses' (q, N, e) in release order, e each response's id
-cells in buckets before b, which is the schedule's count from its admission and `warden.audit`'s release order, two
-requests released in one bucket numbered by ordinal. The cases at a close:
+(`scan_traffic.serve`: built traffic, nothing served) over five execution phases of T = 8 buckets, r = 2 cells a
+bucket, D = 3. At each close b the stamps are the open responses' (q, N, e) in release order: every response released
+before b with no end cell before b, e its id cells in buckets before b, which is the schedule's count from its
+admission and `warden.audit`'s release order, two requests released in one bucket numbered by ordinal. The stamps read
+no id and no request: the same traffic with other ids has the same stamps. The cases at a close:
 
 - a response still inside its delay at b is stamped e = 0, and its continuation is its request;
 - one cut at three closes in a row has its whole count at each, the difference its outputs between them, and the same
   continuation whether built from the request or from the close before (`resumed`);
-- one whose `END` is in bucket b − 1 has no stamp; nor has one whose last id, in b − 1, is its `max_tokens`-th or an
-  end-of-sequence id, its `END` falling in bucket b: `max_tokens` − e = 0 is never a continuation;
-- one with an id cell in bucket b itself is stamped with that id still to come, `max_tokens` − e = 1;
+- one whose `END` is in bucket b − 1 has no stamp;
+- one whose last id, in b − 1, is its `max_tokens`-th, and one whose last is an end-of-sequence id, its `END` falling
+  in bucket b, is stamped and not continued: `max_tokens` − e = 0 is never a continuation;
+- one that holds an end-of-sequence id and whose server sends on through two closes is stamped at both and continued
+  at neither;
+- one with an id cell in bucket b itself is stamped and continued with that id still to come, `max_tokens` − e = 1;
 - a request whose cells straddle b, and a response the certifier failed before b, have none.
 
 A continuation is the certified request with the released ids after its prompt and `max_tokens` − e left, the pair
 (q, P + e); rendered as an id request and released as an arrival of another session it reads back as itself. No cell
 at or after b moves a stamp: the records before b give the same edge alone, and beside any later records. Each
-disagreement between a record's stamps and the records is refused by its name (a stamp dropped, added for a finished
-or unreleased response, doubled, out of release order, of another N, of another e), as are a response past its
-`max_tokens` and records the rule can't read."""
+disagreement between a record's stamps and the records is refused by its name (a stamp dropped, of a continued
+response or of a finished one; added for a response with an end cell before b, a failed one or an unreleased one;
+doubled; out of release order; of another N; of another e), as are a stamped response past its `max_tokens` and
+records the rule can't read."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -45,7 +50,7 @@ def _ids(q: int, n: int, last: int | None = None) -> tuple[int, ...]:
     return tuple(out[:-1] + [last]) if last is not None else tuple(out)
 
 
-#: (admission bucket, prompt ids, max_tokens, response ids) of connections 1 … 9; connection 9's server never answers
+#: (admission bucket, prompt ids, max_tokens, response ids) of connections 1 … 10; connection 9's server never answers
 TRAFFIC = (
     (0, 3, 4, _ids(1, 4)),             # ended in the first execution phase
     (1, 100, 20, _ids(2, 20)),         # four request cells, its END in bucket 3; its ids in buckets 4 … 13
@@ -56,10 +61,15 @@ TRAFFIC = (
     (12, 2, 1, _ids(7, 1)),            # its one id and its END in bucket 15
     (18, 9, 7, _ids(8, 7)),            # ids in buckets 21 … 24: one id in bucket 24
     (19, 3, 5, ()),                    # failed late at its first egress cell, bucket 22
+    # its second id, in bucket 23, is an end-of-sequence id; its server sends on to bucket 32, its END in bucket 33
+    (20, 4, 30, (10_000, EOS[0], *_ids(10, 18))),
 )
 LATE = (8,)
 #: each close's stamps
-STAMPS = {0: (), 8: ((2, 1, 8), (4, 3, 0)), 16: ((4, 3, 16),), 24: ((4, 3, 32), (8, 7, 6)), 32: ()}
+STAMPS = {0: (), 8: ((2, 1, 8), (3, 2, 6), (4, 3, 0)), 16: ((4, 3, 16), (6, 5, 4)),
+          24: ((4, 3, 32), (8, 7, 6), (10, 9, 2)), 32: ((10, 9, 18),), 40: ()}
+#: each close's continuations, as (q, N, e): the stamped responses that aren't finished
+CONTINUED = {0: (), 8: ((2, 1, 8), (4, 3, 0)), 16: ((4, 3, 16),), 24: ((4, 3, 32), (8, 7, 6)), 32: (), 40: ()}
 
 
 def _request(q: int, prompt: int, max_tokens: int) -> C.Request:
@@ -74,7 +84,7 @@ def _bytes(r: C.Request) -> bytes:
     return id_request(**r._asdict(), frame_bytes=B, offset=0)
 
 
-def _serve(traffic=TRAFFIC, requests=REQUESTS, late=LATE, windows=4) -> ST.Served:
+def _serve(traffic=TRAFFIC, requests=REQUESTS, late=LATE, windows=5) -> ST.Served:
     return ST.serve(PARAMS, [_bytes(r) for r in requests], [a for a, *_ in traffic], [FAST] * len(traffic),
                     [xs for *_, xs in traffic], windows, late)
 
@@ -106,14 +116,17 @@ def _slot(records, t: int, q: int, k: int = 0) -> int:
 def test_each_closes_stamps_are_the_open_responses_released_counts_in_release_order(run):
     assert run.admitted == tuple(a for a, *_ in TRAFFIC)
     audit = W.audit(PARAMS, run.ingress, run.egress, run.failed)
-    assert [w["accepted"] for w in audit["windows"]] == [True, True, False, True]
+    assert [w["accepted"] for w in audit["windows"]] == [True, True, False, True, True]
     conns = {c["ordinal"]: c for c in audit["connections"]}
-    assert [conns[q]["ingress_end"] for q in range(1, 10)] == [1, 3, 3, 6, 8, 12, 13, 19, 20]
+    assert [conns[q]["ingress_end"] for q in range(1, 11)] == [1, 3, 3, 6, 8, 12, 13, 19, 20, 21]
     assert conns[9]["failed"] == "late" and conns[9]["ended"] == 22
+    assert STAMPS.keys() == CONTINUED.keys() and all(set(CONTINUED[b]) <= set(STAMPS[b]) for b in STAMPS)
     for b, want in STAMPS.items():
         edge = _edge(run, b)
-        assert edge.stamps == want and [(c.q, c.n, c.e) for c in edge.continuations] == list(want)
+        assert edge.stamps == want and [(c.q, c.n, c.e) for c in edge.continuations] == list(CONTINUED[b])
         responses = C.read(PARAMS, run.ingress, run.egress, b)
+        assert want == tuple((r.q, r.n, len(C.released(r, b))) for r in responses
+                             if conns[r.q]["ended"] is None or conns[r.q]["ended"] >= b)
         by_release = sorted((c for c in conns.values() if c["ingress_end"] < b),
                             key=lambda c: (c["ingress_end"], c["ordinal"]))
         assert [(r.q, r.n, r.released) for r in responses] == \
@@ -150,92 +163,135 @@ def test_a_response_cut_at_closes_in_a_row_has_one_continuation_however_it_is_bu
 
     whole = four(32)
     assert [len(C.released(whole, b)) for b in (8, 16, 24, 32)] == [0, 16, 32, 40]
-    assert [C.is_open(whole, b, EOS) for b in (8, 16, 24, 32)] == [True, True, True, False]
+    assert [C.is_open(whole, b) for b in (8, 16, 24, 32)] == [True, True, True, False]
+    assert [C.continues(whole, b, EOS) for b in (8, 16, 24, 32)] == [True, True, True, False]
     at8 = C.resumed(four(8), 8, EOS)
     assert at8.request == REQUESTS[3] and at8.released == 8 and at8.cells == ()
     at16 = C.resumed(C.resumed(whole, 8, EOS), 16, EOS)
     assert at16 == C.resumed(whole, 16, EOS) and len(at16.request.prompt) == 7 + 16
     assert at16.request.max_tokens == 40 - 16 and at16.cells == whole.cells[16:]
-    (stamp,), (cont,) = C.stamps([at16], 24, EOS), C.continuations([at16], 24, EOS)
+    (stamp,), (cont,) = C.stamps([at16], 24), C.continuations([at16], 24, EOS)
     assert stamp == (4, 3, 32 - 16)
     direct = next(c for c in _edge(run, 24).continuations if c.q == 4)
     assert cont.request == direct.request and direct.e == 32 and direct.request.max_tokens == 8
-    with pytest.raises(ValueError, match="isn't open"):
-        C.resumed(whole, 32, EOS)
+    three = next(r for r in C.read(PARAMS, run.ingress, run.egress, 8) if r.q == 3)
+    for r, b in ((whole, 32), (three, 8)):
+        with pytest.raises(ValueError, match="doesn't continue"):
+            C.resumed(r, b, EOS)
 
 
-def test_a_response_that_ends_at_the_close_isnt_continued_and_one_with_an_id_in_its_bucket_is(run):
-    at = {b: {r.q: r for r in C.read(PARAMS, run.ingress, run.egress, b)} for b in (8, 16, 24, 32)}
+def test_a_finished_response_is_stamped_until_its_end_cell_and_never_continued(run):
+    at = {b: {r.q: r for r in C.read(PARAMS, run.ingress, run.egress, b)} for b in (8, 16, 24, 32, 40)}
+
+    def qs(b: int, eos=EOS) -> tuple[list[int], list[int]]:
+        responses = list(at[b].values())
+        return [s.q for s in C.stamps(responses, b)], [c.q for c in C.continuations(responses, b, eos)]
+
     three = at[8][3]
     assert three.ended is None and len(C.released(three, 8)) == 6 == three.request.max_tokens
-    assert at[16][3].ended == 8 and not C.is_open(three, 8, EOS) and not C.is_open(three, 8, ())
+    assert C.is_open(three, 8) and C.finished(three, 8, EOS) and C.finished(three, 8, ())
+    assert qs(8) == ([2, 3, 4], [2, 4]) == qs(8, ())
+    assert at[16][3].ended == 8 and not C.is_open(at[16][3], 16) and 3 not in qs(16)[0]
+
     seven, six = at[16][7], at[16][6]
-    assert seven.ended == 15 and not C.is_open(seven, 16, EOS)
+    assert seven.ended == 15 and not C.is_open(seven, 16)
     assert six.ended is None and at[24][6].ended == 16 and [t for t, _ in six.cells] == [14, 14, 15, 15]
     assert six.cells[-1][1] in EOS and len(six.cells) < six.request.max_tokens
-    assert not C.is_open(six, 16, EOS)
-    assert C.stamps(list(at[16].values()), 16, ()) == ((4, 3, 16), (6, 5, 4))
+    assert C.is_open(six, 16) and C.finished(six, 16, EOS) and not C.finished(six, 16, ())
+    assert qs(16) == ([4, 6], [4]) and qs(16, ()) == ([4, 6], [4, 6])
+    assert not C.is_open(at[24][6], 24)
+
+    ten = at[40][10]
+    assert ten.released == 21 and ten.ended == 33 and len(ten.cells) == 20 < ten.request.max_tokens
+    assert ten.cells[1] == (23, EOS[0]) and [len(C.released(ten, b)) for b in (24, 32, 40)] == [2, 18, 20]
+    assert [C.is_open(ten, b) for b in (16, 24, 32, 40)] == [False, True, True, False]
+    assert C.finished(ten, 24, EOS) and C.finished(ten, 32, EOS)
+    assert qs(24) == ([4, 8, 10], [4, 8]) and qs(32) == ([10], []) and qs(40) == ([], [])
+    (cont,) = C.continuations([at[24][10]], 24, ())
+    assert (cont.e, cont.request.max_tokens, cont.request.prompt[-2:]) == (2, 28, (10_000, EOS[0]))
+
     eight = at[32][8]
     assert [t for t, _ in eight.cells] == [21, 21, 22, 22, 23, 23, 24] and eight.ended == 24
     cont = next(c for c in _edge(run, 24).continuations if c.q == 8)
     assert cont.e == 6 and cont.request.max_tokens == 1 and cont.request.prompt[-6:] == _ids(8, 6)
-    assert 5 not in at[8] and at[16][5].released == 8 and not C.is_open(at[16][5], 8, EOS)
+    assert 5 not in at[8] and at[16][5].released == 8 and not C.is_open(at[16][5], 8)
     for b, want in STAMPS.items():
-        assert C.stamps(list(at[32].values()), b, EOS) == want
-    assert at[24][9].ended == 22 and at[24][9].cells == () and not C.is_open(at[24][9], 24, EOS)
+        assert C.stamps(list(at[40].values()), b) == want
+        assert tuple((c.q, c.n, c.e) for c in C.continuations(list(at[40].values()), b, EOS)) == CONTINUED[b]
+    assert at[24][9].ended == 22 and at[24][9].cells == () and not C.is_open(at[24][9], 24)
 
 
 def test_no_cell_at_or_after_the_close_moves_a_stamp(run):
     other = _serve(traffic=tuple((a, p, m, _ids(q + 20, len(xs))) for q, (a, p, m, xs) in enumerate(TRAFFIC, 1)))
-    for b in (8, 16, 24):
+    for b in (8, 16, 24, 32):
         w = b // T
         alone = C.edge(PARAMS, run.ingress[:w], run.egress[:w], b, EOS)
         beside = C.edge(PARAMS, run.ingress[:w] + other.ingress[w:], run.egress[:w] + other.egress[w:], b, EOS)
         assert alone == beside == _edge(run, b)
-    for b in (16, 24):
-        assert C.edge(PARAMS, other.ingress, other.egress, b, EOS).continuations != _edge(run, b).continuations
+    for b in STAMPS:
+        theirs = C.edge(PARAMS, other.ingress, other.egress, b, EOS)
+        assert theirs.stamps == STAMPS[b]
+        assert (theirs.continuations != _edge(run, b).continuations) == (b in (8, 16, 24, 32))
+    assert [c.q for c in C.edge(PARAMS, other.ingress, other.egress, 32, EOS).continuations] == [10]
 
 
 @pytest.mark.parametrize("name, written", [
-    ("missing", [(4, 3, 32)]),
+    ("missing", [(4, 3, 32), (10, 9, 2)]),
+    ("missing", [(4, 3, 32), (8, 7, 6)]),
     ("missing", []),
-    ("extra", [(4, 3, 32), (7, 6, 1), (8, 7, 6)]),
-    ("extra", [(4, 3, 32), (8, 7, 6), (9, 8, 0)]),
-    ("extra", [(4, 3, 32), (8, 7, 6), (10, 9, 0)]),
-    ("duplicate", [(4, 3, 32), (4, 3, 32), (8, 7, 6)]),
-    ("order", [(8, 7, 6), (4, 3, 32)]),
-    ("release", [(4, 2, 32), (8, 7, 6)]),
-    ("release", [(4, 7, 32), (8, 3, 6)]),
-    ("count", [(4, 3, 33), (8, 7, 6)]),
-    ("count", [(4, 3, 32), (8, 7, 7)]),
-    ("count", [(4, 3, 16), (8, 7, 6)]),
-    ("count", [(4, 3, 32), (8, 7, 0)]),
+    ("extra", [(4, 3, 32), (7, 6, 1), (8, 7, 6), (10, 9, 2)]),
+    ("extra", [(4, 3, 32), (6, 5, 4), (8, 7, 6), (10, 9, 2)]),
+    ("extra", [(4, 3, 32), (8, 7, 6), (9, 8, 0), (10, 9, 2)]),
+    ("extra", [(4, 3, 32), (8, 7, 6), (10, 9, 2), (11, 10, 0)]),
+    ("duplicate", [(4, 3, 32), (4, 3, 32), (8, 7, 6), (10, 9, 2)]),
+    ("order", [(8, 7, 6), (4, 3, 32), (10, 9, 2)]),
+    ("order", [(4, 3, 32), (10, 9, 2), (8, 7, 6)]),
+    ("release", [(4, 2, 32), (8, 7, 6), (10, 9, 2)]),
+    ("release", [(4, 7, 32), (8, 3, 6), (10, 9, 2)]),
+    ("count", [(4, 3, 33), (8, 7, 6), (10, 9, 2)]),
+    ("count", [(4, 3, 32), (8, 7, 7), (10, 9, 2)]),
+    ("count", [(4, 3, 16), (8, 7, 6), (10, 9, 2)]),
+    ("count", [(4, 3, 32), (8, 7, 6), (10, 9, 3)]),
+    ("count", [(4, 3, 32), (8, 7, 6), (10, 9, 0)]),
 ])
 def test_each_disagreement_between_the_stamps_and_the_records_is_refused_by_name(run, name, written):
+    """At bucket 24 responses 4 and 8 continue and 10 is finished with no end cell; 6 and 7 have their `END` and 9 its
+    `FAIL` before it, and no connection 11 was released."""
     responses = C.read(PARAMS, run.ingress, run.egress, 24)
-    C.check(STAMPS[24], responses, 24, EOS)
-    C.check([C.Stamp(*s) for s in STAMPS[24]], responses, 24, EOS)
+    C.check(STAMPS[24], responses, 24)
+    C.check([C.Stamp(*s) for s in STAMPS[24]], responses, 24)
     with pytest.raises(C.Refused, match=f"^{name}: ") as e:
-        C.check(written, responses, 24, EOS)
+        C.check(written, responses, 24)
     assert e.value.name == name and name in C.REFUSALS
     for b, want in STAMPS.items():
-        if b != 24 and want != STAMPS[24]:
+        if b != 24:
             with pytest.raises(C.Refused):
-                C.check(want, responses, 24, EOS)
+                C.check(want, responses, 24)
+    with pytest.raises(C.Refused, match="^missing: response 10 "):
+        C.check(CONTINUED[24], responses, 24)
+    with pytest.raises(C.Refused, match="^extra: response 3 .* has an end cell before it"):
+        C.check([(3, 2, 6), *STAMPS[16]], C.read(PARAMS, run.ingress, run.egress, 16), 16)
 
 
-def test_a_response_past_its_max_tokens_is_refused():
+def test_a_stamped_response_past_its_max_tokens_is_refused():
     traffic = ((0, 3, 4, _ids(1, 4)), (1, 3, 5, _ids(2, 12)))
     run = _serve(traffic, tuple(_request(q, p, m) for q, (_, p, m, _) in enumerate(traffic, 1)), (), 2)
     assert _edge(run, 0).stamps == ()
-    for b in (8, 16):
-        with pytest.raises(C.Refused, match="^over: response 2 has (8|12) id cells") as e:
-            _edge(run, b)
+    responses = C.read(PARAMS, run.ingress, run.egress, 8)
+    assert C.stamps(responses, 8) == ((2, 1, 8),)
+    C.check([(2, 1, 8)], responses, 8)
+    for refused in (lambda: _edge(run, 8), lambda: C.continuations(responses, 8, EOS),
+                    lambda: C.resumed(responses[1], 8, EOS)):
+        with pytest.raises(C.Refused, match="^over: response 2 has 8 id cells") as e:
+            refused()
         assert e.value.name == "over"
+    assert [r.ended for r in C.read(PARAMS, run.ingress, run.egress, 16)] == [5, 10]
+    assert _edge(run, 16) == C.Edge((), ())
     r = C.Response(1, 0, 2, _request(1, 3, 2), ((4, 7), (4, 8), (9, 9)))
-    assert C.stamps([r], 4, EOS) == ((1, 0, 0),) and C.stamps([r], 8, EOS) == ()
+    assert [C.stamps([r], b) for b in (4, 8, 16)] == [((1, 0, 0),), ((1, 0, 2),), ((1, 0, 3),)]
+    assert [c.e for c in C.continuations([r], 4, EOS)] == [0] and C.continuations([r], 8, EOS) == ()
     with pytest.raises(C.Refused, match="^over: "):
-        C.stamps([r], 16, EOS)
+        C.continuations([r], 16, EOS)
 
 
 def test_records_the_rule_cant_read_are_refused(run):
@@ -248,7 +304,7 @@ def test_records_the_rule_cant_read_are_refused(run):
         refused("whole number of execution phases", b=b)
     refused("no complete ingress record of execution phase 2", ingress=run.ingress[:2])
     refused("no complete egress record of execution phase 1", egress=run.egress[:1] + run.egress[2:])
-    refused("no complete ingress record of execution phase 4", b=40)
+    refused("no complete ingress record of execution phase 5", b=48)
     refused("two egress records of one execution phase", egress=run.egress + run.egress[:1])
     faulted = [replace(run.egress[0], status=Status(Reason.OVERFLOW)), *run.egress[1:]]
     refused("no complete egress record of execution phase 0", egress=faulted, b=8)
@@ -268,7 +324,8 @@ def test_records_the_rule_cant_read_are_refused(run):
             egress=_with_cell(ended, 9, _slot(run.egress, 9, 4, 1), IT.pad_cell(B, 4)))
     twice = _with_cell(run.egress, 15, _slot(run.egress, 15, 7, 0), IT.end_cell(7, B))
     refused("connection 7's end cell isn't its one end", egress=twice, b=16)
-    refused("connection 10's cell isn't an id cell", egress=_with_cell(run.egress, 9, j, IT.data_cell(5, 10, B)))
+    for q in (10, 11):
+        refused(f"connection {q}'s cell isn't an id cell", egress=_with_cell(run.egress, 9, j, IT.data_cell(5, q, B)))
     early = _with_cell(run.egress, 5, _slot(run.egress, 5, 4), IT.data_cell(5, 4, B))
     refused("egress bucket 5: connection 4's cell isn't an id cell", egress=early, b=8)
 
@@ -295,10 +352,12 @@ def test_records_the_rule_cant_read_are_refused(run):
 def test_responses_out_of_their_records_order_are_refused():
     one = C.Response(1, 0, 2, _request(1, 3, 9), ((5, 7), (6, 8)))
     two = C.Response(2, 1, 3, _request(2, 3, 9), ((6, 9),))
-    assert C.stamps([two, one], 8, EOS) == ((1, 0, 2), (2, 1, 1))
+    assert C.stamps([two, one], 8) == ((1, 0, 2), (2, 1, 1))
     for bad in ([one, two._replace(q=1)], [one, two._replace(n=0)], [one, two._replace(released=1, cells=())],
                 [one._replace(cells=((6, 7), (5, 8))), two], [one._replace(cells=((1, 7),)), two]):
         with pytest.raises(C.Refused, match="^records: "):
-            C.stamps(bad, 8, EOS)
+            C.stamps(bad, 8)
         with pytest.raises(C.Refused, match="^records: "):
-            C.check([], bad, 8, EOS)
+            C.check([], bad, 8)
+        with pytest.raises(C.Refused, match="^records: "):
+            C.continuations(bad, 8, EOS)
