@@ -871,13 +871,5 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
     return deco
 
 
-<<<<<<< 99c8914848
 __all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
-           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
-||||||| merged common ancestors
-__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
-           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
-=======
-__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
            "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]
->>>>>>> 7af4d24fca3e
