@@ -28062,3 +28062,23 @@ How I know, by group: `test_suites.py` 5 rows and `test_move_check.py` 1 row: ru
 - **The digests are the staged tree's.** When top names the 12:30Z staging: `python3 hand_lines_build.py /agent/repos/verity origin/BRANCH hand-lines.toml` in `lanes/proofs/layout/`, then `python3 hand_lines_check.py hand-lines.toml /agent/repos/verity origin/BRANCH`. On my own copy over `main` `d1c3ccf9e6a6` the 8 digests equal the staged tree's [run]. Not done by me: no new staged branch is on the remote at 12:08Z (only `cursor/top-layout-staged-82b0` at `3ce911415f6d`).
 - **Still open from my entries, for your word:** one run of the two `generate.sh` by a Lean worker on the staged tree with our rows applied, to show the three vector files are byte for byte what the command writes; the 13 files under `verity/hardware/` that the registry gives to compute-research after the move; the staged tree's private row that reads `verity/protocols` whole (1,278 files to private instead of 999); the mover's three unacknowledged split references on `main` `d1c3ccf9e6a6`, one in our `benchmarks/route_capture/pyproject.toml`.
 - **Notes:** `fda1bceeb3`. The scan scripts and their outputs are in `lanes/proofs/layout/tools/`, so a new VM starts from the notes.
+
+## HOUSEKEEP, Tue 10 Nov 12:10Z: CORRECTION and your 12:07Z item 3: the registry gives compute-research 11 of our files after the move, not 13, and network-accounting 4, not 5; the 11 by file, with what reads each and my recommendation
+
+**The correction.** My 11:55Z entry said 13 files go to compute-research and 5 to network-accounting. I miscounted my own table: it is **11** and **4** (the 30 stand: vllm 9, memory-accounting 3, no owner 3, compute-research 11, network-accounting 4) [recounted from the registry on `main` `a337d86e48` and on the staged tree `3ce911415f6d`]. The 4 are `verity/protocols/pyproject.toml`, `reporting.py`, `tests/test_profile.py`, `tests/test_record.py`. If you gave compute-research "13", the list below is the whole of it.
+
+**The 11, by the registry's row `verity/hardware/` (compute-research's; today it holds 10 files: the hardware cards and their tests).**
+
+| after the move | today | what it is | what reads it today [`git grep` on `a337d86e48`] |
+|---|---|---|---|
+| `verity/hardware/site/` (3: `__init__.py`, `pyproject.toml`, `tests/test_site.py`) | `verity/core/site/` | the Site in code, 697 lines, mirroring `Security/Definitions/Core/Site.lean` | `verity/core/protocols/registration.py`; SPOT's service suite (`verity/core/service/spot/tests/test_site_difftest.py` and its `lakefile.toml`); the composition's `tests/test_registration_difftest.py` |
+| `verity/hardware/registration.py` | `verity/core/protocols/registration.py` | the registration log in Python (`CoreProtocol/Registration.lean`), 332 lines | SPOT's `one_stage/registration.py` and `tests/test_one_stage.py`; the composition's `tests/test_registration_difftest.py`; `benchmarks/datacenter/datacenter/logical.py` and its test (network-accounting's) |
+| `verity/hardware/record.py` | `verity/core/protocols/record.py` | `Core.Record` in Python (`CoreProtocol/Record.lean`), 76 lines | SPOT's `challenger.py`; `verity/core/protocols/tests/test_record.py` |
+| `verity/hardware/world/` (6: `World.lean`, `lakefile.toml`, `lake-manifest.json`, `lean-audit.json`, `lean-toolchain`, `.gitignore`) | `verity/core/primitives/world/` | the Lake package `core_world`: the outside world a device's driver runs over, 70 lines | one `require`, `verity/core/devices/certifier/lean/lakefile.toml:22-23`, and the certifier device's Lean (network-accounting's). No file of ours |
+
+**Recommendation.**
+- **Ours, with three registry rows** (`verity/hardware/site/`, `verity/hardware/registration.py`, `verity/hardware/record.py`; 5 files): each mirrors Lean that is ours (the Site, and the interface package's `Registration` and `Record`, which go to `verity/flock/verifier/interface`), the Site's difftest runs in SPOT's service suite, and every reader but `benchmarks/datacenter` is SPOT's or the composition's. Nothing compute-research owns reads them.
+- **Not ours: `verity/hardware/world/`** (6 files). Its one reader is the network certifier's device, so by use it is network-accounting's; compute-research's row would give it an owner who neither reads nor writes it. A Lake package needs an owner for its lock (`lean-audit.json`), so it should not be left to a default row.
+- test_record.py, the record's own test, goes to `verity/protocols/tests/` and comes back to us with network-accounting's row for `:439`; nothing to do.
+
+**Not checked:** readers that load a file by a computed path rather than an import (my earlier scan at this head found none for these four; not re-run now).
