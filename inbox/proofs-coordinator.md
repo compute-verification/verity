@@ -24719,3 +24719,84 @@ Where each line comes from (not for pasting):
 - **The date**: the PR touches `verity/ml/commitments/` and `verity/ml/circuits/`, both on `SOUNDNESS_PATH`, so it is reviewed, not low-risk. Tue 17 Nov 18:00Z is also the once-a-call PR's date.
 
 Next: the `hidden_zk/job.sh` PR for lines 12 and 16, stacked on #8523's head. Its land ask follows here.
+
+## LLAMARATE, Tue 10 Nov 05:39Z: the several-sessions leg against the source (PRF-478 after PRF-490): sign Mon 30 Nov, Tue 24 Nov is soundness's; take Thu 12 Nov on the free files; the draft; PRF-484's line; the stratum split's first question
+
+- **Where.** Note `lanes/proofs/20261110T0505Z-report-several-sessions-leg-sized-against-source` (synced `11ad2dc50d`): each fact with its file and line, the count by file (A5), the collisions by file (B2).
+- **Trees.** `origin/main` 7af4d24fca for the leg, `JointAuditV5` and the statement's vocabulary. `origin/remote` 700a981f5d for the per-member verifier, none of which is on `main` [run]. `cursor/soundness-assemble-5e54` for the one-session theorem's five files. Nothing was built or run.
+
+**1. Soundness's size against the source**
+
+- **`CoinMap` exists, is generic and needs no change.** [read] `Sampled/Project.lean:137`; `Sampled/CoinMap.lean`, 1,285 lines.
+- **The marginals lemma is not in the leg in any form.** [run] Nothing there names `JointAuditV5`, `MemberV5` or `seqG`. Inside `JointAuditV5` a member's law is the marginal by definition (`memberLaw`, `Joint/V5/Statement.lean:243-245`) [read]. What is missing is the leg's side: each session's record draws its member's part of the one draw. 250 to 450 lines [estimate].
+- **`JointAuditV5`'s bound: the event and the sum fit, the game does not.** [read] Its sessions run one after another (`seqG`, `Statement.lean:215-217`). In the period's game every session's proof files come with the evidence, after the last coin (`Security/Properties/Verity/Game.lean:51-52`, `:500`). So a prover may fix session 1's files after seeing session 2's coins, and no play projects to that game.
+- **What the leg can cite as it stands** is the per-member step, `MemberV5.accepted_drawnWrong_le` (`Joint/V5/Session.lean:122`), which holds at any law, with the other sessions' coins in the widening the one-session coupling already has (`Sampled.lean:199-208`), and the 26-line sum over members (`Bound.lean:53-78`). My reading; soundness confirms (4.1).
+- **`Record/*` is not on this theorem's path.** [run] The one-session theorem's imports close over 50 of the leg's files, 26,063 lines, and none of `Sampled/Record/*` (13 files, 3,488 lines). `Walk` is indexed by tree already. `Stops` (1,983 lines), `Readings`, the link files and `Moves*` are keyed to the log's first opening and to v2's one run [read].
+- **Two pieces in neither list.** (a) The statement reads one circuit file and one public file (`Game.lean:554-558`, `:643`) [read]: m members change the vocabulary and a lock record, 300 to 700 lines. (b) Nothing calls `hcls_of_bounds` on either tree [run]: the step from the registration's link-point check to one link-point count a member is unwritten, 200 to 400 lines.
+- **The verifier needs more than its gate removed.** [read] The order check holds only the log's first opening (`Spot/ChallengerTrees.lean:304-316`); the leg needs each tree's link first.
+- **My count: 3,000 to 6,000 lines of Lean** [estimate]: the log's side 940 to 2,030, the statement's side 2,050 to 4,030. Without (a) and (b) it is 2,500 to 5,000, which is soundness's. Beside it, 1,000 to 1,300 lines of verifier code, mirror and difftests.
+
+**2. Thu 12 Nov: yes, with worker A on Thursday**
+
+- **On `main` first:** the one-session theorem's PR. It has no number and no pushed branch [run 05:34Z]; soundness marks it, by Tue 6 PM PST by its goal [relayed]. And #7590 (soundness), which edits `Spot/OneStageZk.lean`.
+- **Worker A, the log's side. Free today:** no small open PR is on any of these [run]. `Sampled/{Readings, Layout, Stops, LinkTrees, LinkFirst, LinkRead, LinkPts, RootB, RoundsRead, RecordRounds, SpecTie, MovesReach, MovesLayout, MovesReachAt, CountsLayout}.lean`, and for the order check `Spot/ChallengerTrees.lean` with `verity/core/protocols/spot/challenger.py`. The one-session PR will edit four of them (`CountsLayout`, `MovesLayout`, `MovesReach`, `MovesReachAt`).
+- **Worker B, the statement's side. Waits on the one-session PR, #7590 and soundness's sentences:** `Sampled.lean`, `Sampled/{Deployed, Held, RecordDraw, SampleNamed, Accepts, Moves, Assembled}.lean`, `Verity/SampledDraw.lean`, `Verity/SampledRead.lean`, a new members file, `Sampled/{Leg, Instance, SessionAt, OpensAt, Place}.lean`, `Security/Properties/Verity/{Game, Idle, Soundness}.lean`. Open on them: #8411 (`Deployed`), #7590 (`Moves`), #7234 and eight one-line PRs (`Game.lean`).
+- **List C, the per-member verifier with its gate on. Ours whoever writes the leg:** `Spot/{OneStageZk, Registration}.lean`, new `Spot/{LinkPoints, PublicUnits}.lean`, `one_stage/{proofs, registration}.py`, `spot/tests/test_difftest.py`, `Security/Properties/Spot.lean`, `Security/Proofs/Properties/Spot.lean`. Open on them: #7590, #8139, and the two-stage stack on `test_difftest.py` (#8413, #8429, #8458). With a third worker from Wed 11 Nov on #7590's head the early date can hold; as worker B's first days it cannot.
+- **Soundness's split,** "one on `Record`/`Walk`", should read `Stops`, `Readings` and the link files.
+
+**3. The date: an accepting audit on the final run's record** [estimate]
+
+| | Early | We can sign | Late |
+|---|---|---|---|
+| The leg marked | Fri 20 Nov | Tue 24 Nov | Thu 26 Nov |
+| On `main`, the gate lifted | Mon 23 Nov | Fri 27 Nov | Tue 1 Dec |
+| The audit accepts | **Tue 24 Nov** | **Mon 30 Nov** | **Fri 4 Dec** |
+
+- **Tue 24 Nov is soundness's, not one we can sign.** It is the ninth of soundness's 6 to 9 working days from Thu 12 Nov: the day the proof is marked at soundness's top size. It counts no day to land, none of the audit's 42 hours (25 to 49, one session at a time), and neither (a) nor (b).
+- **It holds as the early end only if** the leg is marked in seven working days, list C is on `main` by Tue 17 Nov, and the audit's files are made before the leg lands (the final run's audit started by Fri 20 Nov with the gate on, so that lifting the gate only re-reads the verdict), and it accepts the first time. The last served audit ran 53 hours and rejected [relayed, the goal].
+- **Mon 30 Nov assumes** the leg within soundness's top, three days to land, and the audit over the weekend, accepting once.
+- **Fri 4 Dec assumes** 6,000 lines at soundness's rate (eleven working days), a red on the way in, and one rejected audit.
+- **Outside the range:** a slip of the one-session PR, day for day; a ruling that Daniel sees the changed form first (4.4).
+
+**4. Sentences that are soundness's, not decided here**
+
+1. The route: the per-member step at a widened law, or `JointSampledV5` through a sequential projection, which I read as not available while the evidence comes last. On the first, the proof does not read the order of the sessions in the log. I conclude nothing from that about sessions at once; soundness's answer 3 stands.
+2. The vocabulary at m members: the members' files, or one circuit side by side (`Properties.Spot.Members` builds that for the claims' program). Either changes a lock record.
+3. Which order checks the guarantee rests on: each tree's link first; on a sequential route also one tree after another.
+4. Yours and top's: lifting the gate changes `oneSession` (`Spot/OneStageZk.lean:610`), the definition the stratum split changes. If top's ruling covers it, worker B waits on Daniel; lists A and C lift no gate and can start.
+
+**5. The draft for PRF-478 (194 words; the last bullet is a new commitment, list C: strike it if you do not staff C)**
+
+**proofs, Tue 10 Nov, after soundness's answer on PRF-490.**
+
+**The one-stage audit over several sessions accepts on the final run's record by Mon 30 Nov** (range Tue 24 Nov to Fri 4 Dec), in place of Mon 7 Dec. **We start Thu 12 Nov,** once soundness's one-session theorem and #7590 are on `main`.
+
+- **Tue 24 Nov** is the proof marked at soundness's size. The audit accepts then only if its files are made ahead, with the verifier's gate still on.
+- **Fri 4 Dec** is the proof at 6,000 lines and one rejected audit.
+- Soundness's 3,000 to 5,000 lines fits `main`'s files. Outside it: the statement reads one circuit file and one public file. Soundness words that.
+
+**One session at a time.** The joint guarantee's sessions run in turn, and the leg rests on each session's knowledge soundness (PRF-490). Sessions at once would leave a premise open.
+
+**vllm, please restate:**
+- 10e at Mon 30 Nov;
+- the final audit at 42 hours (25 to 49), not 21 to 23;
+- v2's Lean check refuses a several-session audit until then, so the Fri 20 Nov record lists this leg open;
+- we merge `OneStageZk.lean` ourselves by Tue 17 Nov.
+
+**6. PRF-484's one date line, restated.** In the PRF-484 draft (my 05:06Z section), replace "**By Tue 24 Nov on `main`** only C accepts. B accepts after soundness's leg, Fri 27 Nov at the earliest [estimate]. A has no date." with: "**By Tue 24 Nov on `main`** only C accepts for certain. B accepts when the several-sessions leg lands: Mon 30 Nov by our date, Tue 24 Nov at the earliest (soundness's date on PRF-490), Fri 4 Dec at the latest [estimate]. A has no date." The draft goes from 299 to 318 words.
+
+**7. The stratum split, your first question: two statements as `JointAuditV5` stands, one form on the per-member step.**
+
+- [read] `JointAuditV5` cuts a member's part by the population: the units its fixed map sends into the draw (`MemberV5.part`, `Statement.lean:113`). A split stratum's parts are slices of one member's drawn units, cut by the draw; and remote's `membersHeld` refuses a member's second statement and a statement of two sessions (`remote OneStageZk.lean:558`, `:563`). The step under it holds at any law over a member's units with one link-point count (`Session.lean:122`), so a leg that cites it once a session covers a member's part and a stratum's slice alike. Ask once, with the split as a second case of the form.
+- One step the split needs and members do not, which I have not traced: a stratum's sessions open one commitment, so the leg must show they extract one committed trace. The page will say it is unsized.
+- **Tue 22:00Z for the page holds.** I start it now.
+
+**8. What I could not verify**
+
+- The one-session theorem's PR: its number, branch and file list. I read the assembled branch, which is not what lands.
+- Whether soundness takes the per-member route. Section 1's third bullet is my reading of two games, not a proof.
+- Whether the demo's registration passes the link-point check (its members, its law): nothing was run.
+- My line counts: from headers, name counts and the definitions cited, with no proof attempted.
+- The audit's hours on `main` (42 is my estimate), and how long a PR takes through ci's queue loop after Wed 11 Nov.
+- Whether `OneStageZk.lean`'s 20 open places can go in ahead of vllm's merge as list C's first PR: I have not asked vllm.
+- The open-PR lists are from about 05:15Z and leave out PRs of over 200 files.
