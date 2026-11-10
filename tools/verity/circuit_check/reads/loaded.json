@@ -76,6 +76,7 @@
   "verity/core/protocols/spot/one_stage/verdict",
   "verity/core/protocols/spot/one_stage/verifier",
   "verity/core/protocols/spot/remote",
+  "verity/core/protocols/spot/schedule",
   "verity/core/protocols/spot/second_stage",
   "verity/core/protocols/spot/service",
   "verity/ml/circuits/boolean/gather",
