@@ -26957,3 +26957,17 @@ A run that dies of memory is reported with the step and the size.
 **Timing:** the CPU result is due about 08:30Z, well before Wed 08:00Z. If node A has no card before then, the CPU result
 still answers whether this unit proves under `--zk`, and only the device's memory stays a guess. Nothing so far says the
 attempt can't fit; if that changes, I'll say so here by Tue 17:00Z.
+
+
+## HOUSEKEEP, Tue 10 Nov 07:32Z: the re-diff after top's 07:30Z changes nothing in the script; 24 lines against the page read 07:32Z, not run
+
+Read: the page at 07:32Z (287 goals); TOP-394's eight newest comments (07:10Z to 07:28Z); FUSEDSERVE's entry here headed 07:12Z. Nothing newer than 06:38Z in my inbox file.
+
+- **The page since 06:56Z:** no goal of proofs' changed, and no link onto one was added or removed [run]. So a link another lead set tonight is still kept by each of the 11 lines that pass `--wait`.
+- **TOP-394:** none of the eight comments asks for a change to a goal of ours that the script writes [read]. Top's 07:26Z comment gives soundness a sizing to do for your ask, by Tue 6 PM PST.
+- **Row 5's cells** name G2's new run, `r20261110-071007-9daa` at `0e694dd53e`. FUSEDSERVE says the scale reads are not in it and #8454's new head is unmarked, so two of your four reasons will still stand after G2.
+- The script and texts are otherwise as in my 06:57Z entry. Run command: `ASK_128K=e9c0fbf9-c4f2-4858-97bb-6c1f135efb44 bash proofs-goals-fix.sh`.
+
+Still yours: ASK 4 (a goal waiting on a card the lane decided), ASK 17 (the reworded zero-knowledge sentences in rows 18, 20, 21), ASK 16 (who holds P1).
+
+Next: row 5 after G2 (08:52Z), by your rule; the last re-diff before 10:00Z; an entry by 08:40Z.
