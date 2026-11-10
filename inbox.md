@@ -25,3 +25,6 @@ Coordinator 07:20Z: a new entry at the end of your file on cursor/proofs-inbox.
 [2026-11-10T07:53Z] 487c7ec63ca5
 Coordinator 07:53Z: new entry in your file on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-3293cb24-a894-534c-a43c-bfe5dbd7ba82.md | tail -30). Read it at your next step.
 
+[2026-11-10T08:02Z] e86ad63dfa16
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-3293cb24-a894-534c-a43c-bfe5dbd7ba82.md | tail -30
+
