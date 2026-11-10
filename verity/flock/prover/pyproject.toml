@@ -255,7 +255,7 @@ tests = ["tests/test_rec_inner_stage.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/flock/prover/python/verity_flock/templates",
-    "verity/ml/windows",
+    "verity/windows",
 ]
 
 [[tool.verity.tests.reads]]

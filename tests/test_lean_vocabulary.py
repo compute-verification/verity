@@ -986,10 +986,10 @@ KNOWN: dict[str, str] = {
         "homonym, one inner proof through the firewall: rename (proofs)",
     "verity/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
-    "verity/ml/windows/interface.py::Circuit":
+    "verity/windows/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
-    "verity/ml/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
-    "verity/ml/windows/interface.py::Window":
+    "verity/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
+    "verity/windows/interface.py::Window":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes the builder's output for it (proofs)",
     # verity/
     "verity/settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",

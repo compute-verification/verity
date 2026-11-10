@@ -23,7 +23,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import mufu as MU
 from verity.definitions.ops import prims as OP
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 
 #: one plain row template, one ``COLS`` row's at its own width, and one packed with two return fields (a whole ``PARTS`` part,
 #: DeepGEMM's linear's quantisation, here on rows of its own family); each row's committed members and their element dtypes

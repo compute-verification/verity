@@ -26,7 +26,7 @@ from verity.spot.verifier.one_stage import partition as P, registered as REG, re
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
-from verity.ml.windows import flock_inputs as FI, wiring as WI
+from verity.windows import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import toy as T

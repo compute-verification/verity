@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.windows import rows as CS
+from verity.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, const_word
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import Template, template

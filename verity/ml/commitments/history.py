@@ -1,7 +1,7 @@
 """History tables: rows other proof blocks output, committed as one table that proof blocks read at hidden positions, as
 registered values are read. The Lean verifier (`Spot.HistoryTable`) is the definition; this module mirrors it, held to it
 by the spot suite's `test_history_difftest.py`, for the prover's committer (`HistoryTable`), the verifier's side of a
-window (`verity.ml.windows.history`) and one-stage's registration check (`registration.check`'s ``history``).
+window (`verity.windows.history`) and one-stage's registration check (`registration.check`'s ``history``).
 
 A table's tree has a fixed capacity, `CAPACITY` leaves, whatever its length, so its shape says nothing of the request's.
 Its domain is ``CommitmentDomain(B, -2, RangeIndexedDomain(0, capacity))``, ``B`` the identity digest of
@@ -214,7 +214,7 @@ class HistoryTable:
     appended in position order (`append`), each under its own salt, in a tree of ``capacity`` leaves with `placeholder`'s
     past its length. The tree is kept whole, so an append rehashes only the leaves and paths it changes: a window's rows
     cost about ``log2(capacity)`` hashes each, never the table's capacity again. It reads as a registered value does where
-    a window commits one (`verity.ml.windows.interface.Window`'s ``registered``): ``rows``, ``salts``, ``words``,
+    a window commits one (`verity.windows.interface.Window`'s ``registered``): ``rows``, ``salts``, ``words``,
     ``word_bits``, ``leaves`` (its capacity), ``root``, ``path`` and ``entry``; ``bcs`` are its rows' public strings."""
 
     word_bits = 16

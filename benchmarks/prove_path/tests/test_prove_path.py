@@ -44,7 +44,7 @@ import pytest
 from verity.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
 from verity.circuits.codec import canonical_json
-from verity.ml.windows import interface as IF, rows as CS
+from verity.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import window_advice as WA

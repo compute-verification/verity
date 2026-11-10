@@ -56,7 +56,7 @@ from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
 from verity.definitions.boolean import gate_table
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration

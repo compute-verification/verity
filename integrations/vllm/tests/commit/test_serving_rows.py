@@ -22,7 +22,7 @@ from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
 from verity.circuits.defs import REGISTRY, bind
 from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R
-from verity.ml.windows import flock_inputs as FI, rows as SR
+from verity.windows import flock_inputs as FI, rows as SR
 from verity_vllm.commit import index as IX
 from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 

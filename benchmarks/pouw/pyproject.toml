@@ -52,7 +52,7 @@ untraced = [
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
 # CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
-# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.ml.windows.rows'
+# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.windows.rows'
 # (the commit files named below: serving_rows and what it imports).
 # test_served_units_summarize runs served_units' summarize.py, which scores the hidden_zk controls its job.sh sources.
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
@@ -69,12 +69,12 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/definitions/kernels", "verity/ml/randomness", "verity/flock/prover/python", "verity/ml/windows",
+          "verity/definitions/kernels", "verity/ml/randomness", "verity/flock/prover/python", "verity/windows",
           "verity/hardware",
           "verity/configuration/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
-          "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
-          "verity/ml/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
+          "integrations/vllm/verity_vllm/commit/__init__.py", "verity/windows/hiding.py",
+          "verity/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/linear",
           "integrations/vllm/verity_vllm/protocols/__init__.py",
           "integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py",

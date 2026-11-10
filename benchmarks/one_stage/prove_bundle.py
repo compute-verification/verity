@@ -60,7 +60,7 @@ import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
 from verity.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS  # noqa: E402
+from verity.windows import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 FORMAT = "verity/prove-bundle/v0"

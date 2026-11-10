@@ -14,7 +14,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
-from verity.ml.windows import interface as I
+from verity.windows import interface as I
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5

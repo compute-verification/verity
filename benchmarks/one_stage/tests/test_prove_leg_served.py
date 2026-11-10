@@ -107,7 +107,7 @@ def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabular
     its arguments' bits, little-endian, the token's below V. (Each stand-in row opens at its token: the generator holds
     `embedding.reference` to it, and the bit-sliced evaluator gives ok = 1 on these words, too slow for a test.)"""
     from verity.circuits.codec import descriptor_id
-    from verity.ml.windows import interface as IF
+    from verity.windows import interface as IF
 
     fn, gen = L.served("embedding-read:1b:300")
     assert descriptor_id(fn) == descriptor_id(IF.resolve("EmbeddingRead_v1{V=300,H=2048}")) == "EmbeddingRead_v1{V=300,H=2048}"

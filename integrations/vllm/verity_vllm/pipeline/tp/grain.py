@@ -32,7 +32,7 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import b1_tp2 as B1T
 from verity.definitions.registry import tp_allreduce as TA
 from verity.definitions.registry import tp_combine as TC
-from verity.ml.windows import interface as I
+from verity.windows import interface as I
 
 COORD, ROW = "coordinate", "row"
 #: the all-reduces whose every element is the same sum of the ranks' words there, by the static holding the element count

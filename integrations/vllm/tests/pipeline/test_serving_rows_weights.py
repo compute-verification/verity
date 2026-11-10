@@ -20,8 +20,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops.prims import HopperBF16WgmmaDot16
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
+from verity.windows import interface as IF
+from verity.windows import rows as CS
 
 ST = {"K": 32, "N": 3, "DOT": HopperBF16WgmmaDot16}
 ROW, UNIT = bind(G.Gemm, **ST), bind(G.Gemm, **{**ST, "N": 1})

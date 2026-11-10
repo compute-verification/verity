@@ -414,12 +414,12 @@
    "verity/protocols/pouw/prover/schemes/pearl_c_device.py",
    "verity/protocols/pouw/prover/schemes/pearl_kw.py",
    "verity/ml/randomness/__init__.py",
-   "verity/ml/windows/__init__.py",
-   "verity/ml/windows/hiding.py",
-   "verity/ml/windows/interface.py",
-   "verity/ml/windows/population.py",
-   "verity/ml/windows/rows.py",
-   "verity/ml/windows/wiring.py"
+   "verity/windows/__init__.py",
+   "verity/windows/hiding.py",
+   "verity/windows/interface.py",
+   "verity/windows/population.py",
+   "verity/windows/rows.py",
+   "verity/windows/wiring.py"
   ],
   "listed": [],
   "probes": [
@@ -3805,11 +3805,11 @@
    "verity/ml/randomness/uniform_from_words",
    "verity/ml/randomness/uniform_from_words.py",
    "verity/ml/randomness/uniform_from_words/__init__.py",
-   "verity/ml/windows/hiding/__init__.py",
-   "verity/ml/windows/interface/__init__.py",
-   "verity/ml/windows/population/__init__.py",
-   "verity/ml/windows/rows/__init__.py",
-   "verity/ml/windows/wiring/__init__.py"
+   "verity/windows/hiding/__init__.py",
+   "verity/windows/interface/__init__.py",
+   "verity/windows/population/__init__.py",
+   "verity/windows/rows/__init__.py",
+   "verity/windows/wiring/__init__.py"
   ]
  },
  "schema": "circuit-check-reads/v1"

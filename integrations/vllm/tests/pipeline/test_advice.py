@@ -252,7 +252,7 @@ def test_the_registration_records_the_committers_weights_roots_and_refuses_anyth
     to); without it, none. A weights record (the verifier's shapes, no root), a registration of no value, one whose values
     aren't weight parameters' entries with a root of 64 bytes, or one of another model than the run's ``serve.json`` names,
     is a usage error."""
-    from verity.ml.windows import interface as IF
+    from verity.windows import interface as IF
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.records import weights_registration as WRG
 

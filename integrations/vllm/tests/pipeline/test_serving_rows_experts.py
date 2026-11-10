@@ -38,8 +38,8 @@ from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry import moe as MOE
-from verity.ml.windows import interface as IF
-from verity.ml.windows import rows as CS
+from verity.windows import interface as IF
+from verity.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import serving_rows as SRW

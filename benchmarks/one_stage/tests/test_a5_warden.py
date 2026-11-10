@@ -21,7 +21,7 @@ import pytest
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.active import HEADER
 from verity.spot.verifier.one_stage import draw as D, verifier as V
-from verity.ml.windows import rows as SR
+from verity.windows import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))

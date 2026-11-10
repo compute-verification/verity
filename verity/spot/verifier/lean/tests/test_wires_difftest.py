@@ -1,6 +1,6 @@
 """A window circuit's wires (`Spot.Wires`): the check at the size of the description (`wires`, `Wires.check`) and the
 unrolled reference (`wires_unrolled`, `Wires.checkRef`), each held to one Python reference that expands every covered
-reader row, as `verity.ml.windows.interface.members` does: reader index i of a wire is unit
+reader row, as `verity.windows.interface.members` does: reader index i of a wire is unit
 ``at + i // C``, row ``c0 + i % C``, and its writer ``base + sum(d[k] * step[k])`` over i's mixed-radix digits, the
 first digit the slowest (`Wire.writers`, copied below rather than imported: a verifier imports no `verity.ml` code).
 Both pieces agreeing with it on the same inputs is the difftest of the closed form (spans, lookups, wired rows and bits,

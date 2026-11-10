@@ -129,7 +129,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     ``public_body`` states. ``zk_out``: the same member under the hm96 circuit as well (today's ``--zk`` statement, 85's
     ``stage-zk``)."""
     from verity.spot.verifier.one_stage import partition as P
-    from verity.ml.windows.flock_inputs import flock_input_files
+    from verity.windows.flock_inputs import flock_input_files
     from verity_flock import subcircuit_templates as TM
 
     win = json.loads((window / "window.json").read_text())

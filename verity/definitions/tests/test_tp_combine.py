@@ -26,7 +26,7 @@ from verity.definitions.registry import boolean_tp_combine as BC
 from verity.definitions.registry import tp_allreduce as TA
 from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_combine as TC
-from verity.ml.windows.interface import K_MAX, check_proof_block, layout
+from verity.windows.interface import K_MAX, check_proof_block, layout
 
 GLM53_N = 6144
 #: (SHOT, CLUSTER) of the fused calls GLM-5.3 serves at TP8 on H200: one-shot to 10 tokens, then two-shot; 8 CTAs to 16 tokens,

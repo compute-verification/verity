@@ -15,7 +15,7 @@ import random
 import pytest
 
 from verity.ml.crypto import lms
-from verity.ml.windows import interface as IF
+from verity.windows import interface as IF
 from verity.protocols.certifier.verifier import blocks as BK
 from verity.protocols.certifier.verifier.blocks import SCAN_STATE
 from verity.protocols.certifier.verifier import transfer_rows as TR

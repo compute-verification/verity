@@ -1696,7 +1696,7 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
             assert codes({}, w)[0] == "R7-output", (name, w)
 
 
-#: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+#: an AROW row table's port (`verity.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 
