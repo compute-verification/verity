@@ -268,6 +268,9 @@ NEW = {
     "verity/ml/definitions/registry/pearl_c_tile.py": "ml:definitions-registry",
     "verity/ml/definitions/registry/pearl_c_tile.circuit-check.py": "ml:definitions-registry",
     "verity/ml/definitions/registry/pearl_c_tile.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/circuits/ops/tests/test_boolean_rolled.py": "ml:ops-boolean",        # tests `ops/boolean/rolled.py`
+    "verity/ml/flock/tests/test_rolled_lowering.py": "ml:flock-lowering",           # the roll's lowering
+    "verity/ml/definitions/tests/test_sparse_mla_combine_columns.py": "ml:definitions-registry",   # tests `sparse_mla_split`
     "benchmarks/memory/": "stays",                     # a benchmark of its own
     "benchmarks/pouw/pearlplus_lean/": "stays",        # a benchmark's Lean, in a directory part of which is archived
     "benchmarks/network_traces/tests/test_scan_zk_v3c.py": "stays",
