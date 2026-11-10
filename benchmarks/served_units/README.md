@@ -4,9 +4,10 @@ A served model's proof blocks proved one type at a time, from synthetic values a
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
 `serve --zk --draw subset:N` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with
 `verity/ml/flock`'s patches), and the Lean verifier (`flock-verify verify --zk`, built from `verity/core/service/flock`), which must
-pass the honest run through every check and reject the selftest build's forgeries (a committed false output word, a false
-output claim, a flipped internal bit). The verifier holds no program for a proof block (`stage.py` says why), so it then
-refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`), which is what `summarize.py` passes it on.
+pass the honest run through `Zk.verify` and every check before the Program and reject the selftest build's forgeries (a
+committed false output word, a false output claim, a flipped internal bit). The verifier holds no program for a proof block
+(`stage.py` says why), so it then refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`). `summarize.py` counts
+that refusal in `lean_refused_no_program`, apart from Lean's acceptances (`lean_accepted`), and never as an acceptance.
 
 Three kinds of type (`stage.py`'s docstring has each):
 
