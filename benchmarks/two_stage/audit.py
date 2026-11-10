@@ -6,6 +6,10 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   both stages with Lean (`Select.select`, `Select.selectSecond`) on one challenger session's coins (`StageCoins`): a
   development session on this machine (`a5_coins.start`'s ``local``, on `ROOT`, pinned on ``--main``), withheld, each
   stage one sample of it after its registration's digest. Its samples show the path, not an auditor's coins.
+* **The window's seed salt**: the session's first coin of the seed-salt family after `ROOT`, released at its open, before
+  anything registers (`a5_coins.Draws`), which the stream takes (`Stream.seed_salt_released`) and both registrations' windows
+  name (`registration.SEED_SALT`), each held to it by R6; the run of record reads it from the session's log
+  (`a5_coins.seed_salt_evidence`), never from the stream or the records.
 * **The boundary** (`toy.boundary`): N replay blocks' ingress and egress rows under fresh salts, registered on the stream
   (`Stream.register`, held to the challenger's own window), and the first stage's sample S of Q of them.
 * **The interior** (`toy.interior`): S replayed from the boundary's ingress rows, committed template-major and wired as the
@@ -27,15 +31,17 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   takes it (`statements`) to round 2's check (`second_stage.check`, the form allowed) at the params' reference headers
   and registered reads.
 * **The outcome** (`outcome_of`): the sessions delivered to the stream and its outcome on what the interior's audit
-  record took, with both stages' coin evidence once the session has ended, the sessions' statements and the params:
-  the boundary's audit record over the replay sample and the interior's over the second sample, with round 2's check,
-  and the run of record over both.
+  record took, with both stages' coin evidence and the window's seed salt's once the session has ended, the sessions'
+  statements and the params: the boundary's audit record over the replay sample and the interior's over the second
+  sample, with round 2's check, and the run of record over both. Then the salt's negatives (`salt_negatives`): the same
+  outcome without the salt's evidence, refused by the Lean's run.
 * **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off (`toy.one_bit_off`, a bit the
   fold's AND carries to the egress), so b_in's row and b_out's output are not the boundary's at S[0], every circuit and wire
   holding: Lean's registered reads refuse both link members ("does not open"), the fold and flips accepted.
 
-Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
-verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
+Exit 0 when the run is as expected: every session's circuit file the one its template's params name, the seed salt the
+session's log shows the one both windows name, every salt negative refused where the Lean's run reads the salt, and every
+Lean verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
 the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
 alone), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
 those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
@@ -59,6 +65,7 @@ import hashlib
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -70,6 +77,7 @@ import a5_coins as AC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
 from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import registration as RG  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
@@ -78,6 +86,8 @@ FORM_REFUSED = "two-stage-form"
 #: the run root the run's challenger session opens on, which both registrations name
 ROOT = hashlib.sha512(b"verity/two-stage/toy/run/v1").hexdigest()
 CHALLENGER = "two-stage toy: a development challenger session on this machine (a5_coins local)"
+#: the Lean run's refusal of an interior registration whose window's seed salt its evidence doesn't show
+INTERIORS_SEED_SALT = ("interiors", ["seed-salt"])
 
 
 def composer(defn, member: T.CS.Member):
@@ -133,15 +143,22 @@ def needs(stream: S.Stream, n: int, q: int) -> tuple[int, int]:
     return AC.need(f"rate:{q}/{n}", w.program, w.query, n), -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
 
 
-def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
-    """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell) on the
-    run's challenger session, which opens once both stages have planned the coins their samples read (each plan
-    returns only then, so the two plan at once)."""
-    stream = S.Stream(T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES)), list(T.TEMPLATES), replay=T.REPLAY,
-                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
+def stream_on(a: argparse.Namespace, coins: CC.ChallengerCoins) -> S.Stream:
+    """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell, its windows
+    naming the window's seed salt, `a5_coins.SEED_ITEM`) on ``coins``."""
+    spec = T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES))
+    return S.Stream(replace(spec, public=(*spec.public, AC.SEED_ITEM)), list(T.TEMPLATES), replay=T.REPLAY, budget=1,
+                    delta=a.delta, challenger=CHALLENGER, coins=coins)
+
+
+def stream_of(a: argparse.Namespace, coins: StageCoins) -> tuple[S.Stream, str]:
+    """`stream_on` the run's challenger session, which opens once both stages have planned the coins their samples read
+    (each plan returns only then, so the two plan at once), releasing the window's seed salt, which the stream takes
+    for `ROOT`, both registrations' window (`RankCoins.take_salt`): -> (the stream, the salt, lowercase hex)."""
+    stream = stream_on(a, coins)
     with ThreadPoolExecutor(len(coins.stages)) as ex:
         list(ex.map(lambda c, n: c.plan(n), coins.stages, needs(stream, a.n, a.q)))
-    return stream
+    return stream, coins.stages[0].take_salt(stream, ROOT)
 
 
 def drawn(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
@@ -155,20 +172,29 @@ def drawn(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentR
     return draw, segment
 
 
-def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None], statements: list[dict],
-               proofs: dict) -> dict:
-    """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
+def decided(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None],
+            salts: tuple[dict | None, dict | None], statements: list[dict] | None, proofs: dict) -> S.Outcome:
+    """`stream`'s outcome of the second stage's sample ``second``: the sessions delivered (`Stream.deliver`), then
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
-    sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
-    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports,
-    `verifier.audit_record`'s ``own_reads``), and the codes of round 2's check in the interior's (``statements``)."""
+    sessions, with both stages' coin ``evidence``, the evidence of each registration's window's seed salt (``salts``: the
+    boundary's, the interior's), the sessions' ``statements`` and the params ``proofs``."""
     sessions = handed["sessions"]
     verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in handed["verdicts"].items()}
     given = {x: handed[x] for x in ("proved_units", "instances", "served", "session_roots")}
+    return stream.deliver(second, sessions) or stream.outcome(second, verdicts, handed["statement"], coins=evidence[0],
+                                                              interior_coins=evidence[1], seed_salt=salts[0],
+                                                              interior_seed_salt=salts[1], statements=statements,
+                                                              proofs=proofs, **given)
+
+
+def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[dict | None], salt: dict | None,
+               statements: list[dict] | None, proofs: dict) -> dict:
+    """The stream's outcome of the second stage's sample (`decided`), both registrations' window's seed salt's evidence
+    ``salt``: accepted, the checks each stage's audit record failed (each record taking the sessions' reads of its
+    registration's own ports, `verifier.audit_record`'s ``own_reads``), and the codes of round 2's check in the
+    interior's (``statements``)."""
     try:
-        o = stream.deliver(second, sessions) or stream.outcome(second, verdicts, handed["statement"], coins=evidence[0],
-                                                               interior_coins=evidence[1], statements=statements,
-                                                               proofs=proofs, **given)
+        o = decided(stream, second, handed, evidence, (salt, salt), statements, proofs)
     except (S.Refused, S.Pending) as e:
         return {"accepted": False, "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
     body = stream.records[-1]
@@ -177,6 +203,38 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: list[di
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
             "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
             "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}
+
+
+def salt_negatives(a: argparse.Namespace, coins: StageCoins, register: tuple, first: S.Draw, second: S.Draw, handed: dict,
+                   evidence: list[dict | None], salt: dict | None, statements: list[dict] | None,
+                   proofs: dict) -> dict[str, dict]:
+    """The run of record without the window's seed salt's evidence, each its own stream of both stages on the honest
+    samples' bytes (`stream_on` on `a5_coins.Replay`): it takes the window's salt at its release, registers both records as
+    the run's stream did (``register``: the boundary's on a stream, then the interior's after its first stage), samples
+    both stages and decides on the honest coins' ``evidence``, ``statements`` and ``proofs`` (`decided`).
+    ``seed-salt-missing``: neither registration's salt evidence, refused at the Lean run's register (`seed-salt`);
+    ``interior-seed-salt-missing``: the interior's alone (the boundary's ``salt``), refused where it reads the interior
+    (`interiors`, `seed-salt`). -> {name: {refused, accepted, lean}}."""
+    stages = coins.stages
+    read = bytes(stages[0].read) + bytes(stages[1].read)
+    out = {}
+    for name, salts, expect in (("seed-salt-missing", (None, None), AC.REGISTER_SEED_SALT),
+                                ("interior-seed-salt-missing", (salt, None), INTERIORS_SEED_SALT)):
+        s = stream_on(a, AC.Replay(read))
+        try:
+            s.seed_salt_released(stages[0].salt, ROOT, stages[0].salted_at)
+            d1 = s.select(register[0](s))
+            d2 = s.select(register[1](s, d1))
+            if (d1.draw, d2.draw) != (first.draw, second.draw):
+                raise ValueError(f"the replayed samples {d1.units} and {d2.units} are not the honest {first.units} and "
+                                 f"{second.units}")
+            got = decided(s, d2, handed, evidence, salts, statements, proofs)
+            accepted, side = got.accepted, AC.lean_side(s.records[-1]["audit"])
+        except (S.Refused, S.Pending, ValueError, Ch.CoinError) as e:
+            accepted, side = None, {"refused": AC._refusal(e)}
+        at = ((side or {}).get("step"), (side or {}).get("codes"))
+        out[name] = {"refused": accepted is False and at == expect, "accepted": accepted, "lean": side}
+    return out
 
 
 def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
@@ -253,17 +311,19 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
 
 def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window_dir: Path, source, brec: dict, irec: dict,
                  sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict], proofs: dict, out: Path,
-                 provenance: dict) -> tuple[dict, bool, dict, dict, list[dict] | None]:
+                 provenance: dict, salt: str) -> tuple[dict, bool, dict, dict, list[dict] | None]:
     """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
     the boundary registration ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
-    draw, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
-    key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2 at
-    the params ``proofs`` (`toy.references`). -> (a5's summary, its acceptance, the audit record, what the run reports,
-    the sessions' statements: None without a draw)."""
+    draw, law and the interior registration's receipt), the interior's window held to the window's seed salt ``salt``
+    released on `ROOT`, each member's session verified against ``reads`` (by member key, the verifier's own
+    ``--registered`` files), the audit record, and each session's statement held to round 2 at the params ``proofs``
+    (`toy.references`). -> (a5's summary, its acceptance, the audit record, what the run reports, the sessions'
+    statements: None without a draw)."""
     import a5
     import records_audit as RA
 
-    a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
+    a.coins, a.rule, a.compose_cache, a.transfer_gate = None, None, None, []
+    a.window_root, a.seed_salt = ROOT, salt
     a.tie = {"log": [brec]}
     port = a.port or RA.free_ports(a5.RANK_PORTS)
     s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads, drawn=second)
@@ -282,9 +342,9 @@ def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window
 
 
 def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None,
-             o: dict | None, files: dict | None) -> bool:
-    """Both: every check before the sample passed and every session's circuit file the one its template's params name
-    (`pins`, ``files``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
+             o: dict | None, files: dict | None, salted: dict | None) -> bool:
+    """Both: every check before the sample passed, every session's circuit file the one its template's params name
+    (`pins`, ``files``) and every salt negative refused (`salt_negatives`, ``salted``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
     negative refused, a5's record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
     round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
     form alone (`FORM_REFUSED`, while `second_stage.FORM` is off): the interior's audit record failing no check but
@@ -292,7 +352,8 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     members (m0, m4) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
     refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
-    before = all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
+    before = all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values()) \
+        and bool(salted) and all(v["refused"] for v in (salted or {}).values())
     if not a.altered:
         refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
         own = own_reads_only(record, own_ports(window, s.get("draw") or []))
@@ -339,9 +400,10 @@ def main(argv=None) -> int:
 
 
 def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
-    """Both stages on the stream, the second stage's sessions, and the stream's outcome on the session's evidence."""
-    stream = stream_of(a, coins)
-    summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "k": a.k, "altered": a.altered, "root": ROOT,
+    """Both stages on the stream, in the window whose seed salt the session released at its open, the second stage's
+    sessions, the stream's outcome on the session's evidence, and the salt's negatives."""
+    stream, salt = stream_of(a, coins)
+    summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "k": a.k, "altered": a.altered, "root": ROOT, "seed_salt": salt,
                "stream": {"digest": stream.digest, "cells": list(stream.cells), "counts": list(stream.counts)}}
 
     def refused(stage: str, e: Exception) -> int:
@@ -353,9 +415,10 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     S.template_circuits(proofs, stream.spec.check.query)
     (out / "proofs.json").write_text(json.dumps(proofs, indent=1, sort_keys=True))
     bc = T.boundary(T.ingress(a.n), a.q)
-    brec = T.write(bc, out / "boundary", {"toy": "two-stage boundary"})
+    brec = T.write(bc, out / "boundary", {"toy": "two-stage boundary", RG.SEED_SALT: salt})
+    bports, bleaf = T.CS.expected_ports(bc.window), T.CS.leaf_layer(publics(bc))
     try:
-        reg = stream.register(brec, T.CS.expected_ports(bc.window), leaf_layer=T.CS.leaf_layer(publics(bc)), window_root=ROOT)
+        reg = stream.register(brec, bports, leaf_layer=bleaf, window_root=ROOT)
         first, segment = drawn(stream, coins, reg)
     except (S.Refused, Ch.CoinError) as e:
         return refused("first_stage", e)
@@ -365,11 +428,12 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     if a.altered:
         replayed = T.one_bit_off(T.LK.Port.of(bc, T.boundary_ports(bc.window)["ingress"]).rows_at(sample))
     it = T.interior(bc, bd, sample, {"law": "subset", "k": len(sample) * T.N_RHO}, replayed=replayed)
-    irec = T.write(it.committed, out / "interior", {"interior": True, "boundary": bd, "replay_sample": sample}, previous=bd,
+    irec = T.write(it.committed, out / "interior",
+                   {"interior": True, "boundary": bd, "replay_sample": sample, RG.SEED_SALT: salt}, previous=bd,
                    registered=it.registered)
+    iports, ileaf = T.CS.expected_ports(it.window), T.CS.leaf_layer(publics(it.committed))
     try:
-        ireg = stream.register_interiors(first, irec, T.CS.expected_ports(it.window),
-                                         leaf_layer=T.CS.leaf_layer(publics(it.committed)), window_root=ROOT)
+        ireg = stream.register_interiors(first, irec, iports, leaf_layer=ileaf, window_root=ROOT)
         second, segment = drawn(stream, coins, ireg)
     except (S.Refused, Ch.CoinError) as e:
         return refused("second_stage", e)
@@ -379,7 +443,7 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     s, ok, record, got, stmts = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec,
                                              irec, sample, (second.draw, second.law, ireg.receipt),
                                              T.reads(brec, irec, it.window, sample), proofs, out,
-                                             {"toy": "two-stage interior", "altered": a.altered})
+                                             {"toy": "two-stage interior", "altered": a.altered}, salt)
     summary.update(interior={"population": it.window.population, "law": it.window.law, "run": it.window.run,
                              "members": [{"key": m.key, "n": m.n, "base": m.base} for m in it.window.members],
                              "links": T.links(it.window)},
@@ -388,16 +452,27 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     summary["record"]["own_reads_only"] = own_reads_only(record, own_ports(it.window, drawn_units))
     published = draws.evidence()
     summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
+    salt_ev = AC.seed_salt_evidence(published)
+    summary["seed_salt_reason"] = ((published.get("error") or "the session released no seed salt") if salt_ev is None
+                                   else AC.seed_salt_reason(salt_ev, ROOT, salt))
     evidence = [AC.evidence(published, g) for g in segments]
     (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [c.read.hex() for c in coins.stages]},
                                                indent=1, sort_keys=True))
     if "handed" in s:
-        summary["outcome"] = outcome_of(stream, second, s["handed"], evidence, stmts, proofs)
+        summary["outcome"] = outcome_of(stream, second, s["handed"], evidence, salt_ev, stmts, proofs)
+        summary["seed_salt_negatives"] = salt_negatives(
+            a, coins, (lambda st: st.register(brec, bports, leaf_layer=bleaf, window_root=ROOT),
+                       lambda st, d: st.register_interiors(d, irec, iports, leaf_layer=ileaf, window_root=ROOT)),
+            first, second, s["handed"], evidence, salt_ev, stmts, proofs)
     summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"), summary.get("outcome"),
-                                      summary.get("pins"))
+                                      summary.get("pins"), summary.get("seed_salt_negatives")) \
+        and summary["seed_salt_reason"] is None
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     r2, o = summary.get("round_two"), summary.get("outcome") or {}
-    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "pins", "as_expected")},
+    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "pins", "as_expected",
+                                                               "seed_salt_reason")},
+                               "seed_salt_negatives": {k: v["refused"] for k, v in
+                                                       (summary.get("seed_salt_negatives") or {}).items()},
                                "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                  "refused")}},
