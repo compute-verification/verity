@@ -90,13 +90,9 @@ ALLOWED = {
     "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's. The
-    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
-    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
+    # deployment layer (`wipe_parties`), their messages the wire's.
+    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.reporting"},
-    # The bandwidth audit's store is PoUS's `C*`,
-    # under its setup and `vk`, reused as they are.
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
     "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy"},
@@ -182,7 +178,6 @@ CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
     "core.protocols.spot": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.commitments", "ml.crypto", "ml.randomness"},
-    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
@@ -202,7 +197,7 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
 SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/core/service/flock",
-              "verity/ml/flock")
+              "verity/ml/flock", "verity/ml/flock/pod", "verity/ml/flock/verifier", "verity/ml/flock/tool.py")
 SPOT_LEAN = ("verity/core/service/spot", "verity/core/service/flock")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
@@ -527,14 +522,15 @@ def _covered(rel: str, globs: Iterable[str]) -> bool:
 
 
 def _spot_python_offenders() -> list[str]:
-    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES``, its tests included."""
+    """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
+    tests included."""
     out = []
-    for tree in SPOT_TREES:
-        for path in sorted((ROOT / tree).rglob("*.py")):
-            if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
-                continue
-            out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
-                    if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
+    files = {p for tree in SPOT_TREES for p in ([ROOT / tree] if (ROOT / tree).is_file() else (ROOT / tree).rglob("*.py"))}
+    for path in sorted(files):
+        if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
+            continue
+        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
+                if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
     return out
 
 

@@ -29,6 +29,7 @@ from verity_vllm.pipeline import launch_context as LC
 from verity.ml.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
+from verity_vllm.program.frontend.seed_rule import rid_entry
 from verity_vllm.program.prune import BATCHED, registered_form
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
@@ -213,13 +214,13 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
     else the legacy `sampling.variant` -> `variants[...]`, else per-request `variant` / `seed` fields), and/or `--sampling <policy>` with
     `greedy` | `stoch-t<T>-p<P>[-k<K>]` | a JSON object.  Both given -> they must agree (refused otherwise).  Neither given -> greedy,
     recorded as `source: "default"` (a caller without a manifest declares greedy by omission; the row procedure passes the manifest).
-    Returns {"kind": "greedy"} or {"kind": "stochastic", "temperature", "top_p", "top_k", "seeded", "label"} (+ "source", "mixed")."""
+    Returns {"kind": "greedy"} or {"kind": "stochastic", "temperature", "top_p", "top_k", "seeded", "label"} (+ "source", "mixed", "rid": the id length the seed rule reads, `seed_rule.rid_entry`)."""
     def _norm(params: dict, label: str | None = None) -> dict:
         t = float(params.get("temperature", 1.0))
         if t == 0.0:
             return {"kind": "greedy"}
         return {"kind": "stochastic", "temperature": t, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0) or 0),
-                "seeded": bool(params.get("seeded", True)), "label": label or f"stoch-t{t:g}-p{float(params.get('top_p', 1.0)):g}"}
+                "seeded": bool(params.get("seeded", True)), "label": label or f"stoch-t{t:g}-p{float(params.get('top_p', 1.0)):g}", **({"rid": int(params["rid"])} if params.get("rid") is not None else {})}
 
     def _parse_arg(s: str) -> dict:
         s = s.strip()
@@ -263,11 +264,10 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
         a, b = ({k: v for k, v in p.items() if k not in ("label", "source")} for p in (pol_w, pol_a))
         if a != b:
             raise ValueError(f"--sampling {arg!r} disagrees with the manifest's sampling policy {pol_w} ({workload})")
-    pol = pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"})
-    pol = dict(pol)
+    pol = dict(pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"}))
     pol["source"] = "workload" if pol_w is not None else ("arg" if pol_a is not None else "default")
     if workload:
-        pol["workload"] = workload
+        pol.update(workload=workload, **rid_entry(pol, json.load(open(workload)).get("requests", [])))
     return pol
 
 
