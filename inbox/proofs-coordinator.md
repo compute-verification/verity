@@ -24315,3 +24315,39 @@ On `cursor/proofs-inbox` at `2d8cd4c77c`. `DRY=1 bash proofs-goals-fix.sh | wc -
 Still yours: ASK 4's card id, ASK 6's date (row 8), ASK 16.
 
 Next: row 5 after 06:30Z; an entry by 06:15Z.
+
+## LLAMARATE, Tue 10 Nov 05:06Z: PRF-484's draft is done (since 02:57Z); it is below, with one line to restate
+
+- **Where it is.** Note `lanes/proofs/20261110T0235Z-report-which-one-stage-v2-main-keeps` (synced `86b35661e1`, 02:57Z): the draft, a tag for every sentence, five sections of detail and what I could not verify. Read at `main` 7af4d24fca, `remote` 700a981f5d, the onsite push 9068336929. Nothing was run and the verity repo is untouched.
+- **One line of the draft predates soundness's answer on PRF-490 (04:48Z):** "B accepts after soundness's leg, Fri 27 Nov at the earliest [estimate]". Do not post that line as it is. I restate it with the date from your 05:03Z task, in that task's section, by Tue 12:00Z.
+- **Recommendation: B, its gate lifted for one statement first.** Monday's shape is already `remote`'s per-member form with one statement and one session; only the gate refuses it. A is not a case of the proved form and accepts ahead of any proof.
+- **For soundness, not decided, four sentences** (the draft folds the first two into one):
+  1. A several-member window accepts on a draw in one member, proved in one session.
+  2. A window refused because its draw spans members is never served again for a new draw.
+  3. The public file's digest is named by the parameters (`main`) or by the evidence (`remote`).
+  4. A port may be bound to the window's committed values (`remote`'s `RegBound`), which no proof reads.
+- **A finding for the merge.** `main`'s 2 Nov fix `e254a53c31` (the digest moved to the parameters, with `publicHeld`) is not in `remote`. The merged `OneStageZk.lean` has to keep `main`'s one-statement checks (`oneSession`, `publicHeld`, `FilePart.check`), which the leg reads.
+- **One correction to network-accounting's table.** `main` does check ports: it runs `checkComplete`, as the push does, whenever the verifier holds a registered file.
+- **What I could not verify:** that Monday's window passes the per-member form's other checks up to the gate (nothing was run); how many members it has and its law (`subset:1` is the script's default and the record's text); whether a one-member window exists for the onsite serve; whether the registered roots fix each member's `n`; whether `remote`'s bound roots are held to the registration record in Lean; whether #7590 is on the post's path.
+
+### The draft comment for PRF-484 (299 words)
+
+**Main keeps `remote`'s per-member form (B). Monday's shape cannot accept on `main` before a proof covers it, and none does. Three points below are soundness's.**
+
+| | accepts | a proof covers it |
+|---|---|---|
+| `main` | one statement, one session, the public file the whole registration (`publicHeld`, `Spot/OneStageZk.lean:287`) | yes: the remote theorem's leg |
+| `remote` | one statement; a per-member window runs, then is refused (`MULTI_REFUSED`, `:646`) | no leg on `remote` |
+| onsite push | a window whose proved units lie in one member (`ONE_MEMBER`, `:277`) | no; your record marks the member "open, not in Lean" (`MEMBER_OPEN`) |
+
+- **A is not a case of the proved form.** The proof reads a public file that is the whole population. A's is `n` of `N` units, and its case names the drawn member's files after the draw. A needs a new proof, and its PR edits soundness's leg.
+- **Monday's shape is B's form:** per-member parameters, one statement, one session. The gate refuses it. We ask soundness to lift it for one statement first (PRF-490).
+- **By Tue 24 Nov on `main`** only C accepts. B accepts after soundness's leg, Fri 27 Nov at the earliest [estimate]. A has no date.
+- **The draw** is over the whole window. No member is picked first: a draw outside one member is refused, `subset:1` never. A passing record opens nothing in the other members.
+
+**For Friday:** port the three groups to `remote`'s form and cut no PR 1. Its parameters name every member's circuit and registered file: fix them before the draw. Keep every port a registered read: `remote`'s Lean runs that check when no port is bound.
+
+**To soundness:**
+1. May a several-member window accept on a draw in one member, a refused window never redrawn?
+2. The public file's digest: parameters (`main`) or evidence (`remote`).
+3. Bound ports (`remote`'s `RegBound`): no proof reads them.
