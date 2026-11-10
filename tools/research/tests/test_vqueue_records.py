@@ -239,10 +239,23 @@ def test_a_records_commit_is_held_while_its_lean_report_cant_be_read_to_name_its
     refs = _git(h.q.workdir, "for-each-ref")
     monkeypatch.setattr(R, "lean_report", lambda *a: (_ for _ in ()).throw(OSError(f"gone: {h.world.tmp}/scratch-{len(refs)}")))
     got = commit(h.d, sha, rid, (1,))
-    assert got == (f"{rid}'s Lean report ({merge.AUDIT}) can't be read (OSError), so a records commit couldn't name what its "
-                   "records change of what a guarantee says") and got == commit(h.d, sha, rid, (1,)), got
+    assert got == (f"{rid}'s Lean report ({merge.AUDIT}) or a lock it names can't be read (OSError), so a records commit "
+                   "couldn't name what its records change of what a guarantee says") and got == commit(h.d, sha, rid, (1,)), got
     monkeypatch.setattr(R, "lean_report", lambda *a: None)
-    assert commit(h.d, sha, rid, (1,)).startswith(f"{rid}'s Lean report ({merge.AUDIT}) can't be read (QueueError)")
+    assert commit(h.d, sha, rid, (1,)).startswith(f"{rid}'s Lean report ({merge.AUDIT}) or a lock it names can't be read "
+                                                  "(QueueError)")
+    assert _git(h.q.workdir, "for-each-ref") == refs
+
+
+def test_a_records_commit_is_held_while_a_lock_whose_owners_it_names_cant_be_read(world, monkeypatch):
+    """A lock of the candidate's that isn't JSON says no owner: its records commit is held, not made naming `CI` for them."""
+    h, sha = _harness(world, monkeypatch, {**CHANGE, "pkg/lean-audit.json": "{"})
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha, reports={"pkg": {"review": ["guarantee T: changed"], "statement_changes": True}})
+    refs = _git(h.q.workdir, "for-each-ref")
+    assert commit(h.d, sha, rid, (1,)) == (f"{rid}'s Lean report ({merge.AUDIT}) or a lock it names can't be read "
+                                           "(JSONDecodeError), so a records commit couldn't name what its records change of "
+                                           "what a guarantee says")
     assert _git(h.q.workdir, "for-each-ref") == refs
 
 

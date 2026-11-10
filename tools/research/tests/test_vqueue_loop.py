@@ -2287,7 +2287,7 @@ def test_a_records_commit_the_gate_wont_vouch_for_is_held_rung_to_ci_once_and_ma
 
 def test_a_records_commit_held_past_pending_s_drops_its_candidate_and_builds_its_members_again(env):
     """Bounded: `pending_s` after it was first held, the candidate is dropped, its records run settled, and its members built
-    again, a new records run first; @ci was rung once, at the first hold."""
+    again, a new records run first; `CI` was rung once, at the first hold."""
     loop, records, sha, one, _ = _records_loop(env, pending_s=3600)
     records.verdicts["regen-1"] = RecordsRun(PASS)
     records.held = "its regenerated lock records can't be read: Unreadable: regen-1"
