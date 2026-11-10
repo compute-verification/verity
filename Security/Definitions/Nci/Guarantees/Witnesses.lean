@@ -13,7 +13,6 @@ public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.Layered
 public import Definitions.Nci.Assumptions.Dampener
-public import Definitions.Nci.Support
 public import Definitions.Nci.Guarantees.CoverTraining
 public import Definitions.Nci.Guarantees.Remote
 public import Definitions.Nci.Cut.Toy

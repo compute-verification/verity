@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Nci.Support
 public import Definitions.Nci.Assumptions.Baseline
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Data.FinEnum
 
 /-!
 # The inference-only policy's named assumptions

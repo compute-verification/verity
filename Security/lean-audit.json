@@ -5102,34 +5102,18 @@
    "unfolded_hash": "2b5ca1219727bee684ddc883d7315af41791455f10d8f6f6109d5ef26cde0b5c"
   },
   "Nci.SecurityProofs.Inference": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600",
-  "Nci.SecurityProofs.InfoOfState": {
-   "type_hash": "9f1583451f17bdeb540e073a017a0ecc297b129c7158de888554305423a979f5",
-   "unfolded_hash": "f3ee7e937f416af2fc3757b0d9d4dafbc984e2b93873c08c5d7c076babfb155c"
-  },
   "Nci.SecurityProofs.ReferenceThreaded": {
    "type_hash": "14031cc870afb5d46cab9fe5d4401dd018bc2db17e335f114a2e75adc1343bb5",
    "unfolded_hash": "32550bc9bbf0687f87388e8bc3a97f716e1d334dc9fd36d25b44f79e6f4dd9ed"
   },
   "Nci.SecurityProofs.ReferenceTraining": "104a6c9425013ffea4548e58627a31cf0d67358b3da5a64e483d59379ff1566b",
-  "Nci.SecurityProofs.ThreadedContainedInfoFmt2": {
-   "type_hash": "cc1ccac8fbba5d4e3b45976c2fb5cf5d10484968ed7eb17ab5b8535fe9782d63",
-   "unfolded_hash": "845183b9f573e71454cc4f4c2aee6cec8481ea170277c3aef584907f28970e87"
-  },
   "Nci.SecurityProofs.ThreadedOfLayered": {
    "type_hash": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f",
    "unfolded_hash": "2906003a4dc064dc7e6bbccaf0fcb662e288c9e2fda039d48699b0688094b5f4"
   },
-  "Nci.SecurityProofs.ThreadedOfStateFmt2": {
-   "type_hash": "9038bcc7ef1171eeeebd7af7fc95aa828bb972b68c008f94c27585f24f4774f0",
-   "unfolded_hash": "5d45749e9b8486e585e8d5dbeadeadbd9efc6ed55078f79593302b481fd2caab"
-  },
   "Nci.SecurityProofs.ThreadedReads": {
    "type_hash": "795b67c8f7715b8007f162c603941e1adeed26249c63bc4292dca5a8520b2de5",
    "unfolded_hash": "c9296126e8f6206e4fb4dd3f244b9023991f861c8644985e3dd159b503e0eb5c"
-  },
-  "Nci.SecurityProofs.ThreadedReadsInfoFmt2": {
-   "type_hash": "29c58e0f89f3a259fa223ae3cba558d3829f38a5cc2fd1fa78d08e6b7c10df0b",
-   "unfolded_hash": "5234652a55223d969fb7628858275bb3beebe0eacd0f0f2fe06e623165ca0297"
   },
   "Nci.SecurityProofs.ThreadedReadsSlots": {
    "type_hash": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
@@ -17228,19 +17212,6 @@
    "type_hash": "9338044ce5e5f979a6c603d6646e9811831464ed5be8f1b0b4dcd6cfee6d0f1f",
    "unfolded_hash": "b250e15f2780aa2cc33ee1ad781a8ec3ba2ff2177f886e97262198dd4691b184"
   },
-  "Nci.SecurityProofs.InfoOfState": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.InfoOfState : Nci.Guarantees.InfoOfState"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "9f1583451f17bdeb540e073a017a0ecc297b129c7158de888554305423a979f5",
-   "unfolded_hash": "f3ee7e937f416af2fc3757b0d9d4dafbc984e2b93873c08c5d7c076babfb155c"
-  },
   "Nci.SecurityProofs.LayeredTraining": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.LayeredTraining : Nci.Guarantees.LayeredTraining"],
@@ -17483,25 +17454,6 @@
    "type_hash": "e2b5ec98cd836215e65e15aaab67dc73d7bd2032a760d166e02e303fc86aa0d7",
    "unfolded_hash": "be838690267f6d228bb2867c2d43ec5dd093bf968fd9d4a116dd42cad81b3243"
   },
-  "Nci.SecurityProofs.ThreadedContainedInfoFmt2": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ThreadedContainedInfoFmt2 : Nci.Guarantees.ThreadedContainedInfoFmt2"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.RegisteredThrough",
-     "Nci.Assumptions.WeightsSupportFmt2",
-     "Nci.SmallInfo",
-     "Nci.Threading.Sources.FanOutBound",
-     "Nci.Threading.Sources.OffFresh"
-    ],
-    "reads": []
-   },
-   "type_hash": "cc1ccac8fbba5d4e3b45976c2fb5cf5d10484968ed7eb17ab5b8535fe9782d63",
-   "unfolded_hash": "845183b9f573e71454cc4f4c2aee6cec8481ea170277c3aef584907f28970e87"
-  },
   "Nci.SecurityProofs.ThreadedOfLayered": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedOfLayered : Nci.Guarantees.ThreadedOfLayered"],
@@ -17515,25 +17467,6 @@
    "type_hash": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f",
    "unfolded_hash": "2906003a4dc064dc7e6bbccaf0fcb662e288c9e2fda039d48699b0688094b5f4"
   },
-  "Nci.SecurityProofs.ThreadedOfStateFmt2": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ThreadedOfStateFmt2 : Nci.Guarantees.ThreadedOfStateFmt2"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.RegisteredThrough",
-     "Nci.Assumptions.WeightsSupportFmt2",
-     "Nci.Assumptions.WithinBlock",
-     "Nci.Threading.Sources.FanOutBound",
-     "Nci.Threading.Sources.OffFresh"
-    ],
-    "reads": []
-   },
-   "type_hash": "9038bcc7ef1171eeeebd7af7fc95aa828bb972b68c008f94c27585f24f4774f0",
-   "unfolded_hash": "5d45749e9b8486e585e8d5dbeadeadbd9efc6ed55078f79593302b481fd2caab"
-  },
   "Nci.SecurityProofs.ThreadedReads": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedReads : Nci.Guarantees.ThreadedReads"],
@@ -17546,24 +17479,6 @@
    },
    "type_hash": "795b67c8f7715b8007f162c603941e1adeed26249c63bc4292dca5a8520b2de5",
    "unfolded_hash": "c9296126e8f6206e4fb4dd3f244b9023991f861c8644985e3dd159b503e0eb5c"
-  },
-  "Nci.SecurityProofs.ThreadedReadsInfoFmt2": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ThreadedReadsInfoFmt2 : Nci.Guarantees.ThreadedReadsInfoFmt2"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.WeightsSupportFmt2",
-     "Nci.SmallInfo",
-     "Nci.Threading.Sources.FanOutBound",
-     "Nci.Threading.Sources.OffFresh"
-    ],
-    "reads": []
-   },
-   "type_hash": "29c58e0f89f3a259fa223ae3cba558d3829f38a5cc2fd1fa78d08e6b7c10df0b",
-   "unfolded_hash": "5234652a55223d969fb7628858275bb3beebe0eacd0f0f2fe06e623165ca0297"
   },
   "Nci.SecurityProofs.ThreadedReadsSlots": {
    "owner": "@lean",
@@ -25721,7 +25636,6 @@
    "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; NciCheck.Properties.SecurityProofs.ThrottlesDark (Security/Properties/Nci/Threads.lean) joins it to NciCheck.Properties.Witnesses, so a verdict of compliance of NciCheck.evaluate carries its bound.",
    "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.InfoOfState": "frozen (no-function): It is about an arbitrary declaration and a set of its gates whose novel reads are a state and an ingress, not about any verifier's code; a physical premise on a node's windows (Accounting.Guarantees.Actual.Windows) is what would give it an acceptance.",
    "Nci.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (Security/Definitions/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (Security/Definitions/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
@@ -25732,9 +25646,6 @@
    "Nci.SecurityProofs.ReferenceThreaded": "frozen (conjecture,no-function): It rests on the open conjecture ReferenceLayered, that the reference circuit is keyed at Kimi K2's shapes (Security/Definitions/Nci/Assumptions/Layered.lean), and is about an arbitrary reference circuit and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.FitRate": "frozen (conjecture,no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (Security/Definitions/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Nci.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Definitions/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
-   "Nci.SecurityProofs.ThreadedReadsInfoFmt2": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and the sources of its values, under the named WeightsSupportFmt2 (Security/Definitions/Nci/Assumptions/Fmt2.lean), a restatement of the falsified WeightsSupportFmt not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedContainedInfoFmt2": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it, the sources of its values and a declaration that contains it, under the named WeightsSupportFmt2 (Security/Definitions/Nci/Assumptions/Fmt2.lean), a restatement of the falsified WeightsSupportFmt not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedOfStateFmt2": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it, the sources of its values and a declaration that contains it, under the named WeightsSupportFmt2 (Security/Definitions/Nci/Assumptions/Fmt2.lean), a restatement of the falsified WeightsSupportFmt not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRateSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.ThreadedReadsSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Definitions/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -27181,11 +27092,6 @@
    "Nci.SecurityProofs.HeldBudget": {
     "∀ (U : Fin R.d.n → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.d.n), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.d.𝓘.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "brought by PRs on `next` beside the rule (#5805, #5125, #6636), inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.InfoOfState": {
-    "Finset.instPartialOrder.le R D.D.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Finset.instPartialOrder.le (Finset.instSDiff.sdiff (D.D.into R) D.θ) (Finset.instUnion.union Sst Sin)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : D.D.Trace), SetLike.instMembership.mem (Nci.admissible D θv) a → Exists fun s => Eq (Nci.values Sst a) (f s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Nci.SecurityProofs.RecomputeByGates": {
     "∀ (c : κ), Real.instLE.le g (K.G c).card.cast": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -27197,10 +27103,6 @@
    },
    "Nci.SecurityProofs.ThreadedOfLayered": {
     "Real.instLT.lt S (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedOfStateFmt2": {
-    "Finset.instPartialOrder.le (Finset.instSDiff.sdiff (d.D.into W) d.θ) (Finset.instUnion.union Sst Sin)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : d.D.Trace), SetLike.instMembership.mem (Nci.admissible d θv) a → Exists fun s => Eq (Nci.values Sst a) (f s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.VerdictLag": {
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",

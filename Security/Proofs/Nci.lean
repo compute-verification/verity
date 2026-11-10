@@ -3,7 +3,6 @@ module
 public import Proofs.Nci.Cut
 public import Proofs.Nci.CutWitness
 public import Proofs.Core
-public import Proofs.Nci.Support
 public import Proofs.Nci.Pull
 public import Proofs.Nci.Rate
 public import Proofs.Nci.Threads
@@ -15,10 +14,7 @@ public import Proofs.Nci.WeightsSlotsWitness
 public import Proofs.Nci.FitRate
 public import Proofs.Nci.FitWitness
 public import Proofs.Nci.Dampener
-public import Proofs.Nci.Info
 public import Proofs.Nci.Transfers
-public import Proofs.Nci.Fmt
-public import Proofs.Nci.Fmt2
 public import Proofs.Nci.Remote
 public import Proofs.Nci.RemotePeriod
 public import Proofs.Nci.Capability

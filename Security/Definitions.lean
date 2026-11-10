@@ -12,7 +12,6 @@ public import Definitions.Core.Period
 public import Definitions.Core.Structure
 public import Definitions.Core.Rec
 public import Definitions.Nci
-public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
@@ -63,11 +62,9 @@ public import Definitions.Nci.Guarantees.FitRate
 public import Definitions.Nci.Guarantees.Dampener
 public import Definitions.Nci.Guarantees.Remote
 public import Definitions.Nci.Guarantees.RemotePeriod
-public import Definitions.Nci.Guarantees.Info
 public import Definitions.Nci.Assumptions.Capability
 public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
-public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Covering
 public import Definitions.Nci.Guarantees.CoveringTwoCosts
 public import Definitions.Nci.Guarantees.Cut
