@@ -5295,7 +5295,7 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "missing": "honest",
    "why": "honest instance needs each window's escape bound and leak relation's error (its hypotheses hesc and hleak) at the deployed verifier, which SampledLeakAccepted gives one window from Compiled.KS and no lemma states at this guarantee's hypotheses",
-   "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
+   "unfolded_hash": "d339cc8ffd4bdca709ea2be68156cbfdfc72778e0544bab00fa6ce85d2386463"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
@@ -18778,7 +18778,7 @@
     "reads": []
    },
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
-   "unfolded_hash": "a85933f2ce75db26aab088e8a818dae42c192636418a23ca8feaa065d8cf727c"
+   "unfolded_hash": "30796106c5b5506746a4c3bdf67ae671561a427388e8ee016b6e3243267134d4"
   },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
@@ -18804,7 +18804,7 @@
     "reads": []
    },
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
-   "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
+   "unfolded_hash": "d339cc8ffd4bdca709ea2be68156cbfdfc72778e0544bab00fa6ce85d2386463"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "owner": "@proofs",
@@ -18983,7 +18983,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "59bf25e273e580d5a0dacf99d6e5ba6fd8239a12d658882fb8527d5ff4d88e75"
+   "type_hash": "6066af8a62363b4f1ad2f790755c6cfaf6b6c6779cf10f7a1b66b475f5ffa6f4"
   },
   "NetTiming.Witness.PooledLeakCarried_nontrivial": {
    "owner": "@proofs",
@@ -35728,7 +35728,7 @@
    }
   },
   "Definitions.NetworkCertifier.Carried": {
-   "digest": "634640d7a8c1430ed2ea5ca74830afd06885d583f2874f3573da286315409b67",
+   "digest": "b5050e07ed96d112f037af9c8b5a9421894aada371ada155b824dae32f1d3638",
    "definitions": {
     "NetTiming.AccSeqsCarried": "2e8db8d1cf409825083cd52b2229dd9c5af50e6133c4c7e731c8974003b790de",
     "NetTiming.AcceptedCarried": "df9c8b60a2e4ef1965f06a821aa3066df1da64625065a2a4c403af2d096368c4",
@@ -35742,8 +35742,7 @@
     "NetTiming.PooledGoodCarried": "db76677f651d89b88b044045daa6f2a54a0217e6f7cda5fbc9195eb6153ec2c3",
     "NetTiming.RLeakCarried": "688b2c6a3314f1564a845b85baa2f8e2367e99049ce725084e73ce596c4dc26a",
     "NetTiming.ResetsIn": "f17496cd6b0bcd44de69fbfce427ecc3108c8dd849bc058ad04b6c0dc706ede3",
-    "NetTiming.poolOpen": "4874fc3cdb655140ed8eba5e750cc319bc10f261a59ae320f0f577174edd7b21",
-    "NetTiming.runsBefore": "1eb148a4221b22658388804a4f46ba808757e4ba57dfa482fc80fd56ddae1ba4"
+    "NetTiming.poolOpen": "4874fc3cdb655140ed8eba5e750cc319bc10f261a59ae320f0f577174edd7b21"
    }
   },
   "Definitions.NetworkCertifier.Checked": {
@@ -35816,9 +35815,9 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "4ead6e402b6e55388a74abf4fe5a31a7cb7d00cbf9ae5c3a8bf6d422bedc45dc",
+   "digest": "a0507d9a58dd8c88f2e9020daba9de2c1f061f4c9fe1d8133dcb2b166469afe6",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "0804ccc2658b6117fd77640b8baef1f86e0ce0ed7199405b672d6630d8012da9"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "8626bd453a35bd0970731bcf8ac7f5b010e53a5aba05f8da321e0f204f6b07f4"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
@@ -35828,9 +35827,9 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.PooledLeak": {
-   "digest": "38ca673b31284bd8b9d0f1e7d2a2340cd75fe4902eb71c6e3a44fc3379f3a972",
+   "digest": "9e25772ab9207a3dcf842d3fe2ac27ef7f1002d50f86e48d50d30c320c68794c",
    "definitions": {
-    "NetTiming.Guarantees.PooledLeakAccepted": "3332d3b8bf69d8e7ea8921bcf37dd07fde136b69e5687c8a821179ddd80d4002"
+    "NetTiming.Guarantees.PooledLeakAccepted": "ecc9283ccfc0633c2fca110ecf7d91a5f47414b6bdc95561508f21090609b4b3"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
@@ -35863,10 +35862,10 @@
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
-   "digest": "feacd6c22bbf9dbfdecb6334f134465878f92bf72ed142f82ebc81e18a8c137a",
+   "digest": "d404880d5d6a1740da0394f5ae1559e7dbd4db60b276d087a61869b3fb798375",
    "definitions": {
     "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55",
-    "NetTiming.PooledGood": "2b05778a0b771484955c53e73af6c5e221e8f1e027afe8027b90b5f95237f091"
+    "NetTiming.PooledGood": "82a11c0d8e1a2bf90a6a1ad8b96e18ac0539b75af43da83c2855569664285363"
    }
   },
   "Definitions.NetworkCertifier.Run": {
@@ -35930,7 +35929,7 @@
    }
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "9cc562fd05c1b89f7ac7cd7690de4175bd592b1f820be5ba1b302ed0f2d9cae7",
+   "digest": "322d79906afd4ccda3829d45c4e31d9436768456c69def2e9a65f23bc6b8250b",
    "definitions": {
     "NetTiming.AccSeqsSampled": "ad626b8423fb6d1b02f0a19e7b7bf3cc40e451d1d1fb01e9ceeedd2c65e09e80",
     "NetTiming.AcceptedFaulty": "ebfd078ac94cee1cb354ad8287355b63d6744527774706f89341de50c27c2798",
@@ -35938,7 +35937,8 @@
     "NetTiming.RLeak": "962130822d4deb3d4ac96574835a2a69a5ba3f6c63a719008a6bc92a3423ab13",
     "NetTiming.faultyBits": "11626696611eb91d66ee3f2a5c453e27db0facb8f80ee3d83b1c5f75a1a1dc27",
     "NetTiming.faultySets": "cf08892338b4055889a2cb6fd6b503d7977e9a006937f0e3c224517ffef076ba",
-    "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb"
+    "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb",
+    "NetTiming.runsBefore": "1eb148a4221b22658388804a4f46ba808757e4ba57dfa482fc80fd56ddae1ba4"
    }
   },
   "Definitions.NetworkCertifier.SampledReg": {
