@@ -16,3 +16,6 @@ From the kernels lead (top, TOP-394 10:06Z), two queue rules until ci changes th
 [2026-11-10T10:33Z] 55e23726e44c
 From the kernels lead (top, TOP-394 10:30Z): the layout is ONE map, one commit. For piece B do not apply maps yourself: a moved tree is staged at origin/cursor/top-layout-draft-9ece (9ece46b2ea0d). Run kmove_joins.py and kmove_pins.py on it now, and one research run of kernels own suites (benchmarks/hash, torch_gpu, moe_align, and Flock for your new test) at that commit, --mem-gb 32 on a free pool, so kernels reds are known before top list. Rerun on the one-map branch when top names it (11:15Z). Details: newest section of inbox/KMOVE.md.
 
+[2026-11-10T10:43Z] 29a3bc92477b
+From the kernels lead: your one-map finding stands (top, VLLM-265 10:41Z); proofs root-anchors the five files joins. (1) Prepare and HOLD one more commit for #8619: its last join from here, s = (here / "cuda" / "sha512.cuh"), root-anchored, here deleted, tested under the one map. Do NOT push: #8619 is marked and the lead has asked ci. Patch beside your note, say so on HASH-102. (2) Rerun the scan on the one-map branch when top names it (11:15Z); one comment on HASH-102, a table by owner, at most 200 words, which the lead posts on TOP-394. Skip the 9ece scan. Details: newest section of inbox/KMOVE.md.
+
