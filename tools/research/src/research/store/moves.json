@@ -1737,6 +1737,29 @@
         "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
         "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/codec_tensor/decode_ncu.py": "archive/benchmarks/codec_tensor/decode_ncu.py",
+        "benchmarks/codec_tensor/step.cu": "archive/benchmarks/codec_tensor/step.cu",
+        "benchmarks/codec_tensor/step.sh": "archive/benchmarks/codec_tensor/step.sh",
+        "benchmarks/kv_filler/fill.py": "archive/benchmarks/kv_filler/fill.py",
+        "benchmarks/kv_filler/fill_run.sh": "archive/benchmarks/kv_filler/fill_run.sh",
+        "benchmarks/kv_filler/run.sh": "archive/benchmarks/kv_filler/run.sh",
+        "benchmarks/kv_filler/serve.py": "archive/benchmarks/kv_filler/serve.py",
+        "benchmarks/kv_filler/stack_hook.py": "archive/benchmarks/kv_filler/stack_hook.py",
+        "benchmarks/kv_filler/step_profile.py": "archive/benchmarks/kv_filler/step_profile.py",
+        "benchmarks/kv_filler/tests/test_serve.py": "archive/benchmarks/kv_filler/tests/test_serve.py",
+        "benchmarks/kv_filler/tests/test_step_profile.py": "archive/benchmarks/kv_filler/tests/test_step_profile.py",
+        "benchmarks/pous/fast_decode/": "archive/benchmarks/pous/fast_decode/",
+        "benchmarks/pous/tests/test_pous_wipe_resume.py": "archive/benchmarks/pous/tests/test_pous_wipe_resume.py",
+        "benchmarks/pous/wipe_resume/": "archive/benchmarks/pous/wipe_resume/",
+        "benchmarks/stacked_share/": "archive/benchmarks/stacked_share/",
+        "benchmarks/word_codec/encode_rate.py": "archive/benchmarks/word_codec/encode_rate.py",
+        "benchmarks/word_codec/encode_rate.sh": "archive/benchmarks/word_codec/encode_rate.sh",
+        "benchmarks/word_codec/model/": "archive/benchmarks/word_codec/model/",
+        "benchmarks/word_codec/tests/test_model.py": "archive/benchmarks/word_codec/tests/test_model.py"
+      }
     }
   ]
 }

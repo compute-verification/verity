@@ -173,5 +173,5 @@ it next to honest, naive-cheat and broken-premise provers (`K` on the developer'
 Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if any prover ends other than expected:
 
 ~~~bash
-bash benchmarks/pous/wipe_resume/run.sh   # on a CPU node, from a clone (the Lean verdict builds into it)
+bash archive/benchmarks/pous/wipe_resume/run.sh   # on a CPU node, from a clone (the Lean verdict builds into it)
 ~~~
