@@ -174,12 +174,12 @@ def test_the_writer_appends_measurements_in_the_form_a_reader_of_numbers_takes(t
     w = kit.writer(out)
     stamp = kit.host_stamp()
     first = w.measurement("served_tok_s", 4120.5, "tok/s")
-    assert first == {"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "commit": SHA, "run": RUN, "interval": None,
+    assert first == {"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "commit": SHA, "run": RUN, "ci95": None,
                      "target": None, "verdict": None, "inputs": [], "host": stamp}
     assert _result(out) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [first]}
     second = kit.writer(out).measurement("serving_cost", 0.031, "ratio", interval=(0.029, 0.034), target=0.05,
                                          verdict="within target", inputs=("served_tok_s", "stock_tok_s"))
-    assert (second["interval"], second["target"], second["verdict"]) == ([0.029, 0.034], 0.05, "within target")
+    assert (second["ci95"], second["target"], second["verdict"]) == ([0.029, 0.034], 0.05, "within target")
     assert second["inputs"] == ["served_tok_s", "stock_tok_s"] and second["host"]["card"] == "none"
     w.measurement("reps", 20, "", inputs="served_tok_s")
     w.measurement("stock_tok_s", None, "tok/s", target=4000, verdict="cannot tell")
@@ -231,6 +231,7 @@ def test_the_writer_refuses_what_isnt_a_measurement_of_this_run(tmp_path, no_gpu
     for kw, why in (({"name": ""}, "has a name"), ({"name": 3}, "has a name"), ({"unit": None}, "unit is a string"),
                     ({"inputs": ["a", 3]}, "inputs are the names"), ({"inputs": [""]}, "inputs are the names"),
                     ({"interval": (1.0,)}, r"interval is \(low, high\)"), ({"interval": (2.0, 1.0)}, r"interval is \(low, high\)"),
+                    ({"interval": 0.5}, r"interval is \(low, high\)"),
                     ({"interval": (0.0, math.inf)}, "interval is a finite number"), ({"target": "low"}, "target is a finite number")):
         with pytest.raises(ValueError, match=why):
             w.measurement(**{"name": "b", "value": 1.0, "unit": "s"} | kw)

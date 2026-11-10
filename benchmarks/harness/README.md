@@ -274,9 +274,9 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
   six at 0.95), with its `half_width` as a share of the ratio.
 - **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=())`:** appends one
-  measurement to `out/result.json`, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with its
-  interval, its target, the verdict of its check against that target, the names of the inputs it was computed from, and
-  the host stamp. `out` is a job's `$OUT`, or the run's directory, where the measurements are the run's own.
+  measurement to `out/result.json`, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with its 95%
+  interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from,
+  by name, and the `host` stamp. `out` is a job's `$OUT`, or the run's directory, where the measurements are the run's own.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a verdict with no target, and a verdict in
