@@ -34,7 +34,7 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     rule over the interior record's program, partition and that port's leaves, a port a wire names its writer's output
     port's, `heldPort`): the verifier computes both, so the prover chooses neither;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
-    count;
+    count, or more than `2^64` (`MAX_LEAVES`);
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
@@ -47,9 +47,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     never the boundary port, each slot of replay block `S[i]` reading only its unit's row there (`i·r + ρ(j)`, the
     value's leaves the `Q` sampled blocks' `r` each); for a port a wire names, its writer's output port of the
     interior record, each slot of replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the
-    port's leaves the writer's `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading
-    only its own rows (`[(u - off_t)·r, (u - off_t + 1)·r)`, `r` the port's leaves over the part's `Q·n_t` slots), or
-    a value either registration registers; each at its root, domain and leaves. Or a port a link or a wire names is
+    port's leaves the writer's `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading only
+    its own first row (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either
+    registration registers; each at its root, domain and leaves, at most `2^64` of them (`MAX_LEAVES`). Or a port a
+    link or a wire names is
     not read.
   - `second-refs`: its header shares rows (`shared_rows`: tables whose rows its instances read by the refs in its public
     file's body) at a port it doesn't read registered (`refsOk`). At a port it reads registered, the session's verifier
@@ -708,10 +709,15 @@ def headerOk (own : Own) (named : Bool) (k : Nat) (t : String) (h : Json) : Bool
     | none => false
   | none => false
 
-/-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count. -/
+/-- The most leaves a tree a session reads may have: its positions are 64-bit. -/
+def MAX_LEAVES : Nat := 2 ^ 64
+
+/-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count, at most
+`MAX_LEAVES`. -/
 def populationOk (q : Nat) (p : Part) (h : Json) : Bool :=
   match getD (getD h "units") "indices", nat? (getD h "instances") with
-  | .arr is, some m => m == q * p.n && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
+  | .arr is, some m =>
+    m == q * p.n && decide (m ≤ MAX_LEAVES) && is.toList.map nat? == (List.range (q * p.n)).map fun i => some (p.lo + i)
   | _, _ => false
 
 /-- The header's scheme is the interior record's, its `frame_v3` roots outside the ports `reads` reads are the record's
@@ -739,12 +745,19 @@ def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
 def registeredEntry (rec : Json) (v : String) : Option Json :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
 
-/-- Entries `e` and `x` name one root, domain and leaf count. -/
+/-- Entry `e` names a leaf count of at most `MAX_LEAVES`. -/
+def leavesOk (e : Json) : Bool := match nat? (getD e "leaves") with
+  | some n => decide (n ≤ MAX_LEAVES)
+  | none => false
+
+/-- Entries `e` and `x` name one root, domain and leaf count, of at most `MAX_LEAVES` leaves. -/
 def sameAt (e x : Json) : Bool :=
-  jeq (getD e "root") (getD x "root") && jeq (getD e "domain") (getD x "domain") && jeq (getD e "leaves") (getD x "leaves")
+  jeq (getD e "root") (getD x "root") && jeq (getD e "domain") (getD x "domain") &&
+    jeq (getD e "leaves") (getD x "leaves") && leavesOk e
 
 /-- Every read of registered-reads entry `e` (slot `reads_from + k` reads row `reads[k]`, null for none) is by one of
-part `p`'s slots `u`, of a row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units` each. -/
+part `p`'s slots `u`, of the first row of the unit `unit u` names, in a tree of `units` units' rows, `leaves / units`
+each. -/
 def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option Nat) : Bool :=
   let first : Option Nat := match getD e "reads_from" with | .null => some 0 | x => nat? x
   match nat? (getD e "leaves"), getD e "reads", first with
@@ -753,8 +766,7 @@ def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option 
       match rs.getD k .null with
       | .null => true
       | x => match nat? x, unit (f + k) with
-        | some pos, some b =>
-          p.holds q (f + k) && decide (b * (leaves / units) ≤ pos) && decide (pos < (b + 1) * (leaves / units))
+        | some pos, some b => p.holds q (f + k) && pos == b * (leaves / units)
         | _, _ => false
   | _, _, _ => false
 
@@ -791,8 +803,8 @@ boundary port it names, of its rows' `per` a replay block, each slot only its un
 boundary port, of its rows' `per` a sampled block, each slot only its unit's row of its cell's (`wiredRow`); a port a
 wire names, only its writer's output port of the interior record, of the writer's units a
 block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
-the interior record, each slot only its own rows, or a value either registration registers, never a boundary port.
-Each at its root, domain and leaves. -/
+the interior record, each slot only its own first row, or a value either registration registers, never a boundary
+port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with

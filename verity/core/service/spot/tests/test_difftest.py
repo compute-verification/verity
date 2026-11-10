@@ -3998,8 +3998,8 @@ def _second_own(j):
     the design's `links` and `wires` (each null for none derived) and the `rows` they place its units at (null for
     none), the reads the `verdicts` of record report (`audit.session_registered`) and what they name of the sessions
     they checked (`second_stage.verified_of`), and each template's reference header (`refs`, `{template: header}`, null
-    for none) and the registered reads its reference statement was verified against (`ref_reads`,
-    `{template: registered}`, each null for none, null for no template's)."""
+    for none) and the registered reads the params give it, taken as given (`ref_reads`, `{template: registered}`, each
+    null for none, null for no template's)."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
         raise D.Reject("allow is not a boolean")
@@ -5897,12 +5897,12 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     parts' order (else `second-order`), with a part's `x` read from the boundary where the design links it, each slot
     at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and fail only on the form
     while it is refused (`two-stage-form`); every part needs a statement, the second stage drawing in it or not
-    (`second-cover`); a read of the boundary at another cell's replay block, of its own `x` at
-    another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but the boundary port
-    its link names (or the interior's value of its name, where the interior registers one), or a linked port not read
-    (`second-read`) is refused, as are reads the verifier of record doesn't
-    report (`second-reported`); links none derived, one for a template of no part, or one whose rows don't place its
-    part's units, are refused (`second-links`);
+    (`second-cover`); a read of the boundary at another cell's replay block, of a tree of more than `2^64` leaves, of
+    its own `x` at another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but
+    the boundary port its link names (or the interior's value of its name, where the interior registers one), or a
+    linked port not read (`second-read`) is refused, as are reads the verifier of record doesn't report
+    (`second-reported`); links none derived, one for a template of no part, or one whose rows don't place its part's
+    units, are refused (`second-links`);
     a header that isn't its template's reference header placed in the run (`second_stage.at_run`: its set
     `served/<run>/m<k>` at its template's position, its ports' bindings the window rule's) but for the run's fields
     (`second_stage.RUN_FIELDS`, `units.blocks` and `registered` among them), or of a template with none, is refused
@@ -5920,6 +5920,17 @@ def test_round_two_holds_each_session_to_its_part(pieces):
 
     def placed(c: dict, **w) -> dict:
         return {**c, "interior": {**c["interior"], "window": {**c["interior"]["window"], **w}}}
+
+    def wide(c: dict, per: int) -> dict:
+        """`c` with the boundary's `x` of `per` rows a replay block, TRIPLE's rows naming them, its slots reading their
+        units' rows there."""
+        b, s, (r,) = c["boundary"], c["statements"][1], c["rows"]
+        e = s["registered"]["ports"]["x"]
+        read = {**e, "leaves": b["population"] * per,
+                "reads": [x // r["per"] * per + x % r["per"] for x in e["reads"]]}
+        return {**_second_with(c, 1, registered={**s["registered"], "ports": {"x": read}}), "rows": [{**r, "per": per}],
+                "boundary": {**b, "roots": [{**x, "leaves": read["leaves"]} if x["port"] == BX else x
+                                            for x in b["roots"]]}}
     elsewhere = _second_reference(triple, 0, h1["instances"], ("out", "x"))
     assert elsewhere != honest["refs"][triple] and SS.blank_run(elsewhere) == SS.blank_run(honest["refs"][triple])
     assert h0["set"] == "served/r-test/m0" and h1["set"] == "served/r-test/m1" and sorted(b0) == ["out", "x"]
@@ -5936,6 +5947,8 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         ({**honest, "allow": False}, ["two-stage-form"]),
         ({**honest, "statements": honest["statements"][::-1]}, ["second-order"]),
         (linked, []),
+        (wide(linked, 2 ** 64 // linked["boundary"]["population"]), []),
+        (wide(linked, 2 ** 64 // linked["boundary"]["population"] + 1), ["second-read"]),
         (own, []),
         ({**own, "allow": False}, ["two-stage-form"]),
         (_second_case(SECOND_MIXED, True, sample, drawn, links={pair, triple}, allow=True), []),
