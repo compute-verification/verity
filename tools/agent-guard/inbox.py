@@ -13,6 +13,10 @@
     python3 tools/agent-guard/inbox.py check AGENT_ID [--repo DIR]   on AGENT_ID's own VM: whether this VM's hook polls
                                                                      for it, and whether Cursor reads a shell hook here; exit
                                                                      1, with how to read the branch, if not
+    python3 tools/agent-guard/inbox.py guard [AGENT_ID] [--repo DIR] on your own VM: nothing when a shell hook has run for
+                                                                     you here; else one line (the guard and the inbox are
+                                                                     not running, why, the fix) and exit 1. `research`
+                                                                     prints it once a session
     python3 tools/agent-guard/inbox.py selftest [AGENT_ID]           on your own VM ($CURSOR_CONVERSATION_ID by default):
                                                                      the checks of `check`, then send yourself a message your
                                                                      next commands must deliver: delivery end to end
@@ -28,6 +32,10 @@ IDLE) runs no command and takes nothing until it is resumed, with Task or a foll
 the agent are still uncollected on origin, and `send --wait S` whether a VM took this one: taken is on the agent's VM, to be
 delivered at its next command, and not yet acted on.
 `--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
+
+Which hooks a session runs is fixed when its VM boots, by its branch's tracked `.cursor/hooks.json`, and nothing on a
+running VM changes it. A shell hook that ran for an agent leaves its event in the guard's event log, or (a copy from before
+that log) the inbox's poll mark: `check`, `selftest` and `guard` read both.
 
 AGENT_ID is the agent's conversation id: a cloud agent's or a subagent's is the `bc-…` id its Task call returned.
 """
@@ -213,33 +221,94 @@ def as_cursor_reads(text: str) -> object:
     return parsed(text)
 
 
-def hook_problems(agent: str, repo: Path) -> list[str]:
-    """Why this VM's shell hook may not run for `agent`: each hooks.json Cursor could read here (the checkout's, and each
-    directory's above it, since a workspace root can hold the checkout) that it reads otherwise than as JSON or with no shell
-    hook, and no event of `agent` in EVENT_LOG, where every run of this hook records one."""
-    problems, shell_hook_read = [], False
-    found = [d / ".cursor/hooks.json" for d in (repo.resolve(), *repo.resolve().parents) if (d / ".cursor/hooks.json").is_file()]
-    for path in found:
-        text = path.read_text(errors="replace")
-        read = as_cursor_reads(text)
-        config = read if isinstance(read, dict) else {}
-        if read != parsed(text):
-            problems.append(f"Cursor reads {path} otherwise than its JSON says: it strips a `/*` or `//` inside it as a comment"
-                            f", leaving {read if isinstance(read, str) else 'the steps ' + ', '.join(sorted(config.get('hooks') or {}))}")
-        hooks = (config.get("hooks") or {}).get("beforeShellExecution") or []
-        shell_hook_read |= any("shell_hook.py" in str(h.get("command")) for h in hooks if isinstance(h, dict))
-    if not shell_hook_read:
-        problems.append(f"Cursor reads no shell hook from {', '.join(map(str, found)) or f'a .cursor/hooks.json at {repo} or above'}")
-    seen = False
-    for log in (Path(settings.EVENT_LOG + ".1"), Path(settings.EVENT_LOG)):
-        if log.exists():
-            seen |= any('"hook": "shell_hook.py"' in ln and f'"conversation_id": "{agent}"' in ln
-                        for ln in log.read_text(errors="replace").splitlines())
-    if not seen:
-        problems.append(f"no shell hook has run for {agent} on this VM: {settings.EVENT_LOG} has no event of it, though this "
-                        "command's own hook would have written one (none runs, or an older copy without the log does). Cursor "
-                        "reads hooks.json when the session starts: after fixing it, restart the session")
+def shell_hook_in(text: str) -> bool:
+    """Whether Cursor reads a shell hook from a hooks.json's `text`."""
+    read = as_cursor_reads(text)
+    hooks = (read.get("hooks") or {}).get("beforeShellExecution") or [] if isinstance(read, dict) else []
+    return any("shell_hook.py" in str(h.get("command")) for h in hooks if isinstance(h, dict))
+
+
+def hooks_file(repo: Path) -> Path | None:
+    """The one hooks.json a cloud agent's session reads: the one at the top of the checkout holding `repo`; one in a
+    directory above the checkout (a workspace root that holds it) is not read. None when `repo` is in no checkout."""
+    try:
+        return Path(git(repo, "rev-parse", "--show-toplevel").strip()) / ".cursor/hooks.json"
+    except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+        print(f"inbox: {repo.resolve()} is in no checkout: {e}", file=sys.stderr)
+        return None
+
+
+def file_problems(repo: Path) -> list[str]:
+    """How Cursor reads the hooks.json of `repo`'s checkout (`hooks_file`) otherwise than as its JSON, and whether it reads
+    no shell hook from it."""
+    path = hooks_file(repo)
+    if path is None or not path.is_file():
+        return [f"Cursor reads no shell hook: {repo.resolve()} is in no checkout" if path is None else
+                f"Cursor reads no shell hook: there is no {path}"]
+    problems, text = [], path.read_text(errors="replace")
+    read = as_cursor_reads(text)
+    if read != parsed(text):
+        steps = (read.get("hooks") or {}) if isinstance(read, dict) else {}
+        problems.append(f"Cursor reads {path} otherwise than its JSON says: it strips a `/*` or `//` inside it as a comment"
+                        f", leaving {read if isinstance(read, str) else 'the steps ' + ', '.join(sorted(steps))}")
+    if not shell_hook_in(text):
+        problems.append(f"Cursor reads no shell hook from {path}")
     return problems
+
+
+def hook_seen(agent: str) -> bool:
+    """Whether a shell hook has run for `agent` on this VM: EVENT_LOG holds an event of it, or the inbox its poll mark. Only
+    the shell hook writes that mark, and a copy from before the event log writes it too: hook.sh runs origin/main's copy,
+    which can be older than the checkout's. Another hook's event shows nothing: from a hooks.json it misreads, Cursor can
+    run the Task hook on shell commands and no shell hook."""
+    for log in (Path(settings.EVENT_LOG + ".1"), Path(settings.EVENT_LOG)):
+        if log.exists() and any('"hook": "shell_hook.py"' in ln and f'"conversation_id": "{agent}"' in ln
+                                for ln in log.read_text(errors="replace").splitlines()):
+            return True
+    return (INBOX / f"{agent}.polled").exists()
+
+
+#: Cursor reads a VM's hooks once, when the VM boots, from its branch's tracked hooks.json: nothing done on a running VM
+#: changes which hooks it runs
+AT_BOOT = "A VM reads its hooks once, when it boots, from its branch's .cursor/hooks.json"
+
+
+def hook_problems(agent: str, repo: Path) -> list[str]:
+    """Why this VM's shell hook may not run for `agent`: what `file_problems` finds at `repo`, and no trace of a shell hook
+    run for `agent` (`hook_seen`), which this command's own hook would have left."""
+    problems = file_problems(repo)
+    if not hook_seen(agent):
+        problems.append(f"no shell hook has run for {agent} on this VM: {settings.EVENT_LOG} has no event of it and {INBOX} no "
+                        f"poll mark of it, though this command's own hook would have left both. {AT_BOOT}: only a VM booted "
+                        "after that file is fixed runs it")
+    return problems
+
+
+def guard_off(agent: str, repo: Path) -> str | None:
+    """One line for `agent` on its own VM when no shell hook has run for it here: the guard and the inbox are not running,
+    why (its branch's hooks.json, read at `repo`'s checkout), and the fix; None when one has run."""
+    if hook_seen(agent):
+        return None
+    head = (f"no shell hook has run for {agent} on this VM, so the guard that refuses a command printing a secret and the "
+            f"inbox are not running here. {AT_BOOT}")
+    if hooks_file(repo) is None:
+        return f"{head}. Run `python3 tools/agent-guard/inbox.py guard {agent}` in your checkout for why, and the fix"
+    problems = file_problems(repo)
+    try:
+        main = git(repo, "show", "origin/main:.cursor/hooks.json")
+    except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+        main = f"unread ({e})"
+    new_vm = "a VM booted from the branch after that runs them"
+    if not problems:
+        why = "this branch's loads as written now, so it changed after this VM booted, or Cursor did not load it"
+        fix = f"Push the branch: {new_vm}"
+    elif shell_hook_in(main) and as_cursor_reads(main) == parsed(main):
+        why, fix = problems[0], f"Merge origin/main, whose hooks.json loads, and push: {new_vm}"
+    else:
+        why, fix = problems[0], ("origin/main's does not load either, as of this checkout's last fetch: fetch it, merge it "
+                                 f"once it loads, and push: {new_vm}")
+    return (f"{head}: {why}. {fix}. Until then `python3 tools/agent-guard/inbox.py check {agent}` says how to read your "
+            "messages by hand")
 
 
 def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
@@ -299,10 +368,16 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
     ck = sub.add_parser("check")
     ck.add_argument("agent")
     ck.add_argument("--repo", type=Path, default=Path("."))
-    sf = sub.add_parser("selftest")
-    sf.add_argument("agent", nargs="?", default=settings.CONVERSATION_ID)
-    sf.add_argument("--repo", type=Path, default=Path("."))
+    for name in ("guard", "selftest"):
+        sf = sub.add_parser(name)
+        sf.add_argument("agent", nargs="?", default=settings.CONVERSATION_ID)
+        sf.add_argument("--repo", type=Path, default=Path("."))
     a = ap.parse_args(argv)
+    if a.cmd == "guard":
+        line = guard_off(full_id(a.agent), a.repo)
+        if line:
+            print(line)
+        return 1 if line else 0
     if a.cmd == "selftest":
         problems = hook_problems(full_id(a.agent), a.repo)
         token = secrets.token_hex(4)
