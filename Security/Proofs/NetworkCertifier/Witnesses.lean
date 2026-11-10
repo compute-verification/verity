@@ -141,12 +141,17 @@ theorem ks_toy : (toyL).KS shaD :=
 
 set_option synthInstance.maxSize 1024 in
 /-- **`SampledAuditAccepted`'s premise at the toy code**, which is `SampledLeakAccepted`'s too: `Compiled.KS`
-(`ks_toy`). -/
+(`ks_toy`). The code accepts no run (`SamplingDeploy.run_rejV2_out`) and parses no statement, so the facts behind
+`Compiled.KS` hold there with nothing to check. At a code that accepts a run `Compiled.KS` stays the guarantee's
+hypothesis, which this lemma does not discharge. -/
 theorem SampledAuditAccepted_honest : (toyL).KS shaD := ks_toy
 
 set_option synthInstance.maxSize 1024 in
 /-- **`PeriodLeakAccepted`'s premises at the toy code**, which are `SampledLeakRegistered`'s and
-`CommOfPeriodLeakAccepted`'s too: `Compiled.KS` (`ks_toy`), and the code's commitment binds (`binds_deployOf`). -/
+`CommOfPeriodLeakAccepted`'s too: `Compiled.KS` (`ks_toy`), and the code's commitment binds (`binds_deployOf`). The
+code accepts no run (`SamplingDeploy.run_rejV2_out`) and parses no statement, so the facts behind `Compiled.KS` hold
+there with nothing to check. At a code that accepts a run `Compiled.KS` stays the guarantee's hypothesis, which this
+lemma does not discharge; the binding holds at every code. -/
 theorem PeriodLeakAccepted_honest : (toyL).KS shaD ∧ (toyL).commit.Binds shaD :=
   ⟨ks_toy, binds_deployOf (FlockDeploy.deployZk relD) SamplingDeploy.toyCode shaD⟩
 
