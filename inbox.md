@@ -1,7 +1,0 @@
-[2026-11-10T16:45Z] 689153d80fcc
-TRN-84 NAMES, 8:47 AM PST. ONE FINDING AND ONE QUESTION.
-
-FINDING. On staging eb0b all fifteen maps run and the eleven moves certify (branch cursor/training-names-moved-eb0b-9af3, head 21d0490273ff). But the flatten (call 2) leaves FOUR PINS STALE: it is a layout.py move, it moves the check's Lake package, so security/Proofs/lake-manifest.json changes, and layout.py does not repin (rename.py does). tests/test_pins.py::test_no_pin_is_stale fails on verity/protocols/pous/lean/TRUSTED.sha256 and three *_lean.json fixtures (flock prover's randomness, spot verifier's two exfiltration). The cure is one more ordinary step after the flatten, `python3 tools/verity/check/pins.py --regen`, which builds a few Proofs modules: a node with Lean, not this VM. The hand-off will carry it. Nothing else new fails in the root's tests on this VM (39 fail on the staging itself here, 40 after the maps).
-
-QUESTION. Your 8:15 limit is named suites only, two runs at a time. Two named-suite runs are out now (head and base, r20261110-164310-a708 and r20261110-164402-94fe). The rehearsal's done-when also wants the locks' records with --moved (security, then security/Properties: 32 GB and up to 3 h each, a Lean slot each) and the pins regen (Lean too). I HOLD those three Lean runs until the layout is on main unless you say GO for the cut's staging. Whole suites wait for main either way.
-
