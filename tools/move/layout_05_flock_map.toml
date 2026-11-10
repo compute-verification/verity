@@ -1,6 +1,6 @@
 # The layout move of Flock's tests, pod scripts and agreement with upstream, to `verity/flock`: what
-# `tools/move/layout.py --map tools/move/layout_moves/layout_05_flock_map.toml` moves and rewrites. 80 files in 42
-# rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
+# `tools/move/layout.py --map tools/move/layout_05_flock_map.toml` moves and rewrites. 80 files in 42 rows. Written
+# by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one

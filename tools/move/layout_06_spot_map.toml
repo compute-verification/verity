@@ -1,11 +1,18 @@
-# The layout move of Flock's Lean package, to `verity/flock/verifier`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_03_flock_verifier_map.toml` moves and rewrites. 325 files in 13 rows. Written by
+# The layout move of sampled proofs, to `verity/spot`: what `tools/move/layout.py --map
+# tools/move/layout_06_spot_map.toml` moves and rewrites. 144 files in 19 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
 # ends in it. A directory is one row where all of it goes one way; a directory this move shares with another is one
 # row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
+# - `verity/core/service/spot/` to `verity/spot/verifier/lean/`: SPOT's Lake package: the rule puts its
+#   `pyproject.toml` on the Python verifier's in `verity/spot/verifier/`; the Lean takes `lean/`, as each protocol's
+#   Lean is its `lean/`.
+# - `verity/core/service/vstar/recursive/` to `verity/spot/verifier/recursive/`: the recursive audit's Lake package
+#   requires SPOT's: under Flock's verifier, where the rule leaves it, it reads against the order of the layout.
+# - `verity/core/protocols/profile.py` to `verity/spot/verifier/profile.py`: the integrity profile: the rule gives
+#   `verity/spot/verifier/protocols/profile.py`, a `protocols/` segment that names nothing.
 # - `verity/core/service/vstar/` to `verity/flock/verifier/vstar_cli/`: V*'s command package: the rule gives
 #   `verity/flock/verifier/vstar/`, which differs only by case from `VStar/`, the Flock verifier's own Lean sources,
 #   and a checkout that ignores case merges the two.
@@ -17,23 +24,29 @@ old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"verity/core/protocols/interface/" = "verity/flock/verifier/interface/"
-"verity/core/service/firewall/" = "verity/flock/verifier/firewall/"
-"verity/core/service/flock/" = "verity/flock/verifier/"
-"verity/core/service/vstar/VStarDifftest.lean" = "verity/flock/verifier/vstar_cli/VStarDifftest.lean"
-"verity/core/service/vstar/VStarMain.lean" = "verity/flock/verifier/vstar_cli/VStarMain.lean"
-"verity/core/service/vstar/VStarTrace.lean" = "verity/flock/verifier/vstar_cli/VStarTrace.lean"
-"verity/core/service/vstar/VStarTraceCli.lean" = "verity/flock/verifier/vstar_cli/VStarTraceCli.lean"
-"verity/core/service/vstar/lake-manifest.json" = "verity/flock/verifier/vstar_cli/lake-manifest.json"
-"verity/core/service/vstar/lakefile.toml" = "verity/flock/verifier/vstar_cli/lakefile.toml"
-"verity/core/service/vstar/lean-audit.json" = "verity/flock/verifier/vstar_cli/lean-audit.json"
-"verity/core/service/vstar/lean-toolchain" = "verity/flock/verifier/vstar_cli/lean-toolchain"
-"verity/core/service/vstar/pyproject.toml" = "verity/flock/verifier/vstar_cli/pyproject.toml"
-"verity/core/service/vstar/tests/" = "verity/flock/verifier/vstar_cli/tests/"
+"verity/core/protocols/profile.py" = "verity/spot/verifier/profile.py"
+"verity/core/protocols/spot/README.md" = "verity/spot/verifier/README.md"
+"verity/core/protocols/spot/__init__.py" = "verity/spot/verifier/__init__.py"
+"verity/core/protocols/spot/candidates.py" = "verity/spot/candidates.py"
+"verity/core/protocols/spot/challenger.py" = "verity/spot/device/challenger.py"
+"verity/core/protocols/spot/coins.py" = "verity/spot/device/coins.py"
+"verity/core/protocols/spot/consumers.py" = "verity/spot/verifier/consumers.py"
+"verity/core/protocols/spot/costfit.py" = "verity/spot/costfit.py"
+"verity/core/protocols/spot/one_stage/" = "verity/spot/verifier/one_stage/"
+"verity/core/protocols/spot/optimize.py" = "verity/spot/optimize.py"
+"verity/core/protocols/spot/parties.py" = "verity/spot/verifier/parties.py"
+"verity/core/protocols/spot/plancheck.py" = "verity/spot/plancheck.py"
+"verity/core/protocols/spot/pyproject.toml" = "verity/spot/verifier/pyproject.toml"
+"verity/core/protocols/spot/remote.py" = "verity/spot/device/remote.py"
+"verity/core/protocols/spot/second_stage.py" = "verity/spot/verifier/second_stage.py"
+"verity/core/protocols/spot/service.py" = "verity/spot/verifier/service.py"
+"verity/core/protocols/spot/tests/" = "verity/spot/verifier/tests/"
+"verity/core/service/spot/" = "verity/spot/verifier/lean/"
+"verity/core/service/vstar/recursive/" = "verity/spot/verifier/recursive/"
 
 [tokens]
 # directories no row moves whole, as a reference to one reads after the move
-"verity/core/service/vstar/" = "verity/flock/verifier/vstar_cli/"
+"verity/core/protocols/spot/" = "verity/spot/"
 
 [retired]
 paths = []
@@ -57,7 +70,20 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"verity.core.protocols.interface" = "verity.flock.verifier.interface"
-"verity.core.service.firewall" = "verity.flock.verifier.firewall"
-"verity.core.service.flock" = "verity.flock.verifier"
-"verity.core.service.vstar.tests" = "verity.flock.verifier.vstar_cli.tests"
+"verity.core.protocols.profile" = "verity.spot.verifier.profile"
+"verity.core.protocols.spot" = "verity.spot.verifier"
+"verity.core.protocols.spot.candidates" = "verity.spot.candidates"
+"verity.core.protocols.spot.challenger" = "verity.spot.device.challenger"
+"verity.core.protocols.spot.coins" = "verity.spot.device.coins"
+"verity.core.protocols.spot.consumers" = "verity.spot.verifier.consumers"
+"verity.core.protocols.spot.costfit" = "verity.spot.costfit"
+"verity.core.protocols.spot.one_stage" = "verity.spot.verifier.one_stage"
+"verity.core.protocols.spot.optimize" = "verity.spot.optimize"
+"verity.core.protocols.spot.parties" = "verity.spot.verifier.parties"
+"verity.core.protocols.spot.plancheck" = "verity.spot.plancheck"
+"verity.core.protocols.spot.remote" = "verity.spot.device.remote"
+"verity.core.protocols.spot.second_stage" = "verity.spot.verifier.second_stage"
+"verity.core.protocols.spot.service" = "verity.spot.verifier.service"
+"verity.core.protocols.spot.tests" = "verity.spot.verifier.tests"
+"verity.core.service.spot" = "verity.spot.verifier.lean"
+"verity.core.service.vstar.recursive" = "verity.spot.verifier.recursive"

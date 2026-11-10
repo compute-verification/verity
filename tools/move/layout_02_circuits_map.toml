@@ -1,5 +1,5 @@
 # The layout move of the circuit language, to `verity/circuits`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_02_circuits_map.toml` moves and rewrites. 101 files in 36 rows. Written by
+# tools/move/layout_02_circuits_map.toml` moves and rewrites. 101 files in 36 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already

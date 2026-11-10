@@ -5,16 +5,16 @@
 
 It reads `layout_maps.json` beside it (the layout's assignment at one commit: each moved component's new directory and
 files, the files archived and the files that stay) and the files REF tracks, and writes the layout as `layout.py` maps
-in two forms that move every file to the same place:
+in two forms that move every file to the same place, beside itself, where `stage.py` reads a map:
 
-    tools/move/layout_moves/layout_NN_NAME_map.toml   one map a move, numbered in the order they run
-    tools/move/layout_one/layout_one_map.toml         every row as one map
+    tools/move/layout_NN_NAME_map.toml   one map a move, numbered in the order they run
+    tools/move/layout_one_map.toml       every row as one map
 
 It writes nothing unless every check below passes, so it is the one rerun when `main` moves: a tracked file it cannot
 place stops it, by name. Then:
 
-    python3 tools/move/layout.py --map tools/move/layout_one/layout_one_map.toml --dry-run
-    for m in tools/move/layout_moves/layout_??_*_map.toml; do python3 tools/move/layout.py --map $m --dry-run; done
+    python3 tools/move/layout.py --map tools/move/layout_one_map.toml --dry-run
+    for m in tools/move/layout_??_*_map.toml; do python3 tools/move/layout.py --map $m --dry-run; done
 
 THE RULE for a path inside a directory. The layout gives each component a directory, which ends in `verifier/`,
 `prover/` or `device/` where the component is that part. A moved file's new path is
@@ -43,8 +43,8 @@ archives it; the script names each one, for a commit that deletes them after the
 rename the package, and every mention of it that is left, to `archive.…`; a row that took it along by the rule would
 rename the package under the modules other rows take out of it.
 
-EXCEPTIONS, each a row of `EXCEPT`, `KEEP` (a component or a file that stays) or `DROP` (a file a move deletes) with
-its reason: where the rule gives two files one path or two paths
+EXCEPTIONS, each a row of `EXCEPT`, `KEEP` (a component, a file or a directory that stays), `DROP` (a file a move
+deletes) or `ALIASES` (a name a moved module is imported by that its path does not give) with its reason: where the rule gives two files one path or two paths
 that differ only by case, puts a file nobody trusts in a trusted directory, takes a module out of its import package,
 or gives a path nobody would look for. A row the rule itself now gives is reported as doing nothing.
 
@@ -153,13 +153,15 @@ EXCEPT = [
      "V*'s command package: the rule gives `verity/flock/verifier/vstar/`, which differs only by case from `VStar/`, the "
      "Flock verifier's own Lean sources, and a checkout that ignores case merges the two"),
     ("verity/core/protocols/certifier/lean/", "verity/protocols/certifier/device/program/lean/",
-     "the certifier program's Lake package: the rule puts it on `verifier/lean/`, where the network check's Lake package "
-     "goes (two lakefiles, manifests, locks and toolchains on one path); the program is what the device runs"),
+     "the certifier program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake "
+     "package goes (two lakefiles, manifests, locks and toolchains on one path)"),
     ("verity/ml/commitments/tests/test_leaves.py", "integrations/vllm/tests/commitments/test_leaves.py",
      "the test of `leaves.py`, which goes into the integration: it goes into the integration's suite with the module it "
      "tests; left with its own suite, a test under `verity/` would import an integration"),
     ("verity/ml/commitments/tests/test_vllm_v1.py", "integrations/vllm/tests/commitments/test_vllm_v1.py",
      "the test of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`"),
+    ("examples/h200/e2e_h200/served_weights.py", "benchmarks/torch_gpu/p2_stage/served_weights.py",
+     "the served weights' reader goes beside the GPU stage that reads it; the demo's other files stay"),
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
@@ -171,6 +173,7 @@ EXCEPT_MOVE = {
     "verity/core/protocols/pyproject.toml": "verity",
     "verity/core/devices/memory_challenger/": "pous",
     "verity/core/protocols/remote_bandwidth/": "poub",
+    "examples/h200/e2e_h200/served_weights.py": "archive",
 }
 #: components the layout gives a directory that stay where they are: {component id: why}
 KEEP = {
@@ -178,12 +181,15 @@ KEEP = {
                 "scripts would read `benchmarks/census` by path",
     "bench:63": "PoUW's calculators stay in `benchmarks/pouw/`: nothing under `verity/` or an integration imports them, "
                 "and one of them loads `benchmarks/sampling_plan`",
-    "benchmarks/network_traces/leak_bounds.py":
-        "a calculator that loads the certifier's prover: under `verifier/`, where the rule puts it, a verifier's file would "
-        "load a prover's",
-    "benchmarks/network_traces/chain_record.py":
-        "it drives a run and loads `benchmarks/` files by bare name, and it loads the certifier's prover, which no file under "
-        "`verifier/` may",
+    "benchmarks/network_traces/":
+        "its files find each other by bare name, with the directory on `sys.path`, and a move leaves a bare name as "
+        "written: the directory stays whole, its archived files too, until its owner imports by package name and splits it",
+}
+#: a name a moved module is imported by that its path does not give: {the name: (the move, the module's new name, why)}
+ALIASES = {
+    "e2e_h200.served_weights":
+        ("archive", "benchmarks.torch_gpu.p2_stage.served_weights",
+         "its readers put `examples/h200` on `sys.path` and import it as `e2e_h200.served_weights`"),
 }
 #: files a move deletes: {path: (the move, why)}
 DROP = {
@@ -201,6 +207,7 @@ UNTRUSTED = {
 NEW = {
     "verity/ml/commitments/history.py": "ml:commitment-schemes",
     "verity/ml/commitments/tests/test_history.py": "ml:commitment-schemes",
+    "archive/AGENTS.md": "stays",                      # what `archive/` is, there before the archive's files arrive
 }
 #: references to a directory a map splits that stay right as they are: (the move, "old file: old directory", why)
 SPLIT = [
@@ -261,8 +268,8 @@ INCLUDE = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "integrations/vllm/manifests/definitions.json"]
 NAMESAKE = ("pyproject.toml", "__init__.py", "lakefile.toml")
 MAP_NAME = re.compile(r"layout_(\d\d_\w+|one)_map\.toml")
-#: the two forms of the layout and the directory each is written to, under `tools/move/`
-FORMS = {"moves": "layout_moves", "one": "layout_one"}
+#: the two forms of the layout
+FORMS = ("moves", "one")
 ONE = ("layout", "the whole layout")
 TEST_FILE = re.compile(r"(?:.*/)?(?:test_[^/]*|[^/]*_test)\.py")
 #: where no suite collects a test file and none need (`tests/test_repository.py`'s `UNSUITED_TEST_DIRS`)
@@ -374,6 +381,11 @@ def excepted(p):
     return (None, None, None) if best is None else (best[0], best[1] + p[len(best[0]):], EXCEPT_MOVE.get(best[0]))
 
 
+def kept(p):
+    """Whether a path row of `KEEP` (a file, or a directory ending in "/") holds `p`."""
+    return any(holds(k, p) for k in KEEP if "/" in k)
+
+
 def place(data, tracked, say):
     """{tracked file: a component's id, "stays" or "archived"}: by the data's paths, `NEW`, or the files beside it."""
     entry = {}
@@ -426,7 +438,7 @@ def plan(data, owner, say, suites=()):
     out, plain = {}, {}
     for p, key in owner.items():
         row, new, mv = excepted(p)
-        if key == "stays" or key in KEEP or p in KEEP:
+        if key == "stays" or key in KEEP or kept(p):
             rule, move = None, None
         elif key == "archived":
             rule, move = "archive/" + p, "archive"
@@ -467,7 +479,7 @@ def plan(data, owner, say, suites=()):
         t = posixpath.dirname(p)
         while t and t not in tests:
             t = posixpath.dirname(t)
-        if not t or owner[p] == "archived" or excepted(p)[0] == p:   # a row of its own: with the code it tests
+        if not t or (owner[p] == "archived" and not kept(p)) or excepted(p)[0] == p:   # a row of its own: with the code it tests
             continue
         pp = tests[t]
         pdir = posixpath.dirname(pp)
@@ -528,17 +540,21 @@ def plan(data, owner, say, suites=()):
     return out, sorted(emptied), suited
 
 
-def compress(mine, tracked_dirs):
+def compress(mine, tracked_dirs, own=()):
     """The rows of one map: `mine` is {old file: new file}; `tracked_dirs` is {directory: (files in it, subdirectories)}
     over every tracked file. A directory is one row where every tracked file under it is the map's and keeps its path
-    below it; otherwise its files are rows and its subdirectories are looked at in turn."""
+    below it; otherwise its files are rows and its subdirectories are looked at in turn. A file of `own` is always a row
+    of its own and its directory may still be one row: the longest row wins."""
     whole = {}
+    own = {p for p in own if p in mine}
 
     def walk(d):
         files, subs = tracked_dirs[d]
         target = set()
         for f in files:
             p = f"{d}/{f}" if d else f
+            if p in own:
+                continue
             new = mine.get(p)
             target.add(None if new is None or posixpath.basename(new) != f else posixpath.dirname(new))
         for s in subs:
@@ -561,6 +577,7 @@ def compress(mine, tracked_dirs):
         for s in subs:
             emit(f"{d}/{s}" if d else s)
     emit("")
+    rows.update((p, mine[p]) for p in own)
     return rows
 
 
@@ -597,10 +614,15 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
             # The map empties the directory and its files part ways. `layout.py` looks only for paths that begin with a
             # row or a `[tokens]` key, so without one a reference to the directory itself (a suite's declared input, a
             # boundary's glob) is neither rewritten nor noted and names a directory that is gone. It reads as the one
-            # new directory that holds every file of the old one, where that is narrower than a top-level directory;
+            # new directory that holds every file of the old one but the archived, where that is narrower than a
+            # top-level directory;
             # else, in the one map, as where its package goes, each such reference acknowledged in `[split]`.
-            common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in mine])
-            if "/" in common:
+            rest = [p for p in mine if not dest[p][0].startswith("archive/") and excepted(p)[0] != p]
+            whole = {dest[p][0][: -len(p[len(d):])] if dest[p][0].endswith(p[len(d):]) else None for p in rest}
+            common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in rest or mine])
+            if len(whole) == 1 and (n := next(iter(whole))) is not None:
+                out[d + "/"] = n + "/"                 # all but the archived and a file with a row of its own keep together
+            elif "/" in common:
                 out[d + "/"] = common + "/"
             elif one and name is not None and posixpath.basename(dest[f"{d}/{name}"][0]) == name:
                 out[d + "/"] = posixpath.dirname(dest[f"{d}/{name}"][0]) + "/"
@@ -672,6 +694,10 @@ def render(fname, v, before, one=False):
               "", "[modules]",
               "# the renames [paths] and [roots] imply (`layout.py --modules`)"]
     lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["modules"].items())]
+    if v["aliases"]:
+        lines += ["", "[aliases]", "# a name a moved module is imported by that its path does not give"]
+        for k, x in sorted(v["aliases"].items()):
+            lines += [wrap("# ", f"`{k}`: {ALIASES[k][2]}."), f"{toml_str(k)} = {toml_str(x)}"]
     return "\n".join(lines) + "\n"
 
 
@@ -681,7 +707,7 @@ def main():
     ap.add_argument("--data", default=os.path.join(HERE, "layout_maps.json"))
     ap.add_argument("--out", default=HERE, help="where the two forms' directories go (default: tools/move)")
     ap.add_argument("--form", choices=[*FORMS, "both"], default="both",
-                    help="`moves`: one map a move, in `layout_moves/`; `one`: every row as one map, in `layout_one/`")
+                    help="`moves`: one map a move; `one`: every row as one map")
     ap.add_argument("--targets", help="write the table of where each moved component goes here, tab-separated")
     ap.add_argument("--created", help="write here the `__init__.py`s `layout.py` creates over all the maps, one a line")
     a = ap.parse_args()
@@ -766,7 +792,7 @@ def main():
             mine = {p: n for p, (n, _, m) in dest.items() if m == move}
             if not mine:
                 die(f"{move}: no file")
-            rows = compress(mine, tracked_dirs)
+            rows = compress(mine, tracked_dirs, [p for p in mine if excepted(p)[0] == p])
             # the archive speaks for no directory
             tokens = {} if move == "archive" else tokens_for(move, dest, tracked_dirs, rows, emptied, one)
             roots_new = {}
@@ -791,6 +817,11 @@ def main():
             if set(drop) & set(dest):
                 die(f"{move}: DROP deletes a file a row moves: {sorted(set(drop) & set(dest))}")
             lay_data["drop"] = {"paths": drop}
+            aliases = {k: n for k, (m, n, _) in sorted(ALIASES.items()) if one or m == move}
+            for k, n in aliases.items():
+                if n not in modules.values():
+                    die(f"{move}: ALIASES' row {k} names {n}, which no row of the map makes")
+            lay_data["aliases"] = aliases
             lay = L.Layout(lay_data)
             got = {p: lay.file(p) for p in tracked if lay.file(p) is not None}
             if got != mine:
@@ -801,7 +832,8 @@ def main():
                     die(f"{move}: {p} -> {n}: its module {mo} would be renamed {lay.module(mo)}, not {mn}")
             reasons = [(o, n, w) for o, n, w in EXCEPT if any(holds(o, p) for p in mine)]
             maps[move] = {"what": what, "rows": rows, "tokens": tokens, "split": split, "modules": modules,
-                          "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "data": lay_data, "drop": drop}
+                          "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "data": lay_data, "drop": drop,
+                          "aliases": aliases}
 
         # ---- across the maps: no row over another map's files or over a destination, Lake packages whole
         keys = [(m, k) for m in maps for k in maps[m]["rows"]]
@@ -863,24 +895,19 @@ def main():
     if a.form in ("one", "both"):
         built["one"] = build({p: (n, key, ONE[0]) for p, (n, key, _) in dest.items()}, [ONE], True)
 
-    # ---- write: one directory a form; a move's map carries its place in the order in its name
+    # ---- write: a move's map carries its place in the order in its name
     os.makedirs(a.out, exist_ok=True)
-    for old in os.listdir(a.out):                      # the maps this script wrote beside itself before the forms had directories
-        if MAP_NAME.fullmatch(old):
-            os.remove(os.path.join(a.out, old))
     fnames = {}
     for form, (maps, order, after) in built.items():
         one = form == "one"
         fname = {m: "layout_one_map.toml" if one else f"layout_{i:02d}_{m}_map.toml" for i, m in enumerate(order, 1)}
         fnames[form] = fname
-        out = os.path.join(a.out, FORMS[form])
-        os.makedirs(out, exist_ok=True)
-        for old in os.listdir(out):
-            if MAP_NAME.fullmatch(old) and old not in fname.values():
-                os.remove(os.path.join(out, old))
+        for old in os.listdir(a.out):                  # this form's maps of an earlier run, under names it no longer writes
+            if MAP_NAME.fullmatch(old) and (old == "layout_one_map.toml") == one and old not in fname.values():
+                os.remove(os.path.join(a.out, old))
         for move in order:
-            with open(os.path.join(out, fname[move]), "w") as f:
-                f.write(render(f"{FORMS[form]}/{fname[move]}", maps[move], [fname[b] for b in order if b in after[move]], one))
+            with open(os.path.join(a.out, fname[move]), "w") as f:
+                f.write(render(fname[move], maps[move], [fname[b] for b in order if b in after[move]], one))
     form = "moves" if "moves" in built else "one"     # the table and the counts below are of the maps a move, where written
     maps, order, after = built[form]
     fname = fnames[form]
@@ -923,13 +950,14 @@ def main():
     moved = {key for _, key, _ in dest.values() if key in comps}
     if "one" in built:
         v = built["one"][0][ONE[0]]
-        size = os.path.getsize(os.path.join(a.out, FORMS["one"], "layout_one_map.toml"))
+        size = os.path.getsize(os.path.join(a.out, "layout_one_map.toml"))
         print(f"the one map: {len(v['mine'])} files, {len(v['rows'])} rows ({sum(1 for k in v['rows'] if k.endswith('/'))} "
               f"directories), {len(v['tokens'])} tokens, {len(v['split'])} split rows, {len(v['modules'])} module renames, "
               f"{size} bytes")
     print(f"{len(order)} maps at {a.ref} {head[:12]} (the data's cut: {data['commit'][:12]}): {len(dest)} files "
           f"({sum(1 for _, k, _ in dest.values() if k in comps)} in {len(moved)} components that move, "
-          f"{sum(1 for _, k, _ in dest.values() if k == 'archived')} archived), "
+          f"{sum(1 for n, _, _ in dest.values() if n.startswith('archive/'))} to archive/, "
+          f"{sum(1 for n, k, _ in dest.values() if k not in comps and not n.startswith('archive/'))} by a row of EXCEPT alone), "
           f"{sum(len(v['rows']) for v in maps.values())} rows, {sum(len(v['tokens']) for v in maps.values())} tokens")
     for move in order:
         v = maps[move]

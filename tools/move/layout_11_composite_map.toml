@@ -1,5 +1,5 @@
-# The layout move of Window, to `verity/windows`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_14_windows_map.toml` moves and rewrites. 15 files in 1 rows. Written by
+# The layout move of the composite protocols, to `verity/composite`: what `tools/move/layout.py --map
+# tools/move/layout_11_composite_map.toml` moves and rewrites. 77 files in 5 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -10,10 +10,14 @@
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
-new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "verity/composite/datacenter/datacenter" }
 
 [paths]
-"verity/ml/windows/" = "verity/windows/"
+"benchmarks/datacenter/" = "verity/composite/datacenter/"
+"benchmarks/live_challenger/" = "verity/composite/device/live_challenger/"
+"verity/core/protocols/composition/" = "verity/composite/verifier/composition/"
+"verity/core/protocols/onsite/" = "verity/composite/verifier/onsite/"
+"verity/core/protocols/remote/" = "verity/composite/verifier/remote/"
 
 [retired]
 paths = []
@@ -37,4 +41,8 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"verity.ml.windows" = "verity.windows"
+"benchmarks.datacenter" = "verity.composite.datacenter"
+"benchmarks.live_challenger" = "verity.composite.device.live_challenger"
+"verity.core.protocols.composition" = "verity.composite.verifier.composition"
+"verity.core.protocols.onsite" = "verity.composite.verifier.onsite"
+"verity.core.protocols.remote" = "verity.composite.verifier.remote"

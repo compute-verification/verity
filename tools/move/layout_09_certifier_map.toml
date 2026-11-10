@@ -1,5 +1,5 @@
 # The layout move of network certification, to `verity/protocols/certifier`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_09_certifier_map.toml` moves and rewrites. 272 files in 72 rows. Written by
+# tools/move/layout_09_certifier_map.toml` moves and rewrites. 265 files in 65 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -7,8 +7,8 @@
 # row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
 # - `verity/core/protocols/certifier/lean/` to `verity/protocols/certifier/device/program/lean/`: the certifier
-#   program's Lake package: the rule puts it on `verifier/lean/`, where the network check's Lake package goes (two
-#   lakefiles, manifests, locks and toolchains on one path); the program is what the device runs.
+#   program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake package goes (two
+#   lakefiles, manifests, locks and toolchains on one path).
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
 
@@ -17,13 +17,6 @@ old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"benchmarks/network_traces/block_certifier.py" = "verity/protocols/certifier/verifier/network_traces/block_certifier.py"
-"benchmarks/network_traces/certifier_serve.py" = "verity/protocols/certifier/device/network_traces/certifier_serve.py"
-"benchmarks/network_traces/load_relay.py" = "verity/protocols/certifier/device/network_traces/load_relay.py"
-"benchmarks/network_traces/scan_period.py" = "verity/protocols/certifier/verifier/network_traces/scan_period.py"
-"benchmarks/network_traces/warden_chain.py" = "verity/protocols/certifier/verifier/network_traces/warden_chain.py"
-"benchmarks/network_traces/warden_serve.py" = "verity/protocols/certifier/device/network_traces/warden_serve.py"
-"benchmarks/network_traces/wipe_egress.py" = "verity/protocols/certifier/verifier/network_traces/wipe_egress.py"
 "verity/core/devices/certifier/" = "verity/protocols/certifier/device/"
 "verity/core/protocols/certifier/PROTOCOL.md" = "verity/protocols/certifier/verifier/PROTOCOL.md"
 "verity/core/protocols/certifier/README.md" = "verity/protocols/certifier/verifier/README.md"
@@ -116,13 +109,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.network_traces.block_certifier" = "verity.protocols.certifier.verifier.network_traces.block_certifier"
-"benchmarks.network_traces.certifier_serve" = "verity.protocols.certifier.device.network_traces.certifier_serve"
-"benchmarks.network_traces.load_relay" = "verity.protocols.certifier.device.network_traces.load_relay"
-"benchmarks.network_traces.scan_period" = "verity.protocols.certifier.verifier.network_traces.scan_period"
-"benchmarks.network_traces.warden_chain" = "verity.protocols.certifier.verifier.network_traces.warden_chain"
-"benchmarks.network_traces.warden_serve" = "verity.protocols.certifier.device.network_traces.warden_serve"
-"benchmarks.network_traces.wipe_egress" = "verity.protocols.certifier.verifier.network_traces.wipe_egress"
 "verity.core.devices.certifier" = "verity.protocols.certifier.device"
 "verity.core.protocols.certifier" = "verity.protocols.certifier.verifier"
 "verity.core.protocols.certifier.active" = "verity.protocols.certifier.verifier.active"
