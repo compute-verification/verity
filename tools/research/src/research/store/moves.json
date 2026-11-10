@@ -1524,6 +1524,16 @@
         "Security/Proofs/Properties/RemoteAudit/ComponentWitnesses.lean": "Security/Proofs/Properties/RemoteAudit/SubprotocolWitnesses.lean",
         "Security/Properties/RemoteAudit/Component.lean": "Security/Properties/RemoteAudit/Subprotocol.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/numerical/python/verity_numerical/bench/templates.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
+        "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
+        "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.json": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.json",
+        "benchmarks/numerical/python/verity_numerical/bench/input_sets.py": "verity/ml/flock/python/verity_flock/input_sets.py",
+        "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json": "verity/ml/commitments/tests/fixtures/commit-slots-v1.json",
+        "benchmarks/numerical/tests/bench/data/captured-101/": "verity/ml/flock/tests/data/captured-101/"
+      }
     }
   ]
 }

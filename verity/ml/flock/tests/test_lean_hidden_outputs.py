@@ -161,9 +161,9 @@ def test_a_block_of_three_vus_is_refused(store, tmp_path):
     and `trailing_zeros(3) = 0` in Rust, would pin VUs 0 and 1 here, VU 0 there, and VU 2 in neither. The statement is flat
     GEMM's composed for three VUs a block, with its public file of three instances."""
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     from verity_flock import circuit as FC
     from verity_flock import ir_lower as IL
