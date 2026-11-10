@@ -63,7 +63,7 @@ noncomputable def shape (D : Deploy Coin Col T) (leaves coinLeaves : Msg → ℕ
 zero knowledge has, `Nums.εzk` and `4t·3^t`; and each statement's shape. -/
 noncomputable def zkSystem (D : ZkDeploy Coin Col T) (decode : List (ℕ × Col) → List T)
     (stops : (Msg → Msg) → Msg → List Coin → Bool) (len : Msg → ℕ → ℕ) (leaves coinLeaves : Msg → ℕ)
-    (Sim : ℕ → Simulator) (Hides : (Msg → Msg) → ℝ≥0 → Prop) : ZkSystem Coin Wit where
+    (Sim : ℕ → Simulator) (Hides : (Msg → Msg) → ℝ≥0 → Prop) : ZkProofSystem Coin Wit where
   toProofSystem := system D.toDeploy decode stops len
   kZK x := D.V.k x + 1
   Nonce _ := D.Nonce
