@@ -1,6 +1,6 @@
 /-
 The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier samples, its
-digest, and R1–R7 against the verifier's own copies (`check`).
+digest, and R1–R8 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
@@ -66,6 +66,10 @@ before it (`R6-pool-reset-week`). The resets are serving's choice, so they are a
 windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 1009, 9.98 bits, for 600-second windows),
 which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
 record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
+
+Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone
+(`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an Input joins
+no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes).
 -/
 module
 
@@ -143,7 +147,7 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
       jeq (getD (getD e "window") "pool_week") (Lean.toJson p.week)
   | none => false
 
-/-- The verifier's own copies that R1–R7 hold the record to. -/
+/-- The verifier's own copies that R1–R8 hold the record to. -/
 structure Verifier where
   program : Program
   query : Json
@@ -473,7 +477,7 @@ def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array Stri
         (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
     "R6-pool-reset-week"
 
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
+/-- `registration.check`'s failure codes, R1–R8 in order: empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
@@ -540,6 +544,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
+  -- R8
+  c := kept (Partition.readAlone v.program v.query) c "R8-shared-input"
   return c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
@@ -611,6 +617,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
+  -- R8
+  c := kept (Partition.readAlone v.program v.query) c "R8-shared-input"
   return c
 
 /-! ## `check` is `checkRef` -/

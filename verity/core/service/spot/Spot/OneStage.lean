@@ -53,7 +53,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
 * **check** (`checkLive`, at the coins `checkAt`): with coins, that the sample's units are the ones their raw bytes sample
-  under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
+  under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
   the registered one). It rejects when one fails or
@@ -479,7 +479,7 @@ def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteAr
         some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
       else none
 
-/-- R1–R7, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
+/-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
 check `checkAt` runs once the coins drew the sample. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier

@@ -68,6 +68,7 @@ from verity.core.protocols.spot.challenger import COIN_BYTES, NO_CLOSE, NO_TREE,
 from verity.core.protocols.spot.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
 from verity.core.protocols.spot.one_stage.proofs import order_why
+from verity.core.protocols.spot.one_stage.verdict import Verdict
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -650,11 +651,15 @@ def _registered_reads(verdicts: dict) -> None:
             raise D.Reject("a verifier of record reports registered reads that are not objects with a string value and a root")
 
 
-def _registration(p: dict, rec) -> tuple[str, ...]:
+def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   seed_salt=p.get("seed_salt"), pool=p.get("pool")).codes
+                   seed_salt=p.get("seed_salt"), pool=p.get("pool"))
+
+
+def _registration(p: dict, rec) -> tuple[str, ...]:
+    return _registration_verdict(p, rec).codes
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -797,7 +802,8 @@ def partition(j):
 
 def registration(j):
     j = _json(j)
-    return {"codes": list(_registration(_params_of(j), j.get("record") if isinstance(j, dict) else None))}
+    v = _registration_verdict(_params_of(j), j.get("record") if isinstance(j, dict) else None)
+    return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout})}
 
 
 def registered(j):
@@ -2713,6 +2719,78 @@ def unit_gates(j):
     return [gates, gates]
 
 
+def fanout(j):
+    """A template query's fan-out and the run Input nodes its proof blocks don't each read alone over a program
+    (`partition.fanout`, `partition.shared_inputs`; `Partition.fanout`, `Partition.sharedInputs`), refused for another
+    query or one that doesn't apply."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    if not P.is_template_query(query):
+        raise D.Reject("not a template query")
+    try:
+        return {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query)}
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+
+
+@functools.cache
+def _readers(rows: int, plan: tuple, registered: bool) -> Program:
+    """A root over `x`, `rows` pairs of bytes (registered with `registered`), of one instance of `PAIR` per step of
+    `plan`, `(form, members, sources)`: a call, a batch of `members` mapping its pairs (`map`) or broadcasting one
+    (`broadcast`), each byte read by a source `(kind, a, b)` from `x[a][b]` (kind 0, or before any instance) or from an
+    earlier instance's result (its `b`-th member's, of a batch), returning every instance's result. Put among
+    `PROGRAMS`."""
+    def body(B, S, x):
+        outs: list = []
+        for form, n, sources in plan:
+            it = iter(sources)
+
+            def byte():
+                kind, a, b = next(it)
+                if kind == 0 or not outs:
+                    return x[a % rows][b % 2]
+                f, v, m = outs[a % len(outs)]
+                return v if f == "call" else v[b % m]
+            if form == "call":
+                outs.append(("call", B.call(PAIR, array_of([byte(), byte()])), 1))
+            elif form == "map":
+                outs.append(("batch", B.batch(PAIR, array_of([array_of([byte(), byte()]) for _ in range(n)]), axes=(0,)), n))
+            else:
+                outs.append(("batch", B.batch(PAIR, array_of([byte(), byte()]), axes=(None,), n=n), n))
+        return tuple_of(*(v for _f, v, _n in outs))
+    ret = Tuple(*(Value(8) if form == "call" else Array(n, Value(8)) for form, n, _s in plan))
+    name = "CoreSpotReaders" + hashlib.sha256(repr((rows, plan)).encode()).hexdigest()[:12]
+    program = Program(bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(rows, Array(2, Value(8)))),), ret),
+                                               body, register=False)), registered=("x",) if registered else ())
+    PROGRAMS[PO.program_sha512(program)] = program
+    return program
+
+
+@st.composite
+def fanout_cases(draw) -> dict:
+    """A program and a query for the fan-out: a population program of `PAIR`, or a root over `x`, two to five pairs of
+    bytes, a run Input or a registered one, of one to four instances of `PAIR` wired at random (`_readers`), under `PAIR`'s
+    template query, or rarely a query that is not one or doesn't apply."""
+    query = draw(st.sampled_from([P.template_instance_query(PAIR.id)] * 6 + [P.template_instances_query([PAIR.id]),
+                                                                            P.template_instance_query(TRIPLE.id),
+                                                                            PO.query()]))
+    if draw(st.integers(0, 4)) == 0:
+        program = P.population_program(PAIR, draw(st.integers(1, 6)))
+        PROGRAMS[PO.program_sha512(program)] = program
+    else:
+        source = st.tuples(st.integers(0, 1), st.integers(0, 9), st.integers(0, 9))
+        step = st.tuples(st.sampled_from(["call", "call", "map", "broadcast"]), st.integers(2, 3),
+                         st.tuples(*[source] * 6))
+        program = _readers(draw(st.integers(2, 5)), tuple(draw(st.lists(step, min_size=1, max_size=4))),
+                           draw(st.integers(0, 3)) == 0)
+    return {"program": _json(codec.encode_program(program)), "query": _json(query)}
+
+
 PIECES = "sampled-proofs-difftest"
 
 
@@ -2744,8 +2822,18 @@ COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
     JSON), package=PACKAGE)
 UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
     st.builds(lambda c: {"program": c[0], "query": c[1]}, partitions()), JSON), package=PACKAGE)
+FANOUT = D.Port(PIECES, "fanout", fanout, st.one_of(fanout_cases(), JSON), package=PACKAGE)
+_X0, _X00 = ((0, 0, 0), (0, 0, 1)), ((0, 0, 0),) * 4
+#: Programs R8 reads past a population's: two calls of `PAIR` on `x`'s first pair, a batch of three broadcasting it (a
+#: run Input two proof blocks read), and a call reading the first's result whose result a batch of two maps (F 4).
+READER_SETUPS = [Setup(_readers(2, (("call", 2, _X0 + _X00),) * 2, False), P.template_instance_query(PAIR.id)),
+                 Setup(_readers(2, (("broadcast", 3, _X0 + _X00),), False), P.template_instance_query(PAIR.id)),
+                 Setup(_readers(3, (("call", 2, _X0 + _X00), ("call", 2, ((1, 0, 0), (0, 1, 0)) + _X00),
+                                    ("map", 2, ((1, 1, 0), (0, 2, 0), (0, 2, 1), (0, 1, 1), (0, 0, 0), (0, 0, 0)))),
+                                False), P.template_instance_query(PAIR.id))]
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
+    changed_audits(most=1, setups=READER_SETUPS).map(_REGISTRATION_OF),
     _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2),
     changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([SUPPLIED], 1, 0, SUPPLIED_SETUPS).map(_REGISTRATION_OF),
@@ -4802,7 +4890,7 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
@@ -4817,6 +4905,28 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_r8_reads_the_readers_python_does(pieces):
+    """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
+    broadcasting it, share the run Input `x` at F 1, and the registration is refused (`R8-shared-input`); a call reading
+    another's result, whose result a batch of two maps, joins all three at F 4, which the registration publishes; and
+    `x` registered is no run Input."""
+    for s, f, shared in zip(READER_SETUPS, (1, 1, 4), ([0], [0], [])):
+        case = {"program": s.desc, "query": _json(s.query)}
+        assert fanout(case) == {"fanout": f, "shared": shared}
+        assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
+        named, expanded = service.params_law("rate:1/2", s.program, s.query, None)
+        rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
+        given = {"params": {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [],
+                            "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
+                            "scheme": SCHEME, "work_table": None}, "record": rec}
+        reg = registration(given)
+        assert reg == {"codes": ["R8-shared-input"] if shared else [], "fanout": f}
+        assert D.replay(REGISTRATION, given, pieces) == ("output", D.canonical(reg))
+    program = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
+    case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instance_query(PAIR.id))}
+    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": []}))
 
 
 @pytest.mark.parametrize("name, change, code", [

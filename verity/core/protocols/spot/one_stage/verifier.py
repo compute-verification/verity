@@ -8,9 +8,8 @@ every call, both outcomes are recorded beside the one of record (a `Verdict`'s `
 alone, or an audit record that does not accept, has no profiles and fails its `verifiers` check. Lean that can't be built
 or run, or that refuses an input (a form its decoders don't read), disagrees with any Python outcome: it fails closed.
 
-* `check`: R1-R8 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes).
-  R8 is Python's alone, which the Lean doesn't check: a Python R8 refusal is a disagreement, so refused, and the fan-out
-  a verdict carries (`Verdict.fanout`) is Python's;
+* `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out a template query's verdict
+  publishes (`Verdict.fanout`, the Lean's `fanout`); the details are Python's (the Lean reports codes);
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
@@ -212,12 +211,13 @@ def _summary(v: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
-    """The verdict of record from the Lean's answer `got` and Python's `py`: compared on `ok` and the codes, and with
-    `whole` on the details too."""
+    """The verdict of record from the Lean's answer `got` and Python's `py`: compared on `ok`, the codes and the fan-out
+    a registration verdict publishes, and with `whole` on the details too."""
     mine = py.to_json()
     both = {"lean": _summary(got), "python": _summary(mine)}
     verifiers = {"of_record": RECORD_VERDICT, **both}
-    same = "refused" not in got and (_same(got, mine) if whole else both["lean"] == both["python"])
+    same = "refused" not in got and (_same(got, mine) if whole else both["lean"] == both["python"]
+                                     and got.get("fanout") == mine.get("fanout"))
     if not same:
         return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers, py.fanout)
     if RECORD_VERDICT == "lean":
@@ -289,7 +289,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                                                   window_root, held, outputs, day, declarations, seed_salt, pool),
                        "record": dict(rec)})
     if "codes" in got:
-        got = {"ok": not got["codes"], "codes": got["codes"]}
+        got = {"ok": not got["codes"], "codes": got["codes"], **({"fanout": got["fanout"]} if "fanout" in got else {})}
     return _decide(got, py, whole=False)
 
 

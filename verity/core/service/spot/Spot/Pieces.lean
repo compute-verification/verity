@@ -10,7 +10,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
   walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
-* `registration`: R1–R7's failure codes for a record against the parameters;
+* `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query;
+* `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
 * `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
@@ -181,9 +182,22 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
-/-- `{"params", "record"}` to R1–R7's codes. -/
+/-- `{"program", "query"}`, a program object and a template query, to `{"fanout", "shared"}`: its fan-out and the run
+Input nodes its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`); refused for another
+query or one that doesn't apply. -/
+def fanout (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
+  return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
+    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs))]
+
+/-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
+(`Partition.fanout?`), whatever the record. -/
 def registration (j : Json) : V Json := do
-  return codes (Registration.check (getD j "record") (← params (getD j "params")).verifier)
+  let v := (← params (getD j "params")).verifier
+  let cs := (Registration.check (getD j "record") v).map Json.str
+  return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList)
 
 /-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
@@ -757,7 +771,7 @@ def templateCircuits (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("registration", registration),
+   ("fanout", fanout), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),

@@ -165,7 +165,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/spot`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
-  (`check`; R8, the fan-out and the run Inputs two proof blocks read, is Python's alone so far), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
+  (`check`, with the fan-out its verdict publishes), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
