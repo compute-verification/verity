@@ -31742,3 +31742,144 @@ Your 19:17Z entry, read at 19:26Z. [run] unless marked.
 - I'd take (A): it is `TheftFaulted`'s own form, one line of proof, and (B) is its instance. Whether #8226's theorem may change its premise this way is the claim, and yours to take to Daniel. I make no edit to `FaultedTwo.lean` until you say which.
 
 **What I hold now.** Nothing running. #8512 and #8527: no push from me, as you said. Scratch branches stand: the five old ones, `cursor/proofs-cross-8226-7d2e` (`d759d47c0242`, superseded by `-4b1f`) and `cursor/proofs-cross-8226-4b1f`. Notes: `20261110T1912Z-checkpoint-weightsec` and the one I write after this entry.
+
+## PRF-477 TWOPROVE, Tue 10 Nov 19:38Z: `ba58`'s two failures are #8448's P10 size ratchet, not N2's; N2 passes everything it ran; the stager is pushed and passes; network-accounting's two facts hold at #8512's committed form (not on `main`), with replay blocks as the wrong set, and binding sets the number
+
+**1. `ba58`** (`r20261110-174838-ba58`, vy-nebius-cpu-13, rc 1) [read: its `out/suites.json` and log, and the files below]
+
+- `integrations/vllm` had 14,565 passed, 2 failed and 556 skipped. The two failures:
+  - `tests/lint/test_p10_size.py::test_no_new_or_grown_offenders`
+  - `tests/tools/test_scorecard.py::test_the_real_tree_agrees_with_the_p10_and_p7_allowlists`
+- The run's other two suites passed: `verity/core/protocols/spot` (846) and `verity/core/service/spot` (247, 2 skipped).
+- One cause: `integrations/vllm/verity_vllm/pipeline/serving_rows.py` is over `MODULE_MAX` = 800 with no allowlist entry. `git show C:<file> | wc -l`:
+  ```
+  f81ce1a085be 805   #8448's old head, the first parent of N2's base
+  1113b8a6675c 794   #8448's new head
+  origin/main  777
+  7e2a3dcd01f7 794   N2 after merging 1113b8a6675c
+  ```
+- The other evidence:
+  - `rg -c '"verity_vllm/pipeline/serving_rows.py"'` on `tests/lint/allowlists/p10_size.json` at `f81ce1a085be` printed nothing, so there is no entry.
+  - `git log 3cb71ba075 --not f81ce1a085be 1113b8a6675c origin/main -- <file>` lists 0 commits, so N2's own commits never touch it.
+- Whose it is: #8448's. `main` at the run's commit passes both tests (777 lines), and #8448's old head fails both the same way.
+- The fix: I merged #8448's new head into N2 (`7e2a3dcd01`, pushed). I reran only `integrations/vllm`, as `r20261110-190742-45ff` on vy-nebius-cpu-13. It is running, ETA about 20:20Z [guess: the suite took 64 min in `e457`].
+
+**2. N2's verdicts** (`cursor/proofs-n2-table-root-5b1e`, head `3cb71ba075`)
+
+- **Lean, `r20261110-175006-9296`** [run]:
+  - Spot and `Security/Proofs` pass.
+  - `Security` and `Security/Properties` pass after one regenerated record each, for `Spot.OneStage`'s reads (`Params` and `paramsParsed`; `Params` gained the interior's `tables`). No guarantee's statement or premises changed.
+  - I committed only those six hashes, as `3cb71ba075`.
+  - No stated guarantee reads `Spot.Run.interiorSteps` or `tablesServed`, so no guarantee covers N2's step yet. The two-stage form stays refused through `FORM`.
+- **Suites:** `ba58` is above, and `45ff` is running.
+- **`e457`** (every suite whose inputs changed, at `dec036480b`, before the byPort commit) [run; read: its stdout]:
+  - It hit the check slot's 7,200 s cap and was cancelled (rc 130).
+  - 50 suites passed.
+  - `integrations/vllm` failed the same two P10 tests and no other (14,565 passed). The `test_pouw_device` ids in its block are warnings.
+  - `verity-flock` was killed at the cap with no verdict.
+  - 10 suites never started: `verity/core/protocols/pouw`, `research`, `verity/ml/circuits/ops`, `verity/core/service/vstar`, the circuit-check suite, `verity/ml/circuits`, `verity-numerical`, `verity-core-evaluate`, `verity/ml/commitments` and `verity/ml/windows`.
+  - I relaunch none of them, because N2's files are none of their inputs [guess: I didn't check them suite by suite]. Say if you want them run.
+
+**3. The stager** [run]
+
+- **Where:** `cursor/proofs-reference-stager-9e41` at `78e491e98b`, cut from `origin/main` `5482988e34`, pushed. No PR.
+- **`benchmarks/two_stage/references.py`**, `stage(window, definitions, links, out, key)`: for each template of any interior window, the auditor's reference statement.
+  - It is `member_stager`'s statement of the template's member, bound to the window's partition and program.
+  - It is staged on zero rows, with each port's table and refs as the window lays them out. Its prover file is deleted.
+  - Its registered reads name each port's value, words and schema.
+- **What it refuses:**
+  - a template split into chunks, since round 2 places one reference a template in each part, which I haven't checked against;
+  - a member whose template has no Definition;
+  - a link port its member lacks.
+- **The toy:** `toy.references` now calls `references.stage`.
+- **Tests:** `r20261110-191831-9c10` on vy-nebius-cpu-13, rc 0. `benchmarks/two_stage` had 12 passed and 3 skipped. The skips are `test_guard.py`, which skips without `VERITY_TWO_STAGE_GUARD`. The 12 include:
+  - the two new tests: a reference is the same, byte for byte, under two runs with different boundary digests and samples; and the three refusals;
+  - the existing test that holds each session's header to its template's reference placed in the run, which now goes through `references.stage`.
+- **What's left:** step (3) of your 17:42Z, against vllm's head once PRF-477 names it. If any of the 56 templates in vllm's window splits into chunks, the chunk refusal is the first thing it hits.
+
+**4. Your earlier (d) to (g)** were answered in my 17:59Z entry. Nothing there is open.
+
+**5. Network-accounting's two facts (PRF-456), for the two-stage audit** [read: the files named; I built none of #8512; computed: the arithmetic]
+
+**Where it stands today.**
+
+- `main` refuses every two-stage run last (`two-stage-form`, with `FORM = false` at `verity/core/service/spot/Spot/SecondStage.lean:133` and `verity/core/protocols/spot/second_stage.py:79`). No two-stage audit is accepted today, so both facts are about what `FORM` would admit.
+- `main`'s two-stage guarantee is `Flock.SecurityProofs.SpotKSTwo` (`Security/Proofs/Flock/SamplingGeneric/Guarantees.lean:74`, proved at 95). It is the extracted form (`CompiledTwo.KS`, `Security/Definitions/Claims/SamplingTwo.lean:325`). Its event reads the boundary trace the extractor outputs after seeing the run's coins. It fixes no set before the coins, so it gives neither fact.
+- The committed form is in #8512 (`cursor/proofs-twomiss-ac23`, head `a4916e0142`, open), in `Security/Definitions/Claims/SamplingTwoReg.lean`. Three statements, each about every compiled two-stage verifier that meets `CompiledTwo.Sessions`, are proved and listed in its lock:
+  - `compilerKSRegTwo`
+  - `compilerMissTwo`
+  - `compilerHeadlineTwo`
+- The period bound, `compilerPeriodTwoReg`, is proved at `Security/Proofs/WeightSecurity/TwoRegPeriod.lean:131`, but no lock entry holds it: `rg -c compilerPeriodTwoReg` on the lock finds nothing.
+- At SPOT[Flock]'s code, meeting `Sessions` needs `SpotFlock.Addresses`, which is open in `SpotKSTwo`'s lock entry. Nothing instantiates the committed form at that code yet.
+
+**Fact 1, the wrong set fixed at registration.** It holds at #8512 when the wrong set is replay blocks. It does not hold for proof blocks.
+
+- **What `MissTwo` bounds** (`SamplingTwoReg.lean:190`): the two stages miss the committed incorrect set with probability at most \((1-r_1 r_2)^{|W|}\).
+  - \(W\) is `wrongAtBoundaryAt` (line 60) at the committed boundary trace: the replay blocks that hold an incorrect proof block at every interior.
+  - It reads only the boundary values. The trace, `Compiled.regVal` (`Security/Definitions/Claims/SamplingGeneric.lean:575`), reads only the statement, the prover and its tape, so \(W\) is fixed before any coin.
+  - \(r_1\) is the first stage's catch rate for each replay block (`Design.Two.FirstRate`). \(r_2\) is the second stage's sampling rate for each cell (`SecondRate`).
+- **Proof blocks are not fixed before the first coin.** The ones the second stage can catch (`FregTwo`, line 110) read the committed interior (`iregVal`, line 96). The prover registers that interior after the first stage's coins and before the second stage's (`Sessions.interior`, `SamplingTwo.lean:296`; `register_interiors` in the code). `MissTwo` needs only \(W\), so in network-accounting's form \(W_i\) is a set of replay blocks and \(q = r_1 r_2\).
+- **A gap when audits overlap** [read the definitions; that nothing closes it is my grep of #8512, not a build]:
+  - `regVal` is the plurality of what this audit's extractions open, at the prover and its tape.
+  - If the prover's play in this audit reads another audit's coins released after this audit's registration, those coins are part of its tape, and \(W\) can depend on them. \(W\) is then fixed before this audit's coins, but not by the history before its registration.
+  - #8512's period (`PeriodTwoReg`, `Security/Proofs/WeightSecurity/TwoReg.lean:74`) plays the windows in order, so it doesn't reach this case.
+  - What's missing: a lemma that two tapes that agree up to the registration give one `regVal`, except with a binding finder's probability, since the statement's roots commit the boundary.
+  - The one-stage `KSReg` that the pooled statement reads (`SamplingGeneric.lean:629`) has the same `regVal`, and the same gap.
+
+**Fact 2, "accepted with a sampled wrong block" bounded at any value of the other audits' coins.** It holds at #8512.
+
+- **The bound:** `KSRegTwo`'s first conjunct (`SamplingTwoReg.lean:168`). At every prover, Pr over its tape and this run's coins of [accepted, with a sampled proof block in `FregTwo`] is at most \(\varepsilon_{reg,2}\).
+- **Why other audits' coins don't matter:** they reach this audit only through the prover, so the bound holds at each of their values. It needs this run's coins to be independent of them, which `UniformRandomBytes` at each of the challenger's two calls gives (`CallsUniform`, a premise of `SampledKSTwo`, `Guarantees.lean:47`).
+- **It is one number per hash budget:** \(\varepsilon_{reg,2}\) reads the prover only through three finders' collision probabilities, so it is one number for every prover with a given number of SHA-512 calls.
+
+**The number, each part named** [read: the formula, `εregTwo`, line 157; computed: the arithmetic; guessed where marked]
+
+\[\varepsilon_{reg,2} = \kappa_s + \sqrt{k\,\gamma_s \Pr[B]} + N\sqrt{\Pr[B_{conf}]} + \Pr[B_{conf}] + N\sqrt{\Pr[B_{conf,2}]}\]
+
+The symbols:
+
+- \(T\) is the cheater's SHA-512 calls in one audit.
+- \(N\) is the audited program's gates.
+- \(R\) is the extraction's expected reruns, \(1 + k_{out} + k_{out}k_{in}(1 + n_{sess}e_s)\) (`ExtractRunsExpLe`). It is at least \(2^{23.2}\) once the footprint and the sample have one bit each, since then \(k_{out}, k_{in} \ge 3\cdot 2^{10}\).
+- I read SHA-512 at the strict birthday bound, \(\sqrt{\Pr} \le \text{cost}/2^{256.5}\), as `Compiled.KSAt` does for its square-root term (`SamplingGeneric.lean:530`).
+
+The parts:
+
+- **\(\kappa_s\)**, Flock's knowledge error at the sampled proof block. It is a maximum over the proof blocks, not a sum over sessions. It is at most \(2^{-202.98}\) at one table (`Claims.Flock.Numbers.κ_le`), with \(\varepsilon_{table} = \text{tables}\cdot 2^{-205}\) at the deployed record (`Security/Proofs/Flock/Claims/Sampling/Deployed.lean:212`).
+- **The fork finder's term**, \(\sqrt{k\gamma_s\Pr[B]}\). With \(\gamma_s \le 2^{48}\) (`NumbersGamma`) and \(k \le 2^{20}\) [guess], it is \(2^{-141.5}\) at \(T = 2^{80}\) and \(2^{-93.5}\) at \(T = 2^{128}\).
+- **The boundary's and the interior's binding**, \(N\sqrt{\Pr[B_{conf}]}\) and \(N\sqrt{\Pr[B_{conf,2}]}\). Each is about \(N\cdot 2T(1+R)/2^{256.5}\).
+  - I take \(N \ge 2^{43.7}\): 287 tokens a window at \(5.1\times10^{10}\) MACs a token (`benchmarks/spot_figures/cards/workload.glm-5.3.json`), counting one gate a MAC, a floor of mine.
+  - Each term is then \(2^{-131.8}(1+R)\) at \(T = 2^{80}\) and \(2^{-83.8}(1+R)\) at \(T = 2^{128}\).
+- **\(\Pr[B_{conf}]\)** is negligible beside them.
+
+**So the two binding terms set the number, not Flock.** Against \(2^{-61.0}\) a class audit:
+
+- **At \(T = 2^{80}\):** it holds while \(R \le 2^{69.8}\). At \(R = 2^{23.2}\) it is \(2^{-107.6}\).
+- **At \(T = 2^{128}\):** it fails at \(R = 2^{23.2}\) already, at \(2^{-59.6}\), which is under \(2^{-53.4}\) an audit but over \(2^{-61.0}\).
+- **At the weaker reading the tree also uses** (`ecr/sha-512`, \(\Pr \le E[\text{cost}]/2^{256}\), `Security/Definitions/Accounting/Assumptions/Compose.lean:139`): every square-root term fails even at \(T = 2^{80}\), since \(N\sqrt{2T}/2^{128} \ge 2^{-43.8}\).
+- **Not computed:** \(R\) at the plan's own statement. It needs the plan's footprint bits, sampled proof blocks and sessions, and Flock's reruns.
+- **The plan's two caveats:** the cache factor of 0.1 is assumed, and S = 28,000 is unchecked. Neither enters this number.
+
+**Where I may differ from ACCOUNTD.** I can't see their answer: nothing in this file matches. The pooled statement's one-stage `KSReg` has:
+
+- the same `regVal`, so the same gap when audits overlap;
+- the same \(N\sqrt{\Pr[B_{conf}]}\) term, but not the interior's, so its number is about half of mine;
+- proof blocks as the wrong set, with \(q\) the per-block rate.
+
+**For PRF-456, ready to paste:**
+
+> Two-stage audit, both facts, at #8512's committed form (open; not on `main`, where every two-stage run is refused by `FORM`):
+>
+> 1. **Wrong set fixed at registration: holds, with replay blocks as the set.** `MissTwo` bounds the miss by \((1-r_1r_2)^{|W|}\), with \(W\) = `wrongAtBoundaryAt`: the replay blocks wrong at every interior, read from the boundary alone and fixed before any coin. It doesn't hold for proof blocks: the interior is registered after the first stage's coins. When audits overlap, `regVal` (the committed trace) can read later audits' coins through the prover's tape. No lemma yet says that tapes agreeing up to the registration give one `regVal`. The one-stage `KSReg` has the same gap.
+> 2. **The sampled-wrong bound reads only this audit's coins: holds.** `KSRegTwo`'s first conjunct bounds it by \(\varepsilon_{reg,2}\) at every prover, given uniform challenger bytes at both calls.
+>
+> The number is set by the committed traces' binding, \(2\cdot N\cdot 2T(1+R)/2^{256.5}\) at the strict birthday bound, with \(N \ge 2^{43.7}\) gates, not by Flock (\(\le 2^{-202.98}\)):
+>
+> - at \(T = 2^{80}\) it is under \(2^{-61.0}\) while the extraction's expected reruns \(R \le 2^{69.8}\);
+> - at \(T = 2^{128}\) it is over \(2^{-61.0}\) already at \(R = 2^{23.2}\), and at the `ecr` reading it is over even at \(T = 2^{80}\).
+>
+> \(R\) at the plan's statement is not computed yet.
+
+**Next:** your 19:22Z three answers (vllm's tuple-of-fields change, `o1`, the bare name), in an entry by Wed 00:30Z.
+
+**Runs:** `r20261110-190742-45ff` (`integrations/vllm` at N2's head), vy-nebius-cpu-13, ETA about 20:20Z.
