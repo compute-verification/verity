@@ -25,6 +25,8 @@ under (H) and (E) say on small circuits, and where they are silent.
   (`asInputs_hH_false`). On the in-tree toy with its `w` gate registered and then untied, (H) holds at the untied
   circuit with (E) and the values, and fails at `d` at every cap and all positive costs (`toyR_premises`). On `CZ`,
   with a gate computed from `θ` as an input, the same (`toyZ_premises`).
+* **`Π` at `d` against `Π` untied.** On that toy `Π(1)` is at least 1 at `d`, where the registered `w` gate costs
+  nothing, and 0 untied (`toyR_piMax_lt`).
 -/
 
 @[expose] public section
@@ -407,6 +409,76 @@ theorem toyR_premises :
   ⟨toyR_reads, fun _ _ u v _ _ => Subsingleton.elim u v, toyR_hardness_untied, toy_exports 1, toy_values,
     toy_noSharedPair,
     fun _ _ hw hx k => untie_hH_false dR Toy.W Toy.val hw hx (Or.inl toyR_word) (by decide) k⟩
+
+/-! ### `Π` at `d` and `Π` untied, at that toy -/
+
+/-- A path into a gate that reads nothing is that gate alone. -/
+theorem eq_of_feedsWithin_of_reads_empty {C : Circuit} {R : Finset (Fin C.N)} {g t : Fin C.N}
+    (hp : Nci.Covering.FeedsWithin C R g t) (ht : C.reads t = ∅) : g = t := by
+  induction hp with
+  | refl _ => rfl
+  | step _ hgh _ ih =>
+    rw [ih ht, ht] at hgh
+    exact absurd hgh (notMem_empty _)
+
+/-- A path inside `R` starts in `R`. -/
+theorem mem_of_feedsWithin {C : Circuit} {R : Finset (Fin C.N)} {g t : Fin C.N}
+    (hp : Nci.Covering.FeedsWithin C R g t) : g ∈ R := by
+  cases hp with
+  | refl h => exact h
+  | step h _ _ => exact h
+
+/-- The toy's `w`-word and one of its `x`-words. -/
+abbrev pairR : Finset (Finset (Fin Toy.C.N)) := {{0}, {1}}
+
+theorem toyR_pair_reads : ∀ y ∈ pairR.biUnion id, Toy.C.reads y = ∅ := by decide
+
+theorem toyR_pair_starts :
+    ∀ x ∈ unregisteredInputs dR, x ∈ pairR.biUnion id → x ∉ (univ \ {1} : Finset (Fin Toy.C.N)) := by decide
+
+/-- At `d` the pair is behind one gate: the registered `w` gate costs nothing. -/
+theorem toyR_kappa_tied : kappaWords dR pairR ≤ 1 := by
+  have hsep : Separates Toy.C ({1} : Finset (Fin Toy.C.N)) (unregisteredInputs dR) (pairR.biUnion id) := by
+    intro x hx y hy hp
+    have hxy : x = y := eq_of_feedsWithin_of_reads_empty hp (toyR_pair_reads y hy)
+    rw [← hxy] at hy
+    exact toyR_pair_starts x hx hy (mem_of_feedsWithin hp)
+  have h : kappa Toy.C (unregisteredInputs dR) (pairR.biUnion id) ≤ ({1} : Finset (Fin Toy.C.N)).card :=
+    kappa_le hsep
+  rw [card_singleton] at h
+  exact h
+
+theorem toyR_pi : Toy.W.pi pairR = 1 := by
+  first
+    | decide
+    | (simp only [Work.pi, Fintype.univ_unit, sum_singleton, toy_wWords, toy_xWords]; decide)
+
+/-- `Π(1)` at `d` is at least 1: the pair. -/
+theorem toyR_piMax_tied : 1 ≤ piMax dR Toy.W 1 := by
+  have h : Toy.W.pi pairR ≤ piMax dR Toy.W 1 := by
+    first
+      | exact Finset.le_sup (f := Toy.W.pi) (mem_filter.2 ⟨mem_univ _, toyR_kappa_tied⟩)
+      | (unfold piMax; exact Finset.le_sup (f := Toy.W.pi) (mem_filter.2 ⟨mem_univ pairR, toyR_kappa_tied⟩))
+  rw [toyR_pi] at h
+  exact h
+
+/-- `Π(1)` untied is 0: a `w`-word and an `x`-word are then two unregistered inputs. -/
+theorem toyR_piMax_untied : piMax (dR.untie wordR) Toy.W 1 = 0 := by
+  have h : piMax (dR.untie wordR) Toy.W 1 = piMax Toy.d Toy.W 1 := by
+    first
+      | exact congrArg (fun f : Finset (Finset (Fin Toy.C.N)) → ℕ =>
+          ((univ : Finset (Finset (Finset (Fin Toy.C.N)))).filter fun S => f S ≤ 1).sup Toy.W.pi)
+          (funext toyR_kappa)
+      | (unfold piMax; simp only [toyR_kappa])
+      | (unfold piMax; simp only [toyR_kappa]; rfl)
+  rw [h]
+  exact toy_piMax le_rfl
+
+/-- **`Π` at `d` is larger than `Π` untied**, at the cap 1: a count that takes `Π` at `d` for a work that multiplies
+by an untied word counts that word as free. -/
+theorem toyR_piMax_lt : piMax (dR.untie wordR) Toy.W 1 < piMax dR Toy.W 1 := by
+  rw [toyR_piMax_untied]
+  exact toyR_piMax_tied
 
 /-! ### A gate computed from `θ`, as an input -/
 
