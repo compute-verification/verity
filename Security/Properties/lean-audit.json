@@ -873,7 +873,8 @@
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
-   "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a fourth trust assumption, by the default of Daniel's card 3a8de52d applied 9 Nov 16:00Z, provisional: Daniel can reverse it"
+   "Verity.Assumptions.TrustedHost": "the honest verifier server's auditor-trusted devices (trusted-host): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {
    "Verity.remote_soundness_of_subprotocols": {
@@ -4051,6 +4052,24 @@
    ],
    "assumptions": [],
    "type_hash": "be577666ca2d997724e2f6c27e85a0f32ab25a6091fd7b50d55ae36d137f0698"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
+   "assumptions": [],
+   "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log_honest": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_honest : Pous.Period.PooledShortLog_honest"],
+   "assumptions": [],
+   "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_nontrivial : Pous.Period.PooledShortLog_nontrivial"],
+   "assumptions": [],
+   "type_hash": "918e7292201b0d4ec19a1ad0f4586c158a191610851dd27f0b67962dda2bbd0f"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "owner": "@memory-accounting",
@@ -7513,6 +7532,203 @@
    },
    "type_hash": "0f5109466e05f075d67d02887e9bd8af525c461822f0b9cd76df9c9f427222aa"
   },
+  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused",
+     "Accounting.Remote.Held.Assumptions.ChipCeiling",
+     "Accounting.Remote.Held.Assumptions.Covers",
+     "Accounting.Remote.Held.Assumptions.Disks",
+     "Accounting.Remote.Held.Assumptions.Links",
+     "Accounting.Remote.Held.Assumptions.NoOutsideCompute",
+     "Accounting.Remote.Held.Assumptions.Paced",
+     "Accounting.Remote.Held.Assumptions.Routed",
+     "Accounting.Remote.Held.Assumptions.SketchBoundAt",
+     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
+    ],
+    "reads": []
+   },
+   "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
+   "unfolded_hash": "c3e7030030842c438bd0a9c7778bd2adf9bf6b52b3e440e0e729aa450b56c334"
+  },
+  "Properties.RemoteAudit.Line.lineChecked": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Line.lineChecked : Properties.RemoteAudit.Line.LineChecked"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
+   "unfolded_hash": "1054dea1f96fdd78d6440a0af7180567849b86eb124ccd8bdb0a0a360ab5794c"
+  },
+  "Properties.RemoteAudit.Line.lineRegistered": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Line.lineRegistered : Properties.RemoteAudit.Line.LineRegistered"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "dc010c6f5a9aaf0fbc666592ae5a47a0f427bba6f06b16b6e290c6305ccda1ee",
+   "unfolded_hash": "461a38e4a651f415420827dc5c1512edf229888e8d0b0e7af95ad1aa45fd3fa6"
+  },
+  "Properties.RemoteAudit.Line.stretchBound": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Line.stretchBound : Properties.RemoteAudit.Line.StretchBound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680",
+   "unfolded_hash": "2285439dfcc19865351bcde4fa8527006d304fcbbc0da3468e97c9ac43d23f04"
+  },
+  "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Shared.acceptSamplesOpenable : Properties.RemoteAudit.Shared.AcceptSamplesOpenable"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "59afc5f62f7084ed1d08eb8098c537d877d5669db75840144a1bbaa47c87120f",
+   "unfolded_hash": "894ebd2a140ad427d3007a1ffbae3c1d4b1ae6721e81b6468f2f6b86d8b2cb94"
+  },
+  "Properties.RemoteAudit.Shared.acceptedSamplesOpenable": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Shared.acceptedSamplesOpenable : Properties.RemoteAudit.Shared.AcceptedSamplesOpenable"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "494a55e1aaa32cfb75483b6703f3bc06c30ef52fa0fc38453dc55e8ed6a2967f",
+   "unfolded_hash": "fd6df678f1fb995b8c8c648711ea29c7b6cc1cff0bd0e8ce5fdf25aa3dc733b0"
+  },
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled : Properties.RemoteAudit.Shared.OpeningsUnreadUntilSampled"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "79f9bb5f15adc4fa29ab204bad8d9386d1d72d9d0b996f337cd9932b82ba55a5",
+   "unfolded_hash": "2489d31cd84b0dea5a2d2b40ffb131a8fd395a5def37ff194d369cfbc4dc23da"
+  },
+  "Properties.RemoteAudit.Shared.recordKeptAfterSample": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Shared.recordKeptAfterSample : Properties.RemoteAudit.Shared.RecordKeptAfterSample"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2d8e4dd85b70e15922b853cab5e8287d41ff99fb4bd23abe23edb607e9c2c6e6",
+   "unfolded_hash": "785660831753d1f061fd3e0b07ef62a8221269136fb333e8a27d4b5af73acc2d"
+  },
+  "Properties.RemoteAudit.Shared.sampleIsSubset": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.sampleIsSubset : Properties.RemoteAudit.Shared.SampleIsSubset"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
+   "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
+  },
+  "Properties.RemoteAudit.Shared.sessionSamplesRecords": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Shared.sessionSamplesRecords : Properties.RemoteAudit.Shared.SessionSamplesRecords"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e6c1a140775c818676c1428038f19e1852570407e6bddb50429dc1ced57f56dc",
+   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
+  },
+  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol :",
+    "  Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused",
+     "Accounting.Remote.Held.Assumptions.ChipCeiling",
+     "Accounting.Remote.Held.Assumptions.Covers",
+     "Accounting.Remote.Held.Assumptions.Disks",
+     "Accounting.Remote.Held.Assumptions.Links",
+     "Accounting.Remote.Held.Assumptions.NoOutsideCompute",
+     "Accounting.Remote.Held.Assumptions.Paced",
+     "Accounting.Remote.Held.Assumptions.Routed",
+     "Accounting.Remote.Held.Assumptions.SketchBoundAt",
+     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
+    ],
+    "reads": []
+   },
+   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
+   "unfolded_hash": "7418dc9a88e2afee55638d86639cf55583a134b9dd44fe2cbad0e4fdd78b1d43"
+  },
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.acceptIsVerified : Properties.RemoteAudit.Subprotocol.AcceptIsVerified"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
+   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
+  },
   "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete": {
    "owner": "@memory-accounting",
    "signature": [
@@ -7734,203 +7950,6 @@
    ],
    "assumptions": [],
    "type_hash": "9fe6079d3f20e669aafd1faffb0c16f964a581d9336812ecaeed1dcba8157ac5"
-  },
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
-   "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Accounting.Remote.Draw.Assumptions.Counted",
-     "Accounting.Remote.Draw.Assumptions.Live",
-     "Accounting.Remote.Draw.Assumptions.Refused",
-     "Accounting.Remote.Held.Assumptions.ChipCeiling",
-     "Accounting.Remote.Held.Assumptions.Covers",
-     "Accounting.Remote.Held.Assumptions.Disks",
-     "Accounting.Remote.Held.Assumptions.Links",
-     "Accounting.Remote.Held.Assumptions.NoOutsideCompute",
-     "Accounting.Remote.Held.Assumptions.Paced",
-     "Accounting.Remote.Held.Assumptions.Routed",
-     "Accounting.Remote.Held.Assumptions.SketchBoundAt",
-     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
-    ],
-    "reads": []
-   },
-   "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
-   "unfolded_hash": "c3e7030030842c438bd0a9c7778bd2adf9bf6b52b3e440e0e729aa450b56c334"
-  },
-  "Properties.RemoteAudit.Line.lineChecked": {
-   "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.lineChecked : Properties.RemoteAudit.Line.LineChecked"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
-   "unfolded_hash": "1054dea1f96fdd78d6440a0af7180567849b86eb124ccd8bdb0a0a360ab5794c"
-  },
-  "Properties.RemoteAudit.Line.lineRegistered": {
-   "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.lineRegistered : Properties.RemoteAudit.Line.LineRegistered"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "dc010c6f5a9aaf0fbc666592ae5a47a0f427bba6f06b16b6e290c6305ccda1ee",
-   "unfolded_hash": "461a38e4a651f415420827dc5c1512edf229888e8d0b0e7af95ad1aa45fd3fa6"
-  },
-  "Properties.RemoteAudit.Line.stretchBound": {
-   "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.stretchBound : Properties.RemoteAudit.Line.StretchBound"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680",
-   "unfolded_hash": "2285439dfcc19865351bcde4fa8527006d304fcbbc0da3468e97c9ac43d23f04"
-  },
-  "Properties.RemoteAudit.Shared.acceptSamplesOpenable": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Shared.acceptSamplesOpenable : Properties.RemoteAudit.Shared.AcceptSamplesOpenable"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "59afc5f62f7084ed1d08eb8098c537d877d5669db75840144a1bbaa47c87120f",
-   "unfolded_hash": "894ebd2a140ad427d3007a1ffbae3c1d4b1ae6721e81b6468f2f6b86d8b2cb94"
-  },
-  "Properties.RemoteAudit.Shared.acceptedSamplesOpenable": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Shared.acceptedSamplesOpenable : Properties.RemoteAudit.Shared.AcceptedSamplesOpenable"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "494a55e1aaa32cfb75483b6703f3bc06c30ef52fa0fc38453dc55e8ed6a2967f",
-   "unfolded_hash": "fd6df678f1fb995b8c8c648711ea29c7b6cc1cff0bd0e8ce5fdf25aa3dc733b0"
-  },
-  "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Shared.openingsUnreadUntilSampled : Properties.RemoteAudit.Shared.OpeningsUnreadUntilSampled"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "79f9bb5f15adc4fa29ab204bad8d9386d1d72d9d0b996f337cd9932b82ba55a5",
-   "unfolded_hash": "2489d31cd84b0dea5a2d2b40ffb131a8fd395a5def37ff194d369cfbc4dc23da"
-  },
-  "Properties.RemoteAudit.Shared.recordKeptAfterSample": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Shared.recordKeptAfterSample : Properties.RemoteAudit.Shared.RecordKeptAfterSample"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "2d8e4dd85b70e15922b853cab5e8287d41ff99fb4bd23abe23edb607e9c2c6e6",
-   "unfolded_hash": "785660831753d1f061fd3e0b07ef62a8221269136fb333e8a27d4b5af73acc2d"
-  },
-  "Properties.RemoteAudit.Shared.sampleIsSubset": {
-   "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Shared.sampleIsSubset : Properties.RemoteAudit.Shared.SampleIsSubset"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "81b4778b5eef399a2b7a2a9155eb39837e6465aca5124393f34925da36670bd8",
-   "unfolded_hash": "fa62d7398f5ce5bcd07c5792a9727b22de1d49848fd9b79a03050dd737c0789b"
-  },
-  "Properties.RemoteAudit.Shared.sessionSamplesRecords": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Shared.sessionSamplesRecords : Properties.RemoteAudit.Shared.SessionSamplesRecords"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "e6c1a140775c818676c1428038f19e1852570407e6bddb50429dc1ced57f56dc",
-   "unfolded_hash": "24d961566c7728bc2e92a7355a8e86461a137b16827141649806ad6bd8acef3b"
-  },
-  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol :",
-    "  Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Accounting.Remote.Draw.Assumptions.Counted",
-     "Accounting.Remote.Draw.Assumptions.Live",
-     "Accounting.Remote.Draw.Assumptions.Refused",
-     "Accounting.Remote.Held.Assumptions.ChipCeiling",
-     "Accounting.Remote.Held.Assumptions.Covers",
-     "Accounting.Remote.Held.Assumptions.Disks",
-     "Accounting.Remote.Held.Assumptions.Links",
-     "Accounting.Remote.Held.Assumptions.NoOutsideCompute",
-     "Accounting.Remote.Held.Assumptions.Paced",
-     "Accounting.Remote.Held.Assumptions.Routed",
-     "Accounting.Remote.Held.Assumptions.SketchBoundAt",
-     "Accounting.Remote.Held.Assumptions.SquaringCeiling"
-    ],
-    "reads": []
-   },
-   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-   "unfolded_hash": "7418dc9a88e2afee55638d86639cf55583a134b9dd44fe2cbad0e4fdd78b1d43"
-  },
-  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Properties.RemoteAudit.Subprotocol.acceptIsVerified : Properties.RemoteAudit.Subprotocol.AcceptIsVerified"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
-   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
@@ -10972,24 +10991,6 @@
     ]
    },
    "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
-  },
-  "Pous.Period.SecurityProofs.pooledShort_log": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.pooledShort_log : Pous.Period.PooledShortLog"],
-   "assumptions": [],
-   "type_hash": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b"
-  },
-  "Pous.Period.SecurityProofs.pooledShort_log_honest": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_honest : Pous.Period.PooledShortLog_honest"],
-   "assumptions": [],
-   "type_hash": "a166ec85423658dbf9ab96dee3c20618193b6c8e4315ea1abae1955f572dec6b"
-  },
-  "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": {
-   "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.pooledShort_log_nontrivial : Pous.Period.PooledShortLog_nontrivial"],
-   "assumptions": [],
-   "type_hash": "918e7292201b0d4ec19a1ad0f4586c158a191610851dd27f0b67962dda2bbd0f"
   }
  },
  "shape": {
@@ -24605,29 +24606,6 @@
     "Properties.Remote.VerifierOwn": "b8047d52e6c51899acde32a61fd3db1ea1cc80fff100c26bf680a0a3afa34729"
    }
   },
-  "Properties.RemoteAudit.Subprotocol": {
-   "digest": "0048f21f8eef37307c2c945cf6153f75ea48fdb430983ea21a8f9a92f6a457ba",
-   "definitions": {
-    "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "4b48a72479e07767c7c8ab4732a4b729d5e85ec4fe7bcb21e932804cf70e487a",
-    "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "0c3f4a9da00275a23933b27e77d475a148a04ee1cb42c5a1f88363dcd501549d",
-    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
-    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "7e2b15037f08a7e1d467b79b5b8f2dafb3982874492f62a01265fe8d9ac70a06",
-    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": "5453a8e9a27d5bddb36524e21dbeaa324cf720256ddafe81a3e59f30d35ecce2",
-    "Properties.RemoteAudit.Subprotocol.LineHeldBy": "9b36c86bf9f1b5e627c4e102fd97115abcffa49671acb740739627ef02bf7aad",
-    "Properties.RemoteAudit.Subprotocol.PublishedEps": "ee33731b02e913f1a7490a860417ca61c9da9b8c1201e872194f5cf4c1796096",
-    "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "babf79f313f17f66bc69c337c274e98d8290700277851e72a7f4a75083b20ca2",
-    "Properties.RemoteAudit.Subprotocol.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
-    "Properties.RemoteAudit.Subprotocol.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
-    "Properties.RemoteAudit.Subprotocol.honestEvidence": "21347928e2ccd4cff7a8a36ddfa234616064103b45c7160c03bbae7e42289a50",
-    "Properties.RemoteAudit.Subprotocol.honestParams": "f7f7d7f6403bf63d3c308a026cbbd4ddee5c527af0d0c5e10446cad36483240d",
-    "Properties.RemoteAudit.Subprotocol.honestTrace": "8cab1b1ed8145a02ebf4989a158cb820b4f8e636c56acfba6276fca5670cd601",
-    "Properties.RemoteAudit.Subprotocol.lineBy": "ccec17dd63bb3aa57e90638332f7a29998242db76a9f213ac1361b60739bcc0f",
-    "Properties.RemoteAudit.Subprotocol.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
-    "Properties.RemoteAudit.Subprotocol.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
-    "Properties.RemoteAudit.Subprotocol.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
-    "Properties.RemoteAudit.Subprotocol.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
-   }
-  },
   "Properties.RemoteAudit.Line": {
    "digest": "5cdfb3d7dbd58016f5825b87ddfaf6ff284523bc5e8e89898b70d282acf7d59e",
    "definitions": {
@@ -24651,6 +24629,29 @@
     "Properties.RemoteAudit.runBlocks": "c861e9121d65c5458cc0881e6e7177a02f546e08239d951ef67edf5351293b62",
     "Properties.RemoteAudit.sessionLayout": "7e672a14fbaaec746a56e8d39032fe644767be17e5d0a442e6e492d5a24507e8",
     "Properties.RemoteAudit.tileAt": "2bb40254f89138644670e928ab397b45fc2cbe726eb025846cd843c94c84c75d"
+   }
+  },
+  "Properties.RemoteAudit.Subprotocol": {
+   "digest": "3828b016bba293378ceb7c756ff58777b464653f7212394d858737cc7efef3df",
+   "definitions": {
+    "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "4b48a72479e07767c7c8ab4732a4b729d5e85ec4fe7bcb21e932804cf70e487a",
+    "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "0c3f4a9da00275a23933b27e77d475a148a04ee1cb42c5a1f88363dcd501549d",
+    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "7e2b15037f08a7e1d467b79b5b8f2dafb3982874492f62a01265fe8d9ac70a06",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": "5453a8e9a27d5bddb36524e21dbeaa324cf720256ddafe81a3e59f30d35ecce2",
+    "Properties.RemoteAudit.Subprotocol.LineHeldBy": "9b36c86bf9f1b5e627c4e102fd97115abcffa49671acb740739627ef02bf7aad",
+    "Properties.RemoteAudit.Subprotocol.PublishedEps": "ee33731b02e913f1a7490a860417ca61c9da9b8c1201e872194f5cf4c1796096",
+    "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "babf79f313f17f66bc69c337c274e98d8290700277851e72a7f4a75083b20ca2",
+    "Properties.RemoteAudit.Subprotocol.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
+    "Properties.RemoteAudit.Subprotocol.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
+    "Properties.RemoteAudit.Subprotocol.honestEvidence": "21347928e2ccd4cff7a8a36ddfa234616064103b45c7160c03bbae7e42289a50",
+    "Properties.RemoteAudit.Subprotocol.honestParams": "f7f7d7f6403bf63d3c308a026cbbd4ddee5c527af0d0c5e10446cad36483240d",
+    "Properties.RemoteAudit.Subprotocol.honestTrace": "8cab1b1ed8145a02ebf4989a158cb820b4f8e636c56acfba6276fca5670cd601",
+    "Properties.RemoteAudit.Subprotocol.lineBy": "ccec17dd63bb3aa57e90638332f7a29998242db76a9f213ac1361b60739bcc0f",
+    "Properties.RemoteAudit.Subprotocol.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
+    "Properties.RemoteAudit.Subprotocol.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
+    "Properties.RemoteAudit.Subprotocol.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
+    "Properties.RemoteAudit.Subprotocol.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
    }
   },
   "Properties.SampledProofs": {
