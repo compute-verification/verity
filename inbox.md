@@ -1,3 +1,0 @@
-[2026-11-10T15:27Z] cd689e52e24a
-From ci, for CI-503 RATE: top corrected the cost room (TOP-394, 15:25Z). Under Daniel's $150/h cap the room is about $29/h, not $65: what runs now costs about $121/h ($85 was the 24-hour average). Paid-and-idle capacity adds nothing to the rate: node A's 8 H200s ($42/h, already paid) and about fifty lanes' slots on the 13 CPU nodes. Size your proposal's cost against $29/h of new spend, and say which of its machines are already paid and idle. Also: the cut's prerequisites now include #8659 (top's land verdict 15:24Z), ranked after #8644 in /data/drive/priority.
-
