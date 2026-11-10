@@ -61,7 +61,9 @@ KINDS, each treated one way:
   and no moved file brings (its "files created"; `--created FILE` lists them).
 - Lake packages. Each moves whole, by a directory row at or above its root or a `[tokens]` row for it, so a lakefile's
   or a manifest's relative `path` to it follows; a Lake package inside another has rows of its own. Lean module names
-  don't change.
+  don't change, and no `.lean` file's bytes do (`EXCLUDE`): a module's source is in its build key, so a path rewritten
+  in a comment would compile the module again, and every module that imports it. A `.lean` file that writes a path
+  outside a comment is rewritten, by a row of `LEAN_PATHS`.
 - Distributions with their own `pyproject.toml`. The pyproject moves with its component and the distribution keeps its
   name and import name (`ROOTS`).
 - Tests go with their suite; plain files go with their component, by the rule.
@@ -302,9 +304,18 @@ EXCLUDE = [
     "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py",
     "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
     "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+    "**/*.lean",
+]
+#: the `.lean` files the rewrite still reads: each writes a path outside a comment, by today's path and by its new one
+LEAN_PATHS = [
+    "verity/ml/flock/tests/lean/RandomnessVectors.lean", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+    "verity/core/protocols/spot/tests/lean/ExfiltrationVectors.lean",
+    "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+    "verity/core/protocols/spot/tests/lean/ExfiltrationTwoVectors.lean",
+    "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
 ]
 INCLUDE = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
-           "integrations/vllm/manifests/definitions.json", "adapters/vllm/manifests/definitions.json"]
+           "integrations/vllm/manifests/definitions.json", "adapters/vllm/manifests/definitions.json", *LEAN_PATHS]
 NAMESAKE = ("pyproject.toml", "__init__.py", "lakefile.toml")
 MAP_NAME = re.compile(r"layout_(\d\d_\w+|one)_map\.toml")
 #: the two forms of the layout
@@ -760,9 +771,11 @@ def render(fname, v, before, one=False):
               *(wrap("# ", f"`{p}`: {DROP[p][1]}.") for p in v["drop"]),
               "paths = [" + ", ".join(toml_str(p) for p in v["drop"]) + "]", "", "[rewrite]",
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
-              "# archive), and files whose bytes a digest pins.",
+              "# archive), files whose bytes a digest pins, and Lean sources. A module's source is in its build key, so a path",
+              "# rewritten in a comment would compile the module again, and every module that imports it. A `.lean` file that",
+              "# writes a path outside a comment is still rewritten (`include`); lakefiles and Lake manifests are too.",
               "exclude = [" + ",\n           ".join(", ".join(toml_str(x) for x in EXCLUDE[i:i + 4]) for i in range(0, len(EXCLUDE), 4)) + "]",
-              "include = [" + ", ".join(toml_str(x) for x in INCLUDE) + "]",
+              "include = [" + ",\n           ".join(", ".join(toml_str(x) for x in INCLUDE[i:i + 3]) for i in range(0, len(INCLUDE), 3)) + "]",
               "", "[modules]",
               "# the renames [paths] and [roots] imply (`layout.py --modules`)"]
     lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["modules"].items())]
