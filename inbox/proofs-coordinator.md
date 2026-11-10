@@ -25816,3 +25816,94 @@ planner is at `cursor/proofs-breakeven-be7a` `a5e4e56a11`. Nothing here changes 
 
 Next: nothing of mine is running. Wed from 03:30Z, the Lean leg. By Wed 12:00Z, the `SampledKSLiveV3`/`V5` statements
 and the `outNet = unitNet` answer.
+
+## TWOINSTANCE → proofs coordinator, Tue 10 Nov 06:23Z: decisions 2 and 3 checked; the TOP-394 comment to paste
+
+**1. Decision 2: no reader. The hand merge can go as you set it.**
+- [read] On `remote`, `ServedGranularityOptimum` and `ServedGranularityChoice` appear in three places only:
+  - `Partitioning/Guarantees.lean`, which states them;
+  - `Partitioning/SecurityProofs/FreeCompute.lean`, which proves them;
+  - their own records in `Security/lean-audit.json`: their guarantee entries, their frozen shape ("lemma: leaves the list") and the reads lists of the modules they read.
+
+  No other guarantee's record names them. Neither name is anywhere on `main`.
+- [read] Nothing served reads them. No Python, integration, benchmark or example names them, on either side.
+- [read] **What the hand merge adds to `main`'s files:**
+  - `servedCost` in `Partitioning/Model.lean` (only `remote` has it);
+  - the two definitions in `Guarantees.lean`;
+  - `root_law_le` and the two proofs in `FreeCompute.lean`. They rest on `GranularityOptimum`, whose statement text is the same on both sides.
+
+  `main` moved `MeetsTarget` to `Security/Definitions/Flock/Audit/Partitioning.lean`. `main`'s `GranularityOptimum` already reads it there.
+
+**2. Decision 3: none of the 26 has drifted from Pearl+'s code on `main`, because `main` has no Pearl+ code. 15 depend on `PouwCommit` definitions that only `remote` has. Name these to compute-accounting's lead.**
+- [read] **Pearl+ comes in whole from `remote`.** `main` has no Pearl+ Lean at all, and none is at the merge base. That covers:
+  - the verifier package `verity/core/protocols/pouw/lean/pearlplus/` (`PouwPearlPlus`);
+  - its properties and their proofs.
+
+  So they reach the merge as one piece, as `remote`'s Properties lock records them. What can differ is the shared code they read. The 26 read 40 modules, and 24 of those are on both sides.
+- [read, text check] **The 15 that need `remote`'s `PouwCommit`.** Each reads `PouwCommit.Frame` or `PouwCommit.Bindings`, whose definitions exist only on `remote`'s line. They came from #6059 (C3b: PouwCommit's frames and trees are `Flock.FV3`'s), which is closed on GitHub and not on `main`.
+  - `remote` adds `foldRoots`, `Domain.fv3` and `Hash.scheme`; `git grep` finds none of them on `main`.
+  - `remote` changes `Domain` and its constructors, `Hash.bytes`, `Hash.run`, `frameBytes`, `frameHash`, `rangeIdentity` and `weightsRoot`.
+  - [run] `PouwCommit/Frame.lean`, `Bindings.lean` and `Rows.lean` conflict in the merge.
+  - If their hand merge takes `main`'s side, these 15 no longer match: `acceptMeans`, `acceptMeans_drawn`, `acceptMeans_honest`, `loadedGivesUp`, `loadedGivesUp_honest`, `openingBinds`, `openingBinds_honest`, `openingBinds_nontrivial`, `planMeans`, `planMeans_honest`, `refusedBeforeTheCoin`, `refusedBeforeTheCoin_honest`, `tileAcceptMeans`, `tileAcceptMeans_derived`, `tileAcceptMeans_honest`.
+  - Those files aren't proofs'. Either their owner keeps #6059's definitions, or compute-accounting restates the 15 against `main`'s `PouwCommit`.
+- [read] **Two of `main`'s changes the merge takes cleanly.** 13 of the 15 also read the modules involved:
+  - `Flock.Draw`'s `Stratum.toJson` and `WorkStratum.toJson` now write their keys in ascending order;
+  - `Flock.HmRow`'s `HmOut.parseTmpl` now reads its lines through `tmplOf` and refuses a META definition.
+
+  [guess] Whether a statement reaches either needs the build, because the lock records reads per module, not per guarantee. No Pearl+ file names either one.
+- [read] **The `Spot` rename.** Three Pearl+ files name `SampledProofs.Challenger` or `Properties.SampledProofs.Draw`, which `main` calls `Spot.*`:
+  - `PouwPearlPlus/Coins.lean`;
+  - `PouwPearlPlus/Load.lean`;
+  - `Security/Properties/Pouw/PearlPlusDraw.lean`.
+
+  `LiveCommitment`, `LiveOpening` and `liveReason` read the same on both sides once the namespace is renamed. `main`'s move tool must be rerun over these three files.
+- [read] **The domain constants.** `main` moved `Identity.Domains`' PoUW entries into `Domains/Pouw.lean` and `Domains/Shared.lean`. The parts keep the same namespace, the table imports them publicly, and all 12 constants Pearl+ reads keep their values.
+- [read, text check] **The other 9 are clear:** `loadedGivesUp_nontrivial`, `planMeans_nontrivial`, `tileAcceptMeans_nontrivial`, `tileKeepsTheCap` (×3) and `yIsTheUnscale` (×3). Beyond Pearl+'s own code, they read only definitions whose text is the same on both sides.
+- **How I checked, without building:**
+  - I took every definition that `remote`'s Properties lock records under `reads` for the modules the 26 read.
+  - I compared each definition's source text on `main`, on `remote` and at the merge base, with comments and module-system decorations removed.
+  - The lock's digests can't be compared across `main`'s module port. For example, `Flock.Sha512.round` has the same text and a different digest.
+  - The script is `ppdefs.py` in `lanes/proofs/tools/mergelist/` in the notes.
+  - Its limits: reads are per module, so a definition only some other guarantee reads still counts. Structure fields and generated constants are compared through their declaration.
+  - The build of the resolved tree (decision 5) settles both.
+
+**3. The prune's conflicts number 59, 49 of them proofs'. None of the counts is 54.**
+- [run] merge-tree with the drivers (`git merge-tree --write-tree origin/main origin/remote`, 528 conflicts) reports 62 modify/delete conflicts where `remote` deleted the file. 59 of them are the prune's:
+  - 49 under `Security/Proofs/Flock/`, Deliverable 1's 49;
+  - 10 under `Security/Proofs/Accounting`, `Core` and `Pouw`, outside proofs' list.
+
+  The other 3 are outside `Security/`. 54 matches none of these counts. [guess] It may be 49 and the five below read as separate.
+- [run] **The 10 outside proofs' list can take the deletion.** In the merged tree, nothing imports them except one of them: `H100FragProofs` imports `H100DenseProofs`. That is the same text check.
+- The five that keep `main`'s copy are within the 49:
+  - `Claims/Recursion/SeqDeployStop.lean`;
+  - `Claims/Sampling/Select.lean`;
+  - `Claims/ZK/PadsRoot.lean`;
+  - `Claims/ZK/Stop.lean`;
+  - `Soundness/CROnly.lean`.
+
+  Files the merge keeps import each of them.
+- [run] **The merged tree's id.** Today's run gives tree `8f66b736d6`, not Deliverable 1's `d0c1bc1197`, at the same refs and with the same 528 conflicts. [guess] The lock driver's output is the difference.
+- [read] **Where the per-file list is.** It's commit `7c8e1a34c3` on `cursor/proofs-inbox`, not on this branch.
+
+**4. The TOP-394 comment, 213 words, to paste:**
+
+~~~markdown
+**Proofs' part of merging `remote` into `main`** (proofs' Lean files; no Lean was built)
+
+Counts:
+- [run] 528 reproduces with the tree's merge drivers: `tools/verity/lean/merge.py --install`, then `git merge-tree --write-tree --name-only origin/main origin/remote` at `7af4d24fca` and `700a981f5d`.
+- [run] 449 is the same command against the staging branch, `origin/main cursor/vllm-remote-stage-496a` at `875cc642dc`.
+- [run] 672 doesn't reproduce: plain git, without the drivers, gives 638.
+
+Locked statements: [run] four guarantees and one premise really differ. Proofs takes:
+- `remote`'s form of the IrDep group (`HonestFixture`, `honest_half_fixture`, `recursiveKSDeployed_honest`), with its `KSCoinTreeWitnesses.lean`; this is PRF-210 arriving on `main`;
+- `main`'s `Binding_meets` and `Binding_meets_one`.
+
+Partitioning: `main`'s files plus `remote`'s `ServedGranularityOptimum` and `ServedGranularityChoice`, kept unlisted as #7194 did the family. [read] Nothing served or listed reads them.
+
+Pearl+: proofs keeps the 26 properties only `remote` lists. [read, text check] 15 of them read `PouwCommit` definitions that only `remote` has (#6059, closed). Its `Frame`, `Bindings` and `Rows` conflict, and their merge must keep those definitions.
+
+Prune: [run] 59 of the conflicts are files `remote`'s prune deleted; 49 of them are proofs' files under `Security/Proofs/Flock/`. Five must keep `main`'s copy, because files the merge keeps import them: `SeqDeployStop`, `Sampling/Select`, `ZK/PadsRoot`, `ZK/Stop`, `CROnly`. The evidence is an import check, which is a text check.
+
+Per-file list: commit `7c8e1a34c3` on `cursor/proofs-inbox`, in `inbox/proofs-coordinator.md`.
+~~~
