@@ -251,8 +251,8 @@ theorem card_touching_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Work 
 
 /-- **Step 1.** The split MACs with no gate in a block outside `G` are at most the entries of the blocks of `G`: at
 most `m k` MACs are split. -/
-theorem card_split_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] (P : Partition d.D m) (W : Work d.D ι)
-    (G : Finset (Fin m)) :
+theorem card_split_le {d : RegisteredCircuit} {ι : Type} [Fintype ι] [DecidableEq ι] (P : Partition d.D m)
+    (W : Work d.D ι) (G : Finset (Fin m)) :
     ((univ.filter fun s : W.Mac => ∀ u, ¬ W.mac s ⊆ P.gates u) \ touching P W Gᶜ).card ≤
       ∑ u ∈ G, (d.unregistered (P.gates u)).card := by
   rw [← card_sigma]
