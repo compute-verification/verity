@@ -7,4 +7,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The tests hold the period tree to `verity.commitments.merkle`, sign with `verity.commitments.crypto.lms`'s HSS keys, and hold
 # `BINDING` to the period unit's (`verity.definitions.commitments.gates.attest`, which builds on `verity.circuits`).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/ml/__init__.py",
-          "verity/circuits", "verity/commitments", "verity/commitments/crypto"]
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/definitions/__init__.py", "verity/definitions/commitments"]
