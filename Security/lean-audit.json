@@ -3392,8 +3392,6 @@
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
   ],
-  "Flock.SecurityProofs.SampledKSLiveV3": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-  "Flock.SecurityProofs.SampledKSLiveV5": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
   "Flock.SecurityProofs.SessionLoopZKDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Claims.ZKServer.LeanRelease.FillRoundEq",
