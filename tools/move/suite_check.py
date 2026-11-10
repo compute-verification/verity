@@ -31,7 +31,7 @@ suite's inputs need an edit after the move, and the check prints the directories
 
 With no map it checks REF's tree as it is, which passes all three. Imports are read from the source (`import`, `from`),
 resolved under the first map's `[roots] old`; a module loaded by path or by name at run time is not seen, and one imported
-where no test runs is. So 3 is wider than the read guard, and each finding says whether the import runs when a test file is
+where no test runs is. A file that doesn't parse is printed with the parser's reason, and its imports are not followed. So 3 is wider than the read guard, and each finding says whether the import runs when a test file is
 imported (`at_import`: outside every function and `if TYPE_CHECKING:`), which the guard is sure to see. The last line
 says how many imports are outside their suite's inputs on REF already, which 3 counts none of."""
 from __future__ import annotations
@@ -78,6 +78,8 @@ class Imports:
             if p.endswith(".py") and (name := L.module_name(p, self.roots)):
                 self.file.setdefault(name, p)
         self.memo: dict[tuple[str, bool], set[str]] = {}
+        #: {a file that doesn't parse: why}; its imports are not followed
+        self.unparsed: dict[str, str] = {}
 
     def resolve(self, name: str) -> str | None:
         while name:
@@ -95,7 +97,8 @@ class Imports:
         self.memo[f, at_import] = out
         try:
             tree = ast.parse(self.m.read(f) or "")
-        except (SyntaxError, ValueError):
+        except (SyntaxError, ValueError) as e:
+            self.unparsed[f] = f"{type(e).__name__}: {e}"
             return out
         me = L.module_name(f, self.roots) or ""
         pkg = (me if f.endswith("/__init__.py") else me.rpartition(".")[0]).split(".")
@@ -273,7 +276,8 @@ def check(m: Moved) -> dict:
                     else posixpath.dirname(m.new[f])})
     return {"orphans": orphans, "parted": parted, "inputs": list(lost.values()),
             "loads_archive": sorted(loads.values(), key=lambda x: x["module"]), "archived_with_code": with_code,
-            "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values())}
+            "sent_with_code": with_suite, "reached": len(reached), "outside_today": list(outside.values()),
+            "unparsed": dict(sorted(imports.unparsed.items()))}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -329,6 +333,8 @@ def main(argv: list[str] | None = None) -> int:
         needs[x["suite_lands"]].add(x["holds_it_after"])
     for suite, dirs in sorted(needs.items()):
         print(f"  {suite}: its inputs would also need {', '.join(sorted(dirs))}")
+    for f, why in r["unparsed"].items():
+        print(f"  doesn't parse, so its imports are not followed: {f} ({why})")
     if r["reached"]:
         today = r["outside_today"]
         print(f"  not counted: {len(today)} of the {r['reached']} imports (a suite and a module its tests reach) are outside the "
