@@ -3,6 +3,7 @@ module
 public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessesChecked
+public import Proofs.NetworkCertifier.PeriodChecked
 public import Proofs.NetworkCertifier.SampledAuditAccepted
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Claims.Prob
@@ -70,38 +71,9 @@ frame at the slot, which every run of the circuit that holds no gate meets. The 
 verifier `certL`, as `PeriodLeakAccepted`'s does, at the check every run passes, which misses with probability `0` on
 any runs (`checkedWitness_true`): a witness in `RLeakCertifierChecked` is in `RLeakCertifier`
 (`rLeakCertifier_of_rLeakCertifierChecked`), and none is (`certL_noWit`).
-
-**The read-back.** `RecordFormat.readsBy_read`: every record format reads back under its own schedule as the
-parameter, so `RecordFormat.ReadsBy` asks of a format what `RecordFormat.read_record` gives, at fewer parameters.
 -/
 
 @[expose] public section
-
-namespace NetTiming
-
-open Claims Claims.Sampling
-
-/-- **The leak relation at the network certifier's rows with a valid run gives the leak relation there**: a sequence
-accepted with a valid run is accepted. -/
-theorem rLeakCertifier_of_rLeakCertifierChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool}
-    {parse : Msg → Option AuditStatement} {partition : AuditStatement → Option Partition} {L K S : ℕ}
-    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ}
-    {As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)} {valid : AuditStatement → (ℕ → Bool) → Prop} {Dj : ℕ}
-    {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit}
-    (h : RLeakCertifierChecked H Cm parse partition L K S lay k δ As valid Dj tops x w) :
-    RLeakCertifier H Cm parse partition L K S lay k δ As Dj tops x w := by
-  obtain ⟨s, P, hs, hP, h⟩ := h
-  refine ⟨s, P, hs, hP, fun op o hC hCov hl hD => ?_⟩
-  obtain ⟨hl', hD', F, hF, a, ha, free, hfree, -, hacc⟩ := h op o hC hCov hl hD
-  exact ⟨hl', hD', F, hF, a, ha, free, hfree, hacc⟩
-
-/-- **Every record format reads back under its own schedule as the parameter** (`RecordFormat.read_record`). -/
-theorem RecordFormat.readsBy_read {κ Cell Ob : Type} (f : RecordFormat κ Cell Ob) :
-    f.ReadsBy f.read fun θ s => θ = s := by
-  rintro θ s rfl hfit a
-  exact f.read_record _ hfit a
-
-end NetTiming
 
 namespace NetTiming.Witness
 

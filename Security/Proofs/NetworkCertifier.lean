@@ -22,6 +22,7 @@ public import Proofs.NetworkCertifier.PeriodSum
 public import Proofs.NetworkCertifier.Pooled
 public import Proofs.NetworkCertifier.TapRows
 public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.PeriodChecked
 public import Proofs.NetworkCertifier.PooledLeak
 public import Proofs.NetworkCertifier.Schedule
 public import Proofs.NetworkCertifier.PerWindow
@@ -89,12 +90,15 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
-`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
-trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
-network certifier's; `Period` counts with it. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`):
-inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.PeriodLeakChecked`, stated and not
-yet proved): which run its check is held to, and its nontrivial lemma.
+`TapRows` fills an extracted trace in with the network certifier's values and reduces a disagreement between the two
+to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extracted trace carries the network
+certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the network
+certifier's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
+advice bits, and `WitnessesChecked` gives its nontrivial lemma.
+`PeriodChecked` proves the period's bound with the checked inputs left out (`PeriodLeakChecked`): each window's bound
+at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
+empty pool. `Period` proves `PeriodLeakAccepted` as its instance at no checked input. `PeriodCheckedChecks` checks the
+checked statement: which run its check is held to, and its nontrivial lemma.
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
@@ -173,6 +177,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
+theorem PeriodLeakChecked : NetTiming.Guarantees.PeriodLeakChecked := NetTiming.periodLeakChecked
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
