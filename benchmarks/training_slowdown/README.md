@@ -77,9 +77,10 @@ this package's capture beside them. It computes no ρ. Its tests are a suite of 
 
 - **Reads.** Each suite names what it reads outside its directory among its `inputs` (`pyproject.toml`,
   `grader/pyproject.toml`). From `verity`: the circuits' Definitions the gate prices compile, and the codec, the census
-  and the Boolean prices the grader reads with. From `integrations/vllm/verity_vllm`: the training-step frontend, which
-  `capture.lower` lowers a traced step onto and the grader's steps are derived by. From the frontend's tests, by path:
-  the lf model. A run also reads what the tree doesn't hold: the program it is given and the start's θ.
+  and the Boolean prices the grader reads with. From `integrations/vllm/verity_vllm`: the frontend, onto whose
+  reference Definitions `capture.lower` lowers a traced step, and its training-step module, which derives the steps the
+  grader reads. From the frontend's tests, by path: the lf model. A run also reads what the tree doesn't hold: the
+  program it is given and the start's θ.
 - **Writes.** The run command writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's
   digests), `OUT/families/` with each counterexample family's `verified.json` and, with `--keep-checkpoints`, each
   checkpoint's weights. `capture.circuit` and `gates` only print.
