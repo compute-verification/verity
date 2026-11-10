@@ -1,0 +1,34 @@
+# The period family in the Glossary's words for the Remote and Verity declarations: NET-118's map's entries
+# (network-accounting's draft at eb226fa15d) that rename a declaration declared in
+# Security/{Properties,Proofs/Properties}/{Remote,Verity}* or verity/core/protocols/{remote,onsite}.
+# `tools/move/rename.py --map tools/move/period_soundness_map.toml` renames them in one move. The word becomes the
+# Glossary's for what it denotes: a window that is an execution phase (PoUW's period's windows) -> "execution phase"; a
+# span of ticks -> "period"; PoUW's period, which `PouwCheck.Period` names (`PouwCheck.MonitoringPeriod` in
+# compute-accounting's rows) -> "monitoring period".
+
+[words]
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it in another sense).
+"ne_period_stage" = "ne_monitoringPeriod_stage"
+"windowRecords" = "executionPhaseRecords"
+"periodNaming" = "monitoringPeriodNaming"
+"world_window" = "world_period"
+"windows_tied" = "executionPhases_tied"
+"id_period" = "id_monitoringPeriod"
+"windowIds" = "executionPhaseIds"
+"periodOn" = "monitoringPeriodOn"
+"windowOn" = "executionPhaseOn"
+"windowA" = "executionPhaseA"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+# version ("window", "session", "period" as JSON keys and tag strings).
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '"(?:window|windows|session|sessions|period|periods)"']
+strings = []
