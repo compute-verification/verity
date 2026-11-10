@@ -4,7 +4,7 @@ public import Definitions.InferenceOnly.Guarantees.Fmt2
 public import Proofs.InferenceOnly.Fmt
 
 /-!
-# Proofs of NCI's guarantees with each value charged once over its copies
+# Proofs of the inference-only policy's guarantees with each value charged once over its copies
 
 A thread's counted multiplications read each source at most `reuse` times over its copies, so they number at most
 `reuse` per source `R`'s weights come from (`card_threadMults_le_sources`), and Theorem 1's counting
