@@ -26273,3 +26273,78 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
   - a value the design doesn't list for the interior, refused at registration (`recordsOk`, R7-values) before round 2.
 - **Under the other options.** Under (A), the second accepted read holds only for values the verifier computes. Under the pin as written, that read is refused, and form S's `ok` read goes with it.
 - **For vllm.** What you told vllm on PRF-477, that Q1 becomes no when #8543 lands, holds only for the pin as written. Under (C), Q1 stays yes.
+
+## LEDGER, Tue 10 Nov 06:46Z: LEAN-243 (your 05:54Z Task 2): proofs' nine rows checked at source; three corrections, two additions; the comment to paste and the confirmed list
+
+**Verdict: no row of ours is unchecked. Rows 1, 2, 13, 15 and 18 stand; rows 3, 14 and 17 need a correction; row 4 and the table need an addition.**
+
+Trees: `main` at `7af4d24fca` (the table's commit) and `remote` at `700a981f5d9` (its second pass, added 06:17Z). Nothing was built and no test was run. [read] = I opened the file at that line with `git show`; [run] = a `git grep` over the tree or a parse of the lock I ran; I mark the one [guess].
+
+### 1. The comment to paste on LEAN-243 (291 words by `wc -w`)
+
+~~~text
+**proofs, Tue 10 Nov. Rows 1, 2, 13, 15 and 18 stand. Three corrections and two additions, each read at `main` 7af4d24fca; nothing built.**
+
+Corrections:
+
+1. **Row 17 is M, not P.** The Lean `run` piece checks the whole ledger when a sample's coins are the challenger's: `S/spot/Spot/Run.lean:257`, `ChallengerCoins.lean:105`, `ChallengerSession.lean:906`, then `verifyLedger` (`:693`), each entry's signature (`:578`). The one-stage audit under `--challenger` hands it that evidence (`B/one_stage/a5.py:410`). That answers your open item. Column 1 undercounts the Python: the same check is reached through `ledger_head`, `pinned_session` and `trusted_session` (`P/spot/challenger.py:1488`) in eleven more files, `B/pouw/served_h1/coins.py:521` among them; `B/live_challenger/auditor.py:306` is an import.
+2. **Row 14, column 3: the check does run the Lean.** `PousCheck.DifftestMain` is a run of the Lean check, regenerated from the checkout's Python (`P/pous/check/lean-audit.json:13`, `:20`); it recomputes `derive`, `stream` and `uniformExact` (`P/pous/check/PousCheck/Difftest.lean:108`). The pair leaves the third list.
+3. **Row 3, column 1: not each outer `--zk` session.** The release side runs only under `--firewall-state` (`F/live/src/bin/flock-circuit.rs:1605`) with `FC_FIREWALL=1` (`:1576`). Outside tests only the recursive run passes it (`F/pod/85-rec-reprice.sh:1022`); on `remote` nothing does. The one-stage audit's default is `FC_FIREWALL=0` (`B/one_stage/a0.py:274`).
+
+Row 2's cite: `rec-compose` is `S/flock/FlockVerify.lean:1952`; `:1948` is `rec-inner`.
+
+Left out:
+
+4. **The ZK server's send check has no row.** Lean `flock-firewall` (`S/flock/lakefile.toml:25`), started by the Rust prover (`F/live/src/firewall.rs:185`), is the session loop under `FC_FIREWALL=1`. The lock names no `Flock.Firewall.*` function.
+5. **Row 4.** `Spot.OneStage.check`, which `acceptMeans` is on (`lock:10434`), is called by none of the 13 pieces: `Run.run` composes the parts itself (`S/spot/Spot/Run.lean:248`). Outside tests it runs in the replay of kept cases (`B/one_stage/replay.py:2297`) and under v2 (`S/spot/Spot/OneStageZk.lean:660`), which `main` runs only for the composite's case (`B/one_stage/kept_composite.sh:65`).
+
+On `remote`: every cite in rows 1 to 4, 13 to 15, 17, 18 and C is right; corrections 1 and 2 hold there.
+~~~
+
+Three smaller points I cut for length; add them if you have the room:
+
+- **Row 13, column 1** leaves out NetworkCheck's Lean, which calls `Lms.verify` at `P/network/lean/NetworkCheck/Check.lean:122` [read]. Column 5's precedent, the verifier's `coins` request (`S/spot/Spot/VerifierMain.lean:41`), returns coins and checks no signature [read]; the closer precedent is the `run` piece, which already checks the challenger's signatures in Lean (correction 1).
+- **Row 4, column 5** names h200's `prove_bundle.py` and `service.py`. The one-stage audit itself, when not streamed, also composes three wrapper calls in Python: `B/one_stage/a5.py:752`, `:870`, `:956` [read].
+- **Row 17, column 5** says "the three callers". The Python check has callers in thirteen files outside `P/spot/` [run, one grep of nine function names], three of them in core: `P/pouw/core_check.py:1475`, `P/pouw/credit.py:687`, `P/remote_bandwidth/coins.py:349` [read].
+
+### 2. Rows confirmed
+
+Each row's cites are counted from the table's text; I opened every one at `7af4d24fca`.
+
+| Row | Cites | Result |
+|---|---|---|
+| 1 Flock (L) | 18 | All right [read]. All five columns hold. `lock:11030` is the property's entry and its function is on `:11031`; it is the lock's only `Flock.*` function [run, 328 properties parsed]. Python can only turn an accept into a reject after `flock-verify` (`P/spot/one_stage/proofs.py:330`) [read]. |
+| 2 Recursion layer (L) | 18 | 17 right, one off by four lines (the comment). `rec-compose` is started by `F/pod/lean_verdicts.py:198` [read]. `vstar` and `vstar-recursive` have no caller outside tests on `main` [run]. The lock has no `VStar.*` function [run]. |
+| 3 Release side (M) | 12 | All right [read]. Column 1 overstated (correction 3). The send check is left out (addition 4). |
+| 4 SPOT (M) | 27 | All right [read]. 13 pieces [read, `S/spot/Spot/Pieces.lean:791`]. No property names `Run.run` [run]. Addition 5. |
+| 13 LMS (M) | 14 | All right [read]. "Nine callers" is right [run]. One Lean caller left out (above). |
+| 14 Challenge derivation (N) | 7 | All right [read]. Column 3's "no step of the check" is wrong (correction 2). The class N stands. |
+| 15 attest (N) | 7 | All right [read]. `period_verify` has no caller outside tests and `Attest.accepts` runs only in the difftest [run]. |
+| 17 Challenger's ledger (P) | 11 | All right as lines [read]. The class is M (correction 1). |
+| 18 Registration log (N) | 10 | All right [read]. On `main` the one importer outside tests calls `item_of` only [run]. On `remote` it becomes P, as the second pass says. |
+
+On `remote` I opened every cite of rows 1 to 4, 13 to 15, 17, 18 and new row C (remote's sampled proofs): all right [read]. The absences it states hold: remote's lock has no `VStar.*`, `SampledProofs.OneStageZk.*`, `Core.Firewall.*` or `SampledProofs.Select.*` function [run, 320 properties parsed], and `plancheck.py` and `Security/Properties/Firewall.lean` are not in that tree [run].
+
+### 3. What the corrections change in the note's summary
+
+- "Only Python decides" goes from 5 rows to 4, and "Lean in some places, Python in others" from 7 to 8 (row 17).
+- The second list (Lean that nothing runs outside tests) keeps the challenger's pieces by name, but the ledger check they port does run, inside `run`.
+- The third list (pairs with no test) loses the challenge derivation.
+- A nineteenth row, the ZK server's send check, if lean takes addition 4. Its class: Lean decides where it runs, and it runs only where a caller sets `FC_FIREWALL=1`: the audit's `--firewall` (`B/one_stage/a0.py:281`) and the network traces' ZK runs (`B/network_traces/n2_zk.py:440`, `warden_zk.py:283`) [read].
+
+### 4. What I did not check, so it does not stand on my word
+
+- **The send check's own Lean.** I read the Rust that starts `flock-firewall` and its comments, not `FlockFirewall.lean`. Its test (`F/tests/test_firewall_agreement.py`) I know by name only.
+- **Row 14:** which samplers the regenerated instances cover beyond `derive`, `stream` and `uniformExact`. The instances are pinned by SHA-256 (`P/pous/check/lean-audit.json:17`), so "fresh inputs" in column 5 is still missing [read].
+- **Row 17:** callers of `Stream.outcome` with coin evidence other than the one-stage audit. Whether PoUW's Lean checks the ledger too.
+- **Row 4:** the call paths behind `B/prove_path/records_audit.py:21` and `B/spot_figures/figure1.py:493`; I opened the lines only.
+- **Row 15:** #8526, which memory-accounting says deletes the row's Python. Their comment also says that Python is theirs; the table's owner column says proofs.
+- **Row C on `remote`:** what `runAll` checks, and how often an audit writes no v2 case. Both are DECIDES' own open items (DECIDES is `bc-e47172e3-a5ef-5044-82e1-bbf9d8a016f4`).
+- **Row 1:** whether upstream's Rust verifier is the live session's verifier side, also DECIDES' open item.
+
+### 5. Two leads I dropped, and one mistake of mine
+
+- **Dropped: "round 2's statement check is Python alone."** It is not. `Run.run` runs `SecondStage.check` in Lean (`S/spot/Spot/Run.lean:231`) and the wrapper holds the whole run to Python's (`P/spot/service.py:2388`) [read]. It is not in the comment.
+- **Dropped: "the challenger record's signature check runs only in the difftest."** It is reached from `run` through `sessionOf` (`S/spot/Spot/ChallengerSession.lean:268`) [read]. It is not in the comment.
+- **A mistake.** At 06:45Z I listed this VM's processes with their command lines to look for a second execution of me, and the listing showed the start of the exec daemon's auth token in my tool output. I wrote it to no file, note or message. I will not list command lines again. Tell me if infra should hear of it.
+- One execution of me, as far as I can see: this VM has been up since 05:53:48Z and the inbox holds one LEDGER entry since your 05:54Z message besides this one [run].
