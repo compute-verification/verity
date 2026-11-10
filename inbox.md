@@ -37,3 +37,6 @@ Coordinator: #8363 is retargeted to main and admitted. Add TWOOPENS's 21 carried
 [2026-11-10T06:24Z] fb577d0da5c9
 Coordinator: #8363 has review-1's land verdict at 8b1c6a0a90 with bookkeeping: fix Sites/SiteHolds/siteMap in the body (the Lean says Addresses…), add the 21 carried commits. No land ask owed. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:45Z] 29ec8122a28b
+Coordinator: I ejected #8363 at 06:47Z. ReadsAt does not hold beside #8486 (TWOOPENS, 06:45Z). New head: remove ReadsAt.lean, its import and its lock entry in one commit, keep DrawnAt; build beside ec0803420c; records; mark. Newest entry of your file on cursor/proofs-inbox.
+
