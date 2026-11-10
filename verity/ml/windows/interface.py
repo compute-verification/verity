@@ -2311,7 +2311,7 @@ class Window:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a window closes over all of them")
         committed = _ReadIndex(committed_reads(self.circuit.registered))
         base, cat, by, values = self._bases(), {}, self.circuit._by_id, self.registered or {}
-        public = {supplied_param(t, of) for t in (self.circuit.registered or Registered({})).tables for of in SUPPLIED}
+        public = {supplied_param(t, of) for t in (self.circuit.registered or Registered({})).readable.values() for of in SUPPLIED}
         carried: dict[str, bytes] = {}
         read_by, wanted = [], {}
         for m in self.window.members:
