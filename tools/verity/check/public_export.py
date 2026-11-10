@@ -40,8 +40,9 @@ A lock's records of what its modules declare are the whole tree's, and only a bu
 exported one's. With `--records` (a node's work: it builds every package) the exported tree's own Lean check writes them
 (`records`), and the export then holds each lock to the one it comes from: a guarantee or a premise the written lock states
 otherwise than its source refuses the export, by lock, entry and field (`public_lock.restated`). A statement of the public
-spec whose theorem the export leaves out is listed in the lock as unstated (`public_lock.unstated`), and the report names
-each. The commit holds the locks as written.
+spec whose theorem the export leaves out is listed in the lock as unstated (`public_lock.unstated`), an entry that build
+shows to be of nothing in the exported tree goes (`public_lock.STALE`), and the report names each. Any other failure the
+check leaves refuses the export. The commit holds the locks as written.
 
 A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
 ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
@@ -1099,9 +1100,8 @@ def upstream_licenses(upstream: list[dict], scratch: Path) -> list[dict]:
     return out
 
 
-#: a failure of the Lean check that the export's records step answers by an entry (`public_lock.unstated`), with where its
-#: text names the statement
-UNSTATED = ("shape.unstated", re.compile(r"shape: (\S+) \("))
+#: the failure of the Lean check that the export's records step answers by an entry (`public_lock.unstated`)
+UNSTATED = "shape.unstated"
 
 
 def update_records(dest: Path, packages: list[str], out: Path, log: Path) -> dict:
@@ -1131,10 +1131,12 @@ def records(root: Path, dest: Path, logs: Path, locks: list[str],
     record but for the lane's fields (`public_lock.restated`): `ValueError`, naming each, when a public lock would
     state one otherwise than the lock it comes from. A statement of the public spec that the update finds no guarantee
     states (`UNSTATED`: its theorem is in a file the export leaves out) is listed as one, by the one reason the public
-    tree shows (`public_lock.unstated`). The export's commit then holds the locks as written here.
+    tree shows (`public_lock.unstated`), and an entry the update reports to be of nothing in the exported tree goes
+    (`public_lock.STALE`). Any other failure the update leaves is one the exported tree's Lean check would report, and
+    refuses the export, by lock, code and entry. The export's commit then holds the locks as written here.
 
-    The result: the update's exit and log, per lock the statements listed as unstated, and per package the codes of the
-    failures the update left besides those, which the Lean check of the exported tree will still report."""
+    The result: the update's exit and log, and per lock the statements listed as unstated and the stale entries
+    dropped, by code."""
     logs.mkdir(parents=True, exist_ok=True)
     controls = LEAN_CHECK.FIXTURES.relative_to(PB.ROOT).as_posix() + "/"
     locks = [f for f in locks if not f.startswith(controls)]            # the check's controls are no package it audits
@@ -1148,38 +1150,47 @@ def records(root: Path, dest: Path, logs: Path, locks: list[str],
                 for line in PUBLIC_LOCK.restated(json.loads((root / f).read_text(encoding="utf-8")),
                                                  json.loads((dest / f).read_text(encoding="utf-8")))]
     if restated:
-        shown = "; ".join(restated[:PUBLIC_LOCK.SHOWN])
         raise ValueError(f"public_export: {len(restated)} place(s) where a lock the exported tree's check wrote states a "
-                         f"guarantee or a premise otherwise than the lock it comes from: {shown}"
-                         + (f"; and {len(restated) - PUBLIC_LOCK.SHOWN} more" if len(restated) > PUBLIC_LOCK.SHOWN else "")
-                         + ". The public lock never restates one: find what the export leaves out that the statement reads")
-    code, named = UNSTATED
+                         f"guarantee or a premise otherwise than the lock it comes from: {_shown(restated)}. The public "
+                         f"lock never restates one: find what the export leaves out that the statement reads")
     unstated: dict[str, list[str]] = {}
-    left: dict[str, dict[str, int]] = {}
+    stale: dict[str, dict[str, list[str]]] = {}
+    left = []
     for rep in json.loads(audit.read_text(encoding="utf-8")).get("packages", []):
         f = _norm(os.path.relpath(rep["package"], dest.resolve()), LOCK)
-        fails = list(zip(rep.get("failure_codes") or [], rep.get("failures") or []))
-        names = []
-        for c, text in fails:
-            if c == code:
-                if (m := named.match(text)) is None:
-                    raise ValueError(f"public_export: {f}: a `{code}` failure of the exported tree's check names no "
-                                     f"statement where `UNSTATED` reads one: {text[:200]}")
-                names.append(m.group(1))
+        fails = rep.get("failures") or []
+        codes, entries = rep.get("failure_codes"), rep.get("failure_entries")
+        if not fails:
+            continue
+        if f not in locks or not (isinstance(codes, list) and isinstance(entries, list) and len(codes) == len(entries) == len(fails)):
+            raise ValueError(f"public_export: {f}: the exported tree's check reports {len(fails)} failures " + (
+                "without the code and the entry of each" if f in locks else "of a lock the export didn't write"))
+        named = [(c, e) for c, e in zip(codes, entries) if isinstance(e, str)]
+        names = sorted({e for c, e in named if c == UNSTATED})
+        gone = sorted({(c, e) for c, e in named if c in PUBLIC_LOCK.STALE})
+        left += [f"{f}: {c}" + (f" ({e})" if e else "") for c, e in zip(codes, entries)
+                 if not (isinstance(e, str) and (c == UNSTATED or c in PUBLIC_LOCK.STALE))]
+        lock = PUBLIC_LOCK.unstated(PUBLIC_LOCK.unlisted(json.loads((dest / f).read_text(encoding="utf-8")), gone), names)
+        (dest / f).write_text(LEAN_CHECK.text(lock), encoding="utf-8")
         if names:
-            if f not in locks:
-                raise ValueError(f"public_export: {f}: the exported tree's check reports unstated statements for a lock "
-                                 f"the export didn't write")
-            lock = PUBLIC_LOCK.unstated(json.loads((dest / f).read_text(encoding="utf-8")), names)
-            (dest / f).write_text(LEAN_CHECK.text(lock), encoding="utf-8")
-            unstated[f] = sorted(set(names))
-        if rest := Counter(str(c) for c, _ in fails if c != code):
-            left[f] = dict(sorted(rest.items()))
+            unstated[f] = names
+        for c, e in gone:
+            stale.setdefault(f, {}).setdefault(c, []).append(e)
+    if left:
+        raise ValueError(f"public_export: {len(left)} failure(s) of the exported tree's Lean check that its records don't "
+                         f"settle: {_shown(left)}. Each is in {audit}; a public guarantee ships with what the check holds "
+                         f"it to (its witnesses), or its theorem stays behind with them")
     git = ["git", "-c", "user.name=verity-export", "-c", "user.email=export@invalid", "-c", "commit.gpgsign=false"]
     subprocess.run(["git", "add", "--", *locks], cwd=dest, check=True)
     subprocess.run([*git, "commit", "-q", "--amend", "--no-edit", "--allow-empty"], cwd=dest, check=True)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=dest, capture_output=True, text=True, check=True).stdout.strip()
-    return {"update": ran, "unstated": unstated, "left": left, "commit": head}
+    return {"update": ran, "unstated": unstated, "stale": stale, "commit": head}
+
+
+def _shown(lines: list[str]) -> str:
+    """The first of ``lines``, and how many more there are."""
+    more = len(lines) - PUBLIC_LOCK.SHOWN
+    return "; ".join(lines[:PUBLIC_LOCK.SHOWN]) + (f"; and {more} more" if more > 0 else "")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1260,10 +1271,12 @@ def main(argv: list[str] | None = None) -> int:
         rec = report["records"]
         print(f"records: the export's own Lean check wrote its locks' records (exit {rec['update']['exit']}, "
               f"{rec['update']['seconds']} s); no guarantee or premise restated; "
-              f"{sum(map(len, rec['unstated'].values()))} statements listed as unstated; left for the Lean check: "
-              f"{rec['left'] or 'nothing'}")
+              f"{sum(map(len, rec['unstated'].values()))} statements listed as unstated; "
+              f"{sum(len(es) for by in rec['stale'].values() for es in by.values())} stale entries dropped")
         for f, names in rec["unstated"].items():
             print(f"  {f}: unstated: {', '.join(names)}")
+        for f, by in rec["stale"].items():
+            print(f"  {f}: dropped: {'; '.join(f'{c}: {chr(44).join(es)}' for c, es in by.items())}")
     if "build" in report:
         for b in report["build"]["lean"]:
             print(f"  lake {b['package']}: {'ok' if b['ok'] else 'FAILED'} ("

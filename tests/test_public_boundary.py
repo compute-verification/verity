@@ -1000,8 +1000,9 @@ def _exported(tmp_path_factory):
     return root, dest, "lean/lean-audit.json"
 
 
-def _update(change, failures: list[tuple[str, str]] = ()):
-    """An exported check's update, as `records` runs one: it writes ``change`` of the lock and reports ``failures``."""
+def _update(change, failures: list[tuple[str, str | None]] = (), entries: bool = True):
+    """An exported check's update, as `records` runs one: it writes ``change`` of the lock and reports ``failures``, each
+    a code and the entry it is about."""
     def run(dest: Path, packages: list[str], out: Path, log: Path) -> dict:
         assert packages == ["lean"]
         at = dest / "lean" / "lean-audit.json"
@@ -1010,8 +1011,9 @@ def _update(change, failures: list[tuple[str, str]] = ()):
         at.write_text(PE.LEAN_CHECK.text(lock), encoding="utf-8")
         out.mkdir(parents=True)
         (out / "audit.json").write_text(json.dumps({"packages": [{
-            "package": str(dest / "lean"), "failures": [text for _, text in failures],
-            "failure_codes": [code for code, _ in failures]}]}), encoding="utf-8")
+            "package": str(dest / "lean"), "failures": [f"{code}: {entry}" for code, entry in failures],
+            "failure_codes": [code for code, _ in failures]} | (
+                {"failure_entries": [entry for _, entry in failures]} if entries else {})]}), encoding="utf-8")
         return {"exit": 1 if failures else 0, "seconds": 0.0, "log": log.name}
     return run
 
@@ -1019,21 +1021,21 @@ def _update(change, failures: list[tuple[str, str]] = ()):
 def test_the_exports_own_check_writes_its_records_and_states_nothing_otherwise(tmp_path_factory) -> None:
     """The exported tree's check writes the records only a build of that tree knows (what a module declares that a
     guarantee reads), and the lock keeps each guarantee and premise as its source states it. A statement the update
-    finds no guarantee for is listed as unstated, the other failures it leaves are reported by code, and the export is
-    still one commit, holding the locks as written."""
+    finds no guarantee for is listed as unstated, an entry it reports stale goes, and the export is still one commit,
+    holding the locks as written."""
     root, dest, f = _exported(tmp_path_factory)
 
     def reads(lock: dict) -> None:
         lock["reads"]["Lib.Shown"]["definitions"] = {"Lib.Shape": "04"}
+        lock["reads_exempt"] = {"Lib.Inner": "read as it stands", "Lib.Shown": "read as it stands"}
 
     got = PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f], _update(reads, [
-        ("shape.unstated", "shape: Lib.Guarantees.S (Lib.Shown) is a statement that no guarantee of this package states: "
-                           "list the theorem that proves it under `guarantees`, or move it out of the spec"),
-        ("trees.stale-except", "trees: an entry nothing needs")]))
+        ("shape.unstated", "Lib.Guarantees.S"), ("reads.exempt-stale", "Lib.Inner")]))
     wrote = json.loads((dest / f).read_text(encoding="utf-8"))
     assert wrote["reads"]["Lib.Shown"]["definitions"] == {"Lib.Shape": "04"}
     assert wrote["shape"]["frozen"] == {"Lib.Guarantees.S": "unstated: no theorem in this tree proves it"}
-    assert got["unstated"] == {f: ["Lib.Guarantees.S"]} and got["left"] == {f: {"trees.stale-except": 1}}
+    assert wrote["reads_exempt"] == {"Lib.Shown": "read as it stands"}
+    assert got["unstated"] == {f: ["Lib.Guarantees.S"]} and got["stale"] == {f: {"reads.exempt-stale": ["Lib.Inner"]}}
     log = subprocess.run(["git", "log", "--format=%H"], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
     assert log == [got["commit"]]
     assert subprocess.run(["git", "status", "--porcelain"], cwd=dest, capture_output=True, text=True).stdout == ""
@@ -1053,16 +1055,27 @@ def test_the_export_refuses_a_lock_its_check_wrote_that_restates_a_guarantee(tmp
         PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f], _update(restate))
 
 
-def test_the_records_step_fails_closed_on_a_report_it_cannot_read(tmp_path_factory) -> None:
-    """No report from the exported check, or an unstated statement's failure that names none where the export reads one,
-    refuses: the export never ships locks it could not hold to their source."""
+def test_the_export_refuses_what_its_records_do_not_settle(tmp_path_factory) -> None:
+    """A failure the update leaves that is neither an unstated statement nor a stale entry is one the exported tree's
+    Lean check would report, so it refuses the export, by lock, code and entry. So does a report the export can't
+    read: none at all, or one without each failure's entry."""
     root, dest, f = _exported(tmp_path_factory)
+
+    def same(lock: dict) -> None:
+        pass
+
+    with pytest.raises(ValueError, match=r"1 failure\(s\) of the exported tree's Lean check that its records don't "
+                                         r"settle: lean/lean-audit.json: witnesses.missing \(Lib.Rooted\)"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
+                   _update(same, [("shape.unstated", "Lib.Guarantees.S"), ("witnesses.missing", "Lib.Rooted")]))
+    with pytest.raises(ValueError, match="settle: lean/lean-audit.json: build"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f], _update(same, [("build", None)]))
+    with pytest.raises(ValueError, match="without the code and the entry of each"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
+                   _update(same, [("shape.unstated", "Lib.Guarantees.S")], entries=False))
     with pytest.raises(RuntimeError, match="wrote no .*audit.json"):
         PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
                    lambda dest, packages, out, log: {"exit": 2, "seconds": 0.0, "log": log.name})
-    with pytest.raises(ValueError, match="names no statement"):
-        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
-                   _update(lambda lock: None, [("shape.unstated", "a statement is unstated")]))
 
 
 def test_a_lakefile_needs_its_packages_lock(tmp_path: Path) -> None:

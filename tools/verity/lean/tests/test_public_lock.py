@@ -477,3 +477,24 @@ def test_a_public_statement_whose_theorem_stays_behind_is_listed_as_unstated() -
     assert PL.UNSTATED == "unstated: no theorem in this tree proves it"
     with pytest.raises(ValueError, match="Lib.G: `shape.frozen` already holds an entry"):
         PL.unstated(lock, ["Lib.G"])
+
+
+def test_an_entry_the_exported_trees_build_shows_stale_leaves_the_lock():
+    """Which premise a witness takes, which prefix a guarantee reads outside the spec, which exception the trees rule
+    needs and which conjecture a guarantee reads are the build's to say, so the entries the exported check reports stale
+    go then, each from where its code says it is; the others stay, and so does the lock it was given."""
+    lock = {"witnesses_assumed": {"P.H": "a witness takes it", "P.K": "another does"},
+            "reads_exempt": {"Q": "read as it stands"},
+            "trees": {"proofs": ["P.Proofs"], "except": {"P.Proofs.A": "excepted", "P.Proofs.B": "excepted"}},
+            "shape": {"frozen": {"P.g": "frozen: as it is"}, "conjectures": {"P.C": {"status": "open"}}}}
+    was = copy.deepcopy(lock)
+    got = PL.unlisted(lock, [("witnesses.assumed-stale", "P.H"), ("reads.exempt-stale", "Q"),
+                             ("trees.stale-except", "P.Proofs.B"), ("shape.conjecture-unnamed", "P.C")])
+    assert got == {"witnesses_assumed": {"P.K": "another does"}, "reads_exempt": {},
+                   "trees": {"proofs": ["P.Proofs"], "except": {"P.Proofs.A": "excepted"}},
+                   "shape": {"frozen": {"P.g": "frozen: as it is"}, "conjectures": {}}}
+    assert lock == was and PL.unlisted(lock, []) == lock
+    with pytest.raises(ValueError, match=r"trees.except holds no entry 'P.Proofs.C'"):
+        PL.unlisted(lock, [("trees.stale-except", "P.Proofs.C")])
+    with pytest.raises(KeyError):
+        PL.unlisted(lock, [("witnesses.missing", "P.g")])

@@ -25,7 +25,8 @@ the lock it ships states only what the copied files hold:
 
 A `reads` group's records are of what its module declares in the whole tree, so the exported tree's own check writes them
 anew from its build. That lock is held to the one it comes from (`restated`): each guarantee and premise it lists has the
-source's record. A statement the copied spec holds whose theorem isn't copied is listed by one reason (`unstated`).
+source's record. A statement the copied spec holds whose theorem isn't copied is listed by one reason (`unstated`), and an
+entry that build shows to be of nothing in the exported tree goes (`STALE`, `unlisted`).
 
 What the copied files have is the caller's to say, one name at a time: ``has(kind, name)``, for the kinds below. A section
 no rule covers refuses the lock (`unruled`), so a section added to the lock's schema gets its rule here before a lock
@@ -315,6 +316,34 @@ def restated(source: dict, public: dict) -> list[str]:
                 both = isinstance(a, dict) and isinstance(b, dict)
                 fields = sorted(k for k in {*a, *b} if a.get(k) != b.get(k)) if both else []
                 out.append(f"{section}[{name}]: its record differs" + (f" in {', '.join(fields)}" if fields else ""))
+    return out
+
+
+#: the failures of the Lean check that say a kept entry is of nothing in the exported tree, each with where its entry is
+#: listed. Only a build of that tree shows them (which premise a witness takes, which prefix a guarantee reads outside
+#: the spec, which exception the trees rule still needs, which conjecture a guarantee reads), so no rule of `ENTRIES`
+#: drops these entries
+STALE = {
+    "witnesses.assumed-stale": ("witnesses_assumed",),
+    "reads.exempt-stale": ("reads_exempt",),
+    "trees.stale-except": ("trees", "except"),
+    "shape.conjecture-unnamed": ("shape", "conjectures"),
+}
+
+
+def unlisted(lock: dict, stale: Iterable[tuple[str, str]]) -> dict:
+    """``lock`` less each entry of ``stale``: (code, name), a failure of `STALE` the exported tree's check reports of
+    the entry ``name``. ValueError on an entry the lock doesn't hold where the code says it is."""
+    out = dict(lock)
+    for code, name in stale:
+        *outer, last = STALE[code]
+        at = out
+        for key in outer:
+            at[key] = dict(at.get(key) or {})
+            at = at[key]
+        if not isinstance(held := at.get(last), dict) or name not in held:
+            raise ValueError(f"public_lock: {'.'.join(STALE[code])} holds no entry {name!r}, which a `{code}` failure names")
+        at[last] = {k: v for k, v in held.items() if k != name}
     return out
 
 
