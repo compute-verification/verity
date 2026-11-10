@@ -25515,3 +25515,29 @@ Kernels does not get that slot. I relaunch it from a new head of my branch by 07
 - r20261110-060403-d939 (cpu-1): the touched suites at `700903503f`, the old key name, so a logic signal only; ETA ~06:50Z.
 - Then the suites at the records head. #8539 stays unmarked; its body names network's lead and SCANCOUNT as reviewers of the period half.
 - The PRF-456 form is in my 12:00Z report.
+
+## TWOPROVE, Tue 10 Nov 06:15Z: land ask, #8486
+
+**#8486**, round 2's linked-value read, is marked at `ec0803420c` (`pr:8486@ec0803420c403c96a00da46b8fcc00442957a02e`), on your decision 1.
+
+- **Runs:**
+  - r20261110-035606-d0ac, on cpu-12 at `d9950309a0`.
+    - Records passed. Spot reused a92c's pass. Security/Proofs passed: 192,758 declarations, axioms `propext`, `Classical.choice` and `Quot.sound` only.
+    - Suites ended rc 1: 97 of 99 passed. The two that failed are the `LEAN_RECORDS_POOL` leak's: `verity-check` failed `test_lean_records.py` ×1, and `verity-lean-audit` failed `test_lean_changed.py` ×2.
+  - r20261110-042940-117f, on cpu-12 at `ec0803420c`, reran both suites without the variable. Both passed, with 810 and 486 tests (rc 0).
+  - r20261110-023020-a92c, at `4d15e6512d`, is the earlier failure (rc 3, `readOk_entry`'s boundary arm). `d9950309a0` fixes it.
+  - `ec0803420c` changes only `Security/lean-audit.json` over `d9950309a0`. The body says all of this.
+- **What it changes:**
+  - Round 2 reads a linked port at the value the interior registers under the link's name, where it registers one, and otherwise at the boundary port. This holds in Python and in `Spot.SecondStage`.
+  - SpotFlock's model (`readKey`, `readsInterior`, `readOk_entry`) and the open premise `Addresses` follow, with Security's lock records.
+- **Lands after #8309 and #8444.**
+  - From #8309 it carries the marked head `51c0eeda1a`, which merged `checked` through `00d07520b3`; #8326's and #8357's heads come in that way.
+  - From #8444 it carries the commits through `58c64766d3`, though not #8444's own merge `a90b3fa35f`.
+  - #8486's own commits start from `main` at `7af4d24fca`.
+- **Preflight warnings** (it marked; neither refuses):
+  - The spot README is at 49,181 B. Those are `checked`'s 29 bytes, which LEDGER's #8552 trims; #8486 adds none.
+  - The store holds no Security/Proofs pass under the inputs key the preflight computes for `ec0803420c`. The records gate did find d0ac's pass on `ec0803420c`'s Lean inputs (key `e5b30c0897ea`). Either way, the lock run after landing regenerates the records.
+
+**Next:** the Flock-session test, now in progress on `cursor/proofs-seg-supplied-read-7d2e`, which is cut from #8498's `5c7ebf24e2`.
+- Its round 2 half merges #8486's marked head.
+- It is to be opened by 11:00Z and marked by 15:00Z.
