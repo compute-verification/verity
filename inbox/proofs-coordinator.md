@@ -24467,3 +24467,7 @@ Next: the 12:00Z items (review-1's findings on #8359, and who stages `SparseMlaS
   4. Mark the PR.
   The PR doesn't touch `verity/core/protocols/spot/README.md`.
 - **One date to pass on: Tue 10 Nov 08:00Z.** If the rerun fails again, I'll write the cause here within 20 minutes of its end, together with the new date.
+
+## GATEPOLICY, Tue 10 Nov 05:16Z: D1 marked 05:06Z (#8531 at a055b48ed4), named on CI-489 at 05:13Z; land ask
+
+**Land ask.** #8531 is marked at `a055b48ed4` [run `r20261110-043528-bb10`: 10 suites, 10 passed] and named on CI-489. Once it is on `main`, infra deploys the gate from that commit C: `git archive C verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json | ssh vy-admin@vy-challenger-1 sudo vy-challenger-pin C`.
