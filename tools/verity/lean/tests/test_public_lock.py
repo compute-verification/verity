@@ -246,6 +246,41 @@ def test_a_runner_goes_with_a_file_of_its_generator_the_copied_files_lack():
     assert PL.missing(kept, has) == ["runs[Mod.Run].generate: tests/vectors.py"]
 
 
+def test_a_premise_goes_when_only_dropped_guarantees_took_it():
+    """The Lean check fails a premise no listed guarantee takes. A premise the copied files declare, which only a
+    guarantee they lack took, would be one: it goes, from each section that lists it, and is reported as untaken. One a
+    kept guarantee takes stays, and so does one no guarantee of the lock took: that is the lock's own failure."""
+    source = lock()
+    for section, name in (("assumptions", "Lib.A2"), ("domain", "Lib.D2"), ("open", "Lib.O2")):
+        HELD[PL.DECLARATION].add(name)
+        source[section][name] = {"owner": "@lane", "digest": "11"}
+        source["guarantees"]["Lib.Gone.G"]["premises"][section].append(name)
+    source["guarantees"]["Lib.Gone.H"]["assumptions"] = ["Lib.A2"]
+    source["witnesses_assumed"] = {"Lib.A": "a hash", "Lib.A2": "a hash"}
+    HELD[PL.DECLARATION].add("Lib.Idle")
+    source["open"]["Lib.Idle"] = {"owner": "@lane", "digest": "12"}
+    try:
+        out, dropped = PL.public(source, has)
+    finally:
+        HELD[PL.DECLARATION] -= {"Lib.A2", "Lib.D2", "Lib.O2", "Lib.Idle"}
+    assert (set(out["assumptions"]), set(out["domain"]), set(out["open"])) == ({"Lib.A"}, {"Lib.D"}, {"Lib.O", "Lib.Idle"})
+    assert out["witnesses_assumed"] == {"Lib.A": "a hash"}
+    assert {k: v for k, v in dropped.items() if k.startswith(PL.UNTAKEN)} == {
+        "untaken.assumptions": ["Lib.A2"], "untaken.domain": ["Lib.D2"], "untaken.open": ["Lib.O2"],
+        "untaken.witnesses_assumed": ["Lib.A2"]}
+    assert PL.taken(source) - PL.taken(out) >= {"Lib.A2", "Lib.D2", "Lib.O2"} and "Lib.A" in PL.taken(out)
+
+
+def test_a_lock_that_drops_no_guarantee_keeps_every_premise():
+    source = lock()
+    for g in [g for g in source["guarantees"] if "Gone" in g]:
+        del source["guarantees"][g]
+    source["open"]["Lib.O"]["digest"] = "13"
+    source["guarantees"]["Lib.G"]["premises"]["open"] = []
+    out, dropped = PL.public(source, has)
+    assert "Lib.O" in out["open"] and not [k for k in dropped if k.startswith(PL.UNTAKEN)]
+
+
 def test_an_entry_goes_with_a_witness_the_copied_files_lack():
     for path, where in (("witnesses.*.honest", ("witnesses", "Lib.G", "honest")),
                         ("witnesses.*.nontrivial", ("witnesses", "Lib.G", "nontrivial")),

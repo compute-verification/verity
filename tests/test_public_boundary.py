@@ -431,6 +431,61 @@ def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -
         "p/src/Agg.lean", "p/src/Mixed/In.lean"}, "without the lock, no root is the lock's"
 
 
+def test_a_root_whose_modules_are_each_a_root_is_dropped_and_not_written() -> None:
+    """A root with no copied file whose copied modules are each named as a root too would import nothing the build
+    lacks, and its file would stand under the name of a module the export leaves out: the export writes none, and the
+    lakefile and the lock lose the root. A module below it that the lock doesn't name becomes a root of the lock, so the
+    Lean check still seals it. A root with one module that is no root is written as before."""
+    lakefile = ('name = "p"\ndefaultTargets = ["Lib"]\n[[lean_lib]]\nname = "Lib"\n'
+                'roots = ["Lib.Real", "Lib.Real.A", "Lib.Real.B", "Lib.Agg"]\n')
+    lock = {"roots": ["Lib.Real", "Lib.Real.A", "Lib.Agg"]}
+    files = {
+        "p/lakefile.toml": lakefile, "p/lean-audit.json": json.dumps(lock),
+        "p/Lib/Real/A.lean": "module\n", "p/Lib/Real/B.lean": "module\n", "p/Lib/Agg/X.lean": "module\n",
+    }
+    tree, copied = _Texts(files), set(files)
+    assert PE.spare_roots(tree, copied) == {"p": {"Lib.Real": ["Lib.Real.A", "Lib.Real.B"]}}
+    got = PE.generated_roots(tree, copied)
+    assert set(got) == {"p/Lib/Agg.lean"}
+    new, dropped = PE.rewrite_lakefile(lakefile, "p", copied | set(got), ["Lib.Real"])
+    assert tomllib.loads(new)["lean_lib"][0]["roots"] == ["Lib.Real.A", "Lib.Real.B", "Lib.Agg"]
+    assert dropped == [("root", "Lib.Real")]
+    targets = PE.lean_targets(new, "p", tomllib.loads(lakefile), copied | set(got))
+    assert targets["default"] == ["Lib"] and targets["missing_roots"] == []
+
+    class Has:
+        def has(self, here, kind, name):
+            return True
+
+    text = PE.LEAN_CHECK.text(lock)
+    new, dropped = PE.rewrite_lock(text, "p", Has(), spare={"Lib.Real": ["Lib.Real.A", "Lib.Real.B"]})
+    assert json.loads(new)["roots"] == ["Lib.Real.A", "Lib.Agg", "Lib.Real.B"] and dropped == [("roots", "Lib.Real")]
+    assert PE.rewrite_lock(text, "p", Has(), spare={"Lib.Other": ["Lib.Other.A"]}) == (text, [])
+    files["p/Lib/Real/C.lean"] = "module\n"
+    assert PE.spare_roots(_Texts(files), set(files)) == {}
+    assert set(PE.generated_roots(_Texts(files), set(files))) == {"p/Lib/Agg.lean", "p/Lib/Real.lean"}
+
+
+def test_the_module_a_lock_names_as_its_assumptions_is_written_and_its_root_imports_it() -> None:
+    """The Lean check requires the build to hold the module a lock names as its assumptions'. Where the export copies
+    only modules below it, the export writes it as it writes a root, and the root written above it imports it, so the
+    build holds it."""
+    files = {
+        "p/lakefile.toml": 'name = "p"\n[[lean_lib]]\nname = "Lib"\n',
+        "p/lean-audit.json": json.dumps({"roots": ["Lib"], "assumptions_module": "Lib.Assumptions"}),
+        "p/Lib/Assumptions/Hash.lean": "module\n", "p/Lib/Defs.lean": "module\n",
+    }
+    got = PE.generated_roots(_Texts(files), set(files))
+    assert got == {
+        "p/Lib/Assumptions.lean": ("module\n\npublic import Lib.Assumptions.Hash\n\n"
+                                   "/-! The modules under `Lib.Assumptions` that this tree holds. -/\n"),
+        "p/Lib.lean": ("module\n\npublic import Lib.Assumptions\npublic import Lib.Assumptions.Hash\npublic import Lib.Defs\n\n"
+                       "/-! The modules under `Lib` that this tree holds. -/\n")}
+    files["p/Lib/Assumptions.lean"] = "module\n"
+    assert set(PE.generated_roots(_Texts(files), set(files))) == {"p/Lib.lean"}
+    assert PE.spare_roots(_Texts(files), set(files)) == {}
+
+
 def test_a_module_only_files_the_export_leaves_out_import_is_a_root_of_the_lock_it_writes() -> None:
     """The Lean check seals the modules under a lock's roots and builds only what the roots import, so a copied module
     that only files the export leaves out import would have no build: the export lists it as a root. A module the lock
@@ -655,7 +710,7 @@ def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tm
     """The boundary counts a lake `require` or an extra's entry closed only because the export drops it; an export that kept
     one fails rather than ship the edge."""
     root, tree, j = judged
-    monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied: (text, []))
+    monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied, spare=(): (text, []))
     with pytest.raises(ValueError, match="rewrite kept them: .*lake require priv"):
         PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"), {})
 
@@ -814,7 +869,7 @@ def test_the_export_refuses_a_lock_it_wrote_that_names_what_no_copied_file_has(t
     """The export reads back each lock it wrote: one that still names a declaration or a module no copied file has, or
     carries an owner, fails by name rather than ship."""
     tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
-    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None: (text, []))
+    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None, spare=None: (text, []))
     with pytest.raises(ValueError) as e:
         PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
     said = str(e.value)

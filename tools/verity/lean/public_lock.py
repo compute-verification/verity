@@ -10,6 +10,8 @@ the lock it ships states only what the copied files hold:
   goes with a witness the copied files lack: it would say of the public tree what no file there shows;
 * a runner's entry goes with a file of the command that writes its data (`GENERATORS`) the copied files lack: the public
   tree can't make that data, so the run isn't one it can repeat;
+* a premise's entry goes when the guarantees that took it are all gone (`PREMISES`, `TAKES`): the Lean check fails a
+  premise no listed guarantee takes, and the lock's own records say which those are;
 * a kept entry's record may cite other names (`CITES`: the premises a guarantee takes, a deployed guarantee's gap). Those
   are never dropped: a public statement doesn't rest on what the export leaves out, so a cited name the copied files
   lack refuses the lock (`missing`);
@@ -93,6 +95,12 @@ CITES = (
     ("shape.properties.*.rests_on", DECLARATION),
     ("verifier.entries", DECLARATION), ("verifier.stop", DECLARATION), ("verifier.hash", NAMESPACE),
 )
+#: the sections that list premises: an entry of one goes when no kept guarantee takes it and a dropped one did
+PREMISES = ("assumptions", "domain", "open", "witnesses_assumed")
+#: where a guarantee's record lists the premises it takes, as they stand
+TAKES = ("assumptions", "premises.assumptions", "premises.domain", "premises.open")
+#: the rule, in what `public` reports it dropped, of a premise only dropped guarantees took: `UNTAKEN.<section>`
+UNTAKEN = "untaken"
 #: the sections that name nothing of the repository's Lean: the schema's version, the allowed axioms, and what the
 #: dependencies hold (their digests, their modules that may name a bypass, the statements watched in them, their
 #: constants the verifier may reach)
@@ -281,10 +289,18 @@ def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
         [f"{where}: a lane field" for where in lane_fields(lock)]
 
 
+def taken(lock: dict) -> set[str]:
+    """The premises the guarantees ``lock`` lists take as they stand, by their records (`TAKES`)."""
+    records = lock.get("guarantees")
+    return {n for record in (records.values() if isinstance(records, dict) else ())
+            for path in TAKES for holder, key, _ in _places(record, path.split(".")) for n in _names(holder[key])}
+
+
 def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str, list[str]]]:
     """``lock`` as the export ships it, and {the path of the rule: the names of the entries it dropped}. Each entry named
     after what the copied files lack (``has(kind, name)`` false) is gone (`ENTRIES`), and so is each that lists a
-    witness they lack (`WITNESSES`) or a generator's file they lack (`GENERATORS`); no entry carries `LANE_FIELDS`, and
+    witness they lack (`WITNESSES`) or a generator's file they lack (`GENERATORS`), and each premise that only dropped
+    guarantees took (`PREMISES`, reported under `UNTAKEN`); no entry carries `LANE_FIELDS`, and
     `LANE_SECTIONS` are gone. `ValueError` when a
     section has no rule (`unruled`), or when a kept entry still cites a name the copied files lack (`CITES`)."""
     if bad := unruled(lock):
@@ -311,6 +327,13 @@ def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str,
                 if any(not has(kind, n) for h, k, _ in _places(record, listed.split(".")) for n in _names(h[k])):
                     del holder[key][entry]
                     dropped.setdefault(path, []).append(entry)
+    if untaken := taken(lock) - taken(out):
+        for section in PREMISES:
+            value = out.get(section)
+            if gone := [n for n in _names(value) if n in untaken]:
+                out[section] = ({n: v for n, v in value.items() if n not in untaken} if isinstance(value, dict)
+                                else [n for n in value if n not in untaken])
+                dropped[f"{UNTAKEN}.{section}"] = gone
     for section in OWNED:
         for record in out[section].values() if isinstance(out.get(section), dict) else ():
             if isinstance(record, dict):

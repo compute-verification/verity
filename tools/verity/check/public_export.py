@@ -20,9 +20,10 @@ copy.
 
 A library's root file the export doesn't copy, while it copies modules below it, is written by the export
 (`generated_roots`): an aggregate module that imports what isn't public can't ship, so the export's is the imports of the
-modules below it that it does copy. The library then builds as a whole, and its lock's roots have their files. A copied
-module that only files the export leaves out import has no root to build it, so the export lists it as a root of the
-package's lock (`unreached`).
+modules below it that it does copy. The library then builds as a whole, and its lock's roots have their files. The
+module a lock names as its assumptions' is written the same way. A root whose copied modules are each a root of their own
+is not written: the lakefile and the lock lose it (`spare_roots`). A copied module that only files the export leaves out
+import has no root to build it, so the export lists it as a root of the package's lock (`unreached`).
 
 A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays
 only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
@@ -72,7 +73,7 @@ import time
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Callable, NamedTuple
+from typing import Callable, Iterable, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 
@@ -208,10 +209,11 @@ def _module_path(src: str, mod: str) -> str:
     return _norm(src, PB.HEADERS.name(mod).replace(".", "/"))
 
 
-def rewrite_lakefile(text: str, here: str, copied: set[str]) -> tuple[str, list[tuple[str, str]]]:
+def rewrite_lakefile(text: str, here: str, copied: set[str],
+                     spare: Iterable[str] = ()) -> tuple[str, list[tuple[str, str]]]:
     """A lakefile at ``here`` without the targets and path requires the export doesn't copy, and (kind, name) of each
     entry it dropped; ``copied`` holds the root files the export writes (`generated_roots`) too. A library keeps each root
-    the export copies a module at or below; a default target with a root that has no file there leaves `defaultTargets`,
+    the export copies a module at or below, less the ones in ``spare`` (`spare_roots`); a default target with a root that has no file there leaves `defaultTargets`,
     and its modules build one by one (`lean_targets`)."""
     where = _norm(here, "lakefile.toml")
     doc = tomllib.loads(text)
@@ -233,7 +235,7 @@ def rewrite_lakefile(text: str, here: str, copied: set[str]) -> tuple[str, list[
             continue
         if b.name == "lean_lib":
             roots = t.get("roots", [t.get("name")])
-            keep = [r for r in roots if holds(r)]
+            keep = [r for r in roots if holds(r) and r not in spare]
             if not keep:
                 dropped.append(("lean_lib", name))
                 gone.add(name)
@@ -275,13 +277,12 @@ def _parents(path: str) -> list[str]:
     return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
 
 
-def generated_roots(tree, copied: set[str]) -> dict[str, str]:
-    """{file: its text} of each root file the export writes: a root of a copied lakefile's library, or of its package's
-    lock (which the Lean check builds by name), whose file the export doesn't copy while it copies modules below it. The
-    text is the imports of those modules, less the ones the package's lock exempts (a test or a probe, which no root
-    imports); no copied file imports the root, so nothing reads it but the build. It is a `module` when every module it
-    imports is one, since a `module` imports only modules."""
-    out = {}
+def _roots(tree, copied: set[str]) -> tuple[dict[str, str], dict[str, dict[str, list[str]]]]:
+    """(`generated_roots`, `spare_roots`): what the export does about each module a copied lakefile's library or its
+    package's lock names as a root, or the lock names as its assumptions' module, whose file the export doesn't copy
+    while it copies modules below it. Deepest first, so a root imports the ones written below it."""
+    files: dict[str, str] = {}
+    spare: dict[str, dict[str, list[str]]] = {}
     for lakefile in sorted(f for f in copied if f.rpartition("/")[2] == "lakefile.toml"):
         here = os.path.dirname(lakefile)
         doc = tomllib.loads(tree.text(lakefile))
@@ -290,21 +291,48 @@ def generated_roots(tree, copied: set[str]) -> dict[str, str]:
         lock = _norm(here, LOCK)
         policy = json.loads(tree.text(lock)) if lock in copied else {}
         exempt = tuple(policy.get("exempt", {}))
-        for root in (*(r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])),
-                     *policy.get("roots", [])):
+        named = [*(r for lib in doc.get("lean_lib", []) for r in lib.get("roots", [lib.get("name")])),
+                 *policy.get("roots", [])]
+        home = policy.get("assumptions_module")
+        for root in sorted(dict.fromkeys([*named, *([home] if isinstance(home, str) else [])]),
+                           key=lambda r: (-r.count("."), r)):
             at = _module_path(src, root)
-            if f"{at}.lean" in copied or f"{at}.lean" in out:
+            if f"{at}.lean" in copied or f"{at}.lean" in files:
                 continue
             below = {c[len(prefix):].removesuffix(".lean").replace("/", "."): c
-                     for c in copied if c.endswith(".lean") and c.startswith(f"{at}/")}
+                     for c in (*copied, *files) if c.endswith(".lean") and c.startswith(f"{at}/")}
             mods = sorted(m for m in below if not any(m == e or m.startswith(f"{e}.") for e in exempt))
             if not mods:
                 continue
-            modular = all((h := PB.HEADERS.header(tree.text(below[m]))) is not None and h.module for m in mods)
+            if root in named and all(m in named for m in mods):
+                spare.setdefault(here, {})[root] = mods
+                continue
+            modular = all((h := PB.HEADERS.header(files[below[m]] if below[m] in files else tree.text(below[m])))
+                          is not None and h.module for m in mods)
             word = "public import" if modular else "import"
-            out[f"{at}.lean"] = (("module\n\n" if modular else "") + "".join(f"{word} {m}\n" for m in mods)
-                                 + f"\n/-! The modules under `{PB.HEADERS.name(root)}` that this tree holds. -/\n")
-    return out
+            files[f"{at}.lean"] = (("module\n\n" if modular else "") + "".join(f"{word} {m}\n" for m in mods)
+                                   + f"\n/-! The modules under `{PB.HEADERS.name(root)}` that this tree holds. -/\n")
+    return files, spare
+
+
+def generated_roots(tree, copied: set[str]) -> dict[str, str]:
+    """{file: its text} of each root file the export writes: a root of a copied lakefile's library, or of its package's
+    lock (which the Lean check builds by name), or the module the lock names as its assumptions' (which the check
+    requires the build to hold), whose file the export doesn't copy while it copies modules below it. The text is the
+    imports of those modules and of the roots written below it, less the ones the package's lock exempts (a test or a
+    probe, which no root imports); no copied file imports the root, so nothing reads it but the build. It is a `module`
+    when every module it imports is one, since a `module` imports only modules. A root whose modules are each a root of
+    their own gets no file (`spare_roots`)."""
+    return _roots(tree, copied)[0]
+
+
+def spare_roots(tree, copied: set[str]) -> dict[str, dict[str, list[str]]]:
+    """{a copied lakefile's directory: {root: the copied modules below it}} of each root the export drops instead of
+    writing: one of the library or of the lock, with no copied file, whose copied modules are each named as a root too.
+    Each is built by its own name, so a file written for the root would import nothing the build lacks, and would stand
+    under the name of a module the export leaves out. The lakefile and the lock the export writes lose the root
+    (`rewrite_lakefile`, `rewrite_lock`)."""
+    return _roots(tree, copied)[1]
 
 
 def unreached(text: Callable[[str], str], files: set[str], here: str, lock: dict, tracked: set[str]) -> list[str]:
@@ -619,15 +647,23 @@ class Held:
                                                   else self.tracked)
 
 
-def rewrite_lock(text: str, here: str, held: Held,
-                 more: Callable[[dict], list[str]] = lambda lock: []) -> tuple[str, list[tuple[str, str]]]:
+def rewrite_lock(text: str, here: str, held: Held, more: Callable[[dict], list[str]] = lambda lock: [],
+                 spare: dict[str, list[str]] | None = None) -> tuple[str, list[tuple[str, str]]]:
     """A Lean lock without what the export doesn't hold, and each (section, name) dropped (`public_lock.public`): an entry
     named after a declaration, a namespace, a module or a package the copied files lack, an entry with a witness they
-    lack, a runner's with a generator's file they lack, and every `owner`, `issue` and `due`; with the roots ``more``
-    gives for the lock that leaves (`unreached`) after its own. The lock is laid out as the Lean check writes one, so
+    lack, a runner's with a generator's file they lack, a premise only dropped guarantees took, and every `owner`, `issue`
+    and `due`. Its roots lose the ones in ``spare`` (`spare_roots`), and gain each of their modules no root left covers and
+    then the roots ``more`` gives for the lock that leaves (`unreached`). The lock is laid out as the Lean check writes one, so
     the rest of it reads as it did."""
     lock = json.loads(text)
     out, dropped = PUBLIC_LOCK.public(lock, lambda kind, name: held.has(here, kind, name))
+    if gone := [r for r in out.get("roots", []) if r in (spare or {})]:
+        roots = [r for r in out["roots"] if r not in gone]
+        for m in (m for r in gone for m in spare[r]):
+            if not any(m == r or m.startswith(f"{r}.") for r in roots):
+                roots.append(m)
+        out = {**out, "roots": roots}
+        dropped = {**dropped, "roots": [*dropped.get("roots", []), *gone]}
     if extra := more(out):
         out = {**out, "roots": [*out.get("roots", []), *extra]}
     if out == lock:
@@ -660,11 +696,15 @@ def lane_text(text: str) -> list[tuple[str, str]]:
 def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held) -> dict:
     """What the export did to one lock: per section the entries kept and dropped, how many lane fields it removed, the
     dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, the runners
-    that went with a file of their generator, the kept declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
+    that went with a file of their generator, the premises that went with the guarantees that took them, the kept declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
     entry, kind, text) with its count per section (`public_lock.leftovers`): the lane text (`lane_text`), and the
     declarations, modules and paths the export leaves out that a kept string spells (`Held.spelled`). Neither is
     removed here: the lock they come from is reworded, and `export` refuses those no known residue covers (`known`)."""
     kinds, generators = dict(PUBLIC_LOCK.ENTRIES), dict(PUBLIC_LOCK.GENERATORS)
+
+    def untaken(path: str) -> bool:
+        return path.startswith(f"{PUBLIC_LOCK.UNTAKEN}.")
+
     sites, spelled = PUBLIC_LOCK.leftovers(new, lane_text), PUBLIC_LOCK.leftovers(new, held.spelled)
     both = {f"{where}: {name}" for where, kind, name in PUBLIC_LOCK.named(new)
             if kind == PUBLIC_LOCK.DECLARATION and name in held.withheld}
@@ -673,7 +713,8 @@ def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held
             "undeclared": sorted(f"{path}: {name}" for path, name in dropped
                                  if path in kinds and held.undeclared(kinds[path], name)),
             "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped
-                                        if path not in kinds and path not in generators}),
+                                        if path not in kinds and path not in generators and not untaken(path)}),
+            "untaken": sorted(f"{path.partition('.')[2]}: {name}" for path, name in dropped if untaken(path)),
             "generator_withheld": sorted({f"{path}: {name}" for path, name in dropped if path in generators}),
             "roots_added": [r for r in new.get("roots", []) if r not in old.get("roots", [])],
             "also_withheld": sorted(both),
@@ -742,7 +783,7 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
     for f in written(judgment, shipped):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(tree.root / f, dest / f)
-    roots = generated_roots(tree, copied)
+    roots, spare = _roots(tree, copied)
     for f, text in roots.items():
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
         (dest / f).write_text(text, encoding="utf-8")
@@ -766,10 +807,11 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
         old = (dest / f).read_text(encoding="utf-8")
         new, dropped = (rewrite_path_list(old, f, tracked, copied) if listed
                         else rewrite_controls(old) if f in CONTROLS
-                        else rewrite_lakefile(old, here, built) if name == "lakefile.toml"
+                        else rewrite_lakefile(old, here, built, spare.get(here, ())) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
                         else rewrite_lock(old, here, held, lambda lock, here=here: unreached(
-                            lambda f: roots[f] if f in roots else tree.text(f), built, here, lock, tracked)) if name == LOCK
+                            lambda f: roots[f] if f in roots else tree.text(f), built, here, lock, tracked),
+                            spare.get(here)) if name == LOCK
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required,
                                                lambda m, f=f: tree._module(m, f), {r for g, r in unused if g == f}))
         if dropped or (name == LOCK or f in CONTROLS) and new != old:
@@ -811,7 +853,8 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
     subprocess.run([*git, "commit", "-q", "-m", "The public monorepo"], cwd=dest, check=True)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=dest, capture_output=True, text=True, check=True).stdout.strip()
     return {"copied": len(copied), "rewrites": {f: [f"{k} {v}" for k, v in d] for f, d in rewrites.items()},
-            "edges_cut": [str(e) for e in cut], "lean_targets": targets, "generated_roots": sorted(roots), "locks": locks,
+            "edges_cut": [str(e) for e in cut], "lean_targets": targets, "generated_roots": sorted(roots),
+            "spare_roots": {here or ".": sorted(rs) for here, rs in sorted(spare.items())}, "locks": locks,
             "symlinks_not_copied": symlinks, "commit": head}
 
 
@@ -1056,6 +1099,7 @@ def main(argv: list[str] | None = None) -> int:
                                               (len(lock["witness_withheld"]), "entries gone with a witness it doesn't copy"),
                                               (len(lock["generator_withheld"]),
                                                "runners gone with a file of their generator it doesn't copy"),
+                                              (len(lock["untaken"]), "premises gone that only dropped guarantees took"),
                                               (len(lock["roots_added"]), "roots added, modules no root imports"),
                                               (lock["lane_fields"], "lane fields removed"),
                                               (len(lock["also_withheld"]), "kept names a file left out declares too"),
