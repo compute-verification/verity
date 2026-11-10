@@ -750,11 +750,11 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     assert not (serve / "private" / "pouw-period").exists()
 
 
-def pearlplus_parts(serve: Path) -> tuple[Path, dict]:
+def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
     manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
-    dropped round 0, the one file its opened tile reads by the blob holding it, and the Lean verdict of record's verdict,
-    tiles drawn and work, in the grid form with the exact work beside it."""
+    dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
+    the Lean verdict of record's verdict, tiles drawn and work, in the grid form with the exact work beside it."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"
@@ -764,8 +764,8 @@ def pearlplus_parts(serve: Path) -> tuple[Path, dict]:
                         "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
                                    "draw": {"from": "challenger"}}},
              "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
-             "window": {"dropped": [0], "record": {"window": {"version": 2}, "registered": [], "previous": None},
-                        "rounds": [1]},
+             "window": {"dropped": [0], "rounds": [1],
+                        "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
              "lean": {"verdict": "accept", "reason": None, "drawn": 3,
                       "work": {"credited": 4, "credited_tiles": 2, "macs": 16, "rho": "1/4", "epsilon": "1/8",
@@ -861,6 +861,61 @@ def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_p
     assert SC.h1_log(tmp_path / "log.jsonl", r0) == [w0]
     assert SC.h1_log(tmp_path / "nowhere.jsonl", {**r0, "previous": None}) == []
     SC._chain([w0, r0, w1], r1)
+
+
+def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first_record_before_it(tmp_path):
+    """A serve whose window record is Pearl+'s has no H1 log: the log before R is the W Pearl+'s case's parts hold, which
+    R is chained right after, and before it the serve's first registration record where W is chained after one, each
+    taken by the digest the next names. A W chained after nothing is the whole log, whatever first record the serve dir
+    holds; an R naming no previous record has none. Parts holding another W than R names, a W naming a first record the
+    serve dir doesn't hold, and one naming another than it holds are refused: the log would not chain from the
+    deployment's first record."""
+    first = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
+             "previous": None}
+    w, alone = h1_registration(R.digest(first)), h1_registration()
+
+    def serve(name: str, held: dict, start: dict | None) -> tuple[Path, Path]:
+        d = tmp_path / name
+        (d / SC.PEARL_PLUS_PIECE).mkdir(parents=True)
+        (d / SC.PEARL_PLUS_PIECE / "parts.json").write_text(json.dumps({"window": {"record": held}}))
+        if start is not None:
+            (d / SC.DEPLOYMENT).write_text(json.dumps(start, sort_keys=True))
+        return d, d / SC.PEARL_PLUS_PIECE
+
+    def after(x: dict) -> dict:
+        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+
+    assert SC.pearl_log(*serve("chained", w, first), after(w)) == [first, w]
+    SC._chain([first, w], after(w))
+    assert SC.pearl_log(*serve("alone", alone, first), after(alone)) == [alone]
+    assert SC.pearl_log(*serve("no-first", alone, None), after(alone)) == [alone]
+    assert SC.pearl_log(*serve("unchained", w, first), {**after(w), "previous": None}) == []
+    for name, held, start in (("other-w", alone, first), ("first-gone", w, None),
+                              ("other-first", w, {**first, "registered": [{"value": "x"}]})):
+        with pytest.raises(SC.Refused, match="doesn't chain from the deployment's first record"):
+            SC.pearl_log(*serve(name, held, start), after(w))
+
+
+def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(tmp_path, capsys):
+    """Through the command: a serve dir with Pearl+'s parts and no H1 log writes the policy's case with its log the W
+    the parts hold, which R is chained right after, and Pearl+'s case commits to that same W; parts holding another W
+    refuse the policy's case alone."""
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    (serve / "h1" / "log.jsonl").unlink()
+    piece, parts = pearlplus_parts(serve, w)
+    private = serve / "private"
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1))
+    assert (rc, refused) == (0, []), out
+    assert json.loads((private / "inference-only" / "case.json").read_text())["params"]["log"] == [w]
+    pearl = json.loads((private / "pouw-pearl-plus" / "case.json").read_text())
+    assert json.loads(bytes.fromhex(pearl["commitment"]))["window"]["record"] == w
+    other = {**parts, "window": {**parts["window"], "record": h1_registration(entry=5)}}
+    (piece / "parts.json").write_text(json.dumps(other, sort_keys=True))
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
+                                  "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [r["protocol"] for r in refused] == [INF], refused
+    assert "doesn't chain from the deployment's first record" in refused[0]["reason"]
 
 
 @pytest.mark.parametrize("change, reason", [

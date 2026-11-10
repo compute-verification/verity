@@ -4233,6 +4233,21 @@ def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tm
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *own]), "private/compose/inputs.sha256"]
 
 
+def test_a_hand_off_carries_the_serves_first_registration_record_where_the_serve_wrote_one(tmp_path):
+    """The record that registers the weights' roots before the first request (the weights step's
+    deployment-registration.json) is a verifier's input, hiding roots and names alone: the hand-off lists and hashes it
+    with the rest, and `served_verdicts.py witness` refuses nothing of the list."""
+    first = "deployment-registration.json"
+    run = _handed(tmp_path, files={first: {"format": "verity/registration/v2", "previous": None, "registered": []}})
+    assert run.returncode == 0, run.stderr
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    listed = dc.joinpath("inputs.txt").read_text().splitlines()
+    assert listed == [*sorted([first, *HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
+    assert S.witness(listed) == []
+    sums = {f: h for h, f in (x.split("  ", 1) for x in (dc / "inputs.sha256").read_text().splitlines())}
+    assert sums[first] == hashlib.sha256((d / first).read_bytes()).hexdigest()
+
+
 def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its_files_not_step_3s(tmp_path):
     """Where V3c audited the window before the hand-off (its summary there), the hand-off names V3c's audit, the
     sampled-proofs audit of record, as the record's (SAMPLED_AUDIT) and carries its summary, audit record, registration
