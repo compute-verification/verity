@@ -79,7 +79,11 @@ With lengths rows the network certifier:
 - releases no connection whose client has failed: once a client's problem is set (ingress, malformed, cap) it cuts no
   further request cell of it, so the connection has no `END`, no place in the release order and nothing for the
   server. Every released connection therefore ends at an egress slot, in its `END` or a server's `FAIL`, and holds its
-  lane from its release through its admission's bucket + D.
+  lane from its release through its admission's bucket + D;
+- fails such a connection at its first egress slot, in bucket s + D, and never before: until then both its directions
+  are padding. So every connection it admits, released or not, holds its lane through its admission's bucket + D at
+  least, the bucket through which the ingress proof block's scan holds the connection's slot (`ingress_scan.held`),
+  and a lane it frees is a slot the scan has freed: a client's failure leaves the next admission a slot.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
@@ -88,8 +92,8 @@ its bounds (ingress), a client cell of another kind than `DATA` or `END` (malfor
 response cap (cap). Its `FAIL` cell is in the slot of the next egress cell, and it is in the egress record.
 Every `FAIL` is the same bytes: the reason is a frame of the network certifier's `fails` record (`reason_frame`),
 witness the client never sees. The server's four reasons show only at an egress slot, so the server, which controls
-whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once, and
-are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
+whether and where a connection fails, chooses one of at most (cells + 1) outcomes; the client's three fail at once
+(with lengths rows at the connection's first egress slot), and are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`), as the active certifier's do.
 
 **The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
@@ -721,7 +725,8 @@ class Warden:
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
         """Connection c's r egress cells at bucket t (the module docstring's schedule), from s + D on. A client's
-        problem fails the connection at once; the server's only at an egress slot, so where it fails is one of the
+        problem fails the connection at once (with lengths rows at its first egress slot, so it holds its lane through
+        s + D as every other connection does); the server's only at an egress slot, so where it fails is one of the
         egress cells. A `DATA` or `END` cell out of the egress form fails it in that cell's slot, and none of its bytes
         leaves. The reason goes to the `fails` record, never into the cell."""
         B, p, r, D = self.params.cell_bytes, self.params.payload, self.params.slots, self.params.delay
@@ -731,7 +736,7 @@ class Warden:
                 out.append(pad)
                 continue
             failed = None
-            if c.problem is not None:
+            if c.problem is not None and (self.params.lengths is None or t >= c.admitted + D):
                 failed = c.problem
             elif t < c.admitted + D:
                 out.append(pad)

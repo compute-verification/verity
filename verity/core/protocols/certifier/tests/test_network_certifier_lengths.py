@@ -8,10 +8,12 @@ import dataclasses
 
 import pytest
 
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import io_tie as IT
-from verity.core.protocols.certifier.active import HEADER, PAD, id_request
+from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier.active import DATA, HEADER, PAD, id_request
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import EOF, reasons, records, run
-from verity.core.protocols.certifier.warden import (END, INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams,
+from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams,
                                                     cells)
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
@@ -111,3 +113,70 @@ def test_a_connection_whose_client_failed_is_never_released():
         assert bool(server.conns[0].received) == released and warden.requests_released == 1 + released
         assert (log[2]["failed"], log[2]["egress_cells"]) == (None, 3)
         assert [(o, why) for _, o, why in reasons(warden)] == [(1, "malformed")]
+
+
+# --- the lane ----------------------------------------------------------------------------------------------------
+
+
+#: the scan that serves the schedule (`ingress_scan.Class.serves`): the ingress proof block's reference over its rows
+CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
+
+
+def scanned(warden, outputs: dict[int, tuple[int, ...]]):
+    """The ingress proof blocks' reference over every bucket of the run's signed ingress rows (`ingress_scan.scan`,
+    the Programs' outputs `outputs` by ordinal): None where a bucket's is refused."""
+    CLS.serves(warden.params)
+    rows = [row for r in records(warden)[0] for row in WR.window_rows(r, warden.params)]
+    return IS.scan(CLS, rows, outputs)
+
+
+def failed_clients() -> dict[str, tuple]:
+    """Clients that fail before any release, each as (its bytes, the schedule's other parameters, its reason, the
+    bucket it fails in without lengths rows, its request cells' kinds up to there)."""
+    two = cells(id_req(2, 40), B)
+    assert len(two) == 2 * B
+    return {"a cell cut short": (two[:-10], {}, "malformed", 1, [PAD, PAD, END, PAD]),
+            "an ingress that never ends": ((two[:B], False), {}, "ingress", 2, [PAD, PAD, DATA, PAD, PAD, PAD]),
+            "a request past the cap": (cells(id_req(2, 3, max_tokens=9), B), {"max_tokens_cap": 8}, "cap", 1, [PAD] * 4)}
+
+
+@pytest.mark.parametrize("name", sorted(failed_clients()))
+def test_a_connection_that_is_never_released_holds_its_lane_through_its_delay(name):
+    """Both lanes taken at bucket 0, one by a client that fails, and a third connection waiting from bucket 2. With
+    lengths rows the failed connection is padding both ways until its first egress slot, bucket s + D, and fails there,
+    whenever its client failed and why: its lane frees with the slot the ingress proof block's scan holds for it
+    (`ingress_scan.held`, through admitted + D), the third connection is admitted the bucket after, and the scan takes
+    every bucket of the run. Without lengths rows the connection ends where it fails and the third takes its lane at
+    once, while the scan still holds the slot: it has none for the third, and refuses the run."""
+    data, other, why, at, kinds = failed_clients()[name]
+    out, first, third = (7, 8), id_req(1, 3), id_req(3, 3)
+    arrivals = {0: [cells(first, B), data], 2: [cells(third, B)]}
+    answers = [answer(out), [], answer(out)]
+
+    params = dataclasses.replace(LEN, **other)
+    warden, clients, server = run(answers, arrivals, params=params, windows=3)
+    log = {e["ordinal"]: e for e in warden.log}
+    assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == (None, why, 0, D)
+    mine = request_cells(warden, 2)
+    assert [t for t, _, _ in mine] == [t for t in range(D + 1) for _ in range(R)]
+    assert END not in [k for _, k, _ in mine] and [k for _, k, _ in mine][2 * R:] == [PAD] * ((D - 1) * R)
+    assert [(t, k) for t, k, _ in clients[1].cells()] == \
+        [(t, PAD) for t in range(D) for _ in range(R)] + [(D, FAIL)] + [(D, PAD)] * (R - 1)
+    assert reasons(warden) == [(D, 2, why)] and not server.conns[1].received
+    assert (log[3]["admitted"], log[3]["release"], log[3]["failed"]) == (D + 1, 1, None)
+    assert (log[1]["ended"], log[1]["failed"]) == (D + 1, None)
+    assert scanned(warden, {1: out, 3: out}) is not None
+
+    without = dataclasses.replace(PLAIN, **other)
+    plain, plain_clients, _ = run(answers, arrivals, params=without, windows=3)
+    log = {e["ordinal"]: e for e in plain.log}
+    assert (log[2]["failed"], log[2]["ended"]) == (why, at)
+    assert [k for _, k, _ in request_cells(plain, 2)] == kinds
+    assert [(t, k) for t, k, _ in plain_clients[1].cells()][-R:] == [(at, FAIL)] + [(at, PAD)] * (R - 1)
+    assert (log[3]["admitted"], log[3]["failed"]) == (at + 1, None)
+    assert scanned(plain, {1: out, 3: out}) is None
+    if END not in kinds:
+        # the slot, and nothing else of the run: the third arriving once the scan's slot is free, the scan takes it
+        later, _, _ = run(answers, {0: arrivals[0], D + 1: arrivals[2]}, params=without, windows=3)
+        assert {e["ordinal"]: e["admitted"] for e in later.log}[3] == D + 1
+        assert scanned(later, {1: out, 3: out}) is not None
