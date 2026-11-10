@@ -25382,3 +25382,50 @@ Kernels does not get that slot. I relaunch it from a new head of my branch by 07
    binary of mine on node A (`flock-tmpl-unit`, in my private directory). I will not place it unless you say so.
 2. #8454 gets a new head again with the tool fix (`prove_time.sh`, `prove_time.py`, both mine). Hold the land ask I
    sent at 05:53Z until I mark the new head.
+
+## LLAMARATE, Tue 10 Nov 06:12Z: the `oneSession` page is drafted on compute-research's form, with the closure as its own option D; your three lines on the closure; what is yours to set
+
+**The page:** note `20261110T0551Z-draft-ask-one-draw-several-sessions` (kind draft, synced; the page is everything after the front matter, and the `ask-daniel` command is in its `post:` line). It replaces the first draft I named at 05:58Z, under the same id. The tool's page check passes. It is 1,010 words of prose, over the skill's 900 since option D went in. It recommends A, leaves Choose empty, and is kind default with C as the default and the skill's one line why A is not.
+
+**1. Your three lines on the closure (06:02Z).**
+
+- **In or out:** in, as option D of its own ("A, and Pearl+'s kind of draw too"). It is not folded into A and not recommended yet.
+- **Why:** it is a different change to different statements. It does not touch `oneSession`. It lifts `Spot.OneStage.evidenceOf`'s refusal and changes what an accepted run bounds, and nobody has designed its form, so the page cannot show its statement as it would enter the lock.
+- **If D is not chosen, goal 7's whole run waits on four things:** the members' leg (PRF-490; a closure spans templates, and a session proves one circuit file); the cut and its two unsized steps (A); the closure's form designed, worded by soundness, seen by Daniel and proved; and the run's cost, near 380 hours today [relayed, PROVECUT].
+
+**2. The closure at source: which statements and records move.** [read, `origin/main` 7af4d24fca, unless tagged]
+
+- **Not `oneSession`.** It reads only the number of sessions (`verity/core/service/spot/Spot/OneStageZk.lean:610-612`).
+- **The refusal** is `Spot.OneStage.evidenceOf` (`Spot/OneStage.lean:414-418`), which v2 calls at `OneStageZk.lean:231`. [run, a lookup] The lock records it in `reads["Spot.OneStage"]`, 50 definitions in `Security/Properties/lean-audit.json` and 49 in `Security/lean-audit.json`. That record moves.
+- **The scope check** `Flock.ProvedScope.lawWhy` puts a work draw, with or without a closure, outside the proved scope (`verity/core/service/flock/Flock/ProvedScope.lean:557-562`). v2 applies it to each session's own draw (`setupAt`, `OneStageZk.lean:411`). It need not move if each session's record keeps a subset print of its part, as compute-research's form has it [relayed]. If it moves, `reads["Flock.ProvedScope"]` does.
+- **The draw side exists:** v1's draw check already parses a closure and counts it among the proved units (`Spot/Draw.lean:168-236`).
+- **What an accepted run bounds changes.** With a closure the draw's miss of a set B is the base draw's miss of B and of every tile whose closure meets B (`closure_escape`, `Security/Proofs/Flock/Soundness/Audit/Closure.lean:58`). The bound is proved for a model audit: `audit_work_closure` (`:144`), unsound work of at least T with probability at most ((W − T)/W)^K + ε_ks + δ_link. [run, a lookup] The lock has guarantees at a closure law in `Security/lean-audit.json`.
+- **What is not proved** is the session's record at a closure. The session theorem needs one link-point count at every sample (`MemberV5.OneClass`, `Joint/V5/Statement.lean:117`; `JointAuditV5.hcls`, `:199-201`), and a closure's size varies with the draw. That is the refusal's own reason (`OneStage.lean:411-413`). So the closure changes the hypotheses of `Flock.SecurityProofs.JointSampledV5` and `SampledKSLiveV5`, or its design must keep each session's count in one class.
+- **The proofs:** [run, a grep] eight files under `Security/Proofs` name the fact that a draw has no closure, in 16 lines, among them `Properties/Verity/Sampled/Held.lean:564-590`, `Properties/Spot/Credited.lean:141-146` and `:192`, `Flock/Soundness/Discharge/Layout/Drawn.lean:189`. Not all eight are on v2's path; I did not trace which.
+- **Cost:** unsized. The three candidate forms are compute-research's (question 7 to PROVECUT).
+
+**3. Option A against the lock (your 05:35Z ask).**
+
+- [run] `reads["Spot.OneStageZk"]` is a digest over 88 definitions, `oneSession` among them. A changed or new definition fails the Lean check as `guarantees.reads-changed` until `--update` (`tools/verity/lean/check.py:1585-1591`).
+- [read] Two theorems read it, through `VStar.Recursive.Sampled.protocol` (`Security/Properties/Verity/Game.lean:173`, `:180`; `VStarRecursive/Sampled.lean:76`): `Verity.soundness_of_subprotocols` (frozen) and `Verity.remote_soundness_of_subprotocols` ([run] in `deployed`, with `SpotSound` in its `trust_gap`).
+- [run] Neither `shape.frozen` text names a number of sessions; both name "sampled proofs v2 (Spot.OneStageZk)". So the texts need no edit, and neither statement nor the union bound's proof changes. Whether an `unfolded_hash` moves needs `check.py`, which I did not run.
+- [read] Three proofs unfold `oneSession`: `Spot/Credited.lean:276`, `Verity/Sampled/Moves.lean:386`, `Verity/Sampled/Record/Accepts.lean:294`.
+- **`SpotSound`'s proof** needs the several-sessions leg (3,000 to 6,000 lines, my 05:39Z entry) and, for a cut only: `JointAuditV5` restated with a part function in place of `emb`'s filter ([estimate] 300 to 600 lines; `Session.lean`'s step holds as it is), and one incorrect set across sessions that open one commitment (unsized; soundness's). Detail in section I6 of my report note.
+
+**4. Yours to set, and where the page goes beyond compute-research's note.**
+
+- **The default and the deadline.** I wrote C at 6 PM PST Fri 13 Nov. The proof's first week is on files the choice does not touch (list A of my 05:39Z entry), so Friday costs nothing. If top's ruling means blocking, the line is: "Nothing happens; goal 7's whole-run proof waits, and the remote demo's proof is written for members only."
+- **Option C says the remote demo's sessions stay on their plan.** If the members' use also waits on Daniel (item D4 of my 05:39Z entry, unanswered), that sentence and the default change.
+- **"One form, two uses"** is your instruction. compute-research's form is for one statement. The page adds "with several members, each member's blocks are cut so". Nobody has written that check.
+- **"A new check holds the sessions to run in turn."** compute-research left this to PROVECUT (their question 4). I wrote it as part of A because the proved statement plays sessions in turn and nothing checks it (my 05:58Z entry).
+- **The strongest argument against asking now:** A gives Pearl+ nothing until D, and D's form may ask for another cut. The page says both. If you would rather ask once the closure has a form, the page needs only its date changed.
+- **Dates and numbers on the page that are estimates:** Mon 30 Nov and "before December" are mine. 83 to 254 tables, 630 to 1,160 sessions and 380 hours are PROVECUT's. ε = 0.99 for option B is my arithmetic on them (one table holds 1.8 tiles' worth of the largest stratum). I dropped B's 64-table variant from the page: compute-research shows it is itself a statement change.
+
+**5. Not verified.**
+
+- **PROVECUT's review of the form** (CMP-381, due Tue 09:00Z). I reread CMP-381 after 09:00Z and revise the page in place, with a line here.
+- That Pearl+'s large strata are filled by closures and not sampled directly [relayed, PROVECUT and compute-research].
+- That a closure always spans templates [relayed, compute-research: `plan.py:298-302`].
+- The three no-closure proof files that are on v2's path, out of the eight.
+
+**6. A correction to my 05:58Z entry:** the text for PRF-478 there is 117 words, not 103.
