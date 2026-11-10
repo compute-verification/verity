@@ -1406,12 +1406,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     record for a guarantee that has none.  ``ticket`` (with ``update``: `repaired`, `--bookkeeping warn`) files each open
     premise the lock doesn't list, and gives an owner to each entry without one (`assumption_records`)."""
     fails = []
-    if (free := unowned_lock(policy)) and (owner or ticket):
-        if owner:
-            fails.append(Failure("owner.unowned-lock", None, f"owner: the lock is unowned (no entry has an `owner`, an "
-                                 f"`issue` or a `due`), and `--owner {owner}` would own a part of it: to own it, write "
-                                 f"one guarantee's owner in the lock, and `--update --owner` then owns the others"))
-        owner = ticket = None
+    if free := unowned_lock(policy) and not owner:
+        ticket = None
     allowed = set(policy.get("axioms", STANDARD))
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
@@ -2769,7 +2765,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, opened, fails, out, opens = policy.get("assumptions", {}), policy.get("open", {}), [], {}, {}
     domained, domains, cited, cover = policy.get("domain", {}), {}, cited or {}, cover or {}
-    home, seed, free = policy.get("assumptions_module"), policy.get("open_seed"), unowned_lock(policy)
+    home, seed, free = policy.get("assumptions_module"), policy.get("open_seed"), unowned_lock(policy) and not owner
     if not isinstance(opened, dict):
         fails.append(Failure("open.form", None, "open: `open` is {premise: {owner, digest[, issue], due}}"))
         opened = {}
@@ -3572,8 +3568,8 @@ def unowned_lock(policy: dict) -> bool:
     """Whether ``policy`` is an unowned lock: it lists a guarantee or a premise and holds none of a lane's bookkeeping
     (`LANE_FIELDS`, `LANE_SECTIONS`), as the lock of a tree with no lanes does.  It is read from the lock's content, so a
     lock with one such field is owned and held to every rule.  On an unowned lock no entry owes an owner, an `open` entry
-    is its digest alone, and neither `--update`, `--owner` nor `--bookkeeping warn` writes an owner, an issue or a date
-    into it (`judge`)."""
+    is its digest alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an issue or a date into it.  A
+    run given `--owner` reads the lock as owned, and owns it (`judge`)."""
     entries = [r for s in LANE_ENTRIES if isinstance(sec := policy.get(s), dict) for r in sec.values()]
     return bool(entries) and not any(k in policy for k in LANE_SECTIONS) and not any(
         f in r for r in entries if isinstance(r, dict) for f in LANE_FIELDS)
