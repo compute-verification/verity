@@ -31,6 +31,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 paths = []
 
 [drop]
+# `benchmarks/pouw/contents/paths/machine_model.toml`: the entry of `benchmarks/pouw`'s contents for
+# `machine_model/`, which leaves `benchmarks/pouw`.
 paths = ["benchmarks/pouw/contents/paths/machine_model.toml"]
 
 [rewrite]

@@ -33,7 +33,8 @@ whichever component they are in: circuit-check finds a module's bindings beside 
 A SUITE MOVES WHOLE. A `pyproject.toml` that configures pytest is a suite, and every file under its test directories
 goes where the pyproject goes (or stays where it stays), whichever component it is in: no map splits a suite, and
 splitting one is its owner's change after the moves. The script names each place where that puts one component's
-tests in another's directory ("with its suite"), and the trust check lets a suite's tests go with it. An archived
+tests in another's directory ("with its suite"), and the trust check lets a suite's tests go with it. A test whose
+code the layout sends into another suite goes into that suite with it, by a row of `EXCEPT` for the test. An archived
 test stays archived.
 
 AN EMPTIED PACKAGE LEVEL. The `__init__.py` of a package level the moves empty (every other file under it leaves, and
@@ -42,7 +43,8 @@ archives it; the script names each one, for a commit that deletes them after the
 rename the package, and every mention of it that is left, to `archive.…`; a row that took it along by the rule would
 rename the package under the modules other rows take out of it.
 
-EXCEPTIONS, each a row of `EXCEPT` or `KEEP` with its reason: where the rule gives two files one path or two paths
+EXCEPTIONS, each a row of `EXCEPT`, `KEEP` (a component or a file that stays) or `DROP` (a file a move deletes) with
+its reason: where the rule gives two files one path or two paths
 that differ only by case, puts a file nobody trusts in a trusted directory, takes a module out of its import package,
 or gives a path nobody would look for. A row the rule itself now gives is reported as doing nothing.
 
@@ -102,6 +104,7 @@ import tomllib
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import layout as L  # noqa: E402
+import layout_case  # noqa: E402
 
 #: (today's path: a file, or a directory ending in "/"; its new path; why the rule is not followed)
 EXCEPT = [
@@ -112,9 +115,6 @@ EXCEPT = [
      "a module goes with its import package: eleven bench drivers are modules of `verity_flock`, which the rule would "
      "leave in a second `verity/flock/python/verity_flock/` with no `__init__.py`, outside the distribution that keeps "
      "the name"),
-    ("verity/core/protocols/certifier/lean/", "verity/protocols/certifier/device/program/lean/",
-     "the certifier program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake "
-     "package goes (two lakefiles, manifests, locks and toolchains on one path)"),
     ("verity/core/service/spot/", "verity/spot/verifier/lean/",
      "SPOT's Lake package: the rule puts its `pyproject.toml` on the Python verifier's in `verity/spot/verifier/`; the "
      "Lean takes `lean/`, as each protocol's Lean is its `lean/`"),
@@ -152,6 +152,17 @@ EXCEPT = [
     ("verity/core/service/vstar/", "verity/flock/verifier/vstar_cli/",
      "V*'s command package: the rule gives `verity/flock/verifier/vstar/`, which differs only by case from `VStar/`, the "
      "Flock verifier's own Lean sources, and a checkout that ignores case merges the two"),
+    ("verity/core/protocols/certifier/lean/", "verity/protocols/certifier/device/program/lean/",
+     "the certifier program's Lake package: the rule puts it on `verifier/lean/`, where the network check's Lake package "
+     "goes (two lakefiles, manifests, locks and toolchains on one path); the program is what the device runs"),
+    ("verity/ml/commitments/tests/test_leaves.py", "integrations/vllm/tests/commitments/test_leaves.py",
+     "the test of `leaves.py`, which goes into the integration: it goes into the integration's suite with the module it "
+     "tests; left with its own suite, a test under `verity/` would import an integration"),
+    ("verity/ml/commitments/tests/test_vllm_v1.py", "integrations/vllm/tests/commitments/test_vllm_v1.py",
+     "the test of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`"),
+    ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
+     "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
+     "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
 ]
 #: an EXCEPT row whose files go with another move than their component's: {the row's path today: the move}
 EXCEPT_MOVE = {
@@ -167,6 +178,17 @@ KEEP = {
                 "scripts would read `benchmarks/census` by path",
     "bench:63": "PoUW's calculators stay in `benchmarks/pouw/`: nothing under `verity/` or an integration imports them, "
                 "and one of them loads `benchmarks/sampling_plan`",
+    "benchmarks/network_traces/leak_bounds.py":
+        "a calculator that loads the certifier's prover: under `verifier/`, where the rule puts it, a verifier's file would "
+        "load a prover's",
+    "benchmarks/network_traces/chain_record.py":
+        "it drives a run and loads `benchmarks/` files by bare name, and it loads the certifier's prover, which no file under "
+        "`verifier/` may",
+}
+#: files a move deletes: {path: (the move, why)}
+DROP = {
+    "benchmarks/pouw/contents/paths/machine_model.toml":
+        ("hardware", "the entry of `benchmarks/pouw`'s contents for `machine_model/`, which leaves `benchmarks/pouw`"),
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
@@ -174,8 +196,8 @@ UNTRUSTED = {
                       "beside Flock's verifier, whose Lake package holds the ZK server's other half (`Flock.Firewall`)",
     "edge:tools.config": "the settings package (`verity_config`), which the layout puts with the Configuration it reads",
 }
-#: tracked files the data doesn't know, in a directory several components share: {path, or directory ending in "/":
-#: the component id it goes with, "stays" or "archived"}
+#: tracked files the data doesn't know, in a directory several components share, and files it places otherwise:
+#: {path, or directory ending in "/": the component id it goes with, "stays" or "archived"}
 NEW = {
     "verity/ml/commitments/history.py": "ml:commitment-schemes",
     "verity/ml/commitments/tests/test_history.py": "ml:commitment-schemes",
@@ -244,7 +266,7 @@ FORMS = {"moves": "layout_moves", "one": "layout_one"}
 ONE = ("layout", "the whole layout")
 TEST_FILE = re.compile(r"(?:.*/)?(?:test_[^/]*|[^/]*_test)\.py")
 #: where no suite collects a test file and none need (`tests/test_repository.py`'s `UNSUITED_TEST_DIRS`)
-UNSUITED = ("verity/ml/kernels/",)
+UNSUITED = ("verity/ml/kernels/", "archive/")
 SCANNED = ("found by `layout.py`'s own scan and read by nobody: the reference follows the directory's `[tokens]` row, "
            "where its package goes, and part of the directory goes elsewhere")
 SIDECAR = re.compile(r"(.+)\.circuit-check\.(?:py|json)")
@@ -404,7 +426,7 @@ def plan(data, owner, say, suites=()):
     out, plain = {}, {}
     for p, key in owner.items():
         row, new, mv = excepted(p)
-        if key == "stays" or key in KEEP:
+        if key == "stays" or key in KEEP or p in KEEP:
             rule, move = None, None
         elif key == "archived":
             rule, move = "archive/" + p, "archive"
@@ -445,7 +467,7 @@ def plan(data, owner, say, suites=()):
         t = posixpath.dirname(p)
         while t and t not in tests:
             t = posixpath.dirname(t)
-        if not t or owner[p] == "archived":
+        if not t or owner[p] == "archived" or excepted(p)[0] == p:   # a row of its own: with the code it tests
             continue
         pp = tests[t]
         pdir = posixpath.dirname(pp)
@@ -501,7 +523,7 @@ def plan(data, owner, say, suites=()):
         elif all(plain[old]):
             say(f"EXCEPT's row {old} does nothing now: the rule gives {new}")
     for key in KEEP:
-        if key not in comps:
+        if "/" not in key and key not in comps:
             say(f"KEEP's row {key} does nothing now: the layout no longer moves it")
     return out, sorted(emptied), suited
 
@@ -612,11 +634,6 @@ def wrap(prefix, text, width=118):
     return "\n".join(out)
 
 
-#: STAGING ONLY (top's inbox 26, for vllm to take): a file a move deletes, and the move that does. The machine model's
-#: contents row names the model by its old place and is superseded once the model is under `verity/hardware/`.
-DROP = {"benchmarks/pouw/contents/paths/machine_model.toml": "hardware"}
-
-
 def render(fname, v, before, one=False):
     rows = v["rows"]
     lines = [wrap("# ", f"The layout move of {v['what']}: what `tools/move/layout.py --map tools/move/{fname}` moves and "
@@ -645,8 +662,9 @@ def render(fname, v, before, one=False):
     if v["split"]:
         lines += ["", "[split]", "# references to a directory this move splits that stay right: \"old file: old directory\" = why"]
         lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["split"].items())]
-    drop = sorted(p for p, name in DROP.items() if one or f"_{name}_map.toml" in fname)
-    lines += ["", "[retired]", "paths = []", "", "[drop]", "paths = [" + ", ".join(toml_str(p) for p in drop) + "]", "", "[rewrite]",
+    lines += ["", "[retired]", "paths = []", "", "[drop]",
+              *(wrap("# ", f"`{p}`: {DROP[p][1]}.") for p in v["drop"]),
+              "paths = [" + ", ".join(toml_str(p) for p in v["drop"]) + "]", "", "[rewrite]",
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
               "# archive), and files whose bytes a digest pins.",
               "exclude = [" + ",\n           ".join(", ".join(toml_str(x) for x in EXCLUDE[i:i + 4]) for i in range(0, len(EXCLUDE), 4)) + "]",
@@ -702,11 +720,13 @@ def main():
     if stay:
         die("under verity/core or verity/ml with no destination:\n  " + "\n  ".join(stay[:40]))
     trusted_dirs = [t.strip("/") for t in data["trusted_dirs"]]
-    untrusted = collections.defaultdict(list)
+    untrusted, with_suite = collections.defaultdict(list), collections.Counter()
     for p, (n, key, _) in dest.items():
-        if (key in comps and not comps[key]["trusted"] and p not in suited      # a suite's tests go with it, whoever's they are
-                and any(n == t or n.startswith(t + "/") for t in trusted_dirs)):
-            untrusted[key].append(f"{p} -> {n}")
+        if key in comps and not comps[key]["trusted"] and any(n == t or n.startswith(t + "/") for t in trusted_dirs):
+            if p in suited:                            # a suite's tests go with it, whoever's they are
+                with_suite[(key, posixpath.dirname(n))] += 1
+            else:
+                untrusted[key].append(f"{p} -> {n}")
     if set(untrusted) - set(UNTRUSTED):
         die("files of a component the auditor doesn't trust land under a trusted directory (a row in EXCEPT, or in "
             "UNTRUSTED with why it may):\n  " + "\n  ".join(f"{k} ({comps[k]['name']}): {len(v)} files, {v[0]}"
@@ -714,25 +734,19 @@ def main():
     unknown = sorted({m for _, _, m in dest.values()} - {m for m, _ in MOVES})
     if unknown:
         die(f"moves with no entry in MOVES: {unknown}")
-    after_all = (tracked - set(dest)) | set(by_new)   # the tree after the moves
-    folded = collections.defaultdict(set)
-    for p in after_all:
-        for x in (p, *ancestors(p)):
-            folded[x.casefold()].add(x)
-    by_case = sorted(sorted(v) for v in folded.values() if len(v) > 1)
+    after_all = (tracked - set(dest) - set(DROP)) | set(by_new)   # the tree after the moves
+    by_case = layout_case.case_sets(after_all)
     if by_case:
         die("paths of the moved tree that differ only by case, which a checkout that ignores case merges (a row in EXCEPT):\n  "
-            + "\n  ".join(" and ".join(v) for v in by_case[:40]))
+            + "\n  ".join(" and ".join(sorted(v)) for v in by_case[:40]))
     new_of = lambda p: dest[p][0] if p in dest else p   # noqa: E731
     testpaths = [new_of(pp)[: -len("pyproject.toml")].rstrip("/") + t[len(posixpath.dirname(pp)):] for pp, ts in suites for t in ts]
     defines = set(git(repo, "grep", "-lE", r"^(async\s+)?def\s+test|^class\s+Test", a.ref, "--", "*.py").replace(a.ref + ":", "").split())
     unsuited = sorted(new_of(p) for p in tracked if TEST_FILE.fullmatch(p) and p in defines and not p.startswith(UNSUITED)
                       and not any(t in (".", "") or new_of(p).startswith(t + "/") for t in testpaths))
-    if [n for n in unsuited if not n.startswith("archive/")]:
-        die("test files that no suite collects after the moves (a suite moves whole, with its pyproject.toml):\n  "
-            + "\n  ".join(n for n in unsuited if not n.startswith("archive/")))
-    for n in unsuited:
-        notes.append(f"archived out of its suite, so no suite collects it: {n}")
+    unsuited = [n for n in unsuited if not n.startswith(UNSUITED)]
+    if unsuited:
+        die("test files that no suite collects after the moves (a suite moves whole, with its pyproject.toml):\n  " + "\n  ".join(unsuited))
     for p in emptied:
         notes.append(f"stays, the `__init__.py` of a package level the moves empty, for a commit that deletes it after them: {p}")
 
@@ -767,11 +781,16 @@ def main():
                 if len(new) != 1 or None in new:
                     die(f"{move}: it moves the package {name} ({d}) in part, or to two places: {sorted(map(str, new))}")
                 roots_new[name] = new.pop().rstrip("/")
-            lay_data = {"roots": {"old": dict(ROOTS), "new": roots_new}, "paths": rows, "tokens": tokens, "split": {}}
+            lay_data = {"roots": {"old": dict(ROOTS), "new": roots_new}, "paths": rows, "tokens": tokens, "split": {},
+                        "rewrite": {"exclude": EXCLUDE, "include": INCLUDE}}
             modules = L.derived_modules(L.Layout(lay_data))
             lay_data["modules"] = modules
             split = {} if one else {k: w for m, k, w in SPLIT if m == move and k.split(": ")[0] in tracked}
             lay_data["split"] = split
+            drop = sorted(p for p, (m, _) in DROP.items() if (one or m == move) and p in tracked)
+            if set(drop) & set(dest):
+                die(f"{move}: DROP deletes a file a row moves: {sorted(set(drop) & set(dest))}")
+            lay_data["drop"] = {"paths": drop}
             lay = L.Layout(lay_data)
             got = {p: lay.file(p) for p in tracked if lay.file(p) is not None}
             if got != mine:
@@ -782,7 +801,7 @@ def main():
                     die(f"{move}: {p} -> {n}: its module {mo} would be renamed {lay.module(mo)}, not {mn}")
             reasons = [(o, n, w) for o, n, w in EXCEPT if any(holds(o, p) for p in mine)]
             maps[move] = {"what": what, "rows": rows, "tokens": tokens, "split": split, "modules": modules,
-                          "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "data": lay_data}
+                          "roots_new": roots_new, "lay": lay, "mine": mine, "reasons": reasons, "data": lay_data, "drop": drop}
 
         # ---- across the maps: no row over another map's files or over a destination, Lake packages whole
         keys = [(m, k) for m in maps for k in maps[m]["rows"]]
@@ -919,6 +938,8 @@ def main():
               f"split rows, {len(v['modules'])} module renames" + (f"; after {', '.join(sorted(after[move]))}" if after[move] else ""))
     for key, v in sorted(untrusted.items()):
         print(f"  untrusted under a trusted directory, allowed by UNTRUSTED: {key}, {len(v)} files ({v[0]})")
+    for (key, d), n in sorted(with_suite.items()):
+        print(f"  a suite's tests under a trusted directory: {n} of `{key}` ({comps[key]['name']}) in `{d}/`")
     print(f"  `layout.py` creates {len(created)} `__init__.py` over the maps (--created FILE lists them)")
     for n in notes:
         print("  " + n)

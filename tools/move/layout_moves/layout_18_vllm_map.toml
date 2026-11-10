@@ -1,5 +1,5 @@
 # The layout move of the commitment scheme named for vLLM and the window-advice compiler, to `integrations/vllm`:
-# what `tools/move/layout.py --map tools/move/layout_moves/layout_18_vllm_map.toml` moves and rewrites. 8 files in 3
+# what `tools/move/layout.py --map tools/move/layout_moves/layout_18_vllm_map.toml` moves and rewrites. 10 files in 5
 # rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -11,6 +11,11 @@
 #   would be imported as `integrations.vllm.commitments.leaves`.
 # - `verity/ml/commitments/vllm_v1/` to `integrations/vllm/verity_vllm/commitments/vllm_v1/`: as `leaves.py`: the
 #   commitment scheme named for vLLM goes into `verity_vllm`.
+# - `verity/ml/commitments/tests/test_leaves.py` to `integrations/vllm/tests/commitments/test_leaves.py`: the test of
+#   `leaves.py`, which goes into the integration: it goes into the integration's suite with the module it tests; left
+#   with its own suite, a test under `verity/` would import an integration.
+# - `verity/ml/commitments/tests/test_vllm_v1.py` to `integrations/vllm/tests/commitments/test_vllm_v1.py`: the test
+#   of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`.
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
 
@@ -21,6 +26,8 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 [paths]
 "benchmarks/network_traces/window_chain.py" = "integrations/vllm/network_traces/window_chain.py"
 "verity/ml/commitments/leaves.py" = "integrations/vllm/verity_vllm/commitments/leaves.py"
+"verity/ml/commitments/tests/test_leaves.py" = "integrations/vllm/tests/commitments/test_leaves.py"
+"verity/ml/commitments/tests/test_vllm_v1.py" = "integrations/vllm/tests/commitments/test_vllm_v1.py"
 "verity/ml/commitments/vllm_v1/" = "integrations/vllm/verity_vllm/commitments/vllm_v1/"
 
 [retired]
@@ -47,4 +54,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 # the renames [paths] and [roots] imply (`layout.py --modules`)
 "benchmarks.network_traces.window_chain" = "integrations.vllm.network_traces.window_chain"
 "verity.ml.commitments.leaves" = "verity_vllm.commitments.leaves"
+"verity.ml.commitments.tests.test_leaves" = "integrations.vllm.tests.commitments.test_leaves"
+"verity.ml.commitments.tests.test_vllm_v1" = "integrations.vllm.tests.commitments.test_vllm_v1"
 "verity.ml.commitments.vllm_v1" = "verity_vllm.commitments.vllm_v1"

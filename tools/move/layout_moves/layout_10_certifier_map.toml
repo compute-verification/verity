@@ -1,5 +1,5 @@
 # The layout move of network certification, to `verity/protocols/certifier`: what `tools/move/layout.py --map
-# tools/move/layout_moves/layout_10_certifier_map.toml` moves and rewrites. 278 files in 78 rows. Written by
+# tools/move/layout_moves/layout_10_certifier_map.toml` moves and rewrites. 272 files in 72 rows. Written by
 # `tools/move/layout_maps.py`, which states the rule: edit that, not this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -7,8 +7,8 @@
 # row a file. Nothing is edited or deleted.
 # Rows that depart from that rule:
 # - `verity/core/protocols/certifier/lean/` to `verity/protocols/certifier/device/program/lean/`: the certifier
-#   program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake package goes (two
-#   lakefiles, manifests, locks and toolchains on one path).
+#   program's Lake package: the rule puts it on `verifier/lean/`, where the network check's Lake package goes (two
+#   lakefiles, manifests, locks and toolchains on one path); the program is what the device runs.
 # The layout's maps run in the order of their names. This one renames no package another map takes modules out of, so
 # its place among them is free. The format is `layout_map.toml`'s.
 
@@ -18,18 +18,12 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 
 [paths]
 "benchmarks/network_traces/block_certifier.py" = "verity/protocols/certifier/verifier/network_traces/block_certifier.py"
-"benchmarks/network_traces/certifier_piece.py" = "verity/protocols/certifier/device/network_traces/certifier_piece.py"
 "benchmarks/network_traces/certifier_serve.py" = "verity/protocols/certifier/device/network_traces/certifier_serve.py"
-"benchmarks/network_traces/chain_record.py" = "verity/protocols/certifier/verifier/network_traces/chain_record.py"
-"benchmarks/network_traces/chain_record.sh" = "verity/protocols/certifier/verifier/network_traces/chain_record.sh"
-"benchmarks/network_traces/leak_bounds.py" = "verity/protocols/certifier/verifier/network_traces/leak_bounds.py"
 "benchmarks/network_traces/load_relay.py" = "verity/protocols/certifier/device/network_traces/load_relay.py"
 "benchmarks/network_traces/scan_period.py" = "verity/protocols/certifier/verifier/network_traces/scan_period.py"
-"benchmarks/network_traces/scan_period.sh" = "verity/protocols/certifier/verifier/network_traces/scan_period.sh"
 "benchmarks/network_traces/warden_chain.py" = "verity/protocols/certifier/verifier/network_traces/warden_chain.py"
 "benchmarks/network_traces/warden_serve.py" = "verity/protocols/certifier/device/network_traces/warden_serve.py"
 "benchmarks/network_traces/wipe_egress.py" = "verity/protocols/certifier/verifier/network_traces/wipe_egress.py"
-"benchmarks/network_traces/wipe_gate.sh" = "verity/protocols/certifier/verifier/network_traces/wipe_gate.sh"
 "verity/core/devices/certifier/" = "verity/protocols/certifier/device/"
 "verity/core/protocols/certifier/PROTOCOL.md" = "verity/protocols/certifier/verifier/PROTOCOL.md"
 "verity/core/protocols/certifier/README.md" = "verity/protocols/certifier/verifier/README.md"
@@ -123,10 +117,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
 "benchmarks.network_traces.block_certifier" = "verity.protocols.certifier.verifier.network_traces.block_certifier"
-"benchmarks.network_traces.certifier_piece" = "verity.protocols.certifier.device.network_traces.certifier_piece"
 "benchmarks.network_traces.certifier_serve" = "verity.protocols.certifier.device.network_traces.certifier_serve"
-"benchmarks.network_traces.chain_record" = "verity.protocols.certifier.verifier.network_traces.chain_record"
-"benchmarks.network_traces.leak_bounds" = "verity.protocols.certifier.verifier.network_traces.leak_bounds"
 "benchmarks.network_traces.load_relay" = "verity.protocols.certifier.device.network_traces.load_relay"
 "benchmarks.network_traces.scan_period" = "verity.protocols.certifier.verifier.network_traces.scan_period"
 "benchmarks.network_traces.warden_chain" = "verity.protocols.certifier.verifier.network_traces.warden_chain"

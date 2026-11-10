@@ -35,7 +35,7 @@ TRACKED = ["benchmarks/old/run.py", "tools/t.py", "verity/core/devices/__init__.
 
 @pytest.fixture(autouse=True)
 def no_rows_of_the_real_tree(monkeypatch):
-    for table, empty in (("EXCEPT", []), ("EXCEPT_MOVE", {}), ("KEEP", {}), ("NEW", {})):
+    for table, empty in (("EXCEPT", []), ("EXCEPT_MOVE", {}), ("KEEP", {}), ("NEW", {}), ("DROP", {})):
         monkeypatch.setattr(G, table, empty)
 
 
@@ -54,6 +54,13 @@ def test_a_file_goes_to_its_components_directory_under_the_name_it_has_today():
     assert dest["verity/core/devices/c/d.py"] == ("verity/protocols/pous/device/c/d.py", "pous", "pous")
     assert dest["benchmarks/old/run.py"] == ("archive/benchmarks/old/run.py", "archived", "archive")
     assert "tools/t.py" not in dest
+
+
+def test_a_file_or_a_component_named_in_keep_stays(monkeypatch):
+    monkeypatch.setattr(G, "KEEP", {"verity/ml/gates/a.py": "a file that stays", "pous": "a component that stays"})
+    dest, _ = plan()
+    assert "verity/ml/gates/a.py" not in dest and "verity/core/devices/c/d.py" not in dest
+    assert dest["verity/ml/circuits/ops/x.py"][0] == "verity/definitions/ops/x.py"
 
 
 def test_a_sidecar_goes_with_its_module_and_an_emptied_package_levels_init_stays():
