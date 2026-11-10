@@ -1774,6 +1774,12 @@
         "Security/Proofs/Accounting/Actual/Dampener.lean": "Security/Proofs/Accounting/Actual/Slowdown.lean",
         "Security/Proofs/InferenceOnly/Dampener.lean": "Security/Proofs/InferenceOnly/Slowdown.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/rho/": "benchmarks/slowdown/",
+        "benchmarks/rho/rho/": "benchmarks/slowdown/slowdown/"
+      }
     }
   ]
 }
