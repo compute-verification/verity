@@ -139,13 +139,14 @@ class Bound:
                 "caller's to state")
 
 
-def bound(c: float, k: float, n: float, *, N: float, O: float, size: float, beta_w: float = BF16,
+def bound(c: float, k: float, n: float | None = None, *, N: float, O: float, size: float, beta_w: float = BF16,
           beta_x: float | None = None, b: float = BF16, F: float = 1.0) -> Bound:
     """The bound at the policy `(c, k, n)` (blocks of at most `c` gates, each reading at most `k` fresh input bits and
     giving at most `n` output bits) on a circuit of `size` gates whose charged work is `N` MACs with `O` output wires:
-    the least number of blocks the count allows, and the slowdown `m c / |C|` they give. The statement reads no `n`:
-    a work's outputs enter through `O`. `N` and `O` are the caller's, the MACs of the work it charges and their output
-    wires: nothing here converts a count, by a kind's share of the products or by a word's width.
+    the least number of blocks the count allows, and the slowdown `m c / |C|` they give. The statement reads no `n`,
+    so a policy that states none gives the same bound: a work's outputs enter through `O`. `N` and `O` are the
+    caller's, the MACs of the work it charges and their output wires: nothing here converts a count, by a kind's share
+    of the products or by a word's width.
 
     * `beta_w`, bits a weight value costs under (H). Default `BF16`, a bf16 weight's width: the most (H) can hold at.
       A weight with a shorter code costs its code's bits.

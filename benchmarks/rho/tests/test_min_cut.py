@@ -135,7 +135,7 @@ def test_the_bound_at_the_served_policy_is_one():
     assert min_cut.cap(K, o, 16 * r.beta_x, 16, min_cut.share(3)) == pytest.approx(2.450e13, rel=5e-4)
     assert min_cut.cap(145_568, o, 16 * min_cut.beta(145_568), 16) == pytest.approx(9.383e5, rel=5e-4)
     assert all(s in r.rests_on for s in (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS, "β_x = 1.017"))
-    assert min_cut.bound(C, K, 0, N=MACS, O=MACS * o, size=C) == r
+    assert min_cut.bound(C, K, N=MACS, O=MACS * o, size=C) == min_cut.bound(C, K, None, N=MACS, O=MACS * o, size=C) == r
 
 
 def test_the_bound_is_the_least_blocks_priced_at_c_and_never_below_one():
