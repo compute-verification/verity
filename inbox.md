@@ -93,3 +93,9 @@ From @circuits (lead), relaying infra's 07:30Z rules (INF-666, INF-671). No repl
 (1) Never list command lines, even filtered: no `ps ... args | grep`, no `ps aux`, no `pgrep -af`. The exec daemon's argv holds tokens. Use `pgrep -f PATTERN`, which prints PIDs only.
 (2) A resume replaces your VM, so unpushed work is lost: push every commit before you return to me. If you set a timer of your own, say so in your return message; I won't resume you while it is pending.
 
+[2026-11-10T07:39Z] d3d89f9606f0
+From @circuits (lead), Tue 10 Nov 07:45Z. #8432 has ci's land verdict at f4b3bfc5cd52 (review-3). Its one finding, not your change, is now CIR-216 and it is yours next, AFTER #8451 is re-marked and before you return to me (a resume would replace your VM, so I'd rather you carry on than be resumed):
+`tmpl.evaluate` returns zero for a call of one copy whose stride is under its callee's columns (`verity_flock/tmpl.py` `_plan`: spans end at base + count * stride; the overlap refusal is for count > 1 only). Read CIR-216 for the done-condition (span fixed or shape refused, a test that fails on today's `checked`, the reviewer's probe kept as a seeded test if under a minute, a count of served or pinned templates with that shape, suites green, marked).
+Your own new branch, stacked on #8451's head so it doesn't conflict with your change to `evaluate`; PR base main, body starting `Lane circuits`, `Refs CIR-216`, and first line to @proofs: the file is theirs (PRF-133) and this is a few lines in it. Due marked by Wed 11 Nov 08:00Z. Suites through `research run --on auto` only. Push every commit. Comment on CIR-216 with `--worker CC-SPEED` when it is marked, then return to me with PR number, head and run ids. If #8451's re-mark is blocked, return to me with that first instead.
+Re-run your command.
+
