@@ -800,10 +800,10 @@ def spot_of(c: Circuit, doc: dict, order=None) -> dict | None:
     and outputs Python's own layout of it (`verity.ml.windows.interface.layout`, what `check_wires` reads): the order
     the record's, else `order` where one is given beside it. None where that layout has no row for a port, its leaves
     of two widths."""
-    try:
-        lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in c.templates}
-    except ValueError:
+    if any(len(ty.width_set()) != 1 for fn, _ in c.templates
+           for ty in (*(ty for _, ty in fn.signature()[0]), *ref.fields_of(fn.signature()[1]))):
         return None
+    lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in c.templates}
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
             "cuts": doc.get("cuts", {}), "wires": doc.get("wires"),
