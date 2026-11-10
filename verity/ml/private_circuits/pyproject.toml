@@ -4,4 +4,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["verity"]
+# Keyed on `verity/ml` and the modules every unit shares, not on all of `verity/`: `verity.ml` reaches `verity.core` only
+# where tests/test_boundaries.py's `ML_IMPORTS_CORE` says (Flock's `rec_*` builders, two other suites' tests), and a
+# test that goes there fails the read guard, which names the file to list.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verity/ml"]

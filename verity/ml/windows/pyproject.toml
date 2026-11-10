@@ -6,7 +6,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_interface.py"]
-inputs = ["verity", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/kernels"]
+# Keyed on `verity/ml` and the modules every unit shares, not on all of `verity/`: `verity.ml` reaches `verity.core` only
+# where tests/test_boundaries.py's `ML_IMPORTS_CORE` says (Flock's `rec_*` builders, two other suites' tests), and a
+# test that goes there fails the read guard, which names the file to list.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verity/ml"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
