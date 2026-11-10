@@ -31266,3 +31266,75 @@ For the 22 modules of the closure without `Firewall` and `Firewall.Honest`: **33
 - **No open PR edits one of the 17 modules that move.** Of the seven's packages, open PRs touch only locks, two `pyproject.toml` files and a README (#8495, #8556, #8559, #8511, #8414, #8048, #8623).
 
 **Next**: the base cut on `cursor/proofs-flockpkg-1539`, its first node build tonight; then the libraries and the test. Runs in flight: none.
+
+## WEIGHTSEC, Tue 10 Nov 19:05Z: PRF-506: #8512 and #8527 are ready to mark at their merges with `main`; #8400 passes after one regenerated record, named here and committed next; #8224 stops on its own `layers` (two forms, yours to pick); #8226 does not merge clean with `main`
+
+My bc id is `bc-2976c676-7fcc-527c-8901-cf86a911a623`; the issue is PRF-506. Each statement is marked [run], [read] or [guess]. Nothing is marked, opened or force-pushed; no `queue/…` commit and no `next` is under any head [run: `git merge-base --is-ancestor` of each head against the five `queue/*` refs at 18:04Z, before the pushes].
+
+**One line a PR.**
+
+| PR | New head | Records run (cpu-12, pool `proofs`) | Quick tier (`suites.py --changed e7b03e4a6c89 --quick`) | Verdict |
+|---|---|---|---|---|
+| #8512 | `a4916e0142374f08f7133e0e115867e0ea5f9b9d` | `r20261110-181309-fd8b`: pass, pass, pass; nothing regenerated | `r20261110-181647-2116`: 8 of 8 suites | **ready to mark at `a4916e014237`** |
+| #8527 | `fc7ab9c21cea896bc739a1c9de605eaed05c29a8` | `r20261110-181332-f38b`: pass, pass, pass | `r20261110-181649-6988`: 8 of 8 | **ready to mark at `fc7ab9c21cea`**, after #8512, whose new head it holds |
+| #8400 | `75f8f363745c99c4a083ffb2139158c36b888c94` | `r20261110-181246-ec75`: `Security/Proofs` pass, `Security` **regenerated**, `Security/Properties` pass | `r20261110-181541-6d59`: 8 of 8 | **not at this SHA**: one lock-only commit comes first (named below); its SHA and runs are in my next entry |
+| #8224 | `ee04d349d202819cb47c3127e240b93d77a5f728` | none stands: I cancelled `r20261110-181207-7681` after 16 min | `r20261110-181439-24cb`: 8 of 8 | **stopped**: `Security`'s records fail on #8224's own `layers`, not on the merge. Two forms below, yours to pick |
+| #8226 | branch untouched, `3a579391f981` | none: I cancelled `r20261110-181821-9df0` while it waited | none | **stopped** with #8224, and it does not merge clean with `main` (below) |
+
+All four records runs and all four quick tiers ran at the SHA in their row [run: each run's `job.json`]. The quick tier's eight suites: `verity/core/protocols/pous`, `benchmarks/rho`, `benchmarks/nci`, `verity-graph`, `repository`, `verity/core/protocols/pouw`, `verity/ml/circuits/ops`, `verity-pouw-benchmarks`.
+
+**`main` moved after the runs: `e7b03e4a6c89` to `5482988e3496` (seen at 19:02Z).** The four new heads were merged with `e7b03e4a6c89`. Each merges clean with `5482988e3496` [run: `git merge-tree --write-tree` with the drivers registered, rc 0 for all four], and the queue's row for each now reads "waiting: not marked ready" where #8400 and #8512 read "refused: conflicts with `main`" at 18:04Z [run]. I pushed no second merge. What the runs cover for the tree the queue will build:
+- The move changed four files the records run reads: `Security/Proofs/Flock/SpotFlock/EntriesAt.lean`, `FrameIsAt.lean`, `verity/core/service/spot/Spot/SecondStage.lean` and `Security/lean-audit.json` [run: `git diff --name-only`]. So the runs at the new heads are verdicts for the PR with `e7b03e4a6c89`, on `main`'s tooling.
+- For each of the four, the tree of (new head merged with `5482988e3496`) differs from its scratch branch's tree in exactly the 19 paths that #8378 and #8515 change, plus the lock's byte order (the two locks are equal as JSON values) [run]. Eight of the 19 are Lean tooling (`tools/verity/lean/{check,lean_audit,lean_changed,module_keys}.py` and their tests); no `.lean` file is among them. So the scratch runs are verdicts for the same Lean sources and the same lock values as the PR with today's `main`, on #8515's tooling.
+- Neither is a run of the PR with today's `main` on today's tooling. If you want one before the mark, say so: it is one warm records run per PR on a scratch merge of mine, about 35 minutes each [guess, from today's].
+
+**The regenerated record on #8400, named before I commit it.** One record: `guarantees/WeightSecurity.SecurityProofs.TheftServedTied/premises`. Its `domain` gains `WeightSecurity.Assumptions.HonestUseHard` and `WeightSecurity.Assumptions.Simulable`, and its `open` loses them. Why: #8224 files both premises as `domain` in the lock's top-level lists (decision 1, `5ea4217bb7`), and `TheftServedTied` landed on `main` after #8224 branched, so the drivers took its record from `main`, where both are still `open`. This is the only failure of `Security`'s first pass at `75f8f363745c` [run: the run's stdout line 1172, and "every failure of its records is a record difference"]. With the record `check.py --update` wrote, `Security` passes and `Security/Properties` passes [run]. So the check agrees that `TheftServedTied` rests on both as `domain`: **no claim to write up**.
+- The kept record is `lean-audit/record/Security/lean-audit.json` of `r20261110-181246-ec75`, sha256 `820951fa9a1bf41bfdb3f7c600a4293f0468c40331f6e9a1f51625af91d3c6eb`. It equals #8400's lock as JSON values apart from those two leaves; the top-level `assumptions`, `domain`, `open`, `layers`, `trust` and `deployed` are unchanged [run]. In bytes it also puts three entries in the check's order that `main`'s lock holds in another (`NetTiming.SecurityProofs.PooledLeakCarried`, `Verity.SecurityProofs.ServingBlockSum`, `Verity.SecurityProofs.RefineIncorrect`), same values: 37 diff lines in all [run].
+- No statement keyed in the lock changes. I commit exactly that file over `Security/lean-audit.json` on `cursor/proofs-cutlemma-6946`, as your step 3 says, and nothing else.
+- The scratch run `r20261110-163648-d3aa` asked for the same two leaves [run].
+
+**What stops #8224: its own `layers`, since before any merge.** The scratch run `r20261110-163617-ac46` ended `Security` failed with five failures, "its records fail on this build, not only on record differences, which take a person" [run]:
+1. `layers: Definitions.Assumptions.WeightSecurity imports Definitions.WeightSecurity.Assumptions, outside Definitions.Assumptions's layer`.
+2. `layers: Definitions.WeightSecurity.Guarantees imports Definitions.Assumptions.WeightSecurity, outside Definitions.WeightSecurity.Guarantees's layer`.
+3. `TheftFaulted` and `TheftFaultedHonest` now read definitions in `Definitions.Assumptions.WeightSecurity`.
+4. Thirteen guarantees' reads of `Definitions.WeightSecurity.Assumptions` changed (`FaultedUseHard` is gone from it).
+5. `TheftServedTied`'s premises record, the one above.
+
+Failures 1 to 4 are #8224's own. `5ea4217bb7` (9 Nov 17:34Z) moved `FaultedUseHard` into `Definitions/Assumptions/WeightSecurity.lean` after the PR's last records run (`r20261109-020458-8580`) and did not add the `layers` entries. The files and the lock's `layers` are the same blobs and values at the old head `360c939a9e72`, the scratch and the new head [read], and the tooling that differs between `main` and `034a` has no `layer` line [read]. So the run at `ee04d349d202` would end the same way, which is why I cancelled it [guess that it would; the inputs are read, the verdict is not run]. The fix exists on #8400: `ce64184557`, "Lean layers: the named assumptions read weight security's definitions and premises, and its guarantees read the named assumptions", seven lines of the lock's `layers`, with #8400's later records. At #8400's head neither `layers` failure appears [run: `ec75`].
+
+Changing `layers` on #8224 is not in my brief, so the two forms:
+- **(a) #8224 is not marked and lands inside #8400.** #8400 holds #8224's new head, and its lock passes after the one record above. By `queue.py`'s `_carried` [read], a PR that holds an unmarked PR's head carries its change when the owner is the same, and does not wait for it; the queue lists both under `proofs` [run]. #8224 then closes as landed with #8400. Nothing more is committed.
+- **(b) #8224 takes `ce64184557` and its records are regenerated at that head** (failures 3, 4 and 5 become the regenerated records), and it is marked on its own. #8400 and #8226 then merge that head again, so every head and patch-id above it moves once more.
+
+I'd take (a): it is the tree that already passes, and (b) moves three heads to land the same lines. I wait for your word and touch #8224 no further.
+
+**#8226 does not merge clean with `main`.** Your 17:58Z message has it clean. With the drivers registered, `git merge-tree --write-tree` of its head `3a579391f981` stops in three files against `e7b03e4a6c89` and against `5482988e3496` [run, again at 19:02Z]: `Security/Definitions/WeightSecurity/Assumptions.lean`, `Security/Definitions/WeightSecurity/Guarantees.lean` and `Security/Proofs/WeightSecurity.lean`. It is clean only against its own base, #8224's branch, because the stops are #8224's.
+- I left its branch alone. My scratch `cursor/proofs-cross-8226-7d2e` at `d759d47c0242c3239f6238db06209d4a33eb8c56` is its head merged with #8224's new head, a clean merge and a fast-forward of its branch on your word; it merges clean with `5482988e3496` [run].
+- It inherits #8224's `layers` failure (scratch run `r20261110-163650-7710`: the same five failures [run]).
+- Under form (a) it has to sit on #8400 instead. Against #8400's new head the scratch stops in one file, `Security/Proofs/WeightSecurity.lean` [run]. Its own change is `FaultedTwo.lean` and four lines of the proofs root, with no lock change [run]; whether `FaultedTwo.lean` elaborates against #8400's restated `TheftFaulted` is not checked [guess: it may not].
+
+**The five scratch runs you asked me to read.** None stands for a new head by your rule: `main` and `034a` differ in what the records run reads (the three `.lean` files and the lock above, and #8515's Lean tooling), so all were run again, except the two whose verdict is #8224's own.
+
+| PR | Scratch | Run | Verdict [run] |
+|---|---|---|---|
+| #8224 | `c6e50db7dcf0` | `r20261110-163617-ac46` | pass, **failed**, pass: the five failures above |
+| #8400 | `a4a92cd2d3a1` | `r20261110-163648-d3aa` | pass, regenerated, pass: `TheftServedTied`'s two leaves |
+| #8226 | `ae3c44da829b` | `r20261110-163650-7710` | pass, **failed**, pass: the same five |
+| #8512 | `a30e44b3ca22` | `r20261110-163652-99d6` | pass, pass, pass (99 min) |
+| #8527 | `9b4fc83a133f` | `r20261110-163653-bd9c` | pass, pass, pass (105 min) |
+
+**What I did on each PR's branch.**
+- #8224: `origin/main` merged into `360c939a9e72`. Two stops, closed as the scratch did: `Security/Definitions/WeightSecurity/Assumptions.lean` (the PR's `FaultBudget` and `patternCount`, then `main`'s `EgressTied` and `AdviceCovered`) and the doc text of `Security/Proofs/WeightSecurity.lean`.
+- #8400: #8224's new head merged into `9d9fe580337e`, clean. I merged through #8224 and not `origin/main` directly so that #8400 still holds #8224's head.
+- #8512: `origin/main` merged into `5eb93b2b015c`. One stop, the doc text of `Security/Proofs/WeightSecurity.lean`.
+- #8527: #8512's new head merged into `fcd9ed2685ab`, clean.
+- Each conflicted file is the scratch's, taken after showing `main` and `034a` hold the same blob for it; none needed anything that is not on `main` [run]. Each new tree differs from its scratch on exactly the 67 paths where `e7b03e4a6c89` differs from `034a` [run]. Each merged lock is the PR's own lock change over `main`'s [run].
+- CI-489 read before the pushes: no candidate held any of them and none was marked at its head [run, `research queue status` 18:04Z]. Pushed as fast-forwards.
+- Each PR's body has a section saying what the merge closed and how (`research queue edit`).
+- Each PR's own change has a new patch-id (#8224 `2b666c4e63df` to `f0c9f227606c`, #8400 `15312e42f162` to `01c1617a6df8`, #8512 `18a70709026e` to `55e2f145f7d2`, #8527 `12802a4f6fa0` to `b306471849a9`) [run], so no mark or review carries: each needs both again.
+
+**Smaller things.**
+- I launched the records runs with `--on vy-nebius-cpu-12 --pool proofs --as proofs`, as the scratch ones, and the quick tiers with `--on auto` (they ran on cpu-3, cpu-8 and cpu-11).
+- The two cancels are recorded as manual, `--by proofs`, with the reason.
+- The five old scratch branches stand as they were.
+- Note: `20261110T1832Z-checkpoint-weightsec`.
