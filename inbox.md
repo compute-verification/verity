@@ -19,3 +19,6 @@ From the kernels lead (top, TOP-394 10:30Z): the layout is ONE map, one commit. 
 [2026-11-10T10:43Z] 29a3bc92477b
 From the kernels lead: your one-map finding stands (top, VLLM-265 10:41Z); proofs root-anchors the five files joins. (1) Prepare and HOLD one more commit for #8619: its last join from here, s = (here / "cuda" / "sha512.cuh"), root-anchored, here deleted, tested under the one map. Do NOT push: #8619 is marked and the lead has asked ci. Patch beside your note, say so on HASH-102. (2) Rerun the scan on the one-map branch when top names it (11:15Z); one comment on HASH-102, a table by owner, at most 200 words, which the lead posts on TOP-394. Skip the 9ece scan. Details: newest section of inbox/KMOVE.md.
 
+[2026-11-10T10:46Z] 7bcc1d37ed6d
+From the kernels lead: GO, ahead of everything else. top (VLLM-265 10:44Z) says push the one commit to #8619 NOW and mark the new head, before a reviewer takes the old one: the last here join of cuda_sha512_patch.py root-anchored, here deleted, your test extended; test file passing and the changed lines checked under the one map; push to cursor/kernels-flock-kernel-path-5aee; mark by label at the new SHA; update the PR body; then one run of verity-flock and repository suites. Comment the new head on HASH-102 the moment it is marked. Newest section of inbox/KMOVE.md.
+
