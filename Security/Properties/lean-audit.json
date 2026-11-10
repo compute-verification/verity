@@ -2304,7 +2304,10 @@
  },
  "trees": {
   "except": {
-   "Proofs.Properties.Verity.Sampled": "the deployed remote soundness theorem (remote_soundness_deployedReady) states SPOT's target at the deployed vocabulary (`Instance.vocab`) over the live session Flock's V5 chain runs (`Live`, `Constructions`) and the deployment's inputs (`Instance.SessionsReady`, `RegisteredFiles`, `SessionRegistered`, `LogOpensRecorded`), which read Flock's bridge in Proofs; excepted until that session's vocabulary moves to Definitions/Verity"
+   "Proofs.Properties.Verity.Sampled": "the deployed remote soundness theorem (remote_soundness_deployedReady) and its honest witness state SPOT's target at the deployed vocabulary (`Instance.vocab`) over the live session (`Live`, `Constructions`) and the deployment's inputs (`Instance.SessionsReady`, `RegisteredFiles`, `SessionRegistered`, `LogOpensRecorded`), defined in Proofs over Flock's V5 chain; excepted until that vocabulary moves to Definitions/Verity",
+   "Proofs.Properties.Verity.SampledCoins": "the live session's coins (`coinBytesEquiv`), which the deployed remote soundness theorem's session (`Live`) reads; excepted with `Proofs.Properties.Verity.Sampled`",
+   "Proofs.Flock": "the deployed remote soundness theorem's session (`Live`) is Flock's V5 session at the deployed device (its statement, bridge, leaf maps and decoders); Flock is excepted until its spec is extracted, as in Security's lock",
+   "Proofs.Core": "the deployed remote soundness theorem's session reads the game's tapes and two-run coins (`Verity.Game.Tape`, `TwoRun`, `InterleaveBridge`), still in Proofs; excepted until they move to Definitions/Core"
   }
  },
  "guarantees": {
