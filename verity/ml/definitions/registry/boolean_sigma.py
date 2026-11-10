@@ -17,20 +17,21 @@ its word).
     MoeAlignRanks_v2{E,P,BM}, MoeAlignBlocks_v2{P,BM} and the align steps they Call, each _v2
     RMSNormFusedCudaVector8_v4{N,EPS,BLOCK} and the parts its word body batches: RMSNormPairSumCuda_v2,
     RMSNormSumStepCuda_v2, RMSNormSumInOrderCuda_v2{K}   (σ of the served CUDA fused norm, v3)
+    DotTf32_v2{K}, GemmTf32_v2{K,N}   (σ of the training step's TF32 GEMM on sm_120, `cublas_bf16`'s v1)
 
 Each is the served row's word Definition with no Boolean version of its own whose body's callees all have one: the collectives
 and plumbing of the TP rows, the GEMM of the rows on the Ampere accepted kinds (no declared target, the registered-values serve
 among them), DeepSeek-V4's mHC layer and MoE align, and the served-compiled rows' Inductor kernels, FA3's split decode and the MoE
-router and expert GEMMs.  A σ body is built from the Boolean versions registered when it is built, so the
+router and expert GEMMs, and the training step's TF32 GEMM.  A σ body is built from the Boolean versions registered when it is built, so the
 word body and its callees' Boolean versions fix it; circuit-check pins each one's lowering counts.
 """
 from __future__ import annotations
 
 from verity.ml.definitions.boolean import sigma_lift
-from verity.ml.definitions.registry import b1, b1_tp2, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
+from verity.ml.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
 
-__all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "EmbeddingShard",
-           "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
+__all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "DotTf32", "EmbeddingShard",
+           "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "GemmTf32", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
            "InductorAddRMSNorm", "InductorQKNormRoPE", "InductorQKNormRoPEHead", "InductorRMSNorm", "InductorRoPE", "InductorRoPEHead",
            "InductorSiluMul", "InductorSiluMulElem", "MhcFusedPostPre", "MoeAlignBefore", "MoeAlignBelow", "MoeAlignBlockOf",
            "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank", "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart",
@@ -85,3 +86,6 @@ RMSNormPairSumCuda = sigma_lift(CR.RMSNormPairSumCuda, 2)
 RMSNormSumStepCuda = sigma_lift(CR.RMSNormSumStepCuda, 2)
 RMSNormSumInOrderCuda = sigma_lift(CR.RMSNormSumInOrderCuda, 2)
 RMSNormFusedCudaVector8 = sigma_lift(CR.RMSNormFusedCudaVector8, 4)
+
+DotTf32 = sigma_lift(CB.DotTf32, 2)
+GemmTf32 = sigma_lift(CB.GemmTf32, 2)
