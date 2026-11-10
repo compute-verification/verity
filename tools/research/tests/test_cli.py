@@ -409,8 +409,8 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     (repo / "tools/verity/check").mkdir(parents=True)
     (repo / "tools/verity/check/suites.py").write_text(
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\nif rev == 'broken':\n    sys.exit(2)\n"
-        "hit = 'none' if rev == 'nothing' else 'verity-vllm, verity/core'\n"
-        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else 2}: {hit}')\n")
+        "hit = {'nothing': 'none', 'core': 'verity/core'}.get(rev, 'verity-vllm, verity/core')\n"
+        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else hit.count(\",\") + 1}: {hit}')\n")
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
@@ -423,12 +423,14 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
             # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync
-            ([], [*suites, "--quick"], (None, 72, 19140)),       # in whole minutes; 2 x 4 workers x 9 GB beside serial suites
+            ([], [*suites, "--quick"], (None, 64, 19140)),       # in whole minutes; 2 x 4 workers x vllm's 8 GB beside serial suites
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
-            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 128, 17040)),
             # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
             (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
-                                              "--changed main --quick"], (8, 144, 17040)),
+                                              "--changed main --quick"], (8, 128, 17040)),
+            # a change touching only a suite that declares no worker_gb: 2 x 8 workers x suites.py's TEST_PROCESS_GB, 4.5
+            (["--cpus", "8"], [*suites, "--changed", "core", "--quick"], (8, 72, None)),
             ([], [*suites, "--changed=nothing"], (None, None, None)),
             ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
