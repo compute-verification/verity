@@ -15,19 +15,10 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-<<<<<<< 99c8914848:verity/core/service/sampled_proofs/tests/test_challenger_difftest.py
-or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. A lane's days
-(`LEDGER`, `DAY`: `declared_day`) are a declaration in the ledger before the opens of each day it names, then a
-declaration malformed, v1 or in a session, a day declared twice, an open on a day its lane hasn't declared or on no day,
-and the day of a window no session opens, a v1 open's or a dayless one's. The pins log's
-||||||| merged common ancestors:verity/core/service/sampled_proofs/tests/test_challenger_difftest.py
-or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. The pins log's
-=======
 or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. A lane's days (`LEDGER`,
 `DAY`: `declared_day`) are a declaration in the ledger before the opens of each day it names, then a declaration
 malformed, v1 or in a session, a day declared twice, an open on a day its lane hasn't declared or on no day, and the day
 of a window no session opens, a v1 open's or a dayless one's. The pins log's
->>>>>>> 7af4d24fca3e:verity/core/service/spot/tests/test_challenger_difftest.py
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `Spot.ChallengerCoins`) are

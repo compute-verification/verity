@@ -6,6 +6,7 @@ public import Spot.Bits
 public import Spot.Partition
 public import Spot.PartitionRef
 public import Spot.Draw
+public import Spot.LinkPoints
 public import Spot.Supplied
 public import Spot.Registration
 public import Spot.Produced
@@ -14,11 +15,13 @@ public import Spot.PlanCheck
 public import Spot.PyJson
 public import Spot.Record
 public import Spot.OneStage
+public import Spot.PublicUnits
 public import Spot.OneStageZk
 public import Spot.Rate
 public import Spot.HiddenDraw
 public import Spot.Select
 public import Spot.Slots
+public import Spot.PopOrder
 public import Spot.FilePart
 public import Spot.Service
 public import Spot.SecondStage

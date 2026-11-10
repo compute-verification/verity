@@ -451,7 +451,6 @@
     {"file": "Security/Proofs/Accounting/Lemmas/TS.lean", "count": 21},
     {"file": "Security/Proofs/Accounting/Lemmas/TS/Fixed.lean", "count": 2},
     {"file": "Security/Proofs/Accounting/Lemmas/TS/Stages.lean", "count": 1},
-    {"file": "Security/Proofs/Accounting/MemoryShare.lean", "count": 1},
     {"file": "Security/Proofs/Accounting/PerRunPriced.lean", "count": 1},
     {"file": "Security/Proofs/Accounting/PouwWork.lean", "count": 1},
     {"file": "Security/Proofs/Accounting/RateAudit.lean", "count": 8},
