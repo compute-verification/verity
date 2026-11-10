@@ -93,6 +93,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -102,9 +103,18 @@ _VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.
 for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
+from verity_config.settings import SHARED  # noqa: E402
+
 import k32  # noqa: E402
 import model5  # noqa: E402
-from verity_config.settings import SHARED  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from multiprocessing.pool import Pool
+
+    from numpy.typing import ArrayLike
+
+    from verity.ml.circuits.silicon.models import BlockScaledAlignAdd
 
 MAX_TILES_PER_CALL = 1 << 14
 
@@ -255,7 +265,7 @@ def sass_check(so: Path) -> dict:
 
 
 class Probe:
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = ctypes.CDLL(str(so))
         P = ctypes.c_void_p
         self.tcgen05 = hasattr(self.lib, "tcgen05_tiles")
@@ -298,7 +308,8 @@ class Probe:
         self.lib.set_kernel_launch(1 if on else 0)
         return int(self.lib.d_poison_byte())
 
-    def tcgen05_tiles(self, instr: str, A, Bt, SFA, SFB, C, steps: int = 1, force_tmem: bool = False) -> np.ndarray:
+    def tcgen05_tiles(self, instr: str, A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C: np.ndarray,
+                      steps: int = 1, force_tmem: bool = False) -> np.ndarray:
         """sm_100 backend: one 128x8x(64 steps) ``tcgen05.mma`` chain per tile.  ``A`` (n,16,64 steps), ``Bt`` (n,8,64 steps),
         ``SFA`` (n,16,nblk steps), ``SFB`` (n,8,nblk steps), ``C`` (n,16,8) -> ``D`` (n,16,8).  The accumulator path per tile:
         enable_input_d = 0 when the tile's C is all +0 bits (unless ``force_tmem``), else 1 with C preloaded into TMEM."""
@@ -357,7 +368,8 @@ class Probe:
             return None
         return dict(zip(q.split(","), (s.strip() for s in smi.stdout.strip().splitlines()[0].split(","))))
 
-    def rows(self, instr: str, A, Bt, C, SFA=None, SFB=None, steps: int = 1) -> np.ndarray:
+    def rows(self, instr: str, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, SFA: np.ndarray | None = None,
+             SFB: np.ndarray | None = None, steps: int = 1) -> np.ndarray:
         """The generic kernel: ``steps`` dependent MMAs per tile with D kept in registers.  ``A`` (n,16,K steps) / ``Bt`` (n,8,K steps)
         element codes (the K=32 rows' 8-bit containers are formed here), ``SFA`` (n,16,nblk steps) / ``SFB`` (n,8,nblk steps)."""
         n, kind, k, nblk = A.shape[0], ROW_KIND[instr], K_OF[instr], NBLK[instr]
@@ -384,7 +396,8 @@ class Probe:
             D[s:e] = d
         return D
 
-    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None, steps: int = 1, **tcgen05_kw) -> np.ndarray:
+    def tiles(self, instr: str, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, SFA: np.ndarray | None = None,
+              SFB: np.ndarray | None = None, steps: int = 1, **tcgen05_kw: bool) -> np.ndarray:
         """One MMA per tile.  ``A`` (n,16,K) / ``Bt`` (n,8,K) codes (u8; bf16: u16 words), ``SFA`` (n,16,nblk) / ``SFB`` (n,8,nblk) u8,
         ``C`` (n,16,8) FP32 words -> ``D`` (n,16,8).  ``steps`` > 1: an in-register chain of that many MMAs (generic kernel)."""
         if instr in TCGEN05_KIND:
@@ -422,11 +435,11 @@ class Probe:
 # --- encodings ---------------------------------------------------------------------------------------------------------------------
 
 
-def f32_bits(x) -> np.ndarray:
+def f32_bits(x: ArrayLike) -> np.ndarray:
     return np.asarray(x, dtype=np.float32).view(np.uint32)
 
 
-def random_f32_bits(rng, shape, exp_lo=1, exp_hi=254) -> np.ndarray:
+def random_f32_bits(rng: np.random.Generator, shape: tuple[int, ...], exp_lo: int = 1, exp_hi: int = 254) -> np.ndarray:
     n = int(np.prod(shape))
     e = rng.integers(exp_lo, exp_hi + 1, size=n).astype(np.uint32)
     m = rng.integers(0, 1 << 23, size=n).astype(np.uint32)
@@ -450,7 +463,8 @@ def to_bf16_bits(x: np.ndarray) -> np.ndarray:
     return ((u + 0x7FFF + lsb) >> 16).astype(np.uint16)
 
 
-def random_bf16_bits(rng, shape, exp_lo=1, exp_hi=254) -> np.ndarray:
+def random_bf16_bits(rng: np.random.Generator, shape: tuple[int, ...], exp_lo: int = 1,
+                     exp_hi: int = 254) -> np.ndarray:
     n = int(np.prod(shape))
     e = rng.integers(exp_lo, exp_hi + 1, size=n).astype(np.uint16)
     m = rng.integers(0, 128, size=n).astype(np.uint16)
@@ -476,7 +490,8 @@ def _layout_fail(probe: Probe, instr: str, label: str, want: np.ndarray, got: np
     raise RuntimeError(f"layout check ({label}) failed for {instr}: {bad}/{want.size} elements differ; first: {ex}")
 
 
-def _exact_operands(rng, instr: str, n: int, steps: int):
+def _exact_operands(rng: np.random.Generator, instr: str, n: int,
+                    steps: int) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray, np.ndarray]:
     """Exact small-integer operands of ``steps`` chained k-blocks and C + A.B as FP32 words (every partial sum exact in FP32)."""
     k, nblk = K_OF[instr], NBLK[instr]
     fa, fb = k32.ROWS[instr][:2] if instr in k32.ROWS else ("e2m1", "e2m1")
@@ -576,25 +591,26 @@ def layout_check(probe: Probe, instr: str) -> str:
 # --- families ------------------------------------------------------------------------------------------------------------------------
 
 
-def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
+def families_nvf4(rng: np.random.Generator, n_random: int, scale_kind: str,
+                  fixed_mult: int = 1) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     """Yield (name, A (n,16,64) codes, Bt (n,8,64), SFA (n,16,nblk), SFB (n,8,nblk), C (n,16,8)).  ``fixed_mult`` multiplies the
     gated families of fixed size (``signed_zero``, ``signed_zero_matrix``, ``anchor_participation``); 1 keeps every earlier stream."""
     k = 64
     nblk = 4 if scale_kind == "ue4m3" else 2
 
-    def codes(shape):
+    def codes(shape: int | tuple[int, ...]) -> np.ndarray:
         return rng.integers(0, 16, shape).astype(np.uint8)
 
-    def scales(shape, lo=None, hi=None):
+    def scales(shape: int | tuple[int, ...], lo: int | None = None, hi: int | None = None) -> np.ndarray:
         if scale_kind == "ue4m3":
             return UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), shape)]
         lo, hi = (107, 148) if lo is None else (lo, hi)
         return rng.integers(lo, hi, shape).astype(np.uint8)  # moderate E8M0 exponents (autoproof's random_scale), 0xFF NaN excluded
 
-    def acc_random(n, lo=-30, hi=40):
+    def acc_random(n: int, lo: int = -30, hi: int = 40) -> np.ndarray:
         return f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
@@ -709,7 +725,8 @@ def _scale_value(codes: np.ndarray, scale_kind: str) -> np.ndarray:
     return np.exp2((c - 127).astype(np.float64))
 
 
-def _signed_pow2_acc(rng, shape, e_lo: int, e_hi: int, exact_frac: float = 0.5) -> np.ndarray:
+def _signed_pow2_acc(rng: np.random.Generator, shape: int | tuple[int, ...], e_lo: int, e_hi: int,
+                     exact_frac: float = 0.5) -> np.ndarray:
     """FP32 words +-(1.f) 2^e, e uniform in [e_lo, e_hi], f = 0 with probability ``exact_frac`` else uniform 23 bits."""
     n = int(np.prod(shape))
     e = rng.integers(e_lo, e_hi + 1, n) + 127
@@ -719,20 +736,21 @@ def _signed_pow2_acc(rng, shape, e_lo: int, e_hi: int, exact_frac: float = 0.5) 
     return ((s << 31) | (e << 23) | f).reshape(shape)
 
 
-def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
+def families_fp4_re(rng: np.random.Generator, n_random: int, scale_kind: str,
+                    fixed_mult: int = 1) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     """The fp4-re families, both scale kinds: yield (name, A, Bt, SFA, SFB, C) like ``families_nvf4``."""
     k, nblk = 64, (4 if scale_kind == "ue4m3" else 2)
     gpb = 4 // nblk  # groups (of 16) per scale block
     ue4 = scale_kind == "ue4m3"
 
-    def codes(shape):
+    def codes(shape: int | tuple[int, ...]) -> np.ndarray:
         return rng.integers(0, 16, shape).astype(np.uint8)
 
-    def nz_codes(shape):
+    def nz_codes(shape: int | tuple[int, ...]) -> np.ndarray:
         c = rng.integers(1, 16, shape)
         return np.where(c == 8, 1, c).astype(np.uint8)  # never a zero (0x0 / 0x8)
 
-    def scales(shape, lo=None, hi=None):
+    def scales(shape: int | tuple[int, ...], lo: int | None = None, hi: int | None = None) -> np.ndarray:
         if ue4:
             if lo is None:
                 return UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), shape)]
@@ -740,10 +758,10 @@ def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
         lo, hi = (100, 150) if lo is None else (lo, hi)
         return rng.integers(lo, hi, shape).astype(np.uint8)
 
-    def pm_zero(shape):
+    def pm_zero(shape: int | tuple[int, ...]) -> np.ndarray:
         return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
@@ -915,7 +933,7 @@ _TOP_ACC = np.array([0x7F7FFFFF, 0xFF7FFFFF, 0x7F000000, 0xFF000000, 0x7F400000,
                      0x00000000], np.uint32)
 
 
-def families_mxf4_edges(rng):
+def families_mxf4_edges(rng: np.random.Generator) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     """Record-only (UE8M0, two blocks of 32): what a total mxf4 step decides and no finite-domain family reaches.  Yield
     (name, A, Bt, SFA, SFB, C) like ``families_nvf4``.
 
@@ -930,13 +948,13 @@ def families_mxf4_edges(rng):
     cancellation of overflowing blocks, and moderate products."""
     k, nblk = 64, 2
 
-    def nz(shape, lo=1):
+    def nz(shape: int | tuple[int, ...], lo: int = 1) -> np.ndarray:
         return (rng.integers(lo, 8, shape) | (rng.integers(0, 2, shape) << 3)).astype(np.uint8)
 
-    def neg(c):
+    def neg(c: np.ndarray) -> np.ndarray:
         return np.where(c & 7, c ^ 8, c).astype(np.uint8)
 
-    def acc_from(pool, n, zero_tiles=None):
+    def acc_from(pool: np.ndarray, n: int, zero_tiles: np.ndarray | None = None) -> np.ndarray:
         acc = pool[rng.integers(0, len(pool), (n, 16, 8))]
         if zero_tiles is not None:
             acc[zero_tiles] = 0
@@ -1026,7 +1044,8 @@ _E2M1_DOUBLE = np.array([0, 2, 4, 5, 6, 7, 0, 0], np.uint8)
 TWIN_OFFSETS = (27, 28, 29)
 
 
-def scale_split_twins(rng, n: int, scale_kind: str):
+def scale_split_twins(rng: np.random.Generator, n: int,
+                      scale_kind: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """The Pipeline-fit discriminator: tile ``2t + 1`` is tile ``2t`` with every A nibble doubled and every A scale halved.
 
     Every scaled product is the same in both, so any model that reads only the exact products and the accumulator (every
@@ -1065,7 +1084,7 @@ def scale_split_twins(rng, n: int, scale_kind: str):
     off = np.array(TWIN_OFFSETS)[np.arange(h) % len(TWIN_OFFSETS)][:, None, None]
     acc = ((rng.integers(0, 2, (h, 16, 8)).astype(np.uint32) << 31) | ((x_max - off + 127).astype(np.uint32) << 23)).astype(np.uint32)
 
-    def twin(u, v):
+    def twin(u: np.ndarray, v: np.ndarray) -> np.ndarray:
         out = np.empty((2 * h, *u.shape[1:]), u.dtype)
         out[0::2], out[1::2] = u, v
         return out
@@ -1078,7 +1097,8 @@ def scale_split_twins(rng, n: int, scale_kind: str):
 BIT7_PINNED = (0x80, 0xB8, 0xFF)
 
 
-def scale_bit7_twins(rng, n: int):
+def scale_bit7_twins(rng: np.random.Generator,
+                     n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Tile ``2t`` has bit 7 (the PTX ISA's padding bit, which sm_120 and the pinned model ignore) set on about half its UE4M3
     scale bytes, the ``BIT7_PINNED`` bytes on block 0 of A's and B's rows 0-2; tile ``2t + 1`` is the same tile with every byte's
     low 7 bits.  Equal words across every pair are what a scale decoder that ignores bit 7 produces."""
@@ -1094,7 +1114,7 @@ def scale_bit7_twins(rng, n: int):
         lo_a[:, r, 0] = lo_b[:, r, 0] = byte & 0x7F
     acc = f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-10, 10, (n, 16, 8)))).astype(np.float32))
 
-    def twin(x1, x2):
+    def twin(x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
         out = np.empty((2 * n,) + x1.shape[1:], x1.dtype)
         out[0::2], out[1::2] = x1, x2
         return out
@@ -1102,7 +1122,8 @@ def scale_bit7_twins(rng, n: int):
     return twin(A, A), twin(Bt, Bt), twin(hi_a, lo_a), twin(hi_b, lo_b), twin(acc, acc)
 
 
-def bit7_summary(D, SFA, SFB, model, err) -> dict:
+def bit7_summary(D: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, model: np.ndarray | None,
+                 err: np.ndarray | None) -> dict:
     """``scale_bit7``: words where a pair's tiles differ on the device (none: the hardware decodes a UE4M3 byte from its low 7
     bits), and the low-7-bit tiles' mismatches against the pinned model outside its domain errors (the NaN byte 0x7F)."""
     differ = D[0::2] != D[1::2]
@@ -1124,7 +1145,7 @@ def bit7_summary(D, SFA, SFB, model, err) -> dict:
     return rec
 
 
-def twin_summary(D, models: dict) -> dict:
+def twin_summary(D: np.ndarray, models: dict) -> dict:
     """Words where the twins of ``scale_split_twins`` differ, by accumulator offset, on the device and under each model.
 
     A difference on the device is a pair of inputs with the same exact products and accumulator but different words, so no
@@ -1132,7 +1153,7 @@ def twin_summary(D, models: dict) -> dict:
 
     off = np.array(TWIN_OFFSETS)[np.arange(D.shape[0] // 2) % len(TWIN_OFFSETS)]
 
-    def differ(words):
+    def differ(words: np.ndarray) -> dict[str, int]:
         d = words[0::2] != words[1::2]
         return {f"off{o}": int(d[off == o].sum()) for o in TWIN_OFFSETS}
 
@@ -1142,9 +1163,10 @@ def twin_summary(D, models: dict) -> dict:
             "no_product_value_model_fits": any(hw.values())}
 
 
-def families_bf16(rng, n_random: int):
+def families_bf16(rng: np.random.Generator,
+                  n_random: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray]]:
     k = 16
-    def cast(x):
+    def cast(x: np.ndarray) -> np.ndarray:
         return to_bf16_bits(x.astype(np.float32))
     n = n_random
     yield "randn_random_acc", cast(rng.standard_normal((n, 16, k))), cast(rng.standard_normal((n, 8, k))), None, None, \
@@ -1191,7 +1213,9 @@ def verity_models(instr: str) -> dict:
     return {}
 
 
-def model_words(model, A, Bt, SFA, SFB, C, k_mma: int, nblk: int) -> tuple[np.ndarray, np.ndarray]:
+def model_words(model: BlockScaledAlignAdd | k32.GroupSumCandidate, A: np.ndarray, Bt: np.ndarray,
+                SFA: np.ndarray | None, SFB: np.ndarray | None, C: np.ndarray, k_mma: int,
+                nblk: int) -> tuple[np.ndarray, np.ndarray]:
     """One model's word per element, stepped once per k-block with D fed back as C: (D (n,16,8), domain-error mask)."""
     n = A.shape[0]
     steps = A.shape[2] // k_mma
@@ -1222,7 +1246,7 @@ class FakeProbe:
 
     tcgen05 = False
 
-    def __init__(self, instr: str, model_name: str):
+    def __init__(self, instr: str, model_name: str) -> None:
         models = verity_models(instr)
         if model_name not in models:
             raise SystemExit(f"--fake-silicon: {model_name!r} is not a model of {instr} ({sorted(models)})")
@@ -1234,16 +1258,17 @@ class FakeProbe:
                 "gpu_uuid": "GPU-fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES, "hostname": platform.node(),
                 "has_mxf4": True, "backend": "fake"}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
-    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None, steps: int = 1, **_kw) -> np.ndarray:
+    def tiles(self, instr: str, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, SFA: np.ndarray | None = None,
+              SFB: np.ndarray | None = None, steps: int = 1, **_kw: bool) -> np.ndarray:
         D, err = model_words(self.model, np.asarray(A), np.asarray(Bt), SFA, SFB, np.asarray(C, np.uint32), K_OF[instr], NBLK[instr])
         D[err] = 0x7FFFFFFF
         return D
 
 
-def _init(instr: str, group: int):
+def _init(instr: str, group: int) -> None:
     _CTX["instr"] = instr
     _CTX["group"] = group
     try:
@@ -1257,7 +1282,8 @@ def _init(instr: str, group: int):
         _CTX["init_error"] = repr(e)
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray],
+                ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     """Every model's word per element of the chunk: ({model: D (n,16,8)}, {model: domain-error mask})."""
     if "init_error" in _CTX:
         raise RuntimeError(f"model worker failed to initialize: {_CTX['init_error']}")
@@ -1305,7 +1331,8 @@ def _eval_chunk(args):
     return outs, errs
 
 
-def model_eval(pool, A, Bt, SFA, SFB, C, procs):
+def model_eval(pool: Pool, A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray | None, SFB: np.ndarray | None, C: np.ndarray,
+               procs: int) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     n = A.shape[0]
     chunks = max(1, min(n // 16 + 1, procs * 8))
     idx = np.array_split(np.arange(n), chunks)
@@ -1354,7 +1381,8 @@ def slim_record(rec: dict) -> dict:
     return out
 
 
-def hexrec(acc, a, b, d, sfa=None, sfb=None, bf16=False, widths=(1, 1)) -> dict:
+def hexrec(acc: int | np.integer, a: np.ndarray, b: np.ndarray, d: int | np.integer, sfa: np.ndarray | None = None,
+           sfb: np.ndarray | None = None, bf16: bool = False, widths: tuple[int, int] = (1, 1)) -> dict:
     wa, wb = (4, 4) if bf16 else widths
     rec = {"acc": f"{int(acc):08x}", "a": "".join(f"{int(x):0{wa}x}" for x in a), "b": "".join(f"{int(x):0{wb}x}" for x in b), "d": f"{int(d):08x}"}
     if sfa is not None:

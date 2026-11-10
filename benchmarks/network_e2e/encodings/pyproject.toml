@@ -1,8 +1,8 @@
 # The advice's encodings (network certification for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
 # CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
-# the replay's block pool (`replay._KV`), and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v2's pool
-# calls against `_KV` over whole traces; `arith_vectors.py`: the certifier's arithmetic
+# the replay's block pool (`replay.BlockPool`), and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v2's pool
+# calls against `BlockPool` over whole traces; `arith_vectors.py`: the certifier's arithmetic
 # encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own scheduler, which the tests read
 # as fixtures (it needs vLLM). Those fixtures (`tests/fixtures/`) and the certifier's vectors these modules write are
 # fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the suites that read them; one a module
@@ -31,4 +31,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/serve_admit.py", "integrations/vllm/verity_vllm/engine/__init__.py",
-          "integrations/vllm/verity_vllm/engine/hooks.py"]
+          "integrations/vllm/verity_vllm/engine/hooks.py",
+          # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
+          # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
+          "integrations/vllm/verity_vllm/pipeline/advice_code"]
