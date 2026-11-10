@@ -69,6 +69,7 @@ ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
+    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "tools/research/src/research/store/moves.json": 320 * 1024,   # STAGING ONLY: the layout's entry takes it past BLOB_LIMIT
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,

@@ -45,7 +45,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",
           "verity/composite/verifier/onsite", "verity/composite/verifier/remote", "verity/flock/verifier/interface",
           "verity/protocols/pouw/verifier", "verity/spot",
-          "verity/protocols", "verity/protocols/certifier",
+          "verity/protocols/inference_only/verifier/nci", "verity/protocols/certifier",
           "verity/protocols/pous", "verity/protocols/poub/verifier",
           "verity/protocols/pous/device/lean", "verity/commitments/attest/lean",
           "verity/spot/verifier/lean", "verity/spot/verifier/recursive", "verity/flock/verifier",
