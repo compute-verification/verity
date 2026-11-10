@@ -1170,6 +1170,18 @@
   "Properties.Spot.wiresAcyclic": {
    "honest": ["Properties.Spot.wiresAcyclic_honest"],
    "nontrivial": "Properties.Spot.wiresAcyclic_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsCircuitHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsStateAnchored": {
+   "honest": ["Properties.NetworkPeriod.rowsStateAnchored_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStateAnchored_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsStateHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStateHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1433,10 +1445,6 @@
   "Properties.NetworkPeriod.rowsStateTied": {
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "49d11a4dc9c098650eded0616de009de0659264effc14bccd1569b2442c1390f"
-  },
-  "Properties.NetworkPeriod.rowsTiedSampled": {
-   "type_hash": "42b4689990c88250db3d83f31bafc5da246a077a615127495f52158eecaa5b54",
-   "unfolded_hash": "0bd09e652d27289cca3f2ae9d0fcfe22f623eb3e755f548c28dbfb1c7da98930"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "type_hash": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
@@ -5430,6 +5438,15 @@
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d",
    "unfolded_hash": "0ac812ff7d1b70761abf83cdd7cbcc3a446a9d9a67fa5409c7d8752128a954e5"
   },
+  "Properties.NetworkPeriod.rowsCircuitHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
@@ -5456,6 +5473,24 @@
    "type_hash": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
    "unfolded_hash": "75bc70281c52fd0149951468d191dfb340a0080cae7f2a6c9aaf11e753955395"
   },
+  "Properties.NetworkPeriod.rowsStateAnchored": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateAnchored_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsStateTied": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsStateTied : Properties.NetworkPeriod.RowsStateTied"],
@@ -5468,19 +5503,6 @@
    },
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
    "unfolded_hash": "49d11a4dc9c098650eded0616de009de0659264effc14bccd1569b2442c1390f"
-  },
-  "Properties.NetworkPeriod.rowsTiedSampled": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsTiedSampled : Properties.NetworkPeriod.RowsTiedSampled"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "42b4689990c88250db3d83f31bafc5da246a077a615127495f52158eecaa5b54",
-   "unfolded_hash": "0bd09e652d27289cca3f2ae9d0fcfe22f623eb3e755f548c28dbfb1c7da98930"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -11075,7 +11097,15 @@
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    },
-   "Properties.NetworkPeriod.rowsTiedSampled": {
+   "Properties.NetworkPeriod.rowsCircuitHeld": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsStateAnchored": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsStateHeld": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
