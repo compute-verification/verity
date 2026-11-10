@@ -32,7 +32,8 @@ paths = []
 # package's fetched dependencies (`lean_audit.deps_key`), so a path in one written shorter would fetch Mathlib again.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/lake-manifest.json", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
-           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean"]
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean",
+           "tools/verity/lean/moved.py", "tools/verity/lean/tests/test_moved.py"]
 # Rewritten though a pattern above matches: the pins that record a file's digest under its path, whose paths follow the
 # move while every digest stays (the run refuses a digest that would change).
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",

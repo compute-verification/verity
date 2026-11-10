@@ -3,11 +3,19 @@
 # that has none), its dependencies (the pinned bundle from the store when the repository pins one, else
 # `lake-manifest.json` through lake), Mathlib's prebuilt oleans (`lake exe cache get`) when Mathlib is among them, and
 # main's cached build of the package itself (`cache.py get`, every file checked against its sha256). Idempotent.
-# `LEAN_CACHE=off` skips the build cache, as the audit does.
+# `LEAN_CACHE=off` skips the build cache, as the audit does. A PACKAGE_DIR that is no directory here is taken through
+# the recorded layout moves (`moved.py`: a path the package had in an earlier layout is the package's path now), with a
+# line saying so: the Cloud Agent environment's install command names a path only Daniel can change, and a move must not
+# fail its builds.
 #   bash tools/verity/lean/setup.sh PACKAGE_DIR
 set -euo pipefail
 pkg=${1:?usage: setup.sh PACKAGE_DIR}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [ ! -d "$pkg" ]; then
+  now=$(python3 "$here/moved.py" "$pkg")
+  echo "setup.sh: $pkg is $now since the layout moves"
+  pkg=$(cd "$here/../../.." && pwd)/$now
+fi
 if ! command -v elan >/dev/null 2>&1 && [ ! -x "$HOME/.elan/bin/elan" ]; then
   curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
 fi
