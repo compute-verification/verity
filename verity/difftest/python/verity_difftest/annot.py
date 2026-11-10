@@ -28,7 +28,7 @@ LEAN = Path(__file__).resolve().parents[2] / "lean"
 EXE = "annot-difftest"
 FNS = ("annot.term", "annot.check", "annot.reference", "annot.sets")
 _FLOCK = "verity/flock/verifier/"
-INPUTS = ("verity/core/difftest/lean",
+INPUTS = ("verity/difftest/lean",
           *(_FLOCK + f for f in ("lakefile.toml", "lake-manifest.json", "lean-toolchain")),
           *(_FLOCK + f"Flock/{m}.lean" for m in ("Annot", "AnnotExpand", "Bytes", "Canon", "Field", "Hash", "Program",
                                                    "Sizes", "Steps")))

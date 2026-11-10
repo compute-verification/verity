@@ -1745,6 +1745,11 @@
         "verity/core/service/flock/": "verity/flock/verifier/",
         "verity/core/service/vstar/": "verity/flock/verifier/vstar/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/difftest/": "verity/difftest/"
+      }
     }
   ]
 }

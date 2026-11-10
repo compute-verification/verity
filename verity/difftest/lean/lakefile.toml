@@ -15,7 +15,7 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../../../flock/verifier"
+path = "../../flock/verifier"
 
 [[lean_lib]]
 name = "Difftest"

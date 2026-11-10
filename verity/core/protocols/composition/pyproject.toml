@@ -41,7 +41,7 @@ parts = 3
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/core/protocols/record.py",
-          "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
+          "verity/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
           "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/flock/verifier/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/spot",

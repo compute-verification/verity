@@ -17,7 +17,7 @@ path = "../../../flock/verifier"
 
 [[require]]
 name = "verity_difftest"
-path = "../../difftest/lean"
+path = "../../../difftest/lean"
 
 [[lean_lib]]
 name = "CircuitRequirement"
