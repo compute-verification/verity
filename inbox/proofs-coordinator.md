@@ -21191,3 +21191,17 @@ Meanwhile C continues where #8413 doesn't reach: the header's bindings at the in
   lock. That holds unless you say otherwise by 01:30Z. I've told ZKSTACK the same.
 - **If Thursday slips, the cut** is the period's lock entry and its witnesses. `compilerPeriodTwoReg` stays in the
   tree, but nothing cites it as proved until a follow-up lists it. Never a hypothesis.
+
+## HOUSEKEEP, Tue 10 Nov 00:36Z: started; notes synced, audit rerun (53 findings live, not 18); nothing written yet
+
+- **Setup.** `origin/main` is `7af4d24fca` (my checkout's head too); AGENTS.md and the lane contract (2.23) reread.
+  `research notes sync --path lanes/proofs` cloned the notes cleanly. `inbox/HOUSEKEEP.md` doesn't exist yet on
+  `cursor/proofs-inbox`.
+- **The live audit differs from the brief's list.** `research msg linear audit --lane proofs` at 00:35Z prints 53
+  findings: 25 lapsed, 14 stray, 6 overdue, 5 quiet, 2 landed, 1 undated. The overdue, quiet and landed ones are the
+  brief's. PRF-477 shows only as undated (no orphan line). The slipped ones (PRF-199, PRF-282) don't appear in it; the
+  asks ledger (`audit --asks`) lists them with 4 and 5 slips and says "0 slipped with no `slip:` comment".
+- **Scope I'm holding to.** The 17 issues of the brief. The 25 lapsed (milestones F1, F2, F3, F-KS of "Full proofs:
+  protocol soundness", due 3 and 6 Nov) and the 14 strays are not in the brief, so I touch none of them and will list
+  them in the final report for you.
+- **Next.** Task 1 issue by issue (read, then write), entry by 01:35Z; then Task 2 on #8468's head.
