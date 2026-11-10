@@ -1390,6 +1390,11 @@ class _Drawn:
         _v, at, ys, _ = self._at[param]
         return ys[np.searchsorted(at, positions)].tobytes()
 
+    def strings(self, param: str, positions: Sequence[int] | np.ndarray) -> bytes:
+        """Rows ``positions`` of ``param``'s value: the ``b || c`` its salts carry in its own tree, concatenated."""
+        v = self._at[param][0]
+        return b"".join(bytes(v.bcs[int(p)]) for p in positions)
+
     def entry(self, param: str, positions: Sequence[int] | np.ndarray) -> dict[str, Any]:
         """Core's ``Registered.statement(positions)``'s header entry: ``{"value", "positions", "paths"}``."""
         v, at, _, paths = self._at[param]
@@ -2172,7 +2177,10 @@ class Window:
         """Commit every unit's rows (`rows.commit`), refused unless every template's units are all recorded. ``salt_key``:
         tests only (`rows.commit`). A parameter recorded by reference (`record`) is committed as what it reads: a registered
         read's rows as its value's (`rows.ValueRows`), a wired row as its writer's output row (`rows.WIRED`); refused for a
-        row that is neither. Each registered row the window reads has its salt sampled and its path made once (`_Drawn`)."""
+        row that is neither. Each registered row the window reads has its salt sampled and its path made once (`_Drawn`).
+        An input row recorded in full is committed under its value's salt, and refused unless it is the value's row
+        (`rows.commit`'s ``strings_of``): a salt hides one row. A supplied value's rows are left out, their salts being
+        public (`supplied`)."""
         missing = {tid: (self.count(tid), n) for tid, (_, n) in zip(self.circuit.ids, self.circuit.templates)
                    if self.count(tid) != n}
         if missing:
@@ -2192,7 +2200,8 @@ class Window:
                                      f"{words[p]}")
                 wanted.setdefault(param, []).append(positions)
         drawn = _Drawn(values, wanted)
-        data, salts_of, self._entries = [], {}, {}
+        public = {supplied_param(t, of) for t in (self.circuit.registered or Registered({})).tables for of in SUPPLIED}
+        data, salts_of, strings_of, self._entries = [], {}, {}, {}
         for m, reads in zip(self.window.members, read_by, strict=True):
             lay = by[m.template][1]
             if m.template not in cat:
@@ -2225,6 +2234,8 @@ class Window:
                         raise ValueError(f"{m.key} {p}: two units recorded two rows for one row of {param!r}")
                     d["rows"][p] = rows
                     salts_of[m.port(p)] = drawn.salts(param, positions)
+                    if param not in public:
+                        strings_of[m.port(p)] = drawn.strings(param, positions)
                     self._entries.setdefault(m.key, {})[p] = drawn.entry(param, positions)
             wired = {q for q, _o, _ws in m.wired}
             for r, x in d["rows"].items():
@@ -2233,7 +2244,7 @@ class Window:
                         raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
                     d["rows"][r] = CS.WIRED
             data.append(d)
-        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of)
+        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, strings_of=strings_of)
 
     def _words(self, tid: str) -> list[np.ndarray | None]:
         """Template ``tid``'s recorded words by port over all its units, None for a parameter recorded by reference."""

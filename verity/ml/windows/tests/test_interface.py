@@ -834,6 +834,18 @@ class Held:
                 {"value": self.name, "positions": list(positions), "paths": [self.path(p).hex() for p in positions]})
 
 
+class Bound(Held):
+    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`) and for rows committed in
+    full under its salts (`rows.commit`'s ``strings_of``): 16-bit leaves, its row schema and each row's ``b || c`` under its
+    salt."""
+
+    def __init__(self, name: str, rows: np.ndarray) -> None:
+        super().__init__(name, rows)
+        self.word_bits, self.schema, inner = 16, V2, CS._inner(V2, self.words)
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
+
+
 class Supplied(Held):
     """A supplied value as core's ``Registered.commit`` makes it for `interface.supplied`: its rows under the salts given,
     its entry's root and domain digests of what it was committed from."""
@@ -860,8 +872,8 @@ REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM"
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 
-def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = ()) -> tuple[I.Window, Held]:
-    w = Held("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
+def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = ()) -> tuple[I.Window, Bound]:
+    w = Bound("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
     circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,),
                                                                         values=held))
     win = I.Window(circuit, RUN, LAW, cap, registered={"w": w})
@@ -1027,7 +1039,7 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     derives the same members, a wire moved to other writers is refused, and so is a ref moved to another unit's row."""
     ins, outs = chain_values()
     layer = REQUESTS * STEPS
-    w = Held("w", ins[1][::layer].reshape(LAYERS, 256))
+    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
     read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
     circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
     win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
@@ -1049,17 +1061,6 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     with pytest.raises(ValueError, match="own rows"):
         CS.Binding(win.window.program, win.window.query, LAW, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
-
-
-class Bound(Held):
-    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`): 16-bit leaves, its row
-    schema and each row's ``b || c`` under its salt."""
-
-    def __init__(self, name: str, rows: np.ndarray) -> None:
-        super().__init__(name, rows)
-        self.word_bits, self.schema, inner = 16, V2, CS._inner(V2, self.words)
-        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
-                    for r, s in zip(rows, self.salts)]
 
 
 def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
@@ -1491,6 +1492,40 @@ def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
     with pytest.raises(ValueError, match=re.escape(f"its {CS.LINKED!r} rows are {V2} rows, a row table's are {CS.TABLE_SCHEMA}")):
         replace(linked, members=(*linked.members[:k], replace(m, schemas=tuple((p, V2) for p, _ in m.schemas)),
                                  *linked.members[k + 1:]))
+
+
+def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkeypatch):
+    """An input row recorded in full is committed under its registered value's salt (`rows.commit`'s ``salts_of``), and
+    `Window.close` hands over the ``b || c`` that salt carries in the value's own tree (``strings_of``). `rows.commit`
+    refuses a row that makes another string, naming it, since a salt hides one row; the strings move no root; without
+    them the other row commits, to another root; and strings for a port ``salts_of`` doesn't name, or not one a row, are
+    refused."""
+    win, w = registered()
+    given = {}
+    with monkeypatch.context() as mp:
+        mp.setattr(CS, "commit", lambda window, data, **kw: given.update(window=window, data=data, **kw))
+        win.close(salt_key=bytes(32))
+    window, data, salts_of, strings_of = (given[k] for k in ("window", "data", "salts_of", "strings_of"))
+    port = window.members[1].port("wrow")
+    assert sorted(strings_of) == sorted(salts_of) == sorted(m.port("wrow") for m in window.members)
+    assert salts_of[port] == w.salts[2] + w.salts[3] and strings_of[port] == w.bcs[2] + w.bcs[3]
+    held = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of, strings_of=strings_of)
+    free = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of)
+    assert held.roots == free.roots and held.bc == free.bc and held.bc[port] == strings_of[port]
+    other = [dict(d, rows=dict(d["rows"])) for d in data]
+    other[1]["rows"]["wrow"] = data[1]["rows"]["wrow"].copy()
+    other[1]["rows"]["wrow"][1, 0] ^= 1
+    with pytest.raises(ValueError, match=re.escape(f"{port}: rows [1] are not the rows its salts already commit")):
+        CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of, strings_of=strings_of)
+    assert CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of).roots[port] != held.roots[port]
+    for no in ({"salts_of": {}, "strings_of": strings_of},
+               {"salts_of": salts_of, "strings_of": {**strings_of, port: strings_of[port][:-1]}}):
+        with pytest.raises(ValueError, match="strings_of"):
+            CS.commit(window, data, salt_key=bytes(32), **no)
+    moved, _ = registered()
+    moved._recorded[TID][0].words[2][:2, 0] ^= 1
+    with pytest.raises(ValueError, match=re.escape(f"{window.members[0].port('wrow')}: rows [0] are not the rows its salts")):
+        moved.close(salt_key=bytes(32))
 
 
 class Table(Held):

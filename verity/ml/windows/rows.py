@@ -652,7 +652,8 @@ def _table_rows(window: Binding, rows: Mapping[str, np.ndarray]) -> list[np.ndar
 
 def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
            row_salt_key: bytes | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
-           chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None) -> Committed:
+           chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None,
+           strings_of: Mapping[str, bytes] | None = None) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
     port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
     their row table row's salt.  Salt nonces: the members' ports in order; a segment's tables', ``segment_salts`` under
@@ -663,6 +664,10 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     ``salt_key``: tests only; an integration samples 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
+    ``strings_of``: by port of ``salts_of``, the ``b || c`` its salts carry in the value's own tree, one a row: the commit is
+    refused where a row's ``b || c`` is another, since a salt hides one string and a second under it gives away the XOR
+    of the two rows' digests.  A port it leaves out is not held to any string: one whose salts are public, which hide
+    nothing, or carry no string yet.
 
     An input port's rows may be given by reference, in a window with no row tables: `WIRED` for a wired port (its writers'
     output rows) or a `ValueRows` (rows of a registered value). Their rows are never held or hashed: each row's salt and
@@ -730,6 +735,9 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     if any(p not in rows or len(s) != len(rows[p]) * SALT_BYTES for p, s in (salts_of or {}).items()):
         raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the window's ports "
                          "given in full")
+    if any(p not in (salts_of or {}) or len(s) != len(rows[p]) * BC_BYTES for p, s in (strings_of or {}).items()):
+        raise ValueError(f"strings_of {sorted(strings_of)}: not one {BC_BYTES}-byte b || c for each row of one of salts_of's "
+                         "ports")
     if refd and window.row_tables:
         raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a window with row tables, whose linked "
                          "members' rows are read off their x tables: give every row")
@@ -751,6 +759,12 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     WI.salts(ms, rows, ys, skip=refd)
     t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
+    for p, s in (strings_of or {}).items():
+        if bc[p] != bytes(s):
+            mine, theirs = (np.frombuffer(x, dtype=np.uint8).reshape(-1, BC_BYTES) for x in (bc[p], bytes(s)))
+            raise ValueError(f"{p}: rows {np.flatnonzero((mine != theirs).any(axis=1))[:4].tolist()} are not the rows its salts "
+                             "already commit (strings_of): a salt hides one row, so give the registered value's rows under "
+                             "its salts, or other rows under salts of their own")
     if refd:
         strings, at = {}, WI.bases(ms)
         for p, src in refd.items():
