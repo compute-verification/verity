@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Partition
 public import Proofs.Flock.SpotFlock.InstanceStmt.File
+public import Proofs.Flock.SpotFlock.InstanceStmt.Decode
+import Proofs.Flock.Claims.Sampling.Select.SecondWitness
+import all Flock.Program
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
@@ -62,11 +65,13 @@ import all Init.WF
 `load_pubX` walks `HmIn.loadPublic` on the public file `pubOf` to the population `popX`: its header reads back
 (`findByte_pub`, `parse_hdr`), both instances are of the circuit's class `C` (`any_bne_two`), and the header's units
 and the header itself are as `canon` and `canonUtf8` write them, which it takes as hypotheses (`hu1`, `hu2`, `hd`).
-`setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `drawJ` and the partition `partObj` to
-the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is `hdrD`, whose text it
-takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW` keeps
-`HmRow.delta`'s; its partition finding is `checkPartition_X`'s, `HmRow.checkPartition` at the statement's circuit and
-partition object. `setupTables_X` is `Stmt.setupTables` at one table, `tabX`.
+`setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `drawJ`, the partition `partObj` and
+the program `progBytes` to the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is
+`hdrD`, whose text it takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW`
+keeps `HmRow.delta`'s. Its partition finding is `checkPartition_X`'s, `HmRow.checkPartition` at the statement's circuit
+and partition object, derived from the program: the drawn unit is an instance of the circuit's template
+(`deriveTemplateUnits_X`, `HmRow.deriveTemplateUnits`), and no cut wire runs between the units (`linksCheck_X`,
+`HmLinks.check`). `setupTables_X` is `Stmt.setupTables` at one table, `tabX`.
 -/
 
 @[expose] public section
@@ -131,6 +136,20 @@ fwd_def cpX checkPartition_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' 
   block [canon, canonUtf8, HmRow.checkPartitionObject]
   shallow [metaText] trace
 
+open Properties.Spot.SecurityProofs (qsort_fuel) in
+fwd_def dtX deriveTemplateUnits_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    HmRow.deriveTemplateUnits (cO ls lh H C A B A' B' s1) partObj progBytes #[0] by
+  [Decode.descParse_X, Decode.descX_hex, qsort_fuel, Decode.ex_forIn_one, Decode.ex_forIn_range1]
+  block [canon, canonUtf8, TemplateQuery.Desc.parse]
+  shallow [metaText]
+
+fwd_def lcX linksCheck_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String) :
+    HmLinks.check (cO ls lh H C A B A' B' s1) (popX r ls lh H C A B A' B' s1 s3 s4) (HmLinks.readersOf (some drawJ))
+      progBytes by
+  [Decode.decode_prog, Decode.ex_forIn_one, Decode.ex_forIn_empty, Decode.ex_forIn_range_empty]
+  block [canon, canonUtf8, Program.decode]
+  shallow [metaText]
+
 fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (s1 s3 s4 s5 s6 : String) (hello : ByteArray → Nat → String)
     (hr : r.Plain)
@@ -149,14 +168,16 @@ fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' 
     (hd2 : canonUtf8 (hdrD r (cO ls lh H C A B A' B' s1) (hexOf H) (hexOf C)) = .ok s5)
     (hid : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6)
     (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
-    Stmt.setupHidden tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX [] (some drawJ) (some partObj) none none by
+    Stmt.setupHidden tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX [] (some drawJ) (some partObj)
+      (some progBytes) none by
   [parseOut_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck,
     load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, checkPartition_X ls lh H C A B A' B' s1, map_some_ok,
+    deriveTemplateUnits_X ls lh H C A B A' B' s1, linksCheck_X r ls lh H C A B A' B' s1 s3 s4,
     cpo_part, canon_part, bne_self, hd2, hid,
     hhello, unit_eq, delta_in]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, HmIn.loadPublic, HmRow.loadPublic, HmRow.checkPartitionObject,
-    HmRow.delta, HmOut.delta, oA, oB]
+    HmRow.deriveTemplateUnits, HmLinks.check, HmRow.delta, HmOut.delta, oA, oB]
   shallow [metaText]
 
 fwd_def tabX setupTables_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
@@ -177,8 +198,8 @@ fwd_def tabX setupTables_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A 
     (hd2 : canonUtf8 (hdrD r (cO ls lh H C A B A' B' s1) (hexOf H) (hexOf C)) = .ok s5)
     (hid : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6)
     (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
-    Stmt.setupTables tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX 1 [] (some drawJ) (some partObj) none none
-      none none none by
+    Stmt.setupTables tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX 1 [] (some drawJ) (some partObj)
+      (some progBytes) none none none none by
   [setup_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd hd2 hid
     hhello]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
