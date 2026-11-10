@@ -50,6 +50,10 @@ RULE = "NciCheck.Count: Nci.CompliesAtMost c k n"
 FAILED = {"gates": "c", "fresh": "k", "count": "n"}
 
 
+class Refused(Exception):
+    """The integration lowers no circuit of the class asked for; the message is its own reason."""
+
+
 def registered(model: str = MODEL) -> Any:
     """What a serve of the pinned checkpoint ``model`` on the H200 registers (`steps.Registered`): its φ at the
     integration's default seed and execution."""
@@ -260,11 +264,17 @@ def build(model: str, cls: tuple[int, int, int], n: int, check: Callable[[Mappin
     """The built class's session policy, checked by ``check``, and its divisions. ``n`` is the blocks the policy
     declares, which nothing here derives. ``say`` gets a line as each step starts; ``circuit`` is the class's where the
     caller lowered it (default: `class_circuit` of what a serve of ``model`` registers)."""
+    from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.window_circuit import class_circuit
 
     work = block_work(cls, model)
     say(f"lowering class {','.join(map(str, cls))} of {model}")
-    doc, pins = record(class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit)
+    try:
+        circuit = class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit
+    except Unexpressible as e:
+        raise Refused(f"the integration lowers no circuit of class {','.join(map(str, cls))} of {model}, so there is "
+                      f"nothing to count: {e}") from e
+    doc, pins = record(circuit)
     say("the session's Definition, its gate table, c and k")
     pol = policy(doc, pins)
     say("the record's divisions")

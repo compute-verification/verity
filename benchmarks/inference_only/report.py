@@ -196,7 +196,10 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     policies, divisions = [served], []
     if not args.stated_only:
         cls = args.cls or stated.cls
-        policy, div = B.build(args.model, cls, stated.n, check=check, say=say, circuit=circuit)
+        try:
+            policy, div = B.build(args.model, cls, stated.n, check=check, say=say, circuit=circuit)
+        except B.Refused as e:
+            ap.error(str(e))
         sh = P.shape(args.model)
         divisions = division_rows(policy, div, sh)
         built = next(d for d in divisions if d["division"] == args.division)

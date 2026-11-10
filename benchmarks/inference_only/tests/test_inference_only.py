@@ -180,3 +180,18 @@ def test_stated_only_builds_nothing_and_another_division_is_the_built_number(cap
     assert doc["policies"][1] == doc["divisions"][2] and doc["policies"][1]["division"] == "proof block"
     assert doc["policies"][1]["n"] == 9 * doc["divisions"][0]["n"]
 
+
+def test_a_class_the_integration_refuses_is_an_error_that_says_why(monkeypatch, capsys) -> None:
+    from verity_vllm.program.predict import window_circuit
+    from verity_vllm.program.predict.common import Unexpressible
+
+    def refuse(*_a, **_k):
+        raise Unexpressible("a template the composer wouldn't prove")
+
+    monkeypatch.setattr(window_circuit, "class_circuit", refuse)
+    monkeypatch.setattr(B, "registered", lambda _model: None)
+    with pytest.raises(SystemExit) as e:
+        report.main(["--class", "2,8,2"], check=reference, commit=lambda: None)
+    out, err = capsys.readouterr()
+    assert e.value.code == 2 and "AS SERVED: 1" in out and "NOT SERVED" not in out
+    assert "the integration lowers no circuit of class 2,8,2" in err and "a template the composer wouldn't prove" in err
