@@ -499,7 +499,7 @@ def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_pr
     the base had them (`held`), each named.  The sides gave each added premise a different reason: each keeps ours', named;
     with ours' reasons as theirs', the guarantee merges to ours' map with theirs' reasons."""
     sides = json.loads((FIXTURES / "inline-scheduled-requirement.json").read_text())
-    g = "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"
+    g = "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement"
     assert sides["base"]["guarantees"] == sides["ours"]["guarantees"] == sides["theirs"]["guarantees"] and g in sides["base"]["guarantees"]
     base, ours, theirs = (sides[n]["shape"]["inline"][g] for n in ("base", "ours", "theirs"))
     added, dropped = [p for p in theirs if p not in base], [p for p in base if p not in theirs]

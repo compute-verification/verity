@@ -1666,6 +1666,14 @@
         "verity/core/service/sampled_proofs/SampledProofs.lean": "verity/core/service/spot/Spot.lean",
         "verity/core/service/sampled_proofs/SampledProofs/": "verity/core/service/spot/Spot/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/DeclaredCircuit.lean": "Security/Definitions/Accounting/Guarantees/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit.lean": "Security/Proofs/Accounting/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
+        "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
+      }
     }
   ]
 }
