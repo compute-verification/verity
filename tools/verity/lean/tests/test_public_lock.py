@@ -26,6 +26,7 @@ HELD = {
     PL.PREFIX: {"Mod", "Mod.Defs", "Mod.Proofs", "Mod.Run"},
     PL.IMPORT: {"Mod", "Mod.Defs", "Mathlib"},
     PL.PACKAGE: {"../Proofs"},
+    PL.ARGUMENT: {"python3", "scripts/vectors.py", "{repo}", "--out", "{out}"},
 }
 
 
@@ -45,8 +46,8 @@ def lock() -> dict:
         "roots": ["Mod", "Gone"],
         "proved_in": ["../Proofs", "../Gone"],
         "exempt": {"Mod.Run": "a runner", "Gone.Run": "a runner"},
-        "runs": {"Mod.Run": {"generate": "{repo}/gone/vectors.py", "why": "vectors"}, "Gone.Run": {"why": "vectors"},
-                 "Mod.Proofs": {"why": "vectors"}},
+        "runs": {"Mod.Run": {"generate": ["python3", "scripts/vectors.py", "{repo}", "--out", "{out}"], "why": "vectors"},
+                 "Gone.Run": {"why": "vectors"}, "Mod.Proofs": {"why": "vectors"}},
         "axioms": ["propext"],
         "assumptions_module": "Mod.Defs",
         "assumptions": {"Lib.A": {"owner": "@lane", "digest": "01"}, "Lib.Gone.A": {"owner": "@lane", "digest": "02"}},
@@ -69,6 +70,9 @@ def lock() -> dict:
                                  "Lib.Gone.Claim": {"fails": "Lib.Gone.Claim_fails", "meets": []}},
                    "not": {"Lib.A": "a premise", "Lib.Gone.A": "a premise"},
                    "generic": {"Lib.D": "Lib.G", "Lib.Gone.D": "Lib.Gone.G"}},
+        "guarantee_lemmas": {"witnesses": {"Lib.G": {"fails": "Lib.Claim_fails", "meets": ["Lib.Claim_meets"], "by": "Lib.H"},
+                                           "Lib.Gone.G": {"fails": "Lib.Gone.G_fails", "meets": [], "by": "Lib.Gone.H"}},
+                             "not": {"Lib.H": "a digest", "Lib.Gone.H": "a digest"}},
         "witnesses": {"Lib.G": {"honest": ["Lib.G_honest"], "nontrivial": "Lib.G_nontrivial", "kind": "exclusion"},
                       "Lib.Gone.G": {"honest": ["Lib.Gone.G_honest"], "nontrivial": ["Lib.Gone.G_nontrivial"]}},
         "unwitnessed": {"Lib.H": "07", "Lib.Gone.H": {"type_hash": "08", "why": "no witness yet"}},
@@ -123,6 +127,7 @@ def test_an_entry_stays_only_if_the_copied_files_hold_its_name():
         "meaning": ["Gone.Defs"], "escapes": ["Lib.Gone.escape"],
         "claims.modules": ["Gone.Defs"], "claims.witnesses": ["Lib.Gone.Claim"], "claims.not": ["Lib.Gone.A"],
         "claims.generic": ["Lib.Gone.D"],
+        "guarantee_lemmas.witnesses": ["Lib.Gone.G"], "guarantee_lemmas.not": ["Lib.Gone.H"],
         "witnesses": ["Lib.Gone.G"], "unwitnessed": ["Lib.Gone.H"], "witnesses_assumed": ["Lib.Gone.G_honest"],
         "compile_time": ["Gone.Run", "Mod.Proofs"], "layers": ["Gone.Defs"], "layers.*.imports": ["Gone.Defs"],
         "layers.*.except": ["Gone.Run", "Mod.Proofs"], "reads_exempt": ["Gone.Run"],
@@ -141,8 +146,9 @@ def test_an_entry_stays_only_if_the_copied_files_hold_its_name():
 
 def test_every_rule_has_an_entry_in_the_synthetic_lock():
     source = lock()
-    stated = {path for path, *_ in PL._stated(source, (*PL.ENTRIES, *PL.WITNESSES, *PL.CITES))}
-    assert stated == {path for path, _ in (*PL.ENTRIES, *PL.WITNESSES, *PL.CITES)}
+    rules = (*PL.ENTRIES, *PL.WITNESSES, *PL.GENERATORS, *PL.CITES)
+    stated = {path for path, *_ in PL._stated(source, rules)}
+    assert stated == {path for path, _ in rules}
     assert PL.unruled(source) == []
     assert {s.partition(".")[0] for s in (*PL.OPAQUE, *PL.LANE_SECTIONS)} <= set(source)
 
@@ -189,11 +195,29 @@ def test_a_lane_field_left_at_any_depth_is_named():
                                     "shape.conjectures.Lib.O.due: a lane field", "default_owner: a lane field"]
 
 
+def test_a_runner_goes_with_a_file_of_its_generator_the_copied_files_lack():
+    """The data of a run is what its `generate` writes: where the export leaves out a file that command names, the public
+    tree can't make the data, so the entry goes. Its module stays exempt, as the test it still is."""
+    source = lock()
+    source["runs"]["Mod.Run"]["generate"] = ["python3", "{repo}/gone/vectors.py", "{repo}", "--out", "{out}"]
+    out, dropped = PL.public(source, has)
+    assert dropped["runs.*.generate"] == ["Mod.Run"] and out["runs"] == {}
+    assert out["exempt"] == {"Mod.Run": "a runner"}
+    assert PL.missing(out, has) == []
+    kept, dropped = PL.public(lock(), has)
+    assert "runs.*.generate" not in dropped and kept["runs"] == {"Mod.Run": lock()["runs"]["Mod.Run"]}
+    kept["runs"]["Mod.Run"]["generate"][1] = "tests/vectors.py"
+    assert PL.missing(kept, has) == ["runs[Mod.Run].generate: tests/vectors.py"]
+
+
 def test_an_entry_goes_with_a_witness_the_copied_files_lack():
     for path, where in (("witnesses.*.honest", ("witnesses", "Lib.G", "honest")),
                         ("witnesses.*.nontrivial", ("witnesses", "Lib.G", "nontrivial")),
                         ("claims.witnesses.*.fails", ("claims", "witnesses", "Lib.Claim", "fails")),
-                        ("claims.witnesses.*.meets", ("claims", "witnesses", "Lib.Claim", "meets"))):
+                        ("claims.witnesses.*.meets", ("claims", "witnesses", "Lib.Claim", "meets")),
+                        ("guarantee_lemmas.witnesses.*.fails", ("guarantee_lemmas", "witnesses", "Lib.G", "fails")),
+                        ("guarantee_lemmas.witnesses.*.meets", ("guarantee_lemmas", "witnesses", "Lib.G", "meets")),
+                        ("guarantee_lemmas.witnesses.*.by", ("guarantee_lemmas", "witnesses", "Lib.G", "by"))):
         source = lock()
         *above, entry, field = where
         holder = source
@@ -253,7 +277,7 @@ def test_a_refusal_names_at_most_so_many_and_counts_the_rest():
 
 
 @pytest.mark.parametrize("section, value, named", [
-    ("guarantee_lemmas", {"Lib.G": ["Lib.lemma"]}, "guarantee_lemmas"),
+    ("lemmas_of", {"Lib.G": ["Lib.lemma"]}, "lemmas_of"),
     ("shape", {"premises": [], "theorems": ["Lib.G"]}, "shape.theorems"),
     ("claims", {"modules": [], "also": {}}, "claims.also"),
     ("verifier", {"entries": [], "reach": []}, "verifier.reach"),

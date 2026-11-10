@@ -691,6 +691,27 @@ def test_the_export_drops_a_witness_entry_whose_witness_it_does_not_copy(tmp_pat
     assert got["locks"]["lean/lean-audit.json"]["witness_withheld"] == ["witnesses.*.nontrivial: Lib.Rooted"]
 
 
+def test_the_export_drops_a_runner_whose_generator_it_does_not_copy(tmp_path_factory) -> None:
+    """A run's data is what its `generate` writes, so a runner whose generator names a file the export leaves out goes
+    from the lock; its module stays exempt."""
+    lock = _lock()
+    lock["runs"]["Lib.Hidden.Open"]["generate"] = ["python3", "{repo}/lean/Lib/Hidden.lean", "{repo}", "--out", "{out}"]
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    wrote = json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))
+    assert wrote["runs"] == {} and wrote["exempt"] == {"Lib.Hidden": "its runners"}
+    report = got["locks"]["lean/lean-audit.json"]
+    assert report["generator_withheld"] == ["runs.*.generate: Lib.Hidden.Open"] and report["witness_withheld"] == []
+    lock["runs"]["Lib.Hidden.Open"]["generate"][1] = "Lib/Shown.lean"
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))["runs"] == {
+        "Lib.Hidden.Open": lock["runs"]["Lib.Hidden.Open"]}
+    assert got["locks"]["lean/lean-audit.json"]["generator_withheld"] == []
+
+
 def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:
     tree, _, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
     held, L = PE.Held(tree, set(j.public)), PE.PUBLIC_LOCK
@@ -702,6 +723,8 @@ def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:
         L.PREFIX: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Lib.Hidden.Deep", "Mathlib"],
         L.IMPORT: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Lib.Hidden.Deep", "Mathlib", "Mathlib.Tactic"],
         L.PACKAGE: [".", "../lean", "../gone"],
+        L.ARGUMENT: ["python3", "--out", "{out}", "{repo}", "Lib/Shown.lean", "{repo}/lean/Lib/Shown.lean", "Lib/Hidden",
+                     "Lib/Hidden.lean", "{repo}/lean/Lib/Hidden.lean", "Lib/Hidden/Deep.lean", "../lean/Lib/Hidden.lean"],
     }.items()}
     assert has == {
         L.DECLARATION: ["Lib.Kept", "Lib.Rooted", "Lib.Shape"],
@@ -711,6 +734,7 @@ def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:
         L.PREFIX: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open"],
         L.IMPORT: ["Lib", "Lib.Shown", "Lib.Hidden", "Lib.Hidden.Open", "Mathlib", "Mathlib.Tactic"],
         L.PACKAGE: [".", "../lean"],
+        L.ARGUMENT: ["python3", "--out", "{out}", "{repo}", "Lib/Shown.lean", "{repo}/lean/Lib/Shown.lean", "Lib/Hidden"],
     }
     assert [n for n in ("Lib.Outgrown", "Lib.Withheld", "Lib.Kept") if held.undeclared(L.DECLARATION, n)] == ["Lib.Outgrown"]
     assert [m for m in ("Gone", "Lib.Hidden", "Lib") if held.undeclared(L.MODULE, m)] == ["Gone"]
@@ -725,7 +749,7 @@ def test_every_section_the_lean_check_writes_has_its_rule_for_the_export() -> No
     L = PE.PUBLIC_LOCK
     ruled = {s.partition(".")[0] for s in L.RULED}
     assert not sorted(set(PE.LEAN_CHECK.ORDER) - ruled), "give each its rule in tools/verity/lean/public_lock.py"
-    assert ruled <= set(PE.LEAN_CHECK.ORDER) | {"four_names_except"}
+    assert ruled <= set(PE.LEAN_CHECK.ORDER) | {"four_names_except", "guarantee_lemmas"}
 
 
 def test_a_locks_leftovers_are_named_by_section_and_entry() -> None:

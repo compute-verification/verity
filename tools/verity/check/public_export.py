@@ -22,8 +22,8 @@ modules below it that it does copy. The library then builds as a whole, and its 
 
 A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays
 only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
-owner, an issue or a due date. An entry that lists witnesses goes with a witness the export doesn't copy. The export fails,
-naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
+owner, an issue or a due date. An entry that lists witnesses goes with a witness the export doesn't copy, and a runner's
+entry with a file of the command that writes its data. The export fails, naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
 names what no copied file has.
 
 A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
@@ -36,7 +36,8 @@ The report gives:
 
 * what the export copied, rewrote, and cut, the root files it wrote, and the fetched fixtures it shipped and couldn't;
 * per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
-  went with a witness it doesn't copy, the kept names a file it leaves out declares too, and what the text of a kept
+  went with a witness it doesn't copy and the runners that went with a file of their generator, the kept names a file it
+  leaves out declares too, and what the text of a kept
   entry still holds, each with its section, entry, kind and text: the lane-text sites, and the declarations, modules and
   paths the export leaves out that it spells. The export rewords neither, and refuses: the lock they come from is
   reworded. The report holds only those a `[[residue]]` entry of the boundary covers (`known`), which the export ships;
@@ -512,7 +513,9 @@ class Held:
     structure's `mk` and a type's `rec` below the declaration they come from, and no file spells them. A module is held
     when a copied file is that module, in some Lake package (`Tree.lake`'s reading of module names), and a prefix when
     one is it or lies under it. An import is held as a prefix is, and also when the tree tracks no module at or under
-    it, so a dependency's stays. A package is held when its lakefile is copied. A name that a copied file and a file
+    it, so a dependency's stays. A package is held when its lakefile is copied. A command's argument is held unless it
+    is a path, from the package or from `{repo}`, that the tree tracks and the export copies nothing of. A name that a
+    copied file and a file
     the export leaves out both declare is held, and the report names it (`lock_report`'s `also_withheld`)."""
 
     def __init__(self, tree, copied: set[str]):
@@ -546,6 +549,8 @@ class Held:
             return name in self.prefixes or name not in self.tracked_prefixes
         if kind == L.PACKAGE:
             return _norm(here, name, "lakefile.toml") in self.copied
+        if kind == L.ARGUMENT:
+            return (_norm(name.removeprefix("{repo}/")) if name.startswith("{repo}/") else _norm(here, name)) not in self.paths
         raise ValueError(f"public_export: a lock's name of a kind it doesn't know: {kind}")
 
     def spelled(self, text: str) -> list[tuple[str, str]]:
@@ -570,7 +575,7 @@ class Held:
 def rewrite_lock(text: str, here: str, held: Held) -> tuple[str, list[tuple[str, str]]]:
     """A Lean lock without what the export doesn't hold, and each (section, name) dropped (`public_lock.public`): an entry
     named after a declaration, a namespace, a module or a package the copied files lack, an entry with a witness they
-    lack, and every `owner`, `issue` and `due`. The lock is laid out as the Lean check writes one, so the rest of it reads
+    lack, a runner's with a generator's file they lack, and every `owner`, `issue` and `due`. The lock is laid out as the Lean check writes one, so the rest of it reads
     as it did."""
     lock = json.loads(text)
     out, dropped = PUBLIC_LOCK.public(lock, lambda kind, name: held.has(here, kind, name))
@@ -590,12 +595,12 @@ def lane_text(text: str) -> list[tuple[str, str]]:
 
 def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held) -> dict:
     """What the export did to one lock: per section the entries kept and dropped, how many lane fields it removed, the
-    dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, the kept
-    declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
+    dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, the runners
+    that went with a file of their generator, the kept declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
     entry, kind, text) with its count per section (`public_lock.leftovers`): the lane text (`lane_text`), and the
     declarations, modules and paths the export leaves out that a kept string spells (`Held.spelled`). Neither is
     removed here: the lock they come from is reworded, and `export` refuses those no known residue covers (`known`)."""
-    kinds = dict(PUBLIC_LOCK.ENTRIES)
+    kinds, generators = dict(PUBLIC_LOCK.ENTRIES), dict(PUBLIC_LOCK.GENERATORS)
     sites, spelled = PUBLIC_LOCK.leftovers(new, lane_text), PUBLIC_LOCK.leftovers(new, held.spelled)
     both = {f"{where}: {name}" for where, kind, name in PUBLIC_LOCK.named(new)
             if kind == PUBLIC_LOCK.DECLARATION and name in held.withheld}
@@ -603,7 +608,9 @@ def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held
             "lane_fields": len(list(PUBLIC_LOCK.lane_fields(old))),
             "undeclared": sorted(f"{path}: {name}" for path, name in dropped
                                  if path in kinds and held.undeclared(kinds[path], name)),
-            "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped if path not in kinds}),
+            "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped
+                                        if path not in kinds and path not in generators}),
+            "generator_withheld": sorted({f"{path}: {name}" for path, name in dropped if path in generators}),
             "also_withheld": sorted(both),
             "sites": dict(Counter(section for section, *_ in sites)), "site_list": [list(s) for s in sites],
             "spelled": dict(Counter(section for section, *_ in spelled)), "spelled_list": [list(s) for s in spelled]}
@@ -977,6 +984,8 @@ def main(argv: list[str] | None = None) -> int:
     for f, lock in report["locks"].items():
         more = [f"{n} {what}" for n, what in ((len(lock["undeclared"]), "dropped names no tracked file declares"),
                                               (len(lock["witness_withheld"]), "entries gone with a witness it doesn't copy"),
+                                              (len(lock["generator_withheld"]),
+                                               "runners gone with a file of their generator it doesn't copy"),
                                               (lock["lane_fields"], "lane fields removed"),
                                               (len(lock["also_withheld"]), "kept names a file left out declares too"),
                                               (sum(lock["sites"].values()), f"leftovers in kept entries {lock['sites']}"),
