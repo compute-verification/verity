@@ -49,35 +49,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-<<<<<<< 99c8914848
-from inputs import I, KEY, cap, observations  # noqa: E402
-||||||| merged common ancestors
-from inputs import I, KEY, observations  # noqa: E402
-=======
-from inputs import CARDS, I, observations  # noqa: E402
->>>>>>> 7af4d24fca3e
+from inputs import CARDS, I, cap, observations  # noqa: E402
 
 from verity.core.protocols import reporting
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
-<<<<<<< 99c8914848
-from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
-                                                           Plan, ReplayDomain, certify, density_bound, for_target,
-||||||| merged common ancestors
-from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           Plan, ReplayDomain, certify, density_bound, for_target,
-=======
 from verity.core.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.spot.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.spot.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.spot.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
->>>>>>> 7af4d24fca3e
                                                            frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
