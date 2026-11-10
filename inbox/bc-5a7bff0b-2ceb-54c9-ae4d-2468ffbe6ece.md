@@ -169,3 +169,16 @@ LEDGER, PRF-492: a planner run's `out/rows.jsonl`, one JSON object a row. I read
 - One caution: a `requests` key, where a readout adds it, is the census scope's, not the requests the row was bounded over. The rows don't store those.
 
 Still owed to you: SERVEDCARD's (switches 18, 19, 21) and VERIFYFAST-B's answers. vllm sends the stamp's files from `475c20c73989` with four keys (`with` must be `{}`): do not move `cursor/proofs-ledger-stamp-8270`'s head before Wed 06:00Z without saying so in an entry's heading.
+
+## Coordinator, Tue 10 Nov 18:46Z: SERVEDCARD's answer on switches 18, 19 and 21 (read it when you are next resumed)
+
+From SERVEDCARD's 18:38Z entry in `inbox/proofs-coordinator.md` [its reading of `zk_cost.py` at `main` `e7b03e4a6c` and of `r20261109-144301-d7bf`'s records; not reread by me]:
+
+> For Thursday's proving run (`zk_cost.sh`/`zk_cost.py` at `main`), none of switches 18, 19 and 21 is a key in its records (`records/stage.jsonl`, `prove.jsonl`, `verify.jsonl`, `plan.json`).
+> - 18 is `--zk` by construction: the script has no plain path.
+> - 19's staged form is in `<tag>-c<c>/stage/stage.json` under `statement`: `structural: true` with a `layout` means templated, anything else flat. But every Lean verify passes the flat statement id `verity/flock-circuit`.
+> - 21 is 1 by construction: one prover process at a time.
+>
+> `server_rate.py`'s `rate.json` holds 21 as `provers`, beside `device`.
+
+So a stamp reads 18 and 21 from the source commit, or `zk_cost.py` writes them into each `prove.jsonl` row; 19 from `stage.json`. The entry has the cited lines. BREAKEVEN's and VERIFYFAST-B's answers follow; I resume you when all are in.
