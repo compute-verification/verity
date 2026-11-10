@@ -24,7 +24,7 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in benchmarks/live_verifier/host.py benchmarks/remote_session/verifier.py tools/research/src/research/store/cli.py; do
+  for f in benchmarks/live_verifier/host.py verity/core/protocols/remote_bandwidth/session/verifier.py tools/research/src/research/store/cli.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
