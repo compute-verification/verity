@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # whose layout is slots._layout_json's.
 inputs = ["verity", "verity/circuits", "verity/definitions/kernels", "verity/core/__init__.py", "verity/claims", "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/check", "verity/commitments/hm96/PROTOCOL.md",
-          "verity/protocols/poub/verifier", "verity/commitments/tests/fixtures/commit-slots-v1.json"]
+          "verity/protocols/poub/verifier", "verity/commitments/tests/fixtures/commit-slots-v1.json",
+          "integrations/vllm/verity_vllm/commitments"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

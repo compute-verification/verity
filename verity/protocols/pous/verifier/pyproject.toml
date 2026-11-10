@@ -20,4 +20,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "Security/Definitions/Core/Game.lean", "Security/Proofs/Core/Game/Basic.lean",
           "Security/lean-audit.json", "Security/lakefile.toml", "Security/lake-manifest.json", "Security/lean-toolchain",
           "Security/Proofs/lakefile.toml", "Security/Proofs/lake-manifest.json",
-          "verity/protocols/pous/lean/README.md"]
+          "verity/protocols/pous/lean/README.md",
+          "verity/configuration/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pous/__init__.py", "verity/protocols/pous/device/challenger_session.py", "verity/protocols/pous/device/memory_challenger.py"]
