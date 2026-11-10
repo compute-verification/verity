@@ -14,8 +14,8 @@ the base module. A job that builds this package outside the checkout copies it w
 (`tools/verity/lean/closure.py`).
 
 The libraries are layers, each loading only the ones before it: the verifier (`Flock`'s modules outside the next two),
-the ZK server (`FlockZkServer`, a glob over its modules) and the recursion (`FlockRec`, which imports the `Flock.Rec*`
-modules, with `VStar`). `verity/ml/flock/tests/test_lean_layers.py` gives each module its layer and fails on an import
+the ZK server (`FlockZkServer`, which imports `Flock.Firewall` and the modules under it) and the recursion (`FlockRec`,
+which imports the `Flock.Rec*` modules, with `VStar`). `verity/ml/flock/tests/test_lean_layers.py` gives each module its layer and fails on an import
 of a layer above; the imports that still point up are its `UP`, each with what removes it.
 
 The proofs are about the Lean definitions, so the running binary also trusts the pinned toolchain's compiler and the Lean

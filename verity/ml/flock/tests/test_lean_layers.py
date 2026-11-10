@@ -1,9 +1,9 @@
 """The layers of Flock's Lean package (`verity/core/service/flock`), read from its import lines; no Lean runs.
 
 Low to high: the base packages it requires (`Base`, `Circuits`, `Commitments`, whose own order Lake's requires hold);
-Flock alone; the ZK server (the module ``ZK_ROOT`` and the modules under it, which the library `FlockZkServer` globs,
-with its executables' roots); and the recursion (`Flock.Rec*`, the library `FlockRec`, with V*'s circuit `VStar` and the
-`flock-rec-*` executables' roots). A module imports its own layer and the layers below it, so Flock alone reads
+Flock alone; the ZK server (`Flock.Firewall` and the modules under it, the library `FlockZkServer`, with the executables
+`flock-firewall` and `flock-frame-tape`); and the recursion (`Flock.Rec*`, the library `FlockRec`, with V*'s circuit
+`VStar` and the `flock-rec-*` executables). A module imports its own layer and the layers below it, so Flock alone reads
 neither the ZK server nor the recursion, and the ZK server reads nothing of the recursion. The umbrella `Flock` and the
 tests (`Flock.Test.*`) read every layer. ``UP`` holds the imports that still point up, each with what removes it; an
 entry that matches no import fails, so the list only shrinks.
@@ -15,7 +15,6 @@ would be code of the base that no base package holds.
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 
 CORE = Path(__file__).resolve().parents[3] / "core"
@@ -26,9 +25,7 @@ BASE = {"Base": CORE / "primitives" / "base", "Circuits": CORE / "primitives" / 
 
 LAYERS = ("the base packages", "Flock alone", "the ZK server", "the recursion", "every layer")
 BELOW, FLOCK, ZK, REC, ALL = range(5)
-#: the ZK server's module, with those under it
-ZK_ROOT = "Flock.Firewall"
-ZK_ROOTS = {"FlockFirewall", "FlockFrameTape"}
+ZK_ROOTS = {"FlockZkServer", "FlockFirewall", "FlockFrameTape"}
 REC_ROOTS = {"FlockRec", "FlockRecLinks", "FlockRecOpening", "FlockRecSparse"}
 #: `Flock.Rec…` by spelling only: the session's record and its text are Flock alone's
 NOT_REC = {"Flock.Record", "Flock.RecordText"}
@@ -42,7 +39,7 @@ UP: dict[tuple[str, str], str] = {
         "until `Flock.Witness` is split: the declarations that name nothing of the recursion stay, the rest are a module "
         "of the recursion. It is the module's one import, and through it Flock alone and the ZK server reach the recursion",
     ("FlockVerify", "Flock"):
-        "until the verifier executable's recursive commands are an executable of the recursion: `verifyCmd` names the `Rec*` "
+        "until `flock-verify`'s recursive commands are an executable of the recursion: `verifyCmd` names the `Rec*` "
         "modules and `VStar` through the umbrella",
 }
 
@@ -56,7 +53,7 @@ def layer(module: str) -> int:
     root = module.split(".")[0]
     if module == "Flock" or module.startswith("Flock.Test."):
         return ALL
-    if module == ZK_ROOT or module.startswith(ZK_ROOT + ".") or module in ZK_ROOTS:
+    if module == "Flock.Firewall" or module.startswith("Flock.Firewall.") or module in ZK_ROOTS:
         return ZK
     if root == "VStar" or module in REC_ROOTS or (re.fullmatch(r"Flock\.Rec\w*", module) and module not in NOT_REC):
         return REC
@@ -97,28 +94,25 @@ def test_no_module_imports_a_layer_above_its_own():
 def test_an_upward_import_is_found():
     """The scan isn't vacuous: an import in a comment isn't one, `import all` and `meta import` are, and each layer reads
     down and never up."""
-    zk = ZK_ROOT
-    assert imports(f"module\n\npublic import Flock.Hash\n-- import Flock.RecCoins\n/- import {zk} -/\n"
+    assert imports("module\n\npublic import Flock.Hash\n-- import Flock.RecCoins\n/- import Flock.Firewall -/\n"
                    "import all Init.System.ST\npublic meta import Flock.Canon\n") == ["Flock.Hash", "Init.System.ST", "Flock.Canon"]
-    assert [layer(m) for m in ("Init.Data", "Base.Hash", "Flock.Verify", "Flock.Record", "FlockVerify", zk, f"{zk}.Honest",
-                               "FlockFrameTape", "Flock.RecCoins", "VStar.Cli", "FlockRecLinks", "FlockRec", "Flock",
-                               "Flock.Test.Full")] == [BELOW, BELOW, FLOCK, FLOCK, FLOCK, ZK, ZK, ZK, REC, REC, REC, REC,
-                                                       ALL, ALL]
-    sources = {"Flock.Verify": f"import {zk}.Coins\nimport Base.Hash\n", f"{zk}.Coins": "import Flock.RecCoins\n",
-               "Flock.RecCoins": f"import {zk}\nimport Flock.Verify\nimport VStar.Cli\n",
-               "Flock.Test.Full": "import Flock\n", "Flock": "import Flock.RecCoins\n"}
-    assert upward(sources) == [(f"{zk}.Coins", "Flock.RecCoins"), ("Flock.Verify", f"{zk}.Coins")]
+    assert [layer(m) for m in ("Init.Data", "Base.Hash", "Flock.Verify", "Flock.Record", "FlockVerify", "Flock.Firewall",
+                               "Flock.Firewall.Honest", "FlockFirewall", "Flock.RecCoins", "VStar.Cli", "FlockRecLinks",
+                               "Flock", "Flock.Test.RecCap")] == [BELOW, BELOW, FLOCK, FLOCK, FLOCK, ZK, ZK, ZK, REC, REC, REC,
+                                                                 ALL, ALL]
+    sources = {"Flock.Verify": "import Flock.Firewall.Coins\nimport Base.Hash\n", "Flock.Firewall.Coins": "import Flock.RecCoins\n",
+               "Flock.RecCoins": "import Flock.Firewall\nimport Flock.Verify\nimport VStar.Cli\n",
+               "Flock.Test.RecCap": "import Flock\n", "Flock": "import Flock.RecCoins\n"}
+    assert upward(sources) == [("Flock.Firewall.Coins", "Flock.RecCoins"), ("Flock.Verify", "Flock.Firewall.Coins")]
 
 
 def test_each_library_holds_its_layer():
-    """`FlockZkServer` globs the ZK server's module and those under it, and `FlockRec` imports every module of the
-    recursion under `Flock` and nothing else."""
-    libs = {lib["name"]: lib for lib in tomllib.loads((LEAN / "lakefile.toml").read_text())["lean_lib"]}
-    assert (libs["FlockZkServer"].get("roots"), libs["FlockZkServer"].get("globs")) == ([ZK_ROOT], [ZK_ROOT + ".+"])
+    """`FlockZkServer` and `FlockRec` import every module of their layer under `Flock`, and nothing else."""
     own = modules()
-    want = sorted(m for m in own if m.startswith("Flock.") and layer(m) == REC)
-    assert "FlockRec" in libs and sorted(imports(own["FlockRec"].read_text())) == want, (
-        f"FlockRec.lean imports each module of {LAYERS[REC]} under `Flock` once: " + ", ".join(want))
+    for umbrella, rank in (("FlockZkServer", ZK), ("FlockRec", REC)):
+        want = sorted(m for m in own if m.startswith("Flock.") and layer(m) == rank)
+        assert sorted(imports(own[umbrella].read_text())) == want, (
+            f"{umbrella}.lean imports each module of {LAYERS[rank]} under `Flock` once: " + ", ".join(want))
 
 
 def forwarders() -> dict[str, tuple[Path, str]]:
