@@ -66,7 +66,8 @@ open each row against them. A table is a registered parameter of its own, every 
 read takes a supplied value (`supplied`), one row the verifier fills from its pin of the table's parameter, the root or
 the domain id, under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root,
 and the opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the
-proof at the hidden key. Cut registered reads and ingress are refused by the committer until it commits them. A `Read`
+proof at the hidden key; that is the reader's body's doing, so they count registered only where the reader is a
+Definition the verifier pinned by its closure digest (`input_count`'s ``readers``). Cut registered reads and ingress are refused by the committer until it commits them. A `Read`
 may also name an output row ``o<j>``: that row's words are the parameter's leaves at the pattern's positions (a value a
 server sends out, its response or a wire to another server). It fills no input row, and wires may read the row too.
 
@@ -103,9 +104,10 @@ from typing import Any, ClassVar, Protocol
 import numpy as np
 
 from verity.ml.circuits import boolean as B, partition_object as PO
-from verity.ml.circuits.codec import canonical_json, descriptor_id
+from verity.ml.circuits.codec import canonical_json, definition_digest, descriptor_id, encode_program
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.population import population_program
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import advice as AC
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -639,7 +641,9 @@ class Opening:
     holds: ``ports`` are the opening (the row, its salt, its path), and ``verdict`` the output row whose bit is 1 exactly
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
     and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the window's root for
-    the table's parameter is the pinned root (`input_count`)."""
+    the table's parameter is the pinned root and ``reader`` is a Definition the verifier pinned by its digest
+    (`input_count`'s ``readers``), since only the reader's body says what a verdict of 1 holds; ``reader`` is the record's
+    name for it, which says nothing."""
     reader: str
     table: str
     key: str
@@ -1643,11 +1647,12 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
 
 
 def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]], registered: Registered | None,
-                 ingress: Sequence[Ingress] = ()) -> dict[tuple[int, str], str]:
+                 ingress: Sequence[Ingress] = ()) -> tuple[dict[tuple[int, str], str], frozenset[tuple[int, str]]]:
     """The input rows a record that lists its ``members`` declares as registered reads (``templates`` as `listed_ingress`
     takes them), by ``(index among members, port)``, each the parameter whose rows fill it: a model's weights, read at
     public positions, or a table's parameter, whose supplied root and domain id its table reads fill and whose row at a
-    hidden key its openings' ports hold. Every declaration covers whole members of its reader, since a member's port is
+    hidden key its openings' ports hold; and, of those, the ones an opening holds, which count registered only for a
+    pinned reader (`input_count`). Every declaration covers whole members of its reader, since a member's port is
     one value's rows (`registered_reads`). A read (`Read`) is uncut, of its parameter's leaves at a base and steps that are
     multiples of its port's words (`_reads_of`); its port is an output row, which it fills none of, or an input row no
     wire or row table fills: its units' own rows, or a shared-row table of the registered rows they read (``tables``, as
@@ -1677,6 +1682,7 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
         by.setdefault(members[i].template, []).append(i)
     starts = {t: [members[i].base for i in ix] for t, ix in by.items()}
     out: dict[tuple[int, str], str] = {}
+    opened: set[tuple[int, str]] = set()
     rects = [(g.reader, g.port, g.at, g.at + g.units, 0, 1, g.doc()) for g in ingress]
 
     def covered(reader: str, lo: int, hi: int, what: Any) -> Iterator[int]:
@@ -1747,9 +1753,10 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
             for p in o.ports:
                 unfilled(i, p, what)
                 out[(i, p)] = tables[o.table].param
+                opened.add((i, p))
         rects += [(o.reader, p, o.at, o.at + o.units, 0, 1, o.doc()) for p in o.ports]
     _disjoint(rects, "inputs")
-    return out
+    return out, frozenset(opened)
 
 
 def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
@@ -1859,8 +1866,48 @@ def registered_roots(window: Mapping[str, Any]) -> dict[str, str]:
     return dict(roots)
 
 
+def closure_digest(desc: Mapping[str, Any], key: str) -> str:
+    """The closure digest of Definition ``key`` of the Program whose descriptor is ``desc``: the SHA-512, in hex, of the
+    canonical JSON object that maps each Definition ``key`` reaches (itself, its nodes' callees, theirs, …), by descriptor
+    id, to its `codec.definition_digest`. It digests the Definition's whole body, so another Definition under its id has
+    another digest, and it is the same in any Program."""
+    defs, callees, seen, todo = desc["definitions"], desc["callees"], {}, [key]
+    while todo:
+        k = todo.pop()
+        if k not in seen:
+            seen[k] = definition_digest(defs[k], desc)
+            if defs[k]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
+    return hashlib.sha512(canonical_json(seen)).hexdigest()
+
+
+def reader_digest(fn: Any) -> str:
+    """Definition ``fn``'s closure digest (`closure_digest`, over its population of one), which a pin of an opening's reader
+    names. The work is its encoding's: every Definition it reaches, once."""
+    return closure_digest(encode_program(population_program(fn, 1)), descriptor_id(fn))
+
+
+def pinned_readers(readers: Sequence[str] | None, resolve: Callable[[str], Any]) -> Callable[[str], bool]:
+    """Whether a template, named by its descriptor id, is a Definition the verifier pinned as an opening's reader:
+    ``readers`` are the pins, each a closure digest (`reader_digest`, 128 lowercase hex digits), and the template's digest
+    is taken from the Definition ``resolve`` gives for it, never from its name, once a template and only when asked. With
+    no pins no template is, and none is digested. Refused (ValueError) unless ``readers`` is a list, tuple or set of
+    digests, so a template's name or a bare digest never passes for pins."""
+    if readers is not None and not (isinstance(readers, (list, tuple, set, frozenset)) and all(
+            isinstance(d, str) and _DIGEST.fullmatch(d) for d in readers)):
+        raise ValueError(f"readers are a list of closure digests, each 128 lowercase hex digits, not {readers!r}: an opening "
+                         "counts registered only where its reader's Definition has one of them")
+    pins = frozenset(readers or ())
+
+    @functools.cache
+    def pinned(tid: str) -> bool:
+        return bool(pins) and reader_digest(resolve(tid)) in pins
+
+    return pinned
+
+
 def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve, pins: Mapping[str, str] | str | None = None,
-                roots: Mapping[str, str] | None = None) -> dict[str, int]:
+                roots: Mapping[str, str] | None = None, readers: Sequence[str] | None = None) -> dict[str, int]:
     """A circuit record's inputs by what fills them, in bits, from its description alone (a stated record's templates, wires
     and declarations, `Circuit.description`; per template, wire and declaration, never per unit, and never its program):
     every unit's input rows (``inputs``), the rows its wires fill (``wired``, a wire's reader rows times its writer row's
@@ -1878,10 +1925,16 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     parameters, a model's weights one a weight and row width), whose committed root nothing ties to ``P``'s. A read of
     any other parameter, or a table read or opening of a table over one, is free, since a root the prover commits after
     serving, or another root than the pinned one, constrains nothing; with no pins (a bare string is none) every
-    registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
-    `check_inputs`), so no row counts twice."""
+    registered read is free. An opening of a table over a held parameter fills ``registered`` only where its reader is a
+    Definition the verifier pinned: ``readers`` are those pins, the verifier's own as ``pins`` are, each the closure
+    digest of a Definition whose verdict is 1 only when its ports open to the root it reads (`reader_digest`), and the
+    reader's digest is taken from the Definition ``resolve`` gives for its template, the one whose rows are counted, never
+    from the name the record gives it (`pinned_readers`). An opening by any other reader is free, since a reader of the
+    prover's own, its verdict a constant 1, holds its ports to nothing; with no ``readers`` every opening is. Refused
+    unless the declarations are well-formed for the record's templates (`check_wires`, `check_inputs`), so no row counts
+    twice."""
     if "members" in doc:
-        return _listed_count(doc, pins, roots)
+        return _listed_count(doc, resolve, pins, roots, readers)
     if "wires" not in doc:
         raise ValueError("a circuit record is counted from its stated description (its cap and wires) or its listed members")
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
@@ -1897,25 +1950,26 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
     reg, held = reg or Registered({}), held_params(pins, roots)
     pinned = {t.name for t in reg.tables if t.param in held}
+    reader = pinned_readers(readers, {descriptor_id(fn): fn for fn, _ in defs}.__getitem__)
     registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads
                       if r.param in held and r.port in dict(lays[r.reader][0].rows))
                   + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots if r.table in pinned)
-                  + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings if o.table in pinned
-                        for p in o.ports))
+                  + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings
+                        if o.table in pinned and reader(o.reader) for p in o.ports))
     ingress_bits = sum(g.units * 16 * dict(lays[g.reader][0].rows)[g.port] for g in ingress)
     units = sum(n for _, n in lays.values())
     return {"units": units, "inputs": inputs, "wired": wired, "registered": registered, "ingress": ingress_bits,
             "free": inputs - wired - registered - ingress_bits}
 
 
-def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None = None,
-                  roots: Mapping[str, str] | None = None) -> dict[str, int]:
+def _listed_count(doc: Mapping[str, Any], resolve: Callable[[str], Any], pins: Mapping[str, str] | str | None,
+                  roots: Mapping[str, str] | None, readers: Sequence[str] | None) -> dict[str, int]:
     if ({"wires", "cap", *DECLARED, "blocks"} - {"registered"}) & set(doc):
         raise ValueError("a record that lists its members declares only its registered reads and its window's ingress "
                          "beside them")
     members, ingress = _listed_members(doc), window_ingress(doc)
-    read = listed_reads(members, doc["templates"], declarations(doc)[2], ingress)
-    held = held_params(pins, roots)
+    read, opened = listed_reads(members, doc["templates"], declarations(doc)[2], ingress)
+    held, reader = held_params(pins, roots), pinned_readers(readers, resolve)
     inputs = wired = registered = 0
     for i, m in enumerate(members):
         tables, wires = dict(m.tables), {p for p, _o, _ws in m.wired}
@@ -1923,7 +1977,7 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
             n = 16 * int(words) * int(tables.get(p, m.n))
             inputs += n
             wired += n if p in wires else 0
-            registered += n if read.get((i, p)) in held else 0
+            registered += n if read.get((i, p)) in held and ((i, p) not in opened or reader(m.template)) else 0
     window = listed_ingress(members, doc["templates"], ingress)
     return {"units": sum(int(n) for _t, n in doc["templates"]), "inputs": inputs, "wired": wired, "registered": registered,
             "ingress": 0, WINDOW_INGRESS: window, "free": inputs - wired - registered}
