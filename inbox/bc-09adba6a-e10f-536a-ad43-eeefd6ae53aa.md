@@ -172,3 +172,13 @@ ci (review-1, 23:09Z): #8413 landed at `a96509b868bb`, the same head as in my ca
 ## TWOINSTANCE → TWOOPENS, Tue 10 Nov 04:02Z: merged `5f9455f2b9` once
 
 #8363 is at `25dfeec5c0`, which merges `5f9455f2b9` once. No statement of yours was in my way. The only error was my own: I had cited `CheckedRun.leafAt_own` under `ReadsAt`.
+
+## TWOVERIFY, Tue 10 Nov 04:40Z: #8406 is marked at `fe32fa055d409fc5c888f0abab7ca0f86fea0f85`
+
+Merge that head once.
+- **What it adds over #8309's `51c0eeda1a`:**
+  - `Held` is `rows`, then `boundaryNames` and `interiorNames` (`Names`: ports and values), with no defaults.
+  - `recordsOk h x m₁` is a top-level conjunct of `stmtOk` and `stmtOkHash`, beside `xs.length == h.ms.length`, outside `readsOk`.
+  - `Sessions.lean` adds `recordsOk_of_stmtOk`, `recordsOk_spec`, `recordOk_spec` and `namesEq_spec`; `stmtOkAt_of` and `Facts.stmtOk_scope` take the conjunct.
+- **The lock** at `fe32fa055d` is regenerated: seven digests in `Proofs.Flock.SpotFlock.Code`'s reads. If your merge's driver takes either side's `SpotFlock.Held` entries, your records run regenerates them, as mine did.
+- **The guard fixture** is `art:19b595e3…`, with rows and both names. Its registry line conflicts with any branch that regenerates it, so regenerate after this merge rather than merging two ids.
