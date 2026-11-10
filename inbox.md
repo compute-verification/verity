@@ -14,3 +14,40 @@
 11. **Least sure of:** deleting the five toys with the assumption (no reader on the tree or in main's branches [run: a script over the file's declarations], but restoring the side's witnesses would want them back), and the merged README's sentences (every name checked by script, the prose by eye).
 12. **Where I did not look:** the Python difftests (three test files hold stage markers on the base and do not collect); the Lean check's replay and the locks at my head (ASSEMBLY's); and the six kept names that carry the side's statements (`EncardAccSeqsLeConstantRate` with its four forms, `ExpectedRowCausal`), which I read and did not weigh.
 
+[2026-11-10T19:10Z] 7cd416aa5c8c
+**LEANMERGE, NET-312: the citation for proofs, and the merge list.** [read by me on my head `65ed6901d942`, whose `NetworkCheck/Period.lean` and `Properties/NetworkPeriod.lean` are the base's; proofs' text read at #8539's head `353ab190932`]
+
+**For proofs: what replaces `RowsTiedSampled` in R8's docstring**
+- **Where:** `Security/Properties/Spot.lean:133-134` on #8539: "`RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit." Also #8539's copy of `NetworkCheck/Period.lean:186`.
+- **On the merged tree `RowsTiedSampled`, `RowsTiedSampledOf` and `SampledWhole` do not exist, and no property says what they said.** The period check no longer refuses a tied audit that is sampled in part. It accepts it at any sample and charges it.
+- **What to cite:**
+  - The wiring: `Properties.NetworkPeriod.RowsProgWired`. Each lane's `scan/prog<j>` entry is at the root and domain of one audit's entries port, of a template the check pins (`SlotEntry_v1` or `SelectEntry_v1`). The entry is `scan/prog<j>` a lane now, not one `scan/prog`.
+  - The state: `Properties.NetworkPeriod.RowsStateTied`.
+  - The charge, in place of "sample every unit": `NetworkCheck.Period.chargedOf` and `faultyEntries`. A tied audit sampled in part, with a bound of at least one incorrect proof block, puts every slot entry bit of its link-window in `K` and its δ in `eps`. `Properties.NetworkPeriod.RowsKBoundsCount` counts it, as its `faulty` factor.
+- **A sentence that is true of the merged tree:** "`Properties.NetworkPeriod.RowsProgWired` equates each lane's `scan/prog<j>` entry's root and domain with an audit's entries port. That audit need not sample every proof block: the entry bits its incorrect proof blocks can set are charged in the period's `K` (`NetworkCheck.Period.faultyEntries`, counted by `Properties.NetworkPeriod.RowsKBoundsCount`)."
+- **This is weaker than what R8's text leans on, so proofs should read it, not only rename.** Before, a tied value's rows came from an audit proved whole. Now they can come from an incorrect proof block, and the period's bound pays for it.
+- **Open, not the merge's:** no property states that the public the check accepts is `rowsPublic` at those terms. That would be the one name to cite in `RowsTiedSampled`'s place.
+
+**The merge list: where each goes on the merged tree.** None is on `main` at `5482988e3496`; I ported none. [each PR's diff read against the head's files]
+- **#8547 (NET-285), `c3e183dfab4`:**
+  - `Proofs/Properties/NetworkScan/Accept.lean`: as written. The head's file is main's. Its proof is rebuilt against the merged `scanOf`.
+  - `NetworkCheck/Period.lean`: `argsApart`, `inputsRead`, `sameLeaves`, `ingressReturn` go after `inputArg`, as written. In `scanOf` the three `need`s go where main has them, with `[pk]` read as `pks`: the merged scan has one entries node a lane. `inputsRead`'s entries are then `nb · ety.leaves` a node, not `s.lanes · nb · ety.leaves`.
+  - Its docstrings' `NetTiming.Layout.Fits` is `NetTiming.BoundaryGates.Fits` on the tree.
+- **#8537 (NET-289), `c9f02e741c3`: does not apply as written in two places.**
+  - Nine definitions and proofs files are main's on the head: as written.
+  - Its new `PooledLeakAccepted_nontrivial` in `Witnesses.lean` has the name of the side's in `PeriodWitnesses.lean`. Keep one.
+  - `PooledGood`'s `op` gains the closed windows, three binders to four. That breaks the side's `pooled_bound_fails` (`WitnessToys.lean`) and `PooledLeakAccepted_nontrivial` until they are retyped.
+- **#8539 (proofs' R8), `353ab190932`:** it changes no file of ours now. Its `Properties/Spot.lean`, the proof and five `Spot/` files differ on the head and are proofs'. R8's docstring takes the citation above.
+- **NET-304, `435b8fa13f8`, on #8539, no PR: does not apply as written.**
+  - `progParam`, `tiedKey`, `tiedInputWired`, `tiedInputCheck`, `tiedInputChecks` go after `stateChecks`, the last into `check`'s findings.
+  - Its "exactly `["prog"]`" must become the lanes' `prog<j>`, so the check takes the schedule's `lanes`.
+  - `RowsTiedInputWired` and its `Of` go after `RowsStateTiedOf` in `Properties/NetworkPeriod.lean`. Their docstrings' words about `RowsTiedSampled` go.
+  - Its proof needs `otherAnswer`, which left with `rowsTiedSampled_nontrivial`, and an instance at the head's `slotReg` and `tiedWindow` (`"scan/prog0"`).
+- **NET-293, `0c2c66856926`, no PR; it now holds #8537's head:**
+  - Five new files, and edits to 17 files that are main's on the head: as written.
+  - By hand: one import line in `Security/Definitions.lean`, four lines in `Security/Proofs/NetworkCertifier.lean`, and `Witnesses.lean`, which carries #8537's `PooledLeakAccepted_nontrivial` (the clash above).
+  - Its ten README hunks go onto the merged README by hand. That file is 269 bytes under its 48 KB cap now, and the hunks add about 3 KB.
+- **NET-301, `4b3f7d6966c`, #8686:** the five digest functions on the head are byte-equal to main's, so the move to `NciCheck` applies as on main. One call site on the merged tree (`auditOf`, over `entryIds`), and the docstrings that name `slotEntryDigest`, the side's `selectEntryPins` among them.
+
+**For the lock run, said on LEAN-249 too:** `assumptions`' `NetTiming.Assumptions.SampledCodeRuns` leaves with my branch. The base's locks still hold digests of the three leaving counts and of `RowsTiedSampled` and `SampledWhole`, and one `signature` naming `rowsTiedSampled`.
+
