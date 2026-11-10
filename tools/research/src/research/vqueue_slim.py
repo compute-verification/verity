@@ -140,7 +140,7 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     (``gate``), every step `main` waits for at ``base`` (`Driver._gating`), the preflights and a lean-agreement it ran, but
     policy.toml's `off_gate` there and drive.toml's `warn_steps`.  Pending while it launches or runs, each shard's launch
     read as the run's own is.  Infra when it registered no run (``rec`` None, or a detached launch that printed no run ids,
-    a shard's stopping the other shards), never ran or was stopped, or was lost or killed before it passed each of those
+    a shard's stopping the other shards; `Failed.launch`), never ran or was stopped, or was lost or killed before it passed each of those
     steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
     every shard that holds it, `shard_passed`), fail with each of them it failed (a `Failed`: ``step NAME``, the step's
     content key at the candidate, the paths drive names that failure's culprit by, `step_paths`, its content key at
@@ -423,13 +423,15 @@ def _down(rec: dict | None, why: str) -> Verdict:
     """Infra: what became of the run ``rec`` records."""
     ids = " ".join(rec["ids"]) if rec and rec.get("ids") else ""
     return Verdict(INFRA, (), (Failed(f"the run beside its check{f' ({ids})' if ids else ''} {why}",
-                                      f"{rec['tip'] if rec else ''}:{ids or 'no run'}", frozenset()),))
+                                      f"{rec['tip'] if rec else ''}:{ids or 'no run'}", frozenset(),
+                                      launch=why.startswith("registered no run")),))
 
 
 def _keep(rec: dict, v: Verdict, passed: list[str] | None = None) -> Verdict:
     rec["verdict"] = {"state": v.state, **{k: [{"task": f.task, "key": f.key, "inputs": sorted(f.inputs),
                                                 **({"base_key": f.base_key} if f.base_key is not None else {}),
-                                                **({"tests": sorted(f.tests)} if f.tests else {})} for f in fs]
+                                                **({"tests": sorted(f.tests)} if f.tests else {}),
+                                                **({"launch": True} if f.launch else {})} for f in fs]
                                            for k, fs in (("failed", v.failed), ("infra", v.infra)) if fs},
                       **({"passed": passed} if passed is not None else {})}
     return v
@@ -437,7 +439,7 @@ def _keep(rec: dict, v: Verdict, passed: list[str] | None = None) -> Verdict:
 
 def _kept(got: dict) -> Verdict:
     return Verdict(got["state"], *(tuple(Failed(f["task"], f["key"], frozenset(f["inputs"]), f.get("base_key"),
-                                                frozenset(f.get("tests") or ()))
+                                                frozenset(f.get("tests") or ()), launch=bool(f.get("launch")))
                                          for f in got.get(k) or ()) for k in ("failed", "infra")), ended=got["state"] == FAIL)
 
 

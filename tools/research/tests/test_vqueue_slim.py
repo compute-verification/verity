@@ -154,12 +154,13 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     h.got = ([], "train.sh: no machine answered")
     assert start(h.d, sha, base) is None
     assert any(x.endswith("registered no run: train.sh: no machine answered") for x in world.logs), world.logs
-    assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset()),))
+    assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset(),
+                                                          launch=True),))
     h.got = launch = {"dir": str(tmp_path / "launch"), "pid": 1}
     h.d.launched = lambda got: ([], "train.sh: refused")
     rec = start(h.d, sha, base)
     want = Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: train.sh: refused (log {launch['dir']}/log)",
-                                      f"{sha}:no run", frozenset()),))
+                                      f"{sha}:no run", frozenset(), launch=True),))
     assert judge(h.d, rec) == want and "launch" not in rec and judge(h.d, rec) == want
     h.d.launched = lambda got: (None, "")
     rec = start(h.d, sha, base)
@@ -390,7 +391,7 @@ def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_regi
         assert "shards" not in rec and "verdict" not in rec
     else:
         assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
-        assert h.cancelled == ["r-1"] and judge(h.d, rec) == got
+        assert got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
 
 
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
