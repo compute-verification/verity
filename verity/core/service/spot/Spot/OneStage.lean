@@ -40,6 +40,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
   an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
   and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
+  and it may add `history`, `{"digests", "held", "registered", "tables"}`: the history tables its program reads, which
+  need `leaf_layer`, each table's root computed from its writers' public bodies the leaf layer binds and held to the root
+  the window registers for it (`HistoryTable.rootsOf`), and a supplied value's source `{"history": "H/root"}` or
+  `{"history": "H/domain"}` then the bytes of the root or domain id it computed for table `H` (`HistoryTable.resolve`),
+  refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -72,6 +77,7 @@ public import Spot.Registration
 public import Spot.Record
 public import Spot.ChallengerDraw
 public import Spot.Select
+public import Spot.HistoryTable
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -232,6 +238,7 @@ def paramsParsed (j : Json) : V Params := do
     else keys
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
+  let keys := if (field? j "history").isSome then keys.push "history" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -270,6 +277,14 @@ def paramsParsed (j : Json) : V Params := do
     | pj => some <$> poolOf pj registered given (field? j "row_schemas")
   let (suppliedJ, outputsJ, schemasJ) := poolValues pool (Flock.hexOf program.sha512) log (field? j "supplied")
     (field? j "outputs") (field? j "row_schemas")
+  let suppliedJ ← match field? j "history" with
+    | none => pure suppliedJ
+    | some h => do
+      exactly h #["digests", "held", "registered", "tables"] "the history tables"
+      let some leaf := leafLayer
+        | throw "history tables are read from members' public bodies the leaf layer binds: the verifier names no leaf_layer"
+      let roots ← HistoryTable.rootsOf leaf h
+      suppliedJ.mapM (HistoryTable.resolve roots)
   let supplied ← match suppliedJ with
     | none => pure #[]
     | some s => do

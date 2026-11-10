@@ -24,7 +24,9 @@ A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the 
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
-no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
+no dotted name and no lone quoted word in one is rewritten. In Python too a lone quoted word is a name (`"census"`: a key),
+unless the map lists the directory under [rewrite] words (`"Security"`: no key and no run's directory has that name): then
+its name alone between quotes or backticks is rewritten in every file but Rust and Lean. A tracked file that a `.gitignore` matches stays tracked where
 it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
 moves recorded there.
 
@@ -118,6 +120,8 @@ class Layout:
         self.keep = rw.get("keep", [])
         self.keep_in = rw.get("keep_in", {})
         self.keep_dotted = tuple(rw.get("keep_dotted", []))
+        #: moved directories whose name alone, between quotes or backticks, is ours wherever it is written ([rewrite] words)
+        self.words = {w.rstrip("/") for w in rw.get("words", [])}
         self.merged = set(data.get("distributions", {}).get("merged", []))
         self.retired = tuple(data.get("retired", {}).get("paths", RETIRED))
         self.drop = set(data.get("drop", {}).get("paths", []))
@@ -511,7 +515,9 @@ class Run:
                 token, trail = token[:-1], token[-1] + trail
             if "/" not in token:
                 after = text[m.end("p"):m.end("p") + 1]
-                if not (before in "\"'" and after == before) or path.endswith((".py", ".rs", ".lean")):
+                ours = token in self.L.words            # [rewrite] words: a name no key or run directory shares
+                if not (before in ("\"'`" if ours else "\"'") and after == before) or \
+                        path.endswith((".rs", ".lean")) or path.endswith(".py") and not ours:
                     return m.group(0)                   # in code a lone quoted word is a name ("census": a key); joins are `_joins`'s
             new = self._map_token(token, path)
             if new is None or new == token:

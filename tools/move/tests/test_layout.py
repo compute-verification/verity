@@ -279,6 +279,51 @@ def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_i
     assert (r / "bench/pous/stay/run.sh").read_text() == stay.replace('"$0")/../wipe/demo.sh', '"$0")/../../../examples/wipe/demo.sh')
 
 
+WORDS_PY = ('"""The packages of `Analysis` and `Analysis/Proofs`; Analysis in prose is a word."""\n'
+            'ROOT = None\nSPEC = ROOT / "Analysis"\nCAPS = {"Analysis": 3, "Analysis/Proofs": 4, \'Analysis\': 5}\n'
+            'HEAVY = [p for p in CAPS if p.split("/")[0] == "Analysis"]\nNAME = "Analysis is a title"\n')
+WORDS_MAP = ('[roots]\nold = {}\nnew = {}\n\n[paths]\n"Analysis/" = "analysis/"\n\n[modules]\n"Analysis" = "analysis"\n')
+
+
+def _words_tree(tmp_path: Path, rewrite: str) -> Path:
+    r = tmp_path / "repo"
+    files = {"Analysis/Core.lean": "-- stated in `Analysis`\ndef dir : String := \"Analysis\"\n", "caps.py": WORDS_PY,
+             "kinds.toml": 'inputs = ["Analysis", "tools"]  # `Analysis`, and Analysis alone\n',
+             "README.md": "The spec is `Analysis`; Analysis's lock is `Analysis/lean-audit.json`.\n",
+             "tag.rs": 'const DIR: &str = "Analysis";\n',
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(WORDS_MAP + rewrite)
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    return r
+
+
+def test_a_moved_directorys_name_alone_is_a_name_in_python_unless_the_map_lists_it_under_words(tmp_path):
+    """`Security/` to `security/`: the directory is a package's path wherever it stands alone in quotes (a ratchet's key, a
+    tuple of packages, `ROOT / "Security"`), which the default leaves in Python, where a lone quoted word is as often a key
+    or a run's own directory. Without [rewrite] words only the paths with a slash and the data file's entry follow the move,
+    which leaves `{"Analysis": 3, "analysis/Proofs": 4}`; with it the name alone between quotes or backticks follows too, in
+    every file but Rust and Lean, and the bare word in prose or in a longer string stays."""
+    r = _words_tree(tmp_path / "default", "")
+    assert (r / "caps.py").read_text() == WORDS_PY.replace("Analysis/Proofs", "analysis/Proofs")
+    assert (r / "kinds.toml").read_text() == 'inputs = ["analysis", "tools"]  # `Analysis`, and Analysis alone\n'
+    r = _words_tree(tmp_path / "words", '\n[rewrite]\nwords = ["Analysis"]\n')
+    assert (r / "caps.py").read_text() == (
+        '"""The packages of `analysis` and `analysis/Proofs`; Analysis in prose is a word."""\n'
+        'ROOT = None\nSPEC = ROOT / "analysis"\nCAPS = {"analysis": 3, "analysis/Proofs": 4, \'analysis\': 5}\n'
+        'HEAVY = [p for p in CAPS if p.split("/")[0] == "analysis"]\nNAME = "Analysis is a title"\n')
+    assert (r / "kinds.toml").read_text() == 'inputs = ["analysis", "tools"]  # `analysis`, and Analysis alone\n'
+    assert (r / "README.md").read_text() == "The spec is `analysis`; Analysis's lock is `analysis/lean-audit.json`.\n"
+    assert (r / "tag.rs").read_text() == 'const DIR: &str = "Analysis";\n', "a Rust literal is protocol text"
+    assert (r / "analysis/Core.lean").read_text() == "-- stated in `Analysis`\ndef dir : String := \"Analysis\"\n"
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
