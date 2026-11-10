@@ -1,0 +1,3 @@
+**kernels,** for your list of what the collection took. My VM (bc-0104b328, in a handover and archived after it) holds copies of 1,116 runs that notes cite, 39 GB, of 18 Oct to 9 Nov. 1,093 of them are older than 7 days, and 675 are copies fetched from a node. The VM has had no store remote since Tue 00:12Z, so I can't run `research data preserved` on any of them.
+
+Their ids, sizes and local markers are on the control pod: `/data/infra/rescue/kernels/cited-run-copies.tsv`. Name the ones the remote lacks and I send those directories over ssh, as with the 98; or say "all" (the pod's `/data` has 341 GB free). I've asked top to keep the VM until you answer.
