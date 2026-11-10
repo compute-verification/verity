@@ -872,7 +872,17 @@ def test_the_serving_cost_is_the_kits_paired_ratio_of_tokens_a_second_where_the_
     assert S.serving_cost(ref, ours, "chat", 8)["value"] == pytest.approx(1.0 / 1.3 - 1)
     # the rung is one both served: the reference's 32 is not the arm's, and an arm with one rung is read there
     assert S.serving_cost(ref, ours, "chat", 32) is None
-    assert S.serving_cost(ref, cost_arm("boundary-rows", {8: [0.8] * 2}), "chat")["rung"] == 8
+    low = S.serving_cost(ref, cost_arm("boundary-rows", {8: [0.8] * 2}), "chat")
+    assert low["rung"] == 8
+    # the reference's own rungs show it saturated at 16: it served 32 too, and no more tokens a second anywhere
+    assert (c["saturated"], c["peak"]) == (True, 16) and S.peak(ref, "chat", 16) == (16, True)
+    # at 8 they show it is not, since it served more at 16; and at its highest rung nothing shows it
+    assert (low["saturated"], low["peak"]) == (False, 16) and S.peak(ref, "chat", 32) == (16, False)
+    assert S.peak(cost_arm("compiled", {8: [1.0] * 6, 16: [1.5] * 6}), "chat", 16) == (16, False)
+    assert S.peak(cost_arm("compiled", {16: [1.5] * 6}), "chat", 16) == (16, False)
+    assert S._at(c, "compiled") == "at concurrency 16, where compiled is saturated"
+    assert S._at(low, "compiled") == ("at concurrency 8, where compiled is not shown saturated (it served more tokens "
+                                      "a second at concurrency 16)")
     # the reps both have are the ones compared; five have no interval; a load one side didn't serve has no cost
     five = S.serving_cost(ref, cost_arm("boundary-rows", {16: [1.2, 1.25, 1.15, 1.2, 1.25]}), "chat")
     assert five["reps"] == 5 and five["value"] == pytest.approx(0.25) and "ci95" not in five
@@ -923,6 +933,24 @@ def test_an_arm_that_meets_the_slo_for_no_request_has_a_cost_and_none_within_the
     r = S.cost_report([ref, cost_arm("boundary-rows", {16: [0.0] * 6})], arm="boundary-rows", target=5.0)
     assert (r["value"], r["verdict"]) == (None, "cannot tell")
     assert "no finite cost: a side served no token at concurrency 16" in S.cost_text(r)
+
+
+def test_a_loads_line_says_whether_the_references_rungs_show_it_saturated_and_no_verdict_reads_it():
+    """A cost is the tax where stock is saturated only where stock's passes show that: a rung above with no more
+    tokens a second. A job that serves one rung, or whose highest is its fastest, says it is not shown."""
+    ours = cost_arm("boundary-rows", {8: [0.9] * 6, 16: [1.2, 1.25, 1.15, 1.2, 1.25, 1.1]})
+    shown = S.cost_report([cost_arm("compiled", {8: [1.0] * 6, 16: [1.5] * 6, 32: [1.4] * 6}), ours],
+                          arm="boundary-rows", target=50.0)
+    top = S.cost_report([cost_arm("compiled", {8: [1.0] * 6, 16: [1.5] * 6}), ours], arm="boundary-rows", target=50.0)
+    assert [(r["loads"][0]["rung"], r["loads"][0]["saturated"], r["loads"][0]["peak"]) for r in (shown, top)] == [
+        (16, True, 16), (16, False, 16)]
+    assert "over 6 reps, meets; at concurrency 16, where compiled is saturated: compiled 225.0 output" in S.cost_text(shown)
+    assert ("over 6 reps, meets; at concurrency 16, where compiled is not shown saturated (it served no rung above): "
+            "compiled 225.0 output") in S.cost_text(top)
+    # the cost, its interval and its verdict are the same either way: the line says what the passes show
+    same = ("value", "ci95", "verdict")
+    assert {k: shown["loads"][0][k] for k in same} == {k: top["loads"][0][k] for k in same}
+    assert "where compiled serves the most output tokens a second" in S.cost_text(top).splitlines()[2]
 
 
 def test_the_verdict_is_one_of_three_and_the_noise_floor_widens_the_interval():
@@ -1058,8 +1086,10 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
         "long", 6.95, S.MODELS["glm53"].target, "glm-5.3", WHOLE, "compiled", [])
     # the number is the largest, so it misses where one load misses, whatever the other does
     assert r["ci95"][0] < r["value"] < r["ci95"][1] and r["verdict"] == "misses"
-    # each load is read at the rung where stock is saturated, an engine on the model's GPUs
+    # each load is read at the rung where stock serves the most tokens a second, an engine on the model's GPUs; these
+    # arms served one rung a load, so nothing shows stock saturated there
     assert [c["rung"] for c in r["loads"]] == [8, 4] and (r["gpus"], r["vllm"]) == (8, "0.1+gd9105ea8")
+    assert [(c["saturated"], c["peak"]) for c in r["loads"]] == [(False, 8), (False, 4)]
     # the cost within the SLO is beside each load's cost, with no verdict: each load's goodput counts against its own
     # bounds, since long context's first token takes seconds on any engine
     assert [c["within"]["latency_target_ms"] for c in r["loads"]] == [{"ttft": 2000, "tpot": 80}, {"tpot": 80}]
@@ -1085,18 +1115,21 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
         "serving cost, glm-5.3, whole over compiled: 6.95% [6.38%, 7.53%]   target ≤ 2.05% (modelled)   verdict: misses",
         "  the largest of the costs of its loads (chat, long), load long's",
         "  in percent of stock's serving compute, lower is better: how much more GPU time whole needs a token than "
-        "compiled, both serving the same tokens at the concurrency where compiled is saturated, an engine on 8 GPUs"]
+        "compiled, an engine on 8 GPUs, both serving the same tokens at the concurrency, of those both served, where "
+        "compiled serves the most output tokens a second"]
     assert (r["id"], r["target_basis"]) == ("vllm/serving-cost-glm53", "modelled")
     text = "\n".join(lines)
     # each load's line: its cost, then both sides' output and prompt tokens a second at its rung and the tokens a request
     assert ("  load chat, ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset): "
-            "2.04% [1.52%, 2.56%] over 6 reps, cannot tell; at concurrency 8: compiled 300.0 output and 512.0 prompt "
+            "2.04% [1.52%, 2.56%] over 6 reps, cannot tell; at concurrency 8, where compiled is not shown saturated (it "
+            "served no rung above): compiled 300.0 output and 512.0 prompt "
             "tokens/s, whole 294.0 output and 501.8 prompt tokens/s; 256 prompt and 150 output tokens a request\n"
             "    within the latency target (TTFT ≤ 2000 ms, TPOT ≤ 80 ms), which no target or verdict is of: 2.04% "
             "[1.52%, 2.56%] over 6 reps; best goodput 2 req/s at concurrency 8 (compiled), 1.96 req/s at concurrency 8 "
             "(whole)\n") in text
     assert ("  load long, 8,192 random tokens in and 128 out (vLLM's random dataset at one long length): 6.95% [6.38%, "
-            "7.53%] over 6 reps, misses; at concurrency 4: compiled 150.0 output and 256.0 prompt tokens/s, ") in text
+            "7.53%] over 6 reps, misses; at concurrency 4, where compiled is not shown saturated (it served no rung "
+            "above): compiled 150.0 output and 256.0 prompt tokens/s, ") in text
     assert "    within the latency target (TPOT ≤ 80 ms), which no target or verdict is of: 6.95% [6.38%, 7.53%]" in text
     assert "noise floor (compiled-again over compiled, two server lifetimes of one engine, load long): 0.00%" in text
     assert "| whole | 6.95% " in text and "| boundary-rows | 2.14% " in text and "| record | 3.14% " in text
@@ -1226,6 +1259,9 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert number["inputs"] == ["chat", "long"] and number["target_parts"] == r["target_parts"] != []
     assert [(c["load"], c["value"], c["verdict"]) for c in number["loads"]] == [
         ("chat", 2.04, "cannot tell"), ("long", 6.95, "misses")]
+    # each load's entry says the rung it was read at and whether stock's rungs show it saturated there
+    assert [(m["rung"], m["saturated"]) for m in (chat, long)] == [(8, False), (4, False)]
+    assert [(c["rung"], c["saturated"]) for c in number["loads"]] == [(8, False), (4, False)]
     # the launch line's own result carries the fourth verdict, with the changes it leaves off, and still stands
     ours = S.result_of(S.cost_report(cost_arms()))
     assert ours[0] and {m["verdict"] for m in ours[3]} == {"not comparable"}

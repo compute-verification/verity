@@ -103,6 +103,11 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   cannot be told. No SLO enters the cost. Each load's line gives both sides' output and prompt tokens a second at the
   rung and the prompt and output tokens a request, and the third line the GPUs an engine serves on: what a reader
   needs to turn the tokens a second into a utilisation.
+- **Whether stock is saturated at that rung** is said on each load's line and in the JSON (the load's `saturated`).
+  Stock's own rungs show it only where it served a rung above and no more tokens a second at any
+  (`serve_tax.peak`). Otherwise the line says it is not shown, and why: stock served no rung above, or served more
+  at a rung the arm did not. No verdict reads it: a job that serves stock at the one rung an earlier job found does
+  not show it saturated by its own passes.
 - **The cost within the SLO** (`serve_tax.within_slo`) is printed under each load's cost: stock's best goodput over
   the arm's, less one, by the same paired ratio. Goodput is the client's "Request goodput": requests a second within
   the model's SLO (TTFT and time per output token). Each side's best is at the rung where its mean over reps is

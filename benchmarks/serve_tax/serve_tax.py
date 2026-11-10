@@ -87,7 +87,8 @@ record holds the hash and the path, never the file.
 a token, its tax where the reference is saturated: the reference's output tokens a second over the arm's, less one,
 both at the rung of a load where the reference's are highest (`serving_cost`, the benchmark kit's paired ratio over
 reps: `kit`). Every arm serves the same prompts decoded to the same lengths, so the ratio is of GPU time at equal
-tokens, and no SLO enters it. One cost a load, the largest the number, with its 95% interval over reps, its verdict
+tokens, and no SLO enters it. Each load's line says whether the reference's own rungs show it saturated at that rung
+(`peak`: it served a rung above, and no more tokens a second at any). One cost a load, the largest the number, with its 95% interval over reps, its verdict
 against ``--target`` or the model's target, and every other arm's cost beside it, as text and as one JSON object whose
 first keys are value, unit, commit and run. The model's target is the sum of its parts, each of some of our changes
 (`Part`, `CHANGES`): an arm that leaves one of those off has no verdict against it but "not comparable"
@@ -1457,14 +1458,28 @@ def best_pass(arm: dict, load: str) -> tuple[int, list[dict]] | None:
     return c, rungs[c]
 
 
+def _tok_per_s(reps: list[dict]) -> float:
+    return statistics.fmean(r.get("output_tok_per_s") or 0.0 for r in reps)
+
+
 def saturated(ref: dict, arm: dict, load: str) -> int | None:
-    """The rung of ``load`` a cost is read at: of the rungs both arms served, the one where ``ref`` is saturated, its
-    output tokens a second, averaged over its reps, the highest (the lowest such rung). None where they share none."""
+    """The rung of ``load`` a cost is read at: of the rungs both arms served, the one where ``ref``'s output tokens a
+    second, averaged over its reps, are highest (the lowest such rung). None where they share none. Whether ``ref``
+    is saturated there is `peak`'s to say."""
     rungs = bench_rungs(ref, load)
     shared = sorted(set(rungs) & set(bench_rungs(arm, load)))
     if not shared:
         return None
-    return max(shared, key=lambda c: statistics.fmean(r.get("output_tok_per_s") or 0.0 for r in rungs[c]))
+    return max(shared, key=lambda c: _tok_per_s(rungs[c]))
+
+
+def peak(ref: dict, load: str, rung: int) -> tuple[int, bool]:
+    """Where ``ref`` served ``load`` fastest, and whether that shows it saturated at ``rung``: the rung, of all it
+    served, where its output tokens a second are highest (the lowest such), and whether that is ``rung`` with a rung
+    served above it. An arm served at its highest rung alone may serve more above: nothing here shows it saturated."""
+    rungs = bench_rungs(ref, load)
+    top = max(sorted(rungs), key=lambda c: _tok_per_s(rungs[c]))
+    return top, top == rung and max(rungs) > rung
 
 
 def kit() -> tuple:
@@ -1523,10 +1538,12 @@ def serving_cost(ref: dict, arm: dict, load: str, rung: int | None = None) -> di
     """What ``arm`` costs over ``ref`` at ``load``, a fraction: how much more GPU time the arm needs a token, its tax.
     Every arm serves the same prompts, each decoded to its length, so at a rung where the reference has no idle GPU
     time its output tokens a second over the arm's, less one, is the arm's extra GPU time a token. Both sides are read
-    at one rung, ``rung`` or the one where the reference is saturated (`saturated`), over the reps both have there
-    (`paired_cost`), each side with its output and prompt tokens a second and the tokens a request it served. No SLO enters
-    it: ``within`` is the same traffic's cost within the SLO (`within_slo`), which is this cost only where both sides
-    meet the SLO for every request. None where the arms share no rung of the load, or no rep at the rung."""
+    at one rung, ``rung`` or the one where the reference serves the most tokens a second (`saturated`), over the reps
+    both have there (`paired_cost`), each side with its output and prompt tokens a second and the tokens a request it
+    served. ``saturated`` says whether the reference's own rungs show it saturated at that rung, and ``peak`` the rung
+    where it served the most (`peak`). No SLO enters it: ``within`` is the same traffic's cost within the SLO
+    (`within_slo`), which is this cost only where both sides meet the SLO for every request. None where the arms share
+    no rung of the load, or no rep at the rung."""
     a, b = bench_rungs(ref, load), bench_rungs(arm, load)
     c = saturated(ref, arm, load) if rung is None else rung
     if c is None or c not in a or c not in b:
@@ -1551,8 +1568,9 @@ def serving_cost(ref: dict, arm: dict, load: str, rung: int | None = None) -> di
                 "prompt_tokens_per_request": each("prompt_tokens"), "output_tokens_per_request": each("output_tokens")}, tok
 
     (sa, ta), (sb, tb) = side(ref, ra), side(arm, rb)
-    return {"load": load, "reps": len(reps), "rung": c, "reference": sa, "arm": sb, **paired_cost(ta, tb),
-            "within": within_slo(ref, arm, load)}
+    top, shown = peak(ref, load, c)
+    return {"load": load, "reps": len(reps), "rung": c, "saturated": shown, "peak": top, "reference": sa, "arm": sb,
+            **paired_cost(ta, tb), "within": within_slo(ref, arm, load)}
 
 
 def verdict(cost: dict, target: float | None, floor: float = 0.0) -> str | None:
@@ -1657,8 +1675,9 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     run and meets, and else cannot be told (``not_run`` names the loads that have not run). The model's target is the
     sum of its parts (``target_parts``, `target_parts`), and where ``arm`` leaves off a change one of them counts
     every verdict is `NOT_COMPARABLE` instead: the cost is not of what the target is of. A target that is given has
-    no parts. Each load's ``within`` is its cost within the SLO (`within_slo`), which no target or verdict is of.
-    Beside them: the GPUs an engine serves on, what the arm's boundary commitment did (`commitment`), and every other
+    no parts. Each load's ``within`` is its cost within the SLO (`within_slo`), which no target or verdict is of, and
+    its ``saturated`` whether the reference's rungs show it saturated at the load's rung (`peak`), which no verdict
+    reads. Beside them: the GPUs an engine serves on, what the arm's boundary commitment did (`commitment`), and every other
     arm's cost at the number's load and rung, over the reference and over the nearest arm above it that ran (its
     parent, its parent's parent...), which for the arms from ``arm`` up to the reference is its step of the whole,
     with its share of it and what the target has for the changes the step turns on (`in_target`). ``commit`` and
@@ -1730,7 +1749,8 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
             "noise_floor": {"arm": noise["arm"]["arm"], **_cost(noise)} if noise else None,
             "loads": [{"load": c["load"], "what": LOADS[c["load"]].what, **_cost(c), "verdict": c["verdict"],
                        "noise_floor": _cost(c["noise"])["value"] if c["noise"] else None, "reps": c["reps"],
-                       "rung": c["rung"], "reference": c["reference"], "arm": c["arm"], "within": within(c),
+                       "rung": c["rung"], "saturated": c["saturated"], "peak": c["peak"], "reference": c["reference"],
+                       "arm": c["arm"], "within": within(c),
                        **job(c["load"])} for c in per],
             "commitment": commitment(ours), "arms": rows, "no_arm": list(NO_ARM)}
 
@@ -1758,12 +1778,21 @@ def _rates(side: dict) -> str:
     return f"{side['arm']} {side['output_tok_per_s']:,.1f} output{prompt} tokens/s"
 
 
+def _at(c: dict, ref: str) -> str:
+    """A load's rung, and whether the reference's rungs show it saturated there."""
+    if c["saturated"]:
+        return f"at concurrency {c['rung']}, where {ref} is saturated"
+    why = (f"it served more tokens a second at concurrency {c['peak']}" if c["peak"] != c["rung"] else
+           "it served no rung above")
+    return f"at concurrency {c['rung']}, where {ref} is not shown saturated ({why})"
+
+
 def cost_text(r: dict) -> str:
     """`cost_report` as text: the number's line first, naming its load where another has not run, then the target's
     parts and, where the arm leaves one off, why its cost is not comparable with the target, each load's cost with
-    both sides' tokens a second at its rung and, under it, its cost within the SLO, the noise floor, what the arm's
-    boundary commitment did, every other arm with what its step turns on and the target's part for it, and the
-    changes no arm turns on."""
+    its rung, whether the reference is shown saturated there and both sides' tokens a second, and, under it, its cost
+    within the SLO, the noise floor, what the arm's boundary commitment did, every other arm with what its step turns
+    on and the target's part for it, and the changes no arm turns on."""
     by = {c["load"]: c for c in r["loads"]}
     if r["value"] is None:
         n = f"no finite cost: a side served no token at concurrency {by[r['load']]['rung']}"
@@ -1778,8 +1807,8 @@ def cost_text(r: dict) -> str:
               f"{'has' if len(r['not_run']) == 1 else 'have'} not run" if r["not_run"] else
               f"  {rule}, load {r['load']}'s"),
              f"  in {r['unit']}, lower is better: how much more GPU time {r['arm']} needs a token than {r['reference']}, "
-             f"both serving the same tokens at the concurrency where {r['reference']} is saturated, an engine on "
-             f"{r['gpus']} GPU{'s' if r['gpus'] != 1 else ''}"]
+             f"an engine on {r['gpus']} GPU{'s' if r['gpus'] != 1 else ''}, both serving the same tokens at the "
+             f"concurrency, of those both served, where {r['reference']} serves the most output tokens a second"]
     parts = r["target_parts"]
     if parts:
         lines.append("  the target is the sum of its parts: " + ", ".join(
@@ -1796,7 +1825,7 @@ def cost_text(r: dict) -> str:
                 f"; {a['prompt_tokens_per_request']:,.0f} prompt and {a['output_tokens_per_request']:,.0f} output "
                 "tokens a request")
         lines.append(f"  load {c['load']}, {c['what']}: {_c(c)} over {_reps(c['reps'])}"
-                     + (f", {c['verdict']}" if c["verdict"] else "") + f"; at concurrency {c['rung']}: "
+                     + (f", {c['verdict']}" if c["verdict"] else "") + f"; {_at(c, r['reference'])}: "
                      f"{_rates(a)}, {_rates(b)}{each}")
         w = c["within"]
         if w:
@@ -1846,7 +1875,8 @@ def cost_text(r: dict) -> str:
 def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     """A cost report (`cost_report`) as a run's result.json holds it (`write_result`): whether it stands as a
     measurement (each load that ran has a finite cost, and the arm's boundary commitment committed every finished
-    request), its first line, what ran, and its measurements. Each load's cost is a measurement under the load's name.
+    request), its first line, what ran, and its measurements. Each load's cost is a measurement under the load's name,
+    with its rung and whether the reference is shown saturated there.
     The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
     its target, what the target rests on, the target's parts with the changes the arm left off, its verdict (one of
     `verdict`'s three, or `NOT_COMPARABLE`) and each load's cost beside it; it names the loads as its inputs. Where a
@@ -1859,9 +1889,11 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
         return {"name": name, "value": c["value"], **about, "commit": c["commit"], "run": c["run"], "ci95": c["ci95"],
                 "verdict": c["verdict"], **more}
 
-    out = [entry(c["load"], c, what=c["what"], reps=c["reps"]) for c in r["loads"]]
+    out = [entry(c["load"], c, what=c["what"], reps=c["reps"], rung=c["rung"], saturated=c["saturated"])
+           for c in r["loads"]]
     if r["id"] and not r["not_run"]:
-        beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "commit", "run")} for c in r["loads"]]
+        beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "rung", "saturated", "commit", "run")}
+                  for c in r["loads"]]
         out.append(entry(r["id"], r, load=r["load"], loads=beside, inputs=[c["load"] for c in r["loads"]],
                          target_parts=r["target_parts"]))
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
