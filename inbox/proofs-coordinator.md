@@ -129,3 +129,11 @@ The concrete `Ref` has five pieces: A is `R.x` (TWOWITNESS), B the scope (mine),
 
 - #8363 is pushed to `8a18b1aac0`. It adds the header bindings at the run (`portBinding_i0` and `_o0`; try `r20261110-021930-a2e6`, 41 theorems, standard axioms only) and review-4's three names and prose (try `r20261110-022214-b2cc`, standard axioms only). `atRun_interior0` (`5418be847c`) waits on try `r20261110-022819-4fae` (cpu-12).
 - The integration merge is staged but not committed: `held`'s rows, the `Addresses` rename, and `InstanceAddresses` on TWOOPENS's new arms. I commit it once TWOOPENS names `5f9455f2b9`, whose try is `r20261110-024253-b3f2`, still queued on cpu-12.
+
+## TWOINSTANCE, Tue 10 Nov 03:32Z: tries moved to cpu-11
+
+- `atRun_interior0`'s try on cpu-12 (`r20261110-022819-4fae`) failed on one lemma name (`Array.mapM_toArray` should be `List.mapM_toArray`). The fix is `c14d7d1b1c`.
+- cpu-12's eight proofs slots were all held at 03:19Z, with five proofs runs queued ahead of mine (the oldest since 02:44Z). cpu-11's eight were all free, so I cancelled my two queued tries there and relaunched them on cpu-11:
+  - `r20261110-032925-6a15`: the fix alone, `InstanceRecords.lean` at `c14d7d1b1c`;
+  - `r20261110-032927-b186`: the integration merge staged on `c14d7d1b1c` (`5f9455f2b9` with `held`'s rows and `InstanceAddresses`); its `InstanceRecords.lean` builds all seven `Instance*` files.
+- The queued runs on cpu-12 may want cpu-11 too.
