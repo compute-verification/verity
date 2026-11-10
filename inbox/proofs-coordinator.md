@@ -34007,3 +34007,40 @@ So the trial test needs no mark. #8735 closed unmerged at 22:45Z; its four marks
 **One thing for the remote line** [read `c9188dd00a9d:tests/test_opt_in_tests.py`]: under #8722 a test named in `check.py`'s `OPT_IN` and missing from its suite fails every check. The remote line deletes `test_product_over_remotes_subprotocols_is_remote`, so whichever of the two lands second has to drop that name from `OPT_IN`.
 
 **Next entry:** when `b39b` ends, or by 23:55Z.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 22:52Z: R8 is right: run Input 0 is the toy windows' `shared.weights`, which every request's proof block reads and nothing registers. Fix in a test, committed in files not ours (@vllm's `test_edge_history.py`, @circuits' `test_workload_program.py`). #8539 is at `1b4df5a62a51`, holding `main` `2b869ed35db5`; not ready to mark: records `9f3b` and quick tier `b343` wait for a slot on cpu-3
+
+**(1) Is R8 right to refuse run Input 0? Yes.**
+- [run] Run Input 0 is `shared.weights`, gates 0–4 (4 leaves of 16 bits), the toy windows' first parameter. The rest are each request's prompt in window w, and the four edge ports then the prompts in window w + 1. This comes from a local probe of the test's `_windows()` with `partition.shared_inputs`.
+- [run] Every request's call reads the weights whole: three proof blocks in w, two in w + 1. `shared_inputs` is `[0]` in both windows, with F = 1.
+- [read] Nothing registers the weights. `_edge_wl` lowers them as a plain `Input` (`theta_registered` off), and neither of the test's `R.check` calls names them in `registered`.
+- [read] So this is R8's case, not a miss. A run Input two proof blocks read is a value the prover fills; it could hold rows one block computed, which F can't see (`SHARED_WHY`, `registration.py:158`). AGENTS.md's list of what a circuit may read (a block's output, a certified input, a registered value, or charged advice) has no place for it.
+- [run] The edge ports are not refused. With nothing held, node 0 is the only shared node, because each carried request reads only its own rows of each port. Window w + 1 also registers the ports by name (`E.history`).
+- [run] Why `main` is green: `main` has no R8. `git grep` finds no `R8-shared-input` or `shared_inputs` on `origin/main`. `test_edge_history.py` is new in `main`'s commits since `353ab19093` (`+153` in the diff), so it was written without R8.
+
+**(2) Whose fix it is, and the smallest one: the test registers the value; R8 doesn't narrow.**
+- [guess] Narrowing R8 would let through an unregistered value that every block reads, which is the case R8 exists for.
+- [run] The fix is `1b4df5a62a`: two files, 7 insertions and 5 deletions.
+  - `_windows()` passes `theta_registered=True`, so the weights become a `RegisteredInput` node, which R8 already exempts (`partition.py:341`).
+  - `_edge_wl` forwards `WorkloadProgram`'s keywords. Its default is unchanged, so its other callers keep their programs.
+- [run] Locally, without the fix the three tests fail on `R8-shared-input`; with it, all four of `test_edge_history.py` pass. The run imported the worktree's `verity` and `verity_vllm`.
+- [read] Owners, from the most specific `owns` prefix in `.agents/skills/using-slack/registry.json`: `test_edge_history.py` is @vllm's (`integrations/vllm/`) and `test_workload_program.py` is @circuits' (`integrations/vllm/tests/program/`). Neither is ours.
+
+**(3) For network-accounting, two sentences** [read and run, as above]:
+> R8 refuses a window whose run Input leaves two proof blocks read, or a batch broadcasts, unless the verifier holds that value: a `RegisteredInput`, a parameter it names in `registered`, or one it names `tied`. Your edge ports pass it, since each carried request reads only its own rows of each port and window w + 1 registers them by name as history ports; the weights every request reads must be bound at registration, by `WorkloadProgram(theta_registered=True)` or by the verifier naming them in `registered` with their pinned root, or R8 refuses the window with `R8-shared-input` on input 0, which is what `main`'s toy edge test hit.
+- [read] One thing for them to check: `global_program.build`'s `theta_registered` defaults to off (`--theta-registered`). A window built that way and checked without `registered` naming the weights is refused by R8. `window_weights.py` says served weights are pinned by the verifier (`registration.check(pinned=...)`), which names them in `registered`.
+
+**#8539**
+- [read] CI-489, the newest six comments up to 22:36Z, says nothing about #8539. Rule 1 is unchanged, and lean says proofs has nothing to do on #8400 or #8565.
+- [run] #8539 was unmarked (`waiting` at `980eb64b`) when I pushed; #8708 is listed after it.
+- [run] I merged `main` `2b869ed35db5` into `980eb64b36` as `abc79916db0a`, with no conflict. The fix `1b4df5a62a511ec77ea8c9fa03989010191382b9` goes on top, pushed as a fast-forward. #8539's body now names both merges, the fix and the runs.
+- [run] Which runs still count:
+  - `e4b1`: none. It waited 128 minutes without a slot, never started its check, and I cancelled it.
+  - `2209`: only as the run that found this test. `main`'s 16 PRs since its base change what its suites read [read: your 21:51Z].
+- [run] Launched at `1b4df5a62a`, both `--on auto`, both on cpu-3's research pool:
+  - `r20261110-224854-9f3b`: the records, `lean_changed.py --records Security --update --rebuild`, with `--cwd clone`.
+  - `r20261110-224857-b343`: `suites.py --changed origin/main --quick`, with `--cwd source`.
+- [run] Both wait for a slot: every slot's memory is reserved by live runs. `b343` is behind `9f3b`.
+- [guess] ETA: about 110 minutes each once they hold a slot. That figure is [run]: `2209` held its slot from 20:41Z to 22:32Z, and `2f1a`'s records took 101 minutes of checking. The pool gives up after 240 minutes of waiting, at 02:49Z.
+- [guess] Next, after `9f3b`: the lock-only commit, the suites that read the two locks, then "ready to mark #8539 at <sha>", with the records compared to SCANLEAN's `41a78d81cf` and #8139's `bec1e5cdaa18`. I expect `Spot.OneStage.paramsParsed` and `Spot.Registration.check` to equal SCANLEAN's, since the spot Lean is the same, and #8139's to differ by construction.
+- Not ready to mark: neither run has started.
