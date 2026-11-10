@@ -81,7 +81,7 @@ from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
 from verity.ml.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
-from verity.core.protocols.spot.challenger import CoinError
+from verity.spot.device.challenger import CoinError
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops.boolean import gemm as BG

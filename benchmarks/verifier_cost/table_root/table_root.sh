@@ -9,7 +9,7 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 F=$PWD/verity/flock/verifier
-P=$PWD/verity/core/service/spot
+P=$PWD/verity/spot/verifier/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 bash tools/verity/lean/setup.sh "$F" > "$O/setup.log" 2>&1 || { tail -40 "$O/setup.log" >&2; exit 1; }

@@ -14,7 +14,7 @@ import pytest
 import cpu_step as S
 import replay as R
 from verity.ml.protocols.pouw.circuit import words as PW
-from verity.core.protocols.spot.one_stage.draw import strata_problem
+from verity.spot.verifier.one_stage.draw import strata_problem
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.reference import evaluate as reference

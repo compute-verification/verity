@@ -53,7 +53,7 @@ from e2e_h200.commit import _slots, layout as commit_layout  # noqa: E402
 from e2e_h200.plan import EPS_KEY  # noqa: E402
 from e2e_h200.shape import PV_K, SHAPES  # noqa: E402
 from e2e_h200.window import Locator, Registered, Run, Segment  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.definitions.ops.boolean import gemm as BG  # noqa: E402
 from verity.definitions.ops.boolean import quant as BQ  # noqa: E402

@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.spot import challenger as Ch, remote as R
+from verity.spot.device import challenger as Ch, remote as R
 from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent

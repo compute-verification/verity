@@ -27,7 +27,7 @@ CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all
                                              "verity/flock/prover/python/verity_flock/rec_residuals.py",
                                              "verity/flock/prover/python/verity_flock/rec_cap.py",
                                              "verity/flock/prover/python/verity_flock/circuit.py",
-                                             "verity/core/protocols/spot/one_stage/registered.py",
+                                             "verity/spot/verifier/one_stage/registered.py",
                                              "verity/flock/verifier/VStar/In.lean", "verity/flock/verifier/vstar/"]},
              preflight=["tools/verity/check/preflight.py"],
              after_land=["uv", "run", "-q", "python", "tools/verity/check/post_train.py"])

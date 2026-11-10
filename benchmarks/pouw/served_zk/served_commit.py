@@ -138,12 +138,12 @@ from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_r
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as D
-from verity.core.protocols.spot.one_stage import partition as PT
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.one_stage.verdict import Verdict, _Collect
+from verity.spot.device import challenger as Ch
+from verity.spot.verifier import service as S
+from verity.spot.verifier.one_stage import draw as D
+from verity.spot.verifier.one_stage import partition as PT
+from verity.spot.verifier.one_stage import registration as R
+from verity.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402

@@ -25,8 +25,8 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import live_reads as LR
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.spot.device import challenger as Ch
+from verity.spot.verifier.one_stage import proofs as PF
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_credit_cases"):

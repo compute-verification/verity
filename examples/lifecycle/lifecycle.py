@@ -49,9 +49,9 @@ from verity.core.protocols import reporting
 from verity.core.protocols.pous import wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
-from verity.core.protocols.spot import parties
-from verity.core.protocols.spot.coins import OwnRandomness, draw_first
-from verity.core.protocols.spot.one_stage import registered as R
+from verity.spot.verifier import parties
+from verity.spot.device.coins import OwnRandomness, draw_first
+from verity.spot.verifier.one_stage import registered as R
 from verity.core.wire import Body, Int, Message, Schema
 from verity.circuits import boolean as BL
 from verity.circuits import codec

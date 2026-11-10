@@ -34,8 +34,8 @@ from verity_vllm.records import weights_registration as WRG
 
 from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.pouw import audit as AU
-from verity.core.protocols.spot.one_stage import partition as P
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.spot.verifier.one_stage import partition as P
+from verity.spot.verifier.one_stage import registered as G
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF

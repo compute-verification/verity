@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import verity.definitions.ops.scalar  # noqa: F401
-from verity.core.protocols.spot.one_stage import registered as REG
+from verity.spot.verifier.one_stage import registered as REG
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value

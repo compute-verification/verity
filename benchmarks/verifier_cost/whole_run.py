@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "verity/core/service/spot/tests"))
+sys.path.insert(0, str(ROOT / "verity/spot/verifier/lean/tests"))
 
 import test_difftest as T  # noqa: E402
 from verity.circuits import codec, partition_object as PO  # noqa: E402

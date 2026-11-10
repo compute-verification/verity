@@ -78,9 +78,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.core.protocols.pouw.weights import chunks
-from verity.core.protocols.spot.one_stage import produced as PR
-from verity.core.protocols.spot.one_stage import registered as G
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.spot.verifier.one_stage import produced as PR
+from verity.spot.verifier.one_stage import registered as G
+from verity.spot.verifier.one_stage import registration as R
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
 PARTIALS = "partials"

@@ -49,7 +49,7 @@ import verity_difftest as D
 from verity_difftest import canonical
 
 from verity.core.deploy import config as K
-from verity.core.protocols.spot import parties as SPP
+from verity.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 
 PROTOCOLS = Path(__file__).resolve().parents[2]

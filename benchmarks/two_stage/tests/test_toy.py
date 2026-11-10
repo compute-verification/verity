@@ -19,8 +19,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot import challenger as Ch, coins as CC, second_stage as SS, service as S
-from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R, \
+from verity.spot.device import challenger as Ch, coins as CC
+from verity.spot.verifier import second_stage as SS, service as S
+from verity.spot.verifier.one_stage import partition as P, registered as REG, registration as R, \
     verifier as V
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits

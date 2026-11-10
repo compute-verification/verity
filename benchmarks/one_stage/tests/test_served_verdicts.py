@@ -54,7 +54,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 from verity.core.protocols.pous import wipe_period as W
-from verity.core.protocols.spot.one_stage import registration as REG
+from verity.spot.verifier.one_stage import registration as REG
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -1057,7 +1057,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "flock" / "verifier",
-              tree / "verity" / "core" / "service" / "spot", tree / "verity" / "flock" / "pod", bin_, venv,
+              tree / "verity" / "spot" / "verifier" / "lean", tree / "verity" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)

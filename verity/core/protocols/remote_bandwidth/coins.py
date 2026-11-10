@@ -49,8 +49,8 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.core.protocols.spot import remote
-from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
+from verity.spot.device import remote
+from verity.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
                                                              order_reason, pinned_session, record_many)
 from verity.ml.commitments.scheme import DIGEST_BYTES

@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 
-from verity.core.protocols.profile import WINDOW_DELTA
+from verity.spot.verifier.profile import WINDOW_DELTA
 
 LN2 = math.log(2)
 DELTA_BITS = WINDOW_DELTA.denominator.bit_length() - 1  # δ = 2^-DELTA_BITS, the grind's own failure probability (outside ε)

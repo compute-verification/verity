@@ -50,7 +50,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
+from verity.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population

@@ -196,9 +196,9 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: Spot areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
 #: Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
-SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/flock/verifier",
+SPOT_TREES = ("verity/core/protocols/spot", "verity/spot/verifier/lean", "verity/flock/verifier",
               "verity/flock/prover")
-SPOT_LEAN = ("verity/core/service/spot", "verity/flock/verifier")
+SPOT_LEAN = ("verity/spot/verifier/lean", "verity/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")

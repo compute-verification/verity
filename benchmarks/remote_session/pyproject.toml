@@ -32,7 +32,7 @@ untraced = [
     "tests/test_store_layout.py",
 ]
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
+          "verity/spot/verifier/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/core/protocols/record.py",
           "verity/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)

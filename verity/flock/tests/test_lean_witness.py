@@ -51,7 +51,7 @@ import keyed
 import numpy as np
 import pytest
 from test_lean_rec_coins import built, restaged  # noqa: F401
-from verity.core.protocols.spot.one_stage import partition as P
+from verity.spot.verifier.one_stage import partition as P
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_call
 from verity.definitions.ops import gemm as G

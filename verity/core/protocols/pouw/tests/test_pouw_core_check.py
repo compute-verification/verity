@@ -20,9 +20,9 @@ import pytest
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.spot.device import challenger as Ch
+from verity.spot.verifier import service as S
+from verity.spot.verifier.one_stage import registration as R
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
@@ -444,7 +444,7 @@ def test_the_pinned_tiles_are_their_templates():
     by benchmarks/pouw's staged-unit test, and the H1 unit's by its pin test (`test_h1_pin.py`)."""
     from verity.ml.protocols.pouw.circuit import h1tile as H
     from verity.ml.protocols.pouw.circuit import pc8
-    from verity.core.protocols.spot.one_stage import partition as PT
+    from verity.spot.verifier.one_stage import partition as PT
     from verity.circuits.defs import bind
     from verity.definitions.ops.boolean import gemm as BG
     pairs = tuple((i, j) for i in range(4) for j in range(8))

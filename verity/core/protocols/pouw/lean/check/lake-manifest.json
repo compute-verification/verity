@@ -20,7 +20,7 @@
    "name": "core_spot",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../window/../../../../service/spot",
+   "dir": "../../../../../spot/verifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -49,7 +49,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../window/../../../../service/spot/../../primitives/lms/lean",
+   "../../../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

@@ -32,7 +32,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from verity.core.protocols.profile import IntegrityProfile
+from verity.spot.verifier.profile import IntegrityProfile
 
 from . import audit, coins, line, receipts, timing
 

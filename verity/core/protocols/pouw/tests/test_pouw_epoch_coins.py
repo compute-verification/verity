@@ -19,7 +19,7 @@ import epoch_coins_vectors as V
 from verity.core.protocols.pouw import coins as EC
 from verity.core.protocols.pouw import verifier
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.spot import challenger as Ch
+from verity.spot.device import challenger as Ch
 from verity.core.protocols.pouw.audit import Epoch, Workload, salt_of, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.ml.protocols.pouw.schemes import ncp

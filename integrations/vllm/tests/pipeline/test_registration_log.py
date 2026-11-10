@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.spot.verifier.one_stage import registered as G
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program

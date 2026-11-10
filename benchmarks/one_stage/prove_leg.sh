@@ -35,7 +35,7 @@ export PYTHONPATH=$SRC:$SRC/verity/flock/prover/python:$SRC/integrations/vllm:$S
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup
 SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
-(cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/spot/verifier/lean && lake build sampled-proofs-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 FW=
 if [ "${LEG_FIREWALL:-1}" = 1 ]; then

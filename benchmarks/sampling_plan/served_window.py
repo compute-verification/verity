@@ -64,10 +64,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
 from verity.core.protocols import reporting
-from verity.core.protocols.profile import WINDOW_DELTA
-from verity.core.protocols.spot.costfit import Fitted, fit
-from verity.core.protocols.spot.one_stage.partition import UNIT_CLASS_MAX
-from verity.core.protocols.spot.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
+from verity.spot.verifier.profile import WINDOW_DELTA
+from verity.spot.costfit import Fitted, fit
+from verity.spot.verifier.one_stage.partition import UNIT_CLASS_MAX
+from verity.spot.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, ReplayGrain, for_target, grain_costs, leak_count,
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
 

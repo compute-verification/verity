@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.spot.one_stage import partition as P, registration as R
-from verity.core.protocols.spot.one_stage.served import ServedTree
+from verity.spot.verifier.one_stage import partition as P, registration as R
+from verity.spot.verifier.one_stage.served import ServedTree
 from verity.circuits.codec import canonical_json
 
 #: a statement's ``--registered`` file, one a call

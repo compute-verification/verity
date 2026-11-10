@@ -45,7 +45,7 @@ sys.path.insert(0, str(HERE))
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from verity.core.protocols.certifier.warden import INTEGER_FIELDS  # noqa: E402
-from verity.core.protocols.spot.one_stage import registration as RG  # noqa: E402
+from verity.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")

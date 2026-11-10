@@ -25,7 +25,7 @@ path = "../commit"
 
 [[require]]
 name = "core_spot"
-path = "../../../../service/spot"
+path = "../../../../../spot/verifier/lean"
 
 [[lean_lib]]
 name = "PouwWindow"

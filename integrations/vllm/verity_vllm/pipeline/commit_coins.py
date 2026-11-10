@@ -35,9 +35,9 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote
-from verity.core.protocols.spot.challenger import CoinError, LiveOpening, live_reason
+from verity.spot.device import challenger as Ch
+from verity.spot.device import remote
+from verity.spot.device.challenger import CoinError, LiveOpening, live_reason
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW

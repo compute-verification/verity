@@ -41,14 +41,14 @@ parts = 3
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/core/protocols/record.py",
-          "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
+          "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/spot/verifier/profile.py",
           "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/flock/verifier/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/spot",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean",
-          "verity/core/service/spot", "verity/core/service/vstar/recursive", "verity/flock/verifier",
+          "verity/spot/verifier/lean", "verity/spot/verifier/recursive", "verity/flock/verifier",
           "verity/core/primitives/lms/lean",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through

@@ -2201,6 +2201,32 @@
         "verity/ml/flock/tool.py": "verity/flock/tool.py",
         "verity/ml/flock/verifier/": "verity/flock/agreement/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/profile.py": "verity/spot/verifier/profile.py",
+        "verity/core/protocols/spot/README.md": "verity/spot/verifier/README.md",
+        "verity/core/protocols/spot/__init__.py": "verity/spot/verifier/__init__.py",
+        "verity/core/protocols/spot/candidates.py": "verity/spot/candidates.py",
+        "verity/core/protocols/spot/challenger.py": "verity/spot/device/challenger.py",
+        "verity/core/protocols/spot/coins.py": "verity/spot/device/coins.py",
+        "verity/core/protocols/spot/consumers.py": "verity/spot/verifier/consumers.py",
+        "verity/core/protocols/spot/costfit.py": "verity/spot/costfit.py",
+        "verity/core/protocols/spot/one_stage/": "verity/spot/verifier/one_stage/",
+        "verity/core/protocols/spot/optimize.py": "verity/spot/optimize.py",
+        "verity/core/protocols/spot/parties.py": "verity/spot/verifier/parties.py",
+        "verity/core/protocols/spot/plancheck.py": "verity/spot/plancheck.py",
+        "verity/core/protocols/spot/pyproject.toml": "verity/spot/verifier/pyproject.toml",
+        "verity/core/protocols/spot/remote.py": "verity/spot/device/remote.py",
+        "verity/core/protocols/spot/second_stage.py": "verity/spot/verifier/second_stage.py",
+        "verity/core/protocols/spot/service.py": "verity/spot/verifier/service.py",
+        "verity/core/protocols/spot/tests/": "verity/spot/verifier/tests/",
+        "verity/core/protocols/tests/test_profile.py": "verity/spot/verifier/tests/test_profile.py",
+        "verity/core/service/spot/": "verity/spot/verifier/lean/",
+        "verity/core/service/vstar/recursive/": "verity/spot/verifier/recursive/",
+        "verity/core/service/vstar/tests/recursive_data.json": "verity/spot/verifier/recursive/tests/recursive_data.json",
+        "verity/core/service/vstar/tests/test_vstar_recursive.py": "verity/spot/verifier/recursive/tests/test_vstar_recursive.py"
+      }
     }
   ]
 }

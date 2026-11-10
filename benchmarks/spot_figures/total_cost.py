@@ -73,8 +73,8 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
-from verity.core.protocols.spot import plancheck
-from verity.core.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
+from verity.spot import plancheck
+from verity.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
 from verity.circuits.partition_v2 import unit_class
 
 SCHEMA = "spot-figure1/v2"

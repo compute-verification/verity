@@ -35,7 +35,7 @@ import math
 from dataclasses import dataclass
 from fractions import Fraction
 
-from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.spot.verifier.profile import IntegrityProfile, Subset
 
 from . import audit, codec
 from .codec import BLOCK_BYTES

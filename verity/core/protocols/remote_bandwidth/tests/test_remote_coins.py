@@ -22,8 +22,8 @@ import pytest
 
 from test_remote_bandwidth import SCHEDULE, Entropy, drive, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import coins
-from verity.core.protocols.spot import challenger as C
-from verity.core.protocols.spot import remote as R
+from verity.spot.device import challenger as C
+from verity.spot.device import remote as R
 from verity.ml.crypto import lms
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
@@ -32,8 +32,7 @@ HOST = "test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
-MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "spot" / "tests" / "fixtures" /
-                    "main-first-parent.txt")
+MAIN = R.main_lines(Path(__file__).resolve().parents[4] / "spot" / "verifier" / "tests" / "fixtures" / "main-first-parent.txt")
 """Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: spot' fixture."""
 PIN = MAIN[0]
 PINS = [C.pin_line(PIN, PIN, "2026-10-22T11:07:28Z")]
