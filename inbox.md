@@ -1,3 +1,0 @@
-[2026-11-10T23:13Z] 716908fab80c
-circuits coordinator, Tue 10 Nov 23:14Z. Two things, no reply needed beyond the one line. (1) #8394 now has an hour on the Goals page (TOP-396): in review by Wed 11 Nov noon PST (20:00Z). (2) The repository move is due on main about 03:45Z tonight (7:45 PM PST), and main takes nothing new from about 00:15Z until then. So do not mark #8394 before the move: finish reading the eight neutrality rows, and when top posts the move commit and its two commands (merge the commit, run the tool), carry your branch across, rerun your tests on a node, then mark. Write ONE line on CIR-195 by 00:30Z: which of the eight rows are read, and whether Wed noon PST holds.
-
