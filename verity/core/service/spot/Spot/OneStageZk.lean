@@ -13,8 +13,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and `{file: SHA-512}` naming at least each rep
   file the statement's session reads (`<stream with / as .>.bin`). The sampled proof blocks are proved in one session, whose
   statement is theirs: the check refuses evidence naming none or several (`oneSession`) before it reads a tree;
-* **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
-  SHA-512 as `flock-verify --archive` finds them;
+* **blobs**: the files those digests name (`Core.Blobs`). The registered circuit names the lookup tables its session
+  reads (its META's `lookups`, `lookupsOf`), so blobs whose pinned MUFU tables (`tablesOf`, each under its SHA-512 as
+  `flock-verify --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
+  up: the tables the session `run` sets up reads are the registered circuit's;
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a sample other than the one they give before v1's `check`;
@@ -323,6 +325,48 @@ def tablesOf (bs : Core.Blobs) : List (String × ByteArray) :=
   Flock.MUFU_TABLES.filterMap fun t =>
     (bs.entries.find? fun (d, _) => Flock.hexOf d == t.sha512).map fun (_, b) => (t.name, b)
 
+/-- The pinned MUFU tables the circuit file `circuitB` looks up, in `Flock.MUFU_TABLES`' order: the names under its META's
+`lookups` (`Flock.HmOut.metaOf`, the file's second line), none where it has none. -/
+def lookupsOf (circuitB : ByteArray) : V (List String) := do
+  match (← Flock.HmOut.metaOf circuitB).getObjVal? "lookups" with
+  | .ok (.obj kvs) =>
+    let names := kvs.toArray.map (·.1)
+    pure ((Flock.MUFU_TABLES.filter fun t => names.contains t.name).map (·.name))
+  | .ok .null | .error _ => pure []
+  | .ok _ => throw "META: lookups is not an object"
+
+/-- The refusal of blobs whose pinned MUFU tables are not the registered circuit's lookups (`tablesHeld`). -/
+def NO_TABLES : String :=
+  "tables: the blobs' pinned MUFU tables are not the ones the registered circuit looks up (its META's lookups)"
+
+/-- The blobs' lookup tables held to the registration's (module docstring, **blobs**): the pinned MUFU tables the blobs
+hold (`tablesOf`) must be the ones the registered circuit looks up (`lookupsOf`), else they refuse, naming both. -/
+def tablesHeld (p : Own) (bs : Core.Blobs) : V Unit := do
+  let want ← lookupsOf (← bs.get p.circuit "circuit")
+  let got := (tablesOf bs).map (·.1)
+  let names (ns : List String) := if ns.isEmpty then "none" else ", ".intercalate ns
+  if got != want then throw s!"{NO_TABLES}: the circuit looks up {names want}, the blobs hold {names got}"
+
+/-- `tablesHeld` on a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`) and blobs
+under the digests `digests` (lowercase hex), whatever their bytes: the `tables_held` piece,
+`{"lookups": ..., "digests": [hex, ...]}` to `{"why": refusal or null}`. -/
+def tablesPiece (j : Json) : V Json := do
+  let .arr ds := getD j "digests" | throw "digests is not a list"
+  let entries ← ds.mapM fun
+    | .str s => return (← Flock.unhex s, ByteArray.empty)
+    | _ => throw "digests is not a list of hex strings"
+  let m := match j.getObjVal? "lookups" with
+    | .ok l => Json.mkObj [("lookups", l)]
+    | .error _ => Json.mkObj []
+  let c := s!"circuit\nMETA {m.compress}\n".toUTF8
+  let d := Flock.Sha512.hash c
+  let own : Own :=
+    { programJ := Json.null, program := .empty, partition := Json.null, circuit := Flock.hexOf d, pub := "",
+      registered := none }
+  return Json.mkObj [("why", match tablesHeld own ⟨#[(d, c)] ++ entries⟩ with
+    | .ok () => Json.null
+    | .error w => Json.str w)]
+
 /-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
 `tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
 object and program. -/
@@ -519,11 +563,13 @@ def provedHeld (proved want : Array Nat) : V Unit :=
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's sample: every session's verdict, the units the accepted ones proved and whether all
 accepted. A session accepts only where the registration's population is the public file's units in order
-(`FilePart.check`, last). A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
+(`FilePart.check`, last). A refusal, first, of blobs holding other lookup tables than the registered circuit's (`tablesHeld`),
+then for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
 the evidence's (`provedHeld`); and for a length a session's statement can't hold (`fitsWhy`, `drawFitsWhy`, at
 `WORD`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
+  tablesHeld p bs
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
     else pure () : V Unit)
@@ -757,6 +803,44 @@ private def refusal : V Unit → String
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"de\"},\"roots\":{\"x\":\"aa\",\"y\":\"bb\"}},\"instances\":3,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots, domains, population"
 #guard (refusal (publicHeld heldRecord "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+
+/-- A circuit file whose META looks up the MUFU tables `names`. -/
+private def lookingUp (names : List String) : ByteArray :=
+  s!"circuit\nMETA {(Json.mkObj [("lookups", Json.mkObj (names.map (·, Json.mkObj [])))]).compress}\nrest".toUTF8
+
+/-- The verifier's own files naming the circuit file `c` and no public file. -/
+private def ownOf (c : ByteArray) : Own :=
+  { programJ := Json.mkObj [("definitions", Json.mkObj [])], program := .empty, partition := Json.null,
+    circuit := Flock.hexOf (Flock.Sha512.hash c), pub := "", registered := none }
+
+/-- Blobs holding the circuit file `c` and, under their pinned SHA-512s whatever their bytes, the MUFU tables `names`. -/
+private def withTables (c : ByteArray) (names : List String) : Core.Blobs :=
+  ⟨#[(Flock.Sha512.hash c, c)] ++ (Flock.MUFU_TABLES.filter fun t =>
+    names.contains t.name).toArray.map fun t => ((Flock.unhex t.sha512).toOption.getD .empty, .empty)⟩
+
+private def held (lookups tables : List String) : String :=
+  refusal (tablesHeld (ownOf (lookingUp lookups)) (withTables (lookingUp lookups) tables))
+
+#guard held [] [] == ""
+#guard held ["ex2", "rcp"] ["rcp", "ex2"] == ""
+#guard held [] ["rcp"] == s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+#guard held ["ex2"] ["ex2", "rsq", "sqrt", "rcp"] == s!"{NO_TABLES}: the circuit looks up ex2, the blobs hold rsq, sqrt, rcp, ex2"
+#guard held ["ex2", "rcp"] ["ex2"] == s!"{NO_TABLES}: the circuit looks up rcp, ex2, the blobs hold ex2"
+#guard (lookupsOf "circuit\nMETA {\"lookups\":[]}\n".toUTF8).toOption == none
+#guard (lookupsOf "circuit\nMETA {\"lookups\":null}\n".toUTF8).toOption == some []
+#guard (lookupsOf "circuit\nMETA {\"lookups\":{\"foo\":{},\"ex2\":{}}}\n".toUTF8).toOption == some ["ex2"]
+#guard (refusal (tablesHeld (ownOf (lookingUp [])) ⟨#[]⟩)).startsWith "circuit: "
+#guard refusal ((fun _ => ()) <$> run (ownOf (lookingUp [])) #[] none (withTables (lookingUp []) ["rcp"])) ==
+  s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+#guard (refusal ((fun _ => ()) <$> run (ownOf (lookingUp ["rcp"])) #[] none (withTables (lookingUp ["rcp"]) ["rcp"]))).startsWith
+  "public file: "
+#guard (tablesPiece (Json.mkObj [("lookups", Json.mkObj [("rcp", Json.mkObj [])]), ("digests", Json.arr #[Json.str
+  "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc",
+  Json.str "00"])])).toOption == some (Json.mkObj [("why", Json.null)])
+#guard (tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str
+  "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc"])])).toOption ==
+  some (Json.mkObj [("why", Json.str s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp")])
+#guard !(tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str "0"])])).toBool
 
 #guard (rootBLen { (default : Flock.Setup) with m := 25, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 16384
 #guard (rootBLen { (default : Flock.Setup) with m := 26, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 8192
