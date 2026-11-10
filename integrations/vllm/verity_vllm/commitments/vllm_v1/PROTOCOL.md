@@ -6,12 +6,12 @@ beside frame-v3 (`verity.ml.commitments.frame_v3`). Backends select one or the o
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
 of the roots serving emits.
 
-- Reference: `verity.ml.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
+- Reference: `verity_vllm.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
   `verity.ml.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
   tree rule.
-- Vectors: `vectors.json`, written by `python -m verity.ml.commitments.vllm_v1.vectors`. `--check` exits
+- Vectors: `vectors.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors`. `--check` exits
   nonzero if the file is stale.
-- Conformance: `verity/ml/commitments/tests/test_vllm_v1.py` checks the reference against the
+- Conformance: `integrations/vllm/tests/commitments/test_vllm_v1.py` checks the reference against the
   vectors. `integrations/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
 All hashes are SHA-256; §10 specifies `vllm-v1-sha512`, the same framing through SHA-512. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
@@ -184,7 +184,7 @@ covers a parameter the verifier gets wrong, such as N, the chunk size or the lea
 tags and the tree walk are imported from here; the position leaf and the level fold keep a prefix-once form over
 these tags, with a pluggable hash for benchmarks. Every committer and the opening verifiers (`hidden_stream.py`,
 `native_host.py`, `native_ranges.py`) hash through it, and
-`hashing.py` / `merkle.py` re-export the id-leaf rules of `verity.ml.commitments.leaves`.
+`hashing.py` / `merkle.py` re-export the id-leaf rules of `verity_vllm.commitments.leaves`.
 `integrations/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
 
 **CUDA** (checked against the vectors by the pod-marked `integrations/vllm/tests/commit/test_scheme_cuda.py`):
@@ -347,7 +347,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - The committers hash with SHA-512: the Python `commit.scheme` rules and the FA2 tap's `Verity_sha_ctx`.
 - They match `vectors_sha512.json` byte for byte.
 
-**Vectors.** `vectors_sha512.json`, written by `python -m verity.ml.commitments.vllm_v1.vectors_sha512`, covers:
+**Vectors.** `vectors_sha512.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors_sha512`, covers:
 - H over the node, lift and empty tags;
 - position, chunk and thread leaves;
 - trees of 0–7 leaves with their paths;

@@ -2,7 +2,7 @@
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
 beside this file.  Conformance vectors: ``vectors.json`` beside it, written by
-``python -m verity.ml.commitments.vllm_v1.vectors``.  This module is the plain reference: stdlib ``hashlib``
+``python -m verity_vllm.commitments.vllm_v1.vectors``.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.
 
 The tree rule (pairs ``node``, an odd trailing child ``lift``, zero leaves ``empty``) and the id leaf are the ones
@@ -22,11 +22,11 @@ from verity.errors import InvalidArtifact
 from ..leaves import DIGEST_BYTES, empty_root, fold_path, levels, open_path, path_shape
 from ..leaves import ids_digest as ids_digest
 from ..leaves import leaf_hash as id_leaf
-from ..identity import identity_digest, identity_digest_sha512
+from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from ..leaves import LEAF_TAG, shape_text
-from ..scheme import DIGEST_BYTES as _DIGEST_BYTES
-from ..scheme import LeafLayout, Path
-from ..scheme import sha as _sha
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.ml.commitments.scheme import LeafLayout, Path
+from verity.ml.commitments.scheme import sha as _sha
 
 __all__ = [
     "FA2H_KIND_CHUNK",

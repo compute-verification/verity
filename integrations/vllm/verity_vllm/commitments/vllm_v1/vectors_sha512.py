@@ -1,7 +1,7 @@
 """Generate the ``vllm-v1-sha512`` conformance vectors (``vectors_sha512.json`` beside this file) from the reference.
 
-    python -m verity.ml.commitments.vllm_v1.vectors_sha512          # rewrite vectors_sha512.json
-    python -m verity.ml.commitments.vllm_v1.vectors_sha512 --check  # exit 1 if it is stale
+    python -m verity_vllm.commitments.vllm_v1.vectors_sha512          # rewrite vectors_sha512.json
+    python -m verity_vllm.commitments.vllm_v1.vectors_sha512 --check  # exit 1 if it is stale
 
 ``vllm-v1`` with SHA-512 for every hash the scheme computes (PROTOCOL.md §10): leaves, nodes, lifts, the empty root, the
 stream and thread contexts and every root binding are 64 bytes; the integration's identity digests (program, ctx, geo,
@@ -139,7 +139,7 @@ def _opening_vectors() -> list[dict[str, Any]]:
 def build() -> dict[str, Any]:
     return {
         "scheme": NAME_SHA512,
-        "generator": "python -m verity.ml.commitments.vllm_v1.vectors_sha512",
+        "generator": "python -m verity_vllm.commitments.vllm_v1.vectors_sha512",
         "encoding": ("lowercase hex; vllm-v1 with SHA-512 for every hash the scheme computes (tags, framing and field order unchanged); "
                      "scheme-computed digests are 64 bytes, the integration's identity digests 32"),
         "hash": _hash_vectors(),

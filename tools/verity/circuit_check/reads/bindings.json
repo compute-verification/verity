@@ -2088,7 +2088,7 @@
     "_ops.py",
     "verity/protocols/pous/verifier/__init__.py",
     "verity/ml/commitments/advice.py",
-    "verity/ml/commitments/vllm_v1"
+    "integrations/vllm/verity_vllm/commitments/vllm_v1"
    ]
   },
   {
@@ -2650,9 +2650,9 @@
   },
   {
    "probes": [
-    "verity/ml/commitments/leaves.py",
+    "integrations/vllm/verity_vllm/commitments/leaves.py",
     "verity/ml/commitments/poseidon2_babybear.py",
-    "verity/ml/commitments/vllm_v1/__init__.py"
+    "integrations/vllm/verity_vllm/commitments/vllm_v1/__init__.py"
    ]
   },
   {

@@ -1,10 +1,10 @@
 """Generate the ``vllm-v1`` conformance vectors (``vectors.json`` beside this file) from the reference.
 
-    python -m verity.ml.commitments.vllm_v1.vectors          # rewrite vectors.json
-    python -m verity.ml.commitments.vllm_v1.vectors --check  # exit 1 if vectors.json is stale
+    python -m verity_vllm.commitments.vllm_v1.vectors          # rewrite vectors.json
+    python -m verity_vllm.commitments.vllm_v1.vectors --check  # exit 1 if vectors.json is stale
 
 Every input is derived from a fixed label by SHA-256 counter expansion, so the file is a pure function of this
-module and the reference; ``verity/ml/commitments/tests/test_vllm_v1.py`` fails if they drift apart.
+module and the reference; ``integrations/vllm/tests/commitments/test_vllm_v1.py`` fails if they drift apart.
 """
 
 from __future__ import annotations
@@ -335,7 +335,7 @@ def _layout_vectors() -> list[dict[str, Any]]:
 def build() -> dict[str, Any]:
     return {
         "scheme": NAME,
-        "generator": "python -m verity.ml.commitments.vllm_v1.vectors",
+        "generator": "python -m verity_vllm.commitments.vllm_v1.vectors",
         "encoding": "every byte string is lowercase hex; a path entry null means the node is lifted at that level",
         "hash": _hash_vectors(),
         "id_leaf": _id_leaf_vectors(),

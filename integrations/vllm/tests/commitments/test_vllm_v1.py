@@ -8,9 +8,9 @@ import hashlib
 
 import pytest
 
-from verity.ml.commitments import vllm_v1 as ref
+from verity_vllm.commitments import vllm_v1 as ref
 from verity.ml.commitments.scheme import CommitmentScheme
-from verity.ml.commitments.vllm_v1 import vectors as V
+from verity_vllm.commitments.vllm_v1 import vectors as V
 from verity.errors import InvalidArtifact
 
 VECTORS = V.load()
@@ -25,7 +25,7 @@ def _path(entries: list[str | None]) -> list[bytes | None]:
 
 
 def test_vectors_file_is_what_the_reference_generates() -> None:
-    assert V.main(["--check"]) == 0, "rerun `python -m verity.ml.commitments.vllm_v1.vectors`"
+    assert V.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors`"
 
 
 def test_scheme_implements_the_interface() -> None:
