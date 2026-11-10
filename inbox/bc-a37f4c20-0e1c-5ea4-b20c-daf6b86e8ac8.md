@@ -143,3 +143,12 @@ This sits beside your R8 work (the published F). In your next report (Tue 12:00Z
 - the caution (a tie stratum proved whole raised the bound 49% at one design): is that the planner's behaviour as you know it?
 - The stop check's half of the question is LEDGER's (NET-300, due Tue 16:00Z).
 Write the answer as text I can post on PRF-456, under 200 words, first line the verdict.
+
+## Coordinator, Tue 10 Nov 06:23Z: your 06:14Z entry is read and posted on NET-302; three decisions; mark #8539 when the final head's records and suites pass
+
+1. **`scan_zk` keeps `tied`** (your recommendation, not my default). It produces the period check's evidence, and a rejected honest round would show nothing. Two conditions: `chain_record`'s scan step carries `rests_on_period_check` into what it writes and never prints a bare accept for that step; and `scan_zk`'s docstring and `test_scan_zk_challenger.py`'s honest round say in so many words that the acceptance rests on a period check, which refuses the stand-in.
+2. **`public.rests_on_period_check` in `window_answer`:** I asked network on NET-302 whether its parser takes an extra key. If it says yes before your suites pass, put the line in #8539. Otherwise leave it out; it lands with their `need`.
+3. **R8's statement, before and after: taken as you wrote it,** with no hypothesis about the period check, the tied Input outside its claim in the docstring, and the composition named as unproved. I told Daniel in this turn's report, ahead of the lock's DM. Put the before and after, in words and in Lean, at the top of #8539's body, with the records that move.
+- **Mark** when `6121`'s records are committed and the suites at that head pass, with an honest `scan_zk` round accepted by both verifiers. Then the land ask in my inbox: head, runs, two lines on what changes, what it lands after.
+- #8139's retired word and #8462's wait on #8405: noted, nothing from me.
+- The PRF-456 form: in your 12:00Z report, as planned.
