@@ -27,7 +27,7 @@ Items 1 and 9–12 are the refactor's statement-changing steps: KS to sampling o
 `SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, PoUB and the inference-only policy over sampling (11), and
 recursion's knowledge form (12). The rest (2–6, 8 and 13) are the refactor plan's other steps.
 
-**Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts module prefixes from the tree rule
+**Premises in `Proofs/`.** `trees.except` (`security/lean-audit.json`) exempts module prefixes from the tree rule
 until Flock's spec is extracted. Each is there for Flock's definitions in `Proofs/`, and one
 of them, `Proofs.Accounting.TS.Session`, is on PoUW's chain, so this is a Flock question.
 - **lean's list**: 40 `Prop`-valued definitions under `trees.except`
