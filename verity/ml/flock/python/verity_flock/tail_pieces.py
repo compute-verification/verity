@@ -594,8 +594,10 @@ PIECES = {
     "SelectBf16_v1": lambda C, s, a, b: mux(C, s[0], a, b),
     "F32Fabs_v1": lambda C, a: list(a[:31]) + [ZERO],
     "F32Neg_v1": lambda C, a: fp.f32_neg(a),
-    "F32Fmaxf_v1": lambda C, a, b: _fmaxmin(C, a, b, True),
-    "F32Fminf_v1": lambda C, a, b: _fmaxmin(C, a, b, False),
+    # committed: a fold's running max (a row's amax over K values) would otherwise carry its mux forms, a few columns more each
+    # step, into every later step's comparator, and the unit's nonzeros would grow with K²
+    "F32Fmaxf_v1": lambda C, a, b: C.commit(_fmaxmin(C, a, b, True)),
+    "F32Fminf_v1": lambda C, a, b: C.commit(_fmaxmin(C, a, b, False)),
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
     # NVFP4 quantization's casts and the bit AND (PoUW's units; verity.ml.definitions.registry.nvfp4)
     "E4m3ToF32_v1": e4m3_to_f32,

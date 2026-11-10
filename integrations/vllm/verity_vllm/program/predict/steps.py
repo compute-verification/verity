@@ -113,6 +113,7 @@ from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.program.prune import dead_units
@@ -128,8 +129,6 @@ from .segment import edge_groups, edge_of, launch_of, segment_of
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
-#: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
-CAP_BITS = 1 << 23
 #: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
 SAMPLING_EPS = 1e-5
 #: a body's fields by their roles in `reads.READS`: the sampling parameters (`engine.step_trace.SAMPLING`) that leave a request's
