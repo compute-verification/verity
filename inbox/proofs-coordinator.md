@@ -26143,3 +26143,29 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
 - The kernel replay comes only with the full check after landing.
 
 **PR:** [#8565](https://github.com/compute-verification/verity/pull/8565), head `38e2f7d067`, based on `origin/main` (`7af4d24fca`). The land ask follows in its own entry when it's marked. **Date: marked by Tue 10 Nov 08:00Z**, unchanged.
+
+## GATEPOLICY, Tue 10 Nov 06:35Z: `4311`'s red is the rehearsal tree's `repository` suite, none of it the reader's; #8540 is marked
+
+**1. `r20261110-054925-4311` (source `9d51cc9492`) failed on the `repository` suite, 7 tests. Not the 18 `test_served_sources.py` tests, and nothing my commit adds.**
+
+- [read, the run's stdout.log] Four suites ran: `benchmarks/one_stage` 834 passed, `benchmarks/prove_path` 149 passed, `verity-cli` 96 passed, `repository` 172 passed and 7 failed. So the 18 `test_served_sources.py` failures are my VM's alone: remotely that file passes inside `benchmarks/one_stage`.
+- [run, this VM, the seven as named tests, three checkouts] The same seven fail with the same text (the logs differ only in the run time) at `e3578c66bb`, the rehearsal tip without my commit; at `9d51cc9492`, with it; and at `fc2d47bf11`, vllm's tip now. No message names one of my commit's six files.
+- What each says, for vllm:
+  1. `tests/lint/test_repo_env_reads.py::test_no_new_reads`: `benchmarks/one_stage/pearlplus_local_e2e.py:274` (2 reads, 0 allowed), `benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py:50` (1, 0), `tools/verity/circuit_check/tests/test_circuit_check.py` (3, 2 allowed).
+  2. `tests/lint/test_repo_lane_text.py::test_no_new_lane_text`: a Linear id, a PR number, a date or a name in 8 files: `Security/Properties/Pouw/PearlPlus.lean:19`, `benchmarks/one_stage/tests/test_served_pearlplus_lean.py:2,19`, `benchmarks/pouw/pearl_c_vllm/served_passes.py:102`, `benchmarks/pouw/pearl_c_vllm/verify_run.py:738`, `benchmarks/pouw/tests/test_pearl_c_vllm_lean.py:7`, `tools/research/tests/test_records_short_head.py:8`, `verity/core/protocols/onsite/CoreOnsite.lean:20-23`, `verity/core/protocols/pouw/lean/pearlplus/PouwPearlPlus/Check.lean:42`.
+  3. `tests/lint/test_repo_ruff.py::test_no_new_findings`: two stale `noqa` (RUF100), `benchmarks/pouw/pearlplus_lean/tests/test_pearlplus_lean.py:44` and `tools/research/tests/test_records_short_head.py:6`.
+  4. `tests/lint/test_repo_silent_excepts.py::test_no_new_silent_excepts`: `benchmarks/pouw/pearl_c_vllm/served_passes.py:615`, and `verity/core/protocols/sampled_proofs/tests/test_remote.py:685,908` (2, 1 allowed).
+  5. `tests/test_domains.py::test_every_entry_is_read_or_still_written`: nothing reads `POSEIDON2_BABYBEAR_W24_ROW`.
+  6. `tests/test_flock_json.py::test_flock_reads_json_through_the_total_parser`: `Lean.Json.parse` at `Flock/RecCompose.lean:360`, `Flock/RecLinksCmd.lean:52`, `Flock/Test/RecCompose.lean:142`.
+  7. `tests/test_repository.py::test_markdown_size_caps`: `ARCHITECTURE.md` 87 bytes and `verity/core/protocols/remote/README.md` 257 bytes over 48 KB.
+- [read] The rehearsal branch's merge base with `main` is `38f6228a3a` (3 Nov) and it carries other lanes' unlanded branches. On `main`'s line the suite is green: [run `r20261110-050854-2532`] `repository` 280 passed at #8540's head. `4311`'s own note says one of the seven is red on `main` at `41be424eb0` too; I did not find which.
+- [guess] An older `main`'s allowlists and caps meeting files merged in since; merging `main` into the rehearsal branch would clear most.
+- So piece 1's own suites were green in `4311`, and any `--changed` run on the rehearsal's tree fails these seven until they are fixed there. My next run names its suites instead (`benchmarks/one_stage`, `benchmarks/prove_path`, `verity-cli`).
+
+**3. #8540 (D1b): marked ready at 06:33Z**, head `b301a406cc`; the preflight onto `next` at `15ab284aa5` refused nothing. [run `r20261110-050854-2532`] 10 suites, 10 passed, 0 failed. [run `r20261110-050930-fe7c`] the Lean challenger difftest on period-opens carrying the registry's keys, 7 passed. Both ran on cpu-2 and I read both logs. The PR's body already held both results when I came to write them (edited 06:30:25Z, not by this session); every count in it matches the logs.
+
+**4. Correction:** piece 1's commit `9d51cc9492` is +407 −124 in six files, not +403 −122 as my 05:56Z report said.
+
+**2. In hand:** piece 1 onto `fc2d47bf11`, one reader. [read, `fc2d47bf11`] `_ledger_period` and `pearlplus_of_record` find the open and hold the reserve to the lane, the period to Pearl-C and its circuit to the window's. Nothing on the compose side reads α, Γ, the policy's id or the registration out of that open: the composite still takes `--alpha "$ALPHA" --gamma "$GAMMA"` from the developer's limits file (`served_composite.sh:102`). So today the open is found twice and read for the policy once, by mine. I am replacing my finding of it with theirs and taking the session from the case's passes' manifests, as `served_sources.py:423` does. The head and the VLLM-269 comment come by 09:30Z.
+
+**Could not verify:** which one of the seven is red on `main` too; who edited #8540's body; why the 18 fail on my VM (they pass remotely, I did not chase them).
