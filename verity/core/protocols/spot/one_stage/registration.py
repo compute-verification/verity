@@ -271,10 +271,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
+    fan, shared = _readers(program, query)
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
-        return c.verdict()
+        return c.verdict(fanout=fan)
     # R1
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
@@ -367,15 +368,21 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
             _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
                                                 bound))
     # R8
-    fan = None
-    if P.is_template_query(query):
-        try:
-            fan, shared = P.fanout(program, query), P.shared_inputs(program, query)
-        except P.QueryRefused:
-            shared = []
-        if shared:
-            c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
+    if shared:
+        c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     return c.verdict(fanout=fan)
+
+
+def _readers(program: Program, query: Mapping[str, Any]) -> tuple[int | None, list[int]]:
+    """R8's reading of a template query's partition of `program`: its fan-out and the run Input nodes its proof blocks
+    don't each read alone (`partition.fanout`, `partition.shared_inputs`); `(None, [])` for any other query, or one
+    that doesn't apply. A function of the program and query alone, so a verdict publishes F whatever the record."""
+    if not P.is_template_query(query):
+        return None, []
+    try:
+        return P.fanout(program, query), P.shared_inputs(program, query)
+    except P.QueryRefused:
+        return None, []
 
 
 def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],
