@@ -87,7 +87,10 @@
 # serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
 # served_verdicts.sh's weights(), which registers the weights before the first request), and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, and with
+# registration R chained right after W, and where that commit fails, or `retain` wrote no W, the piece goes no further:
+# the commit is what holds the window to its class's fixed load, so without it there is no draw, no verdict and no
+# Pearl+ line, and step 5 writes a piece that rejects for want of one; step 4 is `verify --tie W`, which holds the
+# passes to W, and with
 # PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`, which refuses passes
 # that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the class's, and whose
 # accept publishes its work in the grid form (verify_run.grid_work: the class's structural credit less the give-up padded
@@ -319,8 +322,11 @@ if [ -n "$GO" ] && [ -n "$TIE" ]; then
       > "$Q/tie.log" 2>&1
     rc=$?
     say "tie: served_verdicts.sh pearl-tie exit $rc after $(took "$t"): $(tail -1 "$Q/tie.log" | cut -c1-600)"
+    [ "$rc" = 0 ] || { say "draw: refused before it: the window's commit tied to W failed (pearl-tie exit $rc), so" \
+      "nothing holds the passes to the window's class and no draw or Pearl+ line follows it"; GO=; }
   else
-    say "W: retain wrote no window record, so nothing ties the passes to the window"
+    say "W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ line follows"
+    GO=
   fi
 fi
 
@@ -338,7 +344,7 @@ if [ -n "$GO" ]; then
   period close
   t=$(date +%s)
   TA=()
-  [ -n "$TIE" ] && [ -s "$W" ] && TA=(--tie "$W" ${PEARLPLUS_CLASS:+--class "$PEARLPLUS_CLASS"})
+  [ -z "$TIE" ] || TA=(--tie "$W" ${PEARLPLUS_CLASS:+--class "$PEARLPLUS_CLASS"})
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
     --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
     ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TA[@]+"${TA[@]}"} > "$Q/verify.log" 2>&1 &

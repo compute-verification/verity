@@ -1,6 +1,6 @@
 # The H200 example
 
-It shows the remote protocol's sampled-proofs half (`examples/README.md`) at a frozen shape on one H200: a step's every
+It shows the remote protocol's sampled proofs alone (`examples/README.md`) at a frozen shape on one H200: a step's every
 value committed, proof blocks drawn by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
 (`phases.sh`, the run of record). It claims nothing else.
 

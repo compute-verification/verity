@@ -130,7 +130,7 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
 #: a window's number (``w7``, ``window 7``), a step range, a count of windows or requests, or a field of a window's own
 #: holding a number, a list or a map of numbers, in text
 _OWN = "windows|users|engine_steps|every_slot|population|bits_by_window|advice_bits"
-_NUMBERED = "window|steps|requests|refused"
+_NUMBERED = "window|steps|window_steps|requests|refused"
 
 
 def _window_data(out: Path, k: int) -> list[str]:
@@ -1664,6 +1664,26 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     assert bad["reasons"] == ["the window's Pearl+ epoch isn't one round a Commit step: pass 2 retained no manifest"]
     none = S.pearlplus(tmp_path / "d", None, verified, tie=w)
     assert none["reasons"][0] == "no served run: serve-openai's Pearl+ arm wrote no served.json for the window"
+
+
+def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_windows_steps(tmp_path):
+    """A tied Pearl+ piece's ``load.window_steps`` is the picked window's Commit steps under another name, so `publish`
+    holds the piece in full in the serve dir and leaves it with no such count, and the POUW-DEV line's published form has
+    none either; the verdict, the tie's digest and the scheme stay."""
+    window, verified, w = _tied_epoch(tmp_path)
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    doc = S.pearlplus(out / "pieces" / "pouw", window, verified, tie=w)
+    assert doc["load"] == {"window_steps": 3}
+    whole = (out / "pieces" / "pouw" / S.DEVELOPMENT).read_text()
+    assert S.publish(out, private) == [f"pieces/pouw/{S.DEVELOPMENT}"]
+    pub = json.loads((out / "pieces" / "pouw" / S.DEVELOPMENT).read_text())
+    assert pub["load"] == {} and (pub["verdict"], pub["tie"], pub["scheme"]) == (doc["verdict"], doc["tie"], doc["scheme"])
+    assert (private / "pieces" / "pouw" / S.DEVELOPMENT).read_text() == whole and not _window_data(out, 7)
+    line = f"POUW-DEV {json.dumps(S.development_line(doc), sort_keys=True, default=str)}"
+    said = json.loads(S.public_line(line).removeprefix("POUW-DEV "))
+    assert said["load"] == {} and said["tie"] == doc["tie"] and "window_steps" not in S.public_line(line)
+    assert S.public_line('POUW-DEV {"load": {"window_steps": 3}, "passes": 3, "cred') == f"POUW-DEV {S.CUT}"
+    assert S.publish(out, private) == []
 
 
 @pytest.mark.parametrize("reserved, joined", [

@@ -1888,6 +1888,54 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert json.loads((d / SP.COIN).read_text()) == coin
 
 
+def test_a_runs_passes_rebuilt_from_its_case_take_the_same_verdict_on_the_recorded_coin(tmp_path):
+    """``case_passes.py`` writes back, from the parts and blobs ``served_passes.py case`` left, the passes a verifier
+    reads off the served node: the verdict over them on the recorded coin is the served one's (commitment, source, opened
+    tiles, work) and draws nothing, though each pass holds only the files the opened tiles read. A blob whose bytes
+    changed, one that is gone, and a directory that exists are refused."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    CP = load("pearl_c_vllm_case_passes", KERNEL.parent / "pearl_c_vllm" / "case_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    d = _serve_dir(tmp_path, [a, b])
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json")
+    assert rc == 0, doc["line"]
+    coin = (d / SP.COIN).read_text()
+    lean = {"verdict": "accept", "reason": None, "drawn": 3, "verdicts": doc["verdicts"], "work": answer["public"]["work"],
+            **{k: json.loads(coin)[k] for k in ("commitment", "source")}}
+    (tmp_path / "lean.json").write_text(json.dumps(lean))
+    case = tmp_path / "case"
+    assert SP.main(["case", "--passes", str(d), "--verify", str(tmp_path / "verify.json"), "--lean",
+                    str(tmp_path / "lean.json"), "--out", str(case)]) == 0
+    parts = json.loads((case / SP.CASE_PARTS).read_text())
+
+    rebuilt = tmp_path / "rebuilt"
+    assert CP.main([str(case), str(rebuilt)]) == 0 and CP.main([str(case), str(rebuilt)]) == 2
+    paths = sorted(rebuilt.glob("pass-*/manifest.json"))
+    assert [json.loads(p.read_text()) for p in paths] == parts["manifests"]
+    assert [{str(f.relative_to(p.parent)) for f in p.parent.rglob("*") if f.is_file()} - {"manifest.json"} for p in paths] \
+        == [set(f) for f in parts["evidence"]["files"]]
+    assert all(set(f) < {str(x.relative_to(m.parent)) for x in m.parent.rglob("*") if x.is_file()}
+               for f, m in zip(parts["evidence"]["files"], (a, b)))
+
+    def no_draw(*_):
+        raise AssertionError("a verdict on the recorded coin draws nothing")
+
+    record = tmp_path / "coin.json"
+    record.write_text(coin)
+    again = VR.verify_passes(paths, 3, 1, "test", VR.epoch_coins(rebuilt / "coins.json"), record=record, draw=no_draw,
+                             test_instance=True)
+    assert again["answer"]["verdict"] == "accept", again["line"]
+    assert (again["commitment"], again["source"], again["verdicts"]) == (doc["commitment"], doc["source"], doc["verdicts"])
+    assert again["answer"]["public"]["work"] == answer["public"]["work"] and record.read_text() == coin
+
+    blob = case / SP.CASE_BLOBS / sorted(parts["evidence"]["files"][0].values())[0]
+    good = blob.read_bytes()
+    blob.write_bytes(bytes([good[0] ^ 1]) + good[1:])
+    assert CP.main([str(case), str(tmp_path / "changed")]) == 2 and not (tmp_path / "changed").exists()
+    blob.unlink()
+    assert CP.main([str(case), str(tmp_path / "gone")]) == 2 and not (tmp_path / "gone").exists()
+
+
 def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it

@@ -240,6 +240,15 @@ negatives.
   lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
+- `served_sources.py record`: a served run's record composed on another host from that host's copy of the serve dir,
+  each part from the source that produced its verdict. PoUW's row is the verdict `case_replay.sh`
+  (`benchmarks/pouw/pearl_c_vllm/`) took again there from the run's case, by Python and Lean, under the conditions of
+  record read live from the challenger's gate (its three read verbs alone); sampled proofs' is the audit of record's
+  own answer, never rerun; the inference-only verdict stays the served node's. It takes no composite accept and writes
+  no block record. Who controls the composing host is a required word (`developer` or `auditor`). The public record is
+  each row's judgment with its ε and δ: exact totals stay private unless `--exact-totals public`, a reason leaves as
+  its kind, PoUW's accept whose tie reads an audit that did not accept is `accept, tie unaudited`, and no hash of a
+  file published in redacted form leaves.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
