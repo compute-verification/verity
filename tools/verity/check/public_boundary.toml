@@ -75,6 +75,9 @@ shared = [
     # Bits' program, which the bridge (`Bridge.Members`) and SPOT[Flock]'s code import: entries of their own
     "Security/Properties/Spot/Members.lean",
     "Security/Proofs/Properties/Spot/Bits.lean",
+    # the honest and nontrivial lemmas of the expansion's two size bounds (`ExpandSize`, `ExpandAndSize`), which no public
+    # proof imports: a public guarantee ships with its witnesses, and the lock the export writes keeps their entries
+    "Security/Proofs/Core/ExpandWitnesses.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
