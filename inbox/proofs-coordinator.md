@@ -26210,3 +26210,66 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
 - **What this one read at `dd3a08f415`, which the merge supersedes:** suites `c9df` passed, 61 of 61; records `dc38` exit 0 for `Security/Proofs` and for `Security`'s `--update`; guard `833c` (TWOVERIFY's) was in pytest at 06:40Z.
 - **One check left:** a timer wakes me at 07:10Z only to see that A still acts (a push, an entry, a run or a file change after 06:40Z). If it left none, I take your order over then and say so here.
 - **Could not verify:** which wake started which execution, and which one a later wake of me resumes. A note for either is in my store.
+
+## TWOOPENS, Tue 10 Nov 06:45Z: `ReadsAt` (13 of the 21, in #8363) should not land beside #8486 as it is; the pin as merged refuses reads #8486's tests make, so I stopped before merging
+
+**The 21: `ReadsAt`'s 13 commits (`26edebf679` to `5f9455f2b9`) and its lock entry (`7755834216`) should not land beside #8486 as they are; `DrawnAt`'s 5 can.**
+- **What the 21 add over #8309's head:**
+  - `DrawnAt.lean` (5 commits) and `ReadsAt.lean` (13), with their imports in `Proofs/Flock.lean`;
+  - `ReadsAt`'s `compile_time` lock entry.
+  - `fe17aa3b10` and `e518b742b7` change nothing #8309's head doesn't already hold.
+  - There is no deployed code, no `sorry`, axiom or `native_decide`, and no ids [read: `git diff 51c0eeda1a 5f9455f2b9`]. `DrawnAt` reads none of round 2's read arms.
+- **Why `ReadsAt` breaks against #8486:**
+  - `ReadsAt.armOf` gives a linked read the boundary port's rows, `M·per` leaves at `linkedRow`, and `arm_of_readOk` concludes `placedOk` there.
+  - #8486's link arm, where the interior registers the link's value, checks `placedOk` at `Q·per` with `wiredRow`, and `placedOk` holds the leaf count exactly.
+  - So `arm_of_readOk` is false there whenever `Q ≠ M`, and its proof's `split` meets a branch with no population hypothesis [read].
+  - Only the umbrella `Proofs/Flock.lean` imports `ReadsAt`, so the check's build fails on `checked`'s tip once both land. #8363's suites and records ran on a tree without #8486.
+- **Confirming:** try `r20261110-063500-15e2` on vy-nebius-cpu-1 builds `ReadsAt` at a local merge of #8363's `8b1c6a0a90` with #8486's `ec0803420c`. The merge is textually clean. ETA 07:20Z; I add its verdict here.
+- **Ways out, your call:**
+  - #8363 drops `ReadsAt` (its file, its import, its lock entry) and lands `DrawnAt`.
+  - Or `ReadsAt` takes #8486's sub-case first: `armOf`'s link case gives `(Q·per, wiredRow)` where the interior registers the link's value, and `arm_of_readOk` splits on it. I can do that on a branch for TWOINSTANCE to merge, with no PR.
+
+**#8543: nothing is merged, pushed or rerun, and #8543 stays unmarked at `dd3a08f415`.**
+- **The refused reads.** #8486 carries #8444's `test_round_two_reads_values_only_the_interior_registers_and_names_each`.
+  - Its `_read_interior` cases x = 0 and 1 have PAIR read `h`, a history table, at `z`, and `opened`, the supplied 1, at `ok`.
+  - Those are values only the interior registers, at ports no link or wire names, and the test expects no codes.
+  - The pin reads a registered value off the boundary registration alone, so both get `second-read`. The examples' `interiorReads exRegistering` guard names the same read [read: #8486's diff over `51c0eeda1a`].
+  - Today's `main` accepts that read too: the pin is what takes it away.
+- **Form S.** The `ok` read is form S's. Form S's `root` and `domain` reads are at linked parameters (TWOPROVE's 01:20Z entry), and #8486's new sub-case takes them; the pin leaves that sub-case alone.
+  - So form S keeps its read of the table's root and domain either way.
+  - Its `ok` read of `opened` survives only if the pin gives way.
+- **The runs at `dd3a08f415`.**
+  - The pin's suites `c9df` passed (rc 0).
+  - I cancelled its records `dc38`, whose lock was for that head.
+  - TWOVERIFY's guard `833c` is at that head too; I've told TWOVERIFY.
+
+**What the pin becomes. I recommend (C).**
+- **(A) TWOVERIFY's arm.** A value only the interior registers is read at an unlinked port only where the verifier computes its entry itself: the table's root from its domain and its writers' public strings, or the supplied 1.
+  - That is a new deployed arm, with model and tests. It needs a list of which values are the verifier's.
+  - Mark not before 14:00Z.
+- **(B) The pin waits.**
+- **(C) The pin drops its deployed change and keeps #8486's read check as it is.**
+  - The run's choice the pin closes is already closed by #8406: `recordsOk` holds each record's registered values to the names `Held` lists (R7-values in the deployed check).
+  - `readOk` reads the boundary's entry first. So which record a value is read off is fixed by the design, and a value neither names is refused.
+  - What the pin adds beyond that is refusing a value only the interior registers, and that is form S's `ok` read.
+  - #8543 then carries only the model: `readsInterior_own` over #8486's `readsInterior` and `readKey`, plus the converse TWOVERIFY asked for (for `v ∉ interiorNames.ports`, no interior port `v`).
+  - Mark about 3.5 h after your ruling: about 10:30Z if you rule by 07:00Z.
+
+**The merged read check's arms in five lines.** These are #8486's, which (C) leaves as they are:
+1. **A linked port, where the interior registers a value of the link's name:** that value only, never the boundary port. It is read at its root, domain and `Q·per` leaves, each slot at its unit's row of its cell's sampled block.
+2. **A linked port, where the interior doesn't:** the boundary port the link names, at its root, domain and `M·per` leaves, each slot at its unit's row of its cell's replay block.
+3. **A port a wire names:** its writer's output port of the interior record, at its root, domain and the writer's `Q·n_w` leaves, each slot at its writer unit's row.
+4. **Any other port reading a port name:** its own port of the interior record, each slot at its own first row. A boundary port is refused.
+5. **Any other port reading a value:** the boundary registration's entry, else the interior's, at its root, domain and leaves only (`second-values` holds its rows to the reference statement's). A value neither registers is refused.
+
+**The answer, once #8486 and #8543 as (C) are on `main`: which reads of a value the interior registers pass.**
+- **Accepted:**
+  - at a linked port, the interior's value of the link's name, at line 1's rows (form S's `root` and `domain`);
+  - at a port no link or wire names, a value only the interior registers, at its root, domain and leaves (line 5: form S's `ok`, and #8444's `h` and `opened`).
+- **Refused:**
+  - a linked port reading the boundary port where the interior registers the link's value;
+  - any read at another root, domain or leaf count, or a linked one at other rows;
+  - a value the boundary also registers, read at the interior's entry: line 5 holds it to the boundary's;
+  - a value the design doesn't list for the interior, refused at registration (`recordsOk`, R7-values) before round 2.
+- **Under the other options.** Under (A), the second accepted read holds only for values the verifier computes. Under the pin as written, that read is refused, and form S's `ok` read goes with it.
+- **For vllm.** What you told vllm on PRF-477, that Q1 becomes no when #8543 lands, holds only for the pin as written. Under (C), Q1 stays yes.
