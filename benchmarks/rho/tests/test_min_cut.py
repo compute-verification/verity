@@ -331,8 +331,9 @@ def test_the_charged_count_alone_at_the_served_policy():
 #: the period's rows at the served class: (blocks, nodes, the most untied words one block of a node reads, the best
 #: threshold, the blocks charged at it, the slowdown at it, the slowdown with no threshold). A node's rows are the
 #: function at one node's untied words; a datacenter's and the world's are scaled: so many nodes, each at one node's
-#: bound and all accepted, their block counts a week's, a month's and a year's. One block of a node reads at most
-#: half the node's untied words: a tile's rows are two slots' prompts or one row a slot, and a slot is a block.
+#: bound and all accepted, their block counts a week's, a month's and a year's. That one block of a node reads at
+#: most half the node's untied words is these rows' statement of their record, which the function takes as `most`:
+#: a sampled tile's rows are two blocks' or more.
 PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_567.7, 3_567.7),
           (1e4, 1, UNTIED // 2, 335_684, 0, 7_781.3, 7_781.3),
           (54_300, 1, UNTIED // 2, 223_789, 2, 12_546.5, 11_821.6),
