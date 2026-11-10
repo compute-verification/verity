@@ -45,6 +45,7 @@ import argparse
 import ast
 import bisect
 import fnmatch
+import functools
 import hashlib
 import json
 import os
@@ -74,8 +75,12 @@ FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "c
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
-SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
-                       r'(?P<rel>(?:/[\w.\-]+)+)')
+_SH_DIRNAME = r'\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\)'
+_SH_REL = r"(?P<rel>(?:/[\w.\-]+)+)"
+SH_ANCHOR = re.compile(rf"(?P<head>{_SH_DIRNAME}){_SH_REL}")
+#: a variable a shell script sets to its own directory (`here=$(cd "$(dirname "$0")" && pwd)`)
+SH_HERE = re.compile(r'(?:^|[;\s])(?P<v>[A-Za-z_]\w*)=(?P<q>"?)\$\(cd\s+"\$\(dirname\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\)"'
+                     r"\s+&&\s+pwd(?:\s+-P)?\)(?P=q)(?=[;\s]|$)", re.M)
 #: a variable a shell script sets to its own path (`SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")`)
 SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*)=(?P<q>"?)'
                      r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
@@ -111,6 +116,21 @@ def sh_ref(ref: str) -> str:
 def sh_self_names(text: str) -> set[str]:
     """The names whose `dirname` is a shell script's own directory: its own path's, and each variable it sets to that."""
     return SH_OWN | {m.group("v") for m in SH_SELF.finditer(text)}
+
+
+def sh_here_names(text: str) -> frozenset[str]:
+    """The variables a shell script sets to its own directory (`SH_HERE`) and nowhere sets again."""
+    return frozenset(v for m in SH_HERE.finditer(text) if len(re.findall(rf"(?:^|[;\s]){(v := m['v'])}=", text, re.M)) == 1)
+
+
+@functools.cache
+def sh_anchor(here: frozenset[str] = frozenset()) -> re.Pattern:
+    """A path a shell script names from its own directory: after `$(dirname "$0")` (`SH_ANCHOR`, whose `ref` is the name
+    read), or after a variable of `here` (`$here/../..`), which the script set to that directory."""
+    if not here:
+        return SH_ANCHOR
+    names = "|".join(sorted(map(re.escape, here)))
+    return re.compile(rf"(?P<head>{_SH_DIRNAME}|\$(?:\{{(?:{names})\}}|(?:{names})(?!\w))){_SH_REL}")
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
@@ -1091,12 +1111,13 @@ class Run:
 
     def _sh_anchors(self, path: str, old: str, text: str) -> str:
         """`$(dirname "$0")/../..` in a shell script, or after `${BASH_SOURCE[0]}` or a variable the script sets to its own
-        path (`SH_SELF`): the path it names from the script's directory, from the script's new place."""
+        path (`SH_SELF`), and `$here/../..` after a variable it sets to its own directory (`SH_HERE`): the path it names
+        from the script's directory, from the script's new place."""
         names = sh_self_names(text)
         here_old, here_new = posixpath.dirname(old), posixpath.dirname(path)
 
         def fix(m: re.Match) -> str:
-            if sh_ref(m.group("ref")) not in names:
+            if m.group("ref") is not None and sh_ref(m.group("ref")) not in names:
                 return m.group(0)
             rel = m.group("rel")[1:]
             target = posixpath.normpath(posixpath.join(here_old, rel))
@@ -1115,7 +1136,7 @@ class Run:
                     self.note("shell anchors to a directory that splits", f"{path}: {m.group(0)} (was {target})")
                 new_target = new_target or target
             else:
-                if path != old:
+                if path != old and (m.group("ref") is not None or rel.startswith("../")):   # `$here/out.json` goes with the script
                     self.note("shell anchors not recomputed", f"{path}: {m.group(0)} (names {target}, not in the tree)")
                 return m.group(0)
             if path == old and new_target == target:
@@ -1126,7 +1147,7 @@ class Run:
             self._count(path, "shell anchors")
             return f"{m.group('head')}/{new_rel}"
 
-        return SH_ANCHOR.sub(fix, text)
+        return sh_anchor(sh_here_names(text)).sub(fix, text)
 
     _JOIN = re.compile(r"""(?P<chain>(?:(?P<q>["'])[\w.\-]+(?P=q)\s*/\s*)*(?P<q2>["'])[\w.\-]+(?P=q2))""")
 

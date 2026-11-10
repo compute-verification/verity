@@ -1275,6 +1275,38 @@ def test_a_shell_path_from_a_variable_that_is_not_the_scripts_own_path_is_refuse
     assert f["path"] == "examples/wipe/demo.sh" and "SELF" in f["hunk"]
 
 
+HERE_OLD = ('#!/usr/bin/env bash\nhere=$(cd "$(dirname "$0")" && pwd)\nroot=$(cd "$here/../../.." && pwd)\n'
+            'bash "$here/../../../pkg/app/store/host.py" "$out/../../x"\n' + SH_BODY)
+HERE_NEW = HERE_OLD.replace('"$here/../../.."', '"$here/../.."').replace(
+    '"$here/../../../pkg/app/store/host.py"', '"$here/../../pkg/app/protocols/bandwidth/host.py"')
+
+
+def _here(tmp_path: Path, old: str, new: str) -> dict:
+    repo, base = _repo(tmp_path, {**APP, "bench/pous/wipe/demo.sh": old})
+    for was, new_dir in APP_MOVES:
+        _move(repo, was, new_dir)
+    _move(repo, "bench/pous/wipe/demo.sh", "examples/wipe/demo.sh")
+    _write(repo, {"examples/wipe/demo.sh": new})
+    return _check(repo, base)
+
+
+def test_a_path_after_a_variable_a_shell_script_sets_to_its_own_directory_is_recounted(tmp_path):
+    """`here=$(cd "$(dirname "$0")" && pwd)` is the script's directory, so `$here/../..` is a path from it as
+    `$(dirname "$0")/../..` is: recounted from the script's new place to where what it named went. Refused as before: a
+    climb that names another directory, a path after a variable the script sets again, and one after any other variable."""
+    r = _here(tmp_path / "taken", HERE_OLD, HERE_NEW)
+    assert r["certified"], r["refusals"]
+    assert r["rules"] == {"anchor": ["examples/wipe/demo.sh"]}
+    again = 'here=$(cd "$(dirname "$0")" && pwd)\nhere=$1\n'
+    for case, old, new in (
+            ("elsewhere", HERE_OLD, HERE_NEW.replace('"$here/../.."', '"$here/.."')),
+            ("set again", HERE_OLD.replace('here=$(cd "$(dirname "$0")" && pwd)\n', again),
+             HERE_NEW.replace('here=$(cd "$(dirname "$0")" && pwd)\n', again)),
+            ("another variable", HERE_OLD, HERE_NEW.replace('"$out/../../x"', '"$out/../x"'))):
+        r = _here(tmp_path / case, old, new)
+        assert [f["path"] for f in r["refusals"]] == ["examples/wipe/demo.sh"] and "anchor" not in r["rules"], case
+
+
 def test_relative_import_rewritten_absolute_is_certified(tmp_path):
     body = "".join(f"\n\ndef f{i}():\n    return put({i})\n" for i in range(8))
     files = {"pkg/app/options/__init__.py": "", "pkg/app/options/pearl.py": "from .pearl_host import put\n" + body,

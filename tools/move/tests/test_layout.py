@@ -296,6 +296,24 @@ def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_i
     assert (r / "bench/pous/stay/run.sh").read_text() == stay.replace('"$0")/../wipe/demo.sh', '"$0")/../../../examples/wipe/demo.sh')
 
 
+def test_a_path_after_a_variable_a_shell_script_sets_to_its_own_directory_is_recounted(tmp_path):
+    """`here=$(cd "$(dirname "$0")" && pwd)` is the script's own directory, so a path after `$here` is one from there: the
+    climb to the root loses the level the script lost, and the script beside it that stayed is named from the new place.
+    A file in the script's directory goes with it. A path after a variable the script sets again, or after any other
+    (`$out`), is left."""
+    demo = ('#!/usr/bin/env bash\nhere=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)\nroot=$(cd "$here/../../.." && pwd)\n'
+            'bash "${here}/../stay/run.sh" "$here/notes.txt" "$out/../stay/run.sh"\n')
+    again = '#!/bin/sh\nhere=$(cd "$(dirname "$0")" && pwd)\nhere=$1\nbash "$here/../stay/run.sh"\n'
+    r, p = _run(tmp_path, {"bench/pous/wipe/demo.sh": demo, "bench/pous/wipe/again.sh": again, "bench/pous/wipe/notes.txt": "n\n",
+                           "bench/pous/stay/run.sh": "#!/bin/sh\n"},
+                '[roots]\nold = { pkg = "pkg" }\nnew = { pkg = "pkg" }\n\n[paths]\n"bench/pous/wipe/" = "examples/wipe/"\n\n[modules]\n'
+                '"bench.pous.wipe" = "examples.wipe"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "examples/wipe/demo.sh").read_text() == demo.replace('"$here/../../.."', '"$here/../.."').replace(
+        '"${here}/../stay/run.sh"', '"${here}/../../bench/pous/stay/run.sh"')
+    assert (r / "examples/wipe/again.sh").read_text() == again
+
+
 WORDS_PY = ('"""The packages of `Analysis` and `Analysis/Proofs`; Analysis in prose is a word."""\n'
             'ROOT = None\nSPEC = ROOT / "Analysis"\nCAPS = {"Analysis": 3, "Analysis/Proofs": 4, \'Analysis\': 5}\n'
             'HEAVY = [p for p in CAPS if p.split("/")[0] == "Analysis"]\nNAME = "Analysis is a title"\n')

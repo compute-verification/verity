@@ -643,15 +643,18 @@ def sh_self_names(text: str) -> set[str]:
 
 
 def sh_anchor_rewrite(old: str, new: str, old_path: str, new_path: str, names_old: set[str], names_new: set[str],
-                      pmap: dict[str, str]) -> bool:
+                      pmap: dict[str, str], here: frozenset[str] = frozenset()) -> bool:
     """Whether `new` is `old` with each of a shell script's paths from its own directory recounted so that, from the script's
-    new place, it names the path the old one named, moved by `pmap`."""
-    a, b = list(SH_ANCHOR.finditer(old)), list(SH_ANCHOR.finditer(new))
-    if not a or len(a) != len(b) or SH_ANCHOR.sub("\0", old) != SH_ANCHOR.sub("\0", new):
+    new place, it names the path the old one named, moved by `pmap`: a path after `$(dirname "$0")`, and one after a
+    variable of `here` (`$here/../..`), which the script sets to its own directory before and after the move
+    (`tools/move/layout.py`'s `SH_HERE`)."""
+    anchor = _rename().L.sh_anchor(here) if here else SH_ANCHOR
+    a, b = list(anchor.finditer(old)), list(anchor.finditer(new))
+    if not a or len(a) != len(b) or anchor.sub("\0", old) != anchor.sub("\0", new):
         return False
     for x, y in zip(a, b):
-        ref = x.group("ref")[1:].strip("{}")
-        if x.group("ref") != y.group("ref") or ref not in names_old or ref not in names_new:
+        ref = (x.group("ref") or "")[1:].strip("{}")
+        if x.group("head") != y.group("head") or ref and (ref not in names_old or ref not in names_new):
             return False
         dx = posixpath.normpath(posixpath.join(posixpath.dirname(old_path), x.group("rel")[1:]))
         dy = posixpath.normpath(posixpath.join(posixpath.dirname(new_path), y.group("rel")[1:]))
@@ -1792,10 +1795,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
             sh = is_shell(old, a) and is_shell(new, b)
             sh_names = (sh_self_names(a), sh_self_names(b)) if sh else (set(), set())
+            sh_here = _rename().L.sh_here_names(a) & _rename().L.sh_here_names(b) if sh else frozenset()
 
             def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:  # noqa: B008  (this pair's, bound now)
                 return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)))
                            or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
+                           or (sh_here and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap, sh_here) and not took.add("anchor"))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)
                            for z in dict.fromkeys((x, substitute(x, short))))
 
