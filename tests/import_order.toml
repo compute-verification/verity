@@ -1,7 +1,8 @@
 # The import order: the tree's directories, bottom first.  A file belongs to the deepest directory listed here above it,
 # "." holding the rest, and loads only what its own row or an earlier row holds: a Python import, a Lean import, a Lake
 # package required by path.  The directories of one row may load each other.  `tests/test_boundaries.py` reads this file and
-# nothing else for the order; tests are left out as loaders.  `archive` is last: nothing loads it.
+# nothing else for the order, for "a verifier loads no prover code" and for what a verifier's Python loads; tests are
+# left out as loaders.  `archive` is last: nothing loads it.
 #
 # A new directory under `verity/` is in its parent's row until it is listed here.
 
@@ -33,10 +34,11 @@ order = [
     ["archive"],
 ]
 
-# The ties against the order, by pair of directories: each file that loads a file of a later row, with that file.  It only
-# shrinks: a tie leaves when its loader stops loading the file or one of the two moves, a pair leaves with its last tie,
-# and the test refuses a tie the tree no longer has and names the pair to delete.  Nothing is added: cut a new tie
-# instead (move what the loader needs down to its row, or pass it in).
+# The ties against the order, by pair of directories: each file that loads a file of a later row, with that file.  A pair
+# that ends in `prover` excepts "a verifier loads no prover code" instead: each file under a `verifier/` that loads a
+# file under a `prover/`.  It only shrinks: a tie leaves when its loader stops loading the file or one of the two moves,
+# a pair leaves with its last tie, and the test refuses a tie the tree no longer has and names the pair to delete.
+# Nothing is added: cut a new tie instead (move what the loader needs down to its row, or pass it in).
 [[against]]
 loader = "benchmarks"
 loaded = "archive"
@@ -81,8 +83,58 @@ ties = [
 ]
 
 [[against]]
+loader = "verity/protocols/certifier/verifier"
+loaded = "verity/protocols/certifier/prover"
+ties = [
+    ["verity/protocols/certifier/verifier/network_traces/chain_record.py", "verity/protocols/certifier/prover/__init__.py"],
+    ["verity/protocols/certifier/verifier/network_traces/chain_record.py", "verity/protocols/certifier/prover/ingress_scan.py"],
+    ["verity/protocols/certifier/verifier/network_traces/leak_bounds.py", "verity/protocols/certifier/prover/__init__.py"],
+    ["verity/protocols/certifier/verifier/network_traces/leak_bounds.py", "verity/protocols/certifier/prover/ingress_scan.py"],
+]
+
+[[against]]
 loader = "verity/protocols/pous"
 loaded = "Security"
 ties = [
     ["verity/protocols/pous/lean/submissions/reference.lean", "Security/Proofs/Pous/Statements.lean"],
 ]
+
+# What each verifier's Python loads, by `verifier/` directory under `verity/`: `loads`, the places outside it that its
+# files load, and `reaches`, the places those load in turn, and so on.  A place is a protocol's `verifier/`, `prover/` or
+# `device/` directory, or the row of a file under none.  Until a protocol's Lean verifier decides its verdicts these are
+# the soundness path of its Python verifier.  Both only shrink: the test refuses a place the tree adds and a place
+# nothing reaches any more.
+[[verifier]]
+directory = "verity/protocols/certifier/verifier"
+loads = ["verity", "verity/circuits", "verity/commitments", "verity/windows", "verity/spot/device",
+    "verity/spot/verifier", "verity/protocols/pous/verifier", "verity/protocols/certifier/device",
+    "verity/protocols/certifier/prover", "benchmarks"]
+reaches = ["verity", "verity/circuits", "verity/commitments", "verity/definitions", "verity/configuration",
+    "verity/hardware", "verity/windows", "verity/spot/device", "verity/spot/verifier", "verity/flock",
+    "verity/flock/prover", "verity/protocols/pous/device", "verity/protocols/pous/verifier",
+    "verity/protocols/poub/verifier", "verity/protocols/pouw/prover", "verity/protocols/pouw/verifier",
+    "verity/protocols/certifier/device", "verity/protocols/certifier/prover", "integrations", "benchmarks"]
+
+[[verifier]]
+directory = "verity/protocols/poub/verifier"
+loads = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/spot/device",
+    "verity/spot/verifier", "verity/protocols/pous/device", "verity/protocols/pous/verifier"]
+reaches = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/hardware",
+    "verity/spot/device", "verity/spot/verifier", "verity/protocols/pous/device", "verity/protocols/pous/verifier"]
+
+[[verifier]]
+directory = "verity/protocols/pous/verifier"
+loads = ["verity", "verity/difftest", "verity/commitments", "verity/configuration", "verity/protocols/pous/device"]
+reaches = ["verity", "verity/difftest", "verity/commitments", "verity/configuration", "verity/protocols/pous/device"]
+
+[[verifier]]
+directory = "verity/protocols/pouw/verifier"
+loads = ["verity", "verity/circuits", "verity/commitments", "verity/spot/device", "verity/spot/verifier"]
+reaches = ["verity", "verity/circuits", "verity/commitments", "verity/hardware", "verity/spot/device",
+    "verity/spot/verifier"]
+
+[[verifier]]
+directory = "verity/spot/verifier"
+loads = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/spot/device"]
+reaches = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/hardware",
+    "verity/spot/device"]
