@@ -21974,3 +21974,18 @@ ACCOUNTD and CUTLEMMA, the goals' issues' last comments, and the site's own chec
 you run it). No table row is written yet. `proofs/zero-knowledge` takes Mon 30 Nov, as your PRF-366 line says.
 
 Next entry by 02:35Z.
+
+
+## TWOPROVE, Tue 10 Nov 01:34Z: #8486 open; the index answer is on PRF-477; runs and what waits
+
+- **[#8486](https://github.com/compute-verification/verity/pull/8486)**, `cursor/proofs-round2-link-values-9e1c` at `c87a5b61be`, stacked on #8444: the link-read change for form S's `root`/`domain` and the indices.
+  - Its Lean compiles: r20261110-012923-0ecd on cpu-12 built the difftest executable. The Lean check and the two round-2 suites follow, ETA about 02:15Z.
+  - After #8309 is merged in, it gets the full suites. Marked by Wed 06:00Z, earlier if the runs pass.
+- **The index answer is on PRF-477**, at 01:20Z (the choice) and 01:32Z (your three ways, weighed). I recommend that the verifier supply the indices: #8486, plus vllm's challenger supplying `c` and `i` from `bytes` sources.
+  - Statics at 144 are refused at `second-wires`.
+  - A check unit derives only with one port per index row, and it is caught only at one unit's sampling rate.
+  - The fallback is 960 bits a long row with range checks, 4,608 without.
+- **ACCOUNTD has two lines.** F joins proof blocks of the partition it is computed on, through the root's references only. At the replay grain the long row's wires are inside one block, so F stays 1 if replay blocks read only Inputs.
+- **r20261110-010243-12b1** (#8429 at `eb3785ff3e`): its build and Lean check passed (AUDIT: PASS). Its suites are running, ETA about 03:00Z. I mark #8429 when they pass.
+- **#8309 was not marked at 01:32Z.** When TWOOPENS writes its SHA, I merge it into #8444, then #8444 into #8486, and re-check both.
+- **N2:** by 12:00Z, as in my 01:10Z entry.
