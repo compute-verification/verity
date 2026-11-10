@@ -91,7 +91,7 @@ theorem orderViolation_batch : Batch.program.prog.orderViolation = none := by
   unfold Flock.Program.Prog.orderViolation
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, hk, Nat.sub_zero, Nat.add_sub_cancel,
     Nat.div_one, List.range'_succ]
-  simp [Batch.program, Batch.prog, Batch.root, Batch.template, Batch.body, Batch.node, Std.HashSet.contains_insert]
+  simp [Batch.program, Batch.prog, Batch.root, Batch.template, Batch.body, Batch.node]
 
 theorem valid_batch :
     Spot.Partition.valid (Spot.Partition.build (Flock.hexOf Batch.program.sha512) Batch.query) = true := by
@@ -104,7 +104,7 @@ theorem templateQuery_batch :
     (Flock.TemplateQuery.evaluate Batch.program.desc #["t"]).toOption = some batchRanges := by
   unfold Flock.TemplateQuery.evaluate Flock.TemplateQuery.isInput Flock.Program.isInputId Flock.Program.inputId?
     Flock.Program.widthAfter?
-  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn'_eq_forIn'_range', startsWith_toList]
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', startsWith_toList]
   decide +kernel
 
 theorem evaluate_batch : Spot.Partition.evaluate Batch.program Batch.query = .ok batchRanges := by
@@ -115,7 +115,7 @@ theorem evaluate_batch : Spot.Partition.evaluate Batch.program Batch.query = .ok
     Flock.TemplateQuery.evaluate Flock.TemplateQuery.isInput Flock.Program.isInputId Flock.Program.inputId?
     Flock.Program.widthAfter? Spot.Partition.checkTemplates Spot.Partition.templateBits
   simp (config := { iota := false }) only [qsort_fuel, widths_fuel 4, startsWith_toList,
-    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn'_eq_forIn'_range']
+    Std.Legacy.Range.forIn_eq_forIn_range']
   decide +kernel
 
 theorem layout_batch : ∃ l, Slots.fileLayout default Batch.program Batch.query = .ok l ∧
