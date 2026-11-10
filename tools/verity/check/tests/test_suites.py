@@ -199,6 +199,35 @@ def test_a_deselected_suite_keys_its_pass_apart_and_a_full_pass_still_answers_fo
     assert S.main(["--list", "--deselect", str(listed)]) == 2 and "not a test's node id" in capsys.readouterr().err
 
 
+def test_only_a_candidates_check_leaves_out_the_tests_the_repositorys_candidate_list_names(tmp_path, monkeypatch):
+    """`--candidate` (`check.py --candidate`, the vqueue loop's check of a candidate) adds the tests `CANDIDATE_DESELECT` names
+    to --deselect's, among their suites' own keys as --deselect's are; no other run reads the list, so it keys as before."""
+    _workspace(tmp_path)
+    S = _suites(monkeypatch, tmp_path)
+    keyed, real = [], S.key
+    monkeypatch.setattr(S, "key", lambda s, ids, env, args, deps=None: keyed.append((s.name, list(args))) or real(s, ids, env, args, deps))
+    (tmp_path / S.CANDIDATE_DESELECT).parent.mkdir(parents=True)
+    (tmp_path / S.CANDIDATE_DESELECT).write_text("# over 5 minutes\na/tests/test_a.py::test_a\n")
+    listed = tmp_path / "deselect.txt"
+    listed.write_text("b/tests/test_b.py::test_b\n")
+    a_left, b_left = [S.DESELECT_ARG, "a/tests/test_a.py::test_a"], [S.DESELECT_ARG, "b/tests/test_b.py::test_b"]
+    assert S.main(["--list"]) == 0 and keyed == [("a", []), ("b", [])]
+    keyed.clear()
+    assert S.main(["--list", "--candidate"]) == 0 and keyed == [("a", a_left), ("a", []), ("b", [])]
+    keyed.clear()
+    assert S.main(["--list", "--candidate", "--deselect", str(listed)]) == 0
+    assert keyed == [("a", a_left), ("a", []), ("b", b_left), ("b", [])]
+
+
+def test_the_candidate_list_names_test_files_the_tree_holds(monkeypatch):
+    """A test the candidate list names that moved or was deleted would leave nothing out, and a line that is no node id would fail
+    every candidate's suites: each line is a node id of a test file in the tree."""
+    root = HERE.parents[2]
+    S = _suites(monkeypatch, root)
+    [ids] = S.deselections((root / S.CANDIDATE_DESELECT).read_text(), [S.Suite("repository", ".", (), ())]).values()
+    assert ids and not [i for i in ids if not (root / i.partition("::")[0]).is_file()]
+
+
 def test_a_fresh_trees_own_environment_installs_the_workspace_once_and_runs_again(tmp_path, monkeypatch, capsys):
     """`uv run tools/verity/check/suites.py` on a freshly shipped tree installs only the runner's dependencies; the runner syncs the
     workspace and runs again in place of refusing, once, and an environment it can't fill is still refused."""

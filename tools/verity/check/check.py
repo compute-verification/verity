@@ -23,6 +23,9 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
     ... --deselect FILE                                     the pytest and lean-suites steps leave out the tests FILE names
                                                             (`suites.py --deselect`); recorded, only with --deferred, whose runs
                                                             no gate takes, FILE sent as the run's `DESELECT_FILE` input
+    ... --candidate                                         a candidate's check (the vqueue loop's): those steps leave out the
+                                                            tests the tree's `suites.py` CANDIDATE_DESELECT names too
+                                                            (`suites.py --candidate`); recorded, only with --deferred
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
                                                             nightly `audit-main`, which gates nothing); with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
@@ -1172,6 +1175,10 @@ def record(argv: list[str]) -> int:
         print(f"check: --deselect {deselect} refused: a recorded check that leaves tests out is an after-landing run "
               "(`--deferred STEP,... --on M`), which no gate takes, and FILE a list of node ids", file=sys.stderr)
         return 2
+    if "--candidate" in rest and (deferred is None or not on):
+        print("check: --candidate refused: a candidate's check, which leaves tests out, is an after-landing run "
+              "(`--deferred STEP,... --on M`), which no gate takes", file=sys.stderr)
+        return 2
     try:
         if records:                                    # circuit-check's records alone: its memory, no Lean
             parts = ["circuit-check"]
@@ -1674,13 +1681,14 @@ def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> li
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None, regenerate: bool = True,
            circuit_cache: bool | None = None, splits: dict[str, dict] | None = None,
-           bookkeeping: bool = False, deselect: Path | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
+           bookkeeping: bool = False, deselect: Path | None = None,
+           candidate: bool = False) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
     circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
     per-target passes.  A split suite's parts (`pytest:SUITE:K/M`) run as `suites.py SUITE:K/M` (`suite_args`, with ``splits``,
     an auto plan's or the task list's partitions).  The pytest and lean-suites steps leave out the tests ``deselect`` names
-    (`suites.py --deselect`)."""
+    (`suites.py --deselect`) and, in a ``candidate``'s check, those the tree's candidate list names (`suites.py --candidate`)."""
     circuit_cache = cache if circuit_cache is None else circuit_cache
     py = sys.executable
     a = max(1, n // 2)
@@ -1698,7 +1706,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
-            *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []), *(["--deselect", str(deselect)] if deselect else [])]
+            *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []), *(["--deselect", str(deselect)] if deselect else []),
+            *(["--candidate"] if candidate else [])]
     lean = lean_steps(out, cache, urls, regenerate, bookkeeping)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
@@ -2828,7 +2837,8 @@ def prebuild(out: Path, steps: Steps) -> dict | None:
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
         regenerate: bool = True, circuit_cache: bool | None = None, live=None,
-        splits: dict[str, dict] | None = None, bookkeeping: bool = False, deselect: Path | None = None) -> tuple[bool, list[dict]]:
+        splits: dict[str, dict] | None = None, bookkeeping: bool = False, deselect: Path | None = None,
+        candidate: bool = False) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused, live)
@@ -2866,7 +2876,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
             if reused is not None:
                 reused.start()
             gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits,
-                        bookkeeping=bookkeeping, deselect=deselect)
+                        bookkeeping=bookkeeping, deselect=deselect, candidate=candidate)
             steps.live.plan([name for g in gs for name, _, _ in g])
             steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
@@ -3067,7 +3077,9 @@ def main(argv: list[str], script: bool = False) -> int:
     keep_going = "--keep-going" in argv
     regenerate = "--no-regenerate" not in argv
     bookkeeping = "--bookkeeping-warn" in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate", "--bookkeeping-warn")]
+    candidate = "--candidate" in argv
+    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate", "--bookkeeping-warn",
+                                         "--candidate")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -3134,6 +3146,13 @@ def main(argv: list[str], script: bool = False) -> int:
                   "(`--deferred`), which no gate takes", file=sys.stderr)
             return 2
         print(f"check: --deselect: the pytest and lean-suites steps leave out the tests {deselect} names", flush=True)
+    if candidate:
+        if deferred is None and run_dir is not None:
+            print("check: --candidate refused: a recorded candidate's check, which leaves tests out, is an after-landing run "
+                  "(`--deferred`), which no gate takes", file=sys.stderr)
+            return 2
+        print(f"check: --candidate: the pytest and lean-suites steps leave out the tests {SUITES.CANDIDATE_DESELECT} names",
+              flush=True)
     if picked:
         if sharded or SETTINGS.RESEARCH_RUN_ID:
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
@@ -3189,7 +3208,8 @@ def main(argv: list[str], script: bool = False) -> int:
     live.start()
     try:
         ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits,
-                       **({"bookkeeping": True} if bookkeeping else {}), **({"deselect": deselect} if deselect else {}))
+                       **({"bookkeeping": True} if bookkeeping else {}), **({"deselect": deselect} if deselect else {}),
+                       **({"candidate": True} if candidate else {}))
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)

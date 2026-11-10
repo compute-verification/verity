@@ -1,0 +1,7 @@
+# The tests a candidate's check leaves out (`check.py --candidate`, which passes `suites.py --candidate`): one node id a line,
+# its file's path from the repository's root; a test's name leaves out every parametrization of it. The nightly uncached
+# check is no candidate's and runs them. A test goes here when it takes over 5 minutes, its owner told.
+tools/verity/circuit_check/tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees
+tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned
+verity/core/protocols/composition/tests/test_composition_difftest.py::test_remote_agrees
+verity/ml/circuits/tests/test_population_recorded.py::test_every_recorded_population_keeps_its_id_and_digest

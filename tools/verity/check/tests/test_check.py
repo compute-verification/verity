@@ -798,6 +798,15 @@ def test_a_deselect_list_reaches_the_suites_steps_and_nothing_else(tmp_path, mon
     assert all("--deselect" not in argv for g in CHECK.groups(tmp_path, 16) for _name, argv, _cwd in g)
 
 
+def test_only_a_candidates_check_has_its_suites_steps_leave_out_the_candidate_list(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    steps = {name: argv for g in CHECK.groups(tmp_path, 16, candidate=True) for name, argv, _cwd in g}
+    assert steps["pytest"][-1] == "--candidate"
+    assert all("--candidate" not in argv for name, argv in steps.items() if name not in ("pytest", "lean-suites"))
+    assert all("--candidate" not in argv for g in CHECK.groups(tmp_path, 16) for _name, argv, _cwd in g)
+
+
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
     the namespace's root; MemAvailable bounds both."""

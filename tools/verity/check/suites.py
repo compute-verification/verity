@@ -4,6 +4,7 @@
     uv run tools/verity/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one)
     uv run tools/verity/check/suites.py --quick             without the tests marked `slow`
     uv run tools/verity/check/suites.py --deselect FILE     without the tests FILE names (`deselections`), reported deselected
+    uv run tools/verity/check/suites.py --candidate         a candidate's check: without the tests `CANDIDATE_DESELECT` names
     uv run tools/verity/check/suites.py --changed REV       only the suites the change from REV touches (`touched`)
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
@@ -2256,6 +2257,8 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
 
 
 DESELECT_ARG = "--verity-deselect"
+#: the tests a candidate's check leaves out (`--candidate`), in `deselections`' format; no other run reads it
+CANDIDATE_DESELECT = "tools/verity/candidate-deselect.txt"
 
 
 def deselections(text: str, suites: list[Suite]) -> dict[Suite, list[str]]:
@@ -2359,6 +2362,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--deselect", type=Path, metavar="FILE", help="leave out the tests FILE names, one node id a line, its path from "
                     "the repository's root (`deselections`): each is reported deselected, and each suite holding one keys its pass by "
                     "them, so it never answers for a run of the whole suite; a pass of the whole suite answers for it")
+    ap.add_argument("--candidate", action="store_true", help=f"a candidate's check (`check.py --candidate`): leave out the tests "
+                    f"{CANDIDATE_DESELECT} names too, as --deselect does")
     a = ap.parse_args(argv)
     specs: dict[str, tuple[tuple[int, ...], int, str | None]] = {}
     if a.files and not re.fullmatch(r"[1-9]\d*(?:,[1-9]\d*)*/[1-9]\d*", a.files):
@@ -2393,10 +2398,11 @@ def main(argv: list[str] | None = None) -> int:
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
+    lists = [*([a.deselect] if a.deselect else []), *([ROOT / CANDIDATE_DESELECT] if a.candidate else [])]
     try:
-        drop = deselections(a.deselect.read_text(), suites) if a.deselect else {}
+        drop = deselections("\n".join(f.read_text() for f in lists), suites) if lists else {}
     except (OSError, ValueError) as e:
-        print(f"suites: --deselect {a.deselect}: {e}", file=sys.stderr)
+        print(f"suites: {' and '.join(map(str, lists))}: {e}", file=sys.stderr)
         return 2
 
     def arg_sets(s: Suite) -> list[list[str]]:
