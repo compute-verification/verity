@@ -1815,7 +1815,10 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
     under their numbers, so ``verify --tie W`` accepts the run tied to W's digest on its 8 tables and credits the timed
     passes alone.  The warm-up retained, W can't tie it (W registers none of round 0, and `pearl_c.window.write` refuses
-    to); once the coin is drawn ``retain`` refuses to write W again."""
+    to); once the coin is drawn ``retain`` refuses to write W again.  With ``--previous-record FILE`` the W it writes is
+    the same record chained after that one (its ``previous`` the record's digest, as a serve chains W after its first
+    registration record, the weights'), which the tie holds to the same passes under W's own digest; the flag without
+    ``--window-record`` is a usage error, and a record that can't be read leaves no W."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     d = _serve_dir(tmp_path, [warm, a, b])
@@ -1835,6 +1838,17 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     assert [e["value"] for e in w["registered"]][8:] == ["pearl-b/0", "pearl-b/1"]
     r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
+    first, chained = tmp_path / "first.json", tmp_path / "w-chained.json"
+    first.write_text(json.dumps({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "registered": [], "previous": None}))
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
+    wc = json.loads(chained.read_text())
+    assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
+    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wc), "tables": 10}
+    assert REG.digest(wc) != REG.digest(w)
+    with pytest.raises(SystemExit):
+        SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
+                    "--previous-record", str(tmp_path / "absent.json")]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
