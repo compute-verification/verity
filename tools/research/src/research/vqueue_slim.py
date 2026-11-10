@@ -58,6 +58,10 @@ ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
 #: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
 #: how its launch is waited for
 OWN_TRAIN = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "train.sh"
+#: what a launch that registered no run says when it points at the machines, not the candidate's tree (`Failed.launch`):
+#: train.sh stopped its launcher, still running, at the end of its wait; no run ids within `LAUNCH_LOST_S`; the pod lost its
+#: process.  A launcher that exited without a run ran the candidate's own check.py, and says none of these
+LAUNCH_ONLY = ("no run launched in the wait", "min after its launch", "its process is gone with no exit written")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
 #: `CHECK_READS` (check.py, the modules it loads as it starts, and what they read), and the lean-build of `LEAN`, read from its
 #: source at the commit keyed (`_declared`), never run
@@ -144,7 +148,7 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     (``gate``), every step `main` waits for at ``base`` (`Driver._gating`), the preflights and a lean-agreement it ran, but
     policy.toml's `off_gate` there and drive.toml's `warn_steps`.  Pending while it launches or runs, each shard's launch
     read as the run's own is.  Infra when it registered no run (``rec`` None, or a detached launch that printed no run ids,
-    a shard's stopping the other shards; `Failed.launch`), never ran or was stopped, or was lost or killed before it passed each of those
+    a shard's stopping the other shards; `Failed.launch` when it says one of `LAUNCH_ONLY`), never ran or was stopped, or was lost or killed before it passed each of those
     steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
     every shard that holds it, `shard_passed`), fail with each of them it failed (a `Failed`: ``step NAME``, the step's
     content key at the candidate, the paths drive names that failure's culprit by, `step_paths`, its content key at
@@ -428,7 +432,7 @@ def _down(rec: dict | None, why: str) -> Verdict:
     ids = " ".join(rec["ids"]) if rec and rec.get("ids") else ""
     return Verdict(INFRA, (), (Failed(f"the run beside its check{f' ({ids})' if ids else ''} {why}",
                                       f"{rec['tip'] if rec else ''}:{ids or 'no run'}", frozenset(),
-                                      launch=why.startswith("registered no run")),))
+                                      launch=why.startswith("registered no run") and any(m in why for m in LAUNCH_ONLY)),))
 
 
 def _keep(rec: dict, v: Verdict, passed: list[str] | None = None) -> Verdict:
