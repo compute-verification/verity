@@ -22656,7 +22656,7 @@ Each cell is the GB that can leave over the world's year at 10% total cost (mode
 | | as the planner prices it | 6,163 GB | 6,715 GB |
 | **the fused per-expert cut** at `FUSED_H200` (a design: no serving path commits it) | each lever measured or approved | 1,378 GB | 1,904 GB |
 | | as the planner prices it | 364 GB | 574 GB |
-| the fused cut with SERVEDCARD's warm estimate (a design plus an estimate) | each lever measured or approved | 517 GB | 813 GB |
+| the fused cut with the warm served-block estimate (a design plus an estimate) | each lever measured or approved | 517 GB | 813 GB |
 | | as the planner prices it | 219 GB | 360 GB |
 
 - "As the planner prices it" takes P4's 4× prover goal, P5's templated-check goal for every type, λ = 1, and sparse MLA at the census request's keys.
@@ -22703,7 +22703,7 @@ Three costs are missing from the planner's total:
 - **Design (d):** approved, not built (VLLM-260). Its replays re-prove hit prefixes bit-exactly.
 - **Proving prices:**
   - today's cut, at the proof-overhead card's prices: measured types plus computed rules;
-  - the fused cut, at `FUSED_H200`: measured on one H200, on synthetic statements, not served members. FUSEDSERVE's fit is due Wed 11 Nov.
+  - the fused cut, at `FUSED_H200`: measured on one H200, on synthetic statements, not served members. Its fit on served members is due Wed 11 Nov.
 - **The prover:** 3.71×, measured (each lever measured or approved), or P4's 4× goal (as priced).
 - **The verifier:** measured, after #8287, #8315 and D2.
 - **The templated check:** measured for FlashInfer K2048 and RMSNorm N = 6144 (measured or approved), or P5's goal for every type (as priced).
