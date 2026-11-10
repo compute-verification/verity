@@ -11,15 +11,15 @@ public import Proofs.InferenceOnly.Lemmas.Reads
 /-!
 # Proofs of the partial-sum rule on a reference circuit
 
-Pull a compliant division of the containing declaration back to `c` (`pull`): each piece has no more gates than its IU
-and reads no more novel information (`freshInput_pull`), so the pieces form a division of `c` into IUs of at most `Γ`
+Pull a compliant division of the containing declaration back to `c` (`pull`): each piece has no more gates than its inference block
+and reads no more novel information (`freshInput_pull`), so the pieces form a division of `c` into inference blocks of at most `Γ`
 gates reading at most `αΓ` each. The reads form of the sampling design (`UpdatedMatMulReads`), applied to `c` with that division,
-bounds the pieces' total reads from below by `G · f(αΓ)`; the IUs read at least as much, and at most `α size(d)` in total
+bounds the pieces' total reads from below by `G · f(αΓ)`; the inference blocks read at least as much, and at most `α size(d)` in total
 (`containedMatMul_of_reads`).
 
 Through a partial containment, the pieces divide only the gates `S` that `d` computes. Adding each dark gate as a part
 of its own (`withDark`) divides all of `c`, and the partial-sum count runs over that division: the dark parts absorb
-partial sums, `Z` in total, at most what they read. The reads count runs over the pieces alone, each within its IU's
+partial sums, `Z` in total, at most what they read. The reads count runs over the pieces alone, each within its inference block's
 reads. A second per-piece bound counts products by columns, at most
 `e_max` per input entry used at a position that is not full (`card_products_le_columns`, `max_mul_sum_le`).
 
@@ -145,7 +145,7 @@ theorem card_products_le_dark (M : PartialContainment c d) (ch : Chain c.D) :
 
 end Dark
 
-/-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its IU and reads
+/-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its inference block and reads
 no more novel information. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
@@ -171,7 +171,7 @@ theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : Par
 
 open Classical in
 /-- **The partial sums, counted over the pieces**: partial sums charged `s` over the pieces with the dark gates, each
-piece's charge within its IU's reads, leave the split entries' contributions within the IUs' reads and the dark gates'
+piece's charge within its inference block's reads, leave the split entries' contributions within the inference blocks' reads and the dark gates'
 charges. -/
 theorem partialSums_count {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     {ch : Chain c.D} {b_w b_a : ℝ} (ha : 0 ≤ b_a) {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
@@ -206,8 +206,8 @@ theorem partialSums_count {c d : RegisteredCircuit} {M : PartialContainment c d}
 
 open Classical in
 /-- **The partial-sum rule over the pieces, with a budget for the dark gates**: if the pieces' weight reads and halved
-split-entry contributions are within the IUs' reads and `B`, then
-`max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its IU's reads by
+split-entry contributions are within the inference blocks' reads and `B`, then
+`max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its inference block's reads by
 `ActivationsIncompressible` on the reference circuit. -/
 theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : RegisteredCircuit} {ch : Chain c.D} {dd emax : ℕ}
     {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K) (hw : 0 < b_w)
