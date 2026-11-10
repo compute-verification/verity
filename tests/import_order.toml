@@ -68,6 +68,7 @@ owner = "ci"
 [[distribution]]
 directory = "verity/protocols/inference_only/rho"
 owner = "training"
+date = "2026-11-16"
 
 [[distribution]]
 directory = "verity/protocols/inference_only/nci"
