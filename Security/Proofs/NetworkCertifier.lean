@@ -5,6 +5,7 @@ public import Definitions.NetworkCertifier.Guarantees.Pooled
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -31,6 +32,7 @@ public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.WitnessesChecked
+public import Proofs.NetworkCertifier.PeriodCheckedChecks
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -87,6 +89,8 @@ any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. 
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bounds with checked inputs (`SampledLeakChecked`,
 `PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
+`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.PeriodLeakChecked`, stated and not
+yet proved): which run its check is held to, and its nontrivial lemma.
 -/
 
 @[expose] public section
