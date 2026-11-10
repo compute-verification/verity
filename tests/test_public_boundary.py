@@ -210,6 +210,39 @@ def test_the_export_drops_a_dependency_no_public_file_uses_with_its_source(tmp_p
     assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["python dependency store -> store/pyproject.toml"]
 
 
+def test_the_export_refuses_a_dependency_counted_cut_that_its_rewrite_kept(tmp_path_factory, monkeypatch) -> None:
+    """The boundary counts a dependency no public file uses closed only because the export drops it from the
+    pyproject; an export whose rewrite kept it fails rather than ship the edge."""
+    root = tmp_path_factory.mktemp("tree")
+    tree, boundary, j = _depends(root)
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *DEPENDS], cwd=root, check=True)
+    monkeypatch.setattr(PE, "rewrite_pyproject", lambda text, *rest: (text, []))
+    with pytest.raises(ValueError, match="rewrite kept them: .*python dependency store"):
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+
+
+def test_the_export_writes_a_controls_file_that_only_loses_a_policys_lane_fields(tmp_path_factory) -> None:
+    """A controls file in which no control goes and a control's `policy` names an owner is still written anew: the
+    export drops nothing it would report, and the file it ships carries no owner."""
+    root = tmp_path_factory.mktemp("tree")
+    controls = {"listed": {"policy": {"guarantees": {"P.t": {"owner": "@lane"}}}, "fails": "open: P.S is"},
+                "plain": {"write": {"A.lean": "x"}, "fails": "sorry: "}}
+    files = {f: json.dumps(controls, indent=1) + "\n" for f in PE.CONTROLS[:1]}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *files], cwd=root, check=True)
+    tree, boundary = PB.Tree(root, files=files), PB.Boundary.load(tomllib.loads('[public]\na = ["tools"]\n'))
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, PB.judge(tree, boundary), dest, {})
+    (f,) = files
+    assert f not in got["rewrites"]
+    assert json.loads((dest / f).read_text(encoding="utf-8")) == {
+        "listed": {"policy": {"guarantees": {"P.t": {}}}, "fails": "open: P.S is"}, "plain": controls["plain"]}
+
+
 def test_an_optional_edge_is_not_open_and_each_is_one_edge_with_its_reason(tmp_path: Path) -> None:
     """An edge the boundary lists under `[[optional]]` is one its source runs without, so it is not open; the judgment
     names those the tree has. Without the entry the edge is open."""
