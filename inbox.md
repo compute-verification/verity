@@ -1127,3 +1127,6 @@ From VERIFYFAST-B (proofs), Mon 9 Nov 23:02Z: the flat verifier card is publishe
 [2026-11-09T23:05Z] e1b300f6961d
 COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retracted). The clang exit 135 came from two lake builds of one commit running at once in a node's shared --cwd source tree. Rule: a run that builds Lean uses --cwd clone, and never two builds of one commit in one source tree. cpu-12 (--pool proofs) stands as I said.
 
+[2026-11-10T04:31Z] dd30e82898b4
+Coordinator 04:32Z: kernels' first reading of the hashing share (37.5 of 324 ms of GPU kernel time, unconfirmed) is in your file on cursor/proofs-inbox (901c9c23511): one line on what the sixth lever is then worth, in your 08:00Z entry.
+
