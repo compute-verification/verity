@@ -178,7 +178,10 @@ ready mark (or land verdict) of its own that counts takes those of each other he
 whitespace-kept patch-id (`git patch-id --verbatim`) of its diff from its merge base with the landing branch (`Queue.own_change`,
 `StoreLabels`), and the log names the head they came from.  So a merge of `main`, or a restack that leaves the diff as it was,
 costs no new mark and no new review, a withdrawn mark holds there too, and a head whose own diff differs, if only in whitespace
-(an indentation, the spaces in a string), takes none.
+(an indentation, the spaces in a string), takes none.  The verified queue's loop also gives a head those of each other head
+whose own change, once it has crossed the moves `main` landed since as `tools/move/restack.py` carries a branch
+(`Queue.mapped_change`), is the head's: so a restack across a move costs none either, and one that changes anything besides
+takes none.
 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
@@ -1352,11 +1355,13 @@ class StoreLabels:
     companion doesn't authenticate is read as absent (`refusals` says why); `ready = false` and holds count as written.
     With ``change`` (`Queue.own_change`), a head with no `ready` (or `reviewed`) label of its own that counts takes those of
     each other head of its PR whose own change is the same, logging which (`_counted`): so a merge of `main` costs no new mark
-    and no new review, while a head whose own diff differs takes none."""
+    and no new review, while a head whose own diff differs takes none.  With ``moved`` too (`Queue.mapped_change`: an old
+    head's own change once it has crossed the moves the new head's base has, as `tools/move/restack.py` carries it), so does
+    each whose own change, so mapped, is the head's: a restack across a move costs none either."""
 
     def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None, verify=None,
-                 change: Callable[[str], str | None] | None = None):
-        self.store, self.log, self.since, self.verify, self.change = store, log, since, verify, change
+                 change: Callable[[str], str | None] | None = None, moved: Callable[[str, str], str | None] | None = None):
+        self.store, self.log, self.since, self.verify, self.change, self.moved = store, log, since, verify, change, moved
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
@@ -1412,20 +1417,23 @@ class StoreLabels:
     def _counted(self, pr: int, head: str, key: str) -> tuple[list, list[str]]:
         """The ``key`` labels on `pr:{n}@{head}` that count, and why each other one doesn't.  With ``change``, a head none of
         whose own counts takes those of each other head of the PR with the same own change (``change``, never None for
-        either), each judged on its own head's companions; the log names the heads they came from, once."""
+        either), or, with ``moved``, whose own change mapped across the moves since (``moved``) is the head's, each judged on
+        its own head's companions; the log names the heads they came from, once."""
         counted, refused = self._verified(pr, head, self._labels(pr, head, key))
         if counted or self.change is None or not (others := self._other_heads(pr, head, key)) or not (own := self.change(head)):
             return counted, refused
-        came = []
+        came, moved = [], []
         for old, labs in others.items():
-            if self.change(old) == own:
+            if (same := self.change(old) == own) or self.moved is not None and self.moved(old, head) == own:
                 got, why = self._verified(pr, old, labs)
                 counted, refused = [*counted, *got], [*refused, *why]
-                came += [old] if got else []
-        if came and (pr, head, key) not in self._said:
+                (came if same else moved).extend([old] if got else [])
+        if (came or moved) and (pr, head, key) not in self._said:
             self._said.add((pr, head, key))
-            self.log(f"research queue: #{pr} at {head[:8]} takes the `{key}` labels at {', '.join(c[:8] for c in came)}: none "
-                     f"of its own counts, and its own change is theirs (patch-id {own[:12]})")
+            for heads, how in ((came, "theirs"), (moved, "theirs across the moves `main` landed since, as a restack carries it")):
+                if heads:
+                    self.log(f"research queue: #{pr} at {head[:8]} takes the `{key}` labels at {', '.join(c[:8] for c in heads)}: "
+                             f"none of its own counts, and its own change is {how} (patch-id {own[:12]})")
         return counted, refused
 
     def _verified(self, pr: int, head: str, labs: list) -> tuple[list, list[str]]:
@@ -1732,6 +1740,18 @@ class Queue:
         self._own: dict[tuple[str, str], str | None] = {}
         self._kept: dict[str, str | None] | None = None
         self._kept_at = Path()
+        #: each (old head, new head)'s `mapped_change`; those worked out, kept by old head and `main` below the new one (at
+        #: `_mapped_at`, else the clone's git directory); why each that couldn't be couldn't, until a restart tries it again;
+        #: the moves between each (main, old head); and what `mapped_change` deferred to `work_out_mapped`
+        self._mapped: dict[tuple[str, str], str | None] = {}
+        self._mapped_kept: dict[str, str] | None = None
+        self._mapped_at: Path | None = None
+        self._mapped_failed: dict[str, str] = {}
+        self._crossed: dict[tuple[str, str], list[tuple[str, list[str]]]] = {}
+        self._mapped_wanted: dict[str, tuple[str, str, list[tuple[str, list[str]]]]] = {}
+        #: how many heads `work_out_mapped` maps across moves at once, deferring each `mapped_change` wants to it; 0 maps each
+        #: there and then
+        self.mapped_jobs = 0
 
     # -- the clone and its state
 
@@ -1922,6 +1942,89 @@ class Queue:
             tmp.replace(self._kept_at)
         self._own[key] = self._kept[at]
         return self._own[key]
+
+    def mapped_change(self, old: str, new: str) -> str | None:
+        """``old``'s own change once it has crossed the moves that ``new``'s merge base with the landing branch has and it lacks,
+        as `tools/move/restack.py` carries a branch (`mapped_change`, the function), or None: when there are none, when it can't
+        (logged once, with why), and, with `mapped_jobs`, until `work_out_mapped` has worked it out.  What a mark or land
+        verdict at ``old`` carries to ``new`` by besides `own_change` (`StoreLabels`): a restack across a move keeps them, and
+        one that changes anything besides doesn't.  The scripts run on whole trees, so each is kept as `own_change`s are."""
+        if (key := (old, new)) in self._mapped:
+            return self._mapped[key]
+        onto = _git(self.workdir, "merge-base", self.base, new, check=False).stdout.strip()
+        if not onto or (at := f"{old} {onto}") in self._mapped_failed or not (moves := self._moves_crossed(onto, old)):
+            self._mapped[key] = None
+            return None
+        if at not in self._kept_mapped():
+            if self.mapped_jobs:
+                self._mapped_wanted.setdefault(at, (old, onto, moves))
+                return None
+            with tempfile.TemporaryDirectory(prefix="research-mapped-") as d:
+                self._mapped_done(at, *self._mapped_one(old, onto, moves, self._restack_at(Path(d))))
+        self._mapped[key] = self._kept_mapped().get(at)
+        return self._mapped[key]
+
+    def work_out_mapped(self, budget: float | None = None) -> int:
+        """Work out the heads `mapped_change` deferred since the last call, `mapped_jobs` at once, starting none once ``budget``
+        seconds have passed (None: no limit), and keep each; a later `mapped_change` wants those it didn't start again.  How
+        many it worked out."""
+        if not self._mapped_wanted:
+            return 0
+        wanted, self._mapped_wanted = iter(list(self._mapped_wanted.items())), {}
+        start, done, jobs = time.monotonic(), 0, max(1, self.mapped_jobs)
+        with tempfile.TemporaryDirectory(prefix="research-mapped-") as d, concurrent.futures.ThreadPoolExecutor(jobs) as pool:
+            restack, running = self._restack_at(Path(d)), {}
+            while True:
+                while len(running) < jobs and (budget is None or time.monotonic() - start < budget) \
+                        and (item := next(wanted, None)):
+                    at, (old, onto, moves) = item
+                    running[pool.submit(self._mapped_one, old, onto, moves, restack)] = at
+                if not running:
+                    break
+                finished, _ = concurrent.futures.wait(running, return_when=concurrent.futures.FIRST_COMPLETED)
+                for f in finished:
+                    self._mapped_done(running.pop(f), *f.result())
+                    done += 1
+        if left := sum(1 for _ in wanted):
+            self.log(f"research queue: {left} head(s) wait to be mapped across `main`'s moves: {budget:.0f} s went to {done}")
+        return done
+
+    def _moves_crossed(self, onto: str, old: str) -> list[tuple[str, list[str]]]:
+        if (key := (onto, old)) not in self._crossed:
+            self._crossed[key] = moves_between(self.workdir, onto, old)
+        return self._crossed[key]
+
+    def _kept_mapped(self) -> dict[str, str]:
+        if self._mapped_kept is None:
+            if self._mapped_at is None:
+                self._mapped_at = self.workdir / _out(self.workdir, "rev-parse", "--git-common-dir") / "mapped-changes.json"
+            self._mapped_kept = json.loads(self._mapped_at.read_text()) if self._mapped_at.is_file() else {}
+        return self._mapped_kept
+
+    def _restack_at(self, dest: Path) -> Path:
+        """The directory under ``dest`` holding the landing branch's `tools/move/restack.py`, which `mapped_tree` runs."""
+        return write_scripts(self.workdir, scripts_at(self.workdir, self.base, [RESTACK]), dest) / MOVE_DIR
+
+    def _mapped_one(self, old: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path) -> tuple[str | None, str]:
+        try:
+            return mapped_change(self.workdir, old, onto, moves, restack)
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            return None, f"{type(e).__name__}: {e}"
+
+    def _mapped_done(self, at: str, got: str | None, why: str) -> None:
+        """Keep what `_mapped_one` gave for ``at`` (old head and `main` below the new one): its patch-id, written whole as
+        `own_change`s are, or why it couldn't, logged."""
+        old, onto = at.split()
+        if got is None:
+            self._mapped_failed[at] = why or "it has no own change once mapped"
+            self.log(f"research queue: {old[:8]}'s own change isn't mapped across the moves {onto[:8]} has: {self._mapped_failed[at]}")
+            return
+        kept = self._kept_mapped()
+        kept[at] = got
+        self._mapped_kept = kept = dict(list(kept.items())[-OWN_KEEP:])
+        tmp = self._mapped_at.with_name(f"{self._mapped_at.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(kept))
+        tmp.replace(self._mapped_at)
 
     # -- admission
 
@@ -3820,6 +3923,87 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
         return None
     got = subprocess.run(["git", "patch-id", "--verbatim"], cwd=repo, input=diff.stdout, capture_output=True).stdout.split()
     return got[0].decode() if got else None
+
+
+#: a move commit's line naming its map, and so its script, as `tools/move/restack.py`'s `MOVE_LINE` reads it: `Move:` (drive's
+#: and `stage.py`'s word maps, `rename.py`) and `Layout-move:` (`stage.py`'s path maps, `layout.py`)
+MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): tools/move/[\w.-]+\.toml(?: --no-lock)?$", re.M)
+#: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
+#: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
+#: worktree), and prints the tree it leaves
+_MAPPED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
+           "R.SCRIPT, R.SCRIPT_ARGS = R.move_line(sys.argv[3], None)\n"
+           "print(R.run_script(sys.argv[2], R.move_base(sys.argv[3], None), sys.executable, None)[0])\n")
+#: how long one move's script runs at most on one head (`mapped_tree`): a layout map on the whole tree, `uv lock` with it
+MAPPED_TIMEOUT_S = 1800.0
+
+
+def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
+                timeout: float = MAPPED_TIMEOUT_S) -> tuple[str | None, str]:
+    """(the tree ``commit`` becomes once the move ``move`` runs on it as `tools/move/restack.py`, from the directory ``restack``,
+    runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  The scratch worktree goes under `MERGED_ROOT` when set,
+    else the temporary directory."""
+    env = _script_env()
+    if MERGED_ROOT:
+        Path(MERGED_ROOT).mkdir(parents=True, exist_ok=True)
+        env["TMPDIR"] = str(MERGED_ROOT)
+    try:
+        r = subprocess.run([sys.executable, "-c", _MAPPED, str(restack), commit, move], cwd=repo, capture_output=True,
+                           text=True, env=env, stdin=subprocess.DEVNULL, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, f"ran over {timeout:.0f} s"
+    got = r.stdout.split()
+    return (got[-1], "") if r.returncode == 0 and got else (None, f"exit {r.returncode}: {_tail(r, 3)}")
+
+
+def _own_onto(repo: Path, onto: str, commit: str) -> str | None:
+    """``commit``'s own change (`own_change`) from its merge base with ``onto``."""
+    mb = _git(repo, "merge-base", onto, commit, check=False).stdout.strip()
+    return own_change(repo, mb, commit) if mb else None
+
+
+def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path) -> tuple[str | None, str]:
+    """(``head``'s own change once it has crossed ``moves`` (`moves_between`: those ``onto`` has and it lacks) as
+    `tools/move/restack.py` carries a branch, from its merge base with ``onto``, ''), or (None, why it can't): before each move
+    it merges the move's parent when it lacks it, a merge that must leave its own change as it was (as a merge of `main` must, to
+    keep a mark: `StoreLabels`), then the move's script runs on it (`mapped_tree`, ``restack`` the directory holding main's
+    `restack.py`), and the result takes the move as a second parent.  What a restack of ``head`` gives for its own change, when
+    `main` since the last move touched none of it."""
+    x = head
+    for move, parents in moves:
+        if len(parents) != 1:
+            return None, f"the move {move[:12]} has {len(parents)} parents"
+        base = parents[0]
+        if _git(repo, "merge-base", "--is-ancestor", base, x, check=False).returncode:
+            before = _own_onto(repo, onto, x)
+            r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", x, base, check=False)
+            got = [s for s in r.stdout.split("\0") if s]
+            if r.returncode or not got:
+                return None, (f"it doesn't merge with {base[:12]}, the base of the move {move[:12]}: "
+                              f"{', '.join(got[1:4]) or (r.stderr or '').strip()[-200:]}")
+            x = _git(repo, "commit-tree", got[0], "-p", x, "-p", base, "-m", f"Merge {base}", env=IDENTITY).stdout.strip()
+            if _own_onto(repo, onto, x) != before:
+                return None, f"its merge with {base[:12]}, the base of the move {move[:12]}, changes its own change"
+        tree, why = mapped_tree(repo, x, move, restack)
+        if tree is None:
+            return None, f"the move {move[:12]}'s script fails on it: {why}"
+        x = _git(repo, "commit-tree", tree, "-p", x, "-p", move, "-m", f"Mapped across {move}", env=IDENTITY).stdout.strip()
+    return _own_onto(repo, onto, x), ""
+
+
+def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]]]:
+    """(commit, its parents) of each move ``onto`` has and ``head`` lacks, oldest first: each commit that isn't a merge with a
+    move line (`MOVE_LINE_RE`), as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever
+    parent of `main`'s merges it landed."""
+    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/",
+               "--format=%H %P%x00%B%x1e", onto, f"^{head}", check=False).stdout
+    found = []
+    for rec in filter(None, (s.strip() for s in log.split("\x1e"))):
+        line, _, body = rec.partition("\x00")
+        if MOVE_LINE_RE.search(body):
+            commit, *parents = line.split()
+            found.append((commit, parents))
+    return found
 
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string

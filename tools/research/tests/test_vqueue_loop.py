@@ -1124,14 +1124,60 @@ def test_a_freeze_reads_a_pr_s_own_change_above_the_old_paths_checked_not_the_la
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
+    """Each tick reads new labels, carrying a mark by own change, and by an old head's own change mapped across `main`'s moves
+    while the queue maps heads (`Queue.mapped_jobs`); each ends by mapping the old heads the labels wanted, for a budget."""
     made: list[Labels] = []
+    worked: list[float | None] = []
     loop = env.loop(lambda s: [])
     loop.world.labels_at = lambda: made.append(Labels(env.o.gh)) or made[-1]
+    loop.world.q.work_out_mapped = lambda budget=None: worked.append(budget) or 0
     loop.tick()
+    loop.world.q.mapped_jobs = 2
     loop.tick()
     w = loop.world
     assert len(made) == 2 and w.labels is made[-1] and w.q.ready == made[-1].ready and w.q.marked_at == made[-1].marked_at
     assert made[-1].change == w.q.own_change and made[-1].since == w.q.rules().marked_after
+    assert made[0].moved is None and made[-1].moved == w.q.mapped_change and worked == [L.MAPPED_BUDGET_S] * 2
+
+
+def test_a_tick_whose_mapping_of_old_heads_fails_says_so_and_returns_what_it_logged(env):
+    """The end of a tick maps old heads across `main`'s moves; a git failure there is said, and the tick's records stand."""
+    out: list[str] = []
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    loop.out = out.append
+
+    def fails(budget=None):
+        raise Q.QueueError("git ls-tree: broken")
+
+    loop.world.q.work_out_mapped = fails
+    (built,) = loop.tick()
+    assert built["action"] == "build"
+    assert out[-1] == f"research queue vqueue: tick {loop.last}: mapping old heads across `main`'s moves failed: git ls-tree: broken"
+
+
+def test_move_carry_jobs_says_how_many_old_heads_the_loop_maps_across_moves_at_once(monkeypatch, tmp_path):
+    """`--move-carry-jobs N` is the queue's `mapped_jobs` (default `MAPPED_JOBS`); 0, or less, maps none, so no mark or
+    verdict carries across a move."""
+    seen: list[int] = []
+
+    class Built(Exception):
+        pass
+
+    def loop(world, *args, **kw):
+        seen.append(world.q.mapped_jobs)
+        raise Built
+
+    monkeypatch.setattr(L, "Loop", loop)
+    monkeypatch.setattr(Q, "remote_and_repo", lambda *a: ("origin", "owner/repo"))
+    monkeypatch.setattr(Q, "credential_args", lambda *a: ())
+    monkeypatch.setattr(Q, "GitHub", lambda slug: None)
+    common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
+              "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
+    for extra in ([], ["--move-carry-jobs", "0"], ["--move-carry-jobs", "-3"], ["--move-carry-jobs", "7"]):
+        with pytest.raises(Built):
+            L.main([*common, *extra])
+    assert seen == [L.MAPPED_JOBS, 0, 0, 7]
 
 
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):

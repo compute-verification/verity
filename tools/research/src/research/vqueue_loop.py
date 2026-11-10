@@ -10,7 +10,9 @@ lacks, and the `queue/*` branches it ignores.
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
-`signed_verdicts`, a mark carried to a head with the same own change), with a land verdict by a non-owner or under the low-risk
+`signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
+`main` landed since, as `tools/move/restack.py` carries a branch: `Queue.mapped_change`, which the end of a tick works out,
+`--move-carry-jobs` heads at once for up to `MAPPED_BUDGET_S`), with a land verdict by a non-owner or under the low-risk
 rule (drive.toml's `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by
 its merge), not on `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains; `files`
 is its change against its merge base with `main`, `lean` drive's Lean-change test (`queue.lean_change`), and `conflict`
@@ -196,6 +198,10 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
+#: the old heads mapped across `main`'s moves at once, at the end of a tick (`Queue.work_out_mapped`; `--move-carry-jobs`), and
+#: how long a tick goes on starting them: each runs every move's script on a whole tree, a layout's several minutes a head, so
+#: a tick after a layout lands maps some and leaves the rest to the next ones
+MAPPED_JOBS, MAPPED_BUDGET_S = 4, 600.0
 
 
 def stamp(t: float) -> str:
@@ -546,7 +552,7 @@ class World:
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
-            q._kept_at = cache / "own-changes.json"
+            q._kept_at, q._mapped_at = cache / "own-changes.json", cache / "mapped-changes.json"
             q._kept = json.loads(q._kept_at.read_text()) if q._kept_at.is_file() else {}
         self.post: Callable[[str, tuple[str, ...]], bool] = post or merge_thread_post
         #: graph2's subcommands it was found to lack (`_graph2`)
@@ -592,10 +598,12 @@ class World:
     def _relabel(self, main: str) -> None:
         """New labels, read as drive's tick reads them (one `StoreLabels` keeps what it pulled, so a mark, a verdict or a
         withdrawal written since would go unread): marks from drive.toml's `marked_after` at ``main`` on (else the queue
-        rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change."""
+        rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change, or,
+        while the queue maps heads across moves (`Queue.mapped_jobs`), whose own change is the head's mapped across them."""
         q, flags = self.q, flags_at(self.repo, main)
         self.labels = labels = self.labels_at()
         labels.since, labels.change = flags.marked_after or q.rules().marked_after, q.own_change
+        labels.moved = q.mapped_change if q.mapped_jobs else None
         if flags.signed_verdicts:
             labels.verify = label_verifier(self.repo, MAIN, self.keys, q.log)
         q.ready, q.before_cutoff, q.marked_by, q.marked_at, q.prefetch = (labels.ready, labels.before_cutoff, labels.marked_by,
@@ -1668,6 +1676,10 @@ class Loop:
         if past.bad:
             self.out(f"research queue vqueue: tick {t.n}: {len(past.bad)} line(s) of {self.log_path} read as none: {past.bad[0]}")
         self.keep(t)
+        try:
+            self.world.q.work_out_mapped(MAPPED_BUDGET_S)
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         return logged
 
     def keep(self, t: Tick) -> None:
@@ -2227,6 +2239,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
+    ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
+                    help=f"old heads mapped across `main`'s moves at once at the end of a tick, each running every move's "
+                         f"script on a scratch worktree where a build's merged worktrees go, so a mark or land verdict carries "
+                         f"to a head whose own change is theirs mapped (`Queue.mapped_change`); 0 carries none across a move "
+                         f"(default {MAPPED_JOBS})")
     a = ap.parse_args(argv)
     if a.no_slim and not (a.shadow or a.dry_run):
         print("research queue vqueue: --no-slim moves `main` past lean-agreement and the preflights unchecked: it runs only "
@@ -2255,7 +2272,7 @@ def main(argv: list[str]) -> int:
         q = _Clone(a.repo, remote=remote, github=GitHub(slug), ready=labels.ready, store=store,
                    auth=credential_args(a.repo, remote), before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
                    marked_at=labels.marked_at, prefetch=labels.prefetch, land_into="main")
-        q.branch = "main"
+        q.branch, q.mapped_jobs = "main", max(0, a.move_carry_jobs)
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
