@@ -23,6 +23,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Headline
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenDec
 
 @[expose] public section
 

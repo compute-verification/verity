@@ -17,6 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+public import Proofs.Flock.Soundness.Discharge.Integrate
 
 /-!
 # The tables and sites of a one-table hidden-output session

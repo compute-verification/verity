@@ -188,5 +188,24 @@ public import Proofs.Flock.Soundness.CROnly.Registered
 public import Proofs.Flock.Soundness.CROnly.E2EMore
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
+public import Proofs.Flock.Soundness.Audit.Partitioning
+public import Proofs.Flock.Soundness.Binding
+public import Proofs.Flock.Soundness.Discharge.Aliased
+public import Proofs.Flock.Soundness.Discharge.Const
+public import Proofs.Flock.Soundness.Discharge.DecodeZL
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.Discharge.Exec
+public import Proofs.Flock.Soundness.Discharge.HiddenDec
+public import Proofs.Flock.Soundness.Discharge.Integrate
+public import Proofs.Flock.Soundness.Discharge.PlainHJ
+public import Proofs.Flock.Soundness.Discharge.PlainJ
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin
+public import Proofs.Flock.Soundness.Discharge.Tables
+public import Proofs.Flock.Soundness.Discharge.Zero
+public import Proofs.Flock.Soundness.Discharge.ZkView
+public import Proofs.Flock.Soundness.Registered
+public import Proofs.Flock.Soundness.ZK.GK
+public import Proofs.Flock.Soundness.Discharge.General.Instances
+public import Proofs.Flock.Soundness.Discharge.ZkBind.AtM1
 
 @[expose] public section

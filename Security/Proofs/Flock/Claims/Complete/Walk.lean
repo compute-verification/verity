@@ -51,6 +51,7 @@ import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Prop
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 public import Proofs.Flock.Claims.Complete.Replay.ProverOk
+public import Proofs.Flock.Claims.Complete.Replay
 
 /-!
 # The session walk

@@ -14,6 +14,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+public import Proofs.Flock.Soundness.Discharge.Exec
 
 /-!
 # The tables and sites of a one-table session
