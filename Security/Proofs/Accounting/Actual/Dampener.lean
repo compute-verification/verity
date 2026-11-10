@@ -33,8 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Actual.Threaded
-import Proofs.Nci.Fit
-import Proofs.Nci.Threads
+import Proofs.InferenceOnly.Fit
+import Proofs.InferenceOnly.Threads
 
 /-!
 # The compute dampener's windows from the memory cap over threads
@@ -47,7 +47,7 @@ import Proofs.Nci.Threads
 
 namespace Accounting.SecurityProofs.Actual
 
-open Verity Nci Finset Nci.Dampener
+open Verity InferenceOnly Finset InferenceOnly.Dampener
 
 /-- **The windows' count is the ceiling**: `⌈t/ω⌉₊ = (t + ω − 1)/ω` for a whole-tick window `ω > 0`. -/
 theorem ceil_div_eq_pred_div {t ω : ℕ} (hω : 0 < ω) : ⌈(t : ℝ) / ω⌉₊ = (t + ω - 1) / ω := by
@@ -80,8 +80,8 @@ theorem SlowdownWindowsCapSlots : Guarantees.Actual.SlowdownWindowsCapSlots := b
 theorem SlowdownWindowsCap : Guarantees.Actual.SlowdownWindowsCap := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR
     hcont hT hW hM
-  exact SlowdownWindowsCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (Nci.SecurityProofs.Fit.idSlots T)
+  exact SlowdownWindowsCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T)
     d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT
-    (Nci.SecurityProofs.weightsIncompressibleSlots_of (Nci.SecurityProofs.Fit.idSlots T) hbw.le hW) hM
+    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW) hM
 
 end Accounting.SecurityProofs.Actual

@@ -117,7 +117,7 @@
    "id": "p-inference-theorem",
    "kind": "theorem",
    "status": "proved",
-   "statement": "A declaration divided into sessions reading only theta and their prompts complies (a lemma, with NCI's proofs in Security/Proofs/Nci/Lemmas.lean).",
+   "statement": "A declaration divided into sessions reading only theta and their prompts complies (a lemma, with NCI's proofs in Security/Proofs/InferenceOnly/Lemmas.lean).",
    "refs": {}
   },
   {
@@ -127,8 +127,8 @@
    "statement": "Under threading, weight incompressibility and containment, slowdown >= kappa b_a / (2 alpha Lambda).",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedReads",
-     "Nci.SecurityProofs.ThreadedTraining"
+     "InferenceOnly.SecurityProofs.ThreadedReads",
+     "InferenceOnly.SecurityProofs.ThreadedTraining"
     ]
    }
   },
@@ -139,7 +139,7 @@
    "statement": "A small subcircuit of the reference circuit reads b_w bits per updated weight it uses and b_a per thread value. Stated over wiring; proofs recommends the support form. False at step 0 and for small-batch reference circuits.",
    "refs": {
     "lean": [
-     "Nci.Assumptions.WeightsIncompressible"
+     "InferenceOnly.Assumptions.WeightsIncompressible"
     ],
     "estimates": [
      "b_w.pretrained/frontier-lossy",
@@ -154,7 +154,7 @@
    "statement": "The reference circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedReads"
+     "InferenceOnly.SecurityProofs.ThreadedReads"
     ]
    }
   },
@@ -165,7 +165,7 @@
    "statement": "The declared circuit contains the reference circuit gate for gate (Declaration.Contains).",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedThrottled"
+     "InferenceOnly.SecurityProofs.ThreadedThrottled"
     ]
    }
   },

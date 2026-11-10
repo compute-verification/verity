@@ -939,13 +939,13 @@ most α bits of fresh input per gate. One request is 19,620 gates reading 48 bit
 word), theta being registered."""
 
 
-def _nci() -> Any:
-    """The inference-only policy's Python check (`verity/core/protocols/network/nci/lean/scripts/nci_reference.py`), the
-    reference its Lean check, `NciCheck`, is held to."""
-    name = "lifecycle_nci_reference"
+def _inference_only() -> Any:
+    """The inference-only policy's Python check (`verity/core/protocols/network/inference_only/lean/scripts/inference_only_reference.py`), the
+    reference its Lean check, `InferenceOnlyCheck`, is held to."""
+    name = "lifecycle_inference_only_reference"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, ROOT / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+            name, ROOT / "verity/core/protocols/network/inference_only/lean/scripts/inference_only_reference.py")
         m = importlib.util.module_from_spec(spec)
         sys.modules[name] = m
         spec.loader.exec_module(m)
@@ -956,18 +956,18 @@ def _nci() -> Any:
 def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
     """The policy's check (`check_desc`) on an n-unit execution block: theta the root's registered input nodes (w1 and
     w2), and the division B makes, each unit (one request) an inference block of its own."""
-    nci, text = _nci(), block_program(n)
-    inputs, registered, _ = nci.root_nodes(text)
+    inference_only, text = _inference_only(), block_program(n)
+    inputs, registered, _ = inference_only.root_nodes(text)
     owner, u = [], 0
     for i in inputs:
         owner.append("input" if i else u)
         u += not i
     theta = [k for k, (i, r) in enumerate(zip(inputs, registered)) if i and r]
-    return nci.check_desc({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": list(alpha)})
+    return inference_only.check_desc({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": list(alpha)})
 
 
 def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
-    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `NciCheck.Protocol`): the
+    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `InferenceOnlyCheck.Protocol`): the
     record, the one sampled proofs' answer commits to, names the block's Program, and the policy's check finds that the
     block's division into inference blocks complies. It has no rounds and reads no coins. Theta's provenance is the
     registration's check (`check_baseline`: theta committed under the registered builder)."""
