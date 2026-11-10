@@ -416,6 +416,8 @@ REGISTRY = Registry(
     # ---- verity.ml.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
+    Setting("VERITY_ML_CIRCUITS_SLOW", flag, False, WHERE, "the circuits' tests of over five minutes run (every recorded "
+            "population program rebuilt against its record): which tests run, never what a circuit computes"),
     # ---- verity.ml.definitions' suite
     Setting("VERITY_ML_DEFINITIONS_SLOW", flag, False, WHERE, "the definitions' tests at served statics run (the DSA mask's cut "
             "at 43,008 and 131,072 keys, minutes): which tests run, never what a circuit computes"),
