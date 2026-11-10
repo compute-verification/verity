@@ -20,7 +20,8 @@ the three terms' own shares, which sum to it.
 
 The credited share reads Pearl+'s verdict (``--credit``: ``served_passes.py verify``'s ``answer.json``, core's answer
 form): its ``public.work.credited``, the linears' MACs credited at Pearl's Assumption 1 less what the draw leaves at its
-δ, at θ, over the same wall, and beside it that credit's share of the declared linears. Only the linears are Pearl+'s
+δ (in the grid form, `verify_run.grid_work`, where the run is held to its class's fixed load: at most the exact credit),
+at θ, over the same wall, and beside it that credit's share of the declared linears. Only the linears are Pearl+'s
 work, so attention and the LM head are never credited. A rejected answer credits 0, and so does a run with no
 ``--credit``. The credited share is not part of the declared share, and the two are never added.
 
