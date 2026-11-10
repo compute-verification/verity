@@ -547,6 +547,19 @@ def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepte
     assert R.steady_row({"type": "odd", "provers": 1, "stage": {}}, "r1") == "its row `odd` at 1 provers: it lacks `stage.definition`"
 
 
+def test_a_row_names_the_census_type_it_was_staged_for_not_the_form_staged():
+    """A row staged in another form of its census type (the card stages `FlashInferFp8Linear_v1` as `_v2`) prices the
+    census's type: `stage.word` names it, and `stage.definition` only where a row has no `stage.word`."""
+
+    good = {row["type"]: row for row in REFUSALS}["good"]
+    staged = good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}", "word": "Good_v1{N=1}"}}
+    read = R.steady_row(staged, "r1")
+    assert read.definition == "Good_v1{N=1}" and read.measured
+    cost = P.Flock((read,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
+    assert cost.source == P.STEADY
+    assert R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}"}}, "r1").definition == "Good_v2{N=1}"
+
+
 # ---- the store side ------------------------------------------------------------------------------------------------------------
 
 

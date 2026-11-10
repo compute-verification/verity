@@ -49,7 +49,8 @@ PLAN_FILE = "mix.json"
 RATES = "out/rate/rate.json"
 #: the same rows in an art that holds them itself: its one run's, as completed or corrected after the run
 ART_RATES = "rate.json"
-#: what a row holds for the command to read it, by the script's names (`stage.definition` names its block type; `void`,
+#: what a row holds for the command to read it, by the script's names (`stage.word`, the census type it was staged for,
+#: names its block type, and `stage.definition`, the form staged, where it has no `stage.word`; `void`,
 #: the reasons a row has no rate, is there only when it has none, and `verify_s` only where the verifier was timed)
 ROW_FIELDS = ("statements_per_s", "provers", "warm", "sessions", "accepted", "refused_n", "exits", "flat", "gpus",
               "stage.k_log", "stage.blocks", "stage.full")
@@ -212,6 +213,8 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None) -> P.St
         return f"its row {name}: {why}"
     why = row_why(row)
     stage = row["stage"]
+    if isinstance(stage.get("word"), str):
+        definition = P.definition_id(stage["word"])
     blocks, full, provers = (x if _count(x) else 0 for x in (stage.get("blocks"), stage.get("full"), row.get("provers")))
     k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
     held = RATES if art is None else ART_RATES
