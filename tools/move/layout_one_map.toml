@@ -1,5 +1,5 @@
 # The layout move of the whole layout: what `tools/move/layout.py --map tools/move/layout_one_map.toml` moves and
-# rewrites. 3554 files in 493 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
+# rewrites. 3568 files in 495 rows. Written by `tools/move/layout_maps.py`, which states the rule: edit that, not
 # this.
 # A moved file's new path is its component's new directory, then the name of the directory it is in today, then its
 # path below that; the name is left out where the new directory, less `verifier/`, `prover/` or `device/`, already
@@ -87,7 +87,9 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "benchmarks/pous/hbm_audit/" = "archive/benchmarks/pous/hbm_audit/"
 "benchmarks/pouw/clear/" = "verity/protocols/pouw/clear/"
 "benchmarks/pouw/machine_model/" = "verity/hardware/machine_model/"
+"benchmarks/pouw/np_kernel/" = "archive/benchmarks/pouw/np_kernel/"
 "benchmarks/pouw/receipts/" = "verity/protocols/pouw/receipts/"
+"benchmarks/pouw/tests/test_np_kernel.py" = "archive/benchmarks/pouw/tests/test_np_kernel.py"
 "benchmarks/recursion_e2e/" = "workloads/recursion_e2e/"
 "benchmarks/remote_session/verifier_process.py" = "verity/protocols/poub/verifier/remote_session/verifier_process.py"
 "benchmarks/resource_accounting/" = "archive/benchmarks/resource_accounting/"
@@ -869,7 +871,9 @@ paths = []
 [drop]
 # `benchmarks/pouw/contents/paths/machine_model.toml`: the entry of `benchmarks/pouw`'s contents for
 # `machine_model/`, which leaves `benchmarks/pouw`.
-paths = ["benchmarks/pouw/contents/paths/machine_model.toml"]
+# `benchmarks/pouw/contents/paths/np_kernel.toml`: the entry of `benchmarks/pouw`'s contents for `np_kernel/`, which
+# goes to `archive/`.
+paths = ["benchmarks/pouw/contents/paths/machine_model.toml", "benchmarks/pouw/contents/paths/np_kernel.toml"]
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
@@ -900,7 +904,9 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks.pous.hbm_audit" = "archive.benchmarks.pous.hbm_audit"
 "benchmarks.pouw.clear" = "verity.protocols.pouw.clear"
 "benchmarks.pouw.machine_model" = "verity.hardware.machine_model"
+"benchmarks.pouw.np_kernel" = "archive.benchmarks.pouw.np_kernel"
 "benchmarks.pouw.receipts" = "verity.protocols.pouw.receipts"
+"benchmarks.pouw.tests.test_np_kernel" = "archive.benchmarks.pouw.tests.test_np_kernel"
 "benchmarks.recursion_e2e" = "workloads.recursion_e2e"
 "benchmarks.remote_session.verifier_process" = "verity.protocols.poub.verifier.remote_session.verifier_process"
 "benchmarks.resource_accounting" = "archive.benchmarks.resource_accounting"
