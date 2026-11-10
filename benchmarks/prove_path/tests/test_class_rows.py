@@ -21,7 +21,7 @@ from verity.ml.windows import interface as IF
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import class_rows as CR  # noqa: E402
 
-#: integrations/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
+#: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}

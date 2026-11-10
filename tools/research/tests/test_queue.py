@@ -1902,7 +1902,7 @@ PREFLIGHT_FILES = {
     "tests/test_repository.py": _invariant("REPORT_GENRE_NAME", 1),
     "tools/research/tests/test_pythonpath.py": _invariant("BROKEN_REAL_ROOTS", 3),
     "tests/test_no_wall_clock.py": _invariant("WALL_CLOCK", 1),
-    "integrations/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
+    "adapters/vllm/tests/lint/test_p03_one_evaluator.py": _invariant("VLLM_LINT", 4),
     "tools/verity/check/suites.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "suites.py").read_text(),
     "tools/verity/check/settings.py": (Path(__file__).resolve().parents[2] / "verity" / "check" / "settings.py").read_text(),
     "tools/verity/check/pins.py": ("import sys\nfrom pathlib import Path\nif Path('STALE.txt').exists():\n"
@@ -2205,8 +2205,8 @@ PREFLIGHT_REFUSALS = {
     "wall-clock lint": ({"pkg/tests/test_slow.py": "def test_slow():\n    pass\n", "WALL_CLOCK": ""},
                         "the invariant tests in tests/test_no_wall_clock.py fail on the merged tree: FAILED "
                         "tests/test_no_wall_clock.py::test_wall_clock_absent"),
-    "vllm lint": ({"integrations/vllm/verity_vllm/kernels.py": "", "VLLM_LINT": ""},
-                  "the invariant tests in integrations/vllm/tests/lint fail on the merged tree: FAILED "
+    "vllm lint": ({"adapters/vllm/verity_vllm/kernels.py": "", "VLLM_LINT": ""},
+                  "the invariant tests in adapters/vllm/tests/lint fail on the merged tree: FAILED "
                   "tests/lint/test_p03_one_evaluator.py::test_vllm_lint_absent"),
 }
 
@@ -2247,7 +2247,7 @@ def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_
 
 def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(world, capsys):
     """`PREFLIGHT_LINTS` add up to a minute, so a change outside their prefixes doesn't run them: a head breaking the vllm lint's
-    stand-in without touching integrations/vllm is marked, and the train's check runs the lint."""
+    stand-in without touching adapters/vllm is marked, and the train's check runs the lint."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     _preflight_main(world)

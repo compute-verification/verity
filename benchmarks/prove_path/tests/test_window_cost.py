@@ -34,14 +34,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import class_rows as CR
 import window_cost as W
 
-#: integrations/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit (test_class_rows')
+#: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit (test_class_rows')
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
-LLAMA_1B = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+LLAMA_1B = Path(__file__).resolve().parents[3] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 #: Llama-3.2-1B's arena sizing record (`step_bound_bytes`'s widths)
-SIZING = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/pipeline/fixtures/admission/b16.json"
+SIZING = Path(__file__).resolve().parents[3] / "adapters/vllm/tests/pipeline/fixtures/admission/b16.json"
 
 
 def _census(cls: WindowClass, probe: int | None = None) -> dict:

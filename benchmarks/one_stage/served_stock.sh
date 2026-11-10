@@ -29,7 +29,7 @@ REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737
 PORT=${PORT:-18191} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
 REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-512} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
@@ -41,7 +41,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
   mkdir -p "$D" "$OUT/$1"
-  cd "$TREE/integrations/vllm" || return 9
+  cd "$TREE/adapters/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --max-num-batched-tokens "$MNBT" \
@@ -87,7 +87,7 @@ if [ "${1:-}" = reps ]; then reps; exit $?; fi
 for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
 command -v gpu-lease >/dev/null || { echo "PREFLIGHT: no gpu-lease on this node" | tee -a "$OUT/stock.txt"; exit 3; }
 mkdir -p "$ROOT/cache"
-(cd "$TREE/integrations/vllm" && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") \
+(cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") \
   > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
 rc=$?
 [ "$rc" = 0 ] && [ -f "$PRED/predicted.json" ] || {

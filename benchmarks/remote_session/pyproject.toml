@@ -44,5 +44,5 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
           "benchmarks/live_challenger/auditor.py", "benchmarks/live_challenger/host.json", "benchmarks/live_challenger/serve.py",
           "benchmarks/live_challenger/tests/stub_serve.py",
-          "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
-          "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/remote_bandwidth"]
+          "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
+          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth"]

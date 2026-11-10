@@ -17,7 +17,7 @@ uv sync -q --all-packages --extra torch-cpu > "$OUT/sync.log" 2>&1 || { tail -20
 B=$(mktemp -d "${TMPDIR:-/tmp}/drawn-cost.XXXXXX") || exit 1
 trap 'kill "${SAMPLER:-}" 2>/dev/null; rm -rf "$B"' EXIT
 REAL=${DC_REAL:-1}
-(cd integrations/vllm && VERITY_VLLM_H1_DRAWN_J10R=$REAL ../../.venv/bin/python -m pytest -q -p no:cacheprovider --basetemp "$B/t" \
+(cd adapters/vllm && VERITY_VLLM_H1_DRAWN_J10R=$REAL ../../.venv/bin/python -m pytest -q -p no:cacheprovider --basetemp "$B/t" \
   tests/protocols/test_pouw_h1_drawn.py -k staged_proved_and_credits -m slow) > "$OUT/fixture.log" 2>&1 \
   || { tail -30 "$OUT/fixture.log"; exit 1; }
 T=$(ls -d "$B"/t/test_a_served* | head -1)

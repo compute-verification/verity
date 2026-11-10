@@ -3,7 +3,7 @@
 # and one receipt
 set -uo pipefail
 ROOT=$PWD
-cd integrations/vllm
+cd adapters/vllm
 PY=/workspace/jobs/venv312/bin/python3
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1 HF_HOME=/workspace/hf
 echo "research: $(command -v research)"

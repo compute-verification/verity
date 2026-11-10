@@ -187,7 +187,7 @@ MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(in_mmav2_e4m3_k_order(range(32)))
 #: same word as packing it to FP32 between the two mma (a group result is an FP32 value or a sticky infinity).  Measured: the f16
 #: HMMA with zero accumulators is this pipeline per group (on the H100: ptxas's own sm_90 lowering of ``mma.sync.m16n8k32`` FP8 to two HMMA.16816.F32 over the same k halves
 #: from +0 plus FADDs, 25,040,128 words each, 0 mismatches), the bf16 HMMA with nonzero accumulators is, and the chained f16 pair with its nonzero accumulator is, inside vLLM's
-#: ``fused_moe_kernel`` at GLM-5.3's MMAv2 tiles on the H200 (``integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py``,
+#: ``fused_moe_kernel`` at GLM-5.3's MMAv2 tiles on the H200 (``adapters/vllm/tests/properties/glm53_block_fp8_capture_gpu.py``,
 #: 638,976 words, 0 mismatches, on an operand probe that adder widths 24, 25, 27 and 28 and the other
 #: k orders each miss).
 HOPPER_E4M3_MMAV2_K32 = GroupSum(

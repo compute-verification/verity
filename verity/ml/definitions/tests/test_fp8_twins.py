@@ -25,7 +25,7 @@ from verity.ml.definitions.numerics import fp8_twins as T
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fp8_online_weight_quant_l0_qkv.npz"
 CHECKPOINT = "https://huggingface.co/Qwen/Qwen2.5-1.5B/resolve/8faed761d45a263340a0528343f099c05c9a4323/model.safetensors"
-PRODUCTION = Path(__file__).resolve().parents[4] / "integrations/vllm/tests/program/data/fp8_production_row_l0_qkv.npz"
+PRODUCTION = Path(__file__).resolve().parents[4] / "adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz"
 
 
 def test_online_weight_quant_is_the_committed_words():

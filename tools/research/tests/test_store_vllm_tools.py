@@ -44,7 +44,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
         assert t.name == f"vllm.{stage}" and t.spec == f"tools.research.src.research.store.vllm_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
-        assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
+        assert t.closure == ["adapters/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
@@ -114,7 +114,7 @@ def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs():
     # the earlier shell runners, as records in the store carry them
     p = RT.parse(["bash", "/workspace/src/integrations/vllm/verity_vllm/ops/row_pod.sh", ROW, "LLAMA32_1B", "repo", "rev", "build,match"], stage="build")
     assert p["stage"] == "build,match" and p["row"] == ROW and p["model"] == "repo" and p["batch"] == 1
-    q = RT.parse(["bash", "integrations/vllm/verity_vllm/ops/run_row_v2.sh", "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4",
+    q = RT.parse(["bash", "adapters/vllm/verity_vllm/ops/run_row_v2.sh", "stage", "commit", ROW, "R", "repo", "rev", "--pairs=4",
                   "--required-classes", "module_out"], stage="commit")
     assert q["pairs"] == "4" and q["required_classes"] == "module_out" and q["replay_args"] is None
     # a value that is itself a flag list is a value (the R19 admit fix (a) commit flags), not a bare `--commit-args` switch

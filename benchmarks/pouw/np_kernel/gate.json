@@ -11,7 +11,7 @@
   "benchmarks/pouw/np_kernel/run.sh": "825c2579c6597f6e9de6535f7a0fe7306c09124639febb2cad3db985793b86bd",
   "benchmarks/pouw/np_kernel/ssn.cu": "48a5cbca13ecb1491d6b714e4a51f40154e02ff74e9b2c10e1998a3dbd12d591",
   "benchmarks/pouw/served_zk/hm96_rows.cu": "b7bf605b4b338dac95dbdfcbdb1ce087f694fea2f5796f11f536b0b381000b61",
-  "integrations/vllm/verity_vllm/commit/committer/native_rows.cu": "543cc759fff39c3b25d1f9ded8103696723f4a9ad75afad99e0f65ddd43888bd",
+  "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "543cc759fff39c3b25d1f9ded8103696723f4a9ad75afad99e0f65ddd43888bd",
   "verity/ml/flock/cuda/sha512.cuh": "815b28156c197a12e34c762b88ef7aaef2f4c10d961b7f7990fa97de7c4557a1",
   "verity/ml/kernels/row_commit.cuh": "8ae91f6c3ea088f7439a8f6c30a507935bd39334099dbbd2c7c4e987a071686f",
   "verity/ml/kernels/sha512.cuh": "f9bf63f128136ec7aea71cb3f3d683b23857984732da2a1bef0e81732f87c234"

@@ -24,7 +24,7 @@ case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/s8_wgmma.sass" "$OUT/sass.json"
 if [ -x "$PY" ]; then
   H=$(mktemp -d); trap 'rm -rf "$H"' EXIT
-  HOME=$H PATH="$CUDA/bin:$PATH" PYTHONPATH="$ROOT/integrations/vllm:$ROOT" "$PY" -c \
+  HOME=$H PATH="$CUDA/bin:$PATH" PYTHONPATH="$ROOT/adapters/vllm:$ROOT" "$PY" -c \
     "from verity_vllm.commit import row_tables_device as D; print(D.device_lib('90')._name)"
   cp -r "$H/.cache/verity/row_table" "$OUT/row_table"
 else
@@ -32,7 +32,7 @@ else
 fi
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o s8_wgmma.cubin s8_wgmma.cu"; } > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}"
-  git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/s8_linear integrations/vllm/verity_vllm/commit \
-    integrations/vllm/verity_vllm/protocol_options/pouw_cuda 2>/dev/null || true; } > "$OUT/source.txt"
+  git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/s8_linear adapters/vllm/verity_vllm/commit \
+    adapters/vllm/verity_vllm/protocol_options/pouw_cuda 2>/dev/null || true; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "ship:"

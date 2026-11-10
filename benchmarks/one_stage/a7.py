@@ -6,7 +6,7 @@ reader, each registered block freed at its values' last structural reader, and e
 the cap the committed pass row and the public lifetime cap give), one instance of each per step
 (`verity.ml.circuits.requirement_units`), the layout row at two epochs a value.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
 
 * **Stand-in.** A decoder's requirement built directly (`requirement.Requirement`): 8 weight blocks, every step reading

@@ -142,7 +142,7 @@ def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
                        "HMMA.16816.F32): 638,976 w13 and w2 words, 0 mismatches, and an operand probe (+448 * +448 and +448 * -448 "
                        "in the two k16 halves over small codes) on which the natural k order, the halves swapped, adder widths 24, "
                        "25, 27 and 28, Ampere's 8 + 8 groups, one k32 group, QGMMA's step and a chain of FMAs each differ "
-                       "(integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py v4; run `run`, `art`); HMMA.16816.F32 "
+                       "(adapters/vllm/tests/properties/glm53_block_fp8_capture_gpu.py v4; run `run`, `art`); HMMA.16816.F32 "
                        "from +0 is HOPPER_BF16_M16N8K16's group on the H100 (`h100`)")
 def HopperE4m3MmaV2Dot32(acc: int, *ab: int) -> int:
     """One 32-wide k block of an e4m3 `tl.dot` that Triton 3.7.1 lowers to MMAv2 on sm_90 (a dot whose M is not a multiple of 64 or

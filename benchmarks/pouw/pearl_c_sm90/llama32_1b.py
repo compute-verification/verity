@@ -2,7 +2,7 @@
 (``pearl-c-h100-v1-h3``): its linears as one card serves them (TP 1), each with the sm_90a kernels' domain verdict, and γ at
 the H100 record at both FADD readings (`glm53.gamma`, `glm53.FADD_READINGS`).
 
-The FP8 checkpoint is `verity-vllm fp8-checkpoint`'s verity-fp8-block128/v1 (integrations/vllm's
+The FP8 checkpoint is `verity-vllm fp8-checkpoint`'s verity-fp8-block128/v1 (adapters/vllm's
 ``manifests/checkpoints.json``): every decoder linear a 128 x 128 block-scaled weight, the format GLM-5.3's are, so it takes
 the pinned vLLM's FP8 block linear (`glm53.DEEPGEMM`).  ``lm_head`` (tied to the embedding, BF16, not a LinearBase) is not a
 linear Pearl-C computes.  Every layer has the same four.

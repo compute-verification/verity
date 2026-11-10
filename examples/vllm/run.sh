@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
-# demo's workload names (placement.toml's `row`, the integration's file integrations/vllm/workloads/<row>.json, fetched by
+# demo's workload names (placement.toml's `row`, the integration's file adapters/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
 #   window   the default: one sampling block of the served execution blocks through every subprotocol,
 #            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload's Build of record
@@ -35,7 +35,7 @@ placement = tomllib.loads((here / "placement.toml").read_text())
 row, rows = placement["row"], here.parents[1] / "integrations" / "vllm" / "workloads"
 sums = {name.lstrip("*"): h for h, name in (line.split() for line in (rows / "SHA256SUMS").read_text().splitlines() if line.strip())}
 if (want := sums.get(f"{row}.json")) is None:
-    sys.exit(f"run.sh: placement.toml's row {row} is not a workload integrations/vllm/workloads/SHA256SUMS lists")
+    sys.exit(f"run.sh: placement.toml's row {row} is not a workload adapters/vllm/workloads/SHA256SUMS lists")
 f = rows / f"{row}.json"
 if not f.is_file():
     subprocess.run(["research", "data", "fetch-fixtures", str(f)], check=True, stdout=sys.stderr)

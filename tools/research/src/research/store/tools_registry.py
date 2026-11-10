@@ -138,7 +138,7 @@ def load(spec_or_name: str, source_root: Path | str | None = None) -> Tool:
     except (ImportError, AttributeError) as e1:
         obj = None
         e2: Exception = e1
-        for cand in (root, *list(root.parents)[:6]):     # `--cwd integrations/vllm`: the declaration's file sits at the repo root above
+        for cand in (root, *list(root.parents)[:6]):     # `--cwd adapters/vllm`: the declaration's file sits at the repo root above
             try:
                 obj = from_tree(spec, cand)
                 break

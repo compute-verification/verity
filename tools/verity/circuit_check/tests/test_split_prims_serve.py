@@ -2,7 +2,7 @@
 statics circuit-check binds, the family's targets are the same tasks in the same order, with the same descriptor digests, the
 same registered ids and the same pins as on the main it was cut from (`fixtures/split/prims_serve.json`).  A digest pins the
 whole descriptor, so a Definition whose body, statics or callees changed in the move fails here; the import-boundary test
-(integrations/vllm `tests/program/test_prims_serve_boundaries.py`) cannot see that.  A change that means to move one edits its
+(adapters/vllm `tests/program/test_prims_serve_boundaries.py`) cannot see that.  A change that means to move one edits its
 entry in the fixture."""
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from circuit_check import targets as TG
 
 FIXTURE = Path(__file__).parent / "fixtures" / "split" / "prims_serve.json"
 REG = "verity.ml.definitions.registry"
-#: the family's Definition modules (`FAMILY` of integrations/vllm `tests/program/test_prims_serve_boundaries.py`)
+#: the family's Definition modules (`FAMILY` of adapters/vllm `tests/program/test_prims_serve_boundaries.py`)
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
 

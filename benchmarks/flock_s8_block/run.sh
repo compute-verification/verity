@@ -42,7 +42,7 @@ fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $(dirname $(dirname $PY)) && $UV pip install -q --python $PY numpy blake3; } || exit 1
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_check/src:$REPO/integrations/vllm
+export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
 
 # spec K:N[:R]: "K N R NAME"
 spec() { local k n r; IFS=: read -r k n r <<< "$1"; r=${r:-$ROWS}; echo "$k $n $r k$k-n$n-r$r"; }
