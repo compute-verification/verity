@@ -12,11 +12,19 @@ out and whichever package of the workspace is the build's root. It reads:
   sets but `defaultTargets` and each library's `roots` and `globs`, which say which modules a build compiles and which
   library owns one, never how one compiles); and every file the package's `[[input_file]]` and `[[input_dir]]` targets
   name, which a module may read as it compiles (`include_str`);
-- its env: the root's `lean-toolchain` and what its `lake-manifest.json` pins (`pins`: every fetched package's entry but
-  its `inherited`, and every field of the manifest but the root's `name`, its `packagesDir` and the entries of the
-  packages required by path, which `workspace` reads and checks instead). They fix every module the workspace's packages
-  don't define. Lake resolves an import over every package of the workspace, and a fetched package's configuration may be
-  code Lake runs, so every fetched package of the root is in the env of every module, a path dependency's included;
+- its env: the root's `lean-toolchain` and what its `lake-manifest.json` pins (`pins`) of the packages the module's own
+  package fetches (`fetches`: those its own manifest lists, its path dependencies' among them): each one's entry but
+  its `inherited`, and every field of the root's manifest but its `name`, its `packagesDir` and the entries of the
+  packages required by path, which `workspace` reads and checks instead. They fix every module its compile reads that
+  the workspace's packages don't define: a compile reads its own package's configuration and the artifacts of what it
+  imports (`Module.recFetchPreSetup`, `Lake/Build/Module.lean`), and its package's fetched packages are all it can
+  import from where the package is its own root. So a module of a package required by path has one key under every
+  root that pins those packages alike, its own package among them, whatever else such a root fetches, and the root's
+  own modules read every pin of the root. Under a root that fetches more, Lake resolves an import over every package
+  of the workspace, so a module could there import one its own package doesn't fetch (one two packages define
+  differently Lake refuses, `fetchImportInfo`). Such a module still has this key, which names no pin of that package,
+  and no entry ever stands under it: `put` refuses a compile that read a fetched package other than those the key
+  names (`pinned_as`), and under the package's own root the module doesn't compile;
 - its reads: each output of a workspace module its compile loads, by that output's digest.
 
 As Lean 4.34 loads an import and Lake keys a rebuild on it (`loads`, `read`), and as the task graph's
@@ -311,10 +319,23 @@ def pins(manifest: dict) -> dict | str:
             "fetched": sorted(fetched, key=lambda e: json.dumps(e, sort_keys=True))}
 
 
-def env_parts(root: Path) -> dict[str, str] | str:
-    """{part: its digest} of the env of ``root``'s keys: its `TOOLCHAIN`, and `FETCHED`, what its manifest pins (`pins`).
-    Or why it has no keys: no manifest or toolchain, a manifest that isn't JSON or of another shape, or entries in the
-    root's `.lake` that Lake takes over the manifest's (`OVERRIDES`)."""
+def fetches(d: Path) -> set[str] | None:
+    """The names of the packages the package at ``d`` fetches, those its path dependencies fetch among them: the entries
+    of its own manifest, which is what Lake resolved for it as a root, that aren't packages required by path. None when it
+    has no manifest to say so: its modules' keys then name every package their root fetches."""
+    try:
+        entries = json.loads((d / MANIFEST).read_text())["packages"]
+        return {e["name"] for e in entries if e.get("type") != "path"}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def env_parts(root: Path, of: Path | None = None) -> dict[str, str] | str:
+    """{part: its digest} of the env of ``root``'s keys of the modules of the package at ``of`` (``root``'s own, unless
+    given): ``root``'s `TOOLCHAIN`, and `FETCHED`, what ``root``'s manifest pins (`pins`) of the packages that package
+    fetches (`fetches`), which for ``root``'s own package is all of them. Or why there are no such keys: no manifest or
+    toolchain, a manifest that isn't JSON or of another shape, entries in the root's `.lake` that Lake takes over the
+    manifest's (`OVERRIDES`), or a package ``of`` fetches that ``root``'s manifest doesn't pin."""
     m = root / MANIFEST
     if not all((root / f).is_file() for f in ENV):
         return f"{root} has no lake-manifest.json or lean-toolchain"
@@ -327,13 +348,18 @@ def env_parts(root: Path) -> dict[str, str] | str:
     pinned = pins(manifest) if isinstance(manifest, dict) else "it is not an object"
     if isinstance(pinned, str):
         return f"{m}: {pinned}"
+    if of is not None and (names := fetches(of)) is not None:
+        if unpinned := sorted(names - {e.get("name") for e in pinned["fetched"]}):
+            return f"{m} pins no {unpinned[0]}, which {of} fetches"
+        pinned["fetched"] = [e for e in pinned["fetched"] if e.get("name") in names]
     return {TOOLCHAIN: digest(root / TOOLCHAIN),
             FETCHED: C.digest(json.dumps(pinned, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())}
 
 
 def workspace(root: Path) -> tuple[list[Package], str] | str:
     """(``root``'s package and each package it requires by path, from its `lake-manifest.json`, which lists the inherited
-    ones too; the env of its keys, the digest of its parts, `env_parts`); or why it has no keys (`package`, `env_parts`).
+    ones too; the env of its own modules' keys, the digest of its parts, `env_parts`); or why it has no keys (`package`,
+    `env_parts`).
     Of a path entry Lake reads the directory, which is where its package is read from here, and the configuration file,
     which must be the `lakefile.toml` read here; no two packages have one name, since a key's paths start with it."""
     parts = env_parts(root)
@@ -366,7 +392,7 @@ class Key(NamedTuple):
     task: dict
     #: {path: digest} of its inputs, among those of the build's other modules
     files: dict[str, str]
-    #: its env's digest (`workspace`)
+    #: its env's digest: of `parts`
     env: str
     package: Package
     #: the workspace modules its header imports
@@ -377,7 +403,7 @@ class Key(NamedTuple):
     edges: dict[str, How]
     #: the workspace modules it imports, transitively
     closure: frozenset[str]
-    #: {part: its digest} of its env (`env_parts`)
+    #: {part: its digest} of its env (`env_parts`, of its package)
     parts: dict[str, str]
 
 
@@ -506,13 +532,15 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
     """{module: what its key takes} for each module a build of ``root`` (its default targets, and ``extra`` modules, `lake
     build +M`) compiles in the workspace and that has a key, each after the workspace modules it imports. A module has none
     when no package or two claim it, or a workspace file no library claims, or targets of its package that differ own it
-    (`Package.owner`), or its header can't be read, or it imports one without a key (a cycle included). A module no
-    package's file holds is the toolchain's or a fetched package's, which the env fixes."""
+    (`Package.owner`), or the root doesn't pin a package its package fetches (`env_parts`), or its header can't be read,
+    or it imports one without a key (a cycle included). A module no package's file holds is the toolchain's or a fetched
+    package's, which the env fixes."""
     ws = workspace(root)
     if isinstance(ws, str):
         return {}
-    pkgs, env = ws
-    parts = env_parts(root)
+    pkgs = ws[0]
+    envs = {p.name: (C.env_digest(sorted(parts), parts), parts) for p in pkgs
+            if not isinstance(parts := env_parts(root, p.dir), str)}
 
     def rel(p: Package, f: Path) -> str:
         return f"{p.name}/{Path(os.path.relpath(f, p.dir)).as_posix()}"
@@ -527,7 +555,7 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
     def resolve(mod: str) -> Package | str | None:
         owners = [p for p in pkgs if p.claims(mod) and p.file(mod).is_file()]
         if len(owners) == 1:
-            return owners[0] if owners[0].owner(mod) is not None else None
+            return owners[0] if owners[0].owner(mod) is not None and owners[0].name in envs else None
         if owners or any(p.claims(mod) or p.file(mod).is_file() for p in pkgs):
             return None
         return EXTERNAL
@@ -568,8 +596,8 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
                     "inputs": sorted({src, rel(p, p.dir / "lakefile.toml"), *(rel(p, p.dir / i) for i, _ in p.inputs)}),
                     "outputs": [{"name": o, "path": rel(p, file_of(p.build(), m, o))}
                                 for o in ("olean", "ilean", *(PARTS if h.module else ()))]}
-            memo[m] = out[m] = Key(task, files, env, p, tuple(sorted(edges)), h.module, dict(sorted(edges.items())),
-                                   frozenset(edges).union(*(memo[i].closure for i in edges)), parts)
+            memo[m] = out[m] = Key(task, files, envs[p.name][0], p, tuple(sorted(edges)), h.module, dict(sorted(edges.items())),
+                                   frozenset(edges).union(*(memo[i].closure for i in edges)), envs[p.name][1])
     return out
 
 
@@ -591,37 +619,40 @@ def _strings(j) -> list[str]:
 REFUSED = "\0"
 
 
-def _fetches(root: Path) -> tuple[str, dict[str, dict]] | None:
+def _fetches(root: Path, of: Path | None = None) -> tuple[str, dict[str, dict]] | None:
     """(the digest of ``root``'s toolchain file, {a fetched package's directory under its packages: its entry as a key
-    takes it (`pins`)}); None for a root that has no keys (`env_parts`). Lake checks a package out under its name
-    unescaped."""
-    if isinstance(env_parts(root), str):
+    takes it (`pins`)}), of the packages the package at ``of`` fetches when given (`env_parts`); None for a root that has
+    no such keys. Lake checks a package out under its name unescaped."""
+    if isinstance(env_parts(root, of), str):
         return None
+    names = fetches(of) if of is not None else None
     pinned = pins(json.loads((root / MANIFEST).read_text()))["fetched"]
-    return digest(root / TOOLCHAIN), {str(e.get("name")).replace("«", "").replace("»", ""): e for e in pinned}
+    return digest(root / TOOLCHAIN), {str(e.get("name")).replace("«", "").replace("»", ""): e for e in pinned
+                                      if names is None or e.get("name") in names}
 
 
-def pinned_as(root: Path, here: Path) -> str | None:
-    """Why a compile that read a module's `.olean` in ``here``, a directory no package of the workspace builds, did not
-    read what a key of ``root`` names; or None. A key names the fetched packages by ``root``'s pins, not by their bytes,
-    and a package required by path is compiled in its own tree by whichever build finds a module of it out of date,
-    over that build's root's fetched packages: its own build's, or that of a root requiring it, so the compile `put`
-    finds in Security's tree read Security's packages or, say, Security/Proofs'.
-    Its outputs are a compile of what ``root``'s key names when ``here`` is in the packages of a root that has
-    ``root``'s toolchain and pins every package ``root`` fetches as ``root`` does, the one read among them. The
-    toolchain's own modules are not listed in a `setup.json`, so a directory in no root's packages is refused. ``here``
-    is read as Lake wrote it, `<a root>/.lake/packages/<package>/...`, whatever links it goes through: Lake checks out
-    there what that root pins."""
+def pinned_as(root: Path, of: Path, here: Path) -> str | None:
+    """Why a compile of a module of the package at ``of`` that read a module's `.olean` in ``here``, a directory no
+    package of the workspace builds, did not read what its key under ``root`` names; or None. The key names, by
+    ``root``'s pins and not by their bytes, the packages ``of`` fetches (`env_parts`), and a package required by path is
+    compiled in its own tree by whichever build finds a module of it out of date, over that build's root's fetched
+    packages: its own build's, or that of a root requiring it, so the compile `put` finds in Security's tree read
+    Security's packages or, say, Security/Proofs'.
+    Its outputs are a compile of what the key names when ``here`` is in the packages of a root that has ``root``'s
+    toolchain and pins every package ``of`` fetches as ``root`` does, the one read among them: whatever else either root
+    fetches, the compile read none of it. The toolchain's own modules are not listed in a `setup.json`, so a directory
+    in no root's packages is refused. ``here`` is read as Lake wrote it, `<a root>/.lake/packages/<package>/...`,
+    whatever links it goes through: Lake checks out there what that root pins."""
     parts = here.parts
     at = next((i for i in range(len(parts) - 3, -1, -1) if parts[i:i + 2] == (".lake", "packages")), None)
     if at is None:
         return f"{here} is in no root's fetched packages"
     other, pkg = Path(*parts[:at]), parts[at + 2]
-    mine, theirs = _fetches(root), _fetches(other)
+    mine, theirs = _fetches(root, of), _fetches(other)
     if mine is None or theirs is None:
         return f"{root if mine is None else other} has no keys, and a compile read {pkg} under {other}"
     if pkg not in mine[1]:
-        return f"{root} does not fetch {pkg}, which a compile read under {other}"
+        return f"{of} does not fetch {pkg}, which a compile read under {other}"
     if mine[0] != theirs[0]:
         return f"{other} has another toolchain than {root}"
     if differ := sorted(n for n, e in mine[1].items() if theirs[1].get(n) != e):
@@ -629,7 +660,8 @@ def pinned_as(root: Path, here: Path) -> str | None:
     return None
 
 
-def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict[str, str | None] | None = None) -> str | None:
+def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
+              owners: dict[tuple[str, str], str | None] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
     `.olean` under the build of one of ``pkgs``, the workspace's packages) are the modules its key reads (`loads`), each
@@ -637,8 +669,9 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
     `Lake/Build/Module.lean`): every module a legacy file imports, transitively, and of a `module` file's imports
     those its own imports and their `public import`s reach, with all that a `meta import` or an `import all` needs
     below them. What an import of a `module` file imports privately is not among them, and the key doesn't read it.
-    Every other module there is a fetched package's, read where the key's root pins it (`pinned_as`, ``pkgs[0]`` being
-    the root's package). ``owners`` holds, for one build's calls, the package whose build holds each directory an
+    Every other module there is a fetched package's, one the module's own package fetches, read where the key's root
+    pins it (`pinned_as`, ``pkgs[0]`` being the root's package). ``owners`` holds, for one build's calls and by the
+    module's package, the package whose build holds each directory an
     `.olean` is in, and of any other directory why it is refused (`REFUSED`): a module lists up to every module it
     imports transitively, Mathlib's included, thousands of paths in a few hundred directories. `put` calls this on
     several threads over one ``owners``, so a directory's verdict is written there once, whole."""
@@ -661,11 +694,11 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict
             olean = next((s for s in _strings(paths) if s.endswith(".olean")), None)
         if olean is None:
             return f"importArts gives {i} no .olean"
-        d = os.path.dirname(olean)
+        d = (k.package.name, os.path.dirname(olean))
         if d not in owners:
-            here = Path(d).resolve()
+            here = Path(d[1]).resolve()
             owner = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
-            if owner is None and (why := pinned_as(pkgs[0].dir, Path(os.path.normpath(d)))):
+            if owner is None and (why := pinned_as(pkgs[0].dir, k.package.dir, Path(os.path.normpath(d[1])))):
                 owner = REFUSED + why
             owners[d] = owner
         if (owner := owners[d]) is not None and owner.startswith(REFUSED):

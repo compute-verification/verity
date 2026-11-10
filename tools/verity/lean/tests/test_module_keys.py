@@ -293,8 +293,8 @@ def _manifest(root: Path, change) -> str:
 def test_the_env_is_the_toolchain_and_every_fetched_entry_of_the_root_s_manifest(tmp_path):
     """Of the manifest a key reads every fetched package's entry, whole but `inherited`, and every other field but the
     root's `name`, its `packagesDir` and the entries of the packages required by path, whose directories `workspace`
-    reads: a field this reading has never met moves every key, and so does a fetched package added to the root, which
-    could provide a module a dependency imports."""
+    reads: a field this reading has never met moves every key, and so does a fetched package added to the root, also
+    the key of a module of `d`, which has no manifest to say what it fetches."""
     root = _workspace(tmp_path, {"r/lake-manifest.json": json.dumps({
         "version": "1.2.0", "name": "r", "packagesDir": ".lake/packages", "packages": [
             {"type": "path", "name": "d", "dir": "../d", "inherited": False, "configFile": "lakefile.toml"},
@@ -321,23 +321,62 @@ def test_the_env_is_the_toolchain_and_every_fetched_entry_of_the_root_s_manifest
     assert changed(lambda d: d["packages"][2].update(type="another kind")) == set(keys)
 
 
-def test_a_module_has_one_key_under_every_root_with_the_same_fetched_packages(tmp_path):
-    """A key's paths start at the module's own package, and its env is the root's toolchain and fetched entries: a path
-    dependency's module has one key under each root that fetches the same packages, the dependency itself included, and
-    another under a root that fetches one more."""
-    root = _workspace(tmp_path)
-    fetched = {"type": "git", "name": "mathlib", "rev": "abc"}
-    _write(tmp_path, {"d/lake-manifest.json": json.dumps({"name": "d", "packages": [fetched | {"inherited": False}]}),
-                      "d/lean-toolchain": TOOLCHAIN,
-                      "q/lakefile.toml": 'name = "q"\ndefaultTargets = ["Q"]\n\n[[lean_lib]]\nname = "Q"\n',
+def _fetching(tmp: Path) -> tuple[Path, dict]:
+    """`_workspace`, where `d` says what it fetches (`mathlib`) and `r` fetches `arklib` too; and `mathlib`'s entry."""
+    mathlib = {"type": "git", "name": "mathlib", "rev": "abc"}
+    root = _workspace(tmp, {
+        "r/lake-manifest.json": json.dumps({"name": "r", "packages": [
+            {"type": "path", "name": "d", "dir": "../d"}, mathlib, {"type": "git", "name": "arklib", "rev": "1"}]}),
+        "d/lake-manifest.json": json.dumps({"name": "d", "packages": [mathlib | {"inherited": False}]}),
+        "d/lean-toolchain": TOOLCHAIN})
+    return root, mathlib
+
+
+def test_a_module_has_one_key_under_every_root_that_pins_what_its_package_fetches_alike(tmp_path):
+    """A key's paths start at the module's own package, and its env is the root's toolchain and the root's pins of the
+    packages the module's own package fetches: a path dependency's module has one key under the dependency itself and
+    under each root that pins those alike, whatever else the root fetches, another under a root that pins one of them
+    otherwise, and none under a root that doesn't pin one. The root's own modules read every pin of the root."""
+    root, mathlib = _fetching(tmp_path)
+    _write(tmp_path, {"q/lakefile.toml": 'name = "q"\ndefaultTargets = ["Q"]\n\n[[lean_lib]]\nname = "Q"\n',
                       "q/lake-manifest.json": json.dumps({"name": "q", "packagesDir": "p", "packages": [
-                          fetched | {"inherited": True}, {"type": "path", "name": "d", "dir": "../r/../d"}]}),
+                          mathlib | {"inherited": True}, {"type": "path", "name": "d", "dir": "../r/../d"}]}),
                       "q/lean-toolchain": TOOLCHAIN, "q/Q.lean": "import D.X\n"})
-    under = {r: _built(MK.keys(tmp_path / r, ["D.X"]))["D.X"] for r in ("r", "d", "q")}
-    assert under["r"] == under["d"] == under["q"]
-    (tmp_path / "q" / "lake-manifest.json").write_text(_manifest(tmp_path / "q", lambda d: d["packages"].append(
-        {"type": "git", "name": "arklib", "rev": "1"})))
-    assert _built(MK.keys(tmp_path / "q"))["D.X"] != under["r"]
+
+    def under(r: str, change=None) -> dict[str, str]:
+        if change is not None:
+            (tmp_path / r / "lake-manifest.json").write_text(_manifest(tmp_path / r, change))
+        return _built(MK.keys(tmp_path / r, ["D.X"]))
+
+    q, d = under("q"), under("d")["D.X"]
+    assert under("r")["D.X"] == d == q["D.X"], "r fetches arklib, which d doesn't"
+    more = under("q", lambda doc: doc["packages"].append({"type": "git", "name": "doc-gen4", "rev": "2"}))
+    assert more["D.X"] == d and more["Q"] != q["Q"]
+    assert under("q", lambda doc: doc["packages"][0].update(rev="abd"))["D.X"] != d
+    assert under("q", lambda doc: doc["packages"].pop(0)) == {}, "q pins no mathlib: its Q imports D.X, which has no key"
+    assert "pins no mathlib, which" in MK.env_parts(tmp_path / "q", tmp_path / "d")
+    assert under("d", lambda doc: doc["packages"][0].update(rev="abd"))["D.X"] != d, "d as its own root"
+    assert under("r")["D.X"] == d, "what d's manifest pins is not in a key under r, only which packages it names"
+
+
+def test_the_keys_of_a_root_s_own_modules_name_every_pin_of_the_root(tmp_path):
+    """The env of a root's own modules is the one every module of its workspace had before a path dependency's read
+    less: the root's toolchain and all its manifest pins, whatever the packages it requires by path fetch. So no entry
+    under a root's own module's key is left behind."""
+    root, mathlib = _fetching(tmp_path)
+    keyed = MK.keys(root)
+    whole = {"lean-toolchain": C.digest(TOOLCHAIN.encode()),
+             "fetched packages": _canon({"manifest": {}, "fetched": [{"type": "git", "name": "arklib", "rev": "1"}, mathlib]})}
+    own = {m: k for m, k in keyed.items() if k.package.name == "r"}
+    assert set(own) == {"R", "R.A"} and MK.env_parts(root) == MK.env_parts(root, root) == whole
+    assert {(k.env, tuple(k.parts.items())) for k in own.values()} == {(MK.workspace(root)[1], tuple(whole.items()))}
+    assert MK.workspace(root)[1] == C.env_digest(sorted(whole), whole)
+    less = whole | {"fetched packages": _canon({"manifest": {}, "fetched": [mathlib]})}
+    assert keyed["D.X"].parts == less and keyed["D.X"].env == C.env_digest(sorted(less), less)
+    (tmp_path / "d" / "lake-manifest.json").unlink()
+    again = MK.keys(root)
+    assert {m: (k.task, k.env) for m, k in again.items() if m != "D.X"} == {m: (k.task, k.env) for m, k in own.items()}
+    assert again["D.X"].parts == whole, "a package with no manifest of its own: every pin of the root"
 
 
 def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
@@ -474,7 +513,7 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
     assert "and not ['D.X']" in MK.indexable("R", keyed, pkgs, owners)
     _setup(root, "R", "r", right | {"D.X": lib("r", "D.X")})
     assert MK.indexable("R", keyed, pkgs, owners) == "D.X is built in r, not d"
-    assert owners[str(lib("r", "D.X").parent)] == "r" and owners[str(mathlib.parent)] is None, "one lookup a directory"
+    assert owners["r", str(lib("r", "D.X").parent)] == "r" and owners["r", str(mathlib.parent)] is None, "one lookup a directory"
     _setup(root, "R", "d", right)
     assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
 
@@ -509,6 +548,49 @@ def test_a_build_is_indexed_only_where_it_read_the_fetched_packages_as_its_root_
     assert MK.indexable("R", keyed, pkgs) == "/elan/lib/lean is in no root's fetched packages"
 
 
+def test_a_build_of_a_dependency_is_indexed_where_it_read_the_packages_the_dependency_fetches(tmp_path):
+    """A module of `d`, which fetches `mathlib`, has one key under `d` and under `r`, which fetches `arklib` too
+    (`_fetching`). `d`'s own build compiles it over `d`'s packages, and a build of `r` or of another root requiring `d`
+    over that root's: each is a compile of what the key under `r` names where the root it ran under has `r`'s
+    toolchain and pins `mathlib` as `r` does, whatever else `r` or that root fetches."""
+    root, mathlib = _fetching(tmp_path)
+    pkgs, keyed = MK.workspace(root)[0], MK.keys(root)
+    _write(tmp_path, {"d/D/X.lean": "import Mathlib.Logic.Basic\n"})
+
+    def read(under: str, entries: list[dict] | None = None, toolchain: str = TOOLCHAIN) -> str | None:
+        if entries is not None:
+            _write(tmp_path, {f"{under}/lake-manifest.json": json.dumps({"name": under, "packages": entries}),
+                              f"{under}/lean-toolchain": toolchain})
+        _setup(tmp_path / "d", "D.X", "d", {
+            "Mathlib.Logic.Basic": tmp_path / under / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Logic/Basic.olean"})
+        return MK.indexable("D.X", keyed, pkgs)
+
+    assert read("d") is None, "d's own build: it fetches no arklib, and D.X's key names none"
+    assert read("r") is None
+    assert read("p", [mathlib, {"type": "path", "name": "d", "dir": "../d"}, {"type": "git", "name": "other", "rev": "3"}]) is None
+    assert "pins mathlib otherwise than" in read("p", [mathlib | {"rev": "abd"}])
+    assert "has another toolchain than" in read("p", [mathlib], "leanprover/lean4:v4.35.0\n")
+    assert "pins mathlib otherwise than" in read("d", [mathlib | {"rev": "abd"}]), "d's tree at another pin than r's"
+    assert MK.keys(root)["D.X"].env == keyed["D.X"].env, "which r's key doesn't name: it reads r's pin"
+
+
+def test_a_compile_that_read_a_package_its_own_package_does_not_fetch_is_never_indexed(tmp_path):
+    """Under `r`, which fetches `arklib`, Lake would resolve an import of `d`'s module in `arklib`, which `d` doesn't
+    fetch. The module's key names `mathlib`'s pin alone, so no entry stands under it for a compile that read `arklib`,
+    wherever: it is refused, and one of `r`'s own modules that read the same directory is indexed."""
+    root, _ = _fetching(tmp_path)
+    _write(tmp_path, {"d/D/X.lean": "import ArkLib.Basic\n", "r/R/B.lean": "import ArkLib.Basic\n"})
+    pkgs, keyed, owners = MK.workspace(root)[0], MK.keys(root, ["R.B"]), {}
+    arklib = {"ArkLib.Basic": root / ".lake/packages/arklib/.lake/build/lib/lean/ArkLib/Basic.olean"}
+    assert "D.X" in keyed and keyed["D.X"].parts != keyed["R.B"].parts
+    _setup(root, "R.B", "r", arklib)
+    assert MK.indexable("R.B", keyed, pkgs, owners) is None
+    _setup(tmp_path / "d", "D.X", "d", arklib)
+    why = MK.indexable("D.X", keyed, pkgs, owners)
+    assert why == f"{tmp_path / 'd'} does not fetch arklib, which a compile read under {root}", "after R.B, over one owners"
+    assert MK.indexable("R.B", keyed, pkgs, owners) is None
+
+
 def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_path, monkeypatch):
     """`put` asks `indexable` of a build's modules on several threads over one ``owners``. While one thread reads the two
     manifests that refuse a directory, another asking of the same directory must not find it there as one the root
@@ -527,15 +609,15 @@ def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_
 
     class Owners(dict):
         def __contains__(self, d):
-            if threading.current_thread() is not first and "packages" in d:
+            if threading.current_thread() is not first and "packages" in d[1]:
                 looked.set()
             return super().__contains__(d)
 
-    def slow(root, here):
+    def slow(root, of, here):
         if threading.current_thread() is first:
             inside.set()
             looked.wait()
-        return pinned_as(root, here)
+        return pinned_as(root, of, here)
 
     monkeypatch.setattr(MK, "pinned_as", slow)
     owners, got = Owners(), []
@@ -544,7 +626,7 @@ def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_
         inside.wait()
         got.append(MK.indexable("R", keyed, pkgs, owners))
 
-    other = threading.Thread(target=second)
+    other = threading.Thread(target=second, daemon=True)
     other.start()
     got.append(MK.indexable("R", keyed, pkgs, owners))
     other.join()
