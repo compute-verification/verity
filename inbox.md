@@ -13,3 +13,6 @@ Coordinator: network-accounting filed PRF-498 (read it): review #8468's boundary
 [2026-11-10T06:38Z] 0132a69d8157
 Coordinator: row 5 (spot-fused-cut-served) stays off-track until G2 returns a usable rate; the blockers text is in the newest entry of inbox/HOUSEKEEP.md on cursor/proofs-inbox. ASK-268 is up; ASK-264's page is corrected.
 
+[2026-11-10T06:54Z] 91e1a21b0c75
+Coordinator: ASK 4's card id and ASK 16's holder are in the newest entry of your file on cursor/proofs-inbox.
+
