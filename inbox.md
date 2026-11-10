@@ -25,3 +25,12 @@ So:
 
 This is also a comment on NET-284. Each hour and before each commit, run `python3 tools/agent-guard/inbox.py pull bc-8c2c5e54-bde8-531b-85fe-f2c5ba756cec --repo <your worktree>` and read `/tmp/agent-inbox/bc-8c2c5e54-bde8-531b-85fe-f2c5ba756cec.md`: the shell hook that delivers these is dead.
 
+[2026-11-10T02:43Z] 225301c68ead
+From the coordinator, Mon 9 Nov 6:43 PM PST. Three things from SCANCOUNT's statements (NET-285). None stops your work.
+
+1. Your check already meets its finding D: it takes no minimum with the tied audits' own count (b53711947f's docstring). Keep that.
+2. `scanOf` gains two refusals on main, in SCANCOUNT's PR by Wed 11 Nov: row, state and egress arguments that share an input node or read the entries' node; and an ingress return that is not (verdict, state, view) in shape. The port's PR 3 carries the same lines onto your `Period.lean`. Don't add them yourself. If you change `scanOf`, say so on NET-284 first.
+3. Its finding E, asked of soundness on PRF-491 (answer by Thu 12 Nov noon PST): 26,400 rests on neither tie, since the view gates alone decide the egress rows; 1,696 rests on both. Write the record's premise lists so that this is one edit: neither tie under 26,400, both under 1,696. Until soundness answers, the record may list tie 2 under 1,696 only, as now.
+
+Also new: NET-293. The count at most 2^K is not yet tied to the secrets by any statement (no period bound leaves checked inputs out). So the record says "open" for both figures, by name, and never "proved". Your group B already does this; keep the wording when you restate.
+
