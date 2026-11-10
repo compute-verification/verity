@@ -11,9 +11,9 @@
 # `Kind.networkCertifier`.
 #
 # Only a word that renames a path, a module or a Lean declaration is here, since `move_check.py` certifies no other
-# word of a names move. So this move leaves, for a reviewed change of their own: a constant's or an environment
-# variable's `WARDEN`, the plural `wardens`, the hyphenated names below, and the word in a string literal's sentence
-# (a message, a help text, a record's note), which no move may reword and the name's form would misspell.
+# word of a names move. So this move leaves to `warden_tokens_map.toml`, which runs after it: a constant's or an
+# environment variable's `WARDEN`, the plural `wardens`, the hyphenated names below, and the word in a string
+# literal's sentence (a message, a help text, a record's note), which the name's form would misspell.
 #
 # Kept bytes ([keep]): a name that something outside this move's reach holds. To rename one, regenerate what holds it:
 # - domain tags and format ids (`verity-network-warden/.../vN`, `verity/a5/warden-stand-in/v1`), which are hashed or
@@ -26,13 +26,14 @@
 #   those regenerated;
 # - a record's keys and a kept run's file names (`warden_run`, `warden_check`, `warden.json`, the negatives' names):
 #   the leak guard's rows and every kept run that a later step reads;
-# - a hyphenated name: the gate's verb `warden-rehearse` and its refusal `warden-fails` (the deployed gate and its
-#   callers' keys), the trace corpus's labels `warden-heavy` and `warden-smallkv` (the corpus artifact and the fixture
-#   cut from it), the flags `--warden-run` and `--warden` with the attributes argparse gives them (every script and
-#   kept command that passes one), and a tool's label (`warden-serve`, `warden-form`);
-# - the word in a string literal's sentence, with its article, its possessive or the noun beside it: a message or a
-#   label that a test spells, or that code makes from a kept value (`f"{label} thread"`), stays whole. A reviewed
-#   change rewords these to "network certifier", the tests with them.
+# - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them, so they change
+#   with the gate's own deployment;
+# - the trace corpus's labels `warden-heavy` and `warden-smallkv`: the corpus artifact and the fixture cut from it.
+#
+# Kept for `warden_tokens_map.toml`, by the same [keep]: every other hyphenated name (the flags `--warden-run` and
+# `--warden` with the attributes argparse gives them, a tool's label such as `warden-serve`), and the word in a string
+# literal's sentence with its article, its possessive or the noun beside it, so that a message a test spells, or one
+# code makes from a kept value (`f"{label} thread"`), stays whole until that map rewords it.
 #
 # Not this concept: an "active warden" and a "passive warden" in network steganography's sense, which the architecture
 # and two Lean docstrings cite as that field's term.
@@ -42,8 +43,8 @@
 
 [[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
 files = ["verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean",
-         "Security/Properties/NetworkCertifier/Check/LinkWindow.lean",
-         "Security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean"]
+         "Security/Properties/NetworkCertifier/*LinkWindow.lean",
+         "Security/Proofs/Properties/NetworkCertifier/*LinkWindow.lean"]
 
 [words_in.words]
 "warden" = "networkCertifier"
@@ -86,7 +87,7 @@ patterns = [
     '\ba\.warden\b',
     # the word in a sentence, which after `warden_term_map.toml`'s move stands only in a string literal
     '''(?<![\w-])(?:[Tt]he|[Aa]|no|its|each|this|that|same|whose|active|honest|kept|synthetic|byte-cell|▶|\w+'s) warden(?![\w-])''',
-    """warden's""",
+    '''(?<!\w)warden's''',
     '(?<![\w./-])warden (?:link-windows?|rehearsals?|ordinal|profile|traces?|tests|ports?|rows?|runs?|path|link|view|windows?|cells?|thread|ticker|arrival|admission|release|check|bucket|program|beside|in front)\b',
     '(?<![\w./-])(?:device|another|client /) warden(?![\w-])',
     'warden \((?:its |\{WARDEN)',
