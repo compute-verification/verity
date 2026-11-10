@@ -83,15 +83,20 @@ is a file reads the node's one copy of it, pinned by revision and SHA-512 (`Data
 into the node's cache where it is missing, every run checks its SHA-512 and refuses a file that differs, and its
 record holds the hash and the path, never the file.
 
-`cost` prints the serving cost of one arm over a reference arm from such passes: how much more serving compute the arm
-needs for the same traffic within the SLO, the reference's best goodput over the arm's, less one, each arm's best the
-rung of a load where its goodput is largest (`serving_cost`, the benchmark kit's paired ratio over reps: `kit`); one
-cost a load, the largest the number, with its 95% interval over reps, its verdict against ``--target`` and every other
-arm's cost beside it, as text and as one JSON object whose first keys are value, unit, commit and run. The loads are
-chat and long context (`LOADS`): where one of them has not run, the first line names the one that has and the number
-isn't said to meet its target. Directories of one arm from two jobs, each a load of its own, are one arm (`joined`),
-so a load served later joins the number. ``--result`` writes the run's result.json too (`result_of`): each load's cost
-a measurement, and the number one under the model's metric id once every load has run.
+`cost` prints the serving cost of one arm over a reference arm from such passes: how much more GPU time the arm needs
+a token, its tax where the reference is saturated: the reference's output tokens a second over the arm's, less one,
+both at the rung of a load where the reference's are highest (`serving_cost`, the benchmark kit's paired ratio over
+reps: `kit`). Every arm serves the same prompts decoded to the same lengths, so the ratio is of GPU time at equal
+tokens, and no SLO enters it. One cost a load, the largest the number, with its 95% interval over reps, its verdict
+against ``--target`` and every other arm's cost beside it, as text and as one JSON object whose first keys are value,
+unit, commit and run. Under each load's cost are both sides' output and prompt tokens a second, the tokens a request
+and the engine's GPUs, and the load's cost within the SLO (`within_slo`: the reference's best goodput over the arm's,
+less one, each at the rung where its own is largest), which is the cost only where both sides meet the SLO for every
+request and which no target or verdict is of. The loads are chat and long context (`LOADS`): where one of them has not
+run, the first line names the one that has and the number isn't said to meet its target. Directories of one arm from
+two jobs, each a load of its own, are one arm (`joined`), so a load served later joins the number. ``--result`` writes
+the run's result.json too (`result_of`): each load's cost a measurement, and the number one under the model's metric
+id once every load has run.
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
@@ -234,9 +239,11 @@ class Model:
     slo: tuple[float, float]
     env: dict = field(default_factory=dict)
     #: the most serving it with our changes may cost over stock, in percent of stock's serving compute (`cost_report`),
-    #: and what that figure rests on: modelled (derived, not yet stated by its owner) or measured
+    #: what that figure rests on: modelled (a cost model's share, not a measurement) or measured, and what it counts
+    #: that no arm of vLLM's client turns on, so that a cost within it is not read as the target met with those on
     target: float | None = None
     target_basis: str | None = None
+    target_counts: tuple[str, ...] = ()
     #: the id its serving cost is recorded under in a run's result.json (`result_of`)
     metric: str | None = None
     #: the check template its boundary commitment's replay block is made of, a serving template's descriptor id
@@ -261,8 +268,11 @@ MODELS = {
                      ("--dtype", "bfloat16"), (2.0, 0.08)),
     "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
                        ("--dtype", "bfloat16"), (2.0, 0.08)),
+    # glm53's target is the cost model's share for serving: extra GPU time at equal tokens, which reads no SLO, for a
+    # server that does not cut its cache at a phase edge. Most of it is the certified tick's.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=4.34, target_basis="modelled",
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.05, target_basis="modelled",
+                   target_counts=("admission on the certified tick",),
                    metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}"),
 }
 
@@ -813,7 +823,8 @@ def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int
 
 def bench_metrics(r: dict) -> dict:
     """One pass's metrics from the result vLLM's client saved, under `load_metrics`'s names: the client's own figures
-    (its goodput, throughputs, medians and P99s), none recomputed here."""
+    (its goodput, throughputs, token counts, medians and P99s), none recomputed here; the prompt tokens a second are
+    its total throughput less its output throughput."""
     sent = r["completed"] + int(r.get("failed") or 0)
     good = r.get("request_goodput")
     met = round(good * r["duration"]) if good is not None else None
@@ -821,8 +832,10 @@ def bench_metrics(r: dict) -> dict:
     def s(key: str) -> float | None:
         return r[key] / 1e3 if r.get(key) is not None else None
 
-    return {"sent": sent, "ok": r["completed"], "output_tokens": r["total_output_tokens"], "span_s": r["duration"],
+    return {"sent": sent, "ok": r["completed"], "output_tokens": r["total_output_tokens"],
+            "prompt_tokens": r["total_input_tokens"], "span_s": r["duration"],
             "output_tok_per_s": r["output_throughput"], "total_tok_per_s": r["total_token_throughput"],
+            "prompt_tok_per_s": r["total_token_throughput"] - r["output_throughput"],
             "req_per_s": r["request_throughput"], "goodput_req_per_s": good, "met": met,
             "slo_attained": met / sent if met is not None and sent else None,
             "ttft_p50_s": s("median_ttft_ms"), "ttft_p99_s": s("p99_ttft_ms"), "itl_p50_s": s("median_itl_ms"),
@@ -1377,11 +1390,16 @@ def bench_loads(arm: dict) -> list[str]:
                               if reps and reps[0].get("concurrency") is not None))
 
 
+def bench_rungs(arm: dict, load: str) -> dict[int, list[dict]]:
+    """Each rung of ``load`` an arm served by vLLM's client, with that pass's reps."""
+    return {reps[0]["concurrency"]: reps for name, reps in arm["loads"].items()
+            if reps and reps[0].get("concurrency") is not None and name.rpartition("@")[0] == load}
+
+
 def best_pass(arm: dict, load: str) -> tuple[int, list[dict]] | None:
-    """The rung of ``load`` an arm serves best, with that pass's reps: where its goodput, averaged over its reps, is
-    largest (its output tokens a second, where no rung has any goodput), the lowest such rung."""
-    rungs = {reps[0]["concurrency"]: reps for name, reps in arm["loads"].items()
-             if reps and reps[0].get("concurrency") is not None and name.rpartition("@")[0] == load}
+    """The rung of ``load`` an arm serves best within the SLO, with that pass's reps: where its goodput, averaged over
+    its reps, is largest (its output tokens a second, where no rung has any goodput), the lowest such rung."""
+    rungs = bench_rungs(arm, load)
 
     def mean(c: int, key: str) -> float:
         return statistics.fmean(r.get(key) or 0.0 for r in rungs[c])
@@ -1390,6 +1408,16 @@ def best_pass(arm: dict, load: str) -> tuple[int, list[dict]] | None:
         return None
     c = max(sorted(rungs), key=lambda c: (mean(c, "goodput_req_per_s"), mean(c, "output_tok_per_s")))
     return c, rungs[c]
+
+
+def saturated(ref: dict, arm: dict, load: str) -> int | None:
+    """The rung of ``load`` a cost is read at: of the rungs both arms served, the one where ``ref`` is saturated, its
+    output tokens a second, averaged over its reps, the highest (the lowest such rung). None where they share none."""
+    rungs = bench_rungs(ref, load)
+    shared = sorted(set(rungs) & set(bench_rungs(arm, load)))
+    if not shared:
+        return None
+    return max(shared, key=lambda c: statistics.fmean(r.get("output_tok_per_s") or 0.0 for r in rungs[c]))
 
 
 def kit() -> tuple:
@@ -1404,16 +1432,29 @@ def kit() -> tuple:
     return overhead, overhead_node
 
 
-def serving_cost(ref: dict, arm: dict, load: str) -> dict | None:
-    """What ``arm`` costs over ``ref`` at ``load``, a fraction: how much more serving compute the arm needs for the same
-    traffic within the SLO. Each side is read at its best pass (`best_pass`), over the reps both have, and a rep's
-    serving compute a request within the SLO is the reciprocal of its goodput. The cost is the kit's paired ratio of
-    the two, rep by rep (`kit`): the median over reps of ref's goodput over arm's in the same rep, less one, with the
-    kit's 95% interval, the order statistics of those ratios that bound their median, which fewer than six reps can't
-    give. Where a rep of either side met the SLO for no request the reps don't pair: the value is the ratio of the
-    sides' mean goodputs, with no interval. Where either side's mean goodput is zero the cost has no finite value
-    (``value`` None), and ``throughput``, the ratio of the sides' output tokens a second, is what is left to read.
-    None where a side served no pass of the load."""
+def paired_cost(ref: list[float], arm: list[float]) -> dict:
+    """How much more compute ``arm`` needs than ``ref`` for the same work, a fraction, from each side's rate of work
+    (tokens or requests a second) in the reps both have: the kit's paired ratio (`kit`), the median over reps of ref's
+    rate over arm's in the same rep, less one, with the kit's 95% interval, the order statistics of those ratios that
+    bound their median, which fewer than six reps can't give. Where a rep of either side has no rate the reps don't
+    pair: the value is the ratio of the sides' mean rates, with no interval, and None where either mean is zero."""
+    out: dict = {"value": None}
+    if statistics.fmean(ref) > 0 and statistics.fmean(arm) > 0:
+        out["value"] = statistics.fmean(ref) / statistics.fmean(arm) - 1
+        if all(ref) and all(arm):
+            p = kit()[0].paired([1 / y for y in arm], [1 / x for x in ref])
+            out["value"] = p["gamma"]
+            if p["ci95"]:
+                out["ci95"] = p["ci95"]
+    return out
+
+
+def within_slo(ref: dict, arm: dict, load: str) -> dict | None:
+    """What ``arm`` costs over ``ref`` at ``load`` within the SLO, a fraction: how much more serving compute the arm
+    needs for the same traffic within it, `paired_cost` of the sides' goodputs, a rep's serving compute a request within the
+    SLO being the reciprocal of its goodput. Each side is read at its best pass (`best_pass`), over the reps both
+    have. Where either side's mean goodput is zero it has no finite value. None where a side served no pass of the
+    load."""
     a, b = best_pass(ref, load), best_pass(arm, load)
     if a is None or b is None:
         return None
@@ -1425,32 +1466,55 @@ def serving_cost(ref: dict, arm: dict, load: str) -> dict | None:
     def side(x: dict, c: int, by: dict[int, dict]) -> tuple[dict, list[float]]:
         good = [by[k].get("goodput_req_per_s") or 0.0 for k in reps]
         return {"arm": x["arm"], "concurrency": c, "goodput_req_per_s": statistics.fmean(good),
-                "output_tok_per_s": statistics.fmean(by[k].get("output_tok_per_s") or 0.0 for k in reps),
                 "met": sum(by[k].get("met") or 0 for k in reps), "sent": sum(by[k]["sent"] for k in reps)}, good
 
     (sa, ga), (sb, gb) = side(ref, a[0], ra), side(arm, b[0], rb)
-    out = {"load": load, "reps": len(reps), "reference": sa, "arm": sb, "value": None,
-           "throughput": sa["output_tok_per_s"] / sb["output_tok_per_s"] - 1 if sb["output_tok_per_s"] else None}
-    if sa["goodput_req_per_s"] > 0 and sb["goodput_req_per_s"] > 0:
-        out["value"] = sa["goodput_req_per_s"] / sb["goodput_req_per_s"] - 1
-        if all(ga) and all(gb):
-            p = kit()[0].paired([1 / y for y in gb], [1 / x for x in ga])
-            out["value"] = p["gamma"]
-            if p["ci95"]:
-                out["ci95"] = p["ci95"]
-    return out
+    return {"reps": len(reps), "reference": sa, "arm": sb, **paired_cost(ga, gb)}
+
+
+def serving_cost(ref: dict, arm: dict, load: str, rung: int | None = None) -> dict | None:
+    """What ``arm`` costs over ``ref`` at ``load``, a fraction: how much more GPU time the arm needs a token, its tax.
+    Every arm serves the same prompts, each decoded to its length, so at a rung where the reference has no idle GPU
+    time its output tokens a second over the arm's, less one, is the arm's extra GPU time a token. Both sides are read
+    at one rung, ``rung`` or the one where the reference is saturated (`saturated`), over the reps both have there
+    (`paired_cost`), each side with its output and prompt tokens a second and the tokens a request it served. No SLO enters
+    it: ``within`` is the same traffic's cost within the SLO (`within_slo`), which is this cost only where both sides
+    meet the SLO for every request. None where the arms share no rung of the load, or no rep at the rung."""
+    a, b = bench_rungs(ref, load), bench_rungs(arm, load)
+    c = saturated(ref, arm, load) if rung is None else rung
+    if c is None or c not in a or c not in b:
+        return None
+    ra, rb = ({r["rep"]: r for r in x[c]} for x in (a, b))
+    reps = sorted(set(ra) & set(rb))
+    if not reps:
+        return None
+
+    def side(x: dict, by: dict[int, dict]) -> tuple[dict, list[float]]:
+        tok = [by[k].get("output_tok_per_s") or 0.0 for k in reps]
+        served = sum(by[k].get("ok") or 0 for k in reps)
+
+        def mean(key: str) -> float | None:
+            return None if any(by[k].get(key) is None for k in reps) else statistics.fmean(by[k][key] for k in reps)
+
+        def each(key: str) -> float | None:
+            return None if not served or any(by[k].get(key) is None for k in reps) else sum(by[k][key] for k in reps) / served
+
+        return {"arm": x["arm"], "concurrency": c, "output_tok_per_s": statistics.fmean(tok),
+                "prompt_tok_per_s": mean("prompt_tok_per_s"), "req_per_s": mean("req_per_s"),
+                "prompt_tokens_per_request": each("prompt_tokens"), "output_tokens_per_request": each("output_tokens")}, tok
+
+    (sa, ta), (sb, tb) = side(ref, ra), side(arm, rb)
+    return {"load": load, "reps": len(reps), "rung": c, "reference": sa, "arm": sb, **paired_cost(ta, tb),
+            "within": within_slo(ref, arm, load)}
 
 
 def verdict(cost: dict, target: float | None, floor: float = 0.0) -> str | None:
     """Whether a cost (`serving_cost`) is within ``target``, a fraction: ``meets`` where its whole interval, widened by
-    ``floor`` (the noise floor) at each end, is at or under the target; ``misses`` where all of it is over, or where
-    the arm met the SLO for no request and the reference for some; else ``cannot tell`` (fewer than six reps have no
-    interval). None with no target."""
+    ``floor`` (the noise floor) at each end, is at or under the target; ``misses`` where all of it is over; else
+    ``cannot tell`` (a cost with no finite value, or of fewer than six reps, has no interval). None with no target."""
     if target is None:
         return None
-    if cost["value"] is None:
-        return "misses" if cost["reference"]["met"] and not cost["arm"]["met"] else "cannot tell"
-    if "ci95" not in cost:
+    if cost["value"] is None or "ci95" not in cost:
         return "cannot tell"
     lo, hi = cost["ci95"]
     return "meets" if hi + floor <= target else "misses" if lo - floor > target else "cannot tell"
@@ -1517,11 +1581,13 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     none is given), its interval widened by the load's noise floor, which is the size of the cost there of another arm
     that starts the reference's engine (`same_engine`: two server lifetimes of one engine). The number's verdict
     follows from them, since it is the largest: it misses where a load misses, meets where every load of `LOADS` has
-    run and meets, and else cannot be told (``not_run`` names the loads that have not run). Beside them: what the
-    arm's boundary commitment did (`commitment`), and every other arm's cost at the number's load, over the reference
-    and over the nearest arm above it that ran (its parent, its parent's parent...), which for the arms from ``arm`` up
-    to the reference is its step of the whole, with its share of it. ``commit`` and ``run`` are those of the job that
-    served the number's load."""
+    run and meets, and else cannot be told (``not_run`` names the loads that have not run). ``target_counts`` names
+    what the model's target counts that no arm here turns on. Each load's ``within`` is its cost within the SLO
+    (`within_slo`), which no target or verdict is of. Beside them: the GPUs an engine serves on, what the arm's
+    boundary commitment did (`commitment`), and every other arm's cost at the number's load and rung, over the
+    reference and over the nearest arm above it that ran (its parent, its parent's parent...), which for the arms from
+    ``arm`` up to the reference is its step of the whole, with its share of it. ``commit`` and ``run`` are those of the
+    job that served the number's load."""
     by = joined(arms)
     for name in (reference, arm):
         if name not in by:
@@ -1535,11 +1601,11 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     target, basis = (model.target, model.target_basis) if target is None else (target, "given")
     twin = next((x for x in by.values() if x["arm"] != reference and same_engine(x["arm"], reference)), None)
     for c in per:
-        c["noise"] = serving_cost(ref, twin, c["load"]) if twin else None
+        c["noise"] = serving_cost(ref, twin, c["load"], c["rung"]) if twin else None
         floor = abs(c["noise"]["value"]) if c["noise"] and c["noise"]["value"] is not None else 0.0
         c["verdict"] = verdict(c, None if target is None else target / 100, floor)
     worst = max(per, key=lambda c: math.inf if c["value"] is None else c["value"])
-    load, noise = worst["load"], worst["noise"]
+    load, rung, noise = worst["load"], worst["rung"], worst["noise"]
     not_run = [n for n in LOADS if n not in {c["load"] for c in per}]
     verdicts = {c["verdict"] for c in per}
     overall = (None if target is None else "misses" if "misses" in verdicts else
@@ -1560,16 +1626,18 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         if name == reference or (twin and name == twin["arm"]):
             continue
         over = above(name)
-        step = serving_cost(by[over], by[name], load)
+        step = serving_cost(by[over], by[name], load, rung)
         whole = worst["value"]
         share = (round(step["value"] / whole, 4)
                  if name in chain and step and step["value"] is not None and whole is not None and whole > 0 else None)
-        rows.append({"arm": name, **_cost(serving_cost(ref, by[name], load)), "over": over, "step": _cost(step),
+        rows.append({"arm": name, **_cost(serving_cost(ref, by[name], load, rung)), "over": over, "step": _cost(step),
                      "share": share})
     slo = {"ttft": ours["slo"]["ttft_s"], "tpot": ours["slo"]["tpot_s"]}
 
-    def bounds(name: str) -> dict:
-        return {k: round(slo[k] * 1e3) for k in LOADS[name].slo if k in slo}
+    def within(c: dict) -> dict | None:
+        w = c["within"]
+        return w and {**_cost(w), "latency_target_ms": {k: round(slo[k] * 1e3) for k in LOADS[c["load"]].slo if k in slo},
+                      "reps": w["reps"], "reference": w["reference"], "arm": w["arm"]}
 
     def job(name: str) -> dict:
         (a, b) = (ours["of"][name], ref["of"][name])
@@ -1579,15 +1647,15 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     return {"value": _pct(worst["value"]), "unit": UNIT, "commit": at["commit"],
             "run": at["run"], "metric": "serving_cost", "id": model.metric, "better": "lower", "target": target,
             "target_basis": basis if target is not None else None, "ci95": _cost(worst)["ci95"], "verdict": overall,
+            "target_counts": list(model.target_counts) if basis != "given" and target is not None else [],
             "model": model.served, "arm": arm, "reference": reference, "load": load, "not_run": not_run,
-            "vllm": ours.get("vllm"), "reference_commit": at["reference_commit"], "reference_run": at["reference_run"],
-            "latency_target_ms": bounds(load),
+            "vllm": ours.get("vllm"), "gpus": tp_size(model), "reference_commit": at["reference_commit"],
+            "reference_run": at["reference_run"],
             "noise_floor": {"arm": noise["arm"]["arm"], **_cost(noise)} if noise else None,
             "loads": [{"load": c["load"], "what": LOADS[c["load"]].what, **_cost(c), "verdict": c["verdict"],
-                       "latency_target_ms": bounds(c["load"]),
-                       "noise_floor": _cost(c["noise"])["value"] if c["noise"] else None,
-                       "throughput": _pct(c["throughput"]), "reps": c["reps"],
-                       "reference": c["reference"], "arm": c["arm"], **job(c["load"])} for c in per],
+                       "noise_floor": _cost(c["noise"])["value"] if c["noise"] else None, "reps": c["reps"],
+                       "rung": c["rung"], "reference": c["reference"], "arm": c["arm"], "within": within(c),
+                       **job(c["load"])} for c in per],
             "commitment": commitment(ours), "arms": rows, "no_arm": list(NO_ARM)}
 
 
@@ -1597,14 +1665,23 @@ def _c(c: dict | None) -> str:
     return f"{c['value']:.2f}%" + (f" [{c['ci95'][0]:.2f}%, {c['ci95'][1]:.2f}%]" if c.get("ci95") else "")
 
 
+def _reps(n: int) -> str:
+    return f"{n} rep{'s' if n != 1 else ''}"
+
+
+def _rates(side: dict) -> str:
+    prompt = "" if side["prompt_tok_per_s"] is None else f" and {side['prompt_tok_per_s']:,.1f} prompt"
+    return f"{side['arm']} {side['output_tok_per_s']:,.1f} output{prompt} tokens/s"
+
+
 def cost_text(r: dict) -> str:
-    """`cost_report` as text: the number's line first, naming its load where another has not run, then each load's
-    cost, the noise floor, what the arm's boundary commitment did, every other arm, and the changes no arm turns on."""
+    """`cost_report` as text: the number's line first, naming its load where another has not run, then what the
+    target counts that no arm turns on, each load's cost with both sides' tokens a second at its rung and, under it,
+    its cost within the SLO, the noise floor, what the arm's boundary commitment did, every other arm, and the
+    changes no arm turns on."""
     by = {c["load"]: c for c in r["loads"]}
-    w = by[r["load"]]
     if r["value"] is None:
-        n = (f"no finite cost: {r['arm']} met the latency target for {w['arm']['met']} of {w['arm']['sent']} requests at "
-             f"its best rung, {r['reference']} for {w['reference']['met']} of {w['reference']['sent']}")
+        n = f"no finite cost: a side served no token at concurrency {by[r['load']]['rung']}"
     else:
         n = _c(r)
     target = ("no target" if r["target"] is None else f"target ≤ {r['target']:.2f}%"
@@ -1615,17 +1692,31 @@ def cost_text(r: dict) -> str:
              (f"  not the number yet: it is {rule}, and load {' and load '.join(r['not_run'])} "
               f"{'has' if len(r['not_run']) == 1 else 'have'} not run" if r["not_run"] else
               f"  {rule}, load {r['load']}'s"),
-             f"  in {r['unit']}, lower is better: how much more serving compute {r['arm']} needs than {r['reference']} "
-             "for the same traffic within each load's latency target"]
+             f"  in {r['unit']}, lower is better: how much more GPU time {r['arm']} needs a token than {r['reference']}, "
+             f"both serving the same tokens at the concurrency where {r['reference']} is saturated, an engine on "
+             f"{r['gpus']} GPU{'s' if r['gpus'] != 1 else ''}"]
+    if r["target_counts"]:
+        lines.append(f"  the target also counts {', '.join(r['target_counts'])}, which no arm here turns on: a cost "
+                     "within it does not show the target met with that on")
     for c in r["loads"]:
         a, b = c["reference"], c["arm"]
-        tok = "—" if c["throughput"] is None else f"{c['throughput']:.2f}%"
-        bounds = ", ".join(f"{k.upper()} ≤ {v} ms" for k, v in c["latency_target_ms"].items())
-        lines.append(f"  load {c['load']}, {c['what']}, {bounds}: {_c(c)} over {c['reps']} rep{'s' if c['reps'] != 1 else ''}"
-                     + (f", {c['verdict']}" if c["verdict"] else "") + "; best goodput "
-                     f"{a['goodput_req_per_s']:.4g} req/s at concurrency {a['concurrency']} ({a['arm']}), "
-                     f"{b['goodput_req_per_s']:.4g} req/s at concurrency {b['concurrency']} ({b['arm']}); "
-                     f"the same ratio of output tokens a second: {tok}")
+        each = ("" if a["prompt_tokens_per_request"] is None or a["output_tokens_per_request"] is None else
+                f"; {a['prompt_tokens_per_request']:,.0f} prompt and {a['output_tokens_per_request']:,.0f} output "
+                "tokens a request")
+        lines.append(f"  load {c['load']}, {c['what']}: {_c(c)} over {_reps(c['reps'])}"
+                     + (f", {c['verdict']}" if c["verdict"] else "") + f"; at concurrency {c['rung']}: "
+                     f"{_rates(a)}, {_rates(b)}{each}")
+        w = c["within"]
+        if w:
+            x, y = w["reference"], w["arm"]
+            bounds = ", ".join(f"{k.upper()} ≤ {v} ms" for k, v in w["latency_target_ms"].items())
+            cost = _c(w) if w["value"] is not None else (
+                f"no finite cost ({y['arm']} met it for {y['met']} of {y['sent']} requests at its best rung, "
+                f"{x['arm']} for {x['met']} of {x['sent']})")
+            lines.append(f"    within the latency target ({bounds}), which no target or verdict is of: {cost} over "
+                         f"{_reps(w['reps'])}; best goodput {x['goodput_req_per_s']:.4g} req/s at concurrency "
+                         f"{x['concurrency']} ({x['arm']}), {y['goodput_req_per_s']:.4g} req/s at concurrency "
+                         f"{y['concurrency']} ({y['arm']})")
     f = r["noise_floor"]
     lines.append(f"  noise floor ({f['arm']} over {r['reference']}, two server lifetimes of one engine, load {r['load']}): "
                  f"{_c(f)}" if f else
@@ -1663,8 +1754,9 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     measurement (each load that ran has a finite cost, and the arm's boundary commitment committed every finished
     request), its first line, what ran, and its measurements. Each load's cost is a measurement under the load's name.
     The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
-    its target, what the target rests on, its verdict and each load's cost beside it; it names the loads as its
-    inputs. Where a load has not run there is no such entry: one load's cost is not the number."""
+    its target, what the target rests on and what it counts that no arm turned on, its verdict and each load's cost
+    beside it; it names the loads as its inputs. Where a load has not run there is no such entry: one load's cost is
+    not the number."""
     k = r["commitment"]
     ok = all(c["value"] is not None for c in r["loads"]) and not (k and (k["failed"] or k["committed"] < k["finished"]))
     about = {"unit": r["unit"], "target": r["target"], "target_basis": r["target_basis"], "better": r["better"]}
@@ -1676,7 +1768,8 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     out = [entry(c["load"], c, what=c["what"], reps=c["reps"]) for c in r["loads"]]
     if r["id"] and not r["not_run"]:
         beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "commit", "run")} for c in r["loads"]]
-        out.append(entry(r["id"], r, load=r["load"], loads=beside, inputs=[c["load"] for c in r["loads"]]))
+        out.append(entry(r["id"], r, load=r["load"], loads=beside, inputs=[c["load"] for c in r["loads"]],
+                         target_counts=r["target_counts"]))
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
             "loads": [c["load"] for c in r["loads"]], "vllm": r["vllm"]}
     return ok, cost_text(r).splitlines()[0], what, out

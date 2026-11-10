@@ -793,6 +793,8 @@ def test_a_pass_metrics_are_the_clients_own_figures():
     m = S.bench_metrics(result(completed=197, failed=3, duration=100.0, good=150.0, tok=300.0))
     assert (m["sent"], m["ok"], m["met"], m["output_tokens"], m["span_s"]) == (200, 197, 150, 30000, 100.0)
     assert (m["output_tok_per_s"], m["total_tok_per_s"], m["req_per_s"], m["goodput_req_per_s"]) == (300.0, 812.0, 1.97, 1.5)
+    # the prompt's tokens beside the output's, which a reader converting tokens a second to compute needs apart
+    assert (m["prompt_tokens"], m["prompt_tok_per_s"]) == (51200, 512.0)
     assert m["slo_attained"] == pytest.approx(0.75)
     assert (m["ttft_p50_s"], m["ttft_p99_s"], m["itl_p50_s"], m["itl_p99_s"], m["tpot_p50_s"], m["tpot_p99_s"]) == (
         0.4, 0.9, 0.029, 0.07, 0.03, 0.045)
@@ -832,63 +834,98 @@ def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path):
         S.arm_metrics(d, (1.0, 0.05))
 
 
-def cost_arm(name: str, goodput: dict[int, list[float]], tok: float = 300.0, load: str = "chat") -> dict:
-    """An arm's metrics with ``load`` served at each rung of ``goodput``, a rep each value (requests a second within
-    the SLO, of 2 sent a second)."""
-    reps = {c: [{"rep": i + 1, "rate": None, "concurrency": c, "sent": 200, "ok": 200, "met": round(g * 100),
-                 "goodput_req_per_s": g, "output_tok_per_s": tok, "req_per_s": 2.0, "slo_attained": g / 2}
-                for i, g in enumerate(gs)] for c, gs in goodput.items()}
+def cost_arm(name: str, rate: dict[int, list[float]], load: str = "chat", good: dict[int, list[float]] | None = None) -> dict:
+    """An arm's metrics with ``load`` served at each rung of ``rate``, a rep each value: the requests a second it
+    served, 200 a rep, each of 256 prompt tokens and 150 output tokens, every one within the SLO unless ``good`` gives
+    the rung's goodputs."""
+    def rep(c: int, i: int, r: float) -> dict:
+        g = (good or rate)[c][i]
+        return {"rep": i + 1, "rate": None, "concurrency": c, "sent": 200, "ok": 200, "met": round(200 * g / r) if r else 0,
+                "goodput_req_per_s": g, "req_per_s": r, "output_tok_per_s": 150 * r, "prompt_tok_per_s": 256 * r,
+                "output_tokens": 30000, "prompt_tokens": 51200, "slo_attained": g / r if r else None}
+
     return {"arm": name, "parent": S.ARMS[name].parent, "what": name, "run_id": "r-1", "commit": "c" * 40,
             "vllm": "0.1+gd9105ea8", "model_id": "glm53", "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
-            "loads": {S.pass_name(load, c): rs for c, rs in reps.items()}}
+            "loads": {S.pass_name(load, c): [rep(c, i, r) for i, r in enumerate(rs)] for c, rs in rate.items()}}
 
 
-def test_the_serving_cost_is_the_kits_paired_ratio_of_each_sides_best_pass():
-    """Each arm's best is its own rung: the reference peaks at concurrency 16 and the arm at 8. The cost is the median
-    over reps of the reference's goodput over the arm's in the same rep, less one."""
-    ref = cost_arm("compiled", {8: [1.0] * 6, 16: [1.5, 1.6, 1.4, 1.5, 1.55, 1.45], 32: [0.2, 0.1, 0.3, 0.2, 0.1, 0.3]})
-    ours = cost_arm("boundary-rows", {8: [1.2, 1.25, 1.15, 1.2, 1.25, 1.1], 16: [1.0, 0.9, 1.1, 1.0, 0.9, 1.1]}, tok=280.0)
-    assert S.best_pass(ref, "chat")[0] == 16 and S.best_pass(ours, "chat")[0] == 8 and S.best_pass(ref, "long") is None
+def test_the_serving_cost_is_the_kits_paired_ratio_of_tokens_a_second_where_the_reference_is_saturated():
+    """Both sides are read at one rung, the one where the reference's tokens a second are highest. The cost is the
+    median over reps of the reference's tokens a second over the arm's in the same rep, less one."""
+    ref = cost_arm("compiled", {8: [1.0] * 6, 16: [1.5, 1.6, 1.4, 1.5, 1.55, 1.45], 32: [1.2, 1.1, 1.3, 1.2, 1.1, 1.3]})
+    ours = cost_arm("boundary-rows", {8: [1.3] * 6, 16: [1.2, 1.25, 1.15, 1.2, 1.25, 1.1]})
+    assert S.saturated(ref, ours, "chat") == 16 and S.saturated(ref, ours, "long") is None
     c = S.serving_cost(ref, ours, "chat")
     ratios = sorted(x / y for x, y in zip([1.5, 1.6, 1.4, 1.5, 1.55, 1.45], [1.2, 1.25, 1.15, 1.2, 1.25, 1.1]))
-    assert c["value"] == pytest.approx((ratios[2] + ratios[3]) / 2 - 1) == pytest.approx(0.25) and c["reps"] == 6
-    assert (c["reference"]["concurrency"], c["arm"]["concurrency"], c["arm"]["sent"]) == (16, 8, 1200)
+    assert c["value"] == pytest.approx((ratios[2] + ratios[3]) / 2 - 1) == pytest.approx(0.25)
+    assert (c["reps"], c["rung"], c["reference"]["concurrency"], c["arm"]["concurrency"]) == (6, 16, 16, 16)
     # six reps are the fewest whose ratios bound their median at 95%: the interval is then their least and greatest
     assert c["ci95"] == [pytest.approx(ratios[0] - 1), pytest.approx(ratios[5] - 1)]
-    assert c["ci95"][0] < c["value"] < c["ci95"][1] and c["throughput"] == pytest.approx(300 / 280 - 1)
+    assert c["ci95"][0] < c["value"] < c["ci95"][1]
     # one slow rep moves the interval's end and not the median: the cost isn't the ratio of the sides' means
-    assert c["value"] != pytest.approx(c["reference"]["goodput_req_per_s"] / c["arm"]["goodput_req_per_s"] - 1)
+    assert c["value"] != pytest.approx(c["reference"]["output_tok_per_s"] / c["arm"]["output_tok_per_s"] - 1)
+    # each side's tokens a second there, the prompt's apart from the output's, and the tokens a request it served
+    assert c["reference"]["output_tok_per_s"] == pytest.approx(225.0) and c["reference"]["prompt_tok_per_s"] == pytest.approx(384.0)
+    assert (c["arm"]["prompt_tokens_per_request"], c["arm"]["output_tokens_per_request"]) == (256.0, 150.0)
+    # below the reference's capacity a ratio reads what was sent, not compute: there this arm would look faster than stock
+    assert S.serving_cost(ref, ours, "chat", 8)["value"] == pytest.approx(1.0 / 1.3 - 1)
+    # the rung is one both served: the reference's 32 is not the arm's, and an arm with one rung is read there
+    assert S.serving_cost(ref, ours, "chat", 32) is None
+    assert S.serving_cost(ref, cost_arm("boundary-rows", {8: [0.8] * 2}), "chat")["rung"] == 8
     # the reps both have are the ones compared; five have no interval; a load one side didn't serve has no cost
-    five = S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.2, 1.25, 1.15, 1.2, 1.25]}), "chat")
+    five = S.serving_cost(ref, cost_arm("boundary-rows", {16: [1.2, 1.25, 1.15, 1.2, 1.25]}), "chat")
     assert five["reps"] == 5 and five["value"] == pytest.approx(0.25) and "ci95" not in five
-    one = S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.2]}), "chat")
+    one = S.serving_cost(ref, cost_arm("boundary-rows", {16: [1.2]}), "chat")
     assert one["reps"] == 1 and one["value"] == pytest.approx(1.5 / 1.2 - 1) and "ci95" not in one
-    assert S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.0]}, load="long"), "chat") is None
+    assert S.serving_cost(ref, cost_arm("boundary-rows", {16: [1.0]}, load="long"), "chat") is None
     # the estimator is the kit's own, read from the tree's one copy of it
     paired = S.kit()[0].paired
     assert paired.__module__ == "verity_bench.overhead" and paired([1 / 1.2], [1 / 1.5])["gamma"] == pytest.approx(0.25)
 
 
-def test_an_arm_that_meets_the_slo_for_no_request_has_no_finite_cost_and_misses():
-    ref = cost_arm("compiled", {8: [1.0, 1.0], 16: [1.5, 1.5]})
-    none = cost_arm("boundary-rows", {8: [0.0, 0.0], 16: [0.0, 0.0]}, tok=150.0)
-    none["loads"]["chat@16"] = [r | {"output_tok_per_s": 200.0} for r in none["loads"]["chat@16"]]
+def test_the_cost_within_the_slo_reads_each_sides_best_goodput_and_is_not_the_cost():
+    """Within the SLO each arm's best is its own rung: the reference's goodput peaks at concurrency 16 and the arm's at
+    8. Both serve the same tokens a second at every rung, so the cost is nothing while a quarter more is needed
+    within the SLO: the two are one number only where every request meets the SLO on both sides."""
+    rate = {8: [2.0] * 6, 16: [2.0] * 6}
+    ref = cost_arm("compiled", rate, good={8: [1.0] * 6, 16: [1.5, 1.6, 1.4, 1.5, 1.55, 1.45]})
+    ours = cost_arm("boundary-rows", rate, good={8: [1.2, 1.25, 1.15, 1.2, 1.25, 1.1], 16: [1.0, 0.9, 1.1, 1.0, 0.9, 1.1]})
+    assert S.best_pass(ref, "chat")[0] == 16 and S.best_pass(ours, "chat")[0] == 8 and S.best_pass(ref, "long") is None
+    c = S.serving_cost(ref, ours, "chat")
+    assert c["value"] == pytest.approx(0.0) and c["rung"] == 8          # the lowest of the rungs where stock is fastest
+    w = c["within"]
+    ratios = sorted(x / y for x, y in zip([1.5, 1.6, 1.4, 1.5, 1.55, 1.45], [1.2, 1.25, 1.15, 1.2, 1.25, 1.1]))
+    assert w["value"] == pytest.approx(0.25) and w["ci95"] == [pytest.approx(ratios[0] - 1), pytest.approx(ratios[5] - 1)]
+    assert (w["reps"], w["reference"]["concurrency"], w["arm"]["concurrency"], w["arm"]["sent"]) == (6, 16, 8, 1200)
+    assert S.within_slo(ref, ours, "long") is None
+    # where every request meets the SLO on both sides the two are the same number
+    all_met = S.serving_cost(cost_arm("compiled", {8: [2.0] * 6}), cost_arm("boundary-rows", {8: [1.9, 1.95, 1.9, 1.85, 1.9, 1.95]}), "chat")
+    assert all_met["value"] == pytest.approx(all_met["within"]["value"]) and all_met["ci95"] == pytest.approx(all_met["within"]["ci95"])
+
+
+def test_an_arm_that_meets_the_slo_for_no_request_has_a_cost_and_none_within_the_slo():
+    ref = cost_arm("compiled", {8: [2.0, 2.0], 16: [3.0, 3.0]}, good={8: [1.0, 1.0], 16: [1.5, 1.5]})
+    none = cost_arm("boundary-rows", {8: [1.0, 1.0], 16: [2.0, 2.0]}, good={8: [0.0, 0.0], 16: [0.0, 0.0]})
     c = S.serving_cost(ref, none, "chat")
-    # with no goodput anywhere the arm's best pass is its fastest, and what is left to read is the tokens' ratio
-    assert c["value"] is None and c["arm"]["concurrency"] == 16 and c["throughput"] == pytest.approx(0.5)
-    assert S.verdict(c, 0.05) == "misses"
+    # the cost reads no SLO; with no goodput anywhere the arm's best pass within the SLO is its fastest
+    assert c["value"] == pytest.approx(0.5) and c["within"]["value"] is None and c["within"]["arm"]["concurrency"] == 16
     r = S.cost_report([ref, none], arm="boundary-rows", target=5.0)
-    assert (r["value"], r["ci95"], r["verdict"]) == (None, None, "misses")
-    assert "no finite cost: boundary-rows met the latency target for 0 of 400 requests" in S.cost_text(r)
-    # a load past the reference too says nothing about the arm; a rep with no goodput leaves no interval
-    past = S.serving_cost(cost_arm("compiled", {8: [0.0, 0.0]}), none, "chat")
-    assert past["value"] is None and S.verdict(past, 0.05) == "cannot tell"
-    some = S.serving_cost(ref, cost_arm("boundary-rows", {8: [1.0, 0.0]}), "chat")
-    assert some["value"] == pytest.approx(2.0) and "ci95" not in some and S.verdict(some, 0.05) == "cannot tell"
+    assert (r["value"], r["ci95"], r["verdict"]) == (50.0, None, "cannot tell")          # two reps have no interval
+    assert ("no finite cost (boundary-rows met it for 0 of 400 requests at its best rung, compiled for 200 of 400)"
+            in S.cost_text(r))
+    # a rep with no goodput leaves no interval within the SLO
+    some = S.within_slo(ref, cost_arm("boundary-rows", {8: [1.0, 1.0]}, good={8: [1.0, 0.0]}), "chat")
+    assert some["value"] == pytest.approx(2.0) and "ci95" not in some
+    # an arm that served no token has no finite cost, and its verdict cannot be told
+    dead = S.serving_cost(ref, cost_arm("boundary-rows", {16: [0.0] * 6}), "chat")
+    assert dead["value"] is None and S.verdict(dead, 0.05) == "cannot tell"
+    r = S.cost_report([ref, cost_arm("boundary-rows", {16: [0.0] * 6})], arm="boundary-rows", target=5.0)
+    assert (r["value"], r["verdict"]) == (None, "cannot tell")
+    assert "no finite cost: a side served no token at concurrency 16" in S.cost_text(r)
 
 
 def test_the_verdict_is_one_of_three_and_the_noise_floor_widens_the_interval():
-    cost = {"value": 0.03, "ci95": [0.02, 0.04], "reference": {"met": 1}, "arm": {"met": 1}}
+    cost = {"value": 0.03, "ci95": [0.02, 0.04]}
     assert S.verdict(cost, None) is None
     assert [S.verdict(cost, t) for t in (0.05, 0.04, 0.03, 0.02, 0.01)] == [
         "meets", "meets", "cannot tell", "cannot tell", "misses"]
@@ -919,14 +956,20 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
     assert (r["unit"], r["commit"], r["run"], r["metric"], r["better"]) == (
         "percent of stock's serving compute", "c" * 40, "r-1", "serving_cost", "lower")
     # long context costs more than chat, so it is the number; the model's target applies where none is given
-    assert [(c["load"], c["value"], c["verdict"]) for c in r["loads"]] == [("chat", 2.04, "meets"), ("long", 6.95, "misses")]
+    assert [(c["load"], c["value"], c["verdict"]) for c in r["loads"]] == [("chat", 2.04, "cannot tell"), ("long", 6.95, "misses")]
     assert (r["load"], r["value"], r["target"], r["model"], r["arm"], r["reference"], r["not_run"]) == (
         "long", 6.95, S.MODELS["glm53"].target, "glm-5.3", "two-stage", "compiled", [])
     # the number is the largest, so it misses where one load misses, whatever the other does
     assert r["ci95"][0] < r["value"] < r["ci95"][1] and r["verdict"] == "misses"
-    # each load's goodput counts against its own bounds: long context's first token takes seconds on any engine
-    assert [c["latency_target_ms"] for c in r["loads"]] == [{"ttft": 2000, "tpot": 80}, {"tpot": 80}]
-    assert r["latency_target_ms"] == {"tpot": 80} and r["vllm"] == "0.1+gd9105ea8"
+    # each load is read at the rung where stock is saturated, an engine on the model's GPUs
+    assert [c["rung"] for c in r["loads"]] == [8, 4] and (r["gpus"], r["vllm"]) == (8, "0.1+gd9105ea8")
+    # the cost within the SLO is beside each load's cost, with no verdict: each load's goodput counts against its own
+    # bounds, since long context's first token takes seconds on any engine
+    assert [c["within"]["latency_target_ms"] for c in r["loads"]] == [{"ttft": 2000, "tpot": 80}, {"tpot": 80}]
+    assert [c["within"]["value"] for c in r["loads"]] == [2.04, 6.95] and "verdict" not in r["loads"][0]["within"]
+    assert "latency_target_ms" not in r
+    # what the model's target counts that no arm turned on is said with it, and not with a target given
+    assert r["target_counts"] == list(S.MODELS["glm53"].target_counts) == ["admission on the certified tick"]
     # stock again is the noise floor, not a change; each other arm's cost is over stock and over the arm above it
     assert r["noise_floor"] == {"arm": "compiled-again", "value": 0.0, "ci95": [0.0, 0.0]}
     assert [c["noise_floor"] for c in r["loads"]] == [0.0, 0.0]
@@ -943,21 +986,32 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
     assert rows["canonical-topk"]["value"] == rows["canonical-topk"]["step"]["value"] == 2.56
     assert r["no_arm"] == list(S.NO_ARM) and r["commitment"] is None and json.loads(json.dumps(r)) == r
     lines = S.cost_text(r).splitlines()
-    assert lines[:2] == ["serving cost, glm-5.3, two-stage over compiled: 6.95% [6.38%, 7.53%]   "
-                         "target ≤ 4.34% (modelled)   verdict: misses",
-                         "  the largest of the costs of its loads (chat, long), load long's"]
+    assert lines[:4] == [
+        "serving cost, glm-5.3, two-stage over compiled: 6.95% [6.38%, 7.53%]   target ≤ 2.05% (modelled)   verdict: misses",
+        "  the largest of the costs of its loads (chat, long), load long's",
+        "  in percent of stock's serving compute, lower is better: how much more GPU time two-stage needs a token than "
+        "compiled, both serving the same tokens at the concurrency where compiled is saturated, an engine on 8 GPUs",
+        "  the target also counts admission on the certified tick, which no arm here turns on: a cost within it does "
+        "not show the target met with that on"]
     assert (r["id"], r["target_basis"]) == ("vllm/serving-cost-glm53", "modelled")
     text = "\n".join(lines)
-    assert "  load chat, ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset), " \
-           "TTFT ≤ 2000 ms, TPOT ≤ 80 ms: 2.04% [1.52%, 2.56%]" in text and "over 6 reps, meets; best goodput 2 req/s" in text
-    assert "  load long, 8,192 random tokens in and 128 out (vLLM's random dataset at one long length), TPOT ≤ 80 ms: " \
-           "6.95% [6.38%, 7.53%]" in text and "over 6 reps, misses; best goodput 1 req/s" in text
+    # each load's line: its cost, then both sides' output and prompt tokens a second at its rung and the tokens a request
+    assert ("  load chat, ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset): "
+            "2.04% [1.52%, 2.56%] over 6 reps, cannot tell; at concurrency 8: compiled 300.0 output and 512.0 prompt "
+            "tokens/s, two-stage 294.0 output and 501.8 prompt tokens/s; 256 prompt and 150 output tokens a request\n"
+            "    within the latency target (TTFT ≤ 2000 ms, TPOT ≤ 80 ms), which no target or verdict is of: 2.04% "
+            "[1.52%, 2.56%] over 6 reps; best goodput 2 req/s at concurrency 8 (compiled), 1.96 req/s at concurrency 8 "
+            "(two-stage)\n") in text
+    assert ("  load long, 8,192 random tokens in and 128 out (vLLM's random dataset at one long length): 6.95% [6.38%, "
+            "7.53%] over 6 reps, misses; at concurrency 4: compiled 150.0 output and 256.0 prompt tokens/s, ") in text
+    assert "    within the latency target (TPOT ≤ 80 ms), which no target or verdict is of: 6.95% [6.38%, 7.53%]" in text
     assert "noise floor (compiled-again over compiled, two server lifetimes of one engine, load long): 0.00%" in text
     assert "| two-stage | 6.95% " in text and "| boundary-rows | 2.14% " in text and "| record | 3.14% " in text
     assert "changes with no arm" in text and "boundary commitment:" not in text
     # a target given replaces the model's, and without stock again the output says the floor was not measured
     two = S.cost_report([arms[0], arms[-1]], target=10.0)
     assert (two["target"], two["target_basis"], two["verdict"], two["noise_floor"]) == (10.0, "given", "meets", None)
+    assert two["target_counts"] == [] and "the target also counts" not in S.cost_text(two)
     assert [(x["arm"], x["over"], x["share"]) for x in two["arms"]] == [("two-stage", "compiled", 1.0)]
     assert "noise floor: not measured" in S.cost_text(two) and "target ≤ 10.00% (given)   verdict: meets" in S.cost_text(two)
     assert S.cost_report([arms[0], arms[2]], arm="record", target=0.1)["verdict"] == "misses"
@@ -969,10 +1023,11 @@ def test_one_load_alone_is_named_and_never_meets_the_target_for_the_number():
     chat = [cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0, 2.0, 2.0]), ("two-stage", [1.95, 1.96, 1.97]))]
     r = S.cost_report(chat)
     assert (r["load"], r["value"], r["not_run"], r["verdict"]) == ("chat", 2.04, ["long"], "cannot tell")
-    assert r["loads"][0]["verdict"] == "meets"                    # chat's own cost is within the target
+    assert S.cost_report(chat, target=3.0)["loads"][0]["verdict"] == "meets"       # chat's own cost is within 3%,
+    assert S.cost_report(chat, target=3.0)["verdict"] == "cannot tell"             # and the number still waits for long
     assert S.cost_text(r).splitlines()[:2] == [
         "serving cost, glm-5.3, two-stage over compiled, load chat alone: 2.04% [1.52%, 2.56%]"
-        "   target ≤ 4.34% (modelled)   verdict: cannot tell",
+        "   target ≤ 2.05% (modelled)   verdict: cannot tell",
         "  not the number yet: it is the largest of the costs of its loads (chat, long), and load long has not run"]
     long = [cost_arm(name, {4: gs * 2}, load="long")
             for name, gs in (("compiled", [1.0, 1.0, 1.0]), ("two-stage", [0.94, 0.935, 0.93]))]
@@ -1035,8 +1090,8 @@ def test_the_cost_needs_both_arms_and_a_load_they_share():
 
 def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, capsys: pytest.CaptureFixture):
     commits = {"spans": 1200, "finished": 1200, "waited_s": 2.0, "complete": True, "failed": 0, "tables": 1200}
-    dirs = [bench_arm(tmp_path, "compiled", {"chat@8": [result(good=g) for g in (150.0, 152.0, 151.0) * 2]}),
-            bench_arm(tmp_path, "two-stage", {"chat@8": [result(good=g) for g in (147.0, 149.0, 148.0) * 2]},
+    dirs = [bench_arm(tmp_path, "compiled", {"chat@8": [result(good=g, tok=2 * g) for g in (150.0, 152.0, 151.0) * 2]}),
+            bench_arm(tmp_path, "two-stage", {"chat@8": [result(good=g, tok=2 * g) for g in (147.0, 149.0, 148.0) * 2]},
                       boundary_commits=commits, boundary_rows={"check": "t", **S.ARMS["two-stage"].rows})]
     assert S.main(["cost", *map(str, dirs), "--out", str(tmp_path / "out")]) == 0
     text = capsys.readouterr().out
@@ -1050,7 +1105,7 @@ def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, ca
     assert (r["value"], r["target"], r["verdict"], r["load"], r["not_run"]) == (2.03, 3.0, "cannot tell", "chat", ["long"])
     assert r["loads"][0]["verdict"] == "meets" and r["commitment"]["tables"] == 1200
     saved = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
-    assert saved | {"target": 3.0, "target_basis": "given"} == r
+    assert saved | {"target": 3.0, "target_basis": "given", "target_counts": []} == r
 
 
 def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load_has_run(
@@ -1062,13 +1117,15 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert ok and detail == S.cost_text(r).splitlines()[0] and what["loads"] == ["chat", "long"]
     assert [m["name"] for m in ms] == ["chat", "long", "vllm/serving-cost-glm53"]
     chat, long, number = ms
-    about = {"unit": "percent of stock's serving compute", "target": 4.34, "target_basis": "modelled", "better": "lower"}
+    about = {"unit": "percent of stock's serving compute", "target": 2.05, "target_basis": "modelled", "better": "lower"}
     assert all(m | about == m and m["commit"] == "c" * 40 and m["run"] == "r-1" for m in ms)
-    assert (chat["value"], chat["ci95"], chat["verdict"], chat["reps"]) == (2.04, [1.52, 2.56], "meets", 6)
+    assert (chat["value"], chat["ci95"], chat["verdict"], chat["reps"]) == (2.04, [1.52, 2.56], "cannot tell", 6)
     assert (number["value"], number["ci95"], number["verdict"], number["load"]) == (6.95, [6.38, 7.53], "misses", "long")
-    # the number names the loads it is the largest of, each with its cost beside it
-    assert number["inputs"] == ["chat", "long"]
-    assert [(c["load"], c["value"], c["verdict"]) for c in number["loads"]] == [("chat", 2.04, "meets"), ("long", 6.95, "misses")]
+    # the number names the loads it is the largest of, each with its cost beside it, and what its target counts that
+    # no arm turned on
+    assert number["inputs"] == ["chat", "long"] and number["target_counts"] == ["admission on the certified tick"]
+    assert [(c["load"], c["value"], c["verdict"]) for c in number["loads"]] == [
+        ("chat", 2.04, "cannot tell"), ("long", 6.95, "misses")]
     # one load alone: its cost, and no entry under the metric's id
     alone = S.cost_report([cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0] * 3), ("two-stage", [1.95, 1.96, 1.97]))])
     assert [m["name"] for m in S.result_of(alone)[3]] == ["chat"] and S.result_of(alone)[0]
@@ -1078,7 +1135,7 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     arms = [cost_arms()[0], cost_arms()[-1] | {"boundary_commits": {"spans": 90, "finished": 100, "failed": 0}}]
     assert not S.result_of(S.cost_report(arms))[0]
     # the command writes it through the kit's writer, in the run's directory, citing the report beside it
-    dirs = [bench_arm(tmp_path, name, {f"{load}@8": [result(good=g) for g in gs * 2] for load in ("chat", "long")})
+    dirs = [bench_arm(tmp_path, name, {f"{load}@8": [result(good=g, tok=2 * g) for g in gs * 2] for load in ("chat", "long")})
             for name, gs in (("compiled", (150.0, 152.0, 151.0)), ("two-stage", (147.0, 149.0, 148.0)))]
     out = tmp_path / "run" / "out"
     with pytest.raises(SystemExit, match="with --out DIR"):

@@ -65,9 +65,9 @@ one server lifetime: a warm-up, then each load REPS times, rep by rep, each from
 
 ## The serving cost
 
-One number: how much more serving compute an arm needs than stock for the same traffic within the SLO, in percent of
-stock's serving compute (lower is better), with the loads sent by vLLM's own benchmark client (`vllm bench serve` at the
-pin) in place of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of its header's last form:
+One number: how much more GPU time an arm needs than stock to serve the same tokens, in percent of stock's serving
+compute (lower is better), with the loads sent by vLLM's own benchmark client (`vllm bench serve` at the pin) in place
+of the corpus's. `verity bench serve_tax` is `run.sh`, here with the flags of its header's last form:
 
 ~~~text
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53
@@ -85,20 +85,31 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   is not the pinned one is refused. No run sends the file or keeps it: an arm's `meta.json` records its path and
   SHA-512. `serve_tax.py dataset chat [--fetch]` prints the checked path, for another benchmark that reads the file.
 - **A rung** is a concurrency the client holds (`--request-rate inf --max-concurrency RUNG`): it sends the next request
-  when one ends, as vLLM's standing tests do. A fixed arrival rate can't carry this number: below capacity goodput only
-  repeats the rate, and at capacity the queue grows for as long as the pass lasts. `--loads chat=12+16+24` names the
-  rungs; a load's own are a first ladder, to find where stock peaks.
+  when one ends, as vLLM's standing tests do. A fixed arrival rate can't carry this number: below capacity the tokens a
+  second only repeat the rate, and at capacity the queue grows for as long as the pass lasts. `--loads chat=12+16+24`
+  names the rungs; a load's own are a first ladder, to find where stock is saturated.
 - **A pass** is a load at a rung, `<load>@<rung>`. An arm serves each pass REPS times (six by default) in one server
   lifetime, each from an empty prefix cache, every request greedy and decoding to its length (`--ignore-eos`), the same
   prompts under one seed. `<load>@<rung>/rep-<r>/result.json` is the result the client saved, and the table's figures
   for a pass are the client's own.
-- **The cost** of an arm over `compiled` at a load (`serve_tax.serving_cost`) is stock's best goodput over the arm's,
-  less one. Goodput is the client's "Request goodput": requests a second within the model's SLO (TTFT and time per output
-  token). Each side's best is at the rung where its mean over reps is largest, so each arm is read at its own operating
-  point. The cost is the benchmark kit's paired ratio (`verity_bench.overhead.paired`): the median over reps of stock's
-  goodput over the arm's in the same rep, with the kit's 95% interval, the order statistics of those ratios that bound
-  their median. Six reps are the fewest that have one (their least and greatest ratio); with fewer the cost has no
-  interval and its verdict cannot be told.
+- **The cost** of an arm over `compiled` at a load (`serve_tax.serving_cost`) is the arm's tax where stock is
+  saturated: stock's output tokens a second over the arm's, less one. Every arm serves the same prompts, each decoded
+  to its length, so both sides serve the same tokens, and at a rung where stock's GPUs have no idle time the ratio is
+  the arm's extra GPU time a token. Both sides are read at one rung: of the rungs both served, the one where stock's
+  output tokens a second, averaged over its reps, are highest (`serve_tax.saturated`). The cost is the benchmark kit's
+  paired ratio (`verity_bench.overhead.paired`): the median over reps of stock's tokens a second over the arm's in the
+  same rep, with the kit's 95% interval, the order statistics of those ratios that bound their median. Six reps are
+  the fewest that have one (their least and greatest ratio); with fewer the cost has no interval and its verdict
+  cannot be told. No SLO enters the cost. Each load's line gives both sides' output and prompt tokens a second at the
+  rung and the prompt and output tokens a request, and the third line the GPUs an engine serves on: what a reader
+  needs to turn the tokens a second into a utilisation.
+- **The cost within the SLO** (`serve_tax.within_slo`) is printed under each load's cost: stock's best goodput over
+  the arm's, less one, by the same paired ratio. Goodput is the client's "Request goodput": requests a second within
+  the model's SLO (TTFT and time per output token). Each side's best is at the rung where its mean over reps is
+  largest, so each arm is read at its own operating point. It is the cost only where both sides meet the SLO for
+  every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
+  (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
+  cost within it.
 - **The Commit window** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
   so that a pass holds the commits of the requests it finishes. At a window longer than a pass the commits would fall
   between passes, where no request waits on them, and the cost would leave them out. A short window counts a window's
@@ -108,16 +119,18 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   cost is not the number.
 - **The verdict** of a load against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the
   whole interval is at or under the target, `misses` where all of it is over, else `cannot tell`. The output says
-  what the target rests on (`Model.target_basis`: `modelled` until its owner states one, `given` for `--target`).
+  what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`) and
+  what it counts that no arm of vLLM's client turns on (`Model.target_counts`: GLM-5.3's counts admission on the
+  certified tick), so that a cost within the target is not read as the target met with those on.
   `compiled-again` gives the noise floor, which reps inside one server lifetime don't see, and each load's verdict
-  widens its interval by that load's floor at each end. An arm that meets the SLO for no request at any rung has no finite cost and misses;
-  the same ratio of output tokens a second is printed beside every cost. The number's verdict follows from the loads':
+  widens its interval by that load's floor at each end. The number's verdict follows from the loads':
   it misses where one load misses, meets only where both have run and meet, and otherwise cannot be told.
 - **The arms** are by default `compiled`, `compiled-again` and `two-stage`, and the cost is of the last one named.
   `--arms all` adds one arm for each change in between (`record`, `no-prefix-cache`, `boundary-rows`) and the canonical
   top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
-  with its share of the whole for the arms from the measured one up to stock. A job of `compiled` alone prints no cost:
-  it finds the rungs where stock peaks, which a later job's `--loads` names.
+  at the number's load and rung, with its share of the whole for the arms from the measured one up to stock. A job of
+  `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks, which a
+  later job's `--loads` names.
 - **The boundary commitment's line** says what the measured arm's commitment did, from its own records: the finished
   requests committed, those whose commit failed, and those committed with their history tables. An arm that asks for
   tables on a tree whose boundary commitment builds none commits without them, and the line says the cost is without
@@ -134,8 +147,8 @@ finished job's arm directories, which may be of more than one job: a load served
 
 The run's `result.json` (`serve_tax.result_of`, written by the kit's writer) holds each load's cost as a measurement
 named by the load, and the number as one named by the model's metric id (`Model.metric`), with `ci95`, `target`,
-`target_basis`, `verdict`, `better`, `load`, and `loads`, each load's cost beside it. A job in which a load has not run
-writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
+`target_basis`, `target_counts`, `verdict`, `better`, `load`, and `loads`, each load's cost beside it. A job in which
+a load has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
 ## Running it
 
