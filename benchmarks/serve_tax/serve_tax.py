@@ -1443,7 +1443,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
             "edges": edge_summary(edges), "boundary_rows": meta.get("boundary_rows"),
-            "boundary_commits": meta.get("boundary_commits")}
+            "boundary_commits": meta.get("boundary_commits"), "planned": meta.get("planned")}
 
 
 def summary(xs: list[float]) -> dict:
@@ -1755,7 +1755,68 @@ def joined(arms: list[dict]) -> dict[str, dict]:
             b["boundary_commits"] = {k: x.get(k, 0) + y.get(k, 0) for k in ("spans", "finished", "failed", "tables")}
         b["boundary_commits"] = b.get("boundary_commits") or y
         b["boundary_rows"] = b.get("boundary_rows") or a.get("boundary_rows")
+        b["planned"] = {**(b.get("planned") or {}), **(a.get("planned") or {})}
     return by
+
+
+#: the reference with its prefix cache off (`ARMS`): on the load that repeats a prefix, what the cache alone is worth
+CACHE_OFF = "no-prefix-cache"
+#: what the number is called beside the row under it: its loads repeat no prefix
+NO_REPEAT = "no repeated prefix"
+
+
+def latency_cost(ref: list[dict], arm: list[dict], key: str) -> dict:
+    """How much longer ``arm``'s ``key``, a latency in seconds, is than ``ref``'s over the same reps, a fraction:
+    `paired_cost` of the reciprocals, so the median over reps of the arm's latency over the reference's, less one,
+    with its interval. No value where a rep of either side has no such latency."""
+    a, b = ([r.get(key) for r in x] for x in (ref, arm))
+    return paired_cost([1 / x for x in a], [1 / x for x in b]) if all(a) and all(b) else {"value": None}
+
+
+def prefix_row(by: dict[str, dict], reference: str, arm: str) -> dict | None:
+    """The row under the number, from arms' joined metrics (`joined`), every figure in percent: what ``arm`` costs over
+    ``reference`` on the load that repeats a prefix (`PREFIX`), which the number's loads say nothing of. It has no
+    target and no verdict. One request is in flight, so an arm's cost is the reference's output tokens a second over
+    its own, less one (`serving_cost`); beside it, how much longer the arm's time to the first token and its
+    99th-percentile gap between tokens are (`latency_cost`), the share of the prompt tokens each side's prefix cache
+    served in fact, from the engine's own counters, beside the share the load plans to repeat (`planned`), and whether
+    each side served every request of every rep. ``scaled_down`` says the load is the four requests of `PAIRS` and
+    not the plan they are from. ``cache_off`` is the same for the reference with its prefix cache off (`CACHE_OFF`),
+    where that arm served the load. None where ``reference`` or ``arm`` has not served it; refused where the two
+    served different plans."""
+    ref = by[reference]
+    first = serving_cost(ref, by[arm], PREFIX)
+    if first is None:
+        return None
+    rung = first["rung"]
+    plan = (ref.get("planned") or {}).get(PREFIX)
+    if plan is None or (by[arm].get("planned") or {}).get(PREFIX) != plan:
+        raise SystemExit(f"cost: {reference} and {arm} served load {PREFIX} from different plans, or a directory of "
+                         "theirs names none (meta.json: planned)")
+
+    def over(name: str) -> dict | None:
+        x = by.get(name)
+        c = serving_cost(ref, x, PREFIX, rung) if x else None
+        if c is None:
+            return None
+        a, b = ({r["rep"]: r for r in bench_rungs(y, PREFIX)[rung]} for y in (ref, x))
+        reps = sorted(set(a) & set(b))
+
+        def side(rs: list[dict], of: dict) -> dict:
+            cached = [r.get("prompt_cached_share") for r in rs]
+            return {"arm": of["arm"], "output_tok_per_s": of["output_tok_per_s"],
+                    "cached_share": None if any(v is None for v in cached) else _pct(statistics.fmean(cached)),
+                    "served_all": all(r.get("ok") == r.get("sent") == plan["requests"] for r in rs)}
+
+        ra, rb = [a[k] for k in reps], [b[k] for k in reps]
+        return {**_cost(c), "reps": c["reps"], "ttft": _cost(latency_cost(ra, rb, "ttft_p50_s")),
+                "itl_p99": _cost(latency_cost(ra, rb, "itl_p99_s")), "reference": side(ra, c["reference"]),
+                "arm": side(rb, c["arm"])}
+
+    scaled = {k: plan.get(k) for k in ("requests", "prompt_tokens", "repeated_tokens")} == planned(PAIRS)
+    return {"load": PREFIX, "what": LOADS[PREFIX].what, "label": "on a repeated prefix", "scaled_down": scaled,
+            "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
+            "rung": rung, **over(arm), "cache_off": over(CACHE_OFF) if arm != CACHE_OFF else None}
 
 
 def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, target: float | None = None) -> dict:
@@ -1774,15 +1835,20 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     arm's cost at the number's load and rung, over the reference and over the nearest arm above it that ran (its
     parent, its parent's parent...), which for the arms from ``arm`` up to the reference is its step of the whole,
     with its share of it and what the target has for the changes the step turns on (`in_target`). ``commit`` and
-    ``run`` are those of the job that served the number's load."""
+    ``run`` are those of the job that served the number's load. The number's loads repeat no prefix (``label``), so it
+    is never given without the row on the load that does (``prefix``, `prefix_row`), which comes directly after the
+    console's keys: where that load has not run, ``value`` and ``ci95`` are None, each load's own cost is still under
+    ``loads``, and the number does not meet its target. The row is given without the number: a job of that load alone
+    has it, with no load, no arms' table and no value."""
     by = joined(arms)
     for name in (reference, arm):
         if name not in by:
             raise SystemExit(f"cost: no directory of arm {name} (given: {', '.join(by) or 'none'})")
     ref, ours = by[reference], by[arm]
     per = [c for c in (serving_cost(ref, ours, n) for n in NUMBER if n in bench_loads(ref)) if c]
-    if not per:
-        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join(NUMBER)}) sent by vLLM's client: serve "
+    row = prefix_row(by, reference, arm)
+    if not per and not row:
+        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join(LOADS)}) sent by vLLM's client: serve "
                          f"both with --client {BENCH} and the same --loads")
     model = MODELS[ours["model_id"]]
     parts = target_parts(model, arm) if target is None and model.target is not None else []
@@ -1794,12 +1860,12 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         c["noise"] = serving_cost(ref, twin, c["load"], c["rung"]) if twin else None
         floor = abs(c["noise"]["value"]) if c["noise"] and c["noise"]["value"] is not None else 0.0
         c["verdict"] = verdict(c, None if target is None else target / 100, floor) if comparable else NOT_COMPARABLE
-    worst = max(per, key=lambda c: math.inf if c["value"] is None else c["value"])
-    load, rung, noise = worst["load"], worst["rung"], worst["noise"]
+    worst = max(per, key=lambda c: math.inf if c["value"] is None else c["value"], default=None)
+    load, rung, noise = (worst["load"], worst["rung"], worst["noise"]) if worst else (None, None, None)
     not_run = [n for n in NUMBER if n not in {c["load"] for c in per}]
     verdicts = {c["verdict"] for c in per}
     overall = (None if target is None else NOT_COMPARABLE if not comparable else "misses" if "misses" in verdicts else
-               "meets" if verdicts == {"meets"} and not not_run else "cannot tell")
+               "meets" if verdicts == {"meets"} and not not_run and row else "cannot tell")
 
     def above(name: str) -> str:
         p = ARMS[name].parent if name in ARMS else None
@@ -1812,7 +1878,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         chain.append(x)
         x = above(x)
     rows = []
-    for name in by:
+    for name in by if worst else ():
         if name == reference or (twin and name == twin["arm"]):
             continue
         over = above(name)
@@ -1833,10 +1899,12 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
         (a, b) = (ours["of"][name], ref["of"][name])
         return {"commit": a["commit"], "run": a["run"], "reference_commit": b["commit"], "reference_run": b["run"]}
 
-    at = job(load)
-    return {"value": _pct(worst["value"]), "unit": UNIT, "commit": at["commit"],
-            "run": at["run"], "metric": "serving_cost", "id": model.metric, "better": "lower", "target": target,
-            "target_basis": basis if target is not None else None, "ci95": _cost(worst)["ci95"], "verdict": overall,
+    at, given = job(load or PREFIX), bool(row and worst)
+    return {"value": _pct(worst["value"]) if given else None, "unit": UNIT, "commit": at["commit"],
+            "run": at["run"], "prefix": row and {**row, **job(PREFIX)}, "label": NO_REPEAT,
+            "metric": "serving_cost", "id": model.metric, "better": "lower", "target": target,
+            "target_basis": basis if target is not None else None, "ci95": _cost(worst)["ci95"] if given else None,
+            "verdict": overall,
             "target_parts": parts, "not_in_target": outside, "model": model.served, "arm": arm, "reference": reference,
             "load": load, "not_run": not_run,
             "vllm": ours.get("vllm"), "gpus": tp_size(model), "reference_commit": at["reference_commit"],
@@ -1882,14 +1950,53 @@ def _at(c: dict, ref: str) -> str:
     return f"at concurrency {c['rung']}, where {ref} is not shown saturated ({why})"
 
 
+def _share(side: dict) -> str:
+    return "not recorded" if side["cached_share"] is None else f"{side['cached_share']:.2f}%"
+
+
+def prefix_text(row: dict) -> list[str]:
+    """The row under the number (`prefix_row`) as text: its cost with what it is of and which figure is the cost, then
+    the share planned to repeat beside the share each side's prefix cache served, then the two latencies, then the
+    reference with its prefix cache off."""
+    a, b, p, off = row["reference"], row["arm"], row["planned"], row["cache_off"]
+
+    def served(x: dict) -> str:
+        sides = [s["arm"] for s in (x["reference"], x["arm"]) if not s["served_all"]]
+        return f"{' and '.join(sides)} did not serve every request" if sides else "every request served"
+
+    def slower(x: dict) -> str:
+        return (f"the time to the first token {_c(x['ttft'])} longer, the 99th-percentile gap between tokens "
+                f"{_c(x['itl_p99'])} longer")
+
+    lines = [f"  {row['label']}{', scaled down' if row['scaled_down'] else ''}, {row['what']}; no target, and it judges "
+             f"nothing: {_c(row)} over {_reps(row['reps'])}, one request in flight, where the cost is {a['arm']}'s "
+             f"output tokens a second over {b['arm']}'s, less one: {a['arm']} {a['output_tok_per_s']:,.1f} output "
+             f"tokens/s, {b['arm']} {b['output_tok_per_s']:,.1f}",
+             f"    {p['requests']:,} requests, {p['repeated_share']:.2f}% of their prompt tokens planned to repeat; the "
+             f"prefix cache served {_share(a)} ({a['arm']}) and {_share(b)} ({b['arm']}); {served(row)}",
+             f"    {b['arm']} over {a['arm']}: {slower(row)}"]
+    if off:
+        k = off["arm"]
+        lines.append(f"    {k['arm']}, {a['arm']} with its prefix cache off: {_c(off)} over {_reps(off['reps'])}, "
+                     f"{k['output_tok_per_s']:,.1f} output tokens/s; {slower(off)}; its prefix cache served {_share(k)}; "
+                     f"{served(off)}")
+    return lines
+
+
 def cost_text(r: dict) -> str:
-    """`cost_report` as text: the number's line first, naming its load where another has not run, then the target's
+    """`cost_report` as text: the number's line first, naming its load where another has not run, then the row on a
+    repeated prefix directly under it (`prefix_text`), then the target's
     parts and, where the arm leaves one off, why its cost is not comparable with the target, each load's cost with
     its rung, whether the reference is shown saturated there and both sides' tokens a second, and, under it, its cost
     within the SLO, the noise floor, what the arm's boundary commitment did, every other arm with what its step turns
     on and the target's part for it, and the changes no arm turns on."""
     by = {c["load"]: c for c in r["loads"]}
-    if r["value"] is None:
+    row = r["prefix"]
+    if row is None:
+        n = f"not given without the row on a repeated prefix under it, and load {PREFIX} has not run"
+    elif not by:
+        n = "none of its loads has run"
+    elif r["value"] is None:
         n = f"no finite cost: a side served no token at concurrency {by[r['load']]['rung']}"
     else:
         n = _c(r)
@@ -1897,7 +2004,8 @@ def cost_text(r: dict) -> str:
               + (f" ({r['target_basis']})" if r["target_basis"] else "") + f"   verdict: {r['verdict']}")
     alone = f", load {r['load']} alone" if r["not_run"] and len(r["loads"]) == 1 else ""
     rule = f"the largest of the costs of its loads ({', '.join(NUMBER)})"
-    lines = [f"serving cost, {r['model']}, {r['arm']} over {r['reference']}{alone}: {n}   {target}",
+    lines = [f"serving cost, {r['label']}, {r['model']}, {r['arm']} over {r['reference']}{alone}: {n}   {target}",
+             *(prefix_text(row) if row else []),
              (f"  not the number yet: it is {rule}, and load {' and load '.join(r['not_run'])} "
               f"{'has' if len(r['not_run']) == 1 else 'have'} not run" if r["not_run"] else
               f"  {rule}, load {r['load']}'s"),
@@ -1939,11 +2047,12 @@ def cost_text(r: dict) -> str:
                          f"{x['concurrency']} ({x['arm']}), {y['goodput_req_per_s']:.4g} req/s at concurrency "
                          f"{y['concurrency']} ({y['arm']})")
     f = r["noise_floor"]
-    lines.append(f"  noise floor ({f['arm']} over {r['reference']}, two server lifetimes of one engine, load {r['load']}): "
-                 f"{_c(f)}" if f else
-                 f"  noise floor: not measured at load {r['load']} (no second arm of {r['reference']}'s engine served "
-                 "it): its verdict reads the interval over reps alone, which no difference between two server starts "
-                 "enters")
+    if by:
+        lines.append(f"  noise floor ({f['arm']} over {r['reference']}, two server lifetimes of one engine, load "
+                     f"{r['load']}): {_c(f)}" if f else
+                     f"  noise floor: not measured at load {r['load']} (no second arm of {r['reference']}'s engine "
+                     "served it): its verdict reads the interval over reps alone, which no difference between two "
+                     "server starts enters")
     k = r["commitment"]
     if k:
         tables = (f"{k['tables']:,} of them with their history tables" if k["tables"] else
@@ -1965,10 +2074,11 @@ def cost_text(r: dict) -> str:
                 + ("" if (c["reference_commit"], c["reference_run"]) == (c["commit"], c["run"]) else
                    f"; {r['reference']}: commit {c['reference_commit']}, run {c['reference_run']}"))
 
-    jobs = list(dict.fromkeys(job(c) for c in r["loads"]))
+    served = [*r["loads"], *([row] if row else [])]
+    jobs = list(dict.fromkeys(job(c) for c in served))
     lines += ["", "changes with no arm, which no cost here counts: " + "; ".join(r["no_arm"]) + ".",
               *([f"{jobs[0]}, vLLM {r['vllm']}"] if len(jobs) == 1 else
-                [*(f"load {c['load']}: {job(c)}" for c in r["loads"]), f"vLLM {r['vllm']}"])]
+                [*(f"load {c['load']}: {job(c)}" for c in served), f"vLLM {r['vllm']}"])]
     return "\n".join(lines) + "\n"
 
 
@@ -1980,9 +2090,13 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     The number is one under the model's metric id (`Model.metric`), the entry a reader of results takes it from, with
     its target, what the target rests on, the target's parts with the changes the arm left off, the arm's changes no
     part counts, its verdict (one of `verdict`'s three, or `NOT_COMPARABLE`) and each load's cost beside it; it names
-    the loads as its inputs. Where a load has not run there is no such entry: one load's cost is not the number."""
-    k = r["commitment"]
-    ok = all(c["value"] is not None for c in r["loads"]) and not (k and (k["failed"] or k["committed"] < k["finished"]))
+    the loads as its inputs. Where a load has not run there is no such entry: one load's cost is not the number. The
+    row on a repeated prefix is a measurement under its load's name, with no target and no verdict, and the number's
+    entry carries it (``prefix``) with the number's label; where that load has not run there is no entry under the
+    metric's id either."""
+    k, row = r["commitment"], r["prefix"]
+    ok = (all(c["value"] is not None for c in (*r["loads"], *([row] if row else [])))
+          and not (k and (k["failed"] or k["committed"] < k["finished"])))
     about = {"unit": r["unit"], "target": r["target"], "target_basis": r["target_basis"], "better": r["better"]}
 
     def entry(name: str, c: dict, **more: object) -> dict:
@@ -1991,13 +2105,18 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
 
     out = [entry(c["load"], c, what=c["what"], reps=c["reps"], rung=c["rung"], saturated=c["saturated"])
            for c in r["loads"]]
-    if r["id"] and not r["not_run"]:
+    under = row and {key: row[key] for key in ("load", "label", "scaled_down", "value", "ci95", "reps", "rung", "commit", "run")}
+    if row:
+        out.append({"name": row["load"], "unit": r["unit"], "target": None, "target_basis": None, "better": r["better"],
+                    "verdict": None, "what": row["what"], **under})
+    if r["id"] and not r["not_run"] and row:
         beside = [{key: c[key] for key in ("load", "value", "ci95", "verdict", "reps", "rung", "saturated", "commit", "run")}
                   for c in r["loads"]]
-        out.append(entry(r["id"], r, load=r["load"], loads=beside, inputs=[c["load"] for c in r["loads"]],
-                         target_parts=r["target_parts"], not_in_target=r["not_in_target"]))
+        out.append(entry(r["id"], r, label=r["label"], prefix=under, load=r["load"], loads=beside,
+                         inputs=[c["load"] for c in r["loads"]], target_parts=r["target_parts"],
+                         not_in_target=r["not_in_target"]))
     what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
-            "loads": [c["load"] for c in r["loads"]], "vllm": r["vllm"]}
+            "loads": [*(c["load"] for c in r["loads"]), *([row["load"]] if row else [])], "vllm": r["vllm"]}
     return ok, cost_text(r).splitlines()[0], what, out
 
 
