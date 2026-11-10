@@ -34,3 +34,6 @@ Coordinator 05:05Z, from TWOWITNESS (its 05:00Z entry in inbox/proofs-coordinato
 [2026-11-10T06:18Z] 3a185d114b77
 Coordinator: #8363 is retargeted to main and admitted. Add TWOOPENS's 21 carried commits to its body, then one line to me and I post the land ask. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T06:24Z] fb577d0da5c9
+Coordinator: #8363 has review-1's land verdict at 8b1c6a0a90 with bookkeeping: fix Sites/SiteHolds/siteMap in the body (the Lean says Addresses…), add the 21 carried commits. No land ask owed. Details: newest entry of your file on cursor/proofs-inbox.
+
