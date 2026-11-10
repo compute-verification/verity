@@ -1400,6 +1400,125 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
         win.write(c, tmp_path / "again", {"by": "test"}, registrar=reg)
 
 
+def _window_roots(c: CS.Committed) -> dict[str, dict]:
+    """The registration's ``roots`` entries of a committed window, by port."""
+    return {p: {"port": p, "root": r.hex(), "domain": c.domains[p].domain_id.hex(), "leaves": c.domains[p].count}
+            for p, r in c.roots.items()}
+
+
+def _opens(dom: CommitmentDomain, schema: str, bc: bytes, position: int, path: str, root: bytes) -> bool:
+    """A row's ``b || c`` at ``position`` climbs ``path`` (hex, siblings leaf level first) to ``root`` under ``dom``, as
+    Lean's `Flock.Registered.opens` climbs it."""
+    d, sibs = dom.leaf(position, position, schema, CS.INST.tree_leaf(CS.INST.default_key, bc)), bytes.fromhex(path)
+    for level in range(len(sibs) // 64):
+        s = sibs[64 * level:64 * (level + 1)]
+        d = dom.node(level, position >> 1, *((d, s) if position % 2 == 0 else (s, d)))
+        position >>= 1
+    return d == root
+
+
+def _completed(window: CS.Binding, c: CS.Committed, k: int, got: FI.Complete, params: list[str]) -> None:
+    """``got`` names every port of member ``k``: ``params`` as given, every other at its window tree, each table row's path
+    opening that tree's root and each unit reading the row its ref names."""
+    m = window.members[k]
+    names = [p for p, _ in m.all_rows]
+    assert got.parameter_ports == tuple(params) and got.window_ports == tuple(p for p in names if p not in params)
+    assert set(got.reads["ports"]) == set(got.registered) == set(names) and got.shared_rows == CS.port_leaves(m)
+    for j, p in enumerate(names):
+        if p in params:
+            continue
+        e, h, dom, root = got.reads["ports"][p], got.registered[p], c.domains[m.port(p)], c.roots[m.port(p)]
+        assert (e["value"], e["root"], e["domain"], e["leaves"], e["reads_from"]) == (
+            FI.window_value(m.port(p)), root.hex(), dom.domain_id.hex(), dom.count, m.base)
+        assert h["value"] == e["value"] != m.port(p)
+        assert e["reads"] == (c.refs[k][:, j].tolist() if m.tables else list(range(m.n)))
+        bc = c.bc[m.port(p)]
+        assert h["positions"] == list(range(dom.count))
+        assert all(_opens(dom, m.schema(p), bc[i * CS.BC_BYTES:(i + 1) * CS.BC_BYTES], i, h["paths"][i], root)
+                   for i in range(dom.count))
+
+
+def test_a_drawn_shared_row_members_files_complete_with_every_port_at_its_registered_root():
+    """`flock_inputs.complete` on `registered`'s members, each a shared-row member reading ``wrow`` from the pinned ``w``:
+    ``wrow`` stays at the pin the verifier's own reads give it, and every other port is read at its window tree, each table
+    row opening the registered root, each unit its ref's row, the public body the served one. Refused, naming the member:
+    a root its rows don't fold to, a port with no tree, trees under another run, a served row flipped, a short body, a
+    parameter port named at a window tree, a header that registers a port the registration doesn't, and one that leaves a
+    parameter port out."""
+    win, _w = registered()
+    c = win.close(salt_key=bytes(32))
+    window, roots = win.window, _window_roots(c)
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": 6, "words": K // 2, "domain": "ef" * 64}}
+    params = I.registered_reads(doc, I.window_of_record(doc, LAW, BY_ID.__getitem__), pin, registered=REG)
+    for k, m in enumerate(window.members):
+        got = FI.complete(window, k, roots, c.public_body(k), registered=REG, params=params[m.key], header=win._entries[m.key])
+        assert not got.relaid and got.body == c.public_body(k) and got.reads["ports"]["wrow"] == params[m.key]["ports"]["wrow"]
+        _completed(window, c, k, got, ["wrow"])
+    k, m = 1, window.members[1]
+    got = FI.complete(window, k, roots, c.public_body(k), registered=REG, params=params[m.key], header=win._entries[m.key])
+    x, body = m.port("x"), bytearray(c.public_body(1))
+    body[0] ^= 1
+    at_tree = {"format": REG.READS_V1, "ports": {**params[m.key]["ports"], "x": got.reads["ports"]["x"]}}
+    for change, why in [(dict(roots={**roots, x: {**roots[x], "root": roots[m.port("sx")]["root"]}}), "fold to"),
+                        (dict(roots={p: r for p, r in roots.items() if p != x}), r"ports \['x'\] have no tree"),
+                        (dict(window=replace(window, run="cd" * 64)), "not the window's"),
+                        (dict(body=bytes(body)), "fold to"),
+                        (dict(body=c.public_body(1)[:-1]), "a public body of"),
+                        (dict(params=at_tree, header={**win._entries[m.key], "x": got.registered["x"]}), "named at a window tree"),
+                        (dict(header={**win._entries[m.key], "x": got.registered["x"]}), "its header registers"),
+                        (dict(header=None), "its header registers")]:
+        args = {"window": window, "roots": roots, "body": c.public_body(1), "params": params[m.key], "header": win._entries[m.key],
+                **change}
+        with pytest.raises(ValueError, match=f"{m.key}: .*{why}"):
+            FI.complete(args.pop("window"), k, args.pop("roots"), args.pop("body"), registered=REG, **args)
+
+
+def test_an_instance_major_members_completed_files_are_its_rows_laid_out_as_a_shared_row_members(tmp_path):
+    """`fed_chain`'s members completed (`flock_inputs.complete`): a chain member's ``w`` at the pin the verifier's own reads
+    give it, its wired ``x`` and its output at their window trees, its shared-row body as served; and the feed's every port
+    at its tree. The feed, an instance-major member, has its public body re-laid port-major under identity refs, and
+    `flock_input_files` stages it under the completed header, its prover body port-major from the window's files
+    (`rows.copy_private`): the same rows, salts and strings."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
+                         "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    doc, window, roots = json.loads((tmp_path / "window.json").read_text()), win.window, _window_roots(c)
+    record = json.loads(I.circuit_bytes(win.circuit_record()))
+    params = I.registered_reads(record, I.window_of_record(record, LAW, {SID: SRC, GID: GEMM}.__getitem__), {"w": w.entry()},
+                                registered=REG)
+    g = _first(window, GID)
+    chain = FI.complete(window, g, roots, c.public_body(g), registered=REG, params=params[window.members[g].key],
+                        header=CS.registered_header(doc, g))
+    _completed(window, c, g, chain, ["w"])
+    assert not chain.relaid and chain.body == c.public_body(g)
+    k = _first(window, SID)
+    m, mem = window.members[k], doc["members"][k]
+    got = FI.complete(window, k, roots, c.public_body(k), registered=REG)
+    _completed(window, c, k, got, [])
+    names = [p for p, _ in m.all_rows]
+    assert not m.tables and got.relaid and got.body == b"".join(c.bc[m.port(p)] for p in names) + np.repeat(
+        np.arange(m.n, dtype="<u4")[:, None], len(names), axis=1).tobytes()
+    assert FI.unrelay(got.body, m.n) == c.public_body(k) and FI.unrelay(got.body[:-1] + b"\1", m.n) is None
+    meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
+            "out_ports": mem["out_ports"], "row_schemas": mem["row_schemas"], "vus_per_block": 1, "units_per_vu": 1,
+            "subcircuit": "gemm"}
+    staged = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged",
+                                  completed=got)
+    head, body = Path(staged["inst"]).read_bytes().split(b"\n", 1)
+    head = json.loads(head)
+    assert head["shared_rows"] == got.shared_rows and head["registered"] == got.registered
+    assert body == b"".join(np.ascontiguousarray(c.rows[m.port(p)], dtype="<u2").tobytes() for p in names) + b"".join(
+        c.salts[m.port(p)] for p in names) + got.body
+    pub_head, pub = Path(staged["pub"]).read_bytes().split(b"\n", 1)
+    assert json.loads(pub_head) == {**head, "rows": False} and pub == got.body
+
+
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
     """`sliced`'s position units recorded with ``x`` by reference and ``w`` in full: each cut row ``x#j`` is its slice's
     output row, committed as the full record commits it; one template's parameter is by reference for all its units or

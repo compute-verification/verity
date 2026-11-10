@@ -21,9 +21,9 @@ import pytest
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, verifier as V
 from verity.ml.definitions.registry.b1_tp2 import AllReduce2
-from verity.ml.windows import rows as SR
+from verity.ml.windows import flock_inputs as FI, rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -202,7 +202,7 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
     a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
-                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+                                                            "m": SimpleNamespace(n=T, port=lambda p: f"c0/{p}")}, tmp_path)
     assert seen == {"chunk-without-registered-reads": None,
                     "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
                     "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}}}
@@ -227,7 +227,7 @@ def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
     a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
-                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+                                                            "m": SimpleNamespace(n=T, port=lambda p: f"c0/{p}")}, tmp_path)
     assert seen["bound-port-at-another-root"] == {**honest, "bound": {**bound, "o0": {**bound["o0"], "root": "00" * 64}}}
     assert seen["bound-port-left-out"] == {**honest, "bound": {"o1": bound["o1"]}}
     assert seen["registered-read-against-another-root"]["bound"] == bound
@@ -262,9 +262,50 @@ def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bou
     fv = {"roots": {"o1": "8" * 128}, "domain_ids": {"o1": "9" * 128}}
     out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
         "st": {"registered_file": tmp_path / "registered.json", "interface_file": iface},
-        "m": SimpleNamespace(n=T, template="TEmb_v1"), "header": {"frame_v3": fv}}, tmp_path)
+        "m": SimpleNamespace(n=T, template="TEmb_v1", port=lambda p: f"c0/{p}"), "header": {"frame_v3": fv}}, tmp_path)
     kept = {**honest, "ports": {"domain": ports["domain"]}}
     assert seen["declared-port-bound"] == ({**kept, "bound": {**bound, "o1": {"root": "8" * 128, "domain": "9" * 128}}}, iface)
     assert seen["declared-port-left-out"] == (kept, iface)
     assert seen["bound-ports-without-interface"] == (honest, None) and seen["bound-port-left-out"][1] == iface
     assert not out["declared-port-bound"]["refused"], "a refusal for another reason is not the negative's"
+
+
+def test_a5s_registered_read_negatives_read_a_completed_members_first_window_port_at_another_window_tree(tmp_path, monkeypatch):
+    """A completed member's ``--registered`` file names its own ports at their window trees (each entry's ``value`` its
+    port's `flock_inputs.window_value`): a5's negatives read the first at another window tree's root, every other read as
+    registered, and Lean is to refuse it by a row that does not open; a parameter port is never the one moved."""
+    import a5
+
+    ports = {"w": {"value": "weights/w", "root": "aa" * 64, "leaves": 1, "reads": [0, 0]},
+             "x": {"value": FI.window_value("c0/x"), "root": "bb" * 64, "leaves": T, "reads": list(range(T))},
+             "o0": {"value": FI.window_value("c0/o0"), "root": "cc" * 64, "leaves": T, "reads": list(range(T))}}
+    (tmp_path / "registered.json").write_text(json.dumps({"format": "verity/registered-reads/v1", "ports": ports}))
+    seen = {}
+
+    def lean_verify(lean, st, n, sdir, zk, log):
+        seen[log] = json.loads(st["registered_file"].read_text())["ports"] if "registered_file" in st else None
+        return {"accepted": False, "digest": "d", "why": "setup: registered reads: a row does not open"}
+
+    monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    got = a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
+                                                                  "m": SimpleNamespace(n=T, port=lambda p: f"c0/{p}")}, tmp_path)
+    assert seen["window-port-read-against-another-window-tree"] == {**ports, "x": {**ports["x"], "root": "cc" * 64}}
+    assert got["window-port-read-against-another-window-tree"]["refused"]
+
+
+def test_the_audit_holds_a_completed_members_reads_to_the_registered_values_alone():
+    """The one-stage audit takes a session's registered reads named by its registration (its roots' ports and registered
+    values) and requires them to be its registered values at their roots (`audit.session_registered`, `audit_record`'s
+    ``registered`` check), so a read named by a roots port is refused: a completed member's window reads name
+    `flock_inputs.window_value`, which the check doesn't take, and a parameter read of a registered value it still holds to
+    the registered root."""
+    reg = {"roots": [{"port": "c0/x", "root": "bb" * 64}], "registered": [{"value": "weights/w", "root": "aa" * 64}]}
+    want = {e["value"]: e["root"] for e in reg["registered"]}
+
+    def opened(value: str, w_root: str = "aa" * 64) -> dict | None:
+        return audit.session_registered({"lean": {"of_record": True, "accepted": True, "registered": {
+            "w": {"value": "weights/w", "root": w_root}, "x": {"value": value, "root": "bb" * 64}}}}, reg)
+
+    assert opened(FI.window_value("c0/x")) == want
+    assert opened("c0/x") != want
+    assert opened(FI.window_value("c0/x"), w_root="00" * 64) != want

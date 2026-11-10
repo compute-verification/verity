@@ -22,8 +22,10 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Sequence
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
@@ -188,22 +190,32 @@ def stand_in(set_dir: str) -> dict:
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: tuple[str, str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
+    `tree_from`: a ``--zk`` session's coin tree is sampled and opened by that challenger session, its address and the file
+    holding its secret (`serve --tree-from ADDRESS --tree-secret-file FILE`, `a5_coins.Draws.trees`), and by no challenger
+    of the server's own (FLOCK_CHALLENGER unset)."""
+    if tree_from is not None and not zk:
+        raise ValueError("tree_from is a --zk session's: only its coins are committed to a coin tree (serve --tree-from)")
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
+    senv = {**os.environ, **(env or {})}
+    if tree_from is not None:
+        senv.pop("FLOCK_CHALLENGER", None)
     serve_log = open(out / "serve.log", "w")
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1"],
-                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
+                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(["--tree-from", tree_from[0], "--tree-secret-file", tree_from[1]] if tree_from else [])],
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=senv)
     try:
         for _ in range(1800):
             if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
@@ -239,6 +251,18 @@ def firewall_env(st: dict) -> dict:
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
 
 
+_CLAIMS = threading.Lock()
+
+
+def archiving(held: dict | None, ident: tuple) -> AbstractContextManager:
+    """The lock a run's checks (`lean_verify`, sharing ``held``) archive the circuit file of identity ``ident`` under: the
+    first puts it, and one running beside it waits, then links it."""
+    if held is None:
+        return nullcontext()
+    with _CLAIMS:
+        return held.setdefault(("archiving", ident), threading.Lock())
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = ()) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
@@ -248,8 +272,9 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more of
     `verify`'s (a plain session's ``--coins os --stratified K``). ``st["archived"]``, a dict a run's members share: a
     circuit file archived once, by its file's
-    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
-    Lean holds the object to its key when it reads it (`archiveGet`)."""
+    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again,
+    a check running beside it (`a5.LeanPool`) waiting for the first to put it (`archiving`); Lean holds the object to its
+    key when it reads it (`archiveGet`)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -262,18 +287,19 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     circuit, held = st["dir"] / "circuit.txt", st.get("archived")
     s = circuit.stat()
     ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
-    pre = held.get(ident) if held is not None else None
-    if pre is not None:
-        (archive / "sha512").mkdir(parents=True, exist_ok=True)
-        if not (archive / "sha512" / pre[0]).exists():
-            os.link(pre[1], archive / "sha512" / pre[0])
-    p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
-             *prog, *reads, *iface], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
-    keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
-    if pre is not None:
-        keys["circuit.txt"] = pre[0]
-    elif held is not None and "circuit.txt" in keys:
-        held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
+    with archiving(held, ident):
+        pre = held.get(ident) if held is not None else None
+        if pre is not None:
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            if not (archive / "sha512" / pre[0]).exists():
+                os.link(pre[1], archive / "sha512" / pre[0])
+        p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables,
+                 *part, *prog, *reads, *iface], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
+        keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
+        if pre is not None:
+            keys["circuit.txt"] = pre[0]
+        elif held is not None and "circuit.txt" in keys:
+            held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []

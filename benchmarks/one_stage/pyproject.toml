@@ -42,11 +42,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
+# `benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64`: RoPE's two captured heads, which the opt-in
+# trees session's real `serve --zk --tree-from` stages (`test_a5_tree_relay`, through M0's staging, which no tracer sees).
 inputs = ["tools/config/verity_config", "benchmarks/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
           "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",
           "benchmarks/pouw/run_result.py", "benchmarks/pouw/settings.py",
           "verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
+          "benchmarks/numerical/tests/bench/data/captured-101/slices/rope-head-d64",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py", "examples/vllm/serve.sh",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",

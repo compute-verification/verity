@@ -1,7 +1,7 @@
 """a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
 replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest (per member, every
-member's units, circuit digest and registered file), and blobs the paths of those files and the pinned tables; and the
-audits v2 can't verify say why."""
+member's units, circuit digest and registered file, each completed before the draw) and the auditor's challenger, and
+blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why."""
 
 from __future__ import annotations
 
@@ -138,6 +138,127 @@ def test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw(tmp_path):
     got = a5.v2_proof(done, True, ms)
     assert got["proofs"]["members"]["m1"]["interface"] == sha(iface) and "interface" not in got["proofs"]["members"]["m0"]
     assert got["interfaces"] == [iface]
+
+
+EV = {"key": {"W": 4, "H": 5, "public": "aa" * 32}, "ledger": ["{}"], "main": ["cc" * 20], "pins": ["{}"],
+      "segment": {"label": "draw", "start": 1, "after": "dd" * 64, "openings": [{"coin": "ee" * 64}]},
+      "session": {"close": {}, "hellos": [], "log": [], "record": {}}}
+
+
+def test_the_draws_release_names_the_challenger_and_carries_the_coins():
+    """`drawn_by`: the params name the challenger's key under the draw's family and the window root, and the evidence
+    carries the coins in `Challenger.drawCoins`'s form, the evidence less its key; no evidence, no release."""
+    got = a5.drawn_by(EV, "ab" * 64)
+    assert got == {"params": {"challenger": {"key": EV["key"], "label": a5.AC.FAMILY}, "window_root": "ab" * 64},
+                   "evidence": {"coins": {k: v for k, v in EV.items() if k != "key"}}}
+    assert a5.drawn_by(None, "ab" * 64) is None
+
+
+def test_case_v2_with_the_release_names_the_challenger_v2_requires(tmp_path, RP):
+    (tmp_path / "circuit.txt").write_bytes(b"circuit")
+    (tmp_path / "pub-4.bin").write_bytes(b"public")
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {}}
+    case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
+    statements = [(None, PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)))]
+    proofs = {"circuit": "cc" * 64, "registered": None}
+    drawn = a5.drawn_by(EV, "ab" * 64)
+    got = a5.case_v2(case, evidence["sessions"], proofs=proofs, statements=statements, tables=[], drawn=drawn)
+    assert got["params"] == {"delta": "1/100", "challenger": drawn["params"]["challenger"], "window_root": "ab" * 64,
+                             "proofs": proofs}
+    e = json.loads(bytes.fromhex(got["evidence"]))
+    assert e["coins"] == drawn["evidence"]["coins"] and e["proofs"]["public"] == sha(tmp_path / "pub-4.bin")
+    none = a5.case_v2(case, evidence["sessions"], proofs=proofs, statements=statements, tables=[])
+    assert "challenger" not in none["params"] and "coins" not in json.loads(bytes.fromhex(none["evidence"]))
+
+
+def test_every_members_registered_file_is_fixed_before_the_draw_and_a_drawn_members_reads_must_be_it(tmp_path, monkeypatch):
+    """`complete_members` completes every member's ``--registered`` file before the draw, the undrawn members' too: the
+    file v2's parameters name for the member (`v2_proof`), which names every port of its circuit. A member that can't
+    be completed refuses the audit there, by name. After the draw `complete_drawn` completes a drawn member again and
+    refuses one whose completed reads are not the file fixed before the draw."""
+    def member(k: int) -> dict:
+        d = tmp_path / f"m{k}"
+        d.mkdir()
+        return {"k": k, "m": SimpleNamespace(key=f"T/c{k}", base=2 * k, n=2), "pin": str(k) * 128,
+                "st": {"dir": d, "meta": {"vus_per_block": 1}}}
+
+    def reads_of(k: int, root: str = "aa") -> dict:
+        return {"format": "verity/registered-reads/v1", "ports": {"o0": {"value": f"T/c{k}/o0@window", "root": root * 64}}}
+
+    def complete(window, k, roots, body, *, registered, params=None, header=None):
+        if body == b"bad":
+            raise ValueError(f"T/c{k}: o0: its served rows fold to another root")
+        return SimpleNamespace(reads=reads_of(k, body.decode()), window_ports=(), parameter_ports=())
+
+    monkeypatch.setattr(a5.FI, "complete", complete)
+    monkeypatch.setattr(a5.CS, "registered_header", lambda win, k: {})
+    ms, rec, reads = [member(0), member(1)], {"roots": []}, {}
+    publics = {"T/c0": b"aa", "T/c1": b"aa"}
+    check = a5.complete_members(rec, None, ({}, rec), publics, reads, ms)
+    assert check == {"ok": True, "codes": [], "detail": {},
+                     "members": {f"T/c{k}": {"window_ports": 0, "parameter_ports": 0} for k in (0, 1)}}
+    assert [json.loads(mm["st"]["registered_file"].read_text()) for mm in ms] == [reads_of(0), reads_of(1)] and reads == {}
+    got = a5.v2_proof([{"mm": ms[1], "sdir": tmp_path}], True, ms)
+    assert {k: m["registered"] for k, m in got["proofs"]["members"].items()} == {"m0": reads_of(0), "m1": reads_of(1)}
+    assert "interface" not in got["proofs"]["members"]["m1"] and got["interfaces"] == []
+
+    bad = [member(2)]
+    refused = a5.complete_members(rec, None, ({}, rec), {"T/c2": b"bad"}, reads, bad)
+    assert not refused["ok"] and refused["codes"] == ["T/c2"] and "registered_file" not in bad[0]["st"]
+
+    after, neg = a5.complete_drawn(rec, None, ({}, rec), {**publics, "T/c1": b"bb"}, reads, [(ms[1], [0])], tmp_path)
+    assert not after["ok"] and after["codes"] == ["T/c1"] and neg == {}
+    assert "not the --registered file fixed before the draw" in after["detail"]["T/c1"]
+    assert json.loads(ms[1]["st"]["registered_file"].read_text()) == reads_of(1) and reads == {}
+
+
+@pytest.mark.parametrize("relaid", [False, True], ids=["with tables", "instance-major"])
+def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_is_its_statements(tmp_path, relaid):
+    """`complete_drawn` rewrites a drawn member's public file after the draw under the completed header, an
+    instance-major member's body re-laid port-major too (`flock_inputs.relay`), and the member's session proves that
+    file. Once the tie holds, `pin_completed` pins it as the member's ``completed`` entry, and it is the file v2's case
+    names for the member's statement: by SHA-512 the blob the case carries, not the staged file. The staged entries, each
+    saying whether completion re-lays its member (``relaid``), and their leaf layer, which R4 holds to the registration,
+    are as written before the draw."""
+    from verity.ml.windows import flock_inputs as FI
+
+    def rows(k: int) -> bytes:
+        return bytes((k + i) % 251 for i in range(4 * 2 * FI.BC_BYTES))
+
+    staged = {f"m{k}-key": b'{"header": "staged"}\n' + rows(k) for k in range(2)}
+    members = []
+    for k, (key, data) in enumerate(staged.items()):
+        (tmp_path / f"m{k}").mkdir()
+        (tmp_path / f"m{k}" / "pub-4.bin").write_bytes(data)
+        members.append({"k": k, "m": SimpleNamespace(key=key, base=4 * k, n=4, tables=() if relaid else (("t", 4),)),
+                        "pin": "cc" * 64, "st": {"dir": tmp_path / f"m{k}", "meta": {"vus_per_block": 1},
+                                                 "public": hashlib.sha512(data).hexdigest()}})
+    pin = a5.public_pin(members, {key: data.partition(b"\n")[2] for key, data in staged.items()})
+    (tmp_path / a5.PIN).write_text(json.dumps(pin))
+    assert {m["relaid"] for m in pin["members"].values()} == {relaid}
+    assert [(m["k"], m["n"]) for m in pin["members"].values()] == [(0, 4), (1, 4)]
+    completed_body = FI.relay(rows(1), 4, 2) if relaid else rows(1)
+    mm, completed = members[1], b'{"instances": 4, "header": "completed"}\n' + completed_body
+    (mm["st"]["dir"] / "pub-4.bin").write_bytes(completed)
+    a5.pin_completed(tmp_path, [(mm, [0])])
+    after = json.loads((tmp_path / a5.PIN).read_text())
+    assert after["leaf_layer"] == pin["leaf_layer"]
+    assert {k: {x: m[x] for x in ("k", "n", "file", "body", "relaid")} for k, m in after["members"].items()} == pin["members"]
+    assert "completed" not in after["members"]["m0-key"]
+    assert after["members"]["m1-key"]["completed"] == {"file": hashlib.sha512(completed).hexdigest(),
+                                                      "body": hashlib.sha512(completed_body).hexdigest()}
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    drawn = a5.drawn_by(EV, "ab" * 64)
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], True, members, drawn)
+    (named, proof), = got["statements"]
+    assert named == "m1" and got["drawn"] == drawn and a5.v2_proof([{"mm": mm, "sdir": tmp_path}], True, members)["drawn"] is None
+    assert mm["st"]["public"] == PF.file_sha512(proof.public) == after["members"]["m1-key"]["completed"]["file"]
+    assert mm["st"]["public"] != pin["members"]["m1-key"]["file"]
 
 
 def test_v2_says_why_an_audit_has_no_case():
