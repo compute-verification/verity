@@ -9,7 +9,7 @@ A finite set of triples has at most `√(|π₁₂| |π₁₃| |π₂₃|)` elem
 The proof slices the set by its first coordinate: a slice lies in the product of its two projections' slices and injects
 into the third projection, so its size squared is at most the product of the three, and Cauchy–Schwarz sums the slices.
 
-NCI's main theorem applies it to the products `W_ℓ[i,j] x_t[j]` an IU computes at its other positions, as index triples
+The inference-only policy's main theorem applies it to the products `W_ℓ[i,j] x_t[j]` an IU computes at its other positions, as index triples
 `(i, j, t)`: their projections are the weight entries `(i, j)` they use, the input entries `(t, j)` they use, and the
 output entries `(t, i)` they contribute to (`card_products_le_sqrt`), and summing over the multiplications `ℓ` with
 Cauchy–Schwarz bounds them by `√(p Q Y)` (`sum_card_products_le_sqrt`). The cover theorem's partial-sum bounds apply it
