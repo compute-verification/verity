@@ -941,18 +941,9 @@ class Landing:
         q = self.q
         self._stacked(state, members, tip)
 
-        def after() -> None:
-            with authed(q.auth):
-                caught_up(self.repo, "origin", "check", since=since, log=q.log,
-                          runs={x.commit: attempt for x in members} | {tip: attempt})
-
-        # the landing's after-steps (spec DM, mirror, post_train, posts, labels) wait for the tick's launches (a landing tick
-        # would hold the next launches behind them); the sweep stays here, since it closes what the sync must not read
-        if (pending := getattr(self, "_after", None)) is not None:
-            pending.append(after)
-        else:
-            after()
         with authed(q.auth):
+            caught_up(self.repo, "origin", "check", since=since, log=q.log,
+                      runs={x.commit: attempt for x in members} | {tip: attempt})
             _sweep_after(self.repo, "main", "origin", keep=state.get("stale_closed", {}))
 
     def _jobs(self, commit: str) -> list[dict]:
