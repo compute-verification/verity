@@ -98,7 +98,7 @@ guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratc
 the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
 runs on, which the challenger's coin link reaches through that node's own line of
 `/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the gate key and the
-warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
+network certifier run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
 (`--coins verifier`, the default).
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
@@ -108,7 +108,7 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's network certifier path on that fetch with the serve dir's endpoint
 records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows form of
 the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
@@ -217,7 +217,7 @@ datacenter at δ takes each link at δ / links, and each link pays its own incor
 docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
-SUMMARY --out FILE`, with RUN a fetched warden run and SUMMARY its scan's `summary.json` (its draw). It reads
+SUMMARY --out FILE`, with RUN a fetched network certifier run and SUMMARY its scan's `summary.json` (its draw). It reads
 `leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and sampling blocks) and
 the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
@@ -235,9 +235,9 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - No faulty term with every proof block drawn.
 - The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
-  one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The warden hands each bucket to
+  one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The network certifier hands each bucket to
   a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
-  --paced-ms`), and a warden on the host's clock always paces. Still, the host's state after the server's writes for
+  --paced-ms`), and a network certifier on the host's clock always paces. Still, the host's state after the server's writes for
   the next bucket moves when a bucket reaches the client. The scan's period check (`scan_period.py`) passes the same
   bound as `NetworkCheck.Period`'s `jitter`.
 

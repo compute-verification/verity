@@ -5,11 +5,11 @@ public import Definitions.Core.Assumptions
 public import Proofs.NetworkCertifier.Warden
 
 /-!
-# What the tap's certifier saw is what its warden sent
+# What the tap's certifier saw is what its relay sent
 
 `Definitions.NetworkCertifier.Tap`. Under `trusted-host` the tap's run is its code, so the cells the client receives
-are the warden's code's (`tap_cells`) and, on a schedule the record format holds (`TapRecord.fits`), read back from the
-record the same run writes (`tap_cells_read`): what the certifier saw is what the warden sent, by the one code run. Of the data reaching the tap on a connection, each cell its
+are the relay's code's (`tap_cells`) and, on a schedule the record format holds (`TapRecord.fits`), read back from the
+record the same run writes (`tap_cells_read`): what the certifier saw is what the relay sent, by the one code run. Of the data reaching the tap on a connection, each cell its
 lane sends before its fail cell is in the record, as that cell's data in its bucket (`tap_data_read`). The rest of the
 server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
 does not fix the whole stream the server sent.
@@ -21,7 +21,7 @@ namespace NetTiming
 
 variable {κ Cell Ob Srv Dev : Type}
 
-/-- The cells the trusted tap sends are the warden's code's. -/
+/-- The cells the trusted tap sends are the relay's code's. -/
 theorem tap_cells (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → WardenSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2)) (s : WardenSchedule κ)
@@ -29,7 +29,7 @@ theorem tap_cells (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals Cell
   rw [htrust (s, σ)]
   rfl
 
-/-- **What the certifier saw is what the warden sent**: on a schedule the record format holds, the cells the trusted tap
+/-- **What the certifier saw is what the relay sent**: on a schedule the record format holds, the cells the trusted tap
 sends read back from the record its same run writes. -/
 theorem tap_cells_read (f : TapRecord κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
     (run : Dev → WardenSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)

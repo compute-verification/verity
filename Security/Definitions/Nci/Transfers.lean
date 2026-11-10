@@ -6,7 +6,7 @@ public import Definitions.Nci.Covering
 /-!
 # Transfer gates: what one machine sends another
 
-The whole computation, clients, the auditor's warden and the servers alike, is one circuit `C`, and a division of it
+The whole computation, clients, the auditor's network certifier and the servers alike, is one circuit `C`, and a division of it
 into machines is a `Verity.Partition C n`: machine `m` computes the gates `R_m = P.gates m`, every computed gate on
 exactly one machine, and the input gates of `C` on none. A gate of `R_a` that a gate of `R_b` reads, for machines
 `a ≠ b`, is a **transfer gate** from `a` to `b` (`transfers`), in NCI's words a gate of `out(R_a) ∩ in(R_b)`: `a`

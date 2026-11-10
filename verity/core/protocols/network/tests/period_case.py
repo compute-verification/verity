@@ -21,7 +21,7 @@ drawn network certifier session, its clock certificate signing a sync of Σ_sync
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
-none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
+none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and the scan's
 registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
 of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
 smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'

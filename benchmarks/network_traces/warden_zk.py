@@ -28,7 +28,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   circuit): the member's network certifier port at the network certifier's root (`warden_rows.port`), and its other
   port at the member's committed value of it (`committed_value`: its units' rows under its own salts, committed before
   staging, the root the registration names before any coin, `audit_member`):
-  - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
+  - ``sender``: ``o0`` registered, under the network certifier's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
     network certifier didn't sign (and the prover's registration of its own root, under the network certifier's

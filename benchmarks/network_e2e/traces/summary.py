@@ -87,14 +87,14 @@ def histogram(xs: list[int], edges: list[int]) -> dict:
 
 
 def warden_log(d: Path) -> dict[int, dict]:
-    """The warden's connection log (warden/warden.json) by ordinal, for a trace served through it."""
+    """The network certifier's connection log (warden/warden.json) by ordinal, for a trace served through it."""
     p = d / "warden" / "warden.json"
     return {c["ordinal"]: c for c in json.loads(p.read_text())["connections"]} if p.exists() else {}
 
 
 def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, wardens: dict) -> dict:
     """A request's arrival on each side of the wire: the API server's (`vllm_accept_stamp`), the engine core's (the
-    tracer's `arrivals`) and, through the warden, its connection's (`warden_log`)."""
+    tracer's `arrivals`) and, through the network certifier, its connection's (`warden_log`)."""
     a = accepts.get(rid) or {}
     k, e = added.get(rid, (None, {}))
     out = {"accept_unix": a.get("accept"), "conn_request": a.get("conn_request"), "headers_unix": a.get("headers"),
@@ -194,13 +194,13 @@ def inversions(order: list[str], ref: list[str]) -> int:
 
 
 def warden_at(r: dict, field: str) -> tuple[int, int] | None:
-    """The warden's (bucket, ordinal) for a request at `field` (its record's ``arrived``, ``admitted`` or ``released``)."""
+    """The network certifier's (bucket, ordinal) for a request at `field` (its record's ``arrived``, ``admitted`` or ``released``)."""
     w = r.get("warden") or {}
     return None if w.get(field) is None else (w[field], w["ordinal"])
 
 
 def warden_time(w: dict | None, at: tuple[int, int] | None) -> float | None:
-    """Unix seconds of the warden's tick at `at` (`warden_at`)."""
+    """Unix seconds of the network certifier's tick at `at` (`warden_at`)."""
     return None if w is None or at is None else w["origin_unix"] + at[0] * w["params"]["bucket_ms"] / 1000
 
 
@@ -210,7 +210,7 @@ def own_accept(r: dict) -> float | None:
 
 
 #: each place along the wire that a request's arrival is seen at: (name, the request's place in the order there, its unix
-#: time there given the warden's summary)
+#: time there given the network certifier's summary)
 STAGES = (
     ("client send", lambda r: r.get("send_unix"), lambda r, w: r.get("send_unix")),
     ("warden arrival", lambda r: warden_at(r, "arrived"), lambda r, w: warden_time(w, warden_at(r, "arrived"))),
@@ -229,7 +229,7 @@ def arrival_order(reqs: list[dict], steps: list[dict], w: dict | None) -> dict:
     them in (`engine_order`) and against the place before: per place, the requests seen there, the pairs put the other way
     round (`inversions`), and the seconds from the client's send to the arrival there. A place the trace has no record of
     is left out; the server's accept counts only a connection's first request (a later one came on an accepted
-    connection). A warden's admission and release order by (bucket, ordinal), the order its records certify."""
+    connection). A network certifier's admission and release order by (bucket, ordinal), the order its records certify."""
     engine = engine_order(steps)
     first_t = {}
     for s in steps:
@@ -256,7 +256,7 @@ def arrival_order(reqs: list[dict], steps: list[dict], w: dict | None) -> dict:
 
 
 def warden_summary(d: Path) -> dict | None:
-    """What the warden in front of a trace's server did, from what it published (warden/deployment.json, warden.json)
+    """What the network certifier in front of a trace's server did, from what it published (warden/deployment.json, warden.json)
     and its check (warden/check.json, `warden_serve.py check`); None for a trace without one."""
     w = d / "warden"
     if not (w / "deployment.json").exists():
@@ -281,7 +281,7 @@ def warden_summary(d: Path) -> dict | None:
                                                    "cells_in_their_bucket", "arrival_lag_ms", "cells")}}}
 
 
-#: the warden's tick lateness histogram's bin edges, ms, and its bins
+#: the network certifier's tick lateness histogram's bin edges, ms, and its bins
 LATE_EDGES = (1, 5, 10, 25, 50, 100, 250)
 LATE_LABELS = (f"<{LATE_EDGES[0]}", *(f"{a}-{b}" for a, b in zip(LATE_EDGES, LATE_EDGES[1:])), f">={LATE_EDGES[-1]}")
 #: late ticks `late_ticks` lays out one by one: the latest this many, in tick order
@@ -291,20 +291,20 @@ HOST_PERIOD_S = 0.1
 
 
 def warden_cores(meta: dict) -> list[int]:
-    """The cores a warden trace pinned its warden to (`corpus.cpu_plan`), if it did."""
+    """The cores a network certifier trace pinned its network certifier to (`corpus.cpu_plan`), if it did."""
     cpus = meta.get("cpus")
     return cpus.get("warden", []) if isinstance(cpus, dict) else []
 
 
 def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
-    """The warden's ticks from `warden_probe`'s ticks.json, laid against `host_sample`'s host.jsonl: the lateness
+    """The network certifier's ticks from `warden_probe`'s ticks.json, laid against `host_sample`'s host.jsonl: the lateness
     histogram (ms), what each tick's own work and each publish took, the collections, the host's load over the run, and
     for each tick later than the slack (the `LATE_SHOWN` latest), what ran around it: the tick before's work, the
     publishes and collections between that tick's deadline and this one's start, and the host samples whose period
-    overlaps it (the warden's and the client's CPU seconds and involuntary switches, the busy share of the warden's
+    overlaps it (the network certifier's and the client's CPU seconds and involuntary switches, the busy share of the network certifier's
     `cores`, the host's load and CPU pressure). A spawned publisher's keeps count as publishes, and its pace is
     `publisher` (`publisher_pace`).
-    Seconds count from the warden's origin. None for a trace without the probe."""
+    Seconds count from the network certifier's origin. None for a trace without the probe."""
     if not (w / "ticks.json").exists():
         return None
     t = json.loads((w / "ticks.json").read_text())
@@ -349,11 +349,11 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
 
 
 def publisher_pace(pub: dict, window_s: float, end_s: float) -> dict:
-    """Whether a spawned publisher (`warden_probe`'s `publisher`) kept up: each record's lag, from the warden's handing
+    """Whether a spawned publisher (`warden_probe`'s `publisher`) kept up: each record's lag, from the network certifier's handing
     its close over to the publisher's having kept it (packed, certified, and for the wire's links committed and signed),
     the most behind, how many lagged a whole window or more, the share of each window's span its keeps took (every link's
     keeps of that window, summed), and serve's wait in `close` for the last records, which ended the run that long past
-    `end_s`, its last tick's end. Seconds from the warden's origin."""
+    `end_s`, its last tick's end. Seconds from the network certifier's origin."""
     handed = {(link, w): t for t, link, w in pub["handoff"]}
     lag = {(link, w): round(s + ms / 1000 - handed[link, w], 3) for s, ms, link, w in pub["keep"] if (link, w) in handed}
     worst = max(lag, key=lag.get, default=None)
@@ -379,15 +379,15 @@ def client_loop(w: Path) -> dict | None:
             "max_lag_ms": c.get("max_lag_ms"), "lags": c["lags"][:20], "gc_counts": c.get("gc_counts")}
 
 
-#: a warden trace's views for the replay, each with the warden's order as the certified ingress: view -> its record's field
+#: a network certifier trace's views for the replay, each with the network certifier's order as the certified ingress: view -> its record's field
 VIEWS = {"admitted": "admitted", "released": "released"}
 
 
 def warden_views(root: Path, name: str, w: dict) -> list[str]:
-    """For a warden trace, a directory per `VIEWS` entry, <name>.<view>, that `replay.read_corpus_trace` reads as a
-    trace whose certified ingress is the warden's: each request's ``send_unix`` is the middle of the unix bucket of the
-    warden's tick for it (admission s, or release a: the bucket of the request's last ingress cell), plus 10 µs per
-    request before it in that bucket in ordinal order, so that the order is the warden's (bucket, ordinal). The client's
+    """For a network certifier trace, a directory per `VIEWS` entry, <name>.<view>, that `replay.read_corpus_trace` reads as a
+    trace whose certified ingress is the network certifier's: each request's ``send_unix`` is the middle of the unix bucket of the
+    network certifier's tick for it (admission s, or release a: the bucket of the request's last ingress cell), plus 10 µs per
+    request before it in that bucket in ordinal order, so that the order is the network certifier's (bucket, ordinal). The client's
     own send is in ``client_send_unix``, and ``chunks``, ``first_token_s`` and ``done_s`` are rebased on the new
     ``send_unix``, so that every output keeps its time. ``steps.jsonl``, ``meta.json`` and ``server.log`` are copies of
     the trace's: a hard link stops the tar stream that fetches a run's outputs."""

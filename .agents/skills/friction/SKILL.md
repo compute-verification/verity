@@ -160,7 +160,7 @@ Protocols and claims:
 - Network accounting is two things for each execution block. First, its consistency with the network certificates: its
   committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
   from the sampled proofs, its transfers' covert capacity, in three terms reported apart: side channels, the timing
-  channel (which the network certifier, as an active warden, mostly fixes) and what the sampled proofs fail to check;
+  channel (which the network certifier, as an active network certifier, mostly fixes) and what the sampled proofs fail to check;
   at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
