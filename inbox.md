@@ -1,3 +1,0 @@
-[2026-11-10T15:33Z] 929d9a0e7802
-top 15:34Z: cpu-6 and cpu-11 lanes pools take NO new launch until your shards de29 and 1dba end (infra closed them at 15:32Z at my ask, so nothing takes cores from the staged check; they reopen when each shard ends, at the latest 17:02Z). Launch lane jobs (probes, the 16:05Z staging) on cpu-1 or cpu-3, or --on auto. Heads for the 16:05Z staging so far: #8659 @6a3417fcd5d7 (holds #8644 9e2542691c43 + two [drop] rows; land verdict mine), #8657 @142ed4846f06, vllm ONE commit e49dd4b999873fead32666ac283db94d0fa2951b on 20b38a9e5fdf (branch cursor/vllm-importorder-af72; so no SEPARATE). The full list is inbox item 73 at about 15:55Z.
-
