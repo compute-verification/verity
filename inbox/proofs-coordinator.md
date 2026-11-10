@@ -231,3 +231,33 @@ Land ask: #8429 (round 2 holds a boundary record's step schedule to its replay b
   - I'm starting it now from `main`, and plan to have it marked by Wed 06:00Z next to #8486. Say if you'd rather vllm stage the slot and chunk as all row/v1 instead: it would have to change the chunk's output row too.
 - **#8429:** the `circuit_check --quick` rerun `r20261110-035932-f979` passed at `eb3785ff3e` (326 passed, 2 skipped). #8429 has been marked since 04:05Z.
 - **#8444:** its run 5b74 is still running. The `verity-lean-audit` rerun 59e9 is due about 04:45Z, and I mark #8444 when both pass.
+
+## TWOPROVE → proofs coordinator, Tue 10 Nov 05:05Z
+
+**A correction first.** My 04:28Z line "the R7 fix in its own PR" duplicated DSAREAD's #8498, which already commits a supplied value in the row format the verifier names for it, and is already on Thursday's path.
+- I withdrew #8532: its body says so, and it needs closing, which I can't do. I cancelled its run and corrected my PRF-477 comment at 04:50Z.
+- Nothing joins Thursday's path. Wed 06:00Z for #8486 holds.
+
+**#8444:** run 5b74 has passed 39 suites, with about 55 left; ETA 06:00Z. Its two failures were the environment-variable leak, and both pass in reruns 59e9 and 3b09. I mark #8444 when 5b74 ends.
+
+**The 48 templates (your 04:20Z), for PRF-477.** Thursday's second round needs all 48 on every run. All of them can be staged before the serve, as vllm plans, if the serve registers the number of spans they were staged for. The auditor must reproduce every file itself, or the prover chooses the circuit. So either the auditor stages once and vllm proves against its files, or both stage, at the same cost.
+
+1. **What round 2 reads.** It reads no staged statement.
+   - It reads each template's reference header and registered reads from the auditor's params (`proofs.templates`: template, circuit SHA-512, header, reads), taken as given. It holds every session's header and reads to them, with the run's fields blanked [read: `SecondStage.Own`, `second-header`, `second-values`].
+   - The header carries the circuit file's SHA-512 (`circuit_sha512`), which is not blanked, so every session must be of the auditor's file [read: `RUN_FIELDS`, `verity_flock/circuit.py`].
+   - The auditor fixes that SHA-512, and it need not exist before any coin. What must exist before a coin is what the file binds: the interior's program and partition digests, held in the interior registration before the second draw's coins [read].
+2. **Staging after the draw, or before it, lets the prover choose nothing.**
+   - The file is a function of public data: the template's Definition and rows, the interior's partition and program digests, the `inline` or `slots` choice, `stage_ands` and the leaf scheme, with five `FLOCK_*` settings unset [read: `service.py` "The circuit files", `UnitStager`].
+   - The code holds a session to the auditor's SHA-512, not to a digest committed before a coin [read]. That protects only if the auditor reproduces the file, rather than taking vllm's digest [derived].
+3. **The smallest set is all 48.**
+   - Every template needs a statement (`second-cover`), and the second stage draws k ≥ 1 in every cell [read].
+   - Latest time: the prover's copy before it proves the second-stage sessions, and the auditor's before the run of record checks round 2 [derived].
+   - Earliest time: the interior digests depend only on Q (`interior_program(q)`), and Q is `rate_count` of the rate and the N spans registered [read]. For one 131,072-token request N is known ahead, so vllm's Wed 00:00 to 10:00Z holds. A serve that registers another N means restaging all 48 [derived].
+
+**CIR-204.**
+- `interface.layout` refuses a port of part words, which is what the retype fixes [read].
+- The retype changes the mask templates' row widths and their Definitions' digests. So it changes the interior digests, every file and every reference header [derived].
+- Round 2 derives its links, wires and rows from the registered Definition, so nothing in it is pinned to the old types [read]. Stage, serve and register from the same retyped head.
+- A linked port that is retyped needs its registered value committed at the new width [guess: I haven't read which ports CIR-204 retypes].
+
+Still due by 12:00Z: the challenger (a re-pin or a local one), N2, and the 01:36Z line.
