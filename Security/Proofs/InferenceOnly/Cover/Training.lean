@@ -12,7 +12,7 @@ reads at most `α σ_u` bits of novel information (`freshInput_pull`). Its block
 `k_u ≤ α σ_u` bits outside the free bits (`translation`) and has at most `s` bits (`card_block_le`), so it finishes at
 most `(k_u² + b k_u) / b` counted products (`intensity`). Every counted product's output bit reads something,
 so its gate is a computed gate of `c`, in some piece, whose block computes it (`mem_computed_block_of_pred`). Summed over
-the IUs (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
+the inference blocks (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
 bound of the same form, which the whole-word variant (`Aligned`) reuses.
 -/
 

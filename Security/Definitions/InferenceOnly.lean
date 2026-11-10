@@ -5,24 +5,24 @@ import Mathlib.Analysis.Real.Sqrt
 # Novel communication intensity: the policy
 
 The developer declares `(D, θ)` (`Verity.Declaration`). The input gates in `θ` hold baseline information, committed
-beforehand; every other value is novel information. A division of `D` into isolation units (IUs) is a
-`Verity.Partition` of its computed gates. Input gates are in no IU, so an IU that uses an input reads it. The gates `R`
-of an IU read `width(in(R) \ θ)` bits of novel information (`freshInput`): baseline information is free, and so is
+beforehand; every other value is novel information. A division of `D` into inference blocks is a
+`Verity.Partition` of its computed gates. Input gates are in no inference block, so an inference block that uses an input reads it. The gates `R`
+of an inference block read `width(in(R) \ θ)` bits of novel information (`freshInput`): baseline information is free, and so is
 anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = freshInput R / size R`, in bits per gate.
 
-`Complies Γ α` is the inference-only policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`.
+`Complies Γ α` is the inference-only policy: `D` divides into inference blocks of at most `Γ` gates, each with NCI at most `α`.
 `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most `n` proof blocks of a
 `(c, k)`-partition (`Verity.Partition.IsCK`). A policy is a
 condition on declarations that the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its
 own. `slowdown policy t` is the factor by which every declaration that complies with `policy` and implements `t` is
-larger than `t`. `Reads Γ c` is the least total novel information that the IUs of a division of `c` into IUs of at most
+larger than `t`. `Reads Γ c` is the least total novel information that the inference blocks of a division of `c` into inference blocks of at most
 `Γ` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
 gates where a circuit computes the products, the complete output entries, and the links between consecutive
 multiplications. For a set `R` of gates it gives the draft's vocabulary: the weight entries `R` uses, the input entries
-it uses, the entries whole in `R`, `R`'s full positions, and in a division into IUs the entries that are split and the
-number of IUs that hold products of each. `F` is the slowdown factor the draft proves for such chains.
+it uses, the entries whole in `R`, `R`'s full positions, and in a division into inference blocks the entries that are split and the
+number of inference blocks that hold products of each. `F` is the slowdown factor the draft proves for such chains.
 -/
 
 namespace InferenceOnly
@@ -36,8 +36,8 @@ def freshInput (d : Declaration) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.
 /-- A policy: a condition on declarations. -/
 abbrev Policy : Type := Declaration → Prop
 
-/-- **The inference-only policy** at maximum IU size `Γ` and NCI limit `α`: `d`'s circuit divides into IUs of at most `Γ` gates,
-each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an IU with no gates
+/-- **The inference-only policy** at maximum inference block size `Γ` and NCI limit `α`: `d`'s circuit divides into inference blocks of at most `Γ` gates,
+each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an inference block with no gates
 needs no division). -/
 def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
   ∃ (n : ℕ) (P : Partition d.D n),
@@ -48,7 +48,7 @@ def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
 def CompliesAtMost (c k n : ℕ) : Policy := fun d =>
   ∃ B ≤ n, ∃ P : Partition d.D B, P.IsCK d c k
 
-/-- `Reads_Γ(c)`: the least total novel information that the IUs of a division of `c` into IUs of at most `Γ` gates
+/-- `Reads_Γ(c)`: the least total novel information that the inference blocks of a division of `c` into inference blocks of at most `Γ` gates
 read. -/
 noncomputable def Reads (Γ : ℕ) (c : Declaration) : ℕ :=
   sInf {r | ∃ (n : ℕ) (P : Partition c.D n), (∀ u, c.D.size (P.gates u) ≤ Γ) ∧ r = ∑ u, freshInput c (P.gates u)}
@@ -112,11 +112,11 @@ def inputsUsed (R : Finset (Fin D.N)) : Finset ((ℓ : Fin c.L) × Fin c.N × Fi
   univ.filter fun x => ∃ i, c.prod x.1 x.2.1 i x.2.2 ∈ R
 
 /-- The entry `y_t^{(ℓ)}[i]` is **whole** in `R` when all of its products lie in `R`. (The draft, "Throttling updated
-matrix multiplications", calls an entry whole if all of its products lie in one IU, and split otherwise.) -/
+matrix multiplications", calls an entry whole if all of its products lie in one inference block, and split otherwise.) -/
 def Whole (R : Finset (Fin D.N)) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ∀ j, c.prod ℓ t i j ∈ R
 
-/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into IUs: no IU holds all of its products. -/
+/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into inference blocks: no inference block holds all of its products. -/
 def Split {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ¬ ∃ u, c.Whole (P.gates u) ℓ t i
 
@@ -131,7 +131,7 @@ def LinkedWhole (R : Finset (Fin D.N)) : (ℓ : Fin c.L) → Fin c.N → Fin (c.
   | ⟨ℓ + 1, h⟩, t, j => c.Whole R ⟨ℓ, by omega⟩ t (c.π ⟨ℓ, by omega⟩ h j)
 
 open Classical in
-/-- The number of IUs of a division `P` that hold products of the entry `y_t^{(ℓ)}[i]`. -/
+/-- The number of inference blocks of a division `P` that hold products of the entry `y_t^{(ℓ)}[i]`. -/
 noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : ℕ :=
   (univ.filter fun u => ∃ j, c.prod ℓ t i j ∈ P.gates u).card
 
@@ -141,8 +141,8 @@ end Chain
 multiplications"), at NCI limit `α`, read cap `K`, widths `b_w` of a weight entry and `b_a` of an activation entry, and
 smallest inner dimension `d`:
 `F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / K, √2 (1 + √μ) √(1 − μ) b_a √(b_w / K)}`,
-the maximum written as a supremum. The first term covers IUs that complete entries themselves, the second IUs that split
-entries with other IUs. -/
+the maximum written as a supremum. The first term covers inference blocks that complete entries themselves, the second inference blocks that split
+entries with other inference blocks. -/
 noncomputable def F (α K b_w b_a d : ℝ) : ℝ :=
   1 / (2 * α) * ⨆ μ : Set.Ioo (0 : ℝ) 1,
     min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / K) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / K))

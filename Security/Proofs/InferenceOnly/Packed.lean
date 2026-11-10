@@ -95,7 +95,7 @@ noncomputable def outputsOtherPacked (R : Finset (Fin D.N)) : Finset ((ℓ : Fin
   univ.filter fun x => ¬ c.Full R x.2.1 ∧ ∃ j, c.prod x.1 x.2.1 x.2.2 j ∈ R
 
 open Classical in
-/-- **The products of an IU**: `R` holds the gates of at most `p τ + √(p Q Y)` products. -/
+/-- **The products of an inference block**: `R` holds the gates of at most `p τ + √(p Q Y)` products. -/
 theorem card_products_le_packed (R : Finset (Fin D.N)) :
     ((univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
         c.prod g.1 g.2.1 g.2.2.1 g.2.2.2 ∈ R).card : ℝ) ≤
@@ -148,7 +148,7 @@ theorem card_products_le_packed (R : Finset (Fin D.N)) :
   exact h
 
 open Classical in
-/-- **The products of an IU, by columns**: at positions that are not full for `R`, each input entry `R` uses is in at
+/-- **The products of an inference block, by columns**: at positions that are not full for `R`, each input entry `R` uses is in at
 most `E` products, one for each row of its multiplication, whichever gates hold them. -/
 theorem card_products_le_columns_packed (R : Finset (Fin D.N)) {E : ℕ} (hE : ∀ ℓ, c.e ℓ ≤ E) :
     (univ.filter fun g : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ) × Fin (c.d ℓ) =>
@@ -177,7 +177,7 @@ theorem card_products_le_columns_packed (R : Finset (Fin D.N)) {E : ℕ} (hE : �
 end Lemmas
 
 open Classical in
-/-- **What an IU reads**, on a packed chain: `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits under
+/-- **What an inference block reads**, on a packed chain: `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits under
 `Assumptions.PackedActivationsIncompressible`. -/
 theorem iu_reads_packed {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ)
     (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (h : Assumptions.PackedActivationsIncompressible D c Γ K b_w b_a)

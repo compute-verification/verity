@@ -3,7 +3,7 @@ import Proofs.InferenceOnly.Chain
 /-!
 # Incompressibility in support form gives the draft's
 
-Every value an IU `R` holds is a function of the values on `in(R)` (`eval_agree_of_into`). Over the runs with the
+Every value an inference block `R` holds is a function of the values on `in(R)` (`eval_agree_of_into`). Over the runs with the
 baseline at its committed values, the values on `in(R) ∩ θ` are fixed, so the gates of `R` take at most
 `2^freshInput(R)` distinct values (`support_le`). Adding one gate to a set adds at most one weight entry and one input
 entry to its charge (`charge_insert_le`), so a set of `R`'s gates charged more than `R` reads has a subset charged
@@ -48,7 +48,7 @@ theorem card_image_le_of_factor {α β γ : Type} [DecidableEq β] [DecidableEq 
         obtain ⟨b, hb, rfl⟩ := mem_image.mp (mem_coe.mp hy)
         exact Prod.ext hxy (h a ha b hb hxy)
 
-/-- **The counting bound**: the gates of an IU's subset `T` take at most `2^freshInput(R)` distinct values over the runs
+/-- **The counting bound**: the gates of an inference block's subset `T` take at most `2^freshInput(R)` distinct values over the runs
 with the baseline at `θv`. -/
 theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
     (hT : T ⊆ R) : support d θv T ≤ 2 ^ freshInput d R := by
@@ -183,7 +183,7 @@ theorem rates_le_width_of_support {D : Declaration} {θv : D.D.Transcript} {c : 
   exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (hs.trans hu)
 
 /-- **Support form gives the draft's incompressibility**: `ActivationsSupport` at cap `K + b_w + b_a`, for any committed
-values of the baseline, gives `ActivationsIncompressible` at cap `K`, for IUs of any size. -/
+values of the baseline, gives `ActivationsIncompressible` at cap `K`, for inference blocks of any size. -/
 theorem activationsIncompressible_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
     {K b_w b_a : ℝ} (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (h : Assumptions.ActivationsSupport D θv c (K + b_w + b_a) b_w b_a) :
     Assumptions.ActivationsIncompressible D c Γ K b_w b_a := by

@@ -2,13 +2,13 @@
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
-`InferenceOnly.Complies Γ α` (`Security/Definitions/InferenceOnly.lean`): the computed gates of `D` divide into isolation units of at most `Γ`
+`InferenceOnly.Complies Γ α` (`Security/Definitions/InferenceOnly.lean`): the computed gates of `D` divide into inference blocks of at most `Γ`
 gates, each with `freshInput R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R` with a wire
 into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `InferenceOnlyCheck.Check`'s
 docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.ml.circuits`),
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
-one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
+one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an inference block index.
 A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so no registry is needed.
 
     check_desc(instance) -> the same, for `InferenceOnlyCheck.Desc`'s instance: θ and the owners per root node

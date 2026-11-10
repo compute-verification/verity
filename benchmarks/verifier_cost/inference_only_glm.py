@@ -12,18 +12,18 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
 `nci-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights
-              (`annotations["theta"]`), then θ empty, one IU (the Call)
+              (`annotations["theta"]`), then θ empty, one inference block (the Call)
   rank        rank 0's Program with its weights' input nodes bound at registration (`RegisteredInput<w>_v1`) and
-              nothing else changed: θ the weights, one IU (the request, its peers' partials read as inputs)
-  slice       Definitions of rank 0 as Programs (`slice`), their weight parameters registered, one IU per Call and one
+              nothing else changed: θ the weights, one inference block (the request, its peers' partials read as inputs)
+  slice       Definitions of rank 0 as Programs (`slice`), their weight parameters registered, one inference block per Call and one
               in all: `--policy`, the reference (`inference_only_reference.check_desc`) and `--policy --unrolled` on the instance
               expanded gate by gate must agree
   node        the eight ranks' requests joined into one Definition called once by a root of input nodes, each collective
               reading the other ranks' partials where it read its `peers_*` inputs (the TP exchange inside the node),
-              the weights registered and θ: one IU, the node's session, at (Γ, α) and at its neighbours (α/2, 2α, Γ/2, 2Γ)
+              the weights registered and θ: one inference block, the node's session, at (Γ, α) and at its neighbours (α/2, 2α, Γ/2, 2Γ)
   registered-node
               the node Program `verity-vllm predict node` registered (`--node`), whose SHA-512 must be
-              `--node-digest`. One IU, every root node that isn't an input (the whole node's session), θ its
+              `--node-digest`. One inference block, every root node that isn't an input (the whole node's session), θ its
               `RegisteredInput` root nodes (the descriptor's `annotations["theta"]` too, where it has them). `--policy`
               at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
               registration, the node is held to it before any check (it is the program of the record `--node-trusted`
@@ -37,7 +37,7 @@ request's body, whose reads `InferenceOnlyCheck.Desc` holds as segments of gates
 (`Desc.coalesce`); `inference_only_cost.py glm` counts and times them (`summarize_steps`).
 
 DIR/results.json has a row per check: the Program (SHA-512 digest, bytes, root nodes, gates), the division, the verdict
-summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's IUs.
+summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's inference blocks.
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ from run import EXE, _reference, timed
 
 SCHEMA = "verity/nci-glm/v1"
 DESCRIPTOR = "verity-ir/descriptor/v1"
-#: the demo's policy (README.md): Γ gates per IU, α novel bits per gate
+#: the demo's policy (README.md): Γ gates per inference block, α novel bits per gate
 GAMMA = 2 ** 44
 ALPHA = (1, 2 ** 25)
 #: the stricter point C: α = 2^-28, at Γ and at Γ = 2^52
@@ -81,7 +81,7 @@ NODE_POINTS = {
 INPUT = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
 #: rank 0's Definitions checked gate by gate: the router, the fused all-reduce and norm, and an FP8 linear layer
 SLICES = ("MoeRouterSigmoidBias_v1{", "AllReduceRmsNormMnnvl_v1{", "DeepGemmFp8Linear_v1{K=6144,N=2624}")
-#: a slice's divisions: per root node (its body node `k`, or None for an input node), its IU label
+#: a slice's divisions: per root node (its body node `k`, or None for an input node), its inference block label
 SLICE_DIVISIONS = {"session": lambda k: 0, "call": lambda k: k}
 
 
@@ -289,7 +289,7 @@ def structure(body: dict) -> tuple[list[int], list[int]]:
 
 
 def call_owners(desc: dict) -> list:
-    """A Program whose root is input nodes and Calls: "input" for each input node, one IU per Call."""
+    """A Program whose root is input nodes and Calls: "input" for each input node, one inference block per Call."""
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
     ids: dict[int, int] = {}
     return ["input" if INPUT.match(desc["callees"][nd["fn"]]) else ids.setdefault(k, len(ids)) for k, nd in enumerate(nodes)]
@@ -419,7 +419,7 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> dict
 
 
 class Runs:
-    """Instances written to scratch and checked by `nci-check` on a pool; rows and IUs collected into `out`."""
+    """Instances written to scratch and checked by `nci-check` on a pool; rows and inference blocks collected into `out`."""
 
     def __init__(self, args) -> None:
         self.args, self.out = args, Path(args.out)
@@ -518,7 +518,7 @@ def points(gamma: int, alpha: tuple[int, int], neighbours: bool) -> list[tuple[s
 
 
 def check_program(runs: Runs, scratch: Path, name: str, desc: dict, theta: list, info: dict, neighbours: bool) -> None:
-    """A Program whose root is input nodes and one Call, the Call one IU, at the policy and, when `neighbours`, at its
+    """A Program whose root is input nodes and one Call, the Call one inference block, at the policy and, when `neighbours`, at its
     neighbours."""
     text, size = described(desc)
     ptext = json.dumps(text)
@@ -533,7 +533,7 @@ def check_program(runs: Runs, scratch: Path, name: str, desc: dict, theta: list,
 
 def registered(runs: Runs, scratch: Path, r: int, desc: dict, ann: dict, pin: str, with_theta: bool) -> dict:
     """Rank r's Program as registered: its digest against the pin, θ its weights (refused unless they are registered
-    inputs), then θ empty with the request one IU."""
+    inputs), then θ empty with the request one inference block."""
     text, size = described(desc)
     if size["sha512"] != pin:
         raise ValueError(f"rank {r}: digest {size['sha512'][:16]} is not the pinned {pin[:16]}")

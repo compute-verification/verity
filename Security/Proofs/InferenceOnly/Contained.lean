@@ -8,15 +8,15 @@ import Proofs.InferenceOnly.Support
 
 Support form gives the reference circuit's incompressibility in reads (`activationsIncompressible_of_support`,
 `partialSumsIncompressible_of_support`). Then pull a compliant division of the containing declaration back to `c`
-(`pull`): each piece has no more gates than its IU and reads no more novel information (`freshInput_pull`), so the
-pieces form a division of `c` into IUs of at most `Γ` gates reading at most `αΓ` each. The reads form of the law
+(`pull`): each piece has no more gates than its inference block and reads no more novel information (`freshInput_pull`), so the
+pieces form a division of `c` into inference blocks of at most `Γ` gates reading at most `αΓ` each. The reads form of the law
 (`UpdatedMatMulReads`), applied to `c` with that division, bounds the pieces' total reads from below by `G · f(αΓ)`;
-the IUs read at least as much, and at most `α size(d)` in total.
+the inference blocks read at least as much, and at most `α size(d)` in total.
 
 Through a partial containment (`ContainedMatMulOn`), the pieces divide only the gates `S` that `d` computes. Adding each
 dark gate as a part of its own (`withDark`) divides all of `c`, and the partial-sum count runs over that division: the
 dark parts absorb partial sums, `Z` in total, which their values must hold, so `b_a Z ≤ width(dark)`. The reads count
-runs over the pieces alone, each within its IU's reads. A second per-piece bound counts products by columns, at most
+runs over the pieces alone, each within its inference block's reads. A second per-piece bound counts products by columns, at most
 `e_max` per input entry used at a position that is not full (`card_products_le_columns`, `max_mul_sum_le`).
 
 The count is one lemma over what the dark parts absorb, a budget `B` (`matMulOn_of_counts`): the support form bounds
@@ -28,7 +28,7 @@ namespace InferenceOnly.SecurityProofs
 
 open Verity Finset
 
-/-- **Support form gives partial-sum incompressibility**: an IU's gates take at most `2^freshInput` values. -/
+/-- **Support form gives partial-sum incompressibility**: an inference block's gates take at most `2^freshInput` values. -/
 theorem partialSumsIncompressible_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
     {K b_w b_a : ℝ} (h : Assumptions.PartialSumsSupport D θv c Γ K b_w b_a) :
     Assumptions.PartialSumsIncompressible D c Γ K b_w b_a := by
@@ -181,7 +181,7 @@ theorem card_products_le_dark (M : PartialContainment c d) (ch : Chain c.D) :
 
 end Dark
 
-/-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its IU and reads
+/-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its inference block and reads
 no more novel information. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
@@ -207,7 +207,7 @@ theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialCo
 
 open Classical in
 /-- **The partial sums, counted over the pieces**: partial sums charged `s` over the pieces with the dark gates, each
-piece's charge within its IU's reads, leave the split entries' contributions within the IUs' reads and the dark gates'
+piece's charge within its inference block's reads, leave the split entries' contributions within the inference blocks' reads and the dark gates'
 charges. -/
 theorem partialSums_count {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     {ch : Chain c.D} {b_w b_a : ℝ} (ha : 0 ≤ b_a) {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
@@ -242,8 +242,8 @@ theorem partialSums_count {c d : Declaration} {M : PartialContainment c d} {n : 
 
 open Classical in
 /-- **The partial-sum law over the pieces, with a budget for the dark gates**: if the pieces' weight reads and halved
-split-entry contributions are within the IUs' reads and `B`, then
-`max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its IU's reads by
+split-entry contributions are within the inference blocks' reads and `B`, then
+`max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its inference block's reads by
 `ActivationsIncompressible` on the reference circuit. -/
 theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declaration} {ch : Chain c.D} {dd emax : ℕ}
     {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K) (hw : 0 < b_w)
@@ -296,7 +296,7 @@ open Classical in
 theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
   intro Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX hA hPS
   obtain ⟨s, hsum, hs⟩ := hPS _ (withDark M P) (withDark_caps hα hαK hΓ hP hB hX)
-  -- the charge of each piece, within its IU's reads, and of each dark gate, within its width
+  -- the charge of each piece, within its inference block's reads, and of each dark gate, within its width
   have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
       b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ freshInput d (P.gates u) := fun u => by
     have h := le_freshInput_of_support ((withDark M P).gates_subset_computed _)

@@ -33,11 +33,11 @@ widths, input gates and reads, which is all `size` and `InferenceOnly.freshInput
 
 * `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
   topological order and its input gates reading nothing), `theta` names a baseline of it (`Verity.Declaration`), and the
-  owners are a partition of its computed gates into IUs `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
+  owners are a partition of its computed gates into inference blocks `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
 * `Reports`: for every declaration `d` laid out by the Program with the baseline `theta` names, and the partition `U`
-  the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per IU `u` its `size` and
-  `InferenceOnly.freshInput` exactly, its `complies` is `true` exactly when every IU has at most `Γ` gates and NCI at most
-  `α = num / den` (`Meets`), and its `failure` is the first IU that doesn't, with the rule it breaks first.
+  the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per inference block `u` its `size` and
+  `InferenceOnly.freshInput` exactly, its `complies` is `true` exactly when every inference block has at most `Γ` gates and NCI at most
+  `α = num / den` (`Meets`), and its `failure` is the first inference block that doesn't, with the rule it breaks first.
 * `Witnesses`: a verdict whose `complies` is `true` means the declaration complies, `InferenceOnly.Complies Γ (num / den) d`,
   with the owners as the witness.
 
@@ -114,18 +114,18 @@ def ThetaFault (P : Prog) (theta : Array Json) (t : ℕ) (k : String) : Prop :=
     (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧
       ∃ t' < t, natOf? theta[t']! = some g)
 
-/-- Gate `g`'s owner is `"input"` and `g` an input gate, or an IU and `g` a computed gate. -/
+/-- Gate `g`'s owner is `"input"` and `g` an input gate, or an inference block and `g` a computed gate. -/
 def OwnerOk (P : Prog) (owner : Array Json) (g : ℕ) : Prop :=
   (owner[g]! = .str "input" ∧ IsInput P g) ∨ ((∃ u, natOf? owner[g]! = some u) ∧ ¬ IsInput P g)
 
 /-- Gate `g`'s owner's refusal `k`: `owner-entry` where it is neither `"input"` nor a natural, `input-in-iu` where it
-puts an input gate in an IU, `gate-in-no-iu` where it puts a computed gate in none. -/
+puts an input gate in an inference block, `gate-in-no-iu` where it puts a computed gate in none. -/
 def OwnerFault (P : Prog) (owner : Array Json) (g : ℕ) (k : String) : Prop :=
   (k = "owner-entry" ∧ owner[g]! ≠ .str "input" ∧ natOf? owner[g]! = none) ∨
     (k = "input-in-iu" ∧ (∃ u, natOf? owner[g]! = some u) ∧ IsInput P g) ∨
     (k = "gate-in-no-iu" ∧ owner[g]! = .str "input" ∧ ¬ IsInput P g)
 
-/-- An IU below one that an owner names holds no gate. -/
+/-- An inference block below one that an owner names holds no gate. -/
 def EmptyIU (owner : Array Json) : Prop :=
   ∃ g u, g < owner.size ∧ natOf? owner[g]! = some u ∧ ∃ u' < u, ∀ g' < owner.size, natOf? owner[g']! ≠ some u'
 
@@ -137,7 +137,7 @@ def FirstFault (ok : ℕ → Prop) (fault : ℕ → String → Prop) (n : ℕ) (
 
 /-- `j` is refused with `k`: the first condition it fails, in the order the check reads them, is `k`'s. First the
 fields (`instance`), `Γ` and `α` (`params`) and the program's decoding (`program`), then gate by gate (`GateFault`), then
-θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the IUs
+θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the inference blocks
 (`empty-iu`). -/
 def Malformed (j : Json) (k : String) : Prop :=
   (¬ Shaped j ∧ k = "instance") ∨
@@ -155,7 +155,7 @@ def Malformed (j : Json) (k : String) : Prop :=
              (∀ g < gates P, OwnerOk P i.owner g) ∧ EmptyIU i.owner ∧ k = "empty-iu")))))
 
 /-- `j` is well-formed: its fields parse, its program decodes, and every gate, every entry of θ and every owner is as
-stated, with no IU empty. -/
+stated, with no inference block empty. -/
 def WellFormed (j : Json) : Prop :=
   ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ (∀ g < gates P, GateOk P g) ∧
     (∀ t < i.theta.size, ThetaOk P i.theta t) ∧ i.owner.size = gates P ∧ (∀ g < gates P, OwnerOk P i.owner g) ∧
@@ -216,8 +216,8 @@ def Decodes : Prop :=
 
 /-- The verdict `out` on `j` is the definition's: for every declaration `d` the Program lays out with the baseline
 `theta` names, and the partition `U` the owners are, at `Γ = gamma` and `α = num / den`: `gates` is `d`'s number of
-gates; `ius` lists per IU its `size` and `freshInput`; `complies` is `true` exactly when every IU meets both bounds; and
-`failure` is `null` when every IU does, and otherwise the first IU `u` that doesn't, with `size` when it has more than `Γ`
+gates; `ius` lists per inference block its `size` and `freshInput`; `complies` is `true` exactly when every inference block meets both bounds; and
+`failure` is `null` when every inference block does, and otherwise the first inference block `u` that doesn't, with `size` when it has more than `Γ`
 gates and else `inference_only`. -/
 def Reported (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.Declaration) (n : ℕ) (U : Verity.Partition d.D n),

@@ -4,10 +4,10 @@ import Mathlib.Data.FinEnum
 /-!
 # The inference-only policy's incompressibility in support form: the vocabulary
 
-The draft's incompressibility charges an IU `b_w` bits for each weight entry and `b_a` for each input entry of which it
+The draft's incompressibility charges an inference block `b_w` bits for each weight entry and `b_a` for each input entry of which it
 holds a product. Stated over wiring alone, that is false: a declaration can hold a weight in a constant gate, or rebuild
-it from a narrower wire, and its product gates then read less than they are charged. What an IU must read is what its
-values determine. Every value an IU `R` holds is a function of the values on `in(R)`, so over the assignments that keep
+it from a narrower wire, and its product gates then read less than they are charged. What an inference block must read is what its
+values determine. Every value an inference block `R` holds is a function of the values on `in(R)`, so over the assignments that keep
 the baseline at its committed values, the values of any gates of `R` take at most `2^freshInput(R)` distinct values,
 whatever `R`'s gates compute. The support form charges a set of gates by how many distinct values it takes over those
 assignments, which wiring cannot change.
@@ -45,7 +45,7 @@ namespace Chain
 variable {D : Circuit} (c : Chain D)
 
 open Classical in
-/-- **The draft's charge for the products in `T`**, relative to an IU `R`: `b_w` for each weight entry and `b_a` for
+/-- **The draft's charge for the products in `T`**, relative to an inference block `R`: `b_w` for each weight entry and `b_a` for
 each input entry of which `T` holds a product, other than an input entry linked to an entry whole in `R`, which `R` can
 compute from its own products. At `T = R` it is the left side of the draft's incompressibility. -/
 noncomputable def charge (R : Finset (Fin D.N)) (b_w b_a : ℝ) (T : Finset (Fin D.N)) : ℝ :=

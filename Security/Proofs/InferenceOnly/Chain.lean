@@ -2,9 +2,9 @@ import Definitions.InferenceOnly.Guarantees
 import Proofs.Core
 
 /-!
-# Lemmas 1 and 2: what an IU reads at full and other positions
+# Lemmas 1 and 2: what an inference block reads at full and other positions
 
-The draft's proof of its theorem ("Throttling updated matrix multiplications") counts, for each IU `R`, the weight
+The draft's proof of its theorem ("Throttling updated matrix multiplications") counts, for each inference block `R`, the weight
 entries `R` uses, its full positions and the input entries it uses at its other positions. Lemma 1 bounds the products
 `R` computes at its full positions, and finds at each of them a whole input vector that `R` reads (`full_positions`).
 Lemma 2 says that at its other positions every input entry `R` uses is read, and every output entry `R` contributes to
@@ -89,7 +89,7 @@ theorem full_positions (R : Finset (Fin D.N)) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d
 
 /-- **Lemma 2 (other positions)** (the draft, "Throttling updated matrix multiplications"): "At positions that are not
 full positions of `R`, every entry of `x^{(ℓ-1)}` that `R` uses costs `R` a read of at least `b_a` bits, and every entry
-of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an IU of a division `P`; the read is the one
+of `y^{(ℓ)}` that `R` contributes products to is split." `R` is an inference block of a division `P`; the read is the one
 `Assumptions.ActivationsIncompressible` charges, since such an entry is not linked to an entry whole in `R`. -/
 theorem other_positions {n : ℕ} (P : Partition D n) (u : Fin n) :
     (∀ ℓ t j, ⟨ℓ, t, j⟩ ∈ c.inputsUsed (P.gates u) → ¬ c.Full (P.gates u) t →
@@ -105,8 +105,8 @@ theorem other_positions {n : ℕ} (P : Partition D n) (u : Fin n) :
 end Lemmas
 
 open Classical in
-/-- **What an IU reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
-and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an IU `R` of at most `Γ` computed
+/-- **What an inference block reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
+and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an inference block `R` of at most `Γ` computed
 gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsIncompressible`. `p_R` is the
 number of weight entries `R` uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at
 positions that are not full, and `d` the smallest inner dimension. -/

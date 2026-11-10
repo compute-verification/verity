@@ -11,13 +11,13 @@ each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
   the canonical layout is located and reads only earlier gates (`GateOk`), so `InferenceOnlyCheck.circuitOf` lays it out.
-* `FreshExact`: on such a Program, for a division whose IUs are unions of root nodes, the novel reads `Desc.freshWidth`
-  counts per IU, from what `Desc.analyze` resolves each root node to read, are `InferenceOnlyCheck.ius`'s, gate by gate.
+* `FreshExact`: on such a Program, for a division whose inference blocks are unions of root nodes, the novel reads `Desc.freshWidth`
+  counts per inference block, from what `Desc.analyze` resolves each root node to read, are `InferenceOnlyCheck.ius`'s, gate by gate.
 
 The rest is proved: `Desc.evaluate`'s refusals and folds (`descEvaluate_ok`, `nodeThetaFold_ok`, `nodeOwnerFold_ok`),
 the root's layout (`rootLaidOut_spec`, `node_unique`, `node_exists`), that a root node's gates are input gates exactly
 when it is an input node (`gate_input`, through `Prog.gate`'s walk and `inputsAtRoot`), that every verdict has an
-expansion, and that on each the unrolled check accepts θ and the owners, counts the same IUs, and the same sizes
+expansion, and that on each the unrolled check accepts θ and the owners, counts the same inference blocks, and the same sizes
 (`sizes_eq_tally`).
 -/
 
@@ -175,7 +175,7 @@ theorem descOwnerStep_ok (inp held : Bool) (e : Json) (o : Option ℕ) (h : Desc
       simp [ht, hn, he, pure, Except.pure, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h ⊢ <;>
       exact h.symm
 
-/-- What the owners' fold by node holds: per root node with gates, its IU or `none` for `"input"`, as its kind demands,
+/-- What the owners' fold by node holds: per root node with gates, its inference block or `none` for `"input"`, as its kind demands,
 and `none` for a node without gates. -/
 theorem nodeOwnerFold_ok (P : Prog) (owner : Array Json) (own : Array (Option ℕ)) (h : nodeOwnerFold P owner = .ok own) :
     own.size = nodeCount P ∧ ∀ k < nodeCount P,
@@ -411,7 +411,7 @@ theorem mem_nodeGates (P : Prog) (k g : ℕ) :
 
 /-- **The case `Desc.isInputNode` once got wrong.** A root node that calls a composite holds no input gate, whatever the
 composite's key. `Input16_v1` is a well-formed key of a static-free composite, which the decoder admits, and
-`Desc.isInputNode` read an input node off the key alone, so it admitted such a node's computed gates to θ and to no IU,
+`Desc.isInputNode` read an input node off the key alone, so it admitted such a node's computed gates to θ and to no inference block,
 where `evaluate` refuses them (`theta-not-input`, `gate-in-no-iu`). The difftest's last six vectors are such programs. -/
 theorem call_gates_computed (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputsAtRoot P = true) {k : ℕ}
     (hk : k < nodeCount P) (hprim : (P.defs[((rootBody P).nodes[k]!).fn]!).prim = false) {g : ℕ}
@@ -539,9 +539,9 @@ def GatesLocated : Prop :=
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, GateOk P g
 
-/-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
+/-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose inference blocks are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
-IU), `Desc.freshWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `InferenceOnlyCheck.ius`'s novel
+inference block), `Desc.freshWidth` of what `Desc.intoOf` collects per inference block from `Desc.analyze`'s reads is `InferenceOnlyCheck.ius`'s novel
 reads. -/
 def FreshExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))

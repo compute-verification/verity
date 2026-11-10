@@ -58,7 +58,7 @@ def ContainedTraining : Prop :=
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) width(dark)` for each `μ ∈ [0, 1]`,
 where `min c₁ c₂` is `F`'s minimum at read cap `K` and smallest inner dimension `dd`, and `Λ = max e_max (K / (4 b_w dd))`
 with `e_max` the largest output dimension. The assumptions are on `c` at read cap `K ≥ αΓ`, beside the θ premise
-`ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an IU of its own: the dark gates absorb
+`ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an inference block of its own: the dark gates absorb
 at most their width of the partial sums. -/
 def ContainedMatMulOn : Prop :=
   ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
