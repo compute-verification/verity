@@ -1,6 +1,7 @@
 """`tools/verity/check/verdicts.py`: the passes one machine stored, carried to another as a pack; and `check.py`'s side of it."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import http.client
 import importlib.util
@@ -11,6 +12,7 @@ import sys
 import tarfile
 import types
 import urllib.error
+import zlib
 from pathlib import Path
 
 import pytest
@@ -240,6 +242,36 @@ def test_a_pack_holding_anything_but_verdict_entries_is_refused_whole(tmp_path, 
     assert V.main(["import", str(pack)]) == 1
 
 
+def _unreadable(tmp_path: Path) -> dict[str, Path]:
+    """{the error reading it raises: a pack}: a file that's no pack, a pack cut short, and a gzipped and an xz pack whose stream
+    turns corrupt past their first member, where `tarfile` leaves zlib's and lzma's own errors as they are."""
+    items = [(f"tests/k{i}.json", b"{}" * (1 << 16)) for i in range(8)]
+    V._write(gz := tmp_path / "whole.tar.gz", items)
+    V._write(xz := tmp_path / "whole.tar.xz", items, xz=True)
+    tar, z = gzip.decompress(gz.read_bytes()), zlib.compressobj(wbits=-15)
+    # deflate data that holds 7/8 of the tar, then a block of the reserved type, which zlib refuses wherever it reads it
+    cut = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff" + z.compress(tar[: len(tar) * 7 // 8]) + z.flush(zlib.Z_FULL_FLUSH) + b"\x07"
+    flipped = bytearray(xz.read_bytes())
+    flipped[len(flipped) * 3 // 4] ^= 0xFF
+    data = {"ReadError": b"no pack at all", "EOFError": gz.read_bytes()[: gz.stat().st_size // 2], "error": cut,
+            "LZMAError": bytes(flipped)}
+    for err, b in data.items():
+        (tmp_path / f"{err}.pack").write_bytes(b)
+    return {err: tmp_path / f"{err}.pack" for err in data}
+
+
+def test_a_pack_cut_short_or_corrupt_is_refused_and_nothing_written(tmp_path, monkeypatch):
+    """A recorded run imports other machines' packs at its start: one that isn't a tar, or whose compressed stream ends early
+    or turns corrupt, is refused like one holding anything but verdict entries, never a crash of the run that imports it."""
+    r = _machine(tmp_path, monkeypatch, "b")
+    for err, pack in _unreadable(tmp_path).items():
+        assert V.refusal(pack).startswith(f"{err}: "), err
+        with pytest.raises(V.UNREADABLE) as got:
+            V.import_(pack)
+        assert type(got.value).__name__ == err and not V.entries() and V.main(["import", str(pack)]) == 1
+    assert V.refusal(tmp_path / "absent.tar.gz").startswith("FileNotFoundError: ") and not r["tests"].exists()
+
+
 def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tmp_path, monkeypatch):
     check = _load("check")
     _fill(_machine(tmp_path, monkeypatch, "a"))
@@ -378,16 +410,18 @@ def test_a_run_imports_each_pack_sent_newest_first_and_names_each_in_its_result(
 def test_a_pack_that_cant_be_fetched_isnt_the_one_listed_or_that_import_refuses_is_passed_over_by_name(tmp_path, monkeypatch,
                                                                                                           capsys):
     """A pack holding anything but verdict entries (a Lean audit's scratch is left out of a pack, and a link or another prefix
-    still refuses it), one whose bytes aren't those the store lists for it, one no fetch reaches and one whose URL doesn't parse
-    are each skipped and the next one taken; none of
+    still refuses it), one cut short or corrupt at its source (its sha256 is what the store lists), one whose bytes aren't those
+    the store lists for it, one no fetch reaches and one whose URL doesn't parse are each skipped and the next one taken; none of
     their entries is reused, and no URL is printed, since each grants a read until it expires.  A fetch stops past the size
     listed, so a store that sends more costs a run's start at most a read more than it lists."""
     check = _load("check")
     bad = _refused(tmp_path)
     packs = _packs(tmp_path, monkeypatch, {"old": {"tests/k3.json": "3"}})
     good = {"run": "r-old", "sha256": _sha(packs["old"]), "bytes": packs["old"].stat().st_size, "url": packs["old"].as_uri()}
+    unreadable = _unreadable(tmp_path)
     (huge := tmp_path / "huge.tar.gz").write_bytes(bytes(3 << 20))
     listed = [{"run": "r-bad", "sha256": _sha(bad), "bytes": bad.stat().st_size, "url": bad.as_uri()},
+              *({"run": f"r-{err}", "sha256": _sha(p), "bytes": p.stat().st_size, "url": p.as_uri()} for err, p in unreadable.items()),
               {**good, "run": "r-gone", "url": (tmp_path / "gone.tar.gz").as_uri()}, {**good, "run": "r-nourl", "url": "no-scheme"},
               {**good, "run": "r-huge", "bytes": 1, "url": huge.as_uri()},
               {**good, "run": "r-other", "sha256": "0" * 64}, {**good, "run": "r-long", "bytes": good["bytes"] - 1}, good]
@@ -395,6 +429,8 @@ def test_a_pack_that_cant_be_fetched_isnt_the_one_listed_or_that_import_refuses_
     got = check.verdicts_fetched(listed)
     out = capsys.readouterr().out
     assert "skipping r-bad's pack: import refuses it (BadPack: member 'other/lean/lake-manifest.json'" in out
+    for err in unreadable:
+        assert f"skipping r-{err}'s pack: import refuses it ({err}: " in out
     assert "skipping r-gone's pack: it can't be fetched (URLError); its verdicts are recomputed" in out
     assert "skipping r-nourl's pack: it can't be fetched (ValueError); its verdicts are recomputed" in out
     assert f"skipping r-huge's pack: the {1 << 20} bytes fetched aren't the 1 the store lists under its sha256" in out

@@ -1439,7 +1439,7 @@ def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
             if (why := fetch_pack(p, pack)) is None:
                 try:
                     added, kept = VERDICTS.import_(pack, only)
-                except (VERDICTS.BadPack, tarfile.TarError, OSError, EOFError) as e:
+                except VERDICTS.UNREADABLE as e:
                     why = f"import refuses it ({type(e).__name__}: {e})"
                 else:
                     got.append({"run": p["run"], "sha256": p["sha256"], "added": added, "already": kept,

@@ -39,6 +39,7 @@ import os
 import importlib.util
 import sys
 import tarfile
+import zlib
 from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location("verdicts_settings", Path(__file__).resolve().parent / "settings.py")
@@ -227,6 +228,11 @@ class BadPack(Exception):
     pass
 
 
+#: what reading a pack raises when it isn't one `import` takes: a member that isn't a verdict entry, or a file that isn't a tar
+#: or whose compressed stream is cut short or corrupt (past the first header `tarfile` leaves zlib's and lzma's errors as they are)
+UNREADABLE = (BadPack, tarfile.TarError, OSError, EOFError, zlib.error, lzma.LZMAError)
+
+
 def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
     out = []
     for m in tar.getmembers():
@@ -241,12 +247,12 @@ def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
 
 
 def refusal(pack: Path) -> str | None:
-    """Why `import` would refuse the pack (not a gzipped or xz-compressed tar, or a member that isn't a verdict entry); None when it
-    takes it."""
+    """Why `import` would refuse the pack (`UNREADABLE`: not a gzipped or xz-compressed tar, one cut short or corrupt, or a member
+    that isn't a verdict entry); None when it takes it."""
     try:
         with tarfile.open(pack, "r:*") as tar:
             _members(tar)
-    except (BadPack, tarfile.TarError, OSError, EOFError) as e:
+    except UNREADABLE as e:
         return f"{type(e).__name__}: {e}"
     return None
 
@@ -301,7 +307,7 @@ def main(argv: list[str]) -> int:
         return 0
     try:
         added, kept = import_(a.pack)
-    except (BadPack, tarfile.TarError) as err:
+    except UNREADABLE as err:
         print(f"verdicts: refused {a.pack}: {err}", file=sys.stderr)
         return 1
     print(f"verdicts: {added} added, {kept} already here, from {a.pack}")

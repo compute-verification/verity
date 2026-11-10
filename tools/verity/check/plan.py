@@ -665,7 +665,7 @@ def inner(a) -> dict:
             rid, _, path = spec.partition("=")
             try:
                 sources.append(unpack(V, Path(path), Path(d) / str(i), rid or None))
-            except (V.BadPack, OSError, EOFError) as e:
+            except V.UNREADABLE as e:
                 notes.append(f"{rid or path}: its pack is refused ({type(e).__name__}: {e})")
         parts = plan_tree(tree, sources, a.agreement, local=not a.packs_only, own=a.own)
         commit = _git("rev-parse", "HEAD", repo=tree)
