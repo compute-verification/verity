@@ -293,6 +293,15 @@ def fixture(name: str) -> dict:
 RUNS = fixture("records.json")[R.STEADY]
 
 
+def run_files(tmp: Path, run: str) -> Path:
+    """A fixture run's files as its run record holds them: its jobs' reports under `out/`."""
+
+    files = tmp / "run-files" / run
+    if not files.exists():
+        shutil.copytree(FIXTURES / "steady" / run, files / "out")
+    return files
+
+
 def census_art(s: Store, **meta) -> str:
     return s.tree(R.CENSUS_KIND, R.CENSUS_FILE, fixture("census.json"), {"model": W.model, "run": "r20260101-000000-0000"} | meta)
 
@@ -311,7 +320,7 @@ def recorded(tmp: Path) -> tuple[Store, dict[str, str]]:
             R.SINGLE: s.record(s.doc(R.CARD_SCHEMA, "proof_overhead.json", fixture("proof_overhead.json")), R.SINGLE),
             R.SAMPLING: s.record(plan_art(s), R.SAMPLING)}
     for run in RUNS:
-        s.ran(run, FIXTURES / "runs" / run, rc=0 if run == RUNS[-1] else 1)
+        s.ran(run, run_files(tmp, run), rc=0 if run == RUNS[-1] else 1)
         s.record(run, R.STEADY)
     return s, arts
 
@@ -426,7 +435,7 @@ def test_an_unlabelled_or_superseded_input_is_refused_by_name(tmp_path):
                                          r"cell for 2 block type\(s\) \(MoeExpertFp8ReadGemm_v1.*no block type for 2 "
                                          r"cell\(s\) \(Fused\[.*or no steady-state report of record names"):
         build("spot")
-    s.ran(RUNS[-1], FIXTURES / "runs" / RUNS[-1])
+    s.ran(RUNS[-1], run_files(tmp_path, RUNS[-1]))
     s.record(RUNS[-1], R.STEADY)
     other = s.record(plan_art(s, case="other"), R.SAMPLING)
     with pytest.raises(ValueError, match=f"2 targets carry `run_of_record={W.record(R.SAMPLING)}` and none is superseded: "
@@ -483,7 +492,7 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     for slot, name in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
         s2.record(s2.doc(R.CARD_SCHEMA, name, fixture(name)), slot)
     s2.record(census_art(s2), R.CENSUS)
-    s2.ran(newest, FIXTURES / "runs" / newest)
+    s2.ran(newest, run_files(tmp_path, newest))
     s2.record(s2.doc("evidence/v1", "steady.json", {}, {"runs": [newest]}), R.STEADY)
     doc = R.build("flock", "glm53", store=s2.fresh(), root=REPO)
     assert doc["inputs"][2]["targets"] == [newest] and doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.08784095926)
