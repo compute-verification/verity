@@ -294,7 +294,7 @@ run accepts, `g` is a wire of a unit `ξ` samples, and the extractor returns a w
 reading has `bit` at bit `i` of `g`. -/
 def wEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) (ξ : S.Ξ) (s : q.Sample V S ξ) : Prop :=
   (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
     (∃ u ∈ S.drawOf ξ, g ∈ (V.partsOf θ F).io u) ∧
@@ -303,7 +303,7 @@ def wEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {
 
 theorem weight_eq (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) :
     q.weight V S readX g i bit = Ex fun ξ => Pr (wEvent q V S readX g i bit ξ) := rfl
 
@@ -311,7 +311,7 @@ theorem weight_eq (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteA
 weight at `true` exceeds its weight at `false`. -/
 theorem extract_bit (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (g : Fin (V.circuitOf θ F).N) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
     (q.extract V S readX g).getLsbD i = true ↔
       q.weight V S readX g i false < q.weight V S readX g i true :=
@@ -321,7 +321,7 @@ theorem extract_bit (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byt
 `Dep.extract` didn't pick is at most that of the bit it picked. -/
 theorem minority_le_majority (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (g : Fin (V.circuitOf θ F).N) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
     q.weight V S readX g i (!(q.extract V S readX g).getLsbD i) ≤
       q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
@@ -335,7 +335,7 @@ run accepts, `ξ` samples `u`, and the extractor returns a witness in the recurs
 `Xt` at a bit of a wire of `u`. -/
 def offEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (Xt : (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace) (Xt : (V.circuitOf θ F).Trace)
     (u : Fin (V.units θ F)) (ξ : S.Ξ) (s : q.Sample V S ξ) : Prop :=
   (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧ u ∈ S.drawOf ξ ∧
     ∃ wt, (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1 = some wt ∧ q.R (S.x ξ) wt ∧
@@ -360,7 +360,7 @@ def collEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray
 bit `Dep.extract` didn't pick there. -/
 def bitEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g)) (ξ : S.Ξ) (s : q.Sample V S ξ) : Prop :=
   wEvent q V S readX b.1 b.2 (!(q.extract V S readX b.1).getLsbD b.2) ξ s
 
@@ -370,7 +370,7 @@ witness in the recursive relation whose reading, at a bit `i` of a wire `g` that
 run, that the binding finder at the two collides (`hcoll`). -/
 theorem majority_le_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
       (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
@@ -411,7 +411,7 @@ the bit `Dep.extract` picked there is at least half the probability that the run
 returns a witness in the recursive relation. -/
 theorem drawn_le_weight (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) {u : Fin (V.units θ F)}
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace) {u : Fin (V.units θ F)}
     {g : Fin (V.circuitOf θ F).N} (hg : g ∈ (V.partsOf θ F).io u) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
     Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤ 2 * q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
   have hsum : Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤
@@ -437,7 +437,7 @@ bit collides, through `hcoll`, with every run that reads the plurality's bit the
 at least the bit's minority (`minority_le_majority`). -/
 theorem ex_off_le_bits (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
       (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
@@ -472,7 +472,7 @@ collides, through `hcoll`, with every run that reads the plurality's bit there, 
 sample (`drawn_le_weight`). -/
 theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
       (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
@@ -500,7 +500,7 @@ theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
 /-- **A sampled unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
 at, every unit the sample holds (`hread`), a sampled proof block unbound in `X` has a wire where `X` differs from the reading, at
 some bit. -/
-theorem unbound_drawn (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {Xw Xe : (V.circuitOf θ F).Transcript}
+theorem unbound_drawn (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {Xw Xe : (V.circuitOf θ F).Trace}
     {u : Fin (V.units θ F)}
     (hc : (V.partsOf θ F).Correct Xw u) (ho : ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (Xw g))
     (hu : u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe) :
@@ -540,7 +540,7 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI x ≤ 2 ^ 32 ∧ vS x ≤ nS x * 138543104)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (hcr : ∀ ξ, q.SessionCR (nI (S.x ξ)) (vS (S.x ξ)) (S.x ξ) S.Ω (S.P ξ))
     (hread : ∀ ξ wt, q.R (S.x ξ) wt → ∀ u ∈ S.drawOf ξ,
       (V.partsOf θ F).Correct (readX (S.x ξ) wt) u ∧
@@ -654,7 +654,7 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI x ≤ 2 ^ 32 ∧ vS x ≤ nS x * 138543104)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (hcr : q.FinderCR V S collOf dColl nI vS) (δs : ℝ)
     (hdraw : Pr (fun ξ : S.Ξ =>
@@ -725,7 +725,7 @@ theorem spotRecursive (q : Dep)
       (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI x ≤ 2 ^ 32 ∧ vS x ≤ nS x * 138543104)
     (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl K₀ : ℕ) (δs : ℝ)
     (hK₀ : ∀ m : ℕ, (V.certOf θ).ε * V.units θ F < m → K₀ ≤ m)
     (hdraw : ∀ U : Finset (Fin (V.units θ F)), K₀ ≤ U.card → Claims.Pr (fun ξ : S.Ξ => Disjoint (S.drawOf ξ) U) ≤ δs)

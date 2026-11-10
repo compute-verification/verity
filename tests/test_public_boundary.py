@@ -445,7 +445,7 @@ def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_facto
     tree, boundary = PE.PB.Tree(root, files=TREE), PE.PB.Boundary.load(root / "boundary.toml")
     j = PE.PB.judge(tree, boundary)
     dest = tmp_path_factory.mktemp("export")
-    got = PE.export(tree, boundary, j, dest)
+    got = PE.export(tree, boundary, j, dest, {})
 
     def git(*args: str) -> list[str]:
         return subprocess.run(["git", *args], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
@@ -469,7 +469,50 @@ def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tm
     root, tree, j = judged
     monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied: (text, []))
     with pytest.raises(ValueError, match="rewrite kept them: .*lake require priv"):
-        PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"))
+        PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"), {})
+
+
+def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_path_factory, monkeypatch) -> None:
+    """A fetched fixture (a registry entry git doesn't track) that the boundary's `fixtures` names is fetched and committed as
+    tracked files, a tree's every file; the other public fetched fixtures are listed as not shipped, and a private one isn't
+    listed. One the fetch leaves missing, or with a file over a tracked file's limit, is refused by name."""
+    root, _, _ = judged
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *TREE], cwd=root, check=True)
+    (root / "boundary.toml").write_text('fixtures = ["verity/pub/data"]\n' + BOUNDARY, encoding="utf-8")
+    reg = {"art:" + c * 64: p for c, p in (("1", "verity/pub/data/w.json"), ("2", "verity/pub/data/set"),
+                                           ("3", "verity/pub/other.bin"), ("4", "tools/secret/s.json"),
+                                           ("5", "verity/pub/imports.py"))}
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg), encoding="utf-8")
+    sizes = {"verity/pub/data/w.json": 3, "verity/pub/data/set/a": 1, "verity/pub/data/set/b/c": 2}
+    asked: list[list[str]] = []
+
+    def fetch(r: Path, paths: list[str], log: Path) -> str:
+        asked.append(paths)
+        for f, n in sizes.items():
+            (r / f).parent.mkdir(parents=True, exist_ok=True)
+            (r / f).write_bytes(b"x" * n)
+        return ""
+
+    monkeypatch.setattr(PE, "fetch", fetch)
+    tree, boundary = PE.PB.Tree(root, files=TREE), PE.PB.Boundary.load(root / "boundary.toml")
+    shipped, unshipped = PE.fixtures(tree, boundary, tmp_path_factory.mktemp("logs"))
+    assert asked == [["verity/pub/data/set", "verity/pub/data/w.json"]]
+    assert shipped == {"verity/pub/data/set": ["verity/pub/data/set/a", "verity/pub/data/set/b/c"],
+                       "verity/pub/data/w.json": ["verity/pub/data/w.json"]}
+    assert unshipped == ["verity/pub/other.bin"]
+    dest = tmp_path_factory.mktemp("export")
+    PE.export(tree, boundary, PE.PB.judge(tree, boundary), dest, shipped)
+    listed = subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
+    assert set(sizes) <= set(listed) and (dest / "verity/pub/data/set/b/c").read_bytes() == b"xx"
+
+    sizes["verity/pub/data/set/b/c"] = PE.REPOSITORY.BLOB_LIMIT + 1
+    with pytest.raises(ValueError, match=r"public_export: verity/pub/data/set/b/c: over 256 KiB, the most a tracked file holds"):
+        PE.fixtures(tree, boundary, tmp_path_factory.mktemp("logs"))
+    monkeypatch.setattr(PE, "fetch", lambda r, paths, log: "verity/pub/data/w.json")
+    with pytest.raises(RuntimeError, match=r"public_export: verity/pub/data/w.json: fixtures the export ships, missing or stale"):
+        PE.fixtures(tree, boundary, tmp_path_factory.mktemp("logs"))
 
 
 def test_the_export_refuses_a_destination_it_would_overwrite(tmp_path: Path) -> None:

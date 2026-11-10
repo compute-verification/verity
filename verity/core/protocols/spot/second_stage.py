@@ -6,10 +6,21 @@ registration and to the second draw's cells. `service.Stream` adds it to the int
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
 an instance of (its stratum's name under the check's query), its public file's header, its session record's
-``unit_draw``, and the registered reads it was verified against (``--registered``), None for none.
+``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
+where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
+`verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
+``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
+split across Flock tables is refused, as one split across statements is (``second-template``).
 
 The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
-difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
+difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied; so are its wires (`replay_wires`,
+`SecondStage.replayWires`): a template's parameter that is, at each of its callers, one field of one instance of
+another template reads that writer's output port for the field, one value the interior commits once, so
+``second-read`` holds a wired port to its writer's port at its writer unit's row and `at_run` binds it by that port
+(`_held_port`). A template may have several callers in the body, a batch's members among them, its units theirs in
+body order; each port a link or a wire names reads, unit by unit, the row its caller names (`replay_rows`,
+`SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled.
 
 Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
 ``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
@@ -28,15 +39,27 @@ holds each instance's ref to the row at the position the read gives its unit (`F
 ``second-read`` holds the read to the slot's own rows or its cell's replay block's; elsewhere it only bounds a ref by its
 table, so a ref could point a drawn unit at another unit's rows.
 
+Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the registered reads the
+auditor's params give beside its header, fixed before the run and taken as given: round 2 never verifies the reference
+statement against them), the two the same with each port's run fields blanked (`blank_reads`) (``second-values``,
+`_values_ok`). The run's fields are those ``second-read`` holds
+to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`), and the rows (``reads``,
+``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading a port of the interior record (its own, or at
+a port a wire names its writer's), whose rows the run places (`_run_places_rows`). So the ports a session reads
+registered, the value each reads, and the rows at which it reads a value a registration registers are fixed before the
+run: ``second-read`` alone lets a port no link or wire names read any value either registration registers, at any rows.
+
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
-statement is read.
+statement is read. With it, ``second-schedule`` fails where the boundary registration's record commits a schedule
+(``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that commits none passes.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -44,10 +67,11 @@ from typing import Any
 from verity.ml.circuits.codec import canonical_json, definitions, descriptor_id
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.refs import Affine, Concat, Explicit
-from verity.ml.circuits.types import RecordType, Tuple
+from verity.ml.circuits.types import Array, RecordType, Tuple
 from verity.ml.commitments.window import window_binding
 
 from .one_stage.verdict import Verdict, _Collect
+from .schedule import failure as schedule_failure
 
 FORM = False
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
@@ -58,16 +82,23 @@ STATEMENTS_WHY = ("a two-stage outcome names its second-stage sessions' statemen
 REPORTED_WHY = ("the registered reads the verifiers of record report are not the statements' registered reads, value by "
                 "value")
 LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other than through templates of the "
-             "interior's parts, each called once and reading one parameter alone, returned alone, or returned whole as "
-             "one field each")
+             "interior's parts, each caller reading one aligned row of one parameter alone, or returned whole within "
+             "one field, alike at every caller, or a link's rows don't place its part's units")
+WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one field of one "
+             "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
+             "don't place its part's units or its writer's")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 STMT_KEYS = ["draw", "header", "registered", "template"]
+#: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
+MAX_LEAVES = 2 ** 64
 #: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
 #: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
 #: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
 #: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
-#: read's root, domain and rows (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header
-#: only in the indices and their blocks.
+#: read's root, domain and rows, with ``second-values`` the value each port reads, and the rows at which it reads a
+#: value a registration registers, through the ``--registered`` file the session's verifier holds it to
+#: (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header only in the indices and their
+#: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
 
@@ -87,6 +118,10 @@ class Part:
         """Slot `u`'s place in the sample, `u` one of the part's: the index of its cell's replay block."""
         return (u - self.lo) // self.n
 
+    def unit(self, u: int) -> int:
+        """`Part.unit`: slot `u`'s unit in its cell, its place among the `n` slots there."""
+        return (u - self.lo) % self.n
+
 
 @dataclass(frozen=True)
 class Stmt:
@@ -94,6 +129,53 @@ class Stmt:
     header: dict[str, Any]
     draw: dict[str, Any]
     registered: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class Checked:
+    """What an accepted verdict of record names of the session it checked: the digests of the public file's header and
+    of the ``--registered`` file it checked the session against (``public_header_sha512``, ``registered_sha512``, None
+    for none), the sample it checked it at (``unit_draw``) and the number of tables it set the session up as
+    (``session_tables``)."""
+
+    header: str
+    registered: Any
+    draw: Any
+    tables: Any
+
+
+#: `SecondStage.ONE_TABLE`: the ``session_tables`` a verdict of record names of a session round 2 reads
+ONE_TABLE = 1
+
+
+def verified_of(verdicts: Mapping[str, Any]) -> tuple[Checked, ...]:
+    """`SecondStage.verifiedOf`: what each accepted verdict of record among `verdicts` that names a header names."""
+    return tuple(Checked(v["public_header_sha512"], v.get("registered_sha512"), v.get("unit_draw"),
+                         v.get("session_tables"))
+                 for v in verdicts.values() if isinstance(v, Mapping) and isinstance(v.get("public_header_sha512"), str)
+                 and v.get("of_record") and v.get("accepted") is True)
+
+
+def _integral(j: Any) -> bool:
+    """Whether JSON value `j` holds no non-integer number, the one value Lean's `canon` refuses."""
+    if isinstance(j, float):
+        return False
+    if isinstance(j, Mapping):
+        return all(_integral(v) for v in j.values())
+    return not isinstance(j, (list, tuple)) or all(_integral(v) for v in j)
+
+
+def _sha512(j: Any) -> str | None:
+    """`canonSha512`: the SHA-512 of JSON value `j`'s canonical JSON, None where it holds a non-integer number."""
+    return hashlib.sha512(canonical_json(j)).hexdigest() if _integral(j) else None
+
+
+def _checked(s: Stmt) -> Checked | None:
+    """`Stmt.checked`: what a verdict of record that checked statement `s`'s session, as round 2 reads one, names of it
+    (one table), None when its header or registered reads hold a non-integer number."""
+    h = _sha512(s.header)
+    r = None if s.registered is None else _sha512(s.registered)
+    return None if h is None or (s.registered is not None and r is None) else Checked(h, r, s.draw, ONE_TABLE)
 
 
 @dataclass(frozen=True)
@@ -107,12 +189,71 @@ class Link:
 
 
 @dataclass(frozen=True)
+class Wire:
+    """A wire of the two-stage design: template `template`'s session port `port` reads template `writer`'s output port
+    `wport`, one value the interior commits once, at the writer's port."""
+
+    template: str
+    port: str
+    writer: str
+    wport: str
+
+
+@dataclass(frozen=True)
+class Run:
+    """`SecondStage.Run`: a run of units' rows, `count` units from unit `unit`, the first reading row `row`, each next
+    `step` rows on."""
+
+    unit: int
+    count: int
+    row: int
+    step: int
+
+
+@dataclass(frozen=True)
+class Rows:
+    """`SecondStage.Rows`: the rows template `template`'s units read at its session port `port`, one a link or a wire
+    names: of the value's `per` rows a replay block, the boundary port's (a link) or its writer's units' (a wire), unit
+    `j` reads the one its `runs` give it (`row_at`)."""
+
+    template: str
+    port: str
+    per: int
+    runs: tuple[Run, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {"per": self.per, "port": self.port, "runs": [[r.unit, r.count, r.row, r.step] for r in self.runs],
+                "template": self.template}
+
+
+def rows_of(j: Any) -> tuple[Rows, ...] | None:
+    """`SecondStage.rowsOf?`: rows from their JSON, a list of objects of exactly ``template``, ``port``, ``per`` and
+    ``runs``, two strings, a natural number and a list of ``[unit, count, row, step]``, each a natural number; None for
+    anything else."""
+    if not isinstance(j, list):
+        return None
+    out = []
+    for r in j:
+        if not (isinstance(r, dict) and sorted(r) == ["per", "port", "runs", "template"]):
+            return None
+        t, port, per, runs = r["template"], r["port"], r["per"], r["runs"]
+        if not (isinstance(t, str) and isinstance(port, str) and _nat(per) and isinstance(runs, list)
+                and all(isinstance(x, list) and len(x) == 4 and all(map(_nat, x)) for x in runs)):
+            return None
+        out.append(Rows(t, port, per, tuple(Run(*x) for x in runs)))
+    return tuple(out)
+
+
+@dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
     registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
     Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
-    (`audit.session_registered`), and the reference header of each template's statement, ``(template, header)``, as
-    the auditor's params give it (`service.template_circuits`)."""
+    (`audit.session_registered`), what they name of each session they accepted (`verified_of`), the reference header
+    of each template's statement, ``(template, header)``, and the registered reads it reads,
+    ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
+    (`service.template_circuits`), the design's wires (`replay_wires`, None when the Definition makes none), and the
+    rows of the ports they and the links name (`replay_rows`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -121,7 +262,11 @@ class Own:
     drawn: tuple[int, ...]
     links: tuple[Link, ...] | None = ()
     reported: Mapping[str, Any] | None = None
+    verified: tuple[Checked, ...] = ()
     refs: tuple[tuple[str, Any], ...] = ()
+    ref_reads: tuple[tuple[str, Any], ...] = ()
+    wires: tuple[Wire, ...] | None = ()
+    rows: tuple[Rows, ...] = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -222,7 +367,7 @@ def _sources(r: Any) -> list[tuple[bool, int]]:
 
 
 def _callers(defs: Mapping[str, Any]) -> dict[str, int]:
-    """`SecondStage.callers`: how many nodes of the bodies of `defs` call each definition, by descriptor id."""
+    """`SecondStage.callCounts`: how many nodes of the bodies of `defs` call each definition, by descriptor id."""
     out: dict[str, int] = {}
     for f in defs.values():
         for node in () if isinstance(f, PrimitiveDefinition) else f.body.nodes:
@@ -230,81 +375,248 @@ def _callers(defs: Mapping[str, Any]) -> dict[str, int]:
     return out
 
 
-def _template(callers: Mapping[str, int], node: Any) -> Any:
-    """`SecondStage.template?`: the composite definition `node` calls or batches, when no other node calls it."""
-    c = node.fn
-    once = callers.get(descriptor_id(c)) == 1
-    return c if node.form in ("call", "batch") and not isinstance(c, PrimitiveDefinition) and once else None
+def _members(node: Any) -> int:
+    """`Node.members`: a batch's members or a scan's iterations, else one."""
+    return node.n if node.form in ("batch", "scan") else 1
 
 
-def _node_links(callers: Mapping[str, int], fn: Any, node: Any) -> list[Link] | None:
-    """`SecondStage.nodeLinks`: for each argument of `node` that reads one of replay block `fn`'s parameters, its
-    template's parameter there reads that one; None when the argument reads anything else too, or `node` is no
-    template's."""
-    params, out = [name for name, _t in fn.signature()[0]], []
+def _axis_dims(t: Any, ax: int) -> tuple[int, int] | None:
+    """`Ty.axisDims`: the length of array axis `ax` of `t` and the leaves of its elements; None for none."""
+    while isinstance(t, Array):
+        if ax == 0:
+            return t.n, t.elem.leaves
+        t, ax = t.elem, ax - 1
+    return None
+
+
+def _dims(node: Any, a: int) -> tuple[int, int] | None:
+    """`Arg.dims`: for a batch's argument `a` mapped on an axis, or a scan's sequence, its length and its elements'
+    leaves; None for any other argument."""
+    t = node.args[a].type
+    if node.form == "batch":
+        ax = node.axes[a] if a < len(node.axes) else None
+        return None if ax is None else _axis_dims(t, ax)
+    if node.form == "scan" and 1 <= a <= node.n_xs and isinstance(t, Array):
+        return t.n, t.elem.leaves
+    return None
+
+
+@dataclass(frozen=True)
+class _Callers:
+    """`SecondStage.Callers`: a replay block's body's templates (each node's, None for a node no template's), each
+    node's first unit among its definition's, and each definition's units in the body, by descriptor id."""
+
+    template: tuple[Any, ...]
+    first: tuple[int, ...]
+    units: Mapping[str, int]
+
+
+def _callers_of(defs: Mapping[str, Any], fn: Any) -> _Callers:
+    """`SecondStage.callersOf`: replay block `fn`'s body's templates and their units, once over `defs` and its body:
+    each node's template, the composite definition it calls or batches when every node of `defs` that calls it is one
+    of `fn`'s body's; each node's first unit among its definition's in a replay block, its callers before it in body
+    order holding the units before it, a batch its members' (`_members`), never walked; and each definition's units."""
+    every, here = _callers(defs), _callers({"": fn})
+    units: dict[str, int] = {}
+    template, first = [], []
+    for node in fn.body.nodes:
+        d = descriptor_id(node.fn)
+        first.append(units.get(d, 0))
+        units[d] = units.get(d, 0) + _members(node)
+        c = node.fn
+        template.append(c if node.form in ("call", "batch") and not isinstance(c, PrimitiveDefinition)
+                        and every.get(d) == here.get(d) else None)
+    return _Callers(tuple(template), tuple(first), units)
+
+
+def _push_run(rs: list[Run], r: Run) -> None:
+    """`SecondStage.pushRun`: run `r` after runs `rs`, merged into the last when `r` is one unit right after it
+    continuing its rows (the last one unit, at a row no later than `r`'s, or `r`'s row the last's next), else
+    appended."""
+    last = rs[-1] if rs else None
+    if last is not None and r.count == 1 and last.unit + last.count == r.unit:
+        if last.count == 1 and last.row <= r.row:
+            rs[-1] = Run(last.unit, 2, last.row, r.row - last.row)
+            return
+        if last.count > 1 and r.row == last.row + last.count * last.step:
+            rs[-1] = Run(last.unit, last.count + 1, last.row, last.step)
+            return
+    rs.append(r)
+
+
+def row_at(rs: Sequence[Run], j: int) -> int | None:
+    """`SecondStage.rowAt`: unit `j`'s row under runs `rs`, in order of their first units: the run holding it, found by
+    bisection over their first units, gives ``row + (j - unit)·step``; None for a unit no run holds."""
+    lo, hi = 0, len(rs)
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if rs[mid].unit <= j:
+            lo = mid
+        else:
+            hi = mid
+    if not rs:
+        return None
+    r = rs[lo]
+    return r.row + (j - r.unit) * r.step if r.unit <= j < r.unit + r.count else None
+
+
+def _fits(rs: Sequence[Run], n: int) -> bool:
+    """`SecondStage.fits`: runs `rs` hold units 0 to ``n - 1``, each once, in order: the first from unit 0, each next
+    from the last's end, none empty, the last ending at `n`."""
+    e = 0
+    for r in rs:
+        if r.unit != e or r.count <= 0:
+            return False
+        e += r.count
+    return e == n
+
+
+@dataclass(frozen=True)
+class _Share:
+    """`SecondStage.Share`: one caller's share of a link or a wire `edge`: its template's descriptor id `fn`, the
+    value's rows a replay block `per`, and its units' rows `run`."""
+
+    edge: Any
+    fn: str
+    per: int
+    run: Run
+
+
+def _gather(port: Callable[[Any], tuple[str, str]], same: Callable[[Any, Any], bool], units: Mapping[str, int],
+            xs: Sequence[_Share]) -> list[tuple[Any, int, tuple[Run, ...]]] | None:
+    """`SecondStage.gather`: shares `xs` gathered one per template port (`port`), in order of first appearance, each
+    port's runs in order (`_push_run`), with its value's rows a block; None when two of a port name different values
+    (`same`) or rows a block, or a port's runs don't hold each of its template's `units` once, in order (`_fits`)."""
+    g: list[tuple[_Share, list[Run]]] = []
+    for x in xs:
+        j = next((i for i, (y, _rs) in enumerate(g) if port(y.edge) == port(x.edge)), None)
+        if j is None:
+            g.append((x, [x.run]))
+            continue
+        y, rs = g[j]
+        if not (same(y.edge, x.edge) and y.per == x.per):
+            return None
+        _push_run(rs, x.run)
+    if not all(_fits(rs, units.get(y.fn, 0)) for y, rs in g):
+        return None
+    return [(y.edge, y.per, tuple(rs)) for y, rs in g]
+
+
+def _slice(node: Any, a: int, w: int) -> tuple[int, int] | None:
+    """`SecondStage.slice`: the row of its collection's rows node `node`'s argument `a` reads, `w` leaves a member, and
+    each next member's step, when the argument is one aligned slice of `w` leaves a member of one collection, its one
+    affine part: the same slice for every member (a call's argument, or a batch's shared one, step 0), or a member's
+    from the first, outer axis mapped (step 1). None for any other argument."""
+    rs = _parts(node.args[a].refs)
+    r = rs[0] if len(rs) == 1 else None
+    if w <= 0 or not isinstance(r, Affine) or r.base % w:
+        return None
+    dims = _dims(node, a)
+    if dims is None:
+        return (r.base // w, 0) if r.count == w else None
+    return (r.base // w, 1) if node.form == "batch" and dims[1] == w and r.count == _members(node) * w else None
+
+
+def _node_links(cs: _Callers, fn: Any, k: int, node: Any) -> list[_Share] | None:
+    """`SecondStage.nodeLinks`: the links node `k` of replay block `fn`'s body makes, each its share: for each argument
+    that reads one of `fn`'s parameters, its template's parameter there reads that one, the parameter's rows a block
+    those of the template parameter's width, its units the rows its slice is (`_slice`). None when the argument reads
+    anything else too, or anything but such a slice, or `node` is no template's."""
+    params, out = fn.signature()[0], []
     for a, arg in enumerate(node.args):
         src = _sources(arg.refs)
         first = next((x for x in src if x[0]), None)
         if first is None:
             continue
-        c = _template(callers, node) if all(x == first for x in src) else None
-        ports = [] if c is None else [name for name, _t in c.signature()[0]]
-        if c is None or a >= len(ports) or first[1] >= len(params):
+        c = cs.template[k]
+        ports = [] if c is None else c.signature()[0]
+        if not all(x == first for x in src) or c is None or a >= len(ports) or first[1] >= len(params):
             return None
-        out.append(Link(descriptor_id(c), ports[a], params[first[1]]))
+        (port, ty), (name, pty) = ports[a], params[first[1]]
+        at = _slice(node, a, ty.leaves)
+        if at is None or pty.leaves % ty.leaves:
+            return None
+        out.append(_Share(Link(descriptor_id(c), port, name), descriptor_id(c), pty.leaves // ty.leaves,
+                          Run(cs.first[k], _members(node), *at)))
     return out
 
 
-def _field_link(callers: Mapping[str, int], fn: Any, j: int, f: Any, r: Any) -> tuple[int, Link] | None:
-    """`SecondStage.fieldLink`: the link field `j` of replay block `fn`'s return, of type `f`, makes when it is part `r`
-    of the return: when `r` is a node's whole output, the node a template's of one output, that template's ``o0`` is
-    `fn`'s ``o<j>``; with it, the node's index. None when it is anything else."""
-    nodes = fn.body.nodes
-    if not (isinstance(r, Affine) and r.space == "n" and r.base == 0 and r.idx < len(nodes)):
-        return None
-    c = _template(callers, nodes[r.idx])
-    if r.count != f.leaves or r.count != nodes[r.idx].out.leaves or c is None or _outputs(c.signature()[1]) != 1:
-        return None
-    return r.idx, Link(descriptor_id(c), "o0", f"o{j}")
+def _field_at(t: Any, off: int, c: int) -> int | None:
+    """`SecondStage.fieldAt`: the field of a value of type `t` from leaf `off`, of `c` leaves: its index among
+    `_fields`; None for none."""
+    s = 0
+    for j, f in enumerate(_fields(t)):
+        if s == off and f.leaves == c:
+            return j
+        s += f.leaves
+    return None
 
 
-def _return_links(callers: Mapping[str, int], fn: Any) -> list[Link] | None:
-    """`SecondStage.returnLinks`: when replay block `fn` returns one node's output alone, that node a template's of one
-    output and `fn` of one, that template's ``o0`` is `fn`'s; when `fn` returns several fields, each part of its return
-    one field, each one node's whole output and no node's twice (`_field_link`), each one's template's ``o0`` is its
-    field's. None when it returns anything else."""
-    src, nodes, ret = _sources(fn.body.ret), fn.body.nodes, fn.signature()[1]
-    if not src:
-        return []
-    if _outputs(ret) == 1:
-        p, k = src[0]
-        if p or any(x != (False, k) for x in src) or k >= len(nodes):
+def _field_of(t: Any, s: int, c: int) -> tuple[int, int] | None:
+    """`SecondStage.fieldOf`: the field of a value of type `t` holding its leaves ``[s, s + c)``: its index and first
+    leaf; None for none."""
+    o = 0
+    for j, f in enumerate(_fields(t)):
+        if o <= s and s + c <= o + f.leaves:
+            return j, o
+        o += f.leaves
+    return None
+
+
+def _return_links(cs: _Callers, fn: Any) -> list[_Share] | None:
+    """`SecondStage.returnLinks`: the links replay block `fn`'s return makes, each its share: each part of its return,
+    which holds all of its leaves, node `k`'s whole output, `k` a template's of one output, within one field `j` of the
+    return at a multiple of that output's leaves from the field's first, makes the template's ``o0`` `fn`'s ``o<j>``,
+    the field's rows a block those of the output's width, and `k`'s units the field's rows from there on, one each.
+    None when a part is anything else."""
+    nodes, rty, parts = fn.body.nodes, fn.signature()[1], _parts(fn.body.ret)
+    if sum(r.count for r in parts) != rty.leaves:
+        return None
+    out, s = [], 0
+    for r in parts:
+        start, s = s, s + r.count
+        if not (isinstance(r, Affine) and r.space == "n" and r.base == 0 and r.idx < len(nodes)):
             return None
-        c = _template(callers, nodes[k])
-        return None if c is None or _outputs(c.signature()[1]) != 1 else [Link(descriptor_id(c), "o0", "o0")]
-    fs, parts = _fields(ret), _parts(fn.body.ret)
-    got = [_field_link(callers, fn, j, f, r) for j, (f, r) in enumerate(zip(fs, parts))]
-    links = [x for x in got if x is not None]
-    if len(parts) != len(fs) or len(links) != len(got) or len({k for k, _ in links}) != len(links):
-        return None
-    return [x for _, x in links]
+        x, t = nodes[r.idx], cs.template[r.idx]
+        w = 0 if t is None else t.signature()[1].leaves
+        if t is None or _outputs(t.signature()[1]) != 1 or w <= 0 or not r.count == x.out.leaves == _members(x) * w:
+            return None
+        at = _field_of(rty, start, r.count)
+        if at is None:
+            return None
+        j, off = at
+        f = _fields(rty)[j]
+        if (start - off) % w or f.leaves % w:
+            return None
+        out.append(_Share(Link(descriptor_id(t), "o0", f"o{j}"), descriptor_id(t), f.leaves // w,
+                          Run(cs.first[r.idx], _members(x), (start - off) // w, 0 if _members(x) == 1 else 1)))
+    return out
 
 
-def links_of(defs: Mapping[str, Any], key: str) -> tuple[Link, ...] | None:
-    """`SecondStage.linksOf`: the design's links, from replay block ``defs[key]``'s registered Definition, its
-    parameters and its body: those its nodes make (`_node_links`) and its return (`_return_links`), each value its own
-    port's name. None when its body reads a parameter, or returns, any other way."""
+def link_runs(defs: Mapping[str, Any], key: str) -> list[tuple[Link, int, tuple[Run, ...]]] | None:
+    """`SecondStage.linkRuns`: the design's links with their rows a block and runs, from replay block ``defs[key]``'s
+    registered Definition, its parameters and its body: those its nodes make (`_node_links`) and its return
+    (`_return_links`), one per template port (`_gather`), each value its own port's name. None when its body reads a
+    parameter, or returns, any other way, or a template's callers read a linked port unlike each other."""
     fn = defs.get(key)
     if fn is None or isinstance(fn, PrimitiveDefinition):
         return None
-    callers, out = _callers(defs), []
-    for node in fn.body.nodes:
-        links = _node_links(callers, fn, node)
-        if links is None:
+    cs, shares = _callers_of(defs, fn), []
+    for k, node in enumerate(fn.body.nodes):
+        got = _node_links(cs, fn, k, node)
+        if got is None:
             return None
-        out += links
-    ret = _return_links(callers, fn)
-    return None if ret is None else tuple(out + ret)
+        shares += got
+    ret = _return_links(cs, fn)
+    if ret is None:
+        return None
+    return _gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares + ret)
+
+
+def links_of(defs: Mapping[str, Any], key: str) -> tuple[Link, ...] | None:
+    """`SecondStage.linksOf`: the design's links (`link_runs`)."""
+    runs = link_runs(defs, key)
+    return None if runs is None else tuple(x for x, _per, _rs in runs)
 
 
 def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
@@ -315,13 +627,123 @@ def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
     return None if links is None else tuple(Link(x.template, x.port, _port_of(named, key, x.value)) for x in links)
 
 
-def _links_ok(ps: Sequence[Part], links: Sequence[Link] | None) -> bool:
-    """`SecondStage.linksOk`: links are derived, each for a template one of the parts is of."""
-    return links is not None and all(any(p.template == x.template for p in ps) for x in links)
-
-
 def _link_of(own: Own, t: str, port: str) -> Link | None:
     return next((x for x in own.links or () if x.template == t and x.port == port), None)
+
+
+def _node_wires(cs: _Callers, fn: Any, k: int, node: Any) -> list[_Share] | None:
+    """`SecondStage.nodeWires`: the wires node `k` of replay block `fn`'s body makes, each its share: for each argument
+    that reads a node, its template's parameter there reads that node's output field `f`, one of its template's
+    (`_field_at`), the node one instance and the argument the field whole, the same for each of `node`'s members: the
+    writer's units a block its rows, `node`'s units reading the node's. None when such an argument reads anything else
+    too, or part of a field, several nodes, a node no template's, or `node` is no template's. An argument that reads
+    only `fn`'s parameters is a link's (`_node_links`)."""
+    nodes, out = fn.body.nodes, []
+    for a, arg in enumerate(node.args):
+        if all(p for p, _i in _sources(arg.refs)):
+            continue
+        rs = _parts(arg.refs)
+        r = rs[0] if len(rs) == 1 else None
+        if not (isinstance(r, Affine) and r.space == "n" and r.idx < len(nodes)):
+            return None
+        w, tw, t = nodes[r.idx], cs.template[r.idx], cs.template[k]
+        params = [] if t is None else t.signature()[0]
+        if tw is None or a >= len(params):
+            return None
+        port, ty = params[a]
+        if not (_dims(node, a) is None and _members(w) == 1 and 0 < r.count == ty.leaves
+                and w.out.leaves == tw.signature()[1].leaves):
+            return None
+        f = _field_at(tw.signature()[1], r.base, r.count)
+        if f is None:
+            return None
+        out.append(_Share(Wire(descriptor_id(t), port, descriptor_id(tw), f"o{f}"), descriptor_id(t),
+                          cs.units.get(descriptor_id(tw), 0), Run(cs.first[k], _members(node), cs.first[r.idx], 0)))
+    return out
+
+
+def wire_runs(defs: Mapping[str, Any], key: str) -> list[tuple[Wire, int, tuple[Run, ...]]] | None:
+    """`SecondStage.wireRuns`: the design's wires with their rows a block and runs, from replay block ``defs[key]``'s
+    registered Definition: those its nodes make (`_node_wires`), one per template port (`_gather`). None when its body
+    reads a node any other way, or a template's callers read a wired port unlike each other."""
+    fn = defs.get(key)
+    if fn is None or isinstance(fn, PrimitiveDefinition):
+        return None
+    cs, shares = _callers_of(defs, fn), []
+    for k, node in enumerate(fn.body.nodes):
+        got = _node_wires(cs, fn, k, node)
+        if got is None:
+            return None
+        shares += got
+    return _gather(lambda w: (w.template, w.port), lambda a, b: a.writer == b.writer and a.wport == b.wport, cs.units,
+                   shares)
+
+
+def wires_of(defs: Mapping[str, Any], key: str) -> tuple[Wire, ...] | None:
+    """`SecondStage.wiresOf`: the design's wires (`wire_runs`)."""
+    runs = wire_runs(defs, key)
+    return None if runs is None else tuple(x for x, _per, _rs in runs)
+
+
+def replay_wires(program: Any, key: str) -> tuple[Wire, ...] | None:
+    """`SecondStage.replayWires`: the wires of the replay block `program` defines under descriptor id `key` (`wires_of`
+    over the definitions its descriptor records, `codec.definitions`)."""
+    return wires_of(definitions(program), key)
+
+
+def replay_rows(program: Any, key: str) -> tuple[Rows, ...]:
+    """`SecondStage.replayRows`: the design's rows, those of the ports the links and the wires of the replay block
+    `program` defines under descriptor id `key` name (`link_runs`, `wire_runs`), none for either it makes none of."""
+    defs = definitions(program)
+    if key not in defs:
+        return ()
+    runs = [*(link_runs(defs, key) or ()), *(wire_runs(defs, key) or ())]
+    return tuple(Rows(x.template, x.port, per, rs) for x, per, rs in runs)
+
+
+def _rows_of(own: Own, t: str, port: str) -> Rows | None:
+    """`SecondStage.rowsOf`: the rows of template `t`'s session port `port` (`Own.rows`)."""
+    return next((r for r in own.rows if r.template == t and r.port == port), None)
+
+
+def _placed(own: Own, p: Part, port: str) -> bool:
+    """`SecondStage.placed`: part `p`'s units are placed at its template's session port `port`: its rows' runs hold the
+    `n` units a block of `p` (`_fits`)."""
+    r = _rows_of(own, p.template, port)
+    return r is not None and _fits(r.runs, p.n)
+
+
+def _links_ok(ps: Sequence[Part], own: Own) -> bool:
+    """`SecondStage.linksOk`: the links are derived, each for a template one of the parts is of, whose units its rows
+    place (`_placed`)."""
+    return own.links is not None and all(any(p.template == x.template and _placed(own, p, x.port) for p in ps)
+                                         for x in own.links)
+
+
+def _wires_ok(ps: Sequence[Part], own: Own) -> bool:
+    """`SecondStage.wiresOk`: the wires are derived, each between templates the parts are of, its reader's units placed
+    by its rows (`_placed`), whose rows a block are its writer's units a block."""
+    def writer_ok(w: Wire) -> bool:
+        r = _rows_of(own, w.template, w.port)
+        return r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
+    return own.wires is not None and all(any(p.template == w.template and _placed(own, p, w.port) for p in ps)
+                                         and writer_ok(w) for w in own.wires)
+
+
+def _wire_of(own: Own, t: str, port: str) -> Wire | None:
+    return next((w for w in own.wires or () if w.template == t and w.port == port), None)
+
+
+def _writer_of(own: Own, w: Wire) -> Part | None:
+    """`SecondStage.writerOf`: wire `w`'s writer's part."""
+    return next((p for p in own.parts or () if p.template == w.writer), None)
+
+
+def _held_port(own: Own, named: bool, t: str, p: str) -> str:
+    """`SecondStage.heldPort`: the interior record's port that holds template `t`'s session port `p`: at a port a wire
+    names, its writer's output port, the one tree the interior commits that value in; else its own."""
+    w = _wire_of(own, t, p)
+    return _port_of(named, t, p) if w is None else _port_of(named, w.writer, w.wport)
 
 
 def _put_at(v: Any, j: Any, path: Sequence[str]) -> Any:
@@ -368,14 +790,15 @@ def port_binding(rec: Any, port: str, schema: str, run: str) -> str | None:
 def at_run(own: Own, named: bool, k: int, t: str, r: Any) -> Any:
     """`SecondStage.atRun`: template `t`'s reference header `r` placed in the run, for the session of the `k`-th part:
     its ``set`` the run's input set (`set_name`) and its ``frame_v3.bindings`` the binding of each port of
-    its ``frame_v3.schemas`` (`port_binding`), which the verifier computes. None when the interior record names no run,
-    or a port the verifier can't bind."""
+    its ``frame_v3.schemas`` (`port_binding`, the interior record's port that holds it, `_held_port`: a wired port's its
+    writer's), which the verifier computes. None when the interior record names no run, or a port the verifier can't
+    bind."""
     run = _run_of(own.interior)
     if run is None:
         return None
     bindings = {}
     for p, s in _entries(_get(_get(r, "frame_v3"), "schemas")):
-        b = port_binding(own.interior, _port_of(named, t, p), s, run) if isinstance(s, str) else None
+        b = port_binding(own.interior, _held_port(own, named, t, p), s, run) if isinstance(s, str) else None
         if b is None:
             return None
         bindings[p] = b
@@ -393,7 +816,7 @@ def _header_ok(own: Own, named: bool, k: int, t: str, h: Any) -> bool:
 
 def _population_ok(q: int, p: Part, h: Any) -> bool:
     indices, m = _get(_get(h, "units"), "indices"), _get(h, "instances")
-    return (isinstance(indices, list) and _nat(m) and m == q * p.n and len(indices) == q * p.n
+    return (isinstance(indices, list) and _nat(m) and m == q * p.n and m <= MAX_LEAVES and len(indices) == q * p.n
             and all(_nat(x) and x == p.lo + i for i, x in enumerate(indices)))
 
 
@@ -425,13 +848,16 @@ def _registered_entry(rec: Any, v: str) -> Any:
 
 
 def _same_at(e: Any, x: Any) -> bool:
-    return all(_jeq(_get(e, k), _get(x, k)) for k in ("root", "domain", "leaves"))
+    """`SecondStage.sameAt`: entries `e` and `x` name one root, domain and leaf count, at most `MAX_LEAVES`."""
+    leaves = _get(e, "leaves")
+    return (all(_jeq(_get(e, k), _get(x, k)) for k in ("root", "domain", "leaves"))
+            and _nat(leaves) and leaves <= MAX_LEAVES)
 
 
 def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | None]) -> bool:
     """`SecondStage.rowsOk`: every read of registered-reads entry `e` (slot ``reads_from + k`` reads row ``reads[k]``,
-    None for none) is by one of part `p`'s slots `u`, of a row of the unit ``unit(u)`` names, in a tree of `units` units'
-    rows, ``leaves // units`` each."""
+    None for none) is by one of part `p`'s slots `u`, of the first row of the unit ``unit(u)`` names, in a tree of
+    `units` units' rows, ``leaves // units`` each."""
     first = _get(e, "reads_from")
     first = 0 if first is None else first
     leaves, rs = _get(e, "leaves"), _get(e, "reads")
@@ -443,26 +869,66 @@ def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | No
         if x is None:
             return True
         b = unit(u)
-        return _nat(x) and b is not None and p.holds(q, u) and b * r <= x < (b + 1) * r
+        return _nat(x) and b is not None and p.holds(q, u) and x == b * r
     return all(read_ok(first + k, x) for k, x in enumerate(rs))
+
+
+def _placed_ok(q: int, p: Part, e: Any, leaves: int, row: Callable[[int], int | None]) -> bool:
+    """`SecondStage.placedOk`: registered-reads entry `e` is of `leaves` leaves, and its every read (slot
+    ``reads_from + k`` reads row ``reads[k]``, None for none) is by one of part `p`'s slots `u`, of row ``row(u)``."""
+    first = _get(e, "reads_from")
+    first = 0 if first is None else first
+    n, rs = _get(e, "leaves"), _get(e, "reads")
+    if not (_nat(n) and isinstance(rs, list) and _nat(first)) or n != leaves:
+        return False
+
+    def read_ok(u: int, x: Any) -> bool:
+        if x is None:
+            return True
+        r = row(u)
+        return _nat(x) and r is not None and p.holds(q, u) and x == r
+    return all(read_ok(first + k, x) for k, x in enumerate(rs))
+
+
+def _linked_row(own: Own, p: Part, r: Rows, u: int) -> int | None:
+    """`SecondStage.linkedRow`: the row slot `u` of part `p` reads at a port a link names, of rows `r`: its unit's
+    (`row_at`) of the `per` its cell's replay block holds in the boundary port."""
+    i, x = p.span(u), row_at(r.runs, p.unit(u))
+    return own.sample[i] * r.per + x if 0 <= i < len(own.sample) and x is not None and x < r.per else None
+
+
+def _wired_row(p: Part, r: Rows, u: int) -> int | None:
+    """`SecondStage.wiredRow`: the row slot `u` of part `p` reads at a port a wire names, of rows `r`: its unit's writer
+    unit's (`row_at`), of the `per` its cell's replay block holds in the writer's output port."""
+    x = row_at(r.runs, p.unit(u))
+    return p.span(u) * r.per + x if x is not None and x < r.per else None
 
 
 def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: a port a
-    link names, only the boundary port it names, each slot only its cell's replay block's rows; any other, its own port
-    of the interior record, each slot only its own rows, or a value either registration registers, never a boundary
-    port. Each at its root, domain and leaves."""
+    link names, only the boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its
+    cell's replay block's (`_linked_row`); a port a wire names, only its writer's output port of the interior record, of
+    the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
+    any other, its own port of the interior record, each slot only its own first row, or a value either registration
+    registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
     v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
         return False
     link = _link_of(own, p.template, port)
     if link is not None:
-        b, m = _by_port(own.boundary).get(v), _get(own.boundary, "population")
-
-        def block(u: int) -> int | None:
-            i = p.span(u)
-            return own.sample[i] if 0 <= i < q else None
-        return v == link.value and b is not None and _nat(m) and _same_at(e, b) and _rows_ok(q, p, e, m, block)
+        b, m, r = _by_port(own.boundary).get(v), _get(own.boundary, "population"), _rows_of(own, p.template, port)
+        if not (v == link.value and b is not None and _nat(m) and r is not None):
+            return False
+        lr = r
+        return _same_at(e, b) and _placed_ok(q, p, e, m * lr.per, lambda u: _linked_row(own, p, lr, u))
+    wire = _wire_of(own, p.template, port)
+    if wire is not None:
+        x, pw, r = _by_port(own.interior).get(v), _writer_of(own, wire), _rows_of(own, p.template, port)
+        if not (v == _port_of(named, wire.writer, wire.wport) and x is not None and pw is not None and r is not None):
+            return False
+        wr = r
+        return (_same_at(e, x) and pw.n == wr.per
+                and _placed_ok(q, p, e, q * wr.per, lambda u: _wired_row(p, wr, u)))
     x = _by_port(own.interior).get(v)
     if x is not None:
         return (v == _port_of(named, p.template, port) and _same_at(e, x)
@@ -480,6 +946,27 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
+def _wired_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
+    """`SecondStage.wiredRead`: every port a wire names for template `t` is one of `reads`."""
+    return all(w.template != t or any(port == w.port for port, _ in reads) for w in own.wires or ())
+
+
+def _verified_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.verifiedOk`: an accepted verdict of record names statement `s`'s header, registered reads and
+    sample."""
+    c = _checked(s)
+    return c is not None and any(v.header == c.header and _jeq(v.registered, c.registered) and _jeq(v.draw, c.draw)
+                                 for v in own.verified)
+
+
+def _tables_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.tablesOk`: every accepted verdict of record that names statement `s`'s header, registered reads and
+    sample set its session up as one table."""
+    c = _checked(s)
+    return c is None or all(not (v.header == c.header and _jeq(v.registered, c.registered) and _jeq(v.draw, c.draw))
+                            or _jeq(v.tables, ONE_TABLE) for v in own.verified)
+
+
 def _refs_ok(s: Stmt) -> bool:
     """`SecondStage.refsOk`: statement `s` reads registered every port its header shares rows at (``shared_rows``, the
     tables whose rows its instances read by the refs in its public file's body)."""
@@ -487,15 +974,63 @@ def _refs_ok(s: Stmt) -> bool:
     return all(any(name == port for name, _ in reads) for port, _ in _entries(_get(s.header, "shared_rows")))
 
 
+#: `SecondStage.READ_RUN_FIELDS`: the run's fields of every port of a registered-reads file, which ``second-read`` holds
+#: to the run (`_same_at`)
+READ_RUN_FIELDS = ("root", "domain", "leaves")
+
+#: `SecondStage.READ_ROW_FIELDS`: the rows a port of a registered-reads file reads, slot ``reads_from + k`` its row
+#: ``reads[k]``, run fields only where the run places them (`_run_places_rows`)
+READ_ROW_FIELDS = ("reads", "reads_from")
+
+
+def _run_places_rows(own: Own, t: str, port: str, e: Any) -> bool:
+    """`SecondStage.runPlacesRows`: template `t`'s session port `port` reads registered-reads entry `e` at rows the run
+    places, which ``second-read`` holds to the run (`_placed_ok`, `_rows_ok`): a port a link names, each slot at its
+    unit's row of its cell's replay block's, or one reading a port of the interior record, its own port each slot at its
+    own rows or, at a port a wire names, its writer's at its writer unit's row (`_read_ok`'s first three cases). Any
+    other port reads a value a registration registers, which ``second-read`` holds only to the value's root, domain and
+    leaves (`_same_at`), so ``second-values`` holds its rows to the reference statement's, the same rows in every run.
+    A workload whose rows there depend on the sampled block (a positional table) would need a rule of its own."""
+    v = _get(e, "value")
+    return _link_of(own, t, port) is not None or (isinstance(v, str) and v in _by_port(own.interior))
+
+
+def blank_reads(own: Own, t: str, r: Any) -> Any:
+    """`SecondStage.blankReads`: registered-reads file `r` of a session of template `t` with each port's run fields
+    None: `READ_RUN_FIELDS`, and `READ_ROW_FIELDS` where the run places the port's rows (`_run_places_rows`); anything
+    else unchanged."""
+    ports = _get(r, "ports")
+    if not isinstance(ports, dict):
+        return r
+
+    def blank(p: str, e: Any) -> Any:
+        if not isinstance(e, dict):
+            return e
+        return {**e, **dict.fromkeys(READ_RUN_FIELDS + (READ_ROW_FIELDS if _run_places_rows(own, t, p, e) else ()))}
+    return {**r, "ports": {p: blank(p, e) for p, e in ports.items()}}
+
+
+def _values_ok(own: Own, s: Stmt) -> bool:
+    """`SecondStage.valuesOk`: statement `s`'s registered reads are its template's reference statement's
+    (`Own.ref_reads`) but for the run's fields, the two the same with those blanked (`blank_reads`), so None only where
+    the reference's is, and each value a registration registers read at the reference's rows; False for a template the
+    params give no reference reads."""
+    ref = next(((r,) for t, r in own.ref_reads if t == s.template), None)
+    return ref is not None and _jeq(blank_reads(own, s.template, s.registered), blank_reads(own, s.template, ref[0]))
+
+
 def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
-    checks = (("second-header", _header_ok(own, named, k, s.template, s.header)),
+    checks = (("second-verified", _verified_ok(own, s)),
+              ("second-tables", _tables_ok(own, s)),
+              ("second-header", _header_ok(own, named, k, s.template, s.header)),
               ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
-               and _linked_read(own, p.template, reads)),
-              ("second-refs", _refs_ok(s)))
+               and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
+              ("second-refs", _refs_ok(s)),
+              ("second-values", _values_ok(own, s)))
     return [code for code, ok in checks if not ok]
 
 
@@ -513,6 +1048,23 @@ def statement_reads(ss: Sequence[Any]) -> dict[str, Any]:
             if isinstance(v, str):
                 root = _get(e, "root")
                 out[v] = (out[v] if _jeq(out[v], root) else None) if v in out else root
+    return out
+
+
+def interior_reads(own: Own, ss: Sequence[Any]) -> list[dict[str, str]]:
+    """`SecondStage.interiorReads`: the reads of statements `ss` that `_read_ok` takes at a value only the interior
+    registration registers: at a port no link or wire names, of a value that is no port of either record and that the
+    boundary doesn't register. Each is ``{"template", "port", "value"}``, in statement and port order. These reads rest
+    on the interior's own values (a history table the interior registers, say), and the attached record names them
+    (`attach`)."""
+    out = []
+    for s in map(_stmt, ss):
+        for port, e in sorted(_entries(_get(s.registered, "ports")), key=lambda pe: pe[0]) if s is not None else ():
+            v = _get(e, "value")
+            if (isinstance(v, str) and _link_of(own, s.template, port) is None and _wire_of(own, s.template, port) is None
+                    and v not in _by_port(own.interior) and v not in _by_port(own.boundary)
+                    and _registered_entry(own.boundary, v) is None and _registered_entry(own.interior, v) is not None):
+                out.append({"template": s.template, "port": port, "value": v})
     return out
 
 
@@ -542,8 +1094,12 @@ def interior_order_ok(own: Own) -> bool:
 
 
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
-    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`."""
-    return [] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)]
+    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then ``second-schedule``
+    where the schedule the boundary registration's record commits is not one of its replay blocks
+    (`schedule_failure`)."""
+    why = schedule_failure(own.boundary)
+    return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
+            + ([] if why is None else [("second-schedule", why)]))
 
 
 def _pos_of(ps: Sequence[Part], t: str) -> int:
@@ -579,8 +1135,9 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     once, with the detail it first failed with (`SecondStage.check`), the interior record's order first."""
     if own.parts is None:
         found = [*_interior_failures(own), ("second-cells", CELLS_WHY)]
-    elif not _links_ok(own.parts, own.links):
-        found = [*_interior_failures(own), ("second-links", LINKS_WHY)]
+    elif not (_links_ok(own.parts, own) and _wires_ok(own.parts, own)):
+        found = [*_interior_failures(own), *([] if _links_ok(own.parts, own) else [("second-links", LINKS_WHY)]),
+                 *([] if _wires_ok(own.parts, own) else [("second-wires", WIRES_WHY)])]
     elif statements is None:
         found = [*_interior_failures(own), ("second-statements", STATEMENTS_WHY)]
     else:
@@ -591,12 +1148,18 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     return c.verdict()
 
 
-def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
-    """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, failing where `v`
-    does as a failed check of its own fails it: not accepted, and no profile, integrity profile or wrong units."""
-    out = {**rec, "checks": {**rec["checks"], "statements": v.to_json()}}
+def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]] = ()) -> dict[str, Any]:
+    """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, and the reads
+    `reads` that rest on the interior's own values (`interior_reads`) as ``interior_reads`` where there are any. It
+    fails where `v` does, as a failed check of its own fails it: not accepted, and no profile, integrity profile or
+    wrong units."""
+    out = {**rec, "checks": {**rec["checks"], "statements": v.to_json()},
+           **({"interior_reads": [dict(r) for r in reads]} if reads else {})}
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Link", "Own", "Part", "at_run", "attach", "blank_run", "check", "interior_order_ok", "links_of",
-           "own_draw", "parts", "port_binding", "replay_links", "set_name", "statement_reads"]
+__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "Rows", "Run", "Wire",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads", "link_runs",
+           "links_of",
+           "own_draw", "parts", "port_binding", "replay_links", "replay_rows", "replay_wires", "row_at", "rows_of",
+           "set_name", "statement_reads", "verified_of", "wire_runs", "wires_of"]

@@ -8,13 +8,14 @@ public import Proofs.WeightSecurity.Served
 inputs to the served circuit. On a run whose accepted releases are faulted runs and whose audit leaves fewer than `M`
 incorrect proof blocks undetected, the outsider's view is its view against the datacenter that deviates through the
 fault channel with the run's own covert string (`Served.view_eq_faultResp`): the patterns of the windows accepted before
-the first rejection, whose sizes sum to at most `lead < M`; each window's advice and bucket; the values the windows from
-the first rejection to the halt released, at most `(L + 1) · |O|` (`Served.card_tailOverwrite_le`); and the halt. That
-deviation is honest use of the faulted function by the outsider with the empty pattern beside each query
-(`Outsider.withFaults_model`), and that party with each covert string written in sets at most `M` faults
-(`withString_mem_faultBudget`). So the outsider steals a typical weight only where the run leaves `M` undetected, a
-release isn't faithful, or some faulted-use party steals it, which `FaultedUseHard` on `HonestUseHard` bounds by
-`N^(λ - 1) · p` each.
+the first rejection, or the cut's hint in place of a pattern it cuts, whose sizes sum to at most `lead < M`; each
+window's advice and bucket; the values the windows from the first rejection to the halt released, at most
+`(L + 1) · |O|` (`Served.card_tailOverwrite_le`); and the halt. That deviation is honest use of the faulted function by
+the outsider with the empty pattern beside each query (`Outsider.withFaults_model`), and that party with each covert
+string written in sets at most `M` faults (`withString_mem_faultBudget`), all at patterns the cut doesn't cut
+(`Cut.Interiors`). So the outsider steals a typical weight only where the run leaves `M` undetected, a release isn't
+faithful, or some faulted-use party steals it, which `FaultedUseHard` at the interior patterns bounds by
+`N^(λ - 1) · p` each, `N` counting only them.
 
 The fault model's facts about populations (`Population.Dataflow`). In a checked population the run with some units'
 writes fixed is unique (`runOf_unique`, from `determinate_of_checked`), and any assignment is the run with its own
@@ -228,37 +229,47 @@ variable {R Q Adv O V Tick F Θ' : Type} [Fintype Adv] [Fintype O] [DecidableEq 
 
 open WeightSecurity.Assumptions
 
-/-- **The fault channel's covert strings**: the patterns, then the served channel's strings. -/
-theorem card_faultChannel (size : F → ℕ) (T M K : ℕ) :
-    Fintype.card (faultChannel R Q Adv O V Tick F size T M K).S =
-      patternCount size T M * Fintype.card (servedChannel R Q Adv O V Tick T K).S := by
-  calc Fintype.card (faultChannel R Q Adv O V Tick F size T M K).S
-      = Fintype.card ({φ : Fin T → F // ∑ t, size (φ t) ≤ M} × (servedChannel R Q Adv O V Tick T K).S) :=
+open Classical in
+/-- **The fault channel's covert strings**: each window's pattern or hint, then the served channel's strings. -/
+theorem card_faultChannel (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ) :
+    Fintype.card (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S =
+      Fintype.card {w : Fin T → F ⊕ κ.H // ∑ t, Sum.elim size κ.size (w t) ≤ M} *
+        Fintype.card (servedChannel R Q Adv O V Tick T K).S := by
+  classical
+  calc Fintype.card (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S
+      = Fintype.card ({w : Fin T → F ⊕ κ.H // ∑ t, Sum.elim size κ.size (w t) ≤ M} ×
+          (servedChannel R Q Adv O V Tick T K).S) :=
         Fintype.card_congr' rfl
     _ = _ := Fintype.card_prod _ _
 
-/-- The fault channel's query at a history of length `n < T` carries its string's `n`-th pattern. -/
-theorem faultChannel_ask_snd (size : F → ℕ) (T M K : ℕ) (s : (faultChannel R Q Adv O V Tick F size T M K).S) (r : R)
+/-- The fault channel's query at a history of length `n < T` carries its string's `n`-th pattern, or the empty pattern
+at a hint. -/
+theorem faultChannel_ask_snd (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (T M K : ℕ)
+    (s : (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S) (r : R)
     (hist : List (((Q × Adv) × F) × Option ((O → V) × Tick))) (x : (Q × Adv) × F) :
-    ((faultChannel R Q Adv O V Tick F size T M K).ask s r hist x).2 =
-      if hn : hist.length < T then s.1.val ⟨hist.length, hn⟩ else x.2 := by
+    ((faultChannel R Q Adv O V Tick F κ size φ₀ T M K).ask s r hist x).2 =
+      if hn : hist.length < T then Sum.elim id (fun _ => φ₀) (s.1.val ⟨hist.length, hn⟩) else x.2 := by
   simp only [faultChannel]
-  split_ifs <;> rfl
+  split_ifs with hn
+  · cases s.1.val ⟨hist.length, hn⟩ <;> rfl
+  · rfl
 
 /-- **The outsider with a fault channel string written in sets at most `M` faults**: its `n`-th query carries the
-string's `n`-th pattern, and their sizes sum to at most `M`. -/
-theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') {size : F → ℕ} (φ₀ : F)
-    (hφ₀ : size φ₀ = 0) (T M K : ℕ) (s : (faultChannel R Q Adv O V Tick F size T M K).S) :
-    (Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M K) s ∈ FaultBudget size T M := by
-  intro r resp
-  have hq : ∀ h, (((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M K) s).query r h).2 =
-      if hn : h.length < T then s.1.val ⟨h.length, hn⟩ else φ₀ := by
-    intro h
+string's `n`-th pattern, or the empty pattern at a hint, and their sizes sum to at most the string's. -/
+theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
+    (κ : Cut (Q × Adv) (O → V)) (size : F → ℕ) (φ₀ : F) (hφ₀ : size φ₀ = 0) (T M K : ℕ)
+    (s : (faultChannel R Q Adv O V Tick F κ size φ₀ T M K).S) :
+    (Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F κ size φ₀ T M K) s ∈ FaultBudget size T M := by
+  have hq : ∀ r h, (((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F κ size φ₀ T M K) s).query r
+      h).2 = if hn : h.length < T then Sum.elim id (fun _ => φ₀) (s.1.val ⟨h.length, hn⟩) else φ₀ := by
+    intro r h
     simp only [Outsider.withString]
     rw [faultChannel_ask_snd, Outsider.rebuild_length]
     rfl
-  have key : ∀ n, ((((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M K) s).view r resp
-      n).map fun e => size e.1.2).sum = ∑ i ∈ range n, if hi : i < T then size (s.1.val ⟨i, hi⟩) else 0 := by
+  refine fun r resp => ?_
+  have key : ∀ n, ((((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F κ size φ₀ T M K) s).view r
+      resp n).map fun e => size e.1.2).sum =
+        ∑ i ∈ range n, if hi : i < T then size (Sum.elim id (fun _ => φ₀) (s.1.val ⟨i, hi⟩)) else 0 := by
     intro n
     induction n with
     | zero => rfl
@@ -268,10 +279,14 @@ theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V
       split_ifs
       · exact Nat.add_comm _ _
       · simp [hφ₀]
+  show _ ≤ M
   rw [key T]
-  calc ∑ i ∈ range T, (if hi : i < T then size (s.1.val ⟨i, hi⟩) else 0) = ∑ t : Fin T, size (s.1.val t) := by
+  calc ∑ i ∈ range T, (if hi : i < T then size (Sum.elim id (fun _ => φ₀) (s.1.val ⟨i, hi⟩)) else 0)
+      = ∑ t : Fin T, size (Sum.elim id (fun _ => φ₀) (s.1.val t)) := by
         rw [← Fin.sum_univ_eq_sum_range]
         exact sum_congr rfl fun t _ => dif_pos t.2
+    _ ≤ ∑ t : Fin T, Sum.elim size κ.size (s.1.val t) := sum_le_sum fun t _ => by
+        cases s.1.val t <;> simp [hφ₀]
     _ ≤ M := s.1.2
 
 end Channel
@@ -279,26 +294,6 @@ end Channel
 namespace Served
 
 variable {O V Tick Adv R Q Θ Θ' F : Type}
-
-theorem accLen_le_count (L : ℕ) : ∀ l : List (Served O V Tick Adv), accLen l ≤ count L l
-  | [] => le_rfl
-  | w :: l => by
-    have := accLen_le_count L l
-    simp only [accLen, count]
-    split_ifs <;> omega
-
-/-- **The windows before the first rejection are accepted.** -/
-theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (w : Served O V Tick Adv),
-    n < accLen l → l[n]? = some w → w.accepted
-  | [], _, _, h, _ => by simp [accLen] at h
-  | v :: l, n, w, h, hw => by
-    by_cases hv : v.accepted
-    · rcases n with _ | n
-      · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
-        exact hw ▸ hv
-      · simp only [accLen, hv, if_true] at h
-        exact accepted_of_lt_accLen l n w (by omega) (by simpa using hw)
-    · simp [accLen, hv] at h
 
 /-- The values a run released from the first rejection through the halt, by window and slot: the fault channel's
 overwrite. -/
@@ -325,36 +320,55 @@ variable [Fintype O] [DecidableEq O] [Fintype V] [Fintype Adv] [Inhabited Adv] [
   [Fintype F]
 
 /-- **A faithful run that leaves fewer than `M` incorrect proof blocks undetected is the fault channel's deviation with
-its own covert string**: the patterns of its windows accepted before the first rejection, each window's advice and
-bucket, the values released from the first rejection through the halt, and the halt. -/
-theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ) (φ₀ : F) (hφ₀ : size φ₀ = 0) (M : ℕ)
-    (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L : ℕ) (θ : Θ) (r : R)
-    (l : List (Served O V Tick Adv)) (hfa : Faithful Cf size Ou L θ r l) (hesc : ¬ Undetected M l) :
-    ∃ s : (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)).S,
-      view Ou L r l T = Ou.view r (fun h x => (faultChannel R Q Adv O V Tick F size T M
-        ((L + 1) * Fintype.card O)).resp Cf s θ r (liftView φ₀ h) (x, φ₀)) T := by
+its own covert string**, at the patterns `κ` doesn't cut: for each window accepted before the first rejection its
+pattern, or `κ`'s hint where `κ` cuts it; each window's advice and bucket; the values released from the first rejection
+through the halt; and the halt. -/
+theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F → ℕ) (φ₀ : F) (hφ₀ : size φ₀ = 0)
+    (κ : Cut (Q × Adv) (O → V)) (M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L : ℕ) (θ : Θ)
+    (r : R) (l : List (Served O V Tick Adv)) (hfa : Faithful Cf size Ou L θ r l) (hesc : ¬ Undetected M l) :
+    ∃ s : (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M
+        ((L + 1) * Fintype.card O)).S,
+      view Ou L r l T = Ou.view r (fun h x => (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ
+        (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M ((L + 1) * Fintype.card O)).resp
+          (fun θ (x : (Q × Adv) × κ.Interiors Cf size φ₀) => Cf θ (x.1, x.2.1)) s θ r
+          (liftView ⟨φ₀, Or.inl rfl⟩ h) (x, ⟨φ₀, Or.inl rfl⟩)) T := by
   classical
   have hcl := count_le_length L l
   have hac := accLen_le_count L l
   have hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect := fun h => hesc (Or.inl h)
   have hlead : lead l < M := lt_of_not_ge fun h => hesc (Or.inr h)
-  have hpat : ∀ n, ∃ φ : F, size φ ≤ (if n < accLen l then incorrectAt l n else 0) ∧
-      (n < accLen l → ∀ w, l[n]? = some w → w.egress = Cf θ (((Ou.query r (view Ou L r l n)).1, w.adv), φ)) := by
+  have hpat : ∀ n, ∃ e : κ.Interiors Cf size φ₀ ⊕ κ.H,
+      Sum.elim (fun φ => size φ.1) κ.size e ≤ (if n < accLen l then incorrectAt l n else 0) ∧
+      (n < accLen l → ∀ w, l[n]? = some w → w.egress =
+        Sum.elim (fun φ => Cf θ (((Ou.query r (view Ou L r l n)).1, w.adv), φ.1))
+          (fun c => κ.sim ((Ou.query r (view Ou L r l n)).1, w.adv) c
+            (Cf θ (κ.ask ((Ou.query r (view Ou L r l n)).1, w.adv) c, φ₀))) e) := by
     intro n
     by_cases hn : n < accLen l
     · have hw : l[n]? = some l[n] := List.getElem?_eq_getElem (lt_of_lt_of_le hn (hac.trans hcl))
       obtain ⟨φ, hφs, hφe⟩ := hfa n (lt_of_lt_of_le hn hac) l[n] hw (accepted_of_lt_accLen l n l[n] hn hw)
-      refine ⟨φ, ?_, fun _ w hw' => ?_⟩
-      · rw [if_pos hn]
+      have hinc : size φ ≤ (if n < accLen l then incorrectAt l n else 0) := by
+        rw [if_pos hn]
         simpa [incorrectAt, hw] using hφs
-      · rw [hw, Option.some.injEq] at hw'
+      by_cases hi : κ.Interior Cf size φ₀ φ
+      · refine ⟨.inl ⟨φ, hi⟩, hinc, fun _ w hw' => ?_⟩
+        rw [hw, Option.some.injEq] at hw'
         subst hw'
         exact hφe
-    · exact ⟨φ₀, by rw [hφ₀]; exact Nat.zero_le _, fun h => absurd h hn⟩
-  choose φs hφs using hpat
-  have hsum : ∑ t : Fin T, size (φs t) ≤ M := by
-    calc ∑ t : Fin T, size (φs t) ≤ ∑ t : Fin T, (if (t : ℕ) < accLen l then incorrectAt l t else 0) :=
-          sum_le_sum fun t _ => (hφs t).1
+      · have hcut : κ.Cuts (fun θ x => Cf θ (x, φ₀)) Cf size (· = φ) := by
+          by_contra hc
+          exact hi (Or.inr hc)
+        obtain ⟨c, hcs, hce⟩ := hcut θ ((Ou.query r (view Ou L r l n)).1, l[n].adv) φ rfl
+        refine ⟨.inr c, le_trans hcs hinc, fun _ w hw' => ?_⟩
+        rw [hw, Option.some.injEq] at hw'
+        subst hw'
+        exact hφe.trans hce
+    · exact ⟨.inl ⟨φ₀, Or.inl rfl⟩, by simp [hn, hφ₀], fun h => absurd h hn⟩
+  choose es hes using hpat
+  have hsum : ∑ t : Fin T, Sum.elim (fun φ => size φ.1) κ.size (es t) ≤ M := by
+    calc ∑ t : Fin T, Sum.elim (fun φ => size φ.1) κ.size (es t)
+        ≤ ∑ t : Fin T, (if (t : ℕ) < accLen l then incorrectAt l t else 0) :=
+          sum_le_sum fun t _ => (hes t).1
       _ = ∑ n ∈ range T, (if n < accLen l then incorrectAt l n else 0) :=
           Fin.sum_univ_eq_sum_range (fun n => if n < accLen l then incorrectAt l n else 0) T
       _ = ∑ n ∈ (range T).filter (· < accLen l), incorrectAt l n := (sum_filter _ _).symm
@@ -362,7 +376,7 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
           sum_le_sum_of_subset_of_nonneg (fun n hn => mem_range.2 (mem_filter.1 hn).2) fun _ _ _ => Nat.zero_le _
       _ ≤ lead l := sum_incorrectAt_le_lead l hacc
       _ ≤ M := hlead.le
-  refine ⟨(⟨fun t => φs t, hsum⟩, fun t => (l[t.val]?.map (·.adv)).getD default,
+  refine ⟨(⟨fun t => es t, hsum⟩, fun t => (l[t.val]?.map (·.adv)).getD default,
     fun t => (l[t.val]?.map (·.tick)).getD default, ⟨tailOverwrite L l T, card_tailOverwrite_le L l T⟩,
     ⟨min (count L l) T, Nat.lt_succ_of_le (min_le_right _ _)⟩), ?_⟩
   refine Outsider.view_congr Ou r _ _ T fun n hn => ?_
@@ -381,7 +395,8 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
     by_cases ha : V.length < accLen l
     · have hno : tailOverwrite L l T (⟨V.length, hn⟩, o) = none :=
         if_neg fun h => absurd h.1 (not_le.2 ha)
-      rw [hno, Option.getD_none, (hφs V.length).2 ha l[V.length] hw, hv]
+      rw [hno, Option.getD_none, (hes V.length).2 ha l[V.length] hw, hv]
+      rcases es V.length with φ | c <;> rfl
     · have hso : tailOverwrite L l T (⟨V.length, hn⟩, o) = some (l[V.length].egress o) := by
         unfold tailOverwrite
         rw [if_pos ⟨not_lt.1 ha, hnc⟩, hw]
@@ -418,31 +433,39 @@ open Verity.Game WeightSecurity.Assumptions
 open scoped ENNReal
 
 theorem TheftFaulted : Guarantees.TheftFaulted := by
-  intro Ω R Θ Q Adv O V Tick F Θ' _ _ _ _ _ _ _ _ _ _ C Cf size φ₀ gen Typ Stolen A Af p lam Ou T L M δ run hφ₀ hhon
+  intro Ω R Θ Q Adv O V Tick F Θ' _ _ _ _ _ _ _ _ _ _ C Cf size φ₀ κ gen Typ Stolen A Af p lam Ou T L M δ run hφ₀ hhon
     hfh hsim hesc
   classical
   have hcov : ∀ (z : Ω × R) (l : List (Served O V Tick Adv)),
       Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)) →
         (gen z.1 ∉ Typ ∨ ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) ∨
-          ∃ s : (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)).S,
+          ∃ s : (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M
+              ((L + 1) * Fintype.card O)).S,
             (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') (gen z.1)
-              (((Ou.withFaults φ₀).withString (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O))
-                s).model z.2 (honest Cf (gen z.1)) T) := by
+              (((Ou.withFaults (⟨φ₀, Or.inl rfl⟩ : κ.Interiors Cf size φ₀)).withString
+                (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M
+                  ((L + 1) * Fintype.card O)) s).model z.2
+                (honest (fun θ (x : (Q × Adv) × κ.Interiors Cf size φ₀) => Cf θ (x.1, x.2.1)) (gen z.1)) T) := by
     intro z l hst
     by_cases ht : gen z.1 ∈ Typ
     · by_cases hfa : Served.Faithful Cf size Ou L (gen z.1) z.2 l
       · by_cases he : Served.Undetected M l
         · exact Or.inl (Or.inr (Or.inr he))
-        · obtain ⟨s, hs⟩ := Served.view_eq_faultResp Cf size φ₀ hφ₀ M Ou T L (gen z.1) z.2 l hfa he
+        · obtain ⟨s, hs⟩ := Served.view_eq_faultResp Cf size φ₀ hφ₀ κ M Ou T L (gen z.1) z.2 l hfa he
           refine Or.inr ⟨s, ht, ?_⟩
           rw [withString_model, Outsider.withFaults_model, Outsider.model, ← hs]
           exact hst
       · exact Or.inl (Or.inr (Or.inl hfa))
     · exact Or.inl (Or.inl ht)
-  refine (value_leak Cf gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T (Af ∩ FaultBudget size T M)
-    ((patternCount size T M : ℝ) ^ (lam - 1) * p) (Ou.withFaults φ₀)
-    (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)) (hfh p hhon)
-    (fun s => ⟨hsim s, withString_mem_faultBudget Ou φ₀ hφ₀ T M _ s⟩) (fun z => run (gen z.1) z.2)
+  refine (value_leak (fun θ (x : (Q × Adv) × κ.Interiors Cf size φ₀) => Cf θ (x.1, x.2.1)) gen
+    (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T (Af ∩ FaultBudget (fun φ : κ.Interiors Cf size φ₀ => size φ.1) T M)
+    ((patternCount (fun φ : κ.Interiors Cf size φ₀ => size φ.1) T M : ℝ) ^ (lam - 1) * p)
+    (Ou.withFaults (⟨φ₀, Or.inl rfl⟩ : κ.Interiors Cf size φ₀))
+    (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M
+      ((L + 1) * Fintype.card O)) (hfh p hhon)
+    (fun s => ⟨hsim s, withString_mem_faultBudget Ou κ (fun φ : κ.Interiors Cf size φ₀ => size φ.1)
+      (⟨φ₀, Or.inl rfl⟩ : κ.Interiors Cf size φ₀) hφ₀ T M _ s⟩)
+    (fun z => run (gen z.1) z.2)
     (fun z l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)))
     (fun z l => gen z.1 ∉ Typ ∨ ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l ∨ Served.Undetected M l)
     hcov).trans ?_
@@ -454,20 +477,17 @@ theorem TheftFaulted : Guarantees.TheftFaulted := by
   have hind : avg (fun z : Ω × R => if gen z.1 ∉ Typ then (1 : ℝ≥0∞) else 0) =
       ENNReal.ofReal (Claims.Pr fun z : Ω × R => gen z.1 ∉ Typ) := by
     convert avg_indicator (fun z : Ω × R => gen z.1 ∉ Typ)
+  generalize ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ
+    (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M ((L + 1) * Fintype.card O)).S *
+      ((patternCount (fun φ : κ.Interiors Cf size φ₀ => size φ.1) T M : ℝ) ^ (lam - 1) * p)) = B
   calc avg (fun z : Ω × R => value (fun l => gen z.1 ∉ Typ ∨ ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l ∨
-          Served.Undetected M l) (run (gen z.1) z.2)) +
-        ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)).S *
-          ((patternCount size T M : ℝ) ^ (lam - 1) * p))
+          Served.Undetected M l) (run (gen z.1) z.2)) + B
       ≤ avg (fun z : Ω × R => (if gen z.1 ∉ Typ then (1 : ℝ≥0∞) else 0) +
-          (value (fun l => ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l) (run (gen z.1) z.2) + δ)) +
-        ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)).S *
-          ((patternCount size T M : ℝ) ^ (lam - 1) * p)) :=
+          (value (fun l => ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l) (run (gen z.1) z.2) + δ)) + B :=
         add_le_add (avg_mono hz) le_rfl
     _ ≤ (ENNReal.ofReal (Claims.Pr fun z : Ω × R => gen z.1 ∉ Typ) +
           (avg (fun z : Ω × R => value (fun l => ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l)
-            (run (gen z.1) z.2)) + δ)) +
-        ENNReal.ofReal (Fintype.card (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)).S *
-          ((patternCount size T M : ℝ) ^ (lam - 1) * p)) := by
+            (run (gen z.1) z.2)) + δ)) + B := by
         rw [avg_add, avg_add, hind]
         gcongr
         exact avg_le_const δ
@@ -477,21 +497,26 @@ namespace ToyFaulted
 
 open WeightSecurity.ToyServed
 
-theorem honest_Cf (θ : W) : honest Cf θ = honest Cf (0, 0) := rfl
+/-- The toy's faulted function at the patterns no cut covers. -/
+abbrev CfI : W → (Unit × Unit) × FaultI → Unit → Fin 16 := fun θ x => Cf θ (x.1, x.2.1)
+
+theorem honest_Cf (θ : W) : honest CfI θ = honest CfI (0, 0) := rfl
 
 /-- Faulted use of the toy reveals nothing: the faulted function reads no weight, so every party's output is one fixed
 guess. -/
-theorem guess_le (P : Outsider Unit ((Unit × Unit) × Fault) (Unit → Fin 16) W) :
-    Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1) (P.model z.2 (honest Cf (gen z.1)) 2)) ≤
-      1 / 256 := by
-  calc Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1) (P.model z.2 (honest Cf (gen z.1)) 2))
-      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest Cf (0, 0)) 2) := Pouw.pr_mono fun z h => by
-        obtain ⟨θ, ⟨⟩⟩ := z
-        have h' : P.model () (honest Cf θ) 2 = θ := h.2
-        rw [honest_Cf] at h'
-        exact h'.symm
+theorem guess_le (P : Outsider Unit ((Unit × Unit) × FaultI) (Unit → Fin 16) W) :
+    Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1)
+      (P.model z.2 (honest CfI (gen z.1)) 2)) ≤ 1 / 256 := by
+  calc Claims.Pr (fun z : W × Unit => gen z.1 ∈ Set.univ ∧ Stolen (gen z.1)
+        (P.model z.2 (honest CfI (gen z.1)) 2))
+      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest CfI (0, 0)) 2) :=
+        Pouw.pr_mono fun z h => by
+          obtain ⟨θ, ⟨⟩⟩ := z
+          have h' : P.model () (honest CfI θ) 2 = θ := h.2
+          rw [honest_Cf] at h'
+          exact h'.symm
     _ = 1 / 256 := by
-        rw [Pouw.pr_eq_card _ {(P.model () (honest Cf (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff],
+        rw [Pouw.pr_eq_card _ {(P.model () (honest CfI (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff],
           card_singleton, ToyServed.card_W]
         norm_num
 
@@ -519,19 +544,23 @@ theorem le_of_hard {p : ℝ}
   rw [← he]
   exact hp guesser (Set.mem_univ _)
 
-theorem patternCount_le_one : patternCount size 2 0 ≤ 1 := by
-  unfold patternCount
-  rw [Fintype.card_le_one_iff]
-  have hz : ∀ χ : Fin 2 → Fault, ∑ t, size (χ t) ≤ 0 → ∀ t, χ t = none := by
-    intro χ hχ t
-    have h0 := (Finset.sum_eq_zero_iff.1 (Nat.le_zero.1 hχ)) t (Finset.mem_univ t)
-    cases hc : χ t with
-    | none => rfl
-    | some v =>
-      rw [hc] at h0
-      exact absurd h0 (by simp [size])
-  rintro ⟨φ, hφ⟩ ⟨ψ, hψ⟩
-  exact Subtype.ext (funext fun t => (hz φ hφ t).trans (hz ψ hψ t).symm)
+/-- At the budget `0` the toy's fault channel has one string of patterns and hints: the empty pattern in each window,
+since every other pattern has size `1` and `Cut.none` has no hints. -/
+theorem strings_subsingleton :
+    Subsingleton {w : Fin 2 → FaultI ⊕ (Cut.none (Unit × Unit) (Unit → Fin 16)).H //
+      ∑ t, Sum.elim (fun φ : FaultI => size φ.1) (Cut.none (Unit × Unit) (Unit → Fin 16)).size (w t) ≤ 0} := by
+  have hz : ∀ w : Fin 2 → FaultI ⊕ (Cut.none (Unit × Unit) (Unit → Fin 16)).H,
+      ∑ t, Sum.elim (fun φ : FaultI => size φ.1) (Cut.none (Unit × Unit) (Unit → Fin 16)).size (w t) ≤ 0 →
+        ∀ t, w t = .inl ⟨none, Or.inl rfl⟩ := by
+    intro w hw t
+    have h0 := (Finset.sum_eq_zero_iff.1 (Nat.le_zero.1 hw)) t (Finset.mem_univ t)
+    rcases hc : w t with ⟨φ, hφ⟩ | c
+    · rw [hc] at h0
+      cases φ with
+      | none => rfl
+      | some v => exact absurd h0 (by simp [size])
+    · exact c.elim
+  exact ⟨fun a b => Subtype.ext (funext fun t => (hz a.1 a.2 t).trans (hz b.1 b.2 t).symm)⟩
 
 end ToyFaulted
 
@@ -582,23 +611,28 @@ theorem TheftFaultedNontrivial : Guarantees.TheftFaultedNontrivial := by
   have htyp : Claims.Pr (fun z : WeightSecurity.ToyServed.W × Unit =>
       WeightSecurity.ToyServed.gen z.1 ∉ (Set.univ : Set WeightSecurity.ToyServed.W)) = 0 :=
     Pouw.pr_eq_zero fun z hz => hz (Set.mem_univ _)
-  have hN : (patternCount WeightSecurity.ToyServed.size 2 0 : ℝ) ^ ((1 : ℝ) - 1) = 1 := by
+  have hN : (patternCount (fun φ : WeightSecurity.ToyServed.FaultI => WeightSecurity.ToyServed.size φ.1) 2 0 : ℝ) ^
+      ((1 : ℝ) - 1) = 1 := by
     rw [sub_self, Real.rpow_zero]
-  have hc : Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.Fault
-      WeightSecurity.ToyServed.size 2 0 ((0 + 1) * Fintype.card Unit)).S ≤ 144 := by
-    rw [card_faultChannel]
-    calc patternCount WeightSecurity.ToyServed.size 2 0 *
-          Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2 ((0 + 1) * Fintype.card Unit)).S
-        ≤ 1 * 144 := Nat.mul_le_mul ToyFaulted.patternCount_le_one
-          ((card_servedChannel_le Unit Unit Unit Unit (Fin 16) Unit 2 _).trans (by simp [Finset.sum_range_succ]))
-      _ = 144 := one_mul _
+  have hc : Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.FaultI (Cut.none _ _)
+      (fun φ : WeightSecurity.ToyServed.FaultI => WeightSecurity.ToyServed.size φ.1) ⟨none, Or.inl rfl⟩ 2 0
+      ((0 + 1) * Fintype.card Unit)).S ≤ 144 := by
+    calc Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.FaultI (Cut.none _ _)
+      (fun φ : WeightSecurity.ToyServed.FaultI => WeightSecurity.ToyServed.size φ.1) ⟨none, Or.inl rfl⟩ 2 0
+      ((0 + 1) * Fintype.card Unit)).S
+        ≤ Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2 ((0 + 1) * Fintype.card Unit)).S :=
+          Fintype.card_le_of_injective (fun s => s.2) fun a b h =>
+            Prod.ext (@Subsingleton.elim _ ToyFaulted.strings_subsingleton _ _) h
+      _ ≤ 144 := (card_servedChannel_le Unit Unit Unit Unit (Fin 16) Unit 2 _).trans (by simp [Finset.sum_range_succ])
   simp only [hsteal, hfa, avg_const, add_zero, htyp, ENNReal.ofReal_zero, zero_add, hN, one_mul] at h
   have hlt : ENNReal.ofReal ((Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit
-      WeightSecurity.ToyServed.Fault WeightSecurity.ToyServed.size 2 0 ((0 + 1) * Fintype.card Unit)).S : ℝ) *
-        (1 / 256)) < 1 := by
+      WeightSecurity.ToyServed.FaultI (Cut.none _ _)
+      (fun φ : WeightSecurity.ToyServed.FaultI => WeightSecurity.ToyServed.size φ.1) ⟨none, Or.inl rfl⟩ 2 0
+      ((0 + 1) * Fintype.card Unit)).S : ℝ) * (1 / 256)) < 1 := by
     rw [ENNReal.ofReal_lt_one]
-    have : (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.Fault
-        WeightSecurity.ToyServed.size 2 0 ((0 + 1) * Fintype.card Unit)).S : ℝ) ≤ 144 := by exact_mod_cast hc
+    have : (Fintype.card (faultChannel Unit Unit Unit Unit (Fin 16) Unit WeightSecurity.ToyServed.FaultI (Cut.none _ _)
+      (fun φ : WeightSecurity.ToyServed.FaultI => WeightSecurity.ToyServed.size φ.1) ⟨none, Or.inl rfl⟩ 2 0
+      ((0 + 1) * Fintype.card Unit)).S : ℝ) ≤ 144 := by exact_mod_cast hc
     linarith
   exact absurd h (not_le.2 hlt)
 

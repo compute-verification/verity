@@ -1,16 +1,19 @@
 /-
-Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
-(`Spot.OneStageZk`) or the recursive audit (`VStar.Recursive`), whichever the auditor's params name. One-stage
-v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's are its own run of the verifier.
+SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
+(`Spot.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
+are its own run of the verifier. The recursive audit (`VStar.Recursive`) is refused too (`RECURSIVE_REFUSED`): SPOT's
+soundness covers the one-stage form only, and the verifier refuses every form its soundness doesn't cover.
 
 `Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
 
 * **params**: `{"form": "one-stage" | "recursive", ...}`, the rest that form's params. The auditor fixes the form with the
-  rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused;
+  rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; the recursive form is
+  refused before its rest is read;
 * **commitment**: the registration record (`OneStage.commitmentOf`), as both forms read it;
 * **evidence**: `{"form", ...}`, the rest that form's evidence. One-stage evidence naming no `proofs` is v1's, and
   refused;
-* **check**: that form's check on the blobs; evidence of the other form rejects.
+* **check**: that form's check on the blobs; evidence of the other form rejects, so with the recursive params refused
+  only one-stage v2's check runs.
 -/
 module
 
@@ -34,8 +37,14 @@ def RECURSIVE : String := "recursive"
 
 /-- The refusal of a one-stage statement naming no `proofs`, one-stage v1's. -/
 def V1_REFUSED : String :=
-  s!"one-stage v1 ({Registration.PROTOCOL}) is refused: sampled proofs covers one-stage v2 ({OneStageZk.PROTOCOL}), " ++
-    "whose verdicts are its own run of the verifier on the proofs, and the recursive audit only"
+  s!"one-stage v1 ({Registration.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
+    s!"({OneStageZk.PROTOCOL}), whose verdicts are its own run of the verifier on the proofs"
+
+/-- The refusal of the recursive form: SPOT's soundness covers the one-stage form only, and the verifier refuses
+every form its soundness doesn't cover. -/
+def RECURSIVE_REFUSED : String :=
+  s!"the recursive audit ({Recursive.PROTOCOL}) is refused: SPOT's soundness covers one-stage v2 " ++
+    s!"({OneStageZk.PROTOCOL}) only"
 
 abbrev Params := OneStageZk.Params ⊕ Recursive.Params
 abbrev Evidence := OneStageZk.Evidence ⊕ Recursive.Evidence
@@ -50,7 +59,7 @@ def paramsOfJson (j : Json) : V Params := do
   if form == ONE_STAGE then
     if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
     return .inl (← OneStageZk.paramsOfJson rest)
-  if form == RECURSIVE then return .inr (← Recursive.paramsOfJson rest)
+  if form == RECURSIVE then throw RECURSIVE_REFUSED
   throw s!"the parameters' form {form} is not \"{ONE_STAGE}\" or \"{RECURSIVE}\""
 
 def evidenceOf (b : ByteArray) : V Evidence := do
@@ -92,6 +101,9 @@ def protocol : Core.BlobProtocol where
   | .ok _ => false
 #guard match evidenceOf "{\"form\":\"one-stage\",\"verdicts\":{}}".toUTF8 with
   | .error e => e == s!"the evidence names no proofs: {V1_REFUSED}"
+  | .ok _ => false
+#guard match paramsOfJson (Json.mkObj [("form", RECURSIVE), ("recursive", Json.mkObj [])]) with
+  | .error e => e == RECURSIVE_REFUSED
   | .ok _ => false
 
 end VStar.Recursive.Sampled

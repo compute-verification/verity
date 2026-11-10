@@ -28,7 +28,10 @@ def size : Fault → ℕ
 /-- The faulted served function: the block's fault value, or the honest `0`. -/
 def Cf (_ : W) (x : (Unit × Unit) × Fault) (_ : Unit) : Fin 16 := x.2.getD 0
 
-/-- Every party that queries the faulted function: the class of all parties. -/
-def anyoneF : Set (Outsider Unit ((Unit × Unit) × Fault) (Unit → Fin 16) W) := Set.univ
+/-- The patterns no cut covers at the cut that cuts nothing: every pattern. -/
+abbrev FaultI := (Cut.none (Unit × Unit) (Unit → Fin 16)).Interiors Cf size none
+
+/-- Every party that queries the faulted function at those patterns: the class of all parties. -/
+def anyoneF : Set (Outsider Unit ((Unit × Unit) × FaultI) (Unit → Fin 16) W) := Set.univ
 
 end WeightSecurity.ToyServed

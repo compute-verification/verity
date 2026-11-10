@@ -416,6 +416,56 @@ inline bool hm96_copy_ahead(const std::vector<long long>& leaves, const std::vec
     return true;
 }
 
+// The key's hm96_fragments and the prefixes' hm96_midstates on one device, kept from one proof to the next: both are public, and
+// they are rebuilt where the tables' entries hm96_fragments reads (each salt bit's, 8 words) or the prefixes differ from the last
+// build's
+struct Hm96Consts {
+    std::vector<uint64_t> entries;
+    uint8_t prefixes[256] = {};
+    bool mid_ok = false;
+    uint32_t* d_frag = nullptr;
+    uint64_t* d_mid = nullptr;
+};
+static std::map<int, Hm96Consts> g_hm96_consts;
+
+inline void hm96_consts_on_device(const uint8_t* prefixes, const uint64_t* tables) {
+    int dev = 0;
+    cudaGetDevice(&dev);
+    Hm96Consts& k = g_hm96_consts[dev];
+    std::vector<uint64_t> entries;
+    entries.reserve(8 * 8 * 192);
+    for (int c = 0; c < 8 * 192; c++) {
+        const uint64_t* e = tables + ((size_t)(c >> 3) * 256 + (1u << (c & 7))) * 8;
+        entries.insert(entries.end(), e, e + 8);
+    }
+    if (entries != k.entries) {
+        std::vector<uint32_t> frag(2 * HM96_FRAGS);
+        hm96_fragments(tables, frag.data());
+        const size_t bytes = frag.size() * sizeof(uint32_t);
+        k.entries.clear();
+        if ((k.d_frag || cudaMalloc(&k.d_frag, bytes) == cudaSuccess)
+            && cudaMemcpy(k.d_frag, frag.data(), bytes, cudaMemcpyHostToDevice) == cudaSuccess)
+            k.entries = std::move(entries);
+        else
+            cudaGetLastError();
+    }
+    if (!k.mid_ok || memcmp(k.prefixes, prefixes, 256) != 0) {
+        k.mid_ok = false;
+        uint8_t* d_pre = nullptr;
+        cudaMalloc(&d_pre, 256);
+        cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
+        if (k.d_mid || cudaMalloc(&k.d_mid, 16 * sizeof(uint64_t)) == cudaSuccess) {
+            hm96_midstates<<<1, 1>>>(d_pre, k.d_mid);
+            k.mid_ok = cudaDeviceSynchronize() == cudaSuccess;
+        }
+        cudaFree(d_pre);
+        if (k.mid_ok) memcpy(k.prefixes, prefixes, 256);
+        else cudaGetLastError();
+    }
+    g_hm96.d_frag = k.d_frag;
+    g_hm96.d_mid = k.d_mid;
+}
+
 // One proof's hm96 context (a null tree callback leaves the build unsalted); the device's copy of the salts is zeroed when it
 // ends. The context is process-global: a second install while one is live is refused (two proofs would share a tree counter and
 // level 0).
@@ -436,22 +486,10 @@ struct Hm96Guard {
             cudaGetLastError();
             hm96_drop_copy_stream();
         }
-        std::vector<uint32_t> frag(2 * HM96_FRAGS);
-        hm96_fragments(tables, frag.data());
-        cudaMalloc(&g_hm96.d_frag, frag.size() * sizeof(uint32_t));
-        cudaMemcpy(g_hm96.d_frag, frag.data(), frag.size() * sizeof(uint32_t), cudaMemcpyHostToDevice);
-        uint8_t* d_pre = nullptr;
-        cudaMalloc(&d_pre, 256);
-        cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
-        cudaMalloc(&g_hm96.d_mid, 16 * sizeof(uint64_t));
-        hm96_midstates<<<1, 1>>>(d_pre, g_hm96.d_mid);
-        cudaDeviceSynchronize();
-        cudaFree(d_pre);
+        hm96_consts_on_device(prefixes, tables);
     }
     ~Hm96Guard() {
         if (!mine) return;
-        if (g_hm96.d_frag) cudaFree(g_hm96.d_frag);
-        if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
         if (g_hm96.copy) cudaStreamSynchronize(g_hm96.copy);
         for (auto& a : g_hm96.ahead) cudaEventDestroy(a.second.copied);
         g_hm96.ahead.clear();

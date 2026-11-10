@@ -34,7 +34,7 @@ def forkDraw {Coin A : Type} {n : ℕ} (j : Fin n) (d d' : (Fin n → Coin) × A
 /-- **One prover's escapes over samples**, at the runs `tr` at each tape and sample: fork events `ev i` on two samples, the
 second `forkDraw (j i)` of the first, with weights `c i` under a square root, and one-run events `ev₁ l` with linear
 weights `β l`, each tied to a collision among the verifier's calls in the runs `tr` reads. -/
-structure EscapesD {Ω Coin A : Type} (H : Msg → Msg) (n : ℕ) (tr : Ω → (Fin n → Coin) × A → Trace) where
+structure EscapesD {Ω Coin A : Type} (H : Msg → Msg) (n : ℕ) (tr : Ω → (Fin n → Coin) × A → Transcript) where
   I : Type
   [finI : Fintype I]
   c : I → ℝ
@@ -53,7 +53,7 @@ attribute [instance] EscapesD.finI EscapesD.finL
 
 section EscapesD
 
-variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Trace}
+variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Transcript}
 
 /-- The escapes' term at tape `ω`: `Σ_i √(c_i · Pr_{d,d'}[ev_i]) + Σ_l β_l · Pr_d[ev₁_l]`. -/
 noncomputable def EscapesD.term [Fintype Coin] [Fintype A] (e : EscapesD H n tr) (ω : Ω) : ℝ :=
@@ -127,7 +127,7 @@ theorem abortRun_vLog (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin) (x :
   unfold abortRun
   split
   · exact (run_logs H P V x ω t.1).2
-  · simp [abortTrace]
+  · simp [abortTranscript]
 
 omit [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Fintype A] [Nonempty A] in
 /-- A verifier that takes no rounds at `x` makes no `H` calls there, as the run aborts or not. -/

@@ -50,7 +50,7 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
 _OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
-                   "allreduce_settings": None, "launch_region": None}
+                   "allreduce_settings": None, "launch_region": None, "batched_form": False}
 
 
 def clear_observations() -> None:
@@ -60,6 +60,17 @@ def clear_observations() -> None:
     _OBSERVED["launch_context"] = None
     _OBSERVED["allreduce_settings"] = None
     _OBSERVED["launch_region"] = None
+    _OBSERVED["batched_form"] = False
+
+
+def observe_batched_form(batched: bool) -> None:
+    """Whether the request Program is derived in class G's batched form (the Build's `--batched`, `prune.BATCHED`), which the
+    sparse-attention rules write in its own Definitions (`vllm_dsa.long_row_blocks`, the latent row), as `predict.dsa` does."""
+    _OBSERVED["batched_form"] = bool(batched)
+
+
+def batched_form() -> bool:
+    return bool(_OBSERVED.get("batched_form"))
 
 
 def observe_allreduce_settings(settings: dict | None) -> None:

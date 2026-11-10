@@ -136,8 +136,8 @@ def spots(families: Iterable[str] = ()) -> list[str]:
 def section(targets: list[dict], rules: Iterable[Rule] | None = None) -> list[dict]:
     """The report's ``ranges``: each rule a spot of which is among ``targets``, with its spots, those not among them
     (``missing``), those that failed, whether it holds, and {spot: the checks it passed without running} (``unchecked``: a
-    warning of code ``unchecked``, such as a partition over its leaf budget, which fails nothing, as circuit-check's own verdict
-    doesn't)."""
+    warning of code ``unchecked``, such as the partition over its budget of a spot that is no Call, which fails nothing, as
+    circuit-check's own verdict doesn't; a Call's fails, ``partition/unpartitioned``)."""
     out = []
     for rule in declared() if rules is None else rules:
         seen: dict[str, bool] = {}

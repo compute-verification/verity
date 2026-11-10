@@ -7,7 +7,7 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
 * **The rows** are the warden's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
   bucket t, S = lanes·r slots of B bytes, slot j at bytes j·B (words j·B/2), a connection's cells at the slots its
   wiring gives it, a slot no connection holds B zero bytes.
-* **The window** (`window`), under ``<ROOT>/rank0`` and the sampling design ``work:2``: 2n units of the transfer-gate template
+* **The window** (`window`), under ``<ROOT>/rank0`` and the sampling design ``work-rate:1/8``: 2n units of the transfer-gate template
   `WardenRowIdentity{S·B}` (`warden_zk.py`'s toy, one bucket row's 8·S·B bits in and the same bits out) in two chunks, and
   the rest, ``--rest`` units of `WardenRowIdentity{2B}` over rows of their own (another template, so another stratum),
   standing in for the compiled model steps. The verifier's work table (`serving_rows.work_table_of`) proves every
@@ -84,14 +84,15 @@ from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.grid import Record  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot import service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/warden-stand-in/v1").hexdigest()
-RULE = "work:2"
+RULE = "work-rate:1/8"
 #: each chunk's registered port, by the warden record it opens: the ingress cells are the circuit's input, the egress its output
 LINKS = {ws.INGRESS: ("c0", "row"), ws.EGRESS: ("c1", "o0")}
 #: the egress chunk's statement made for another units' wiring (`made_for`), and what Lean's registered reads, and the host's
@@ -166,14 +167,14 @@ def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
     tg, other = templates(params)
     program, query = CS.population_program([(tg, 2 * n), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
-    law = D.parse_design(RULE)
 
     def ports(words: int) -> dict:
         return {"rows": (("row", words),), "outs": (("o0", words),), "schemas": (("row", V2), ("o0", V2))}
 
     members = tuple(CS.Member(tid, n=n, base=j * n, tables=(("row", n),), name=f"{tid}/{c}", **ports(WR.row_bytes(params) // 2))
                     for j, (c, _p) in enumerate(LINKS.values())) + (CS.Member(rid, n=rest, base=2 * n, **ports(params.cell_bytes)),)
-    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=SRW.work_table_of(law, {tid: 2 * n, rid: rest}, [tid]))
+    law, table = S.params_law(RULE, program, query, SRW.work_table_of(SRW.law_of(RULE), {tid: 2 * n, rid: rest}, [tid]))
+    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=table)
 
 
 def chunks(mine: CS.Binding) -> dict[str, CS.Member]:

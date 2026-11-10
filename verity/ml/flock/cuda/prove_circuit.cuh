@@ -71,6 +71,10 @@ typedef struct {
     // (ligerito_zk.cuh); the proof stream ends in the zk section (fc_write_zk). zk_tamper: the negatives (LigZk::tamper).
     int zk_on; int zk_rep; int zk_t_pad; int zk_tamper;
     const uint64_t* zk_pads; const uint64_t* zk_extra;
+    // zk_words, where set, gives zk_pads and zk_extra once the host has them, and the prover asks for them only when level 0's
+    // commitment first reads them: the host fills them while the witness builds. Nonzero: the host could not
+    int (*zk_words)(void* ctx, const uint64_t** pads, const uint64_t** extra);
+    void* zk_words_ctx;
     // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
     int u_host;
     // rep 1 from rep 0's level-0 commitment (both reps bind one level-0 root): 1 keeps it for the next call with the same
@@ -1301,10 +1305,11 @@ static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, c
 
 // ---- M1: level 0's commitment with its hiding, and the zk section of the proof stream ----------------------------------
 
-// One batch of level-0 lanes before the transform: lane `lane`'s message (src at pos·s_pos + lane·s_lane, zero past l) plus its
-// padding, c·μ at [0, t_pad) and μ at [l, l + t_pad) (verity's flock-zk patch, zk::lane_codeword; c = x).
+// One batch of level-0 lanes before the transform, position pos's lanes at cw[pos·pitch, +2^log_lanes): lane `lane`'s message
+// (src at pos·s_pos + lane·s_lane, zero past l) plus its padding, c·μ at [0, t_pad) and μ at [l, l + t_pad) (verity's flock-zk
+// patch, zk::lane_codeword; c = x).
 __global__ void fc_zk_lane_input(F128* __restrict__ cw, const F128* __restrict__ src, long long s_pos, long long s_lane, int log_lanes,
-                                 long long n, long long l, const F128* __restrict__ pads, int t_pad) {
+                                 long long n, long long l, const F128* __restrict__ pads, int t_pad, long long pitch) {
     long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
     if (i >= (n << log_lanes)) return;
     const long long pos = i >> log_lanes;
@@ -1313,7 +1318,7 @@ __global__ void fc_zk_lane_input(F128* __restrict__ cw, const F128* __restrict__
     const F128* p = pads + (size_t)lane * t_pad;
     if (pos < t_pad) v = f128_add(v, ghash_mul_karatsuba(F128{2, 0}, p[pos]));
     if (pos >= l && pos < l + t_pad) v = f128_add(v, p[pos - l]);
-    cw[i] = v;
+    cw[pos * pitch + lane] = v;
 }
 
 // Leaves of `stride` lanes: `width` lanes' codewords (src, position-major) as lanes [off, off + width) of each leaf.
@@ -1324,11 +1329,44 @@ __global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict_
     out[pos * stride + off + (i - pos * width)] = src[i];
 }
 
+// A host-to-device copy on a stream of its own, after the default stream's work so far (the destination may be memory that work
+// releases); join() makes the default stream wait for it, as leaving the scope does. Without a stream of its own it is queued
+// on the default stream.
+struct FcSideCopy {
+    cudaStream_t s = nullptr;
+    cudaEvent_t done = nullptr;
+    cudaError_t start(void* dst, const void* src, size_t bytes) {
+        cudaEvent_t ready = nullptr;
+        if (cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking) != cudaSuccess
+            || cudaEventCreateWithFlags(&ready, cudaEventDisableTiming) != cudaSuccess
+            || cudaEventCreateWithFlags(&done, cudaEventDisableTiming) != cudaSuccess) {
+            cudaGetLastError();
+            if (ready) cudaEventDestroy(ready);
+            release();
+            return cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, 0);
+        }
+        cudaEventRecord(ready, 0);
+        cudaStreamWaitEvent(s, ready, 0);
+        cudaEventDestroy(ready);
+        const cudaError_t e = cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, s);
+        cudaEventRecord(done, s);
+        return e;
+    }
+    void join() { if (done) cudaStreamWaitEvent(0, done, 0); }
+    void release() {
+        if (done) cudaEventDestroy(done);
+        if (s) cudaStreamDestroy(s);
+        done = nullptr;
+        s = nullptr;
+    }
+    ~FcSideCopy() { join(); release(); }
+};
+
 // commit_zk on the device. The padding's upper half is not zero, so the transform runs every layer (M0's commit skips layer 0
-// by reading the message replicated); the witness's lanes go in four groups and the extra ones in a batch of their own (the
-// NTT's lane tiles are powers of two), each interleaved into the leaves as it's done, so only a quarter of the witness's lane
-// codewords is ever held beside the leaves. The pads and extra lanes stay on the device for the lane phase (the caller frees
-// them).
+// by reading the message replicated); the witness's lanes are transformed in place in the leaves (launch_ntt_rows), or under
+// FC_NTT_REGS=0 in four groups each interleaved into them as it's done, so only a quarter of their codewords is ever held beside
+// the leaves; the extra ones go in a batch of their own (the NTT's lane tiles are powers of two). The pads and extra lanes stay
+// on the device for the lane phase (the caller frees them).
 static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitParams* N, int log_n, const F128* df, F128** d_pads,
                            F128** d_extra, F128** d_cw0, uint8_t** d_tree0, long long* l0_bl, int* l0_ni, std::vector<MHash>& l0_cap) {
     const int k = P->initial_k, w = 1 << k, t_pad = N->zk_t_pad;
@@ -1338,30 +1376,42 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     CK(ffi_malloc(d_pads, (size_t)(w + 4) * t_pad * sizeof(F128)));
     CK(ffi_malloc(d_extra, (size_t)4 * l * sizeof(F128)));
     // queued in stream order: the caller's words (page-locked, gpu_circuit.rs Words) outlive the proof's last read, which waits
-    // on the stream
-    CK(cudaMemcpyAsync(*d_pads, N->zk_pads, (size_t)(w + 4) * t_pad * sizeof(F128), cudaMemcpyHostToDevice, 0));
-    CK(cudaMemcpyAsync(*d_extra, N->zk_extra, (size_t)4 * l * sizeof(F128), cudaMemcpyHostToDevice, 0));
+    // on the stream. Only the last batch reads the extra lanes, so their copy runs beside the witness lanes' transforms
+    const uint64_t *pads = N->zk_pads, *extra = N->zk_extra;
+    if (N->zk_words && N->zk_words(N->zk_words_ctx, &pads, &extra) != 0) { printf("FFI circuit: the host's zk pads failed\n"); return 212; }
+    CK(cudaMemcpyAsync(*d_pads, pads, (size_t)(w + 4) * t_pad * sizeof(F128), cudaMemcpyHostToDevice, 0));
+    FcSideCopy extra_in;
+    CK(extra_in.start(*d_extra, extra, (size_t)4 * l * sizeof(F128)));
     const TwiddleTable* tt;
     F128* d_tw;
     CK(get_cached_twiddles(k_code, tt, d_tw));
     CK(ffi_malloc(d_cw0, (size_t)n * (w + 4) * sizeof(F128)));
     CK(ffi_malloc(d_tree0, (size_t)(2 * n - 1) * FLOCK_HB));
-    const int g_log = k < 2 ? k : 2, wg = w >> g_log;
-    F128 *cw_w, *cw_x;
-    CK(ffi_malloc(&cw_w, (size_t)n * wg * sizeof(F128)));
-    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
-    for (int g = 0; g < w; g += wg) {
-        fc_zk_lane_input<<<(unsigned)((n * wg + 255) / 256), 256>>>(cw_w, df + g, w, 1, k - g_log, n, l, *d_pads + (size_t)g * t_pad, t_pad);
-        launch_ntt(cw_w, d_tw, *tt, 0, k_code, wg);
-        fc_zk_interleave<<<(unsigned)((n * wg + 255) / 256), 256>>>(*d_cw0, cw_w, wg, g, w + 4, n);
-        CK(cudaGetLastError());
+    F128* cw_x;
+    if (ntt_rows_fit(k_code, w, w + 4)) {
+        fc_zk_lane_input<<<(unsigned)((n * w + 255) / 256), 256>>>(*d_cw0, df, w, 1, k, n, l, *d_pads, t_pad, w + 4);
+        launch_ntt_rows(*d_cw0, d_tw, 0, k_code, k_code, w, w + 4);
+    } else {
+        const int g_log = k < 2 ? k : 2, wg = w >> g_log;
+        F128* cw_w;
+        CK(ffi_malloc(&cw_w, (size_t)n * wg * sizeof(F128)));
+        for (int g = 0; g < w; g += wg) {
+            fc_zk_lane_input<<<(unsigned)((n * wg + 255) / 256), 256>>>(cw_w, df + g, w, 1, k - g_log, n, l, *d_pads + (size_t)g * t_pad,
+                                                                        t_pad, wg);
+            launch_ntt(cw_w, d_tw, *tt, 0, k_code, wg);
+            fc_zk_interleave<<<(unsigned)((n * wg + 255) / 256), 256>>>(*d_cw0, cw_w, wg, g, w + 4, n);
+            CK(cudaGetLastError());
+        }
+        ffi_free(cw_w);
     }
-    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
+    CK(cudaGetLastError());
+    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
+    extra_in.join();
+    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad, 4);
     launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
     fc_zk_interleave<<<(unsigned)((n * 4 + 255) / 256), 256>>>(*d_cw0, cw_x, 4, w, w + 4, n);
     CK(cudaGetLastError());
     launch_merkle((const uint8_t*)*d_cw0, *d_tree0, n, (w + 4) * 16);
-    ffi_free(cw_w);
     ffi_free(cw_x);
     *l0_bl = n;
     *l0_ni = w + 4;

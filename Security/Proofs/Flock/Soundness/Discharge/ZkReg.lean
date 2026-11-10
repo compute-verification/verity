@@ -17,6 +17,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJSt
 public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJSt
 public import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicInst
@@ -39,7 +40,8 @@ is sampled into (`OwnReadsHJ`, `regPathsHJ`); `BindHJ`, the `J`-table rows witho
 satisfiable together; `PublicHJ`: `zk_session_soundHJR_custody_reg`, with "wrong" measured against the public file,
 and `zk_session_soundHJR_custody_drawn_reg`, at the sampled proof blocks; `PublicInst`: those two and `checked_of_acceptsHJ` at
 the template instance's program (`instProg`), with no condition on the unit's input groups or on where the outputs are
-returned.
+returned. `SoundHJSt` and `PublicHJSt`: `checked_of_acceptsHJ`, `zk_session_soundHJR` and the two `PublicHJ` theorems at
+the session's statement circuit (`HmOut.parseStmt`), which a templated statement unrolls to.
 -/
 
 @[expose] public section

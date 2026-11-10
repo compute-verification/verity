@@ -79,7 +79,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
-    "prefix-cache": ("verity_vllm.pipeline.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "served": ("verity_vllm.acquire.served", "the served-compiled Program and required-value manifest (build), the GEMM routes it needs (routes)"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
@@ -124,6 +123,13 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "weights-of-record": ("verity_vllm.check.weights_of_record", "the weights of record"),
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
+}
+
+#: Why a command's module can be absent from a tree, for the refusal that names it: the public release leaves out what
+#: reads a private protocol.
+ABSENT: dict[str, str] = {
+    "serve-openai": "the served window (this endpoint and the window circuit) reads the network certifier's encoding, which the "
+                    "public release leaves out, so it ships without a runnable served window",
 }
 
 
@@ -277,7 +283,14 @@ def main(argv: list[str] | None = None) -> Any:
         except settings.UnknownSetting as e:
             print(f"{PROG}: {e}", file=sys.stderr)
             return 2
-    parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    try:
+        parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
+    except ModuleNotFoundError as e:
+        if e.name != COMMANDS[argv[0]][0]:
+            raise
+        why = ABSENT.get(argv[0])
+        print(f"{PROG}: {argv[0]}: its module {e.name} is not on this tree" + (f": {why}" if why else ""), file=sys.stderr)
+        return 2
     process_settings(os.environ)
     if process:
         # run records store sys.argv as the command's own command line, the one `python -m <module>` gave it
