@@ -86,7 +86,12 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",
- "assumptions": {},
+ "assumptions": {
+  "Accounting.Assumptions.KeyBinding": {
+   "owner": "@compute-accounting",
+   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
+  }
+ },
  "domain": {
   "Claims.Sampling.InScopeTwo": {
    "owner": "@proofs",
@@ -176,12 +181,6 @@
   "Accounting.Assumptions.HelpWithinCertifier": {
    "owner": "@compute-research",
    "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Assumptions.KeyBinding": {
-   "owner": "@compute-accounting",
-   "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -6646,12 +6645,11 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["Accounting.Assumptions.KeyBinding"],
     "domain": [],
     "open": [
      "Accounting.Assumptions.ChainSum",
      "Accounting.Assumptions.CircuitCarriers",
-     "Accounting.Assumptions.KeyBinding",
      "Accounting.Assumptions.SketchHashBudget",
      "Accounting.Assumptions.SketchRank",
      "Accounting.Assumptions.SquaringFloor",
@@ -12346,10 +12344,9 @@
    }
   },
   "Definitions.Accounting.Assumptions.Stacking": {
-   "digest": "fe6f285c0616785c4d4e78f98e18817432f380d62dcfcb00ba3566f8ee4b44c7",
+   "digest": "e921ba1b94a07b5c38e7e871f0b7d0da00dbda8302f5b57343a29147032f5bff",
    "definitions": {
     "Accounting.Assumptions.CircuitCarriers": "be29d1c5e01223840401d0246dccf22593f62c50643c17c6db968e95929878f4",
-    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
     "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    }
   },
@@ -13227,6 +13224,12 @@
     "Accounting.Wipe.Strategy.fill": "e2780b7c76e314436ce8a04d3bae50f70435cd87f2eaaefc46967149b74cee2f",
     "Accounting.Wipe.Strategy.filled": "a00fb1227a2e1c6a8e5675e34e1b01f19d5ed079efedfcb8d5d694d8177a39ff",
     "Accounting.Wipe.Strategy.wipe": "a325b788108fae99d194a8ece5cc8e5ac607aea67587bb567e1e5154219ecab4"
+   }
+  },
+  "Definitions.Assumptions.Accounting": {
+   "digest": "b589a81e2fee78e506a7f7166f7e811e70fd350706f1d22241fe43a3d89e005a",
+   "definitions": {
+    "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
    }
   },
   "Definitions.Claims.Sampling": {
