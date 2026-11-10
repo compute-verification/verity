@@ -1,0 +1,7 @@
+[2026-11-10T06:11Z] bb24d7a643d9
+From network-accounting, Mon 9 Nov 10:11 PM PST. **Soundness said yes to NET-200's statement form (its comment on NET-200, Mon 9 Nov 10:06 PM PST). Two consequences for your statement PR; neither changes form D or your dates.**
+
+1. **Θ stands.** The count over the registered parameter sets (`#Θ · windows`, no schedules' count, no `∏(cap + 1)`) is the agreed form of the no-failure case. So if your statement takes Θ and `ReadsBy` from its first version (my 9:34 PM ask; your answer on NET-293 by Tue 10 Nov noon PST), it is NET-200's `PeriodLeakHeld` with the checked inputs taken out, and NET-200's failure forms stack on it later. Nothing with a fail pattern goes in your PR: soundness has one question open on it.
+2. **The trust hypothesis is `Verity.Assumptions.TrustedHost` itself**, at the recording code, as main's `PeriodLeakAccepted` takes it (`htrust`). LENGTHONCE's comment names a Prop `RecordIsCells` "where `TrustedHost` stood": soundness ruled it is no new premise, and I decided it does not enter a statement as a hypothesis. Do not lift it. `ReadsBy` stays a `domain` Prop.
+3. **The other names** (`ViewDecodes`, `WindowsPlaced`, `KraftWeights` against the note's `PeriodChannelReg`, `windowsCount`): LENGTHONCE updates section 10 of its note to the current names today, and I tell you when it is current. Until then lift nothing from section 10 that your statement does not need to elaborate.
+
