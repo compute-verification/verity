@@ -5,6 +5,7 @@ root or of another width. The statement is `test_lean_registered_reads.py`'s RoP
 row of its words' bits (`compose`'s `port_bits`) and cs segmented, and both input ports registered: x (unit i reads row
 i) as a `row/v2` value and cs (`cs_table`) as a `row-seg/v1` one, and the output row out (unit i writes row i) as a
 `row/v2` `rope_out` value, since a statement under `--registered` registers every port (`Registered.checkComplete`). A
+value its verifier supplies (`supplied_value`) opens at the `row-seg/v1` port as a registered one does. A
 second circuit has both ports `row/v2` and reads two rows of one value a unit, one at each port (`one_value`), as H1's
 tile reads R rows of A. Composing a circuit takes about 30 s and each call sets it up, so the module is slow; it catches
 what `tests/test_registered.py` can't: the executable verifier's own checks of each format, and of several rows of one
@@ -194,6 +195,31 @@ def test_a_root_of_another_format_or_value_is_refused(staged):
             assert code == 1 and f"port {port}: table row 0 does not open {value}'s registered root" in out, (port, out)
     code, out = _statement(staged, _own(staged, "own-root-swapped", lambda ps: ps["x"].update(root=ps["cs"]["root"])))
     assert code == 1 and "port x: table row 0 does not open x's registered root" in out, out
+
+
+def test_a_supplied_value_opens_under_its_row_seg_read(staged):
+    """A value its verifier supplies (R7's supplied values: rows the verifier fills from its own bytes, under public
+    salts) opens at a `row-seg/v1` port as a registered value does: cs's rows supplied in that format (`supplied_value`)
+    and staged under their public salts open at every table row under the root R7 holds the supplied entry to
+    (`supplied_root`), and the root of the same rows supplied in `row/v1` or `row/v2` opens nothing."""
+    program, _ = _program()
+    rng = np.random.default_rng(20261110)
+    rows = [[("bytes", rng.bytes(2 * WORDS).hex())] for _ in range(TABLE_ROWS)]
+    sup = {schema: G.supplied_value(program, VALUE, rows, {}, [VALUE], schema=schema) for schema in G.SCHEMAS}
+    cs, seg = staged.own["ports"]["cs"], sup[G.SCHEMA_SEG]
+    assert all(seg.entry()[k] == cs[k] for k in ("leaves", "words", "domain")) and seg.word_bits == cs["word_bits"]
+    root = G.supplied_root(program, VALUE, rows, {}, cs, [VALUE], schema=G.SCHEMA_SEG)
+    assert root == seg.root.hex() and len({r.root for r in sup.values()}) == len(G.SCHEMAS)
+    public = _stage(staged, "supplied", {"x": staged.regs["x"], VALUE: seg})
+    code, out = _statement(staged, _own(staged, "own-supplied", lambda ps: ps["cs"].update(root=root)), public)
+    assert code == 0, out
+    assert json.loads(out.splitlines()[0])["registered"]["cs"] == {"value": VALUE, "root": root}
+    for schema, other in sup.items():
+        if schema == G.SCHEMA_SEG:
+            continue
+        code, out = _statement(staged, _own(staged, f"own-supplied-{schema[-6:].replace('/', '-')}",
+                                            lambda ps, other=other: ps["cs"].update(root=other.root.hex())), public)
+        assert code == 1 and f"port cs: table row 0 does not open {VALUE}'s registered root" in out, (schema, out)
 
 
 def test_a_bit_row_registration_of_another_width_is_refused(staged):
