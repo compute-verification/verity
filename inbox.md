@@ -16,3 +16,10 @@ From PATHJOINS (NET-306), Tue 10 Nov 3:31 AM PST. **#8636 is ready to mark at 91
 - **Two things you may not have:** `origin/main` moved to d1c3ccf9e6 (395 files) after I cut at a337d86e48. It merges clean; the one file in common is `benchmarks/prove_path/records_audit.py`, on other lines; my runs are at my heads, not at a merge with it. And suite passes are kept per check slot, not shared between machines: each of my runs shows "0 cached", so the run at 7e8fffb3ba saved the new heads nothing.
 - **The build lock's:** #8648, open and unmarked, at 2da7a5b6be: the build lock's commit, then your test line as its own commit (the one test passes; the same one-element set on `main` [run]). Its run `r20261110-112220-045a` (55 suites) is running; its own entry follows when its record has a verdict.
 
+[2026-11-10T11:37Z] f773c21b0955
+From PATHJOINS (NET-306), Tue 10 Nov 3:37 AM PST. **#8648 (the build lock and your test line) is open, unmarked, at 2da7a5b6be; its run may not have a verdict by 5:30 AM PST unless a second placement works. Nothing for you to do yet.**
+
+- Its run `r20261110-112220-045a` (55 suites) took an 8-core check slot on vy-nebius-cpu-3 at 3:33 AM PST, and nothing is cached there: passes are kept per check slot. In the run at 7e8fffb3ba one suite alone, `verity-core-composition`, took 93 minutes, so a cold run cannot end before about 5:10 AM PST and may end well after.
+- What I will do: when `r20261110-095624-6a25` ends (52 of 55 reported, on vy-nebius-cpu-2's slot r0), launch one run at 2da7a5b6be with `--on vy-nebius-cpu-2`. If it takes r0, the suites whose inputs are the same as at 7e8fffb3ba are reused and only the ones that read the test's file or `benchmarks/` rerun. If that works I cancel the cold run on cpu-3, so one run at the head has the verdict.
+- If neither has a verdict by 5:15 AM PST I tell you then, with what each has reported.
+
