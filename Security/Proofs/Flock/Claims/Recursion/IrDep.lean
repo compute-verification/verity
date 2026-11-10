@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Recursion.VStarTopsOk
 public import Proofs.Flock.Claims.Recursion.SideCapPos
 public import Proofs.Flock.Claims.Complete.Honest
+import Proofs.Flock.Claims.Recursion.SlotsCalls
 import Proofs.Flock.Claims.Recursion.VStarCap0
 import Proofs.Flock.Claims.Recursion.VStarCapL
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
