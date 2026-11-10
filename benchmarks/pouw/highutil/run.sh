@@ -73,7 +73,7 @@ echo "prep rc $r" >> "$O/rc.txt"
 cp "$W/cfg/prep.json" "$O/prep.json"
 $TORCH_PY -c "import torch, safetensors, tokenizers, pyarrow; print('torch', torch.__version__, torch.version.cuda)" \
   >> "$O/prep.log" 2>&1
-(cd benchmarks/pouw/machine_model && PYTHONPATH=. uv run -q --no-project --with scipy --with numpy python -m verity_machine_model.cli \
+(cd verity/hardware/machine_model && PYTHONPATH=. uv run -q --no-project --with scipy --with numpy python -m verity_machine_model.cli \
   --device "$THETA_DEVICE" theta) > "$O/theta.txt" 2>&1
 echo "theta rc $?" >> "$O/rc.txt"
 WIKI_REV=b08601e04326c79dfdd32d625aee71d232d685c3

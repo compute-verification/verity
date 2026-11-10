@@ -11,14 +11,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation.reference import evaluate
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import fa2_relation, fa3_model
-from verity.ml.definitions.registry import attention_vocab, b1, hopper
-from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fa2_relation, fa3_model
+from verity.definitions.registry import attention_vocab, b1, hopper
+from verity.definitions.registry import fa3_check_inf as F3
 
 CMAP = Path(__file__).resolve().parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

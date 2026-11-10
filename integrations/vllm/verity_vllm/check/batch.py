@@ -22,10 +22,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Hashable, Iterable, Sequence
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.intervals import Intervals, full, isect, norm
-from verity.ml.circuits.liveness import Liveness
-from verity.ml.circuits.types import RecordType, Tuple, Type, field_starts, field_types
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.intervals import Intervals, full, isect, norm
+from verity.circuits.liveness import Liveness
+from verity.circuits.types import RecordType, Tuple, Type, field_starts, field_types
 
 
 class _Mark:

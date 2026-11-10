@@ -18,14 +18,14 @@ import torch
 from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
-from verity.ml.circuits.census import step_of
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.requirement import from_census
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.protocols.poub.verifier import codec
+from verity.protocols.poub.verifier.memory_map import Replay, dumps, parse
+from verity.definitions.circuits.census import step_of
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import Affine, Coll, concat
+from verity.definitions.circuits.requirement import from_census
+from verity.circuits.types import Array, RecordType, Value
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program import prune as P
 from verity_vllm.program.frontend.derive import derive_report
@@ -36,7 +36,7 @@ from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.protocols.remote_bandwidth import commit_map as CM
-from verity.ml.definitions.replay import replayer
+from verity.definitions.replay import replayer
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYOUT = CM.KvPool(block_size=4)
