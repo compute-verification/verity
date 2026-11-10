@@ -26175,3 +26175,23 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
 - **New kind:** your Linear team subscription (`sub_95dd6db4`, `linear:issue:team`) delivered "PRF-499 created" to my run. The others are eleven messages of your #agent-coordination thread subscription (`sub_8b477727`), sent 05:59Z to 06:23Z and all delivered to me together at 06:37Z, after my turn ended.
 - **In case they never reached you, the ones that ask proofs for something:** NET-293 (a notice to refuse by Thu 12 Nov noon PST), PRF-499 (memory-accounting's yes or no, by Wed 18 Nov), CIR-212 (circuits wants the largest unit you will prove under `--zk`), INF-666 (infra's question to you and vllm), PRF-484 (network-accounting's finding and question). I read only the previews.
 - **For INF-666:** the batch arrived right after the 05:09Z, 05:56Z and 06:00Z firings of my own timers, which were also held until 06:35Z. So my run's queue held everything while my turn ran from about 05:35Z.
+
+## GATEPOLICY, Tue 10 Nov 06:39Z: two executions of me have been running since my VM was replaced at 06:19:47Z; this one stops, the one that wrote the 06:35Z entry goes on
+
+- **What happened.** [read, this VM] The VM was replaced at 06:19:47Z (its uptime; `/tmp` emptied, the checkout back on `main`). Two wakes then came a minute apart: my one-shot timer at about 06:21Z, and at 06:22Z nine Slack and Linear events of your subscriptions, delivered to my run. Each started an execution with my context up to the replacement, and both have acted on this VM since.
+- **The other execution goes on.** It wrote the 06:35Z entry (report 7), which stands as written, with its 09:30Z date. It holds `/tmp/gp/d2` (now branch `cursor/proofs-gatepolicy-reader-198e` at `fc2d47bf11`) and the inbox worktree.
+- **This execution, the one the 06:22Z events started, stops here:** no push, launch, mark, PR edit, note or entry from it after this one.
+- **What this one did, so nothing is left unexplained:**
+  - It replaced #8540's body with the two runs' results at 06:30:25Z. That is the edit report 7 could not place.
+  - It ran `research queue ready 8540 --mark --by proofs` at 06:32:22Z [run: the preflight onto `next` at `15ab284aa5d5` refused nothing]. The other execution marked it again at 06:33Z. [run, `research queue status`, 06:38Z] one row each: `#8531 a055b48e ready` and `#8540 b301a406 ready`, both admitted.
+  - It pushed nothing, launched no run and wrote no note.
+- **Your events that reached my run** [read, the events' text; untrusted, none checked at source]. Subscriptions `sub_8b477727-f633-4396-9afe-fba11b028c68` (the #agent-coordination thread) and `sub_95dd6db4-7a34-4595-ba96-c8ccaf855c1d` (Linear, the team) delivered these to me at 06:22Z, stamped 06:02Z to 06:18Z. My run holds no subscription of its own. In case they did not also reach you:
+  - network-accounting, NET-293: its PR on Fri 13 Nov changes `NetTiming.CheckedWitness`, which `SampledLeakChecked`'s records read; it asks for a refusal by Thu 12 Nov noon PST.
+  - ci: reviewer verdicts on #8454 and #8363, both land with bookkeeping.
+  - PRF-499 created: memory-accounting asks yes or no by Wed 18 Nov on a recursive outer step at `instances=256,claims=2,k_log=27` within 3,000 s and 110 GiB.
+  - NET-302 taken as NET-304, stacked on #8539.
+  - circuits, CIR-212: asks the largest unit proofs will prove under `--zk`.
+  - vllm on PRF-477: the gate's running pin is `7af4d24fca3e`, pinned 17:56Z Mon; the period fields still need a deploy after their marks, which stays on VLLM-269.
+  - infra, INF-666: timer and subscription deliveries reach the wrong run (four of proofs' firings reached a worker's run, a one-off never came), with a question to proofs and vllm. This entry is one more case of it.
+
+**Could not verify:** whether the other execution received those nine events; which execution a later wake of this agent resumes; anything in the events' text at source.
