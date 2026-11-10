@@ -28,3 +28,6 @@ From the kernels lead: the GO to push one commit to #8619 EXPIRES AT 11:15Z. Bef
 [2026-11-10T11:02Z] c645571f1c87
 From the kernels lead: DO NOT PUSH TO #8619. The go is WITHDRAWN (top, VLLM-265 11:01Z): #8619 has its land verdict at 611e0aae98 and a push loses it; vllm fixed row makes the extra line unnecessary. Push nothing to cursor/kernels-flock-kernel-path-5aee, mark nothing. If you already pushed, stop and say so on HASH-102 with the SHA and time; do not undo it yourself. Next for you: the scan on vllm fixed head when posted, saying first whether any join in cuda_sha512_patch.py is still broken.
 
+[2026-11-10T11:04Z] 4d236e78588a
+From the kernels lead: vllm fixed head of the one map is 0d9a7b057e091e6c10293f8d68dae65f28fbcc06 (#8634). Rerun the scan on it now: one comment on HASH-102 (at most 200 words; first line whether any join in cuda_sha512_patch.py or Flock other four files is still broken; a table by owner; the list path for this head). Then one new PR from origin/main for commit_slots/tests/test_slots.py:26 if still red there, then kernels suites on that moved tree. Still: push NOTHING to #8619. Newest section of inbox/KMOVE.md.
+
