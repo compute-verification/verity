@@ -5,7 +5,9 @@ is not a multiple of 16 on the operands padded with +0 words), `aligned_bounds` 
 the m and xl steps', and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
 with sm_120's words is the capture's (`cublas_bf16.TRAIN_CAPTURE`); the grid.z dW's is also held here on words of a full-tensor
 dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`), and the lf model's s step's routes
-on the capture's words that tell each from every other GEMM route (`fixtures/cublas_train_lf_sm120.npz`)."""
+on the capture's words that tell each from every other GEMM route (`fixtures/cublas_train_lf_sm120.npz`).  `train_tf32` binds
+`GemmTf32_v1` at each shape the TF32 capture covers and refuses the rest, and the TF32 GEMM, on words and on bits, gives the
+capture's words that tell it from each alternative (`fixtures/cublas_tf32_sm120.npz`)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -141,6 +143,58 @@ def test_attention_bmm_is_batched_gemm_at_each_op() -> None:
                         (("dq", 256, 64, 0), "B = 0")):
         with pytest.raises(ValueError, match=match):
             CB.attention_bmm(*args)
+
+
+def test_train_tf32_is_the_tf32_capture() -> None:
+    assert CB.TRAIN_TF32 == ((4096, 64, 64), (11264, 64, 64), (301056, 64, 64), (2048, 512, 512))
+    for M, K, N in CB.TRAIN_TF32:
+        assert CB.train_tf32(M, K, N).id == f"GemmTf32_v1{{K={K},N={N}}}"
+    for args in ((4096, 64, 32), (2048, 512, 1408), (512, 512, 512)):
+        with pytest.raises(ValueError, match="is not captured"):
+            CB.train_tf32(*args)
+    assert "whole k8 TF32 steps" in CB.GemmTf32.refuse({"K": 12}) and CB.GemmTf32.refuse({"K": 16}) is None
+
+
+def test_the_tf32_gemm_is_sm120s_on_the_capture_words() -> None:
+    """Words of the cc 12.0 capture's f32 mm's under allow_tf32 at each `TRAIN_TF32` shape in each of the four operand layouts
+    (an unsplit `cutlass_80_tensorop_s1688gemm` kernel in each): `GemmTf32_v1` on words and its σ `GemmTf32_v2` on bits give
+    every word, and every alternative the fit tried misses one: the k8 step's products in groups of 8, 4 + 4 or 2 + 2 + 2 + 2
+    at adder widths 24 to 28, each operand rounded to TF32 by RNE, RNA or truncation (all but the step itself), and an f32
+    FFMA chain."""
+    import dataclasses
+
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity.ml.definitions.numerics import mhc_twin as MT
+    from verity.ml.definitions.numerics import torch_kernels as TK
+    from verity.ml.definitions.registry import boolean_sigma as SG
+    from verity.ml.definitions.registry import mhc as MHC
+
+    d = np.load(FIXTURES / "cublas_tf32_sm120.npz")
+    cases = sorted({k.rsplit("/", 1)[0] for k in d.files})
+    assert cases == sorted(f"{M}x{K}x{N}/{la}{lb}" for M, K, N in CB.TRAIN_TF32 for la in "nt" for lb in "nt"), cases
+    base = MHC.HOPPER_TF32_WGMMA_K8_CANDIDATE
+    alts = {(g, w, r): dataclasses.replace(base, groups=g, width=w) for g in ((8,), (4, 4), (2, 2, 2, 2)) for w in range(24, 29)
+            for r in ("rne", "rna", "trunc") if (g, w, r) != (tuple(base.groups), base.width, "rne")}
+    missed = dict.fromkeys([*alts, "ffma"], False)
+    for case in cases:
+        x, w, y = (d[f"{case}/{a}"] for a in "xwy")
+        K = x.shape[1]
+        gemm = bind(CB.GemmTf32, K=K, N=1)
+        words = [int(np.ravel(evaluate(gemm, [int(v) for v in xi], [int(v) for v in wi]))[0]) for xi, wi in zip(x, w)]
+        assert words == y.tolist(), case
+        bits = np.asarray(BS.evaluate_words(bind(SG.GemmTf32, K=K, N=1), x, w[:, None, :])).reshape(-1).astype(np.uint32)
+        assert np.array_equal(bits, y), case
+        for (g, width, r), model in alts.items():
+            acc = np.zeros(len(y), np.uint32)
+            for k in range(0, K, 8):
+                acc = MT.tf32_dot8(acc, x[:, k:k + 8], w[:, k:k + 8], model, r, r)
+            missed[(g, width, r)] |= not np.array_equal(acc, y)
+        acc = np.zeros(len(y), np.uint32)
+        for k in range(K):
+            acc = TK.fma(x[:, k], w[:, k], acc)
+        missed["ffma"] |= not np.array_equal(acc, y)
+    assert all(missed.values()), [h for h, m in missed.items() if not m]
 
 
 #: one route of each kind at K 64, N 3; the grid.z ones over chunks of [24, 24, 16] at k-tile 16, each 24-word chunk's residue
