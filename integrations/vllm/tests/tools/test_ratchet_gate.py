@@ -1281,16 +1281,16 @@ def _lane_lint(repo: Repo) -> str | None:
 def test_lane_text_is_counted_in_every_kind_of_file_its_lint_reads_naming_where_the_text_goes(lane_linted):
     """Markdown, a Lean comment and a Python docstring count, each by its path; a Python string literal is code, not prose."""
     lane_linted.commit("an attribution, a Linear id, a PR and a literal", {
-        "docs/a.md": "# A\n\nSee #1234 (Daniel, 8 Oct).\n", "Security/B.lean": "-- VLLM-136\ndef b := 1\n",
+        "docs/a.md": "# A\n\nSee #1234 (Daniel, 8 Oct).\n", "security/B.lean": "-- VLLM-136\ndef b := 1\n",
         "tools/c.py": '"""Built for #4321."""\nX = "#1234"\n', "tools/d.json": '{"pr": "#1234"}\n'})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["counted"].get("repo_lane_text")) == (
-        "failed", ["Security/B.lean", "docs/a.md", "tools/c.py"]), c["why"]
+        "failed", ["security/B.lean", "docs/a.md", "tools/c.py"]), c["why"]
     assert c["why"].startswith(
-        f"adds 3 lane-text site(s) to the files it changes, as the base's {REPO_LANE_LINT} counts them (Security/B.lean 0 -> 1; "
+        f"adds 3 lane-text site(s) to the files it changes, as the base's {REPO_LANE_LINT} counts them (security/B.lean 0 -> 1; "
         "docs/a.md 1 -> 2; tools/c.py 0 -> 1): Say what is true now, and put the rest where it lives: history in git "
         "(the commit message), work in Linear (the issue), rulings in Notion (the decisions log), results in the store"), c["why"]
-    assert c["fix"] == ["Security/B.lean:1 linear: VLLM-136", "docs/a.md:3 attribution: (Daniel, 8 Oct)",
+    assert c["fix"] == ["security/B.lean:1 linear: VLLM-136", "docs/a.md:3 attribution: (Daniel, 8 Oct)",
                         "tools/c.py:1 pr: #4321"]
     assert "docs/a.md: 2 found, 1 allowed" in (_lane_lint(lane_linted) or "")
 

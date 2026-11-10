@@ -1737,6 +1737,12 @@
         "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
         "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/": "security/",
+        "tools/verity/lean/tests/fixtures/unread/Security/": "tools/verity/lean/tests/fixtures/unread/security/"
+      }
     }
   ]
 }

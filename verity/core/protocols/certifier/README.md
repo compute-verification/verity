@@ -309,9 +309,9 @@ and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
 `compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
-`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
+`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
-definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
+definitions, proved equal to them in `security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
 from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
 what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
@@ -319,7 +319,7 @@ what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge
 `window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the spec, in the last section of
-`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
+`security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
@@ -393,7 +393,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   both reject, among them another network certifier's digest, and `unread`, a sync off Σ_sync that changes neither
   verdict.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
+- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.

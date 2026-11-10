@@ -349,7 +349,7 @@ def write(root: Path, files: dict[str, str]) -> None:
 
 #: what each toy package below holds beside its sources
 TOY = {"lean-toolchain": TOOLCHAIN + "\n"}
-#: a spec, `sp`, and the package its `proved_in` names, `sp/pf`, which requires it by path, as Security and Security/Proofs
+#: a spec, `sp`, and the package its `proved_in` names, `sp/pf`, which requires it by path, as Security and security/Proofs
 SP = {**TOY, "Sp.lean": "import Sp.Defs\n", "Sp/Defs.lean": "def Sp.Claim (n : Nat) : Prop := n = n\n",
       "lakefile.toml": 'name = "sp"\ndefaultTargets = ["Sp"]\n\n[[lean_lib]]\nname = "Sp"\n',
       "lake-manifest.json": manifest("sp"), **{f"pf/{f}": t for f, t in TOY.items()},

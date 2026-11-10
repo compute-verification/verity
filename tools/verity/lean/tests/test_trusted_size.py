@@ -100,11 +100,11 @@ def test_a_run_s_facts_are_its_gzipped_ones_or_an_older_run_s_plain_ones(tmp_pat
 
     monkeypatch.setattr(T, "subprocess", types.SimpleNamespace(run=run, DEVNULL=subprocess.DEVNULL))
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    facts, lock, report = T.fetch_run("r1", tmp_path / "Security")
+    facts, lock, report = T.fetch_run("r1", tmp_path / "security")
     assert asked == [f"lean-audit/audit-Security/{f}"
                      for f in ("facts.json.gz", "facts.json", "lean-audit.json", "report.json")]
     assert (facts.name, lock.name, report.name) == (kept, "lean-audit.json", "report.json") and facts.is_file()
     asked.clear()
-    T.fetch_run("r1", T.ROOT / "Security" / "Properties")
+    T.fetch_run("r1", T.ROOT / "security" / "Properties")
     assert asked[0] == "lean-audit/audit-Security_Properties/facts.json.gz", \
         "a nested package's reports are under its path's tag, as check.py names them"

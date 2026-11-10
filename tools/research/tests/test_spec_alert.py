@@ -276,8 +276,8 @@ def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_not
     new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
     assert spec._entries(old, new) == [] and [k for _, k, _ in spec._across({"x": old}, {"x": new})] == ["trust"]
     repo = _repo(tmp_path)
-    a = _commit(repo, "Security/lean-audit.json", old, "a")
-    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    a = _commit(repo, "security/lean-audit.json", old, "a")
+    b = _commit(repo, "security/lean-audit.json", new, "b")
     assert spec.message(repo, a, b) is None
 
 
