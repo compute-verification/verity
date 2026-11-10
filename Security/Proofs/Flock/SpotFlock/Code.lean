@@ -46,8 +46,8 @@ a code whose verifier, samples and reveal count are unread).
 The design's replay partition is the members' (`filesReplay`: each request's units of every template together), and
 it evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
 proof-block partition a partition of it, each proof block in one replay block and the design well formed) and that the
-replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
-each member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
+replay layout fits the members' files (`filesOk`: the templates are the members, each slot is its own unit, each
+member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
 verifier refuses every statement out of scope.
 
 **What a session reveals** for a checked unit is the program's (`Reveal.reveal`): one opening for each value its proof
@@ -180,9 +180,9 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
 /-- **The replay layout fits the members' files**, decided: the registration's templates are the members, each with
-the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
-`ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
-per slot and proof block, none per gate. -/
+the design's count `k`; each slot `ρ` of `l` that holds a unit holds unit `ρ` (`Slots.fileLayout` lays no other),
+each member `t` has room for its `n_t` units, `ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is
+the members' (`filesBlockOf`). One check per slot and proof block, none per gate. -/
 def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : List ℕ) : Bool :=
   g.ns.size == ms.length && (List.range ms.length).all (fun t => k.getD t 0 == g.ks.getD t 0) &&
     (List.range l.blocks.size).all fun ρ =>
@@ -232,11 +232,12 @@ def parse (x : Msg) : Option AuditStatement :=
 def partition (_ : AuditStatement) : Option Partition :=
   some (membersPart h.ms)
 
-/-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
-the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`) and the layout
-fits the members' files (`filesOk`). -/
+/-- **The two-stage design**: the members' replay partition over the boundary registration's layout of its circuit file
+(`Slots.fileLayout`, `filesReplay`), the first stage's design and the second stage's counts, where the two-stage scope
+holds (`scopeOk`) and the layout fits the members' files (`filesOk`). -/
 def two (_ : AuditStatement) : Option Design.Two :=
-  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  match (Spot.Slots.fileLayout h.reg.first.circuit h.reg.first.program h.reg.first.query).toOption,
+      replayDesign h with
   | some l, some d =>
     if scopeOk (bitsProgs h.ms) (membersPart h.ms) ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ &&
         filesOk h.reg h.ms l h.k then

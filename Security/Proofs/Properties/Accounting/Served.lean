@@ -312,8 +312,8 @@ theorem llama31Rounds : Llama31Rounds := by
   cases F <;> first | exact (hF rfl).elim | decide +kernel
 
 theorem seededScheduleNotLive : SeededScheduleNotLive := by
-  intro ι Cd Np Kd p query l hl hU hWf ⟨ℓ, j, hb, hj, hR⟩ hLC
-  obtain ⟨_, _, _, hd, _, _⟩ := hU l hl
+  intro ι Cd Np Kd p query us gs hus hgs hU hWf ⟨ℓ, j, hb, hj, hR⟩ hLC
+  obtain ⟨_, _, hd, _, _⟩ := hU us gs hus hgs
   obtain ⟨hW1, hW2, _⟩ := hWf
   have hlt : ℓ < Cd.dag.length := by
     by_contra hge

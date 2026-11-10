@@ -17,14 +17,14 @@ off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
 
 **Strata.** `Bridge.partOf P κ ns` lays the population in strata of sizes `ns`, each a run of consecutive units, as the
-deployed `Slots.layout` lays one stratum per template; `subset kd`'s miss doesn't read them.
+deployed `Slots.fileLayout` lays one stratum per template; `subset kd`'s miss doesn't read them.
 
 **Input rows.** `Bridge.partOf P κ ns` puts each input row in the proof block of the unit that owns it, its first reader
 (`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
 opens only the rows its sampled proof blocks read, while registration opens none. So a unit whose owned input row doesn't open is a
-faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
-`Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
-partition.
+faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed layout
+(`Slots.fileLayout`) is that partition: one class, slot `u` the circuit file's block `u` (`FilePart.block`), which is
+`Bridge.blockOf`'s (`FilePartTarget`).
 
 `SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at

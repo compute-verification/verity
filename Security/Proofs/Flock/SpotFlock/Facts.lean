@@ -19,7 +19,8 @@ public import Proofs.Flock.Bridge.Members
   round 2 checks the design evaluates and the design evaluates only in scope.
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
   the design evaluates only where the replay layout fits the members' files, whose replay partition has the layout's
-  shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
+  shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`),
+  and the circuit file's layout has every slot its own unit (`fileLayout_unit`).
 * `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and the reference statement's
   shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statement is in scope (`Held.xS₀_ok`).
 -/
@@ -261,11 +262,12 @@ theorem partition_eq {s : AuditStatement} {Pt : Partition} (hP : partition h s =
   (Option.some.inj hP).symm
 
 theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    ∃ l, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l ∧ replayDesign h = some d.replay ∧
+    ∃ l, Spot.Slots.fileLayout h.reg.first.circuit h.reg.first.program h.reg.first.query = .ok l ∧
+      replayDesign h = some d.replay ∧
       d = ⟨filesReplay h.ms h.reg.ns l, d.replay, h.k⟩ ∧ scopeOk (bitsProgs h.ms) (membersPart h.ms) d = true ∧
       filesOk h.reg h.ms l h.k = true := by
   unfold two at hd
-  cases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with
+  cases hl : (Spot.Slots.fileLayout h.reg.first.circuit h.reg.first.program h.reg.first.query).toOption with
   | none => simp [hl] at hd
   | some l =>
     cases hr : replayDesign h with
@@ -320,18 +322,17 @@ theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Sl
 
 /-- **The registration is the statement's two-stage design** at SPOT[Flock]'s code (`RegMatchesTwo`): the design
 evaluates only where the replay layout fits the members' files (`filesOk`); their replay partition has the layout's
-shape, request `ρ`'s cell of template `t` is the registration's blocks `blockOf ρ t` on `[0, n_t)`, and an input slot's
-cells are empty. -/
+shape, the circuit file's layout has slot `ρ` unit `ρ` (`fileLayout_unit`), and request `ρ`'s cell of template `t` is
+the registration's blocks `blockOf ρ t` on `[0, n_t)`. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
-      ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
+      ∃ g l, reg h x = some g ∧ Spot.Slots.fileLayout g.first.circuit g.first.program g.first.query = .ok l ∧
         d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes ∧
         slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
         g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
         ∀ ρ b, l.blocks[ρ]? = some b →
-          (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
-              cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
-            (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
+          b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+            cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t) := by
   intro x s Pt d hx hP hd hin
   have hx' : parse h x = some s := hx
   have hP' : partition h s = some Pt := hP
@@ -352,22 +353,17 @@ theorem regMatchesTwo :
   have hne := hin.2.1.2.2.2.1
   refine ⟨h.reg, l, hreg, hl, by rw [hdpart]; exact shape_filesReplay h.ms h.reg.ns l,
     ok_of_toOption hr, by rw [hT, hlen], fun t ht => by rw [hdk]; exact hk t (hlen ▸ ht), fun ρ b hb => ?_⟩
-  rcases hbu : b.unit with _ | u
-  · refine Or.inr ⟨rfl, fun t v hv => ?_⟩
-    rw [hdpart, Flock.Bridge.Members.cell_filesReplay_input h.ms hnd hne hfit hb hbu] at hv
-    simp at hv
-  · have hu : u = ρ := (hfit ρ b hb u hbu).1
-    rw [hu] at hbu
-    refine Or.inl ⟨by rw [hu], fun t ht => ?_⟩
-    have ht' : t < h.ms.length := hlen ▸ ht
-    have heq : Set.EqOn (h.reg.blockOf ρ t) (filesBlockOf h.ms h.reg.ns ρ t) (Set.Iio (h.reg.ns.getD t 0)) :=
-      fun p hp => hblk ρ b hb hbu t ht' p hp
-    rw [hdpart]
-    refine ⟨fun a ha a' ha' he => Flock.Bridge.Members.injective_filesBlockOf h.ms h.reg.ns ρ t ?_, ?_⟩
-    · rw [← heq ha, ← heq ha']
-      exact he
-    · rw [Flock.Bridge.Members.cell_filesReplay h.ms hnd hne hfit hb hbu ht']
-      exact Finset.image_congr fun p hp => (heq (Finset.mem_range.1 (Finset.mem_coe.1 hp))).symm
+  have hbu := Properties.Spot.SecurityProofs.fileLayout_unit hl hb
+  refine ⟨hbu, fun t ht => ?_⟩
+  have ht' : t < h.ms.length := hlen ▸ ht
+  have heq : Set.EqOn (h.reg.blockOf ρ t) (filesBlockOf h.ms h.reg.ns ρ t) (Set.Iio (h.reg.ns.getD t 0)) :=
+    fun p hp => hblk ρ b hb hbu t ht' p hp
+  rw [hdpart]
+  refine ⟨fun a ha a' ha' he => Flock.Bridge.Members.injective_filesBlockOf h.ms h.reg.ns ρ t ?_, ?_⟩
+  · rw [← heq ha, ← heq ha']
+    exact he
+  · rw [Flock.Bridge.Members.cell_filesReplay h.ms hnd hne hfit hb hbu ht']
+    exact Finset.image_congr fun p hp => (heq (Finset.mem_range.1 (Finset.mem_coe.1 hp))).symm
 
 /-! ## The sessions are in scope -/
 

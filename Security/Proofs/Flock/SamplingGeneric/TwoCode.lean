@@ -21,15 +21,15 @@ registration the statement names (`reg x`, a `RegTwo`), and the rest `c`'s:
 * the second stage is `Select.selectSecond` on that sample, `k_t` of the `n_t` proof blocks of each sampled replay
   block's cell of each template `t`, over `L₂ x` bytes (`bytes₂`). The interior is template-major: interior unit
   `cellOff q ns t + i·n_t + p` is proof block `blockOf sample[i] t p` of the statement's partition (`RegTwo.blockAt`).
-  The checked units are those proof blocks and the ones the registration always checks (`always`); every proof block
-  is checked where either stage is refused, where the run rejects.
+  The checked units are those proof blocks; every proof block is checked where either stage is refused, where the run
+  rejects.
 
-`RegMatchesTwo` says the registration is the statement's two-stage design: its replay layout has the shape of the
-design's replay partition (its classes' strata sizes, all that the first stage's bound reads: `Design.Pa_shape`), and its
-first-stage design is the design's first stage; its templates are the partition's strata, each with the design's count;
-the layout's population slot `ρ` is unit `ρ`, and that replay block's cell of stratum `t` is `blockOf ρ t` on
-`[0, n_t)`; an input slot's cells are always checked. So the deployed second stage, one uniform `k_t`-subset per cell
-of a sampled replay block, is the contract's sample of each cell.
+`RegMatchesTwo` says the registration is the statement's two-stage design: its replay layout, the circuit file's
+(`Slots.fileLayout`), has the shape of the design's replay partition (its classes' strata sizes, all that the first
+stage's bound reads: `Design.Pa_shape`), and its first-stage design is the design's first stage; its templates are the
+partition's strata, each with the design's count; the layout's slot `ρ` is unit `ρ`, and that replay block's cell of
+stratum `t` is `blockOf ρ t` on `[0, n_t)`. So the deployed second stage, one uniform `k_t`-subset per cell of a
+sampled replay block, is the contract's sample of each cell.
 
 * `replayDraws_code`: `Code.ReplayDraws` from `RegMatchesTwo` and uniform first-stage bytes (`BytesUniform`), by
   `drawMisses`.
@@ -59,13 +59,6 @@ theorem RegTwo.checked_length_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArr
   · exact List.filter_sublist.length_le.trans (by simp)
   · simp
 
-theorem RegTwo.always_mem (g : RegTwo) {N v : ℕ} (src₁ src₂ : ByteArray) (hv : v < N) (ha : g.always v = true) :
-    v ∈ g.checked N src₁ src₂ := by
-  unfold RegTwo.checked
-  split
-  · exact List.mem_filter.2 ⟨List.mem_range.2 hv, by simp [ha]⟩
-  · exact List.mem_range.2 hv
-
 theorem RegTwo.error_mem (g : RegTwo) {N v : ℕ} {src₁ src₂ : ByteArray} {e : String}
     (h : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .error e) (hv : v < N) :
     v ∈ g.checked N src₁ src₂ := by
@@ -80,8 +73,8 @@ theorem RegTwo.ok_mem (g : RegTwo) {N j : ℕ} {src₁ src₂ : ByteArray} {draw
   unfold RegTwo.checked
   rw [h]
   refine List.mem_filter.2 ⟨List.mem_range.2 hv, ?_⟩
-  rw [Bool.or_eq_true, Array.any_eq_true']
-  exact Or.inr ⟨j, hj, by simp⟩
+  rw [Array.any_eq_true']
+  exact ⟨j, hj, by simp⟩
 
 /-- A nonempty replay sample is the first stage's accepted sample. -/
 theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[]) :
@@ -95,11 +88,11 @@ theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[
     rw [hs] at h
     exact absurd rfl h
 
-theorem slots_select_of (rule : Spot.Select.Rule) (p : Spot.Program) (query : Json)
+theorem slots_select_of (rule : Spot.Select.Rule) (cf : _root_.Flock.Circuit) (p : Spot.Program) (query : Json)
     (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) {l : Spot.Slots.Layout}
-    {draw : Json} {proved : Array ℕ} {read : ℕ} (hl : Spot.Slots.layout p query = .ok l)
+    {draw : Json} {proved : Array ℕ} {read : ℕ} (hl : Spot.Slots.fileLayout cf p query = .ok l)
     (hs : Spot.Select.select rule p query table cm src = .ok (draw, proved, read)) :
-    Spot.Slots.select rule p query table cm src = .ok (l, Spot.Slots.checked l proved) := by
+    Spot.Slots.select rule cf p query table cm src = .ok (l, Spot.Slots.checked l proved) := by
   unfold Spot.Slots.select
   rw [hl]
   show (Spot.Select.select rule p query table cm src >>= _) = _
@@ -278,7 +271,7 @@ theorem prod_second_le {T N : ℕ} {cellF : ℕ → ℕ → Finset ℕ} {kOf : �
 /-- **The first stage misses `T` with probability at most `P_a(T)`**: the sample of record's checked slots on uniform
 bytes (`drawMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
 theorem replay_le (g : Reg) (l : Spot.Slots.Layout) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
-    (hl : Spot.Slots.layout g.program g.query = .ok l)
+    (hl : Spot.Slots.fileLayout g.circuit g.program g.query = .ok l)
     (hds : slotDesign g.rule g.program g.query g.table = .ok Dd) (hwf : Dd.WellFormed (slotPartition l))
     (hT : T ⊆ range (slotPartition l).blocks.length) :
     Pr (fun src : Fin L → Fin 256 => ∀ ρ ∈ g.checked (bytesOf src), ρ ∉ T) ≤ Dd.Pa (slotPartition l) T := by
@@ -290,7 +283,7 @@ theorem replay_le (g : Reg) (l : Spot.Slots.Layout) (Dd : Claims.Sampling.Design
   have hlen : (slotPartition l).blocks.length = l.blocks.size := by
     rw [slotPartition_blocks, List.length_map, Array.length_toList]
   have hlay : g.layout = l := by simp only [Reg.layout, hl]
-  have hb := drawMisses g.rule g.program g.query g.table g.closure L T
+  have hb := drawMisses g.rule g.circuit g.program g.query g.table g.closure L T
   simp only [missBound, hl, hds] at hb
   refine le_trans (Pr_mono fun src hm => ?_) hb
   unfold Reg.checked drawChecked at hm
@@ -306,9 +299,8 @@ theorem replay_le (g : Reg) (l : Spot.Slots.Layout) (Dd : Claims.Sampling.Design
     exact hm v0 (Array.mem_toList_iff.2 ((mem_allSlots _ _).2 hv0l)) hv0
 
 /-- **The second stage misses `B` no more often than the replay sample's escapes**, at fixed first-stage bytes
-`src₁` and uniform second-stage bytes: where `B` meets no cell of the replay sample `rl`, the bound is `1`; where an
-always-checked proof block is in `B`, the miss probability is `0`; otherwise `secondMisses`'s product over the sample's
-cells, each entry one replay block of `rl` (`prod_second_le`). -/
+`src₁` and uniform second-stage bytes: where `B` meets no cell of the replay sample `rl`, the bound is `1`; otherwise
+`secondMisses`'s product over the sample's cells, each entry one replay block of `rl` (`prod_second_le`). -/
 theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design.Two)
     (l : Spot.Slots.Layout) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
     (hlen : d.part.blocks.length = l.blocks.size)
@@ -316,9 +308,8 @@ theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims
       g.first.closure src₁ = .ok (draw, proved, read) → rl = (Spot.Slots.checked l proved).toList)
     (hT : g.ns.size = Pt.strata.length) (hk : ∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0)
     (hblocks : ∀ ρ b, l.blocks[ρ]? = some b →
-      (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
-        cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
-      (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true)) :
+      b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+        cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) :
     Pr (fun src₂ : Fin L₂ → Fin 256 => ∀ u ∈ g.checked Pt.blocks.length src₁ (bytesOf src₂), u ∉ B) ≤
       ∏ ρ ∈ (range d.part.blocks.length).filter (· ∈ rl), ∏ t ∈ range Pt.strata.length,
         escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (B ∩ cell Pt d.part ρ t).card := by
@@ -338,12 +329,6 @@ theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims
   obtain ⟨ρ₀, -, t₀, -, v₀, hv₀⟩ := hA
   obtain ⟨hv₀X, hv₀c⟩ := mem_inter.1 hv₀
   have hv₀N : v₀ < N := mem_range.1 (cell_subset Pt d.part ρ₀ t₀ hv₀c)
-  by_cases hB : ∃ v ∈ B, v < N ∧ g.always v = true
-  · obtain ⟨v, hvX, hvN, hav⟩ := hB
-    calc _ ≤ Pr (fun _ : Fin L₂ → Fin 256 => False) := Pr_mono fun src₂ hm => hm v (g.always_mem _ _ hvN hav) hvX
-      _ = 0 := Pr_false
-      _ ≤ _ := hR0
-  push Not at hB
   let E₂ : (Fin L₂ → Fin 256) → Prop := fun src₂ =>
     (Spot.Select.selectSecond sample g.ns g.ks (bytesOf src₂)).isOk = true ∧
       ∀ j ∈ secondX B N g sample,
@@ -381,18 +366,13 @@ theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims
     obtain ⟨b, hb⟩ := hblk ρ (hlen ▸ mem_range.1 hρlen)
     rw [hb] at hu
     simp only [Option.map_some, Option.some.injEq] at hu
-    rcases hblocks ρ b hb with ⟨-, hcells⟩ | ⟨hnone, -⟩
-    · refine ⟨?_, hcells⟩
-      rw [hrl'] at hρrl
-      exact mem_slots_checked (Array.mem_toList_iff.1 hρrl) hb hu
-    · rw [hnone] at hu; cases hu
+    refine ⟨?_, (hblocks ρ b hb).2⟩
+    rw [hrl'] at hρrl
+    exact mem_slots_checked (Array.mem_toList_iff.1 hρrl) hb hu
   · intro ρ hρS hρP t _
     refine eq_empty_of_forall_notMem fun v hv => ?_
-    obtain ⟨hvX, hvc⟩ := mem_inter.1 hv
     obtain ⟨b, hb⟩ := hblk ρ (hlen ▸ mem_range.1 (mem_filter.1 hρS).1)
-    rcases hblocks ρ b hb with ⟨hu, -⟩ | ⟨-, hal⟩
-    · exact hρP (mem_filter.2 ⟨hρS, by rw [hb, Option.map_some, hu]⟩)
-    · exact hB v hvX (mem_range.1 (cell_subset Pt d.part ρ t hvc)) (hal t v hvc)
+    exact hρP (mem_filter.2 ⟨hρS, by rw [hb, Option.map_some, (hblocks ρ b hb).1]⟩)
 
 /-! ## The code's two-stage facts -/
 
@@ -401,21 +381,19 @@ variable (c : Code) (reg : Msg → Option RegTwo) (two : AuditStatement → Opti
   (bytes₂ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256)
 
 /-- **The registration is the statement's two-stage design**: on a statement in the two-stage scope, the statement
-names a registration whose replay layout (`Slots.layout`) has the shape of the design's replay partition, its classes'
-strata sizes, and whose first-stage design (`slotDesign`) is the design's; whose templates are the statement's strata,
-each sampling the design's count; the layout's population slot `ρ` is unit `ρ`, whose cell of stratum `t` in the
-statement's partition is `blockOf ρ t` on `[0, n_t)`, injectively; and every proof block in an input slot's cells is
-always checked. -/
+names a registration whose replay layout, its circuit file's (`Slots.fileLayout`), has the shape of the design's replay
+partition, its classes' strata sizes, and whose first-stage design (`slotDesign`) is the design's; whose templates are
+the statement's strata, each sampling the design's count; and the layout's slot `ρ` is unit `ρ`, whose cell of stratum
+`t` in the statement's partition is `blockOf ρ t` on `[0, n_t)`, injectively. -/
 def RegMatchesTwo : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
-    ∃ g l, reg x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
+    ∃ g l, reg x = some g ∧ Spot.Slots.fileLayout g.first.circuit g.first.program g.first.query = .ok l ∧
       d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes ∧
       slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
       g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
       ∀ ρ b, l.blocks[ρ]? = some b →
-        (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
-          cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
-        (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true)
+        b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+          cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)
 
 /-- **The second stage's coins don't move the first stage's bytes.** -/
 def FirstFixed : Prop :=
@@ -473,7 +451,7 @@ theorem secondDraws_code (hreg : RegMatchesTwo c reg two) (hfirst : FirstFixed c
   · intro draw proved read hs
     rw [hrs]
     unfold Reg.checked drawChecked
-    simp only [slots_select_of _ _ _ _ _ _ hl hs]
+    simp only [slots_select_of _ _ _ _ _ _ _ hl hs]
 
 theorem drawFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : (codeTwo c reg L₁ L₂ bytes₁ bytes₂).DrawFixed := by
   intro x r u _

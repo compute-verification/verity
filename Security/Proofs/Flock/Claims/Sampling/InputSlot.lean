@@ -39,10 +39,10 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # Input slots
 
-The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate proof
-block per input gate, in gate order, which `Slots.checked` lists on every sample. No run opens an input row on its own:
-the session proves the sampled proof blocks (`HmRow.drawn`), and registration opens no row, so an input row is opened only
-through a sampled proof block that reads it.
+A partition may lay an input class after the population (`withInputs`): one stratum of a one-gate proof block per input
+gate, in gate order. The deployed verifier lays none (`Slots.fileLayout`): each input row is in the proof block of the
+unit that owns it. No run opens an input row on its own: the session proves the sampled proof blocks (`HmRow.drawn`),
+and registration opens no row, so an input row is opened only through a sampled proof block that reads it.
 
 * `faulty_input_iff`: at a slot whose proof block is `[p]`, `p` an input gate, the slot is faulty exactly when the
   witness opens no value at `p`. An input's computed value is its committed value, so an opened input

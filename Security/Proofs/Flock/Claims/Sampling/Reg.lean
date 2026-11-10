@@ -57,14 +57,13 @@ def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
 
 /-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
 (`first`), each template's proof blocks in a replay block (`ns`, a cell each) and the second stage's count in each of
-its cells (`ks`), the statement's proof block at position `p` of template `t`'s cell in replay block `ρ`
-(`blockOf ρ t p`), and the proof blocks checked whatever the stages sample (`always`). -/
+its cells (`ks`), and the statement's proof block at position `p` of template `t`'s cell in replay block `ρ`
+(`blockOf ρ t p`). -/
 structure RegTwo where
   first : Reg
   ns : Array ℕ
   ks : Array ℕ
   blockOf : ℕ → ℕ → ℕ → ℕ
-  always : ℕ → Bool
 
 /-- **The replay sample** on the bytes `src`: the units the first stage proves (`Select.select`'s), which `Run.run`
 hands the second stage; none where it is refused. -/
@@ -87,12 +86,11 @@ def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ :=
   g.blockOf (sample.getD ((j - o) / n) 0) t ((j - o) % n)
 
 /-- **The checked proof blocks** below `N`, at first-stage bytes `src₁` and second-stage bytes `src₂`: those the second
-stage proves (`Select.selectSecond` on the replay sample) and those always checked; all of them where the second stage
-is refused. -/
+stage proves (`Select.selectSecond` on the replay sample); all of them where the second stage is refused. -/
 def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
   match Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ with
   | .ok (draw, _) => (List.range N).filter fun v =>
-      g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
+      (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
   | .error _ => List.range N
 
 /-- **The two-stage sampled verifier's code with its Lean samples**: `c` with `checked` the two stages' on the

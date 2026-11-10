@@ -482,4 +482,17 @@ theorem mem_checked_layout (f : FilePart.FilePart) (ns : Array ℕ) (h : f.n ≤
     rw [hget]
     simpa [Slots.blockOf] using Array.contains_iff_mem.2 hp
 
+/-- **Every slot of a circuit file's layout is its own unit** (`Slots.fileLayout`): slot `ρ`'s proof block is unit
+`ρ`'s. -/
+theorem fileLayout_unit {c : Flock.Circuit} {d : Program} {query : Lean.Json} {l : Slots.Layout}
+    (h : Slots.fileLayout c d query = .ok l) {ρ : ℕ} {b : Slots.ProofBlock} (hb : l.blocks[ρ]? = some b) :
+    b.unit = some ρ := by
+  obtain ⟨S, ns, -, -, rfl⟩ := fileLayout_ok c d query l h
+  have hbl := layout_blocks (FilePart.ofCircuit c ns.toList.sum) ns (le_of_eq rfl)
+  obtain ⟨hv, rfl⟩ := Array.getElem?_eq_some_iff.1 hb
+  have := List.getElem_of_eq hbl (by rw [Array.length_toList]; exact hv)
+  rw [Array.getElem_toList, List.getElem_map, List.getElem_range] at this
+  rw [this]
+  rfl
+
 end Properties.Spot.SecurityProofs

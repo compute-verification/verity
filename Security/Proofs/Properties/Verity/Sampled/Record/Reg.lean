@@ -135,7 +135,7 @@ theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_
     (h : Flock.Bridge.PopMatches desc q n)
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p) : _root_.Spot.Partition.units p q = .ok n := by
   obtain ⟨p', us, hp', hus, hn⟩ := Flock.Bridge.popMatches_iff.1 h
-  obtain rfl : p' = p := by rw [hp] at hp'; exact (Except.ok.inj hp').symm
+  obtain rfl : p = p' := by rw [hp] at hp'; exact Except.ok.inj hp'
   obtain ⟨S, hS, hu⟩ := Flock.Bridge.popUnits_ok hus
   obtain ⟨rs, he, rfl⟩ := strata_ok p q S hS
   rw [units_eq p q rs he]

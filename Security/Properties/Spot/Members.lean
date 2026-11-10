@@ -21,7 +21,7 @@ statement over several templates' circuit files, each template's units lowered f
 * `membersConsts ms`: each member's constants (`Bits.consts`) at its positions.
 * `filesBlockOf ms ns`, `filesUnits`, `filesBlock`, `filesReplay ms ns l`: the members' replay partition over the replay
   layout `l`, each member `t` holding `n_t` units (`ns`) per request: request `ρ`'s replay block is its units of every
-  member together, member `t`'s units `ρ·n_t + p` for `p < n_t`, slot `filesBlockOf ms ns ρ t p`; an input slot's block
+  member together, member `t`'s units `ρ·n_t + p` for `p < n_t`, slot `filesBlockOf ms ns ρ t p`; a slot without a unit
   holds none.
 * `memberBlocksFast`, `filesBlockAt`, `filesReplayFast`: `memberBlocks` and `filesReplay` with what each rebuilds per
   unit or per gate built once, equal to them and compiled in their place (`@[csimp]`).
@@ -116,8 +116,8 @@ def filesBlockOf (ms : Bits.Members) (ns : Array ℕ) (u t p : ℕ) : ℕ := uni
 def filesUnits (ms : Bits.Members) (ns : Array ℕ) (u : ℕ) : List ℕ :=
   (List.range ms.length).flatMap fun t => (List.range (ns.getD t 0)).map (filesBlockOf ms ns u t)
 
-/-- **A replay slot's block in the members' replay partition**: its request's proof blocks' gates together; none for an
-input slot. -/
+/-- **A replay slot's block in the members' replay partition**: its request's proof blocks' gates together; none for a
+slot without a unit. -/
 def filesBlock (ms : Bits.Members) (ns : Array ℕ) (b : Slots.ProofBlock) : List ℕ :=
   match b.unit with
   | some u => (filesUnits ms ns u).flatMap fun v => (membersPart ms).blocks.getD v []
