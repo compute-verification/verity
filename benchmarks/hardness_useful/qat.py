@@ -14,6 +14,13 @@ matrix's c is solved again, so the overflow stays at the target as the weights m
 fits an 8B student in fp32 on one GPU; B·A is merged into the latent weight before the final c, codes and evals.
 --teacher-device puts the teacher on another GPU.
 
+With --layers N the student and the teacher are heads (`head`): the checkpoint's embeddings and first N decoder layers.
+The loss is then the hidden-state error after layer N − 1 (`hidden_error`; with --each-layer, its mean over the N
+layers), each layer reading the student's own upstream output, as served; only the block linears train (their latent
+weights, or with --lora their rank-R updates), so the head differs from the checkpoint in their codes and scales alone;
+and every perplexity below is that error instead. --load-codes FILE serves such a head's exported codes inside the
+whole model (with --device-map).
+
 Quality, before training (the post-training quantization at the same scales) and after:
 - perplexity at --seq on WikiText-2's test split (raw, joined by blank lines, non-overlapping windows) and on the first
   --val-tokens of the FineWeb-Edu val shard;
@@ -34,6 +41,7 @@ outside the run dir) and result.json records the file's sha256.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import math
@@ -119,6 +127,84 @@ def perplexity(model, ids: np.ndarray, seq: int, bs: int = 4, max_windows: int |
     return {"ppl": math.exp(nll / cnt), "nll": nll / cnt, "tokens": cnt, "window_nll": windows}
 
 
+def checkpoint_file(model: str, name: str) -> Path:
+    if Path(model).is_dir():
+        return Path(model) / name
+    from huggingface_hub import hf_hub_download
+
+    return Path(hf_hub_download(model, name))
+
+
+def head(model: str, layers: int, dtype) -> torch.nn.Module:
+    """The checkpoint's embeddings and first `layers` decoder layers, read from only the shards that hold them, with no
+    final norm and no output head: its logits are the hidden state after the last of those layers."""
+    from safetensors import safe_open
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    cfg = AutoConfig.from_pretrained(model)
+    cfg.num_hidden_layers = layers
+    m = AutoModelForCausalLM.from_config(cfg, attn_implementation="sdpa")
+    m.lm_head = m.model.norm = torch.nn.Identity()
+    m.to(dtype)
+    want = set(m.state_dict())
+    try:
+        index = json.loads(checkpoint_file(model, "model.safetensors.index.json").read_text())["weight_map"]
+        shards = sorted({index[k] for k in want})
+    except OSError:  # a checkpoint in one file has no index
+        shards = ["model.safetensors"]
+    state = {}
+    for shard in shards:
+        with safe_open(str(checkpoint_file(model, shard)), "pt") as f:
+            state |= {k: f.get_tensor(k) for k in f.keys() if k in want}
+    m.load_state_dict(state)
+    return m
+
+
+def hidden_error(hs, ht) -> torch.Tensor:
+    """Per decoder layer and sequence, the mean over positions of ‖h_s − h_t‖² / ‖h_t‖² in fp32: hs and ht are a head's
+    and its teacher's hidden states (the embeddings', then each layer's)."""
+    out = []
+    for s, t in zip(hs[1:], ht[1:], strict=True):
+        t = t.to(s.device).float()
+        out.append(((s.float() - t).pow(2).sum(-1) / t.pow(2).sum(-1)).mean(-1))
+    return torch.stack(out)
+
+
+@torch.no_grad()
+def distance(model, ids: np.ndarray, seq: int, bs: int = 4, max_windows: int | None = None, *, teacher) -> dict:
+    """`perplexity`'s windows through a head and its teacher: the mean `hidden_error` after the last layer (err), after
+    each layer, and per window after the last."""
+    n = len(ids) // seq
+    if max_windows:
+        n = min(n, max_windows)
+    was = model.training
+    model.eval()
+    dev, tdev = (m.get_input_embeddings().weight.device for m in (model, teacher))
+    errs = []
+    for i in range(0, n, bs):
+        x = torch.from_numpy(ids[i * seq:min(i + bs, n) * seq].astype(np.int64).reshape(-1, seq))
+        with torch.autocast(dev.type, dtype=torch.bfloat16):
+            errs.append(hidden_error(model(x.to(dev), output_hidden_states=True).hidden_states,
+                                     teacher(x.to(tdev), output_hidden_states=True).hidden_states).double().cpu())
+    model.train(was)
+    e = torch.cat(errs, 1)
+    return {"err": e[-1].mean().item(), "layers": e.mean(1).tolist(), "windows": n, "window_err": e[-1].tolist()}
+
+
+def measure(args):
+    """What an eval measures over its windows: `perplexity`, or a head's `distance` from its teacher."""
+    return perplexity if args.teacher is None else functools.partial(distance, teacher=args.teacher)
+
+
+def headline(r: dict) -> float:
+    return r["err"] if "err" in r else r["ppl"]
+
+
+def sha256(path: Path) -> str:
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
 def zeroshot(model, tok, tasks: list[str], bs: int, limit: int | None) -> dict:
     import lm_eval
     from lm_eval.models.huggingface import HFLM
@@ -150,10 +236,11 @@ def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
     served(model, args, spec)
     out = {}
     if "wikitext2" in args.ppl_sets:
-        out["wikitext2"] = perplexity(model, wt_ids[args.wt_skip * args.seq:], args.seq, max_windows=args.wt_windows)
+        out["wikitext2"] = measure(args)(model, wt_ids[args.wt_skip * args.seq:], args.seq,
+                                         max_windows=args.wt_windows)
     if "fineweb_val" in args.ppl_sets:
-        out["fineweb_val"] = perplexity(model, val_ids[args.val_skip * args.seq:], args.seq,
-                                        max_windows=args.val_tokens // args.seq)
+        out["fineweb_val"] = measure(args)(model, val_ids[args.val_skip * args.seq:], args.seq,
+                                           max_windows=args.val_tokens // args.seq)
     return out
 
 
@@ -167,7 +254,7 @@ def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
         for m in filter(None, args.eval_modes.split(",")):
             ev["modes"][m] = ppls(model, wt_ids, val_ids, args, m)
             log("mode", m, json.dumps(ev["modes"][m]))
-    log("eval", json.dumps({m: {k: round(v["ppl"], 4) for k, v in e.items() if k != "modes"}
+    log("eval", json.dumps({m: {k: float(f"{headline(v):.5g}") for k, v in e.items() if k != "modes"}
                             for m, e in [(args.serve, ev)] + list(ev.get("modes", {}).items())}),
         f"{time.time() - t0:.0f}s")
     served(model, args, args.serve)
@@ -200,9 +287,7 @@ def export(model, path: Path) -> dict:
         tensors[name[: -len(".weight")] + ".s"] = s.float().cpu().contiguous()
     path.parent.mkdir(parents=True, exist_ok=True)
     save_file(tensors, str(path))
-    with open(path, "rb") as f:
-        digest = hashlib.file_digest(f, "sha256").hexdigest()
-    return {"file": str(path), "sha256": digest, "bytes": path.stat().st_size, "matrices": len(tensors) // 2}
+    return {"file": str(path), "sha256": sha256(path), "bytes": path.stat().st_size, "matrices": len(tensors) // 2}
 
 
 def main(argv=None) -> int:
@@ -219,6 +304,14 @@ def main(argv=None) -> int:
                     "calibration_before instead of solved again (`quant.wrap`'s calib)")
     ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs (cpu: on the CPU), "
                     "codes frozen (`quant.FrozenQLinear`); evaluation only (--tokens 0)")
+    ap.add_argument("--layers", type=int, default=None, metavar="N",
+                    help="train and measure the head, the first N decoder layers, on its hidden-state error against "
+                    "the bf16 head's (module docstring)")
+    ap.add_argument("--each-layer", action="store_true",
+                    help="with --layers, the loss is the error's mean over the N layers, not the last's alone")
+    ap.add_argument("--load-codes", type=Path, default=None,
+                    help="with --device-map, serve the matrices this file names (an arm's --codes) from its codes and "
+                    "scales (`quant.load_codes`)")
     ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
                     "zero-shot: MODE[/wF][:X+...][;MODE=X+...]... (`quant.Served`, `quant.set_served`)")
     ap.add_argument("--eval-modes", default=EVAL_MODES, help="more serving specs to measure perplexity under")
@@ -240,8 +333,8 @@ def main(argv=None) -> int:
     ap.add_argument("--wt-skip", type=int, default=0, help="WikiText-2 windows to skip first (as --val-skip)")
     ap.add_argument("--probe", type=int, default=0, help="WikiText-2 windows to run `quant.Probe` over, served as "
                     "--serve, before training")
-    ap.add_argument("--val-skip", type=int, default=0, help="FineWeb-Edu val windows to skip first (a model too slow "
-                    "for one lease measures --val-tokens in parts and sums their nll)")
+    ap.add_argument("--val-skip", type=int, default=0, help="FineWeb-Edu val windows to skip first, in the evals and "
+                    "the curve (a model too slow for one lease measures --val-tokens in parts and sums their nll)")
     ap.add_argument("--data", type=Path, default=Path(os.environ.get("HU_DATA", "data")))
     ap.add_argument("--tasks", default=TASKS, help="lm-eval tasks, comma-separated; empty for perplexity only")
     ap.add_argument("--zs-batch", type=int, default=64)
@@ -259,6 +352,9 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     assert args.codes or not args.price, "--price prices the --codes file"
     assert args.target != "bf16" or args.serve == "a16", "bf16 has no codes to serve noised"
+    assert not args.layers or not (args.tasks or args.device_map or args.target == "bf16"), \
+        "--layers trains and measures a quantized head: no zero-shot (--tasks=), no --device-map"
+    assert not args.load_codes or args.device_map, "--load-codes replaces a frozen wrap's codes (--device-map)"
     args.out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(0)
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -287,10 +383,23 @@ def main(argv=None) -> int:
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, attn_implementation="sdpa",
                                                      device_map=args.device_map, max_memory=even_memory(args.model))
         res["device_map"] = {k: str(v) for k, v in getattr(model, "hf_device_map", {}).items()}
+    elif args.layers:
+        model = head(args.model, args.layers, torch.float32).to(dev)
     else:
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32,
                                                      attn_implementation="sdpa").to(dev)
     model.config.use_cache = False
+    tdev = torch.device(args.teacher_device) if args.teacher_device else dev
+
+    def bf16_model():
+        t = head(args.model, args.layers, torch.bfloat16) if args.layers else AutoModelForCausalLM.from_pretrained(
+            args.model, torch_dtype=torch.bfloat16, attn_implementation="sdpa")
+        t.to(tdev).eval().config.use_cache = False
+        for p in t.parameters():
+            p.requires_grad_(False)
+        return t
+
+    args.teacher = bf16_model() if args.layers else None
     target = None if args.target in ("absmax", "bf16") else float(args.target)
     targets = None
     if args.targets:
@@ -310,13 +419,18 @@ def main(argv=None) -> int:
     if args.target != "bf16":
         res["calibration_before"] = quant.wrap(model, target, args.rotate, log, targets, frozen=bool(args.device_map),
                                                calib=calib)
+        if args.load_codes:
+            res["loaded_codes"] = {"file": str(args.load_codes), "sha256": sha256(args.load_codes),
+                                   "matrices": quant.load_codes(model, args.load_codes)}
+            log("loaded codes", args.load_codes, len(res["loaded_codes"]["matrices"]), "matrices, changed",
+                json.dumps({k: round(v["codes_changed"], 4) for k, v in res["loaded_codes"]["matrices"].items()}))
         res["matrices_before"] = quant.stats(model)
     res["eval_before"] = evaluate(model, tok, wt_ids, val_ids, args, zs=steps == 0 or not args.no_zs_before)
     if args.probe and args.target != "bf16":
         served(model, args, args.serve)
         quant.PROBE = quant.Probe(model)
         t0 = time.time()
-        perplexity(model, wt_ids, args.seq, max_windows=args.probe)
+        measure(args)(model, wt_ids, args.seq, max_windows=args.probe)
         res["probe"] = {"spec": args.serve, "windows": args.probe, "seconds": time.time() - t0,
                         "matrices": quant.PROBE.summary()}
         quant.PROBE = None
@@ -324,17 +438,14 @@ def main(argv=None) -> int:
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
 
     if steps > 0:
-        tdev = torch.device(args.teacher_device) if args.teacher_device else dev
-        teacher = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16,
-                                                       attn_implementation="sdpa").to(tdev).eval()
-        teacher.config.use_cache = False
-        for p in teacher.parameters():
-            p.requires_grad_(False)
+        teacher = args.teacher or bf16_model()
         if args.lora:
             res["lora_params"] = quant.add_lora(model, args.lora)
-            for n, p in model.named_parameters():
-                if n.endswith("norm.weight"):
-                    p.requires_grad_(True)
+        for n, p in model.named_parameters():
+            if args.layers:
+                p.requires_grad_(p.requires_grad and ".layers." in n and "norm" not in n)
+            elif args.lora and n.endswith("norm.weight"):
+                p.requires_grad_(True)
         params = [p for p in model.parameters() if p.requires_grad]
         res["trained_params"] = sum(p.numel() for p in params)
         log("training", res["trained_params"], "parameters", f"(lora {args.lora})" if args.lora else "(all)")
@@ -342,7 +453,12 @@ def main(argv=None) -> int:
                                 fused=dev.type == "cuda")
         warm = max(1, int(args.warmup * total))
         accum = args.batch // args.micro
-        curve = [{"step": 0, "fineweb_val_64": perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]}]
+        hid, first = bool(args.layers), 0 if args.each_layer else -1
+
+        def val64():
+            return headline(measure(args)(model, val_ids[args.val_skip * args.seq:], args.seq, max_windows=64))
+
+        curve = [{"step": 0, "fineweb_val_64": val64()}]
         recals = []
         quant.set_served(model, args.serve).reseed(TRAIN_SEED, dev)
         model.train()
@@ -362,13 +478,16 @@ def main(argv=None) -> int:
                 x = torch.from_numpy(train_ids[off:off + args.micro * tseq].astype(np.int64)
                                      .reshape(args.micro, tseq)).to(dev, non_blocking=True)
                 with torch.no_grad(), torch.autocast(dev.type, dtype=torch.bfloat16):
-                    tl = teacher(x.to(tdev)).logits.to(x.device)
+                    to = teacher(x.to(tdev), output_hidden_states=hid)
                 with torch.autocast(dev.type, dtype=torch.bfloat16):
-                    sl = model(x).logits
-                loss = KD.apply(sl, tl) / accum
+                    so = model(x, output_hidden_states=hid)
+                if hid:
+                    loss = hidden_error(so.hidden_states, to.hidden_states)[first:].mean() / accum
+                else:
+                    loss = KD.apply(so.logits, to.logits.to(x.device)) / accum
                 loss.backward()
                 tot += loss.item()
-                del tl, sl, loss
+                del to, so, loss
             gn = torch.nn.utils.clip_grad_norm_(params, 1.0).item()
             opt.step()
             opt.zero_grad(set_to_none=True)
@@ -376,17 +495,17 @@ def main(argv=None) -> int:
                 info = quant.recalibrate(model)
                 ovs = sorted(v["strassen1"] for v in info.values())
                 recals.append({"step": step + 1, "min": ovs[0], "median": ovs[len(ovs) // 2], "max": ovs[-1]})
-            rec = {"step": step + 1, "kd": tot, "lr": lr, "grad_norm": gn,
+            rec = {"step": step + 1, "hidden" if args.layers else "kd": tot, "lr": lr, "grad_norm": gn,
                    "tok_s": (step + 1) * args.batch * tseq / (time.time() - t0)}
             if (step + 1) % args.eval_every == 0 or step + 1 == steps:
-                rec["fineweb_val_64"] = perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]
+                rec["fineweb_val_64"] = val64()
             curve.append(rec)
             if (step + 1) % 10 == 0 or "fineweb_val_64" in rec or step < 3:
                 log("step", json.dumps({k: (round(v, 6) if isinstance(v, float) else v) for k, v in rec.items()}))
             done = step + 1
             if args.train_min is not None and time.time() - t0 > args.train_min * 60 and done < steps:
                 if "fineweb_val_64" not in rec:
-                    rec["fineweb_val_64"] = perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]
+                    rec["fineweb_val_64"] = val64()
                 log("step", f"stopping at {done} of {steps}: --train-min {args.train_min} passed")
                 break
         res["train"] = {"curve": curve, "recalibrations": recals, "seconds": time.time() - t0,
@@ -420,7 +539,8 @@ def main(argv=None) -> int:
         res["rss_kib"] = {k: int(v.split()[0]) for k, v in (ln.split(":", 1) for ln in status.read_text().splitlines())
                           if k in ("VmHWM", "VmRSS", "RssAnon", "RssFile", "RssShmem")}
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
-    log("done", json.dumps({k: res["eval_after"][k]["ppl"] for k in ("wikitext2", "fineweb_val") if k in res["eval_after"]}))
+    log("done", json.dumps({k: headline(res["eval_after"][k]) for k in ("wikitext2", "fineweb_val")
+                            if k in res["eval_after"]}))
     return 0 if res.get("price_rc", 0) == 0 else 1
 
 
