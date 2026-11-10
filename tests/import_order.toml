@@ -1,8 +1,10 @@
 # The import order: the tree's directories, bottom first.  A file belongs to the deepest directory listed here above it,
-# "." holding the rest, and loads only what its own row or an earlier row holds: a Python import, a Lean import, a Lake
-# package required by path.  The directories of one row may load each other.  `tests/test_boundaries.py` reads this file and
-# nothing else for the order, for "a verifier loads no prover code" and for what a verifier's Python loads; tests are
-# left out as loaders.  `archive` is last: nothing loads it.
+# "." holding the rest, and loads only what its own row or an earlier row holds: a Python import (at load, inside a
+# function, or a module named in a string), a Lean import, a Lake package required by path.  The directories of one row
+# may load each other.  `tests/test_boundaries.py` reads this file and nothing else for the order, for "a verifier loads
+# no prover code", for the distributions of their own under `verity/`, and for what a verifier's or a device's Python
+# loads and what loads it.  Tests are no loaders, except into the last row.  `archive` is loaded by no live row, and
+# `infra`, the last, by no other row.
 #
 # A new directory under `verity/` is in its parent's row until it is listed here.
 
@@ -30,110 +32,639 @@ order = [
     ["workloads"],
     ["benchmarks"],
     [".", "tests"],
-    ["infra"],
     ["archive"],
+    ["infra"],
 ]
 
-# The ties against the order, by pair of directories: each file that loads a file of a later row, with that file.  A pair
-# that ends in `prover` excepts "a verifier loads no prover code" instead: each file under a `verifier/` that loads a
-# file under a `prover/`.  It only shrinks: a tie leaves when its loader stops loading the file or one of the two moves,
-# a pair leaves with its last tie, and the test refuses a tie the tree no longer has and names the pair to delete.
-# Nothing is added: cut a new tie instead (move what the loader needs down to its row, or pass it in).
+# The directories under `verity/` with an import root of their own: each is a distribution of its own, which `verity`
+# never loads, a verifier least of all.  A directory covers the files of its own row under it, so `verity/flock` leaves
+# out `verity/flock/verifier`.  Each entry names its owner and either the date it becomes part of `verity`, held to
+# `verity`'s rules, or the reason it stays a distribution of its own.  It only shrinks: a directory under `verity/`
+# that is not listed here is `verity`'s.
+[[distribution]]
+directory = "verity/flock"
+owner = "proofs"
+reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
+
+[[distribution]]
+directory = "verity/difftest"
+owner = "proofs"
+reason = "the differential test of the Lean against its Python (`verity_difftest`, which their tests import, on Hypothesis)"
+
+[[distribution]]
+directory = "verity/protocols/pous/verifier/check"
+owner = "memory-accounting"
+reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
+
+[[distribution]]
+directory = "verity/configuration/config"
+owner = "ci"
+
+[[distribution]]
+directory = "verity/protocols/inference_only/rho"
+owner = "training"
+
+[[distribution]]
+directory = "verity/protocols/inference_only/nci"
+owner = "compute-accounting"
+
+[[distribution]]
+directory = "verity/composite/device/live_challenger"
+owner = "proofs"
+
+[[distribution]]
+directory = "verity/protocols/poub/device/live_verifier"
+owner = "memory-accounting"
+
+[[distribution]]
+directory = "verity/protocols/pouw/clear"
+owner = "compute-accounting"
+
+# The ties against the order: for a pair of rows, the first listed before the second, each file of the first that loads a
+# file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
+# loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
+# a pair no file needs any more, which it names to delete.
 [[against]]
-loader = "benchmarks"
-loaded = "archive"
-ties = [
-    ["benchmarks/one_stage/prove_bundle.py", "archive/examples/h200/interfaces/verity_e2e_demo/__init__.py"],
-    ["benchmarks/one_stage/prove_bundle.py", "archive/examples/h200/interfaces/verity_e2e_demo/replay_bundle.py"],
-    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/commit.py"],
-    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/driver.py"],
-    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/shape.py"],
-    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/store.py"],
-    ["benchmarks/torch_gpu/commit_slots/overlap.py", "archive/examples/h200/e2e_h200/weights.py"],
+loader = "verity"
+loaded = "verity/commitments"
+files = [
+    "verity/core/protocols/bandwidth/audit.py",
+    "verity/core/protocols/bandwidth/openings.py",
+    "verity/core/protocols/bandwidth/tags.py",
+    "verity/core/protocols/pous/period_reports.py",
 ]
 
 [[against]]
-loader = "verity/flock"
-loaded = "tools"
-ties = [
-    ["verity/flock/agreement/tool.py", "tools/research/src/research/store/tool.py"],
-    ["verity/flock/tool.py", "tools/research/src/research/pythonpath.py"],
-    ["verity/flock/tool.py", "tools/research/src/research/store/tool.py"],
+loader = "verity"
+loaded = "verity/protocols/pous"
+files = [
+    "verity/core/devices/memory_challenger/lean/scripts/replay.py",
+    "verity/core/protocols/bandwidth/audit.py",
+    "verity/core/protocols/pous/period_reports.py",
 ]
 
 [[against]]
 loader = "verity/flock/verifier"
 loaded = "verity/difftest"
-ties = [
-    ["verity/flock/verifier/firewall/FirewallDifftest.lean", "verity/difftest/lean/Difftest.lean"],
-    ["verity/flock/verifier/firewall/lakefile.toml", "verity/difftest/lean/lakefile.toml"],
-    ["verity/flock/verifier/vstar/VStarDifftest.lean", "verity/difftest/lean/Difftest.lean"],
-    ["verity/flock/verifier/vstar/lakefile.toml", "verity/difftest/lean/lakefile.toml"],
+files = [
+    "verity/flock/verifier/firewall/FirewallDifftest.lean",
+    "verity/flock/verifier/firewall/lakefile.toml",
+    "verity/flock/verifier/vstar/VStarDifftest.lean",
+    "verity/flock/verifier/vstar/lakefile.toml",
 ]
 
 [[against]]
-loader = "verity/protocols/certifier"
+loader = "verity/flock/verifier"
+loaded = "verity/spot"
+files = [
+    "verity/flock/verifier/vstar/recursive/VStarRecursive/Protocol.lean",
+    "verity/flock/verifier/vstar/recursive/lakefile.toml",
+]
+
+[[against]]
+loader = "verity/flock/verifier"
+loaded = "tools"
+files = [
+    "verity/flock/verifier/tool.py",
+]
+
+[[against]]
+loader = "verity/spot"
+loaded = "verity/protocols/pouw"
+files = [
+    "verity/spot/sampling_plan/demo_a.py",
+]
+
+[[against]]
+loader = "verity/flock"
+loaded = "tools"
+files = [
+    "verity/flock/pod/catalog.py",
+    "verity/flock/tool.py",
+]
+
+[[against]]
+loader = "verity/flock"
 loaded = "benchmarks"
-ties = [
-    ["verity/protocols/certifier/device/network_traces/certifier_serve.py", "benchmarks/network_traces/active_replay.py"],
-    ["verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py"],
-    ["verity/protocols/certifier/device/network_traces/warden_serve.py", "benchmarks/network_traces/stall_probe.py"],
-    ["verity/protocols/certifier/verifier/network_traces/scan_period.py", "benchmarks/network_traces/scan_zk.py"],
-]
-
-[[against]]
-loader = "verity/protocols/certifier/verifier"
-loaded = "verity/protocols/certifier/prover"
-ties = [
-    ["verity/protocols/certifier/verifier/network_traces/chain_record.py", "verity/protocols/certifier/prover/__init__.py"],
-    ["verity/protocols/certifier/verifier/network_traces/chain_record.py", "verity/protocols/certifier/prover/ingress_scan.py"],
-    ["verity/protocols/certifier/verifier/network_traces/leak_bounds.py", "verity/protocols/certifier/prover/__init__.py"],
-    ["verity/protocols/certifier/verifier/network_traces/leak_bounds.py", "verity/protocols/certifier/prover/ingress_scan.py"],
+files = [
+    "verity/flock/pod/gemm_hill.py",
+    "verity/flock/pod/read_gadget.py",
+    "verity/flock/python/verity_flock/bench.py",
+    "verity/flock/python/verity_flock/circuit_bench.py",
+    "verity/flock/python/verity_flock/instances.py",
+    "verity/flock/python/verity_flock/ir_bench.py",
+    "verity/flock/python/verity_flock/register.py",
 ]
 
 [[against]]
 loader = "verity/protocols/pous"
 loaded = "Security"
-ties = [
-    ["verity/protocols/pous/lean/submissions/reference.lean", "Security/Proofs/Pous/Statements.lean"],
+files = [
+    "verity/protocols/pous/lean/submissions/reference.lean",
 ]
 
-# What each verifier's Python loads, by `verifier/` directory under `verity/`: `loads`, the places outside it that its
-# files load, and `reaches`, the places those load in turn, and so on.  A place is a protocol's `verifier/`, `prover/` or
-# `device/` directory, or the row of a file under none.  Until a protocol's Lean verifier decides its verdicts these are
-# the soundness path of its Python verifier.  Both only shrink: the test refuses a place the tree adds and a place
-# nothing reaches any more.
-[[verifier]]
+[[against]]
+loader = "verity/protocols/poub"
+loaded = "tools"
+files = [
+    "verity/protocols/poub/device/live_verifier/host.py",
+]
+
+[[against]]
+loader = "verity/protocols/certifier"
+loaded = "benchmarks"
+files = [
+    "verity/protocols/certifier/device/network_traces/certifier_piece.py",
+    "verity/protocols/certifier/device/network_traces/load_relay.py",
+    "verity/protocols/certifier/verifier/network_traces/chain_record.py",
+    "verity/protocols/certifier/verifier/network_traces/scan_period.py",
+]
+
+[[against]]
+loader = "integrations"
+loaded = "tools"
+files = [
+    "integrations/vllm/tools/migrate/superseded_quarantine.py",
+]
+
+[[against]]
+loader = "tools"
+loaded = "benchmarks"
+files = [
+    "tools/research/src/research/store/tools_registry.py",
+]
+
+[[against]]
+loader = "tools"
+loaded = "infra"
+files = [
+    "tools/research/console/verity_console.py",
+]
+
+[[against]]
+loader = "benchmarks"
+loaded = "."
+files = [
+    "benchmarks/one_stage/prove_bundle.py",
+    "benchmarks/one_stage/served_verdicts.py",
+    "benchmarks/torch_gpu/commit_slots/overlap.py",
+]
+
+# What each verifier's and each device's Python loads, and what loads it, by `verifier/` or `device/` directory under
+# `verity/`: `loads`, the places outside it that its files load; `reaches`, the places those load in turn, and so on;
+# `loaded_by`, the Python files under `verity/` outside every verifier and device that load it, tests included.  A
+# place is the directory one level below a row, or the row for a file directly in it.  Until a protocol's Lean verifier
+# decides its verdicts, `reaches` is the soundness path of its Python verifier.  All three only shrink: the test refuses
+# a place or a file the tree adds and one it no longer has.
+[[trusted]]
+directory = "verity/flock/verifier"
+loads = [
+    "tools/research",
+]
+reaches = [
+    "tools/research",
+]
+
+[[trusted]]
+directory = "verity/protocols/certifier/device"
+loads = [
+    "benchmarks/network_traces",
+    "verity",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/protocols",
+    "verity/protocols/certifier",
+    "verity/protocols/certifier/verifier",
+    "verity/protocols/pous",
+    "verity/protocols/pous/verifier",
+    "verity/spot",
+    "verity/spot/verifier",
+]
+reaches = [
+    "benchmarks/network_traces",
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/circuits/evaluation",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/protocols",
+    "verity/protocols/certifier",
+    "verity/protocols/certifier/verifier",
+    "verity/protocols/pous",
+    "verity/protocols/pous/verifier",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+]
+
+[[trusted]]
 directory = "verity/protocols/certifier/verifier"
-loads = ["verity", "verity/circuits", "verity/commitments", "verity/windows", "verity/spot/device",
-    "verity/spot/verifier", "verity/protocols/pous/verifier", "verity/protocols/certifier/device",
-    "verity/protocols/certifier/prover", "benchmarks"]
-reaches = ["verity", "verity/circuits", "verity/commitments", "verity/definitions", "verity/configuration",
-    "verity/hardware", "verity/windows", "verity/spot/device", "verity/spot/verifier", "verity/flock",
-    "verity/flock/prover", "verity/protocols/pous/device", "verity/protocols/pous/verifier",
-    "verity/protocols/poub/verifier", "verity/protocols/pouw/prover", "verity/protocols/pouw/verifier",
-    "verity/protocols/certifier/device", "verity/protocols/certifier/prover", "integrations", "benchmarks"]
+loads = [
+    "benchmarks/network_e2e",
+    "benchmarks/network_traces",
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/circuits/evaluation",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/frame_v3",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/protocols",
+    "verity/protocols/certifier",
+    "verity/protocols/certifier/prover",
+    "verity/protocols/pous",
+    "verity/protocols/pous/verifier",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+    "verity/windows",
+]
+reaches = [
+    "benchmarks/network_e2e",
+    "benchmarks/network_traces",
+    "benchmarks/one_stage",
+    "integrations/vllm",
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/circuits/evaluation",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/frame_v3",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/config",
+    "verity/definitions",
+    "verity/definitions/circuits",
+    "verity/definitions/kernels",
+    "verity/definitions/numerics",
+    "verity/definitions/ops",
+    "verity/definitions/registry",
+    "verity/definitions/silicon",
+    "verity/flock",
+    "verity/flock/prover",
+    "verity/flock/python",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/protocols",
+    "verity/protocols/certifier",
+    "verity/protocols/certifier/prover",
+    "verity/protocols/poub",
+    "verity/protocols/poub/verifier",
+    "verity/protocols/pous",
+    "verity/protocols/pous/device",
+    "verity/protocols/pous/verifier",
+    "verity/protocols/pouw",
+    "verity/protocols/pouw/prover",
+    "verity/protocols/pouw/verifier",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+    "verity/windows",
+]
+loaded_by = [
+    "verity/protocols/certifier/prover/advice_check.py",
+    "verity/protocols/certifier/prover/cache_step_v2.py",
+    "verity/protocols/certifier/prover/cache_step_v3.py",
+    "verity/protocols/certifier/prover/compile_slice_v2.py",
+    "verity/protocols/certifier/prover/compile_slice_v3.py",
+    "verity/protocols/certifier/prover/compile_slice_v4.py",
+    "verity/protocols/certifier/prover/compile_slice_v5.py",
+    "verity/protocols/certifier/prover/compile_slice_v6.py",
+    "verity/protocols/certifier/prover/egress.py",
+    "verity/protocols/certifier/prover/ingress_scan.py",
+    "verity/protocols/certifier/prover/io_ids.py",
+    "verity/protocols/certifier/prover/served_statics.py",
+    "verity/protocols/certifier/prover/served_tie.py",
+    "verity/protocols/certifier/prover/window_charge.py",
+]
 
-[[verifier]]
+[[trusted]]
 directory = "verity/protocols/poub/verifier"
-loads = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/spot/device",
-    "verity/spot/verifier", "verity/protocols/pous/device", "verity/protocols/pous/verifier"]
-reaches = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/hardware",
-    "verity/spot/device", "verity/spot/verifier", "verity/protocols/pous/device", "verity/protocols/pous/verifier"]
+loads = [
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/protocols",
+    "verity/protocols/poub",
+    "verity/protocols/pous",
+    "verity/protocols/pous/device",
+    "verity/protocols/pous/verifier",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+]
+reaches = [
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/protocols",
+    "verity/protocols/poub",
+    "verity/protocols/pous",
+    "verity/protocols/pous/device",
+    "verity/protocols/pous/verifier",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+]
+loaded_by = [
+    "verity/commitments/gates/block_check.circuit-check.py",
+    "verity/composite/datacenter/datacenter/examples.py",
+    "verity/composite/datacenter/datacenter/memory.py",
+    "verity/composite/datacenter/tests/test_examples.py",
+    "verity/definitions/requirement/tests/test_census_and_memory_map.py",
+]
 
-[[verifier]]
+[[trusted]]
+directory = "verity/protocols/pous/device"
+loads = [
+    "verity",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/protocols",
+    "verity/protocols/pous",
+    "verity/protocols/pous/verifier",
+]
+reaches = [
+    "verity",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/protocols",
+    "verity/protocols/pous",
+    "verity/protocols/pous/verifier",
+]
+loaded_by = [
+    "verity/core/devices/memory_challenger/lean/scripts/replay.py",
+    "verity/core/protocols/pous/period_reports.py",
+    "verity/core/protocols/pous/tests/test_pous_period_reports.py",
+]
+
+[[trusted]]
 directory = "verity/protocols/pous/verifier"
-loads = ["verity", "verity/difftest", "verity/commitments", "verity/configuration", "verity/protocols/pous/device"]
-reaches = ["verity", "verity/difftest", "verity/commitments", "verity/configuration", "verity/protocols/pous/device"]
+loads = [
+    "verity",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/protocols",
+    "verity/protocols/pous",
+    "verity/protocols/pous/device",
+]
+reaches = [
+    "verity",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/protocols",
+    "verity/protocols/pous",
+    "verity/protocols/pous/device",
+]
+loaded_by = [
+    "verity/core/protocols/bandwidth/audit.py",
+    "verity/core/protocols/bandwidth/tests/bandwidth_vectors.py",
+    "verity/core/protocols/bandwidth/tests/test_bandwidth.py",
+]
 
-[[verifier]]
+[[trusted]]
 directory = "verity/protocols/pouw/verifier"
-loads = ["verity", "verity/circuits", "verity/commitments", "verity/spot/device", "verity/spot/verifier"]
-reaches = ["verity", "verity/circuits", "verity/commitments", "verity/hardware", "verity/spot/device",
-    "verity/spot/verifier"]
+loads = [
+    "verity",
+    "verity/circuits",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/protocols",
+    "verity/protocols/pouw",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+]
+reaches = [
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/gates",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/protocols",
+    "verity/protocols/pouw",
+    "verity/spot",
+    "verity/spot/device",
+    "verity/spot/verifier",
+]
+loaded_by = [
+    "verity/flock/tests/test_lean_registered_bit_rows.py",
+    "verity/protocols/pouw/clear/clear_audit.py",
+    "verity/protocols/pouw/clear/clear_work.py",
+    "verity/protocols/pouw/grind_price.py",
+    "verity/protocols/pouw/prover/circuit/__init__.py",
+    "verity/protocols/pouw/prover/circuit/anchors.py",
+    "verity/protocols/pouw/prover/circuit/cap.circuit-check.py",
+    "verity/protocols/pouw/prover/circuit/cap.py",
+    "verity/protocols/pouw/prover/circuit/compile.py",
+    "verity/protocols/pouw/prover/circuit/eps1_reference.py",
+    "verity/protocols/pouw/prover/circuit/h1tile.py",
+    "verity/protocols/pouw/prover/circuit/h1window.py",
+    "verity/protocols/pouw/prover/circuit/h1zy.py",
+    "verity/protocols/pouw/prover/circuit/live.py",
+    "verity/protocols/pouw/prover/circuit/ncp2.py",
+    "verity/protocols/pouw/prover/circuit/pc4.py",
+    "verity/protocols/pouw/prover/circuit/pc8.py",
+    "verity/protocols/pouw/prover/circuit/plan.py",
+    "verity/protocols/pouw/prover/circuit/rowk.py",
+    "verity/protocols/pouw/prover/schemes/__init__.py",
+    "verity/protocols/pouw/prover/schemes/ncp.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c4.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c_work.py",
+    "verity/protocols/pouw/prover/schemes/pearl_kw.py",
+    "verity/spot/sampling_plan/demo_a.py",
+    "verity/spot/sampling_plan/tests/test_demo_a.py",
+]
 
-[[verifier]]
+[[trusted]]
+directory = "verity/spot/device"
+loads = [
+    "verity",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/spot",
+    "verity/spot/verifier",
+]
+reaches = [
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/spot",
+    "verity/spot/verifier",
+]
+loaded_by = [
+    "verity/flock/prover/pod/rec_inner.py",
+    "verity/flock/prover/python/verity_flock/rec_live.py",
+    "verity/flock/prover/tests/test_rec_live.py",
+    "verity/flock/tests/test_challenger_audit.py",
+    "verity/flock/tests/test_lean_plain_hidden_tables.py",
+    "verity/flock/tests/test_lean_plain_tree.py",
+    "verity/flock/tests/test_lean_rec_compose.py",
+    "verity/flock/tests/test_lean_served_registered.py",
+    "verity/flock/tests/test_pod_lean_verdicts.py",
+    "verity/hardware/tests/test_record.py",
+]
+
+[[trusted]]
 directory = "verity/spot/verifier"
-loads = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/spot/device"]
-reaches = ["verity", "verity/circuits", "verity/commitments", "verity/configuration", "verity/hardware",
-    "verity/spot/device"]
+loads = [
+    "verity",
+    "verity/circuits",
+    "verity/commitments",
+    "verity/commitments/hm96",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/spot",
+    "verity/spot/device",
+]
+reaches = [
+    "verity",
+    "verity/circuits",
+    "verity/circuits/boolean",
+    "verity/claims",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/hm96",
+    "verity/commitments/randomness",
+    "verity/configuration",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
+    "verity/hardware",
+    "verity/hardware/protocols",
+    "verity/spot",
+    "verity/spot/device",
+]
+loaded_by = [
+    "verity/composite/datacenter/datacenter/binding.py",
+    "verity/composite/datacenter/tests/test_datacenter.py",
+    "verity/flock/prover/pod/rec_inner.py",
+    "verity/flock/prover/pod/rec_reprice.py",
+    "verity/flock/prover/python/verity_flock/inner_registered.py",
+    "verity/flock/prover/python/verity_flock/rec_bindings.py",
+    "verity/flock/prover/python/verity_flock/rec_cap.py",
+    "verity/flock/prover/python/verity_flock/rec_circuits.py",
+    "verity/flock/prover/python/verity_flock/rec_links.py",
+    "verity/flock/prover/python/verity_flock/rec_live.py",
+    "verity/flock/prover/python/verity_flock/rec_outer.py",
+    "verity/flock/prover/python/verity_flock/rec_residuals.py",
+    "verity/flock/prover/python/verity_flock/rec_session.py",
+    "verity/flock/prover/python/verity_flock/rec_sparse.py",
+    "verity/flock/prover/python/verity_flock/rec_vstage.py",
+    "verity/flock/prover/python/verity_flock/rec_vstar.py",
+    "verity/flock/prover/tests/test_class_statement_unit_stager.py",
+    "verity/flock/prover/tests/test_inner_registered.py",
+    "verity/flock/prover/tests/test_rec_bindings.py",
+    "verity/flock/prover/tests/test_rec_claim.py",
+    "verity/flock/prover/tests/test_rec_full_draw.py",
+    "verity/flock/prover/tests/test_rec_inner_stage.py",
+    "verity/flock/prover/tests/test_rec_links.py",
+    "verity/flock/prover/tests/test_rec_live.py",
+    "verity/flock/prover/tests/test_rec_opening_statement.py",
+    "verity/flock/prover/tests/test_rec_residuals.py",
+    "verity/flock/prover/tests/test_rec_session.py",
+    "verity/flock/prover/tests/test_rec_vstage.py",
+    "verity/flock/prover/tests/test_rec_vstar_checks.py",
+    "verity/flock/prover/tests/test_tmpl_statement.py",
+    "verity/flock/prover/tests/tmpl_statement.py",
+    "verity/flock/tests/plain_hidden.py",
+    "verity/flock/tests/served_registered.py",
+    "verity/flock/tests/stratified_agree.py",
+    "verity/flock/tests/test_audit_profile.py",
+    "verity/flock/tests/test_lean_ks_form.py",
+    "verity/flock/tests/test_lean_rec_coins.py",
+    "verity/flock/tests/test_lean_rec_inner_streams.py",
+    "verity/flock/tests/test_lean_registered_bit_rows.py",
+    "verity/flock/tests/test_lean_registered_reads.py",
+    "verity/flock/tests/test_lean_served_registered.py",
+    "verity/flock/tests/test_lean_verifier.py",
+    "verity/flock/tests/test_lean_witness.py",
+    "verity/flock/tests/test_registered_rows.py",
+    "verity/protocols/certifier/prover/window_charge.py",
+    "verity/protocols/pouw/prover/circuit/h1window.py",
+    "verity/protocols/pouw/prover/circuit/plan.py",
+    "verity/spot/optimize.py",
+    "verity/spot/plancheck.py",
+    "verity/spot/sampling_plan/demo_a.py",
+    "verity/spot/sampling_plan/h200.py",
+    "verity/spot/sampling_plan/served_window.py",
+    "verity/spot/sampling_plan/tests/test_demo_a.py",
+    "verity/spot/sampling_plan/tests/test_transformer.py",
+    "verity/spot/sampling_plan/transformer.py",
+]
