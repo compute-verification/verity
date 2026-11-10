@@ -1353,6 +1353,28 @@ def test_move_carry_jobs_says_how_many_old_heads_the_loop_maps_across_moves_at_o
     assert seen == [L.MAPPED_JOBS, 0, 0, 7]
 
 
+def test_wide_file_names_the_file_the_world_reads_each_tick_by_default_the_live_loop_s(monkeypatch, tmp_path):
+    seen: list[Path | None] = []
+
+    class Built(Exception):
+        pass
+
+    def loop(world, *args, **kw):
+        seen.append(world.wide_file)
+        raise Built
+
+    monkeypatch.setattr(L, "Loop", loop)
+    monkeypatch.setattr(Q, "remote_and_repo", lambda *a: ("origin", "owner/repo"))
+    monkeypatch.setattr(Q, "credential_args", lambda *a: ())
+    monkeypatch.setattr(Q, "GitHub", lambda slug: None)
+    common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
+              "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
+    for extra in ([], ["--wide-file", str(tmp_path / "wide")]):
+        with pytest.raises(Built):
+            L.main([*common, *extra])
+    assert seen == [L.WIDE, tmp_path / "wide"] and L.WIDE == Path("/data/vqueue/live/wide")
+
+
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"))
@@ -1419,6 +1441,34 @@ def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(
     seen: list[Snapshot] = []
     env.loop(lambda s: seen.append(s) or []).tick()
     assert {r.number: r.lean for r in seen[-1].ready} == {1: False, 2: True, 3: True, 4: True, 5: False}
+
+
+def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that_isnt_a_pr_number_fails_the_tick(env):
+    """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
+    (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
+    batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is fixed.
+    A wide PR fills its batch's cap."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
+    env.put(1, {"pkg/A.lean": "-- b\n"})
+    env.put(2, {"Security/Definitions/D.lean": "-- d\n"})
+    env.put(3, {"a.txt": "3\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or [], lean=3)
+    loop.world.wide_file = wide = env.tmp / "wide"
+    loop.tick()
+    wide.write_text("")
+    loop.tick()
+    assert [s.wide for s in seen] == [frozenset(), frozenset()]
+    assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (2, True), (3, False)]
+    assert vqueue.decide(seen[-1]) == [Build((1, 2, 3), seen[-1].main, L.DEPTH)]
+    wide.write_text("1\n\n1\n")
+    loop.tick()
+    assert seen[-1].wide == {1} and vqueue.decide(seen[-1]) == [Build((1, 3), seen[-1].main, L.DEPTH)]
+    wide.write_text("1\n#2\n")
+    with pytest.raises(Q.QueueError) as e:
+        loop.tick()
+    assert str(e.value) == (f"--wide-file {wide} holds '#2', which is not a PR number: write PR numbers separated by spaces "
+                            "or commas") and len(seen) == 3
 
 
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
