@@ -1458,3 +1458,72 @@ def test_a_prose_move_is_judged_by_the_map_its_move_line_or_words_names(tmp_path
     (tmp_path / "named").mkdir()
     r = _terms(tmp_path / "named", message="move", words="tools/move/terms_map.toml", **notes)
     assert r["certified"], r["refusals"]
+
+
+LAYOUT_MAP = "tools/move/layout_map.toml"
+LAYOUT_MSG = f"Move by {LAYOUT_MAP}\n\nLayout-move: {LAYOUT_MAP}\n"
+#: `verity/ml/flock/` splits: `tool.py` to `verity/flock/prover/`, `pod/` whole to `verity/flock/pod/`
+FLOCK = {
+    LAYOUT_MAP: '[tokens]\n"verity/ml/flock/" = "verity/flock/prover/"\n"verity/ml/" = "verity/elsewhere/"\n',
+    "verity/ml/flock/tool.py": "FLOCK_PURE = 1\n",
+    "verity/ml/flock/pod/10-link.sh": "echo link\n",
+    "verity/ml/other.py": "X = 1\n",
+    "SKILL.md": ("files beside the code (`verity/ml/flock/`). Its patches are `verity/ml/flock/*.patch`,\n"
+                 "and a test names `verity/ml/flock/src.rs`.\nThe pod scripts are in `verity/ml/flock/pod`.\n"),
+    "tests/_release.py": 'FLOCK = ROOT / "verity" / "ml" / "flock"\n',
+    "Security/Proofs/lakefile.toml": '[[require]]\nname = "vstar"\npath = "../../verity/ml/flock"\n',
+    "Security/Sha.lean": "/-- (`verity/ml/flock`) step for step -/\ntheorem t : 1 = 1 := rfl\n",
+}
+FLOCK_MOVED = {
+    "SKILL.md": FLOCK["SKILL.md"].replace("verity/ml/flock/pod", "verity/flock/pod").replace("verity/ml/flock", "verity/flock/prover"),
+    "tests/_release.py": 'FLOCK = ROOT / "verity" / "flock" / "prover"\n',
+    "Security/Proofs/lakefile.toml": FLOCK["Security/Proofs/lakefile.toml"].replace("verity/ml/flock", "verity/flock/prover"),
+    "Security/Sha.lean": FLOCK["Security/Sha.lean"].replace("verity/ml/flock", "verity/flock/prover"),
+}
+
+
+def _flock(tmp_path: Path, message: str = LAYOUT_MSG, **over: str) -> dict:
+    repo, base = _repo(tmp_path, FLOCK)
+    _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+    _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+    _write(repo, {**FLOCK_MOVED, **over})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+
+
+def test_a_reference_to_a_split_directory_follows_the_maps_tokens_row(tmp_path):
+    """The map the move's commit names says where a reference to a directory it splits goes (`[tokens]`), which no rename
+    does: the directory itself, a pattern below it, a path below it that names nothing, a pathlib chain, a lakefile's
+    relative path, a Lean comment. The report lists the paths the row took."""
+    r = _flock(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert "verity/ml/flock" not in r["map"]
+    assert r["rules"] == {"tokens": ["SKILL.md", "Security/Proofs/lakefile.toml", "Security/Sha.lean", "tests/_release.py"]}
+
+
+def test_a_path_below_a_split_directory_that_the_tree_has_follows_only_its_own_move(tmp_path):
+    """`verity/ml/flock/pod` moved whole to `verity/flock/pod`: the directory's row doesn't send it below `verity/flock/prover/`.
+    Neither does a row send a reference anywhere but where it says, and a row the range doesn't bear out (no file of
+    `verity/ml/` is below `verity/elsewhere/`) is no row."""
+    for case, line in (("below", "The pod scripts are in `verity/flock/prover/pod`."),
+                       ("elsewhere", "The pod scripts are in `verity/flock/pod` (`verity/flock/pod/`)."),
+                       ("not borne out", "The pod scripts are in `verity/flock/pod`, not in `verity/elsewhere/`.")):
+        base = FLOCK["SKILL.md"] if case == "below" else FLOCK["SKILL.md"].replace("pod`.", "pod` (`verity/ml/`).") \
+            if case == "not borne out" else FLOCK["SKILL.md"].replace("pod`.", "pod` (`verity/ml/flock/`).")
+        (tmp_path / case).mkdir()
+        repo, at = _repo(tmp_path / case, {**FLOCK, "SKILL.md": base})
+        _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+        _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+        _write(repo, {**FLOCK_MOVED, "SKILL.md": "\n".join([*FLOCK_MOVED["SKILL.md"].splitlines()[:2], line]) + "\n"})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(at, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        assert [f["path"] for f in r["refusals"]] == ["SKILL.md"], case
+        assert "SKILL.md" not in r["rules"]["tokens"], case
+
+
+def test_the_tokens_rows_are_read_only_from_the_map_a_commit_of_the_range_names(tmp_path):
+    """Without the `Layout-move:` line no map says where the split directory's references go, as before."""
+    r = _flock(tmp_path, message="move")
+    assert {f["path"] for f in r["refusals"]} == set(FLOCK_MOVED) and r["rules"] == {}
