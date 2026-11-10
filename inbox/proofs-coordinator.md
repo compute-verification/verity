@@ -22725,3 +22725,20 @@ Three costs are missing from the planner's total:
 - **The guarantee covers no token past 2,048 keys** until CIR-195's rows are proved: that is 82.5% of the 128k plan's computed tokens. The planner prices those blocks as covered.
 - **Nothing here runs on main.** The planner is on `cursor/proofs-breakeven-be7a` (a5e4e56a11), and the wrapper that pins β (`headline_at10.py`) is in the lane's notes. benchmarks' `verity bench` is to be the one command that prints the number.
 - **The goal's 49 TB** over a datacenter's year: I haven't traced its configuration. At this configuration, a datacenter's year at 10% is 7.4 TB on today's cut and 1.4 TB on the fused cut (each lever measured or approved, at the cap). So the goal text should change.
+
+
+## HOUSEKEEP, Tue 10 Nov 03:14Z: Goals texts now carry PRF-495 item 3 and PRF-494's premises; still 25 lines, not run; rows 5 and 7 wait on 04:20Z and on you
+
+Read: PRF-495 and PRF-494 (filed 02:48Z; the index names "item 3 -> HOUSEKEEP's Goals script"), VLLM-250 to 02:46Z, FUSEDSERVE 03:01Z, MOEBIND2 02:30Z, VERIFYFAST-B 02:54Z, your inbox note list (nothing newer than 02:18Z).
+
+On `cursor/proofs-inbox` at `bf62efe757`. `DRY=1` still prints **25** lines; all 25 pass both checks and build a write against the stand-in route [run]. Three texts changed since my 02:31Z entry, each from a source I read:
+
+- **`spot-two-stage-e2e`, PRF-495 item 3.** It now says: on main, serving commits only each request's ids in and out, and the schedule's read and the history tables are in review. Checked: `PORTS = (INGRESS, EGRESS)` at `boundary_rows.py:68` on `main`; #8429 and #8434 open, unmarked [gh 03:12Z].
+- **`spot-two-stage-e2e`, vllm's step.** VLLM-250, vllm-twostage 02:46Z: "the advice step passes on last night's served window ... Tuesday's 16:00Z serve runs the step itself". The text and the blocker say that in place of "no date".
+- **The three goals of PRF-494.** `spot-two-stage-e2e` states the verdict (refused at the last step, like every two-stage run); `spot-two-stage-sound` and `spot-post-ready` name the three premises open in the lock on `main`: `CompiledTwo.Scope`, `SpotFlock.Embeds`, `SpotFlock.FrameIs` (`SpotKSTwo`, not under `deployed`) [read 03:13Z]. None of my texts keeps "proved for the Lean verifier with `Evaluates` and `Reveals` open". PRF-494's wording that follows the page to Daniel stays yours; if the page's outcome changes what these goals say, tell me before 14:00Z.
+
+Not changed, and why: row 8 (MOEBIND2 at 02:30Z gives steps, about 13 and 70 minutes, and no date); row 14 (VERIFYFAST-B at 02:54Z: "Goal: closes without PR E", which agrees with on-track).
+
+One thing for you from the board: PRF-492 to PRF-497 are in Backlog with no project (read 03:11Z). They are `from:proofs` in our own team, so the audit does not call them stray, but PRF-495 is due today and unstarted. Say if you want them placed under "Full proofs: protocol soundness" on the SPOT milestone.
+
+Next: FUSEDSERVE's verdict line after 04:20Z into row 5, your holder into row 7, both pushed by 05:00Z with an entry.
