@@ -8,12 +8,17 @@
 * where its index rows are `index_values` it computes `DsaTopKReadRows_v1`'s function (slow);
 * its links (`links`) at the served statics are 87, of nine values, and at small statics they are the ones round 2 derives
   from the replay block (`interior_links.links`), under either naming of round 1's record, and its interior window
-  (`window`) with them is the stream's interior program, a function of the replay sample's size (slow).
+  (`window`) with them is the stream's interior program, a function of the replay sample's size (slow);
+* a drawn span's units (`spans`) are one span a template, every unit of the mask's cut and of the index on rows its
+  Definition returns its outputs on and every read an opening of the span's table at its slot's position; the reads return
+  what the check returns on the same operands, and `interior_rows.interior` commits the spans under the block's wires and
+  links, refusing a row that is not its writer's, its value's or its table's (slow).
 """
 from __future__ import annotations
 
 import random
 from collections import Counter
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -24,6 +29,8 @@ from verity.ml.circuits.codec import definitions, descriptor_id
 from verity.ml.circuits.defs import Builder, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.refs import Affine, Coll
+from verity.ml.circuits.types import Tuple
+from verity.ml.commitments import history as HT
 from verity.ml.commitments.gates.embedding import read
 from verity.ml.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_links as IL, interior_rows as IR
@@ -184,3 +191,121 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
         digests.append(P.program_digest(w.program))
         assert digests[-1] == P.program_digest(want)
     assert digests[0] != digests[1]
+
+
+def _bits(a: np.ndarray) -> np.ndarray:
+    """Rows of u16 words as rows of bits, each word's low bit first."""
+    return np.unpackbits(np.ascontiguousarray(a, dtype="<u2").view(np.uint8).reshape(len(a), -1), axis=1, bitorder="little")
+
+
+def _table(length: int, seed: int, name: str = "long-row-test", fill: tuple[int, int] | None = None) -> HT.HistoryTable:
+    """A history table of 16 leaves holding ``length`` rows of one word, each under a salt of its own; ``fill``: its class
+    (prompt, outputs), to whose rows it is filled (`boundary_tables.fill`)."""
+    rng = np.random.default_rng(seed)
+    rows = rng.integers(0, 1 << 16, (length, 1), dtype=np.uint16)
+    rows = BT.fill(rows, *fill, 16) if fill else rows
+    tc = HT.HistoryTable("ab" * 64, name, 1, 16)
+    tc.append(rows, [rng.bytes(192) for _ in rows])
+    return tc
+
+
+def _rows(seed: str, ns) -> list[tuple[list[int], int]]:
+    """An instance a given n: 12 index scores (f32 words) and n, every second instance's scores ties at the threshold."""
+    rng = random.Random(seed)
+    pool = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000]
+    return [([rng.choice(pool) if k % 2 else rng.getrandbits(32) for _ in range(12)], n) for k, n in enumerate(ns)]
+
+
+def test_a_spans_units_are_each_its_definitions_value() -> None:
+    """`spans` at small statics over three instances (random scores, ties at the threshold, n = 0): one span a template in
+    `window`'s order, a template's units an instance its group, and each unit of the mask's cut and of the index takes rows
+    on which its Definition returns its outputs, every word's bits past its type 0. Each read's key is its slot unit's
+    position and its rows open the table there (`interior_links.opened`, the read's reference), past the table's length
+    too."""
+    t = _small()
+    table = _table(9, 1)
+    got = LR.spans(t, "r0", _rows("long-row-spans", (12, 7, 0)), table, "p" * 64)
+    ms, cells = LR.window(t, 1)
+    assert [(s.member.template, s.member.rows, s.member.outs, s.n, s.group) for s in got] == \
+        [(m.template, m.rows, m.outs, 3 * n, n) for m, n in zip(ms, cells, strict=True)]
+    assert all(s.entries == [[i * s.group, (i + 1) * s.group, "r0", i] for i in range(3)] for s in got)
+    defs = {descriptor_id(d): d for _, d in LR.units(t)}
+    for s in got[:-1]:
+        params, ret = defs[s.member.template].signature()
+        fields = ret.fields if isinstance(ret, Tuple) else (ret,)
+        args = [_bits(s.data["rows"][p])[:, :ty.leaves] for (p, _w), (_n, ty) in zip(s.member.rows, params, strict=True)]
+        outs = [_bits(s.data["outs"][p]) for p, _w in s.member.outs]
+        want = np.asarray(BS.evaluate_bits(defs[s.member.template], *args)).reshape(s.n, -1)
+        assert np.array_equal(np.concatenate([o[:, :f.leaves] for o, f in zip(outs, fields, strict=True)], axis=1), want)
+        assert not any(o[:, f.leaves:].any() for o, f in zip(outs, fields, strict=True))
+    slot, reads = got[-2], got[-1]
+    assert reads.member.template == descriptor_id(t.bindings["READ"])
+    assert np.array_equal(reads.data["rows"]["tok"], slot.data["outs"]["o0"])
+    assert {int(k) for k in reads.data["rows"]["tok"][:, 0]} & set(range(9, 12))
+    IL.opened(reads.member, reads.data, reads.n, [table], 16)
+    with pytest.raises(ValueError, match="11 scores for a row of 12 keys"):
+        LR.spans(t, "r0", [([0] * 11, 3)], table, "p" * 64)
+
+
+@pytest.mark.slow
+def test_a_drawn_spans_units_commit_as_its_interior() -> None:
+    """Two sampled spans of a class of three (`spans`: one of two instances, one of one, which the interior pads to the
+    block's two), each opening its own table as round 1 registered it: the reads' rows and oks are what the check returns
+    on the same operands at each instance (the one place a span's units are held to the whole check), and
+    `interior_rows.interior` commits them under the replay block's wires (`second_stage.replay_wires`) and `links`: its
+    program is the stream's at two spans and it registers the block's nine parameters as round 2 names them. It refuses a
+    span whose wired row is not its writer's output, whose scores at one unit are not the block's another unit read, or
+    whose read is not an opening of its table. About a minute over the links test, which builds the same layout: nothing
+    cheaper has the block's wires."""
+    t = _small()
+    L = LR.layout(RUN, t)
+    key, q0 = descriptor_id(L.replay), L.n_rho
+    ms, cells = LR.window(t, q0)
+    links, wires = LR.links(t, q0, tables=True), SS.replay_wires(L.program, key)
+    tables = [_table(n, seed, BT.name(RUN, L.prompt, L.outputs, slot, 0), (L.prompt, L.outputs))
+              for slot, n, seed in ((0, 9, 1), (2, 5, 2))]
+    rows = _rows("long-row-interior", (12, 7))
+    drawn = [LR.spans(t, "r0", rows, tables[0], "p" * 64), LR.spans(t, "r2", _rows("long-row-padded", (5,)), tables[1], "p" * 64)]
+
+    read = drawn[0][-1]
+    assert read.n == len(rows) * 2
+    index = LR.index_values(2)
+    opening = {p: _bits(read.data["rows"][p]).reshape(len(rows), 2, -1) for p in IL.READ[1:]}
+    args = {"scores": [_i32s(s) for s, _n in rows], "n": [_i32s([n]) for _s, n in rows],
+            **{p: [_i32s(v)] * len(rows) for p, v in index.items()},
+            **{p: opening[p][:, 0] for p in IL.TABLE}, **{p: opening[p].reshape(len(rows), -1) for p in IL.READ[3:]}}
+    got = np.asarray(BS.evaluate_bits(t, *(np.asarray(args[p], dtype=np.uint8) for p, _ty in t.signature()[0])))
+    want = [_bits(read.data["outs"]["o0"]).reshape(len(rows), -1), _bits(read.data["outs"]["o1"])[:, 0].reshape(len(rows), -1)]
+    assert np.array_equal(got.reshape(len(rows), -1), np.concatenate(want, axis=1))
+
+    served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
+                        for x in tables]}
+    kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "tables": tables, "served": served,
+          "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
+    it = IR.interior(drawn, cells, "00" * 64, [0, 2], **kw)
+    w = it.committed.window
+    assert [(m.template, m.n) for m in w.members] == [(m.template, 2 * n) for m, n in zip(ms, cells, strict=True)]
+    want = P.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
+                                      values=IL.link_values(links, 2))
+    assert P.program_digest(w.program) == P.program_digest(want)
+    assert [e["value"] for e in it.record["registered"]] == [f"{key}/{p}" for p in PARAMS]
+    assert it.published == {x.value: [bc.hex() for bc in x.bcs] for x in tables}
+
+    ids = [s.member.template for s in drawn[0]]
+
+    def off(base: str, kind: str, port: str, unit: int = 0) -> list:
+        k = next(i for i, x in enumerate(ids) if x.startswith(base))
+        s = drawn[0][k]
+        a = s.data[kind][port].copy()
+        a[unit, 0] ^= 1
+        return [(*drawn[0][:k], replace(s, data={**s.data, kind: {**s.data[kind], port: a}}), *drawn[0][k + 1:]), drawn[1]]
+
+    merge = ms[ids.index(next(x for x in ids if x.startswith("DsaPositionsMerge")))]
+    for base, kind, port, why in (
+            ("DsaPositionsMerge", "rows", merge.rows[0][0], "units that write them"),
+            ("DsaPositionsSlot", "outs", "o0", "units that write them"),
+            ("DsaTopKDigitCount", "rows", "scores", "which another unit reads as another row"),
+            ("EmbeddingRead", "rows", "row", "does not open its table there")):
+        with pytest.raises(ValueError, match=why):
+            IR.interior(off(base, kind, port), cells, "00" * 64, [0, 2], **kw)
+

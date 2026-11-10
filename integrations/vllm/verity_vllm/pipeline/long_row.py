@@ -35,12 +35,17 @@ parameters the interior registers as values (`interior_links`): the scores, n an
 gives, and the table's root and domain and the index rows the verifier supplies (`supplied`). `links` states them in closed
 form, since round 2's derivation (`interior_links.links`) reads the block's Program, which at the served statics builds every
 unit's body; the tests hold the two to each other at small statics.
+`spans` is a drawn span's units as `interior_rows.interior` commits them, one `interior_rows.Span` a template: every unit's
+rows and outputs in u16 words, computed from each instance's scores and n and the table its reads open by the units'
+references (`dsa_topk_mask_cut.values`, `dsa_topk_reads.values`, `interior_links.table_reads`), never by a Definition.
 """
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
 from typing import Any
+
+import numpy as np
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import descriptor_id
@@ -219,4 +224,94 @@ def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tup
     read = descriptor_id(READ)
     out += [IL.Supply(read, p, value(p), n_rho, tuple(i for i in every for _ in range(TOPK))) for p in IL.TABLE]
     out += [IL.Operand(read, p, value(p), n_rho * TOPK, tuple(range(n_rho * TOPK)), words(READ, p)) for p in IL.READ[3:]]
+    return tuple(out)
+
+
+def _words(ty: Any, v: Any) -> np.ndarray:
+    """A value of type ``ty`` as its row's u16 words, the low word first: an int, a sequence of u32 words where ``ty`` is
+    32 bits of each, else a sequence of bits, the last word's padding 0."""
+    w = -(-ty.leaves // 16)
+    if isinstance(v, (int, np.integer)):
+        return np.asarray([(int(v) >> 16 * k) & 0xFFFF for k in range(w)], dtype=np.uint16)
+    v = np.asarray(v, dtype=np.uint64)
+    if 2 * len(v) == w:
+        return v.astype("<u4").view("<u2")
+    if len(v) > ty.leaves:
+        raise ValueError(f"{len(v)} bits for a value of {ty.leaves}")
+    bits = np.zeros(16 * w, dtype=np.uint8)
+    bits[:len(v)] = v
+    return np.packbits(bits, bitorder="little").view("<u2")
+
+
+def _instance(check: SpecializedDefinition, scores: Sequence[int], n: int, table: Any) -> list[tuple[list, list]]:
+    """One instance's units in body order (`units`), each its parameters' rows and its outputs' in u16 words: the row's
+    ``scores`` (N f32 words) and ``n`` through the mask's cut and the index (their references), each wired parameter its
+    writer's output as the body wires it (`_args`), the index rows the verifier's (`index_values`), and read j opening
+    ``table`` at slot unit j's position."""
+    from verity_vllm.pipeline import interior_links as IL
+
+    N, TOPK, block = (check.bindings[k] for k in ("N", "TOPK", "BLOCK"))
+    if len(scores) != N:
+        raise ValueError(f"{len(scores)} scores for a row of {N} keys")
+    bl, plan = X.blocks(N, TOPK, block), {u.key: u for u in X.plan(N, TOPK, block)}
+    got = X.values(list(scores), int(n), TOPK, block)
+    got |= R.values([bit for b, (lo, hi) in enumerate(bl) for bit in got[("mask", b)][0][:hi - lo]], TOPK, block)
+    reads = IL.table_reads(table, [got[("slot", j)][0] for j in range(TOPK)])
+    index = index_values(TOPK)
+    out: dict[tuple, list[np.ndarray]] = {}
+    done: list[tuple[list, list]] = []
+    for key, defn in units(check):
+        params, ret = defn.signature()
+        fields = ret.fields if isinstance(ret, Tuple) else (ret,)
+        if key[0] == "read":
+            rows = [reads["rows"][p][key[1]] for p, _ty in params]
+            outs = [reads["outs"][f"o{f}"][key[1]] for f in range(len(fields))]
+        else:
+            outs = [_words(ty, v) for ty, v in zip(fields, got[key], strict=True)]
+            if key in plan:
+                u = plan[key]
+                lo, hi = u.keys
+                if len({p for p, _w, _f in u.wires}) != len(u.wires):
+                    raise ValueError(f"{descriptor_id(defn)}: a parameter of two writers, which no row here joins")
+                given = {p: out[w][f] for p, w, f in u.wires}
+                if hi > lo:
+                    given |= {"scores": _words(Array(hi - lo, R.F32), scores[lo:hi]), "n": _words(R.I32, int(n) & 0xFFFFFFFF)}
+                rows = [given[p] for p, _ty in params]
+            elif key[0] == "positions":
+                rows = [out[("mask", key[1])][0]]
+            elif key[0] == "merge":
+                rows = [out[("positions", b)][f] for f in (0, 1) for b in range(len(bl))]
+            elif key[0] == "chunk":
+                rows = [out[("merge",)][0], _words(R.I32, index["c"][key[1]])]
+            else:
+                rows = [out[("chunk", key[1] // R.CHUNK)][0], _words(R.I32, index["i"][key[1] % R.CHUNK])]
+        for (p, ty), r in zip(params, rows, strict=True):
+            if len(r) != ty.leaves // 16:
+                raise ValueError(f"{descriptor_id(defn)}: its {p!r} row is {ty.leaves // 16} words, not {len(r)}")
+        out[key] = outs
+        done.append((rows, outs))
+    return done
+
+
+def spans(check: SpecializedDefinition, rid: str, rows: Sequence[tuple[Sequence[int], int]], table: Any,
+          program: str) -> tuple[Any, ...]:
+    """A drawn span's units as `interior_rows.interior` takes a sampled span: one `interior_rows.Span` a template of
+    ``check`` in `window`'s order, its units instance by instance (its ``group`` a template's units an instance), each
+    unit's rows and outputs in u16 words. ``rows``: each instance's (scores, n), the row's N index scores as f32 words and
+    its n, as the replay gives them; ``table``: the history table the span's reads open (`interior_links.kept_table`, the
+    one round 1 served); ``rid`` and ``program``: the request and the digest of the Program it was replayed from."""
+    from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+
+    ids = [descriptor_id(d) for _, d in units(check)]
+    per: dict[str, list[tuple[list, list]]] = {t: [] for t in ids}
+    for scores, n in rows:
+        for t, unit in zip(ids, _instance(check, scores, n, table), strict=True):
+            per[t].append(unit)
+    out = []
+    for t, got in per.items():
+        m = IR.named(CR.unit_member(SRW.template(t), len(got)))
+        data = {"rows": {p: np.stack([r[g] for r, _o in got]) for g, (p, _w) in enumerate(m.rows)},
+                "outs": {p: np.stack([o[g] for _r, o in got]) for g, (p, _w) in enumerate(m.outs)}}
+        each = len(got) // len(rows)
+        out.append(IR.Span(rid, m, data, [[i * each, (i + 1) * each, rid, i] for i in range(len(rows))], program, group=each))
     return tuple(out)
