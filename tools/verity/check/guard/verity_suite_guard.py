@@ -24,7 +24,10 @@ its tests ran (under `"*"` when neither: a session fixture, a conftest). It dese
 whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
 workers' shares: an order only, which parallel suites declare their outcomes don't depend on. Under `suites.py --files` it
 collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`), or of a part by test id deselects the tests
-whose node id hashes to another part (`id_part`), and reports how many it left out (`part_out`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+whose node id hashes to another part (`id_part`), and reports how many it left out (`part_out`). It deselects each test a
+`--verity-deselect NODEID` names exactly, its parametrizations too (pytest's own `--deselect` takes a prefix, which would leave
+out `test_ab` with `test_a`; `suites.py --deselect`), and reports them (`deselected`): a worker's go to the controller, whose
+summary counts them deselected. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 
@@ -81,6 +84,7 @@ _reads: dict[str, set[str]] = {}                                 # test module (
 _outcomes: dict[str, float | None] = {}
 _setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
+_deselected: set[str] = set()                                    # the node ids `--verity-deselect` left out (a controller: its workers')
 _traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
 _workers_untraced: dict[str, set[str]] | None = None             # in an xdist controller: its workers', which start its tests' programs
@@ -272,12 +276,43 @@ def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]
     return [heads[p] if p in heads else next(rest) for p in range(len(nodeids))]
 
 
+def pytest_addoption(parser) -> None:
+    parser.addoption("--verity-deselect", action="append", default=[], metavar="NODEID",
+                     help="deselect the test with this node id, its file's path from the repository's root ($VERITY_SUITE_ROOT, "
+                          "else the working directory), and its parametrizations: exactly, where --deselect takes a prefix "
+                          "(suites.py's --deselect)")
+
+
+class _Deselected:
+    """A test an xdist worker deselected, as its controller's terminal summary counts it (plugins read a report's `__dict__`)."""
+
+    def __init__(self, nodeid: str) -> None:
+        self.nodeid = nodeid
+
+
+def repository_id(item) -> str:
+    """Test ``item``'s node id with its file's path from the repository's root: pytest's own is from its rootdir, which needn't
+    be the suite's directory or the repository's."""
+    return os.path.relpath(os.path.realpath(item.path), _root) + "::" + item.nodeid.partition("::")[2]
+
+
+def listed(nodeid: str, ids: frozenset[str]) -> bool:
+    """Whether test ``nodeid`` is one ``ids`` names (`--verity-deselect`): itself, or a parametrization of one (`NAME[...]`)."""
+    return nodeid in ids or nodeid.partition("[")[0] in ids
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items) -> None:
-    """Deselect the tests of the other parts of a part by test id (`id_part`), then those `VERITY_SUITE_REUSE` names; in an xdist
-    worker, start the longest of those left at the heads of the workers' shares (`VERITY_SUITE_HEAVY`, longest first; every
-    worker orders its collection alike, as xdist requires)."""
+    """Deselect the tests `--verity-deselect` names, then those of the other parts of a part by test id (`id_part`), then those
+    `VERITY_SUITE_REUSE` names; in an xdist worker, start the longest of those left at the heads of the workers' shares
+    (`VERITY_SUITE_HEAVY`, longest first; every worker orders its collection alike, as xdist requires)."""
     global _part_out
+    if ids := frozenset(config.getoption("verity_deselect")):
+        named = {i: repository_id(i) for i in items}
+        if gone := [i for i in items if listed(named[i], ids)]:
+            _deselected.update(named[i] for i in gone)
+            config.hook.pytest_deselected(items=gone)
+            items[:] = [i for i in items if not listed(named[i], ids)]
     if _id_part is not None and (out := [i for i in items if id_part(i.nodeid, _id_part[1]) not in _id_part[0]]):
         _part_out = len(out)
         config.hook.pytest_deselected(items=out)
@@ -417,6 +452,9 @@ def pytest_testnodedown(node, error) -> None:
         _unguarded.append(node.gateway.id)
     else:
         _part_out = max(_part_out, record.get("part_out", 0))
+        if new := sorted(set(record.get("deselected", [])) - _deselected):     # every worker collects, and deselects, alike
+            _deselected.update(new)
+            node.config.hook.pytest_deselected(items=[_Deselected(n) for n in new])   # so the controller's summary counts them
         for p, m in record["outside"].items():
             _outside.setdefault(p, m)
         _watched.update(record["watched"])
@@ -439,7 +477,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     if hasattr(config, "workerinput"):
         config.workeroutput[_KEY] = {"outside": dict(sorted(_outside.items())), "watched": sorted(_watched), "reads": reads, **used,
                                      "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())},
-                                     "part_out": _part_out}
+                                     "part_out": _part_out, "deselected": sorted(_deselected)}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
     passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
@@ -447,7 +485,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     payload = json.dumps({"counts": _counts, "outside": dict(sorted(_outside.items())), "unguarded": _unguarded, "unmarked_slow": _slow,
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
                           "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())},
-                          "part_out": _part_out},
+                          "part_out": _part_out, "deselected": sorted(_deselected)},
                          indent=1)
     with open(_REPORT, "w") as f:
         f.write(payload)

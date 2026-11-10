@@ -18,12 +18,12 @@ spec.loader.exec_module(CHECK)
 SHA = "6b3d704c8" * 4 + "abcd"
 
 
-def _launches(monkeypatch, *argvs):
+def _launches(monkeypatch, *argvs, whole: bool = False):
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
-            launched.append(cmd[:cmd.index("--")])
+            launched.append(cmd if whole else cmd[:cmd.index("--")])
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
@@ -46,6 +46,29 @@ def test_every_launch_on_a_machine_asks_for_its_own_clone_and_a_local_one_runs_i
         assert head[head.index("--source") + 1] == "."
     [local] = _launches(monkeypatch, [])
     assert local[local.index("--cwd") + 1] == "source"
+
+
+def test_a_deselect_list_travels_as_an_after_landing_runs_input_and_no_other_recorded_check_takes_one(tmp_path, monkeypatch, capsys):
+    """`--deselect FILE`: the tests a candidate's check leaves out reach its machine as the run's `DESELECT_FILE` input, and only
+    an after-landing run (`--deferred` on a machine), which no gate takes, sends one."""
+    listed = tmp_path / "deselect.txt"
+    listed.write_text("a/tests/test_a.py::test_a\n")
+    [head] = _launches(monkeypatch, ["--on", "vy-x", "--priority", "--keep-going", "--deferred", "pytest", "--deselect", str(listed)])
+    assert [Path(head[i + 1]).name for i, x in enumerate(head) if x == "--send"].count(CHECK.DESELECT_FILE) == 1
+    for argv in (["--on", "vy-x", "--deselect", str(listed)], ["--deferred", "pytest", "--deselect", str(listed)],
+                 ["--on", "vy-x", "--deferred", "pytest", "--deselect", str(tmp_path / "absent.txt")]):
+        assert CHECK.record(["--base", "HEAD", *argv]) == 2
+        assert "--deselect" in capsys.readouterr().err
+
+
+def test_a_candidates_check_is_an_after_landing_run_whose_machine_is_told_it_is_one(monkeypatch, capsys):
+    """`--candidate` reaches the machine's check, whose suites steps leave out the tests the tree's candidate list names, and
+    only an after-landing run (`--deferred` on a machine), which no gate takes, is a candidate's."""
+    [cmd] = _launches(monkeypatch, ["--on", "vy-x", "--priority", "--keep-going", "--deferred", "pytest", "--candidate"], whole=True)
+    assert cmd[cmd.index("--") + 1:].count("--candidate") == 1
+    for argv in (["--on", "vy-x", "--candidate"], ["--deferred", "pytest", "--candidate"]):
+        assert CHECK.record(["--base", "HEAD", *argv]) == 2
+        assert "--candidate" in capsys.readouterr().err
 
 
 def _git(cwd: Path, *args: str) -> str:

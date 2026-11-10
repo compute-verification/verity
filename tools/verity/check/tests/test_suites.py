@@ -161,6 +161,73 @@ def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(t
     assert S.main(["--list"]) == 0 and len(probed) == 1
 
 
+def test_a_deselected_test_belongs_to_the_deepest_suite_holding_its_file(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    root, outer, inner = S.Suite("repository", ".", (), ()), S.Suite("v", "verity", (), ()), S.Suite("c", "verity/core/c", (), ())
+    text = ("# why each is left out\n\nverity/core/c/tests/test_x.py::test_a\nverity/tests/test_y.py::test_b[1]\n"
+            "tests/test_z.py::T::test_c\nverity/core/c/tests/test_x.py::test_a\n")
+    assert S.deselections(text, [root, outer, inner]) == {inner: ["verity/core/c/tests/test_x.py::test_a"],
+                                                          outer: ["verity/tests/test_y.py::test_b[1]"],
+                                                          root: ["tests/test_z.py::T::test_c"]}
+    for bad in ("verity/tests/test_y.py", "verity/tests/test_y.py::", "/abs/test_y.py::t", "../test_y.py::t", "verity/notes.md::t"):
+        with pytest.raises(ValueError, match="not a test's node id"):
+            S.deselections(bad, [root, outer])
+    with pytest.raises(ValueError, match="no suite's directory holds"):
+        S.deselections("tests/test_z.py::t", [outer])
+
+
+def test_a_deselected_suite_keys_its_pass_apart_and_a_full_pass_still_answers_for_it(tmp_path, monkeypatch, capsys):
+    """`--deselect FILE` puts the tests it names among their suite's own pytest arguments, first among its keys, so its pass is
+    kept under a key no run of the whole suite reads (the nightly uncached check runs them all), and a pass of the whole suite,
+    its next key, answers for it; a suite FILE names nothing of keys as it would without it."""
+    _workspace(tmp_path)
+    S = _suites(monkeypatch, tmp_path)
+    keyed, real = [], S.key
+    monkeypatch.setattr(S, "key", lambda s, ids, env, args, deps=None: keyed.append((s.name, list(args))) or real(s, ids, env, args, deps))
+    listed = tmp_path / "deselect.txt"
+    listed.write_text("a/tests/test_a.py::test_a\n")
+    left = [S.DESELECT_ARG, "a/tests/test_a.py::test_a"]
+    assert S.main(["--list", "--deselect", str(listed)]) == 0
+    assert keyed == [("a", left), ("a", []), ("b", [])]
+    assert "a: --deselect leaves out a/tests/test_a.py::test_a" in capsys.readouterr().out
+    keyed.clear()
+    assert S.main(["--list"]) == 0 and keyed == [("a", []), ("b", [])]
+    keyed.clear()
+    assert S.main(["--list", "--quick", "--deselect", str(listed)]) == 0
+    assert keyed == [("a", S.QUICK + left), ("a", left), ("a", S.QUICK), ("a", []), ("b", S.QUICK), ("b", [])]
+    listed.write_text("a/tests/test_a.py\n")
+    assert S.main(["--list", "--deselect", str(listed)]) == 2 and "not a test's node id" in capsys.readouterr().err
+
+
+def test_only_a_candidates_check_leaves_out_the_tests_the_repositorys_candidate_list_names(tmp_path, monkeypatch):
+    """`--candidate` (`check.py --candidate`, the vqueue loop's check of a candidate) adds the tests `CANDIDATE_DESELECT` names
+    to --deselect's, among their suites' own keys as --deselect's are; no other run reads the list, so it keys as before."""
+    _workspace(tmp_path)
+    S = _suites(monkeypatch, tmp_path)
+    keyed, real = [], S.key
+    monkeypatch.setattr(S, "key", lambda s, ids, env, args, deps=None: keyed.append((s.name, list(args))) or real(s, ids, env, args, deps))
+    (tmp_path / S.CANDIDATE_DESELECT).parent.mkdir(parents=True)
+    (tmp_path / S.CANDIDATE_DESELECT).write_text("# over 5 minutes\na/tests/test_a.py::test_a\n")
+    listed = tmp_path / "deselect.txt"
+    listed.write_text("b/tests/test_b.py::test_b\n")
+    a_left, b_left = [S.DESELECT_ARG, "a/tests/test_a.py::test_a"], [S.DESELECT_ARG, "b/tests/test_b.py::test_b"]
+    assert S.main(["--list"]) == 0 and keyed == [("a", []), ("b", [])]
+    keyed.clear()
+    assert S.main(["--list", "--candidate"]) == 0 and keyed == [("a", a_left), ("a", []), ("b", [])]
+    keyed.clear()
+    assert S.main(["--list", "--candidate", "--deselect", str(listed)]) == 0
+    assert keyed == [("a", a_left), ("a", []), ("b", b_left), ("b", [])]
+
+
+def test_the_candidate_list_names_test_files_the_tree_holds(monkeypatch):
+    """A test the candidate list names that moved or was deleted would leave nothing out, and a line that is no node id would fail
+    every candidate's suites: each line is a node id of a test file in the tree."""
+    root = HERE.parents[2]
+    S = _suites(monkeypatch, root)
+    [ids] = S.deselections((root / S.CANDIDATE_DESELECT).read_text(), [S.Suite("repository", ".", (), ())]).values()
+    assert ids and not [i for i in ids if not (root / i.partition("::")[0]).is_file()]
+
+
 def test_a_fresh_trees_own_environment_installs_the_workspace_once_and_runs_again(tmp_path, monkeypatch, capsys):
     """`uv run tools/verity/check/suites.py` on a freshly shipped tree installs only the runner's dependencies; the runner syncs the
     workspace and runs again in place of refusing, once, and an environment it can't fill is still refused."""

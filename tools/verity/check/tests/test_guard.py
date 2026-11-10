@@ -62,6 +62,32 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", {}, [], 4), r.log.read_text()
 
 
+@pytest.mark.parametrize("workers", [1, 2])
+def test_a_deselected_test_does_not_run_and_is_reported_deselected(tmp_path, monkeypatch, workers):
+    """`--verity-deselect` takes a repository node id exactly (pytest's `--deselect` takes a prefix, which would leave out
+    `test_bb` with `test_b`) and a test's every parametrization by its name, and an xdist controller's summary counts what its
+    workers left out, as it doesn't for pytest's own."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "pkg" / "tests" / "test_pick.py").write_text(
+        "import pytest\n\ndef test_b():\n    pass\n\ndef test_bb():\n    pass\n\n"
+        "@pytest.mark.parametrize('x', [1, 2])\ndef test_p(x):\n    pass\n")
+    left = ["pkg/tests/test_pick.py::test_b", "pkg/tests/test_pick.py::test_p"]
+    r = S.run(suite, ["pkg"], [x for nodeid in left for x in (S.DESELECT_ARG, nodeid)], tmp_path / "logs", workers)
+    assert (r.status, r.counts["passed"]) == ("passed", 5), r.log.read_text()
+    assert r.deselected == ["pkg/tests/test_pick.py::test_b", "pkg/tests/test_pick.py::test_p[1]", "pkg/tests/test_pick.py::test_p[2]"]
+    assert "5 passed, 3 deselected" in r.log.read_text() and S._count(r) == "5 passed, 3 deselected"
+
+
+def test_a_suite_whose_every_test_is_deselected_passes(tmp_path, monkeypatch):
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    r = S.run(suite, ["pkg"], [S.DESELECT_ARG, "pkg/tests/test_reads.py::test_0", S.DESELECT_ARG, "pkg/tests/test_reads.py::test_1",
+                               S.DESELECT_ARG, "pkg/tests/test_reads.py::test_2", S.DESELECT_ARG, "pkg/tests/test_reads.py::test_3"],
+              tmp_path / "logs")
+    assert (r.status, len(r.deselected)) == ("passed", 4), r.log.read_text()
+
+
 def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path, monkeypatch):
     """A suite that imports an undeclared helper through its warm `__pycache__` must not fail naming only `...cpython-*.pyc`,
     which no PR's diff touches, so drive could find no culprit. The read is named as the `.py` source,

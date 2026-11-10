@@ -788,6 +788,25 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
 
+def test_a_deselect_list_reaches_the_suites_steps_and_nothing_else(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    listed = tmp_path / "deselect.txt"
+    steps = {name: argv for g in CHECK.groups(tmp_path, 16, deselect=listed) for name, argv, _cwd in g}
+    assert steps["pytest"][-2:] == ["--deselect", str(listed)]
+    assert all("--deselect" not in argv for name, argv in steps.items() if name not in ("pytest", "lean-suites"))
+    assert all("--deselect" not in argv for g in CHECK.groups(tmp_path, 16) for _name, argv, _cwd in g)
+
+
+def test_only_a_candidates_check_has_its_suites_steps_leave_out_the_candidate_list(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    steps = {name: argv for g in CHECK.groups(tmp_path, 16, candidate=True) for name, argv, _cwd in g}
+    assert steps["pytest"][-1] == "--candidate"
+    assert all("--candidate" not in argv for name, argv in steps.items() if name not in ("pytest", "lean-suites"))
+    assert all("--candidate" not in argv for g in CHECK.groups(tmp_path, 16) for _name, argv, _cwd in g)
+
+
 def test_memory_is_what_the_tightest_cgroup_over_this_process_leaves(tmp_path):
     """On a VM a run's limit is on its session scope, not the root cgroup (vy-nebius-cpu-1 caps each at 240 GB); in a pod it is
     the namespace's root; MemAvailable bounds both."""
