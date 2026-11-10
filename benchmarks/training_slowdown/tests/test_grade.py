@@ -310,7 +310,8 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
 
     here = {"config": {"text": 'start = "s"\n'}, "commit": "c0ffee"}
     again = (f"re-trace it at the record's commit c0ffee and config.text with a CPU job, `{G.RETRACE}`, RUN_JSON the "
-             f"record")
+             f"record: the tree the job runs in takes the trace with its own capture, and refuses a config it reads "
+             f"as another program than the record's")
     orphan = "the record has no config.text and no commit, so no config to re-trace from"
     assert G.RETRACE == "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
     assert why(job([OVER, UNDER], split="search"), **here) == (

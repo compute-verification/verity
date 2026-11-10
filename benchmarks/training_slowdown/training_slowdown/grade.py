@@ -255,14 +255,16 @@ def ratio(c: dict | None, h: dict | None) -> dict | None:
 
 def retrace(record: dict) -> str:
     """How a record's trace is taken again, which a record ρ can't read says: by the job that re-traces a record's
-    own config (`RETRACE`), which reads its `config.text` and checks its tree against the record's; a record without
-    its `config.text` or its `commit` has no config to re-trace from."""
+    own config (`RETRACE`), which reads its `config.text`, takes the trace with the capture of the tree it runs in
+    (so this tree's, for a trace this grade is to read) and refuses a tree that reads the config as another program
+    than the record's; a record without its `config.text` or its `commit` has no config to re-trace from."""
     lacks = [k for k, v in (("config.text", (record.get("config") or {}).get("text")), ("commit", record.get("commit")))
              if not v]
     if lacks:
         return f"the record has no {' and no '.join(lacks)}, so no config to re-trace from"
     return (f"re-trace it at the record's commit {record['commit']} and config.text with a CPU job, `{RETRACE}`, "
-            f"RUN_JSON the record")
+            f"RUN_JSON the record: the tree the job runs in takes the trace with its own capture, and refuses a "
+            f"config it reads as another program than the record's")
 
 
 def changed_steps(record: dict, through: int | None) -> list[dict]:

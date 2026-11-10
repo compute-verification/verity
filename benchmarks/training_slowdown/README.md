@@ -113,9 +113,9 @@ of the calculator's registry (`benchmarks/rho/data`, its `[policy.*]` tables). T
 name that is neither is refused. p is read on the final set where the attack and its honest config each have a final
 record, else on the search split, and the block says which. A search record with no trace, with one the capture
 refused, or with one of a capture version the tree's `priced` doesn't read has no ρ, and then there is no S: the
-reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above), or
-says the record has no config to re-trace from. A record's `provenance`, where it has one (no job writes it), is
-passed on unread, beside the record and in what S rests on.
+reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above, which
+takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record's
+`provenance`, where it has one (no job writes it), is passed on unread, beside the record and in what S rests on.
 
 ## Limits of the count
 
@@ -124,6 +124,9 @@ passed on unread, beside the record and in what S rests on.
   replay refused.
 - The measured quantities are one traced step's: a record's updated steps take its representative step's structure,
   scaled to their tokens. A cut counts a value at its dtype's width, and values are whole tensors.
+- A job's trace holds the traced step's products and read-backs, and no cut of its gradient. So the grade's ρ is
+  never Fit's, whose check on the training then holds at no (c, k): it is the products term where that exceeds 1,
+  else 1. The reduction and update sensitivities beside ρ have no figure.
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.
