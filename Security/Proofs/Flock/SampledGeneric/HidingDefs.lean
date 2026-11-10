@@ -17,7 +17,7 @@ that hides, as a hypothesis. This file defines what the statements of `HidingSta
 * `Hider.map`, `Hider.comap`: a commitment read through a function (leaf digests, the trees over them, their roots),
   and a commitment to a function of the trace (a row's inner digest).
 * `hm96Hider`: hm96's commitment to a trace of `N` leaves as a `Hider`: the prover's coins are one salt per leaf, and
-  leaf `i` is `Hf (X i + My (y i), c (y i))`. `hm96Exe`: the executable's commit strings `b ‖ c` of `N` inner digests
+  leaf `i` is `Hf (Xt i + My (y i), c (y i))`. `hm96Exe`: the executable's commit strings `b ‖ c` of `N` inner digests
   (`Flock.Hm96.Default512.commitString`), and `hm96Gap`, its per-leaf hiding gap at the pinned key.
 * `MalVerifier`, `zkOfMal`, `malErr`: a claims-core record (a prover on a nonce and a rest, a black-box simulator)
   as a `Zk` against the malicious verifiers of its rounds, with `ZKmalR`'s error.
@@ -37,9 +37,9 @@ open scoped ENNReal
 /-- **Zero knowledge at the error `ε x w v`**: for every statement and witness in the relation and every verifier, the
 honest prover's view is `ε x w v`-close to the simulator's, both ways. The error may read the witness and the verifier;
 `Zk.ZK` is the case where it reads the statement alone. -/
-def Zk.ZKAt {Stmt Wit VS View : Type} (Z : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop)
+def Zk.ZKAt {Stmt Wit VS View : Type} (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop)
     (ε : Stmt → Wit → VS → ℝ≥0∞) : Prop :=
-  ∀ x w, Rel x w → ∀ v, Close (Z.real x w v) (Z.sim x v) (ε x w v)
+  ∀ x w, Rel x w → ∀ v, Close (Zs.real x w v) (Zs.sim x v) (ε x w v)
 
 /-! ## Commitments read through a function -/
 
@@ -49,28 +49,28 @@ variable {Tr Tr' Rnd Com Com' : Type}
 
 /-- **The commitment read through `g`**: whatever is computed from it and public data (leaf digests, the trees over
 them, their roots). -/
-def map (H : Hider Tr Rnd Com) (g : Com → Com') : Hider Tr Rnd Com' := ⟨fun X r => g (H.commit X r)⟩
+def map (H : Hider Tr Rnd Com) (g : Com → Com') : Hider Tr Rnd Com' := ⟨fun Xt r => g (H.commit Xt r)⟩
 
-/-- **The commitment to `t X`**: a commitment to a function of the trace (each row's inner digest). -/
-def comap (H : Hider Tr Rnd Com) (t : Tr' → Tr) : Hider Tr' Rnd Com := ⟨fun X r => H.commit (t X) r⟩
+/-- **The commitment to `t Xt`**: a commitment to a function of the trace (each row's inner digest). -/
+def comap (H : Hider Tr Rnd Com) (t : Tr' → Tr) : Hider Tr' Rnd Com := ⟨fun Xt r => H.commit (t Xt) r⟩
 
 end Hider
 
 /-! ## hm96's trace commitment -/
 
-/-- **hm96's commitment to a trace of `N = |ι|` leaves.** The trace is a digest `X i` at each leaf, the prover's coins
-are one salt `y i` per leaf, and leaf `i` of the commitment is `Hf (X i + My (y i), c (y i))`: with `My` the salt's mask
+/-- **hm96's commitment to a trace of `N = |ι|` leaves.** The trace is a digest `Xt i` at each leaf, the prover's coins
+are one salt `y i` per leaf, and leaf `i` of the commitment is `Hf (Xt i + My (y i), c (y i))`: with `My` the salt's mask
 under the key, `c` the salt's hash and `+` XOR, the pair is hm96's commit string `(b, c)`, and `Hf` is what is published
 of it (the pair itself, or the tree leaf's digest). -/
-def hm96Hider (ι : Type) {Y B C D : Type} [AddCommGroup B] (My : Y → B) (c : Y → C) (Hf : B × C → D) :
-    Hider (ι → B) (ι → Y) (ι → D) :=
-  ⟨fun X y i => Hf (X i + My (y i), c (y i))⟩
+def hm96Hider (ι : Type) {Sa Bs C D : Type} [AddCommGroup Bs] (My : Sa → Bs) (c : Sa → C) (Hf : Bs × C → D) :
+    Hider (ι → Bs) (ι → Sa) (ι → D) :=
+  ⟨fun Xt y i => Hf (Xt i + My (y i), c (y i))⟩
 
 /-- **The executable's commit strings of `N = |ι|` inner digests**: leaf `i` is
-`Flock.Hm96.Default512.commitString (X i) (y i)`, the `b ‖ c` the verifier computes the tree leaf from, at the pinned
+`Flock.Hm96.Default512.commitString (Xt i) (y i)`, the `b ‖ c` the verifier computes the tree leaf from, at the pinned
 key, under the salt `y i` (192 bytes, as its bits). -/
 def hm96Exe (ι : Type) : Hider (ι → ByteArray) (ι → Discharge.ZkView.Salt) (ι → ByteArray) :=
-  ⟨fun X y i => _root_.Flock.Hm96.Default512.commitString (X i) (Discharge.ZkView.saltBytes (y i))⟩
+  ⟨fun Xt y i => _root_.Flock.Hm96.Default512.commitString (Xt i) (Discharge.ZkView.saltBytes (y i))⟩
 
 open Classical in
 /-- **hm96's per-leaf hiding gap at the pinned key**: the statistical distance of `(M·y, c(y))` from `(U, c(y))` for a
@@ -122,29 +122,30 @@ variable {Stmt Wit VS View : Type}
 /-- **The honest views of sessions in turn.** Session `j` proves the `j`-th statement from the `j`-th witness against
 the verifier `v h`, with `h` the views of the sessions before it, first first: what the verifier carries from session
 to session is what it saw. The view is the list of the sessions' views. -/
-def Zk.seqReal (Z : Zk Stmt Wit VS View) : List (Stmt × Wit) → (List View → VS) → Exp (List View)
+def Zk.seqReal (Zs : Zk Stmt Wit VS View) : List (Stmt × Wit) → (List View → VS) → Exp (List View)
   | [], _ => ⟨.ret [], PUnit.unit⟩
-  | xw :: l, v => (Z.real xw.1 xw.2 (v [])).andThen fun a => (Z.seqReal l fun h => v (a :: h)).map (a :: ·)
+  | xw :: l, v => (Zs.real xw.1 xw.2 (v [])).andThen fun a => (Zk.seqReal Zs l fun h => v (a :: h)).map (a :: ·)
 
 /-- **The simulator's views of sessions in turn**: session `j`'s simulator at the `j`-th statement against `v h`, with
 `h` the simulated views before it. -/
-def Zk.seqSim (Z : Zk Stmt Wit VS View) : List Stmt → (List View → VS) → Exp (List View)
+def Zk.seqSim (Zs : Zk Stmt Wit VS View) : List Stmt → (List View → VS) → Exp (List View)
   | [], _ => ⟨.ret [], PUnit.unit⟩
-  | x :: l, v => (Z.sim x (v [])).andThen fun a => (Z.seqSim l fun h => v (a :: h)).map (a :: ·)
+  | x :: l, v => (Zs.sim x (v [])).andThen fun a => (Zk.seqSim Zs l fun h => v (a :: h)).map (a :: ·)
 
 /-- **The sessions' error**: the sum over the sessions of session `j`'s error at its statement and witness against the
 verifier where the honest run reaches it, averaged over the honest views of the sessions before it. -/
-noncomputable def Zk.seqErr (Z : Zk Stmt Wit VS View) (ε : Stmt → Wit → VS → ℝ≥0∞) :
+noncomputable def Zk.seqErr (Zs : Zk Stmt Wit VS View) (ε : Stmt → Wit → VS → ℝ≥0∞) :
     List (Stmt × Wit) → (List View → VS) → ℝ≥0∞
   | [], _ => 0
-  | xw :: l, v => ε xw.1 xw.2 (v []) + (Z.real xw.1 xw.2 (v [])).ex fun a => Z.seqErr ε l fun h => v (a :: h)
+  | xw :: l, v =>
+    ε xw.1 xw.2 (v []) + (Zs.real xw.1 xw.2 (v [])).ex fun a => Zk.seqErr Zs ε l fun h => v (a :: h)
 
 /-- **Sessions in turn as one proof system**: its statement is the list of the sessions' statements, its witness the
 list of their witnesses, and its verifier reads that list of statements and, at each session, the views of the sessions
 before it. -/
-def Zk.seq (Z : Zk Stmt Wit VS View) : Zk (List Stmt) (List Wit) (List Stmt → List View → VS) (List View) where
-  real xs ws v := Z.seqReal (xs.zip ws) (v xs)
-  sim xs v := Z.seqSim xs (v xs)
+def Zk.seq (Zs : Zk Stmt Wit VS View) : Zk (List Stmt) (List Wit) (List Stmt → List View → VS) (List View) where
+  real xs ws v := Zs.seqReal (xs.zip ws) (v xs)
+  sim xs v := Zs.seqSim xs (v xs)
 
 end Sessions
 

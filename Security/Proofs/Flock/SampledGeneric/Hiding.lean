@@ -86,14 +86,14 @@ theorem Close.coinAvg {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd �
 /-! ## Zero knowledge at an error that reads the witness and the verifier -/
 
 /-- `Zk.ZK` at `ε_zk` is `Zk.ZKAt` at the error `ε_zk(x)`. -/
-theorem Zk.ZKAt.of_ZK {Stmt Wit VS View : Type} {Z : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
-    {εzk : Stmt → ℝ≥0∞} (h : Z.ZK Rel εzk) : Z.ZKAt Rel fun x _ _ => εzk x :=
+theorem Zk.ZKAt.of_ZK {Stmt Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
+    {εzk : Stmt → ℝ≥0∞} (h : Zs.ZK Rel εzk) : Zs.ZKAt Rel fun x _ _ => εzk x :=
   h
 
 /-- `Zk.ZKAt` on other statements (`zkComap`). -/
-theorem Zk.ZKAt.comap {Stmt Stmt' Wit VS View : Type} {Z : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
-    {ε : Stmt → Wit → VS → ℝ≥0∞} (h : Z.ZKAt Rel ε) (g : Stmt' → Stmt) :
-    (zkComap Z g).ZKAt (fun x w => Rel (g x) w) fun x => ε (g x) :=
+theorem Zk.ZKAt.comap {Stmt Stmt' Wit VS View : Type} {Zs : Zk Stmt Wit VS View} {Rel : Stmt → Wit → Prop}
+    {ε : Stmt → Wit → VS → ℝ≥0∞} (h : Zs.ZKAt Rel ε) (g : Stmt' → Stmt) :
+    (zkComap Zs g).ZKAt (fun x w => Rel (g x) w) fun x => ε (g x) :=
   fun x w hR v => h (g x) w hR v
 
 /-! ## Commitments -/
@@ -103,29 +103,29 @@ namespace Hider
 variable {Tr Tr' Rnd Com Com' : Type}
 
 /-- Two commitments with the same commitment to every trace under every coin are one. -/
-theorem ext_commit {H H' : Hider Tr Rnd Com} (h : ∀ X r, H.commit X r = H'.commit X r) : H = H' := by
+theorem ext_commit {H H' : Hider Tr Rnd Com} (h : ∀ Xt r, H.commit Xt r = H'.commit Xt r) : H = H' := by
   cases H
   cases H'
-  exact congrArg Hider.mk (funext fun X => funext fun r => h X r)
+  exact congrArg Hider.mk (funext fun Xt => funext fun r => h Xt r)
 
 variable [Fintype Rnd] [Nonempty Rnd]
 
 /-- **A post-processed commitment's probability**: the average over the prover's coins of the post-processing's. -/
-theorem exp_andThen_pr {W : Type} (H : Hider Tr Rnd Com) (X : Tr) (f : Com → Exp W) (E : W → Prop) :
-    ((H.exp X).andThen f).pr E = avg fun r => (f (H.commit X r)).pr E :=
+theorem exp_andThen_pr {W : Type} (H : Hider Tr Rnd Com) (Xt : Tr) (f : Com → Exp W) (E : W → Prop) :
+    ((H.exp Xt).andThen f).pr E = avg fun r => (f (H.commit Xt r)).pr E :=
   rfl
 
 /-- **Hiding survives reading the commitment through a function**: what is computed from a hiding commitment hides. -/
 theorem Hiding.map {H : Hider Tr Rnd Com} {εh : ℝ≥0∞} (h : H.Hiding εh) (g : Com → Com') : (H.map g).Hiding εh :=
-  fun W X X' f => h W X X' fun c => f (g c)
+  fun W Xt Xt' f => h W Xt Xt' fun c => f (g c)
 
 /-- **Hiding survives committing to a function of the trace.** -/
 theorem Hiding.comap {H : Hider Tr Rnd Com} {εh : ℝ≥0∞} (h : H.Hiding εh) (t : Tr' → Tr) : (H.comap t).Hiding εh :=
-  fun W X X' f => h W (t X) (t X') f
+  fun W Xt Xt' f => h W (t Xt) (t Xt') f
 
 /-- Hiding grows with its error. -/
 theorem Hiding.mono {H : Hider Tr Rnd Com} {εh εh' : ℝ≥0∞} (h : H.Hiding εh) (hε : εh ≤ εh') : H.Hiding εh' :=
-  fun W X X' f => (h W X X' f).mono hε
+  fun W Xt Xt' f => (h W Xt Xt' f).mono hε
 
 end Hider
 
@@ -133,19 +133,19 @@ end Hider
 
 section Hm96
 
-variable {ι Y B C D : Type} [Fintype ι] [DecidableEq ι] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
+variable {ι Sa Bs C D : Type} [Fintype ι] [DecidableEq ι] [Fintype Sa] [Nonempty Sa] [AddCommGroup Bs] [Fintype Bs]
 
 /-- **hm96's trace commitment is a `Hider` that hides at `2·N·δ₁`**: `hm96_commit_two_traces`, at the test that runs
 the post-processing on the leaves and reads its event. -/
-theorem hm96Hider_hiding (My : Y → B) (c : Y → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (Hf : B × C → D) :
+theorem hm96Hider_hiding (My : Sa → Bs) (c : Sa → C) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding My c δ₁) (Hf : Bs × C → D) :
     (hm96Hider ι My c Hf).Hiding (2 * Fintype.card ι * δ₁) := by
-  intro W X X' f E
-  have key : ∀ X₁ X₂ : ι → B, (((hm96Hider ι My c Hf).exp X₁).andThen f).pr E ≤
+  intro W Xt Xt' f E
+  have key : ∀ X₁ X₂ : ι → Bs, (((hm96Hider ι My c Hf).exp X₁).andThen f).pr E ≤
       (((hm96Hider ι My c Hf).exp X₂).andThen f).pr E + 2 * Fintype.card ι * δ₁ := by
     intro X₁ X₂
     rw [Hider.exp_andThen_pr, Hider.exp_andThen_pr]
     exact hm96_commit_two_traces My c hT1 Hf X₁ X₂ (fun d => (f d).pr E) fun d => prob_le_one E (f d).g (f d).s
-  exact ⟨key X X', key X' X⟩
+  exact ⟨key Xt Xt', key Xt' Xt⟩
 
 end Hm96
 
@@ -154,8 +154,8 @@ publishing each leaf's pair as its bytes `b ‖ c`, to the trace of the inner di
 theorem hm96Exe_eq (ι : Type) :
     hm96Exe ι = (hm96Hider ι Discharge.ZkView.My Discharge.ZkView.saltHash
       fun p : Discharge.ZkView.Bits × ByteArray => Discharge.ZkView.bytesOf (k := 64) p.1 ++ p.2).comap
-        fun (X : ι → ByteArray) i => Discharge.ZkView.bitsOf (X i) :=
-  Hider.ext_commit fun X y => funext fun i => Discharge.ZkView.commitSplit (X i) (y i)
+        fun (Xt : ι → ByteArray) i => Discharge.ZkView.bitsOf (Xt i) :=
+  Hider.ext_commit fun Xt y => funext fun i => Discharge.ZkView.commitSplit (Xt i) (y i)
 
 open Classical in
 /-- **The executable's commit strings hide at `2·N·δ₁`**, with `δ₁` the hiding gap at the pinned key, where
@@ -209,7 +209,7 @@ end FlockSoundness.SampledGeneric
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 /-- **hm96's trace commitment hides** (`Flock.Guarantees.Hm96TraceHiding`): `hm96Hider_hiding`. -/
 theorem Flock.SecurityProofs.Hm96TraceHiding : Flock.Guarantees.Hm96TraceHiding := by
-  intro ι Y B C D _ _ _ _ _ _ My c δ₁ Hf hT1
+  intro ι Sa Bs C D _ _ _ _ _ _ My c δ₁ Hf hT1
   exact hm96Hider_hiding My c hT1 Hf
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
@@ -224,15 +224,15 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 real trace, which simulates each session on the real commitment, at the session's error averaged over the commitment
 coins (`Close.coinAvg`); that is `ε_hide`-close to `auditSim` at `X₀` (`auditSim_eq_andThen`, `Hider.Hiding`). -/
 theorem Flock.SecurityProofs.GenericSampledZKAt : Flock.Guarantees.GenericSampledZKAt := by
-  intro n Tr Rnd Com Wit VS View _ _ H Z Rel ε εh samp wit hZ hH X hX X₀ v
-  have h1 : Close (auditView H Z samp wit X v) (auditSim H Z samp X v)
-      (avg fun r => ε (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v) :=
-    Close.coinAvg (fun r => Z.real (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v)
-      (fun r => Z.sim (H.commit X r, samp v (H.commit X r)) v) (fun r w => (H.commit X r, samp v (H.commit X r), w))
+  intro n Tr Rnd Com Wit VS View _ _ H Zs Rel ε εh samp wit hZ hH Xt hX X₀ v
+  have h1 : Close (auditView H Zs samp wit Xt v) (auditSim H Zs samp Xt v)
+      (avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v) :=
+    Close.coinAvg (fun r => Zs.real (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
+      (fun r => Zs.sim (H.commit Xt r, samp v (H.commit Xt r)) v) (fun r w => (H.commit Xt r, samp v (H.commit Xt r), w))
       _ fun r => hZ _ _ (hX r _) v
-  have h2 : Close (auditSim H Z samp X v) (auditSim H Z samp X₀ v) εh := by
+  have h2 : Close (auditSim H Zs samp Xt v) (auditSim H Zs samp X₀ v) εh := by
     rw [auditSim_eq_andThen, auditSim_eq_andThen]
-    exact hH _ X X₀ (auditSimAfter Z samp v)
+    exact hH _ Xt X₀ (auditSimAfter Zs samp v)
   exact (h1.trans h2).mono (le_of_eq (add_comm _ _))
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
@@ -240,7 +240,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.SampledGeneric in
 `GenericSampledZKAt` at the masked session (`flockSession_zkAt`, from `MaskedZK`) and the executable's commit strings
 (`hm96Exe_hiding`). -/
 theorem Flock.SecurityProofs.SpotFlockZK : Flock.Guarantees.SpotFlockZK := by
-  intro nr t ht ι _ _ n Θ stmt samp wit X hX X₀ v
+  intro nr t ht ι _ _ n Θ stmt samp wit Xt hX X₀ v
   exact Flock.SecurityProofs.GenericSampledZKAt n _ _ _ _ _ _ (hm96Exe ι) (zkComap (flockSession nr t Θ) stmt)
     (fun s w => Claims.Flock.R (flockZk nr t).parse (stmt s) w) (fun s w v => flockErr nr t (stmt s) w v) _ samp wit
-    ((flockSession_zkAt nr t ht Θ).comap stmt) (hm96Exe_hiding ι) X hX X₀ v
+    ((flockSession_zkAt nr t ht Θ).comap stmt) (hm96Exe_hiding ι) Xt hX X₀ v

@@ -67,8 +67,8 @@ open scoped ENNReal
 (`hm96Hider`), whatever `Hf` publishes of each leaf's commit string: if a leaf hides at `δ₁` (`Claims.Hm96Hiding`), the
 commitments to any two traces are `2·N·δ₁`-close against every post-processing (`Hider.Hiding`). -/
 def Hm96TraceHiding : Prop :=
-  ∀ (ι Y B C D : Type) [Fintype ι] [DecidableEq ι] [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B]
-    (My : Y → B) (c : Y → C) (δ₁ : ℝ≥0∞) (Hf : B × C → D),
+  ∀ (ι Sa Bs C D : Type) [Fintype ι] [DecidableEq ι] [Fintype Sa] [Nonempty Sa] [AddCommGroup Bs] [Fintype Bs]
+    (My : Sa → Bs) (c : Sa → C) (δ₁ : ℝ≥0∞) (Hf : Bs × C → D),
     Claims.Hm96Hiding My c δ₁ → (hm96Hider ι My c Hf).Hiding (2 * Fintype.card ι * δ₁)
 
 /-- **The executable's hm96 commit strings hide**, with no hypothesis: for `N = |ι|` inner digests committed by
@@ -81,27 +81,27 @@ def Hm96ExeHiding : Prop :=
 /-- **The sampled audit's zero knowledge, at a session's error that reads the witness and the verifier.** For a proof
 system whose honest prover's view is `ε x w v`-close to its simulator's at every statement and witness in its relation
 and every verifier (`Zk.ZKAt`), and a commitment that is `ε_hide`-hiding (`Hider.Hiding`): against every verifier `v`,
-which samples (`samp`) after seeing the commitment, the audit's view at any trace `X` whose openings are witnesses of
-every sample's statement is close to the simulator's at any fixed trace `X₀` (`auditSim`), which reads nothing of `X`,
+which samples (`samp`) after seeing the commitment, the audit's view at any trace `Xt` whose openings are witnesses of
+every sample's statement is close to the simulator's at any fixed trace `X₀` (`auditSim`), which reads nothing of `Xt`,
 at `ε_hide` plus the session's error averaged over the prover's commitment coins:
 $$\varepsilon_{\rm hide}+\mathbb E_r\,\varepsilon(x_r,w_r,v).$$ -/
 def GenericSampledZKAt : Prop :=
   ∀ (n : ℕ) (Tr Rnd Com Wit VS View : Type) [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
-    (Z : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop)
+    (Zs : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop)
     (ε : Com × Finset (Fin n) → Wit → VS → ℝ≥0∞) (εh : ℝ≥0∞) (samp : VS → Com → Finset (Fin n))
     (wit : Tr → Rnd → Finset (Fin n) → Wit),
-    Z.ZKAt Rel ε → H.Hiding εh →
-    ∀ X : Tr, (∀ r S, Rel (H.commit X r, S) (wit X r S)) →
-    ∀ (X₀ : Tr) (v : VS), Close (auditView H Z samp wit X v) (auditSim H Z samp X₀ v)
-      (εh + avg fun r => ε (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v)
+    Zs.ZKAt Rel ε → H.Hiding εh →
+    ∀ Xt : Tr, (∀ r S, Rel (H.commit Xt r, S) (wit Xt r S)) →
+    ∀ (X₀ : Tr) (v : VS), Close (auditView H Zs samp wit Xt v) (auditSim H Zs samp X₀ v)
+      (εh + avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
 
-/-- **The sampled audit over Flock's masked session is zero knowledge.** The prover commits to a trace `X` of
+/-- **The sampled audit over Flock's masked session is zero knowledge.** The prover commits to a trace `Xt` of
 `N = |ι|` inner digests by the executable's hm96 commit strings under one uniform salt each (`hm96Exe`); the verifier
 `v`, a malicious verifier of the masked session's rounds, samples after seeing them (`samp`); and Flock's reference
 prover proves the sample's statement `stmt (c, S)` from the trace's openings (`wit`) in one masked session
 (`flockSession`). If every such statement is in the masked record's relation with those openings, the verifier's view,
 the commit strings, the sample and the session's transcript, is close to the simulator's at any fixed trace `X₀`, which
-reads nothing of `X`, at
+reads nothing of `Xt`, at
 $$2N\delta_1+\mathbb E_r\bigl[\varepsilon_{zk}(x_r)+4t\,3^t\Pr[\mathrm{Fork}(P(w_r),V^*)]\bigr],$$
 with `δ₁` hm96's hiding gap at the pinned key (`hm96Gap`), `ε_zk` and the fork factor `MaskedZK`'s (`flockErr`), and
 the average over the prover's salts. -/
@@ -111,22 +111,22 @@ def SpotFlockZK : Prop :=
     (stmt : (ι → ByteArray) × Finset (Fin n) → Claims.Msg)
     (samp : MalVerifier (flockRounds nr t) Θ → (ι → ByteArray) → Finset (Fin n))
     (wit : (ι → ByteArray) → (ι → Discharge.ZkView.Salt) → Finset (Fin n) → Claims.Flock.Wit)
-    (X : ι → ByteArray),
-    (∀ r S, Claims.Flock.R (flockZk nr t).parse (stmt ((hm96Exe ι).commit X r, S)) (wit X r S)) →
+    (Xt : ι → ByteArray),
+    (∀ r S, Claims.Flock.R (flockZk nr t).parse (stmt ((hm96Exe ι).commit Xt r, S)) (wit Xt r S)) →
     ∀ (X₀ : ι → ByteArray) (v : MalVerifier (flockRounds nr t) Θ),
-      Close (auditView (hm96Exe ι) (zkComap (flockSession nr t Θ) stmt) samp wit X v)
+      Close (auditView (hm96Exe ι) (zkComap (flockSession nr t Θ) stmt) samp wit Xt v)
         (auditSim (hm96Exe ι) (zkComap (flockSession nr t Θ) stmt) samp X₀ v)
         (2 * Fintype.card ι * hm96Gap +
-          avg fun r => flockErr nr t (stmt ((hm96Exe ι).commit X r, samp v ((hm96Exe ι).commit X r)))
-            (wit X r (samp v ((hm96Exe ι).commit X r))) v)
+          avg fun r => flockErr nr t (stmt ((hm96Exe ι).commit Xt r, samp v ((hm96Exe ι).commit Xt r)))
+            (wit Xt r (samp v ((hm96Exe ι).commit Xt r))) v)
 
 /-- **Sessions in turn are zero knowledge at the sum of their errors.** For a proof system that is zero knowledge at
 `ε` (`Zk.ZKAt`): its sessions in turn at a list of statements, each with a witness in the relation, against one
 verifier that carries what it saw from session to session (`Zk.seq`), are zero knowledge at the sum over the sessions
 of session `j`'s error, averaged over the honest views of the sessions before it (`Zk.seqErr`). -/
 def GenericSessionsZK : Prop :=
-  ∀ (Stmt Wit VS View : Type) (Z : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞),
-    Z.ZKAt Rel ε → Z.seq.ZKAt (List.Forall₂ Rel) fun xs ws v => Z.seqErr ε (xs.zip ws) (v xs)
+  ∀ (Stmt Wit VS View : Type) (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞),
+    Zs.ZKAt Rel ε → Zs.seq.ZKAt (List.Forall₂ Rel) fun xs ws v => Zs.seqErr ε (xs.zip ws) (v xs)
 
 /-- **The sampled audit's zero knowledge with a session per sampled statement.** As `GenericSampledZKAt`, with the
 sample's statements a list `stmts (c, S)`, each proved in its own session, in turn, from the trace's openings
@@ -136,16 +136,16 @@ $$\varepsilon_{\rm hide}+\mathbb E_r\sum_j\mathbb E\,\varepsilon(x_{r,j},w_{r,j}
 session `j`'s error averaged over the honest views of the sessions before it. -/
 def GenericSampledSessionsZK : Prop :=
   ∀ (n : ℕ) (Tr Rnd Com Stmt Wit VS View : Type) [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
-    (Z : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞) (εh : ℝ≥0∞)
+    (Zs : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (ε : Stmt → Wit → VS → ℝ≥0∞) (εh : ℝ≥0∞)
     (stmts : Com × Finset (Fin n) → List Stmt) (samp : (List Stmt → List View → VS) → Com → Finset (Fin n))
     (wits : Tr → Rnd → Finset (Fin n) → List Wit),
-    Z.ZKAt Rel ε → H.Hiding εh →
-    ∀ X : Tr, (∀ r S, List.Forall₂ Rel (stmts (H.commit X r, S)) (wits X r S)) →
+    Zs.ZKAt Rel ε → H.Hiding εh →
+    ∀ Xt : Tr, (∀ r S, List.Forall₂ Rel (stmts (H.commit Xt r, S)) (wits Xt r S)) →
     ∀ (X₀ : Tr) (v : List Stmt → List View → VS),
-      Close (auditView H (zkComap Z.seq stmts) samp wits X v) (auditSim H (zkComap Z.seq stmts) samp X₀ v)
-        (εh + avg fun r => Z.seqErr ε
-          ((stmts (H.commit X r, samp v (H.commit X r))).zip (wits X r (samp v (H.commit X r))))
-          (v (stmts (H.commit X r, samp v (H.commit X r)))))
+      Close (auditView H (zkComap Zs.seq stmts) samp wits Xt v) (auditSim H (zkComap Zs.seq stmts) samp X₀ v)
+        (εh + avg fun r => Zs.seqErr ε
+          ((stmts (H.commit Xt r, samp v (H.commit Xt r))).zip (wits Xt r (samp v (H.commit Xt r))))
+          (v (stmts (H.commit Xt r, samp v (H.commit Xt r)))))
 
 /-- **The sampled audit over Flock's masked sessions, a session per sampled statement, is zero knowledge.** As
 `SpotFlockZK`, with the sample's statements a list `stmts (c, S)`, each proved in its own masked session, in turn,
@@ -160,16 +160,16 @@ def SpotFlockSessionsZK : Prop :=
     (samp : (List Claims.Msg → List (List (Claims.Msg × Claims.Out)) → MalVerifier (flockRounds nr t) Θ) →
       (ι → ByteArray) → Finset (Fin n))
     (wits : (ι → ByteArray) → (ι → Discharge.ZkView.Salt) → Finset (Fin n) → List Claims.Flock.Wit)
-    (X : ι → ByteArray),
-    (∀ r S, List.Forall₂ (Claims.Flock.R (flockZk nr t).parse) (stmts ((hm96Exe ι).commit X r, S)) (wits X r S)) →
+    (Xt : ι → ByteArray),
+    (∀ r S, List.Forall₂ (Claims.Flock.R (flockZk nr t).parse) (stmts ((hm96Exe ι).commit Xt r, S)) (wits Xt r S)) →
     ∀ (X₀ : ι → ByteArray)
       (v : List Claims.Msg → List (List (Claims.Msg × Claims.Out)) → MalVerifier (flockRounds nr t) Θ),
-      Close (auditView (hm96Exe ι) (zkComap (flockSession nr t Θ).seq stmts) samp wits X v)
+      Close (auditView (hm96Exe ι) (zkComap (flockSession nr t Θ).seq stmts) samp wits Xt v)
         (auditSim (hm96Exe ι) (zkComap (flockSession nr t Θ).seq stmts) samp X₀ v)
         (2 * Fintype.card ι * hm96Gap +
           avg fun r => (flockSession nr t Θ).seqErr (fun x w v => flockErr nr t x w v)
-            ((stmts ((hm96Exe ι).commit X r, samp v ((hm96Exe ι).commit X r))).zip
-              (wits X r (samp v ((hm96Exe ι).commit X r))))
-            (v (stmts ((hm96Exe ι).commit X r, samp v ((hm96Exe ι).commit X r)))))
+            ((stmts ((hm96Exe ι).commit Xt r, samp v ((hm96Exe ι).commit Xt r))).zip
+              (wits Xt r (samp v ((hm96Exe ι).commit Xt r))))
+            (v (stmts ((hm96Exe ι).commit Xt r, samp v ((hm96Exe ι).commit Xt r)))))
 
 end Flock.Guarantees
