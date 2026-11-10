@@ -224,12 +224,12 @@ class Charged:
     cap: float
     #: `T`, what all the blocks read outside `θ` between them, at most: `blocks · k + word · untied`
     total: float
-    #: `S`, the sum over the blocks that aren't charged of the squares of what each reads, at most, however many
-    #: of `charged` are
-    squares: float
+    #: `Q`, the sum over the blocks that aren't charged of the square of what each reads over the `q = β_w β_x` it
+    #: is asked (H) at, at most, however many of `charged` are
+    squares_by_q: float
     mac_gates: float
     beta_w: float
-    #: (H)'s `β` for an activation at `cap`; `None`: none there, so no bound
+    #: (H)'s `β` for an activation at `cap`, the least any block is asked it at; `None`: none there, so no bound
     beta_x: float | None
     b: float
 
@@ -256,8 +256,9 @@ class Charged:
             return (f"no bound with {threshold}: a block that isn't charged reads up to {self.cap:.4g} bits, and "
                     f"(H)'s β for an activation ({HARDNESS}) is stated up to k = {BETA[-1][0]:.4g}")
         return (f"{self.statement}, whose standing the lock gives, at T = {self.total:.4g} bits and "
-                f"S = {self.squares:.4g}, with {threshold}; under (H) ({HARDNESS}) at k = {self.cap:.4g} bits, "
-                f"β_w = {self.beta_w:.4g} and β_x = {self.beta_x:.4g} bits a value, and (E) ({EXPORTS}) at "
+                f"Q = {self.squares_by_q:.4g}, with {threshold}; under (H) ({HARDNESS}) at what each block reads, "
+                f"up to k = {self.cap:.4g} bits, β_w = {self.beta_w:.4g} and β_x = {self.beta_x:.4g} bits a value "
+                f"there, and (E) ({EXPORTS}) at "
                 f"b = {self.b:.4g} bits an output, conjectures one set of gates refutes; and two premises no Lean "
                 f"statement gives: the period's accepted execution phases hold at most {self.untied:.6g} untied "
                 f"words between them, at most {self.most:.6g} of them in one block ({UNTIED_WORDS}), and an untied "
@@ -284,14 +285,18 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     * at most `⌊untied / (w + 1)⌋` blocks are charged, and none where `⌊most⌋ ≤ w`, each holding at most
       `c / mac_gates` MACs whole, MACs being disjoint;
     * all the blocks together read `T ≤ blocks · k + word · untied`;
-    * a block of `G` that reads `w_u` untied words reads at most `k + word · w_u`, with `w_u ≤ v = min(w, most)` and
-      the `w_u` summing to at most `untied`, so `S ≤ |G| k² + word · E_G (2 k + word · v)` at
-      `E_G = min(untied, |G| v)`, and (H) is taken at `k + word · v`;
+    * a block of `G` that reads `w_u` untied words reads at most `r_u = k + word · w_u`, with `w_u ≤ v = min(w, most)`
+      and the `w_u` summing to at most `untied`. (H) is taken at each block's own `r_u`, at `q(r_u) = β_w β_x(r_u)`,
+      so `Q`, the sum over `G` of `r_u² / q(r_u)`, is at most `|G| k² / q(k)` and, for the untied words, the lesser of
+      `untied` times the most a word adds and `|G|` times the most a block adds, `(k + word · v)² / q(k + word · v)
+      − k² / q(k)`. The most a word adds is the steepest chord of `r² / q(r)` from `r = k`: between two of `beta`'s
+      rows the chord falls and then rises, so it is steepest at an end of a row or at `k + word · v`. With one
+      `beta_x` given it is `word (2 k + word · v) / q`, and `Q` is the sum of the squares over `q`;
     * `O` is the output wires of every MAC the period's blocks hold, `O / N` a MAC, the charged blocks' among them.
 
     Which blocks are charged is not the caller's to say, so each term is taken at its most: `H` at every block that
-    can be charged, and `S` at `|G| = blocks`, none charged. The period's MACs `M` then satisfy
-    `M ≤ H + macs_on(T, S, (O / N) M, q, b)`, which is solved for `M`, and the slowdown is the blocks' gates over
+    can be charged, and `Q` at `|G| = blocks`, none charged. The period's MACs `M` then satisfy
+    `M ≤ H + macs_on(T, Q, (O / N) M, 1, b)`, which is solved for `M`, and the slowdown is the blocks' gates over
     those MACs' gates as a plain circuit, `blocks · c / (M · size / N)`, at least 1. With no untied word it is
     `bound`'s slowdown, whatever `w`; with every block charged it is 1; at `w = 0` every block that isn't charged
     reads `k`.
@@ -299,7 +304,8 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     * `mac_gates`, the fewest gates of one of the work's MACs, the caller's to state of its work and read only
       where a block is charged. Default `size / N`, the plain circuit's gates a MAC: right where that circuit is its
       MACs alone, and a caller whose circuit holds other gates states its own.
-    * `beta_w`, `beta_x`, `b`: `bound`'s, with `beta_x` by default `beta` at the most a block of `G` reads.
+    * `beta_w`, `beta_x`, `b`: `bound`'s, with `beta_x` by default `beta` at what each block reads, the table's row
+      for it: a block that reads more is asked (H) at a lower `β_x`, and no other block is.
 
     The statement reads two arrays (`HE`'s `F = 1`), and no `n`.
     """
@@ -307,23 +313,38 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     most = min(most, untied)
     over = min(w, most)  # the most untied words a block that isn't charged reads
     cap = k + word * over
-    beta_x = beta(cap) if beta_x is None else beta_x
+    rows = beta_x is None  # (H) at each block's own reads, the table's row for them
+
+    def q_at(reads: float) -> float | None:
+        at = beta(reads) if rows else beta_x
+        return None if at is None else beta_w * at
+
+    beta_cap = beta(cap) if rows else beta_x
     # words are whole: a block that reads at most `most` of them reads at most `⌊most⌋`
     under = most <= w or (most < math.inf and math.floor(most) <= w)
     charged = 0 if under else min(blocks, math.floor(untied / (w + 1)))
     total = blocks * k + word * untied
-    squares = blocks * k ** 2 + word * min(untied, blocks * over) * (2 * k + word * over)
     premises = (HARDNESS, EXPORTS, UNTIED_WORDS, WORD_BITS)
-    if beta_x is None or N <= 0 or blocks <= 0:
+    if beta_cap is None or N <= 0 or blocks <= 0:
         return Charged(1.0, blocks, untied, w, most, word, charged, math.nan, math.inf, HE_CHARGED, premises, k, cap,
-                       total, squares, mac_gates or math.nan, beta_w, beta_x, b)
-    q = beta_w * beta_x
+                       total, math.inf, mac_gates or math.nan, beta_w, beta_cap, b)
+    tied, extra = k ** 2 / q_at(k), 0.0
+    if over > 0 and untied > 0:
+        # `(reads, q)` where the chord of `reads² / q(reads)` from `k` may be steepest: `cap`, and both sides of
+        # each of `beta`'s rows between
+        ends = [(cap, q_at(cap))]
+        for row_k, at in BETA if rows else ():
+            if k < row_k < cap:
+                ends += [(row_k, beta_w * at), (row_k, q_at(math.nextafter(row_k, math.inf)))]
+        a_word = max((reads ** 2 / q - tied) * word / (reads - k) for reads, q in ends)
+        extra = min(untied * a_word, blocks * (cap ** 2 / q_at(cap) - tied))
+    by_q = blocks * tied + extra
     held = charged * c / mac_gates
-    # M = a + d √M, with a = H + T + ½ √(S T / (q b)) and d = ½ √(S (O / N) / q)
-    a, d = held + macs_on(total, squares, 0.0, q, b), math.sqrt(squares * (O / N) / q) / 2
+    # M = a + d √M, with a = H + T + ½ √(Q T / b) and d = ½ √(Q (O / N))
+    a, d = held + macs_on(total, by_q, 0.0, 1.0, b), math.sqrt(by_q * (O / N)) / 2
     macs = ((d + math.sqrt(d * d + 4 * a)) / 2) ** 2
     return Charged(max(1.0, blocks * c * N / (macs * size)), blocks, untied, w, most, word, charged, held, macs,
-                   HE_CHARGED, premises, k, cap, total, squares, mac_gates, beta_w, beta_x, b)
+                   HE_CHARGED, premises, k, cap, total, by_q, mac_gates, beta_w, beta_cap, b)
 
 
 def best_w(c: float, k: float, n: float | None = None, *, blocks: float, untied: float, most: float = math.inf,
