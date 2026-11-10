@@ -154,8 +154,8 @@ ANSWER = {
     **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows")}, "public.held[]": O,
     "public.scans[].tied[]": O, **{f"public.charged[].{k}": O for k in ("delta", "drawn", "units", "wrong_units")},
     **{f"public.{f}[].{k}": O for f in ("audits", "scans")
-       for k in ("delta", "drawn", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter", "units",
-                 "wrong_units")},
+       for k in ("delta", "drawn", "entries", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter",
+                 "units", "wrong_units")},
 }
 #: a step of the chain's report: its verdict, the sample's law, population and size with its bound at each δ, and what
 #: it ran in the clear
