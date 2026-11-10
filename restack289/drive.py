@@ -2,8 +2,8 @@
 """VLLM-289: the restack rehearsal's driver for many branches in one `research run --on auto --cwd source` job. Scratch: it
 lands nowhere.
 
-    drive.py --staged STAGED [--base BASE] [--move M ...] [--main MAIN] [--tool REF] [--workers N] [--pins auto|on|off]
-             [--real --ident-name NAME --ident-email EMAIL] [--smoke] PR=HEAD...
+    drive.py (--staged STAGED | --stand-in MAP...) [--base BASE] [--move M ...] [--main MAIN] [--tool REF] [--workers N]
+             [--pins auto|on|off] [--real --ident-name NAME --ident-email EMAIL] [--smoke] PR=HEAD...
 
 It makes the job's own clone of the source root with the repository's merge drivers registered (`research.clone.make`, what
 `--cwd clone` calls: a source root has none, and a lock, a pyproject's test lists or a lint allowlist then merges as text),
@@ -24,6 +24,11 @@ In the clone, in order:
    `--move-commit` (`restack.moves_on`), each conflicted file's merge attribute, and a bundle of the commits made
    ($OUT/bundles/pr-PR.bundle: the result, or the last step before a stop), so a stop can be read and mended, and a result
    pushed, from a VM without the script running again.
+
+`--stand-in MAP...` (with `--base BASE`, no `--staged`) is for the hours no staging on BASE can be fetched: the job computes
+one, BASE's own `layout.py` on BASE for each MAP in turn, a move commit each, and uses its tip as STAGED. It has the
+moves and none of the stager's hand rows, input rows or regenerated files, so a branch that crosses it has passed the
+merge of BASE, the script and the merge of the generated move, and nothing about the hand rows.
 
 `--tool REF` runs REF's `tools/move/restack.py` instead of the checkout's (the staged tree's copy, which is `main`'s once
 the layout lands). `--real` only changes the commits' identity: `--ident-name` and `--ident-email` at the hour it runs,
@@ -136,6 +141,27 @@ def merge_base(pr: str, head: str, base: str) -> dict:
             RS.drop_worktree(wt, None)
 
 
+def stand_in(base: str, maps: list[str]) -> dict:
+    """A staging computed here: ``base``'s own layout script on ``base`` for each of ``maps`` in turn, a move commit each. Each
+    tree goes into `restack._GENERATED` under the key `check_generated` asks with, so the check of these moves is this run."""
+    tip, moves, steps = base, [], []
+    for m in maps:
+        t0 = time.time()
+        RS.SCRIPT, RS.SCRIPT_ARGS = "tools/move/layout.py", ("--map", m)
+        try:
+            tree, _restored, _output = RS.run_script(tip, tip, sys.executable, None)
+        except (RS.ScriptFailed, SystemExit) as e:
+            steps.append({"map": m, "on": tip, "status": "script-failed", "error": str(e)[-1500:], "minutes": minutes(t0)})
+            break
+        commit = RS.commit_tree(tree, [tip], f"Move by {m}\n\nVLLM-289's stand-in for a staging: `python3 tools/move/layout.py "
+                                f"--map {m}` at the root of {tip}, and nothing by hand.\n\nLayout-move: {m}\n", None)
+        RS._GENERATED[(commit, tip, sys.executable, RS.SCRIPT, RS.SCRIPT_ARGS)] = tree
+        steps.append({"map": m, "on": tip, "status": "generated", "commit": commit, "tree": tree, "minutes": minutes(t0)})
+        moves.append(commit)
+        tip = commit
+    return {"tip": tip if moves else None, "moves": moves, "steps": steps}
+
+
 def one(job: tuple) -> dict:
     """One branch as its owner carries it: `git merge BASE`, then `restack.main` as the command line runs it; never raises."""
     pr, head = job
@@ -184,7 +210,8 @@ def main() -> int:
     global RS, A, NO_PINS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("branches", nargs="+", metavar="PR=HEAD")
-    ap.add_argument("--staged", required=True)
+    ap.add_argument("--staged")
+    ap.add_argument("--stand-in", nargs="+", metavar="MAP", help="compute the staging: BASE's layout.py on BASE for each MAP")
     ap.add_argument("--base", help="the layout's base: `git merge BASE` at each head first")
     ap.add_argument("--move", action="append", default=[], help="a --move-commit (default: the moves the tool finds)")
     ap.add_argument("--main", help="restack's --main (default: STAGED)")
@@ -198,6 +225,8 @@ def main() -> int:
     a = ap.parse_args()
     if a.real and not (a.ident_name and a.ident_email):
         ap.error("--real takes --ident-name and --ident-email")
+    if bool(a.staged) == bool(a.stand_in) or (a.stand_in and (not a.base or a.real or a.move)):
+        ap.error("one of --staged and --stand-in; --stand-in takes --base, and neither --real nor --move")
     os.environ.update({k: v for k, v in IDENT.items() if not (a.real and k.endswith("_DATE"))})
     if a.real:
         os.environ.update(GIT_AUTHOR_NAME=a.ident_name, GIT_COMMITTER_NAME=a.ident_name, GIT_AUTHOR_EMAIL=a.ident_email,
@@ -225,9 +254,21 @@ def main() -> int:
         import restack
         RS, A = restack, a
 
+        a.base = RS.rev(a.base, None) if a.base else None
+        made = None
+        if a.stand_in:
+            default = (RS.SCRIPT, tuple(RS.SCRIPT_ARGS))
+            made = stand_in(a.base, a.stand_in)
+            RS.SCRIPT, RS.SCRIPT_ARGS = default
+            for st in made["steps"]:
+                say(f"stand-in: {st['map']} on {st['on'][:12]}: {st['status']} {st.get('commit', '')[:12]} [{st['minutes']} min]"
+                    + (f"\n    {st['error'][-600:]}" if st.get("error") else ""))
+            if not made["tip"]:
+                save("summary.json", {"stand_in": made})
+                return 2
+            a.staged = made["tip"]
         a.staged = RS.rev(a.staged, None)
         a.main = RS.rev(a.main, None) if a.main else a.staged
-        a.base = RS.rev(a.base, None) if a.base else None
         a.move = [RS.rev(m, None) for m in a.move]
         env = {"python": sys.version.split()[0], "executable": sys.executable, "git": tool("git", "--version"),
                "uv": tool("uv", "--version"), "cpus": os.cpu_count(), "shipped": shipped, "source": SOURCE,
@@ -235,7 +276,7 @@ def main() -> int:
                "drivers": RS.out("config", "--local", "--get-regexp", r"^merge\..*\.name$").splitlines(),
                "staged": a.staged, "base": a.base, "moves": a.move, "main": a.main, "workers": a.workers, "real": a.real}
         say("environment", json.dumps(env))
-        summary: dict = {"environment": env, "results": []}
+        summary: dict = {"environment": env, "stand_in": made, "results": []}
         save("summary.json", summary)
 
         summary["staged_pins"] = sp = staged_pins(a.staged)
