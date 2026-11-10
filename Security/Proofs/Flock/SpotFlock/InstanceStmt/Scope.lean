@@ -114,7 +114,7 @@ fwd_def pubO load_pubO (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A'
     HmOut.loadPublic tz (cO ls lh H C A B A' B' s1) (pubOf r (hexOf H) (hexOf C)) by
   [findByte_pub hr (plainStr_hexOf H) (plainStr_hexOf C), extract_hdr r (hexOf H) (hexOf C), fromUTF8?_toUTF8,
     parse_hdr hr (plainStr_hexOf H) (plainStr_hexOf C), norm_hdr r (hexOf H) (hexOf C),
-    extract_body r (hexOf H) (hexOf C), cO_sha, bne_self, hCe, any_bne_two, hu1, hu2, hd]
+    extract_body r (hexOf H) (hexOf C), cO_sha, cO_classSha, bne_self, hCe, any_bne_two, hu1, hu2, hd]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, Flock.norm]
   shallow [metaText]

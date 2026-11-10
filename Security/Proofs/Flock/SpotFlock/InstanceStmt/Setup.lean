@@ -108,6 +108,17 @@ theorem map_some_ok {ε α : Type} {m : Except ε α} {a : α} (h : m = .ok a) :
 
 theorem cO_sha (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     (cO ls lh H C A B A' B' s1).sha = H := rfl
+theorem cO_classSha (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    (cO ls lh H C A B A' B' s1).classSha = C := rfl
+theorem cO_meta (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
+    (cO ls lh H C A B A' B' s1).metaJ = metaJ := rfl
+
+/-- The partition's digest in hex, as `HmRow.checkPartition` compares it with META's. -/
+theorem partDigest_hex : hexOf (Sha512.hash (HmRow.PARTITION_V1.toUTF8.push 0 ++ partText.toUTF8)) = partHex := by
+  have h := partHex_eq
+  unfold HmRow.partitionDigest at h
+  rw [canon_part] at h
+  exact Option.some.inj h
 
 fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String)
     (hr : r.Plain) (hCe : C.isEmpty = false)
@@ -117,7 +128,7 @@ fwd_def popX load_pubX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A'
     HmIn.loadPublic tz (cO ls lh H C A B A' B' s1) {} (pubOf r (hexOf H) (hexOf C)) by
   [findByte_pub hr (plainStr_hexOf H) (plainStr_hexOf C), extract_hdr r (hexOf H) (hexOf C), fromUTF8?_toUTF8,
     parse_hdr hr (plainStr_hexOf H) (plainStr_hexOf C), norm_hdr r (hexOf H) (hexOf C),
-    extract_body r (hexOf H) (hexOf C), cO_sha, bne_self, hCe, any_bne_two, hu1, hu2, hd]
+    extract_body r (hexOf H) (hexOf C), cO_sha, cO_classSha, bne_self, hCe, any_bne_two, hu1, hu2, hd]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf, HmRow.parse, HmOut.parse, Flock.norm]
   shallow [metaText]
@@ -132,7 +143,7 @@ theorem delta_in (c : Circuit) (p : Nat) : HmIn.delta c {} p = (oA c p, oB c p) 
 
 fwd_def cpX checkPartition_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 : String) :
     HmRow.checkPartition (cO ls lh H C A B A' B' s1) (some partObj) by
-  [cpo_part, canon_part, bne_self]
+  [cpo_part, canon_part, cO_meta, partDigest_hex, bne_self]
   block [canon, canonUtf8, HmRow.checkPartitionObject]
   shallow [metaText] trace
 
