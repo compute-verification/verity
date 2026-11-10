@@ -3,7 +3,7 @@
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
 
-* `class-vs-k`: each class's per-block overhead against the block's novel input budget `k`, at the inference block's
+* `class-vs-k`: each class's per-block overhead against the block's fresh input budget `k`, at the inference block's
   gates and at the server block's (one server between two wipes), and where each becomes vacuous.
 * `overheads`: the overhead per scenario and family: its lower bound from the bounds at each status, each bound alone,
   and each attack beside it.

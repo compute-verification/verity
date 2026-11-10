@@ -18,7 +18,7 @@ declaration the inference-only policy's statements are about.
   included (`InferenceOnly.readsIn`). It takes no memory constraint: the state at each cut is in the bound.
 * `Windows` (the capacity form): the windows `A[X i, [kω, (k + 1)ω)]`, cut at `t`, divide that declaration's computed
   gates into `n ⌈t/ω⌉` inference blocks, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
-  `M_X + β_X ω` novel bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
+  `M_X + β_X ω` fresh input bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
 
 The proofs are in `Security/Proofs/Accounting/Actual/`.
 -/
@@ -52,7 +52,7 @@ def WindowsAt : Prop :=
 circuit `A` meeting causality, unit-priced compute rate, memory and links at the developer's pairwise disjoint locations
 `X i`, and every window `ω > 0` and `t`: some division `P` of the developer's declaration over `[0, t)` into
 `n ⌈t/ω⌉` units has as its unit `(i, k)` the window `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, of at most `Φ_{X i} ω` gates,
-which reads at most `M_{X i} + β_{X i} ω` bits of novel information. -/
+which reads at most `M_{X i} + β_{X i} ω` fresh input bits. -/
 def Windows : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ M : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
