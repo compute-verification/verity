@@ -29,10 +29,11 @@ spot = [
     "verity/core/protocols/spot",
     "verity/core/service/spot",
 ]
-# C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
+# C-Flock: its prover, its Lean verifier and ZK server with the base packages it requires, and its security analysis
 flock = [
     "verity/ml/flock",
     "verity/core/service/flock",
+    "verity/core/primitives/{base,circuits,commitments}",
     "Security/Proofs/Properties/Flock{,.lean}",
     "Security/*/Flock{,.lean}",
     "Security/Definitions/Assumptions/Flock.lean",
