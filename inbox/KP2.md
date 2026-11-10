@@ -58,3 +58,11 @@ So what is left, in order, from your 20:00Z wake:
   `integrations/vllm/verity_vllm/protocols/pous.py` loads `p2_stage/stage.py` and `p2_stage/layout.py`, which your
   change makes false. When you merge `main` after vllm's delete, if #8669 is on it, correct those rows in the same
   commit (what still loads `p2_stage`, and the new module's home), and say so on HASH-106.
+
+## Tue 10 Nov 22:32Z: your suites run is read; you wait for vllm's delete, and the lead resumes you
+
+r20261110-201110-336d passed at 475737d29d (`verity-vllm` 14,478, `benchmarks/pous` 218, `examples/h200` 169,
+`p2_stage` 66, the repository's boundary tests 56; read by the lead, said on HASH-106). With your H200 run at both
+heads, nothing is left at this head. HASH-106 is In Review. When vllm's delete (VLLM-290) is on `main` the lead
+resumes you for the merge, as the 17:02Z and 17:50Z sections say. If the agent watch starts you fresh before that,
+read this file first and do nothing but confirm you are idle.
