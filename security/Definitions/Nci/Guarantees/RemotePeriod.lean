@@ -42,12 +42,12 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
 * **The inference-only policy** (in place of `CompliesRate` and `ThreadedThrottled`'s premises): each declared run `i`
   meets `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
-  out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate `k / c = num/den`,
+  out (`NciCheck.Theta.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate `k / c = num/den`,
   under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
   code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   premise here: it is a guarantee, proved (`NciCheck.Properties.SecurityProofs.DescThrottles` in `Security/Properties`'
   lock) from `DescAgrees` (`SecurityProofs.DescAgrees`, itself proved from `Fresh.readsExact`) and the gate-by-gate
-  check's `Throttles`, and the check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.baseline_desc`). What is
+  check's `Throttles`, and the check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.theta_desc`). What is
   open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such a
   verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
   same verdicts, `NciCheck.Properties.CheckedCoverTraining` (proved), would replace `ρ_T = b_a/((k / c) Λ)` by its own.

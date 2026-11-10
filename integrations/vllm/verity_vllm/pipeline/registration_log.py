@@ -1,4 +1,4 @@
-"""The registration log NCI's full check reads (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), for a Program whose θ is
+"""The registration log NCI's full check reads (`nci-check INSTANCE TRUSTED`, `NciCheck.Theta`), for a Program whose θ is
 registered (`RegisteredInput<w>_v1`, `WorkloadProgram(theta_registered=True)`).
 
     write(program_digest, params, theta, values, window) -> {"record", "digest", "trusted", "provenance", "salts"}

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Nci.Support
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
@@ -34,7 +34,7 @@ first MLP at many positions reads the embeddings and attention weights once, and
 position itself.
 
 Every bound through a containment, total or partial (`PartialContainment`), also rests on `ThetaRegistered`
-(`Definitions/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the registered
+(`Definitions/Nci/Assumptions/Theta.lean`), a premise about what the protocol lets the registered
 information `θ` hold rather than about any circuit.
 -/
 

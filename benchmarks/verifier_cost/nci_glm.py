@@ -29,7 +29,7 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               registration, the node is held to it before any check (it is the program of the record `--node-trusted`
               cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
               first record), and the check of record runs too, at A (`nci-check INSTANCE TRUSTED`,
-              `NciCheck.Baseline`: the policy check, then θ's provenance against the registration log).
+              `NciCheck.Theta`: the policy check, then θ's provenance against the registration log).
               `--node-points` picks some of `NODE_POINTS`
 
 A finer division of a whole session (per engine step, per layer, per Call) is not checked here. Its root would be the
@@ -474,7 +474,7 @@ def summary(v: dict | None) -> dict:
 
 def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int],
                    provenance: list | None = None) -> Path:
-    """`NciCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `NciCheck.Baseline`'s."""
+    """`NciCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `NciCheck.Theta`'s."""
     with open(path, "w") as f:
         f.write(f'{{"alpha":[{alpha[0]},{alpha[1]}],"gamma":{gamma},"owner":')
         f.write(json.dumps(owner, separators=(",", ":")))
