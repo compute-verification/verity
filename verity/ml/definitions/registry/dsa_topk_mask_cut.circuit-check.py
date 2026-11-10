@@ -17,8 +17,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ml.definitions.registry import dsa_topk_mask_cut as X
 
     return [
-        *((f"DsaTopKDigitPick_v1-served-{k}", lambda k=k: bind(X.DsaTopKDigitPick, M=8, K=k, TOPK=2048))
-          for k in range(X.ROUNDS)),
+        ("DsaTopKDigitPick_v1-served-0", lambda: bind(X.DsaTopKDigitPick, M=8, K=0, TOPK=2048)),
+        ("DsaTopKDigitPick_v1-served-1", lambda: bind(X.DsaTopKDigitPick, M=8, K=1, TOPK=2048)),
+        ("DsaTopKDigitPick_v1-served-2", lambda: bind(X.DsaTopKDigitPick, M=8, K=2, TOPK=2048)),
+        ("DsaTopKDigitPick_v1-served-3", lambda: bind(X.DsaTopKDigitPick, M=8, K=3, TOPK=2048)),
         ("DsaTopKDigitCount_v1", lambda: bind(X.DsaTopKDigitCount, N=8, AT=0, K=0)),
         ("DsaTopKDigitCount_v1-at", lambda: bind(X.DsaTopKDigitCount, N=6, AT=8, K=1)),
         ("DsaTopKDigitCount_v1-last", lambda: bind(X.DsaTopKDigitCount, N=6, AT=8, K=3)),
