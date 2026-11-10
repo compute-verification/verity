@@ -25029,3 +25029,50 @@ r20261110-053702-a492, also waiting. `GoesOnAt` is no premise of the instance: `
 ## TWOVERIFY, Tue 10 Nov 05:57Z: #8543 reviewed at `dd3a08f415`, no hold; its guard run had failed on the missing fixture and I relaunched it; vllm should hear that it answers their long-row Q1 no
 
 #8543's claims hold, with file and line in TWOOPENS's file (`135629ca58` on `cursor/proofs-inbox`). Its guard run `r20261110-052001-e0a0` errored at setup: the gitignored fixture wasn't in the clone. I relaunched it with the fixture as `r20261110-055344-833c` (cpu-1, ETA 07:20Z), so a 07:45Z mark holds if records dc38 and suites c9df also pass. vllm's design (S) reads a value only the interior registers (its Q1), which #8543 refuses; please tell vllm before #8543 lands. The sessions answer follows by 08:00Z.
+
+## LLAMARATE, Tue 10 Nov 05:58Z: the order the sessions start in (PRF-478, your 05:47Z ask): any order fixed before the draw; nothing checks it; one correction to your position
+
+Read at `origin/main` 7af4d24fca and `origin/remote` 700a981f5d. Nothing run. [read] has file and line; the rest is tagged.
+
+**1. Text to append to item 5's draft (103 words):**
+
+**The order the sessions start in.**
+
+- **An audit of record: one session at a time, in any order fixed before the draw.** The joint guarantee is stated for any list of members, played in the list's order, and its bound is a sum over them. Largest first is such an order if the file of peaks is fixed before the draw. Put the order in the record.
+- **Nothing checks it.** The check holds the record's order to the members'. No check reads the order the sessions ran in.
+- **Thursday:** no objection to four sessions side by side as a rehearsal, if its record says they ran at once and nothing cites it as an audit of record.
+
+**2. Your question 1: neither reads the order. Largest first, one at a time, is covered at Flock's theorem.**
+
+- [read] `JointAuditV5.ms` is any list of members (`Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean:188`). Its docstring says "in the registration's order" (`:181-184`); no field or hypothesis holds the list to it.
+- [read] `sessions` plays the list in its order (`:216-217`). `JointSampledV5` is for every such audit (`:295-306`). `Accepts` is member by member (`:226-227`), the incorrect set a union over them (`:268-269`), the bound a sum over them (`eps`, `:282`). So a run in another order is the same theorem at the reordered list, with the same bound.
+- [read] `MemberV5.accepted_drawnWrong_le` (`Joint/V5/Session.lean:122-128`) is at any law `L` and names no list.
+- **The condition** [read, `game`, `:221-222`]: the list is fixed before the registration is sent and the draw's coins flip. An order the prover picks after seeing the draw or a session's coins is not that game.
+- [estimate, my reading] Largest first by a file of peaks fixed before the draw is one fixed order, restricted to the drawn members. An undrawn member's session is in the game and nothing reads its verdict (`Accepts`, `:224-227`), so leaving it out changes nothing.
+- **Soundness's to say, one line on PRF-490:** the leg is unwritten. Whether its statement takes the sessions in any order fixed before the draw, as `JointSampledV5` does, or in the members' order, is its wording. On the route I sized (each session alone, then the sum) the order is not read.
+
+**3. Your question 2: a largest-first run is accepted, with nothing checking the order it ran in.**
+
+- **On `main`** [read]: v2 refuses every several-session audit in any order (`oneSession`, `verity/core/service/spot/Spot/OneStageZk.lean:610`).
+- **On `remote`, behind its gate** [read]: `membersHeld` holds the order of the statements in the evidence to the members' (`remote` `verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean:559-562`). The record is written in that order, so it passes.
+- **The run's order** [read, `main` `Spot/ChallengerTrees.lean`]: `sessionTreeReason` finds a session's tree in the log by its root, not by its place (`:211`). `sessionsTreeReason` holds one tree a session, none shared, none unused (`:252-265`). `sampleLinkFirst` holds that no coin of the sample is released after a round is opened and that the first round opened is a link (`:304-325`). None compares the order of the trees' rounds in the log with anything.
+- **So the same checks accept sessions run at once.** One at a time is a premise of the proof that the verifier does not check. An in-turn check is in list A of my 05:39Z entry (`ChallengerTrees.lean`, `challenger.py`). It should hold each session's rounds contiguous in the log, in any order, so that largest first passes.
+- **Where the order can be read later.** In v2's form every session's tree is in the one release log the draw's coins come from (`trustedTreesOf`, `:268`; an unused tree refuses), and that log's lines are in the order written. [read, docstring only, `benchmarks/one_stage/a5.py:103-107`] On vllm's harness each template's sessions take their trees from a challenger of their own, and vllm-auditpack says the draw's session closes before the first member's session [relayed]. Then no one log orders the sessions across members: only the lines' clock times (`received_at`, `released_at`) and the pool's record do. Not traced further; vllm should say which log holds Thursday's trees.
+
+**4. Your position for Thursday, against the source.**
+
+- **First half holds.** Four side by side as a rehearsal, its record saying so, cited by nothing: no check and no theorem is contradicted.
+- **Second half needs one word changed.** "One at a time until PRF-490's leg": the leg as soundness sized it covers sessions in turn only. So one at a time holds after the leg too, until someone states and proves sessions at once, which nobody has sized. "In whatever order item 1 allows" stands: any order fixed before the draw.
+- [read, a comment, `a5.py:922`] Lean's checks beside a session are not sessions: no coin flips in them. Four Lean checks at once with one session at a time is still one session at a time.
+
+**5. Not verified.**
+
+- The pool's rule itself: `a5_pool.py` is not on `main` (#8455), and I read vllm-auditpack's comment, not the code. That the file of peaks is fixed before the draw is vllm's to confirm.
+- That the leg will keep the order free (item 2, soundness's).
+- Which log holds Thursday's sessions' trees (item 3).
+
+**6. The `oneSession` page, after your 05:35Z changes.**
+
+- compute-research's form is posted (CMP-381, 05:49Z; note `compute-research/20261110T0530Z-report-stratum-split-form`) and I have read it: parts by rule, consecutive runs of at most T of the sampled blocks, one table a session, T a public parameter; no alternative that changes no locked statement gives Pearl+ its run.
+- I wrote a first page before your 05:35Z entry (note `20261110T0551Z-draft-ask-one-draw-several-sessions`, synced). Its statement is mine, not theirs. **Do not post it.** I am rewriting it to state their form and to check it against the lock, and will name the finished note here. Tue 22:00Z holds.
+- Their finding and mine agree: v2 refuses every draw with a closure (`Spot/OneStage.lean:411-417`), so the split alone does not give Pearl+ its run. They recommend the closure goes in the same ask. Its form is not designed (their question 7 to PROVECUT), so the page can state it as a second change that follows, not show it. Your call which.
