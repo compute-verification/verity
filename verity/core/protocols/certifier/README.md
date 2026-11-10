@@ -213,6 +213,11 @@ A spec-level reference for network accounting's timing channel:
   input, and the verifier places each read, the (connection, cell) the Program's proof blocks' wiring pins (`Units`,
   whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`, "The network certifier's
   cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
+  (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
+  committed as the cells' rows are and listed under one head the network certifier signs once; the registration the
+  verifier reads (`check_registration`) and its `--registered` port of the proof blocks that read a table, one a row
+  (`port`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -319,7 +324,7 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
