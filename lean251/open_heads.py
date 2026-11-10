@@ -2,11 +2,12 @@
 """Every open PR head against a staged layout cut, from git alone: does `git merge BASE` stop and on which files, is the
 head `based-after` by `restack.py`'s own rule, and would its restack gain a pins commit.  No script of the move runs.
 
-    open_heads.py STAGING MAIN OUT.json [--open FILE] [--only LANE] [--attrs head|worktree] [--timeout SECONDS]
+    open_heads.py STAGING MAIN OUT.json [--unstaged] [--open FILE] [--only LANE] [--attrs head|worktree] [--timeout S]
     open_heads.py --report OUT.json [--against NODRIVERS.json]
 
 STAGING is the staged cut's head, MAIN the main it is cut over.  The cut's moves are the commits with a move line that
-STAGING has and MAIN lacks, and the cut's base is the first one's parent.  Each head is merged, as `git merge BASE` in
+STAGING has and MAIN lacks, and the cut's base is the first one's parent; with `--unstaged`, STAGING is the base itself,
+the commit the cut will be made on.  Each head is merged, as `git merge BASE` in
 its own checkout would, with the cut's base and with MAIN.  `restack.py` is MAIN's copy, loaded as a module, so the
 moves, their bases and `based-after` are its own.  `--attrs head` (the default) reads `.gitattributes` from the head, as
 a merge in the head's checkout does; `worktree` reads the directory this runs in.  A merge driver named there runs only
@@ -137,6 +138,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--only", help="one owner's heads")
     ap.add_argument("--attrs", choices=("head", "worktree"), default="head")
     ap.add_argument("--timeout", type=float, default=120, help="seconds one merge may take (default 120)")
+    ap.add_argument("--unstaged", action="store_true", help="STAGING is the commit the cut will be made on, no move on it yet")
     a = ap.parse_args(argv)
     if a.report:
         d = json.load(open(a.report))
@@ -146,10 +148,10 @@ def main(argv: list[str]) -> int:
         ap.error("STAGING MAIN OUT.json, or --report OUT.json")
     staging, main_ = git("rev-parse", a.staging).stdout.strip(), git("rev-parse", a.main).stdout.strip()
     rs = module_at(main_, "tools/move/restack.py", "restack_main")
-    cut = rs.moves_on(staging, main_, None)
-    if not cut:
-        raise SystemExit(f"{staging[:12]} has no move that {main_[:12]} lacks")
-    base = rs.move_base(cut[0][0], None)
+    cut = [] if a.unstaged else rs.moves_on(staging, main_, None)
+    if not cut and not a.unstaged:
+        raise SystemExit(f"{staging[:12]} has no move that {main_[:12]} lacks (--unstaged: it is the commit the cut is made on)")
+    base = staging if a.unstaged else rs.move_base(cut[0][0], None)
     if a.open:
         prs = json.load(open(a.open))
     else:
@@ -168,7 +170,8 @@ def main(argv: list[str]) -> int:
             "pyproject-test-lists")},
         "lean_merge_py": git("rev-parse", "-q", "--verify", "origin/main", ok=True).stdout.strip() or "the worktree's",
         "git": git("--version").stdout.strip(),
-        "pins_stale_on_staging": stale_at(staging, pins_at(staging)),
+        "pins_stale_on_staging": {} if a.unstaged else stale_at(staging, pins_at(staging)),
+        "unstaged": a.unstaged,
     }
     rows = []
     heads = {pr["headRefOid"]: pr["number"] for pr in prs}
