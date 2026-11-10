@@ -309,6 +309,11 @@ class EgressTie:
         return scan_root([(self.templates[tp], counts[tp], FIXED[tp]) for tp in TEMPLATES], self.nb, self.cls.EVERY)
 
     @cached_property
+    def counts(self) -> dict[str, int]:
+        """`{template's descriptor id: its proof blocks}` of the phase's Program, as `Stream.register` takes a window's."""
+        return {tid: n for tid, _lo, n in P.ranges(self._program, self.query)}
+
+    @cached_property
     def _partition(self) -> dict[str, Any]:
         return P.partition(self._program, self.query)
 
@@ -469,7 +474,7 @@ class EgressTie:
                 self._roots(record).get(p) != r for p, r in self._fixed(heads, trace).items()):
             raise S.Refused(Verdict(False, ("roots",), {"roots": "the registration's network certifier and trace roots "
                                                                  "are the phase's heads' and the trace's"}))
-        return stream.register(record, self.ports(heads, trace))
+        return stream.register(record, self.ports(heads, trace), counts=self.counts)
 
     @staticmethod
     def _roots(record: Mapping[str, Any]) -> dict[str, bytes] | None:
