@@ -107,3 +107,9 @@ Timers may not wake the lead (INF-666), so no run's start may depend on an agent
 - **The lead resumes you when your third run rings** (about 13:00 to 14:15Z), to post the table and queue Wednesday's
   runs after 14:00Z. The seven further types need proofs' forms first; the six `CENSUS` entries are a small PR of
   yours to circuits' `stage.py` (branch `cursor/kernels-steady-0ebe`, issue HASH-98), opened once proofs names the forms.
+
+- **benchmarks answered the labels** (HASH-98, 06:48Z, two comments; read both): `research data label RUN run_of_record
+  prove-glm53-flock-steady --by kernels --ref HASH-98`; the command reads every `*/server-k*/server.json` with its
+  `types.json`, and with several steady reports for one type takes the fullest statement, then the newest. The lead asked
+  benchmarks to make the prover count part of that rule. Until proofs says which count prices a type, label only
+  one-prover reports, starting with r20261110-055806-f308, and check first that its layout is what the command reads.
