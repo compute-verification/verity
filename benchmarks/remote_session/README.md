@@ -10,7 +10,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/remote_session` | The suite: both processes over a loopback on the CPU, and the Lean line test where `lake` is. It keeps nothing. |
+| `uv run tools/verity/check/suites.py benchmarks/remote_session` | The suite: both processes over a loopback on the CPU, and the Lean line test where `lake` is. It writes no result. |
 | `bash benchmarks/remote_session/run.sh`, with `ROLE=verifier` or `ROLE=prover` (`ROLE=both` only tests the scripts on one machine), and `PLAN`, `GIB`, `GPUS` and the sessions' parameters as its header lists them | PoUB sessions on GPUs, the verifier's process and the prover's over TCP. It writes `verifier.json`, `prover.json` and their logs to `$RESEARCH_RUN_DIR/out`. |
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | A gate run in one command: the developer's whole node serving a model, the verifier on the verifier's host through its gate, the coins from the challenger's host, then the line of record (`auditor.sh`, which runs `auditor_line.py`) and the what-if beside it (`gate_whatif.sh`). Each step is a recorded job, and their ids go to `~/.research/gate-runs/PERIOD.env`. |
 | `verifier_process.py`, with `verifier.py`'s arguments | The verifier's process. It writes `verifier.json` under `--out`. |
