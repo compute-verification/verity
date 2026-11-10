@@ -4238,7 +4238,7 @@
    "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
   },
   "Claims.SamplingGeneric.compilerMissTwo": {
-   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
   },
   "Claims.SamplingGeneric.compilerHeadlineTwo": {
@@ -12487,6 +12487,9 @@
    "type_hash": "2ee399e11183db0f7c3f301abcaf97a5683eac1f2825d864e2773d817b536a31"
   },
   "Claims.SamplingGeneric.compilerMissTwo": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_honest": {
    "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerMissTwo_nontrivial": {

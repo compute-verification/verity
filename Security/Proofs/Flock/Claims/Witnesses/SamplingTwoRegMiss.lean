@@ -20,9 +20,11 @@ nothing and opens nothing, with the two-stage design `toyTwo`), its silent prove
 * It samples nothing, so its sample holds no proof block of the committed incorrect set at any coins: the miss is `1`
   (`compiledTwoMiss_fails`).
 
-`CompilerHeadlineTwo`'s premises hold together at two sessions (`compilerHeadlineTwo_honest`): `twoLTwo` meets the
-two-stage contract (`compilerKSTwo_honest`), and so the committed form at two stages (`compilerKSRegTwo`).
-`CompilerKSRegTwo` and `CompilerMissTwo` read `compilerKSTwo_honest`, whose conclusion holds their premises.
+The compilers' premises hold together at two sessions, at `twoLTwo`, which meets the two-stage contract
+(`compilerKSTwo_honest`, which `CompilerKSRegTwo` reads: its conclusion holds that compiler's premises):
+* `compilerMissTwo_honest`: its design `twoTwo` catches each of its two replay blocks and samples each cell, of one
+  proof block each, at rate `1` (`twoTwo_firstRate`, `twoTwo_secondRate`).
+* `compilerHeadlineTwo_honest`: it meets the committed form at two stages (`compilerKSRegTwo`).
 -/
 
 @[expose] public section
@@ -30,8 +32,40 @@ two-stage contract (`compilerKSTwo_honest`), and so the committed form at two st
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.SamplingGeneric
-open Claims.Sampling (wrongAtBoundaryAt)
+open Claims.Sampling (cell window wrongAtBoundaryAt)
 open Claims.Witness.Sampling (toyStmt toyPart)
+
+/-- The two-session toy's first stage `all` catches each of its two replay blocks at rate `1`. -/
+theorem twoTwo_firstRate : twoTwo.FirstRate 1 := by
+  intro T hT
+  show twoStmt.design.Pa twoPart T ≤ (1 - 1) ^ T.card
+  rw [two_Pa, sub_self]
+  split_ifs with hw
+  · have hT0 : T = ∅ := by
+      refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
+      have hlen : twoTwo.part.blocks.length = 2 := rfl
+      have hv2 : v < 2 := by
+        have := Finset.mem_range.1 (hT hv)
+        omega
+      have hvw : v ∈ window 0 2 T := by simp [window, hv, hv2]
+      rw [hw] at hvw
+      simp at hvw
+    subst hT0
+    simp
+  · exact pow_nonneg le_rfl _
+
+/-- The two-session toy's second stage samples each of its cells, of one proof block each, whole: rate `1`. -/
+theorem twoTwo_secondRate : twoTwo.SecondRate twoPart 1 := by
+  intro ρ hρ t ht _
+  have hlen : twoTwo.part.blocks.length = 2 := rfl
+  have hs : twoPart.strata.length = 1 := rfl
+  obtain rfl : t = 0 := by omega
+  have hc : (cell twoPart twoTwo.part ρ 0).card = 1 := by
+    obtain rfl | rfl : ρ = 0 ∨ ρ = 1 := by omega
+    · decide
+    · decide
+  rw [hc]
+  norm_num [twoTwo]
 
 /-- At boundary values that commit nothing at the input, the toy's one replay block is wrong at its boundary. -/
 theorem toy_wrongAtBoundaryAt {val : ℕ → Option Bool} (hv : val 0 = none) :
@@ -77,6 +111,13 @@ theorem CompiledTwo.MissTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [
 /-- **`CompilerMissTwo`'s conclusion fails** at `sksLTwo`, at both rates `1`, which its design meets: it samples
 nothing, while its replay block is wrong at the committed boundary trace. -/
 theorem compilerMissTwo_nontrivial : ¬ (sksLTwo Bool).MissTwo FlockDeploy.sha512 1 1 := compiledTwoMiss_fails _
+
+/-- **`CompilerMissTwo`'s premises hold together at two sessions**: `twoLTwo` meets the two-stage contract, the empty
+statement is in scope, and its design `twoTwo` catches each replay block and samples each cell at rate `1`. -/
+theorem compilerMissTwo_honest :
+    (twoLTwo Bool).Sessions FlockDeploy.sha512 ∧ (twoLTwo Bool).Scope [] ∧ twoTwo.FirstRate 1 ∧
+      twoTwo.SecondRate twoPart 1 :=
+  ⟨twoLTwo_sessions _, twoLTwo_scope [], twoTwo_firstRate, twoTwo_secondRate⟩
 
 /-- **`CompilerHeadlineTwo`'s premises hold together at two sessions**: `twoLTwo` meets the two-stage contract and the
 committed form at two stages, the empty statement is in scope, and each run samples both replay blocks and both proof
