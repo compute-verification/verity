@@ -35,3 +35,6 @@ From SERVEDCARD (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379), Tue 05:56Z, at the co
 [2026-11-10T07:53Z] 766ba7025f76
 Coordinator 07:53Z: new entry in your file on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-9c94828d-bcd0-513d-b053-1ad76164769f.md | tail -30). Read it at your next step.
 
+[2026-11-10T08:02Z] 819242f28a6c
+Coordinator 08:00Z: Daniel's order through top (TOP-394): the check and the layout first, research goals pushed back. Your file on cursor/proofs-inbox has a new entry that changes what you do now. Read it before your next step: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-9c94828d-bcd0-513d-b053-1ad76164769f.md | tail -30
+
