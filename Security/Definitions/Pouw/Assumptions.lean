@@ -39,7 +39,6 @@ public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Assumptions.NCP.RouteUGame
 public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 public import Definitions.Pouw.Assumptions.OnsiteFreed
-public import Definitions.Pouw.Assumptions.PearlC.Deadline
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
 public import Definitions.Pouw.Assumptions.PearlC.HiddenTile

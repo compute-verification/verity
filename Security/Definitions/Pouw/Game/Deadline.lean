@@ -53,12 +53,14 @@ def Adversary.BoundedBy {CM : CostModel Q R S} (A : Adversary CM) (U : Workload)
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
 /-- What the deadline reads of a game's adversaries, of type `Adv`: each one's preprocessing, the transcript in `Out` it
-commits on oracle `H` and salt `s`, and its online phase's cost and oracle calls there. -/
+commits on oracle `H` and salt `s`, its online phase's cost and oracle calls there, and the inputs it hashes with
+SHA-512 there (none in a game whose break is not a collision). -/
 structure Adversaries (Q R S Adv Out : Type) where
   pre : Adv → QTree Q R State
   transcript : Adv → (Q → R) → S → Out
   cost : Adv → (Q → R) → S → ℝ
   calls : Adv → (Q → R) → S → ℕ
+  hashed : Adv → (Q → R) → S → List Hash.Msg := fun _ _ _ => []
 
 /-- The adversaries of the cost model `CM` on the workload `U`, as the deadline reads them. -/
 def CostModel.adversaries (CM : CostModel Q R S) (U : Workload) : Adversaries Q R S (Adversary CM) Transcript where
@@ -66,5 +68,6 @@ def CostModel.adversaries (CM : CostModel Q R S) (U : Workload) : Adversaries Q 
   transcript A := A.transcript U
   cost A H s := CM.cost A.online H U A.act (A.pre.eval H) s
   calls A H s := CM.calls A.online H U A.act (A.pre.eval H) s
+  hashed A := A.hashed U
 
 end Pouw
