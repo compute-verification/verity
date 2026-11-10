@@ -40,7 +40,7 @@ print("[legs] lane", sys.argv[2], "open periods:", json.dumps(o)); sys.exit(1 if
 PY
 fi
 [ -n "${CIRCUITS:-}" ] && CIRCUITS=$(realpath "$CIRCUITS")
-cd integrations/vllm
+cd adapters/vllm
 rc_all=0
 for leg in ${LEGS:-v1}; do
   mkdir -p "$OUT/$leg"

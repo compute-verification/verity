@@ -7,6 +7,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price;
-# `integrations/vllm/verity_vllm`: the training-step frontend `capture.lower` lowers a step to; the lf model
+# `adapters/vllm/verity_vllm`: the training-step frontend `capture.lower` lowers a step to; the lf model
 # (`train_step_lf.py`), loaded by path, whose shapes the policy states
-inputs = ["verity", "integrations/vllm/verity_vllm", "integrations/vllm/tests/program/train_step_lf.py"]
+inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py"]

@@ -258,11 +258,11 @@ class VllmGpu:
         model = self.MODELS[ws["id"]]
         impl_out = out / "impl"
         impl_out.mkdir(parents=True, exist_ok=True)
-        paths = [tree / "integrations" / "vllm", tree, tree / "verity" / "core" / "protocols" / "pous",
+        paths = [tree / "adapters" / "vllm", tree, tree / "verity" / "core" / "protocols" / "pous",
                  tree / "verity" / "core" / "protocols" / "spot", tree / "tools" / "research" / "src"]
         env = {**os.environ, "PYTHONPATH": ":".join(map(str, paths)), "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
         cmd = [a.python, "-m", "verity_vllm.pipeline.cli", "pous-dense-bench", "--codec", a.scheme, "--out", str(impl_out),
-               "--shapes", str(tree / "integrations/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,
+               "--shapes", str(tree / "adapters/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,
                "--models", model, *FROZEN_FLAGS, "--segment-vector", "--audit", str(a.audits)]
         t = time.perf_counter()
         with (out / "impl.log").open("w") as log:

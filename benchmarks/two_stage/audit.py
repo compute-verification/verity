@@ -47,7 +47,7 @@ those reads (the interior's at the interior record and the links' boundary ports
 (``coins.json``), the sessions' statements (``statements.json``) and ``summary.json`` (both stages' registrations, laws
 and draws, and the outcome, among it).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/adapters/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
         --out DIR [--altered]
 """

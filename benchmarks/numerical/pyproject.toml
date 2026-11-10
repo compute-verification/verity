@@ -29,7 +29,7 @@ untraced = ["tests/bench/test_input_sets.py", "tests/bench/test_lowerings.py", "
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
 # workload's regression expectations, most of them fetched fixtures.
 inputs = ["verity/core/service/flock/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures",
-          "integrations/vllm/tests/regression/expected"]
+          "adapters/vllm/tests/regression/expected"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

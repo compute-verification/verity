@@ -36,7 +36,7 @@ wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
 # node (prove_path/run.sh)

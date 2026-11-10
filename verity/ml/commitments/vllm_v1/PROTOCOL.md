@@ -1,7 +1,7 @@
 # `vllm-v1`: vLLM's serving commitment framing
 
 This is the commitment framing vLLM's serving Commit path emits by name, as a named scheme; its default is `rows-sha512`
-(`integrations/vllm/verity_vllm/commit/step_rows.py`). It is permanent and sits
+(`adapters/vllm/verity_vllm/commit/step_rows.py`). It is permanent and sits
 beside frame-v3 (`verity.ml.commitments.frame_v3`). Backends select one or the other, and both are
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
 of the roots serving emits.
@@ -12,7 +12,7 @@ of the roots serving emits.
 - Vectors: `vectors.json`, written by `python -m verity.ml.commitments.vllm_v1.vectors`. `--check` exits
   nonzero if the file is stale.
 - Conformance: `verity/ml/commitments/tests/test_vllm_v1.py` checks the reference against the
-  vectors. `integrations/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
+  vectors. `adapters/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
 All hashes are SHA-256; §10 specifies `vllm-v1-sha512`, the same framing through SHA-512. `u32be`/`u64be` are big-endian unsigned integers of 4 and 8 bytes; `u32le` is little-endian;
 `‖` is concatenation. Byte strings in the vectors are lowercase hex.
@@ -185,9 +185,9 @@ tags and the tree walk are imported from here; the position leaf and the level f
 these tags, with a pluggable hash for benchmarks. Every committer and the opening verifiers (`hidden_stream.py`,
 `native_host.py`, `native_ranges.py`) hash through it, and
 `hashing.py` / `merkle.py` re-export the id-leaf rules of `verity.ml.commitments.leaves`.
-`integrations/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
+`adapters/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
 
-**CUDA** (checked against the vectors by the pod-marked `integrations/vllm/tests/commit/test_scheme_cuda.py`):
+**CUDA** (checked against the vectors by the pod-marked `adapters/vllm/tests/commit/test_scheme_cuda.py`):
 
 - `verity_vllm/acquire/fa2_tap_src/verity_tap.h`: the in-kernel thread-leaf header and SHA-256 (`Verity_sha_ctx`).
 

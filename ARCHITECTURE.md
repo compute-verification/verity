@@ -48,7 +48,7 @@ The auditor never runs the computation; it only checks proofs. The integrity pro
 Each layer may depend on the layers below it (the import rules: `AGENTS.md`, "Map and commands"):
 
 ~~~text
-integrations/vllm, examples/, benchmarks/ (with the census)
+adapters/vllm, examples/, benchmarks/ (with the census)
 ---------------------------------------------------------------------------
 verity/core/: the verifiers, trusted
   protocols: profile, spot, pouw, pous, certifier; claims
@@ -98,7 +98,7 @@ The workers' GPU servers send only through a data diode, to the ZK server, which
 
 ### Integrations
 
-An integration makes Verity work end to end with a real system, and to Verity it is only a frontend: it hands over a circuit partitioned into proof blocks, the advice a registered compiler compiles, the committed trace and, on a sample, the sampled proof blocks' openings (`AGENTS.md`, "Integrations are frontends"). Any serving stack plugs in without changing `verity/`, and nothing under `verity/` imports an integration (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM integration (`integrations/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
+An integration makes Verity work end to end with a real system, and to Verity it is only a frontend: it hands over a circuit partitioned into proof blocks, the advice a registered compiler compiles, the committed trace and, on a sample, the sampled proof blocks' openings (`AGENTS.md`, "Integrations are frontends"). Any serving stack plugs in without changing `verity/`, and nothing under `verity/` imports an integration (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM integration (`adapters/vllm/`), the only one so far, builds each served workload's circuit, supplies its silicon-specific bindings, and commits the trace while serving.
 
 ## Documentation
 

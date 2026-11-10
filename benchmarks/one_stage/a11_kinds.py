@@ -6,7 +6,7 @@ lowered through Flock's circuit prover (M0's `UnitStager`, the path `a11.py` sta
   largest sub-Definition of the unit that has every piece, lowered the same way;
 * ``too-big``: an instance needs a block past `circuit.K_MAX` (or a statement past the spec's m <= 35).
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11_kinds.py --descriptor descriptor.json.gz --out kinds.json [--jobs 8] [--mem-gb 96]
     ... a11_kinds.py --table kinds.json --only MoeSum_v1,TokenSelect_v1 --out kinds-b.json   # those kinds again, census kept
 

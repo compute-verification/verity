@@ -157,14 +157,14 @@ paths = ["verity/ml/flock/python/verity_flock/templates"]
 tests = ["tests/test_class_statement.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
-    "integrations/vllm/verity_vllm",
+    "adapters/vllm/verity_vllm",
     "tools/verity/circuit_check/src/circuit_check",
     "verity",
 ]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_class_statement_redteam_1178.py"]
-paths = ["integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check", "verity"]
+paths = ["adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -188,7 +188,7 @@ tests = ["tests/test_keyed.py"]
 paths = [
     "*/pyproject.toml",
     "benchmarks/numerical/python/verity_numerical",
-    "integrations/vllm/verity_vllm",
+    "adapters/vllm/verity_vllm",
     "tools/config/verity_config",
     "tools/research/src/research",
     "tools/verity/circuit_check/src/circuit_check",

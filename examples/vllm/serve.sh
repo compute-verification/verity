@@ -50,7 +50,7 @@ mkdir -p "$D" "$ROOT/cache"
 export PY=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 # A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB, past the
@@ -60,7 +60,7 @@ rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "serve dir $D port $PORT until $UNTIL"; nvidia-smi -L; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
   --why "G-A (network certification): LLAMA32_1B serve-openai windows sealed as rows-sha512 row dirs for PROVE-PATH" | tail -2
-cd "$TREE/integrations/vllm"
+cd "$TREE/adapters/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \

@@ -39,26 +39,26 @@ HISTORY_KEYS = frozenset({"argv", "command", "cmd", "invocation", "provenance", 
 #: (file, the string as written: `module` or `module:attr`) that don't resolve and aren't meant to, each with why
 EXEMPT = {
     # the reuse probe's candidates: names a design document left unstated, tried one by one on the pod
-    ("integrations/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:check_applicability"):
+    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:check_applicability"):
         "probed",
-    ("integrations/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:load_artifact"):
+    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:load_artifact"):
         "probed",
-    ("integrations/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.applicability:check"):
+    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.applicability:check"):
         "probed",
-    ("integrations/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
+    ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
         "probed",
     # a conformance row's record of how a NaN scan was made; the module has since gone
-    ("integrations/vllm/verity_vllm/program/frontend/conformance.py", "verity_vllm.check.store_nan_scan"): "history",
+    ("adapters/vllm/verity_vllm/program/frontend/conformance.py", "verity_vllm.check.store_nan_scan"): "history",
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tools/research/tests/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
     # a tool declaration the move guards find in a synthetic tree, under its pre-move or post-move path
     ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
-    ("integrations/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
+    ("adapters/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
     # the vLLM row tools research's registry names: research_tools computes them from `research` on first read (its
     # `__getattr__`), so no top-level line binds them
-    **{("tools/research/src/research/store/tools_registry.py", f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{s}"):
+    **{("tools/research/src/research/store/tools_registry.py", f"adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_{s}"):
        "lazy" for s in ("BUILD", "PLAN", "MATCH", "COMMIT", "REPLAY")},
 }
 
@@ -247,6 +247,6 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     seen = {(p, k, m + (f":{a}" if a else "")) for p, k, m, a in scan()}
     registry = "tools/research/src/research/store/tools_registry.py"
     assert {(registry, "attr", "tools.verity.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
-            ("integrations/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
-            ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
+            ("adapters/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
+            ("adapters/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
             ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register")} <= seen

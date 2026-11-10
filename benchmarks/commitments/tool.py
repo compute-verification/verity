@@ -59,7 +59,7 @@ HIDING_LEAF_COST = Tool(
     version="1",
     command=["python", "benchmarks/commitments/hiding_leaf_cost.py"],
     closure=["benchmarks/commitments/**", *package_paths(TREE, "verity.ml.commitments", "**"), *package_paths(TREE, "verity", "errors.py"),
-             "verity/ml/windows/hiding.py", "integrations/vllm/verity_vllm/commit/scheme.py"],
+             "verity/ml/windows/hiding.py", "adapters/vllm/verity_vllm/commit/scheme.py"],
     key_params=["row_bytes", "rows"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_hiding,

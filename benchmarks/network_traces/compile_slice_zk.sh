@@ -19,7 +19,7 @@ CS_CACHE=${CS_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$CS_CACHE" 2>/dev/null && [ -w "$CS_CACHE" ]; then export HZ_CACHE=$CS_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 # the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (fixtures/artifacts.json)
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \

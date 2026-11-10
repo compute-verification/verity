@@ -12,7 +12,7 @@ With it, M0's block for the unit (`block`): the in-circuit hashing of its rows a
 templates past the row itself: ``units``), and for each ``--also`` Definition (``candidates``: a split's unit main lacks).
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
-      --workload integrations/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
+      --workload adapters/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
     PYTHONPATH=...:<tree>/verity/ml/flock/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
       [--also 'CublasSplitKGemmF32Out_v1{K=6144,N=1,..}' ...] [--also-file SPECS.txt]
 """
