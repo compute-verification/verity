@@ -17,17 +17,17 @@ calls and seven facts of its code. Its witnesses are `Flock.SecurityProofs.Sampl
 `Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo` is the same at SPOT[Flock]'s code (`SpotFlock.code`),
 whose code facts, coins and sessions' runs are proved (`SpotFlock.ksTwo_spot`), with the sessions' openings at SPOT's
 own layout (`SpotFlock.layoutFor`, `SpotFlock.sessionOpensTwo_of_frameIs`) from two facts: the registration's frame is
-SPOT's own (`SpotFlock.Built`), and each gate's value has one site that holds at every checked unit that needs it
-(`SpotFlock.Sites`). Together they give that the frame opens as it says (`SpotFlock.frameIs_built`), and the layout
+SPOT's own (`SpotFlock.Built`), and each gate's value has one address that holds at every checked unit that needs it
+(`SpotFlock.Addresses`). Together they give that the frame opens as it says (`SpotFlock.frameIs_built`), and the layout
 embeds the statement at every registration (`SpotFlock.embeds_layoutFor`). Every registration whose frame is set to
-SPOT's has `Built` (`SpotFlock.built_spot`). Its honest instance needs `Sites` at a two-stage registration, which
-nothing proves yet; `Sites` fails at a registration that commits a value one proof block writes and another reads in
+SPOT's has `Built` (`SpotFlock.built_spot`). Its honest instance needs `Addresses` at a two-stage registration, which
+nothing proves yet; `Addresses` fails at a registration that commits a value one proof block writes and another reads in
 two trees.
 
 `Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo` is `CompiledTwo.Exfil` at the same code and layout
 facts, by `CompiledTwo.exfil_of_ks` on `SpotKSTwo`: what an accepted run serves is in the influence set at `δ`, at
 `SpotKSTwo`'s errors, and that set has at most `Σ_{T admissible} 2^{b(T)}` members. Its nontrivial witness is
-`Claims.SamplingGeneric.compilerExfilTwo_nontrivial`; its honest instance waits on the same `Sites`.
+`Claims.SamplingGeneric.compilerExfilTwo_nontrivial`; its honest instance waits on the same `Addresses`.
 -/
 
 @[expose] public section
@@ -66,23 +66,23 @@ def SampledKSTwo : Prop :=
       (SamplingDeploy.replayTwo (c.atOrder j) reg L₁ (SamplingDeploy.bytesFirst c L₁ j b₁)) cap).KS FlockDeploy.sha512
 
 /-- **SPOT[Flock]'s two-stage verifier is knowledge sound at SHA-512 at its own frame, where each value has one
-site**: at a registration `h` whose frame is SPOT's own (`SpotFlock.Built`), at which each gate's value has one site
-that holds at every checked unit that needs it (`SpotFlock.Sites`), `CompiledTwo.KS` holds at Flock's masked record
-over the readable relation and SHA-512, at SPOT[Flock]'s two-stage code (`SpotFlock.code`), the interior
+address**: at a registration `h` whose frame is SPOT's own (`SpotFlock.Built`), at which each gate's value has one
+address that holds at every checked unit that needs it (`SpotFlock.Addresses`), `CompiledTwo.KS` holds at Flock's
+masked record over the readable relation and SHA-512, at SPOT[Flock]'s two-stage code (`SpotFlock.code`), the interior
 registrations' roots (`SpotFlock.iroots`), the two-stage design (`SpotFlock.two`) and the replay sample of record
 (`SpotFlock.rs`), its inner wait's count the replay cap (`SpotFlock.cap`). -/
 def SpotKSTwo : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Sites h →
+  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
       SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).KS FlockDeploy.sha512
 
 /-- **SPOT[Flock]'s two-stage verifier bounds what an accepted run serves, at SHA-512, at its own frame, where each
-value has one site**: at `SpotKSTwo`'s registration, code, interior roots, design, replay sample and replay cap
+value has one address**: at `SpotKSTwo`'s registration, code, interior roots, design, replay sample and replay cap
 (`SpotFlock.cap`), `CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the influence
 set at δ]` is at most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the influence set at
 any input values has at most `Σ_{T admissible} 2^{b(T)}` members. -/
 def SpotExfilTwo : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Sites h →
+  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
       SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
 

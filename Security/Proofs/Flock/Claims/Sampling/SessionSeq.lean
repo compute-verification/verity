@@ -96,7 +96,7 @@ variable {Ω Ω' : Type} (H : Msg → Msg)
 /-- **A round answered with a message**: the prover's message, the answer and both parties' calls are appended, and the
 run continues. -/
 theorem stepWith_msg_of (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
-    (as : List Msg) (t : Trace) (pa : Msg × List (Msg × Msg)) (hpa : (P.next x hist ω).eval H = pa) (m : Msg)
+    (as : List Msg) (t : Transcript) (pa : Msg × List (Msg × Msg)) (hpa : (P.next x hist ω).eval H = pa) (m : Msg)
     (l : List (Msg × Msg)) (hv : (v (as ++ [pa.1])).eval H = (.msg m, l)) :
     stepWith H P x ω v (n + 1) hist as t =
       stepWith H P x ω v n (hist ++ [(pa.1, m)]) (as ++ [pa.1])
@@ -107,7 +107,7 @@ theorem stepWith_msg_of (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC
 /-- **A round accepted**: the prover's message, the acceptance and both parties' calls are appended, and the run
 accepts. -/
 theorem stepWith_acc_of (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
-    (as : List Msg) (t : Trace) (pa : Msg × List (Msg × Msg)) (hpa : (P.next x hist ω).eval H = pa)
+    (as : List Msg) (t : Transcript) (pa : Msg × List (Msg × Msg)) (hpa : (P.next x hist ω).eval H = pa)
     (l : List (Msg × Msg)) (hv : (v (as ++ [pa.1])).eval H = (.acc, l)) :
     stepWith H P x ω v (n + 1) hist as t = ⟨t.msgs ++ [(pa.1, .acc)], t.pLog ++ pa.2, t.vLog ++ l, .acc⟩ := by
   subst hpa
@@ -115,7 +115,7 @@ theorem stepWith_acc_of (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC
 
 /-- **A round refused**: the prover's message, the refusal and both parties' calls are appended, and the run refuses. -/
 theorem stepWith_rej_of (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
-    (as : List Msg) (t : Trace) (pa : Msg × List (Msg × Msg)) (hpa : (P.next x hist ω).eval H = pa)
+    (as : List Msg) (t : Transcript) (pa : Msg × List (Msg × Msg)) (hpa : (P.next x hist ω).eval H = pa)
     (l : List (Msg × Msg)) (hv : (v (as ++ [pa.1])).eval H = (.rej, l)) :
     stepWith H P x ω v (n + 1) hist as t = ⟨t.msgs ++ [(pa.1, .rej)], t.pLog ++ pa.2, t.vLog ++ l, .rej⟩ := by
   subst hpa
@@ -123,7 +123,7 @@ theorem stepWith_rej_of (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC
 
 /-- **A run only extends its transcript and the verifier's calls.** -/
 theorem stepWith_ext (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) :
-    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), ∃ (rest : List (Msg × Out)) (lm : List (Msg × Msg)),
+    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), ∃ (rest : List (Msg × Out)) (lm : List (Msg × Msg)),
       (stepWith H P x ω v n hist as t).msgs = t.msgs ++ rest ∧
         (stepWith H P x ω v n hist as t).vLog = t.vLog ++ lm := by
   induction n with
@@ -149,7 +149,7 @@ theorem stepWith_ext (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Ou
 /-- **An acceptance is an answer**: a run that accepts has the verifier accept at the messages so far followed by some
 of the run's, at most as many as its rounds. -/
 theorem acc_of_stepWith (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) :
-    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), (stepWith H P x ω v n hist as t).out = .acc →
+    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), (stepWith H P x ω v n hist as t).out = .acc →
       ∃ bs : List Msg, bs ≠ [] ∧ bs.length ≤ n ∧ ((v (as ++ bs)).eval H).1 = .acc := by
   induction n with
   | zero => intro hist as t h; simp [stepWith] at h
@@ -171,7 +171,7 @@ theorem acc_of_stepWith (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC
 entries (`cutSeen`), are those entries and the run's decision. -/
 theorem cutSeen_stepWith (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (mark : Msg)
     (hne : ∀ bs, ((v bs).eval H).1 ≠ .msg mark) (k : ℕ) :
-    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), ∃ new : List (Msg × Out),
+    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), ∃ new : List (Msg × Out),
       (stepWith H P x ω v k hist as t).msgs = t.msgs ++ new ∧
         ∀ rest, cutSeen mark k (new.map (markE mark) ++ rest) = ⟨new, (stepWith H P x ω v k hist as t).out⟩ := by
   induction k with
@@ -210,7 +210,7 @@ theorem stepWith_session (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω
       (∀ j, 0 < j → j < bs.length → ∃ m, ((v' (bs.take j)).eval H).1 = .msg m) →
       (v (as₀ ++ bs)).eval H = (markOut mark ((v' bs).eval H).1, ((v' bs).eval H).2))
     (hne : ∀ bs, ((v' bs).eval H).1 ≠ .msg mark) (k : ℕ) :
-    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length + k = K →
+    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length + k = K →
       (∀ j, 0 < j → j ≤ as.length → ∃ m, ((v' (as.take j)).eval H).1 = .msg m) →
       ∃ (rest : List (Msg × Out)) (lm : List (Msg × Msg)),
         (stepWith H P x ω v (k + n) (hist₀ ++ hist) (as₀ ++ as)
@@ -633,7 +633,7 @@ theorem sessionRunsTo_of_seq {D : Deploy Coin Col T} (S : SessionSeq D) (H : Msg
           (coinSeq fun i => r' (emb i)))) (D.flock.V.k xS) [] [] ⟨[], [], [], .rej⟩ := rfl
     rw [hW r' hr'', hrunF]
     refine ⟨?_, fun q hq => ?_⟩
-    · simp only [Trace.seen]
+    · simp only [Transcript.seen]
       rw [h1, List.append_assoc, S.session_pass x u ms _ _ ((List.range (S.pre x)).map (coinSeq r)) mA hlen hi hms
         (by simp) hpass, htake, hxS, ← hk', hnew, hcut rest]
     · rw [h2]
@@ -716,7 +716,7 @@ theorem SessionSeq.session_acc {D : Deploy Coin Col T} (S : SessionSeq D) (H : M
     ⟨ms, ps, ls, .rej⟩
   refine ⟨ms, rest, by rw [hW]; exact h1, hlen, ?_⟩
   rw [hW]
-  simp only [Trace.seen]
+  simp only [Transcript.seen]
   rw [h1]
   exact S.session_pass x u ms rest _ ((List.range (S.pre x)).map (coinSeq r)) mA hlen hi hms (by simp) hpass
 

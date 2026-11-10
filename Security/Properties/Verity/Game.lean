@@ -14,6 +14,7 @@ public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
+public import Properties.Verity.Sha512
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -520,9 +521,6 @@ def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : A
     (t : Game.Strategy (finish D θ F c a [])) : Game.Strategy (play fs D θ F c) :=
   ⟨a, closeThen (finish D θ F c a) t (frames fs) fs []⟩
 
-/-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
-def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
-
 /-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
 (`Claims.ExpectedCR`) read. -/
 def sha512Msg (m : Claims.Msg) : Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
@@ -656,7 +654,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   check reads none -/
   coinsRead : Subprotocol → Sent → Option (List Release)
   extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Transcript
+    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Trace
   finder : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Claims.Finder
   cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →

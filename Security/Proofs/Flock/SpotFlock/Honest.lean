@@ -55,9 +55,9 @@ theorem slot_fill
     (hfP : ∀ hist : List (Msg × Msg), marked hist = true → hist.length < K → P.next x (hist₀ ++ hist) ω = .ret [])
     (hfV : ∀ bs : List Msg, bs.length ≤ K → (∃ j, 0 < j ∧ j < bs.length ∧ ((vF (bs.take j)).eval H).1 = .acc) →
       (vS (as₀ ++ bs)).eval H = (.msg [], [])) :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as.length + f = K → hist.length = as.length →
+    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as.length + f = K → hist.length = as.length →
       marked hist = true → (∃ j, 0 < j ∧ j ≤ as.length ∧ ((vF (as.take j)).eval H).1 = .acc) →
-      ∃ (hist' : List (Msg × Msg)) (as' : List Msg) (t' : Trace), as'.length = K ∧ hist'.length = K ∧
+      ∃ (hist' : List (Msg × Msg)) (as' : List Msg) (t' : Transcript), as'.length = K ∧ hist'.length = K ∧
         (∃ j, 0 < j ∧ j ≤ K ∧ ((vF (as'.take j)).eval H).1 = .acc) ∧
         ∀ rest, stepWith H P x ω vS (f + rest) (hist₀ ++ hist) (as₀ ++ as) t =
           stepWith H P x ω vS rest (hist₀ ++ hist') (as₀ ++ as') t' := by
@@ -103,11 +103,11 @@ theorem slot_run
     (hfP : ∀ hist : List (Msg × Msg), marked hist = true → hist.length < K → P.next x (hist₀ ++ hist) ω = .ret [])
     (hfV : ∀ bs : List Msg, bs.length ≤ K → (∃ j, 0 < j ∧ j < bs.length ∧ ((vF (bs.take j)).eval H).1 = .acc) →
       (vS (as₀ ++ bs)).eval H = (.msg [], [])) :
-    ∀ (k : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (ts t : Trace), as.length + k = K →
+    ∀ (k : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (ts t : Transcript), as.length + k = K →
       hist.length = as.length → marked hist = false →
       (∀ j, 0 < j → j ≤ as.length → ∃ m, ((vF (as.take j)).eval H).1 = .msg m) →
       (stepWith H P' xS ω' vF k hist as ts).out = .acc →
-      ∃ (hist' : List (Msg × Msg)) (as' : List Msg) (t' : Trace), as'.length = K ∧ hist'.length = K ∧
+      ∃ (hist' : List (Msg × Msg)) (as' : List Msg) (t' : Transcript), as'.length = K ∧ hist'.length = K ∧
         (∃ j, 0 < j ∧ j ≤ K ∧ ((vF (as'.take j)).eval H).1 = .acc) ∧
         ∀ rest, stepWith H P x ω vS (k + rest) (hist₀ ++ hist) (as₀ ++ as) t =
           stepWith H P x ω vS rest (hist₀ ++ hist') (as₀ ++ as') t' := by
@@ -313,7 +313,7 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
     show (((List.range (off h h.ms.length + 1)).map (coinSeq r)).drop (off h t)).take j = _
     rw [show off h h.ms.length + 1 = off h t + (off h h.ms.length + 1 - off h t) by omega, drop_map_range,
       take_map_range _ (by omega), hslot t ht j hj]
-  have key : ∀ t, t ≤ h.ms.length → ∃ (hist : List (Msg × Msg)) (as : List Msg) (tr : Trace),
+  have key : ∀ t, t ≤ h.ms.length → ∃ (hist : List (Msg × Msg)) (as : List Msg) (tr : Transcript),
       hist.length = off h t ∧ as.length = off h t ∧ as.getD 2 [] = m₂ ∧
       (∀ s < t, ∃ j, 0 < j ∧ j ≤ k₀ h s ∧
         decidedAt (stmtAt h m₂ s) (as.drop (off h s)) (cs.drop (off h s)) j = true) ∧

@@ -144,6 +144,7 @@ from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
 from verity.ml.definitions.registry.fa3_check_inf import AttentionV20
 from verity.ml.windows import interface as IF
+from verity_vllm.pipeline.tp.grain import GROUP
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -156,8 +157,6 @@ PROMPT = "prompt"
 #: the `Attention` versions cut by key block, each by the version of its function whose heads' steps are Calls: FA2's v18
 #: by v19, FA3's v4 by v20
 CUTS = {18: AttentionV19, 19: AttentionV19, 4: AttentionV20, 20: AttentionV20}
-#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
-GROUP = 16
 
 
 _GRAIN = Grain()

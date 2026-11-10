@@ -199,13 +199,13 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 theorem exists_cons_of_length_pos {α : Type} {l : List α} (h : 0 < l.length) : ∃ a l', l = a :: l' :=
   List.exists_cons_of_ne_nil (List.ne_nil_of_length_pos h)
 
-theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (b : β)
+theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (b : β)
     (bs : List β) : (ownLog H run (f b)).length ≤ (ownLog H run (flatMapRP f (b :: bs))).length := by
   rw [Claims.Sampling.ownLog_flatMapRP, List.map_cons, List.sum_cons]
   exact Nat.le_add_right _ _
 
 /-- A wait whose first sample is accepted keeps it first. -/
-theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
+theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Transcript) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
     (hr : (run r).out = .acc) : ∃ l, ((waitAccC k (r :: rs) []).eval H run).1 = (r, (run r).seen) :: l := by
   rw [Claims.Sampling.waitAccC_eval_nil, Claims.Sampling.accList,
     List.filter_cons_of_pos (p := fun r => decide ((run r).out = .acc)) (decide_eq_true hr), List.take_cons hk,
@@ -253,7 +253,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- Each of `effL`'s runs' extractions makes a SHA-512 call of its own: its one slot's session finds `()` at once, and
 checking the opening it reveals makes `callCm`'s one call. -/
-theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Trace)
+theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) → Coin) → Transcript)
     (r : Fin ((effL Coin).V.k x) → Coin) (v : Seen) (c : (effL Coin).SlotEC x) :
     0 < (ownLog H run ((effL Coin).runExt x toyStmt r v c)).length := by
   have h1 : 0 < (effL Coin).nPU x := Nat.one_pos

@@ -39,7 +39,7 @@ def toDataflow : Population.Dataflow (Fin n) P.Slot where
   writes u := univ.filter fun s => P.unit s.1 = some u
 
 /-- A transcript's committed values, each in `W` bits. -/
-def encode (W : ℕ) (X : C.Transcript) : P.Slot → BitVec W := fun s => (X s.1).setWidth W
+def encode (W : ℕ) (X : C.Trace) : P.Slot → BitVec W := fun s => (X s.1).setWidth W
 
 open Classical in
 /-- **The partition's unit functions**: unit `u` recomputes its gates from the values it reads, every other gate

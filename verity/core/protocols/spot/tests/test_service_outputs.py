@@ -54,14 +54,14 @@ def _public(ports) -> tuple[S.Public, ...]:
 
 
 def _spec() -> S.Spec:
-    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), STATE), S.Law("subset:2"),
+    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), STATE), S.Law("rate:1/3"),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS),
                   b"outputs-test")
 
 
 def _two_stage_spec() -> S.Spec:
     values = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR), STATE)
-    return S.Spec(values, S.TwoStage(GRAIN, f"subset:{Q}", K),
+    return S.Spec(values, S.TwoStage(GRAIN, "rate:1/2", K),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(BOUNDARY + INTERIOR),
                   b"outputs-two-stage-test")
 
