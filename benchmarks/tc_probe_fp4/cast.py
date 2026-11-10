@@ -39,6 +39,8 @@ from verity.ml.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sa
 if TYPE_CHECKING:
     import argparse
 
+    from numpy.typing import ArrayLike
+
 HERE = Path(__file__).resolve().parent
 OPS = {"cvt_e2m1x2_f32": 0, "cvt_f16x2_e2m1x2": 1, "cvt_ue8m0x2_f32_rz": 2, "cvt_ue8m0x2_f32_rp": 3, "cvt_bf16x2_ue8m0x2": 4,
        "cvt_e4m3x2_f32_ue4m3": 5}
@@ -124,7 +126,7 @@ def reference(op: int, inp: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         return ((ra << 8) | rb).astype(np.uint32), gated
     if op == 4:
         h = inp & 0xFFFF
-        def bf(c):
+        def bf(c: np.ndarray) -> np.ndarray:
             v = np.exp2(c.astype(np.float64) - 127).astype(np.float32).view(np.uint32) >> 16
             return np.where(c == 0, 0x0040, v).astype(np.uint32)
         lo, hi = h & 0xFF, h >> 8
@@ -139,11 +141,11 @@ def reference(op: int, inp: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 # --- inputs ----------------------------------------------------------------------------------------------------------------------
 
 
-def _f32w(x) -> np.ndarray:
+def _f32w(x: ArrayLike) -> np.ndarray:
     return np.asarray(x, np.float32).view(np.uint32)
 
 
-def _neighbours(values) -> np.ndarray:
+def _neighbours(values: ArrayLike) -> np.ndarray:
     """Every value, its FP32 neighbours one ulp either side, both signs."""
     v = np.asarray(values, np.float32)
     out = np.concatenate([v, np.nextafter(v, np.float32(np.inf)), np.nextafter(v, np.float32(-np.inf))])

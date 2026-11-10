@@ -111,7 +111,7 @@ def pack_a(A: np.ndarray, k0: int = 0) -> np.ndarray:
     return _words(A[:, rows, cols])
 
 
-def _pack_b(B: np.ndarray, kmap) -> np.ndarray:
+def _pack_b(B: np.ndarray, kmap: np.ndarray) -> np.ndarray:
     nreg = kmap.shape[1]
     return _words(B[:, np.broadcast_to(_G[:, None, None], (32, nreg, 4)), kmap])
 
@@ -206,7 +206,7 @@ def _init() -> None:
     _CTX["models"] = candidates()
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> tuple[dict, dict]:
     return model_words(_CTX["models"], *args)
 
 
@@ -360,17 +360,17 @@ def families(seed: int, n_random: int,
     share one metadata row (so one dense atom on the compressed operands is its twin).  ``fixed_mult`` multiplies ``signed_zero``."""
     rng = np.random.default_rng(seed)
 
-    def codes(shape, nonzero=False):
+    def codes(shape: int | tuple[int, ...], nonzero: bool = False) -> np.ndarray:
         return k32._codes(rng, "e4m3", shape, nonzero)
 
-    def meta(n, shared=False):
+    def meta(n: int, shared: bool = False) -> np.ndarray:
         m = META_VALID[rng.integers(0, len(META_VALID), (n, 1 if shared else 16, GROUPS))]
         return np.repeat(m, 16, axis=1) if shared else m
 
-    def acc_random(n, lo=-30, hi=40):
+    def acc_random(n: int, lo: int = -30, hi: int = 40) -> np.ndarray:
         return k32._f32((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    def zeros(n):
+    def zeros(n: int) -> np.ndarray:
         return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random // 2
@@ -564,7 +564,8 @@ def capture(args: argparse.Namespace) -> int:
 # --- verify (CPU) ----------------------------------------------------------------------------------------------------------------
 
 
-def _first(mask, As, M, B, C, D, other, n=5) -> list:
+def _first(mask: np.ndarray, As: np.ndarray, M: np.ndarray, B: np.ndarray, C: np.ndarray, D: np.ndarray,
+           other: np.ndarray, n: int = 5) -> list:
     out = []
     for t, i, j in list(zip(*np.nonzero(mask)))[:n]:
         out.append({"tile": int(t), "i": int(i), "j": int(j), "acc": f"{int(C[t, i, j]):08x}", "sparse": f"{int(D[t, i, j]):08x}",
