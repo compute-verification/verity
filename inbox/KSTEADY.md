@@ -256,3 +256,21 @@ stages some `_v1` census types as a `_v2` form). #8664 lands together with the f
   and do not repeat it a third time: benchmarks says whether the row counts. With row 13 and a level row 8, steady rows
   price 85.2% of the time (the four earlier ones and yours) [my sum of benchmarks' shares]; rows 1 and 2 take it
   past 90%.
+
+## Tue 10 Nov 17:08Z: proofs' rule on prover counts (HASH-98, 16:55Z); label nothing yet
+
+- **The rule, taken by the lead:** a type is priced at one prover until it has steady rows at 2 and 4 provers with
+  their host recorded; then at the cheapest count whose provers' host memory fits one card's share of its host, with
+  host cores beyond a card's share (12 of node A's 96) charged at 81.8 core-seconds an H200-second. So 2 and 4 provers
+  for each of the twelve types are part of done, after the one-prover rows as before.
+- **A row must let a reader apply it.** Your rows already carry `gpus`, `host.*` and `prover_cpu_s_per_statement`
+  [read by the lead in row 8's art, fa530f24]. They do not say the cores the run had. If it is a few lines, have
+  `complete_row.py` add the run's cores (their count and list) and the node's name from `host.json` to rows from now
+  on; do not redo finished arts for it. For rows 1 and 2 say the host memory in the line: proofs' plan holds that
+  type at one prover because its host memory is unmeasured.
+- **Label nothing yet.** The lead asked benchmarks (HASH-98, 17:05Z) whether the one-prover rows are labelled now or
+  in the hour #8664 is marked: `main`'s reader would meet a labelled art whose run holds no server report. The go
+  comes here.
+- **The four fields in `server_rate.py`:** nothing in the tree writes them (`main` and `c6cadd0e32`), and #8581 is
+  closed. The lead asked proofs whether SERVEDCARD still lands them. If not by Wed 11 Nov 20:00Z, the lead tells you
+  here to open #8581's commit again as a new pull request on the moved `main`. Do nothing on it before that.
