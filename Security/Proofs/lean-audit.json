@@ -239,7 +239,7 @@
   },
   "Proofs.Flock.SpotFlock.ReadsAt": {
    "why": "ret_walk_inlining, the tactic (an elab) that is ret_walk with each join point whose parameter it names inlined first (inlineStep), so a join point's body is walked at each jump's value (the module's portsOf_reads). It reads no files and does no IO, and the kernel replays every proof it builds.",
-   "digest": "3864f23ecbb51971d825f20d12dd792bb5d14eea629ad4388785dc241cba7870"
+   "digest": "e9128b659484c0588c6da9b791c7557a5a8d9cbfea5a9be94e293374ef400296"
   }
  },
  "layers": {
