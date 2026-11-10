@@ -26,7 +26,7 @@ path = "../../../../core/primitives/randomness"
 
 [[require]]
 name = "verity_difftest"
-path = "../../../../core/difftest/lean"
+path = "../../../../difftest/lean"
 
 # A P2 store's openings are checked on PoUS's vk (`RemoteAudit.P2`), by PoUS's own leaf and path check
 # (`PousCheck.Merkle`).

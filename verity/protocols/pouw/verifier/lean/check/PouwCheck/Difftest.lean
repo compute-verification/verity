@@ -10,7 +10,7 @@ public import PouwCheck.Rounds
 # The difftest's functions: the check's Lean behind `Difftest.serve`
 
 `serve` cases go through `pouw-check serve` (`Core.Protocol.main`); what is not a `serve` case is here, for the shared
-harness (`verity/core/difftest`):
+harness (`verity/difftest`):
 
 * `opening` (`params` as JSON, `commitment` the registration's bytes as hex, `units` a list of integers or null, `unit`,
   `pub` the proof's public file as hex, `opening` as JSON, and `salt`, a certified execution phase's salt as hex, null or absent

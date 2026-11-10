@@ -30,7 +30,7 @@ path = "../../../../core/primitives/randomness"
 
 [[require]]
 name = "verity_difftest"
-path = "../../../../core/difftest/lean"
+path = "../../../../difftest/lean"
 
 [[require]]
 name = "core_memory_challenger"

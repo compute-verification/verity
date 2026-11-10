@@ -2420,6 +2420,11 @@
       "paths": {
         "verity/ml/windows/": "verity/windows/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/difftest/": "verity/difftest/"
+      }
     }
   ]
 }

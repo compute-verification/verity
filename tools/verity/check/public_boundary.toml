@@ -57,7 +57,7 @@ vllm = ["integrations/vllm", "verity/protocols/certifier/verifier/advice.py"]
 # claims' program, which the bridge reads
 shared = [
     "verity/core/primitives/{randomness,lms}",
-    "verity/core/difftest",
+    "verity/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/core/protocols/reporting.py",
     "verity/configuration/config",

@@ -91,7 +91,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../core/difftest/lean",
+   "../../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

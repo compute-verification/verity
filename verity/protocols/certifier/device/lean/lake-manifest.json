@@ -63,7 +63,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../../core/difftest/lean",
+   "../../../../difftest/lean",
    "configFile": "lakefile.toml"}],
  "name": "certifier_device",
  "lakeDir": ".lake",

@@ -12,7 +12,7 @@ public import PouwWindow.RegFile
 # The difftest's functions: the execution phase's Lean behind `Difftest.serve`
 
 One function per ported function of `window.py`, each on a JSON object of its arguments, for the shared harness
-(`verity/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
+(`verity/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
 suite (`tests/test_difftest.py`, and `tests/test_lanes.py` for a sampled leaf's statements) samples the inputs and holds each
 to Python.
 
