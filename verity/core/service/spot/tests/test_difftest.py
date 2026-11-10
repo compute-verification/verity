@@ -6525,7 +6525,7 @@ def test_the_run_refuses_a_population_out_of_order(pieces):
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
 
 
-#: The public files Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
+#: The public files Flock's producers wrote, recorded in `verity/flock/prover/tests`' fetched fixtures
 #: (`fixtures/artifacts.json`): `verity_flock`'s staging (`json.dumps(sort_keys=True)`), and the selftest's and the
 #: recursive links' (compact, sorted).
 RECORDED = PACKAGE.parents[2] / "ml" / "flock" / "tests" / "fixtures"
@@ -6533,7 +6533,7 @@ RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "
 
 
 def _recorded_publics() -> list[Path]:
-    missing = [f"verity/ml/flock/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    missing = [f"verity/flock/prover/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
     assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
     return sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
                   if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))

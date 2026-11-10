@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_links as RL
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent / "flock" / "prover" / "tests")
 BIN = HERE.parents[3] / "verity/flock/verifier/.lake/build/bin/flock-verify"
 SET = HERE / "fixtures" / "rec-links" / "k64-n4"
 #: the fixture's files stored gzipped (`SET / f"{rel}.gz"`), which `plain` gives decompressed

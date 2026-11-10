@@ -58,7 +58,7 @@ fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $(dirname $(dirname $PY)) && $UV pip install -q --python $PY numpy blake3; } || exit 1
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_check/src:$REPO/integrations/vllm
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/integrations/vllm
 
 # spec K:N[:R] or served[-plain]: "K N R NAME" (a served statement's N its member's n, K and R -)
 spec() {
@@ -92,7 +92,7 @@ print(json.dumps({"served_root_held": ok, "window_run_root": w["run"], "publishe
                   "registration_digest": w["registration_digest"]}))
 sys.exit(0 if ok else 1)' "$WINDOW" "$SERVE_RUN" "${SERVE_WINDOW:-0}" > $o/served-root.json || { cat $o/served-root.json; return 1; }
   fi
-  /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/verity/ml/flock/pod/rec_inner.py stage-window --window "$WINDOW" \
+  /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/verity/flock/prover/pod/rec_inner.py stage-window --window "$WINDOW" \
     --member ${MEMBER:-0} --subcircuit "${SUBCIRCUIT:?WINDOW needs SUBCIRCUIT}" --sets $FW/data/served-sets \
     --out $FW/data/served-plain --zk-out $FW/data/served > $o/stage.json 2> $o/stage.err || { tail -20 $o/stage.err; return 1; }
   n=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["n"])' $o/stage.json) || return 1

@@ -18,7 +18,7 @@ import pytest
 
 from verity.core.protocols.spot.one_stage import proofs as PF
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent / "flock" / "prover" / "tests")
 LEAN = HERE.parents[2] / "core" / "service" / "flock"
 VERIFIER = HERE.parent / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"

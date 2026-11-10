@@ -50,8 +50,8 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   # the proving build never has seed injection; the selftest's harness gets its own build with it. Both are kept per pod, keyed
   # by the build scripts, patches and the prover's sources, so later runs of the same builds skip the compile and another
   # tree's run on the pod builds its own
-  KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
-    $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+  KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/flock/prover/*.patch verity/flock/prover/cuda_*_patch.py \
+    $(find verity/flock/prover/cuda verity/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
   BIN=$W/bin-$KEY-g$G-sm$SM; F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock
   # the prover runs on CUDA 13.3: a driver older than that (R570) needs its compat library, cached binary or not
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
@@ -86,11 +86,11 @@ if [ -z "${PYBIN:-}" ]; then
   [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
   PYBIN=$W/py/bin/python3
 fi
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
 # the challengers' Lean, where this pod serves sessions (not a staging run, nor a prover whose verifier is another pod's)
 if [ "$FLOCK_CHALLENGER" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ -z "${FC_VERIFIERS:-}" ]; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=$PYBIN CHALLENGER_WORK=$O/challenger-build
-  . verity/ml/flock/pod/challenger.sh
+  . verity/flock/prover/pod/challenger.sh
   challenger_build; challenger_built || exit 1
 fi
 [ -x /usr/bin/time ] || { apt-get install -y -qq time >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq time >/dev/null 2>&1; }; }   # the prover's own peak memory

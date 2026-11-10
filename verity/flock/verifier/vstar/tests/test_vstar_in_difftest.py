@@ -513,7 +513,7 @@ COINS = FLOCK_TESTS / "fixtures" / "rec-coins" / "16-16-8-n64"
 
 def _fetched(d: Path, fixture: str):
     return pytest.mark.skipif(not d.is_dir(), reason=f"{d} is not fetched: `uv run research data fetch-fixtures "
-                              f"verity/ml/flock/tests/fixtures/{fixture}`")
+                              f"verity/flock/prover/tests/fixtures/{fixture}`")
 
 
 @pytest.mark.slow

@@ -69,7 +69,7 @@ FOLD_BIN=$L/fold-$FSHA/inner-fold
   fi
 ) > $O/build-fold.log 2>&1 &
 FP=$!
-python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
+python3 verity/flock/prover/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
 [ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/ && head -2 $D/circuit.txt > $O/circuit-meta.txt

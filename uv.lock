@@ -2155,7 +2155,7 @@ dev = [
     { name = "verity-cli", editable = "tools/verity/cli" },
     { name = "verity-config", editable = "tools/config" },
     { name = "verity-difftest", editable = "verity/core/difftest" },
-    { name = "verity-flock", editable = "verity/ml/flock" },
+    { name = "verity-flock", editable = "verity/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-ops", editable = "infra/ops" },
     { name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" },
@@ -2215,7 +2215,7 @@ dependencies = [
 requires-dist = [
     { name = "numpy" },
     { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/ml/flock" },
+    { name = "verity-flock", editable = "verity/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
@@ -2310,7 +2310,7 @@ dependencies = [
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "verity-difftest", editable = "verity/core/difftest" },
-    { name = "verity-flock", editable = "verity/ml/flock" },
+    { name = "verity-flock", editable = "verity/flock/prover" },
 ]
 
 [[package]]
@@ -2355,7 +2355,7 @@ requires-dist = [
 [[package]]
 name = "verity-flock"
 version = "0.1.0"
-source = { editable = "verity/ml/flock" }
+source = { editable = "verity/flock/prover" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
@@ -2552,7 +2552,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity", editable = "." },
-    { name = "verity-flock", editable = "verity/ml/flock" },
+    { name = "verity-flock", editable = "verity/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
 ]
 

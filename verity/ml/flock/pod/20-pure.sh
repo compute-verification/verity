@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flock-backend: build flock-pure into a flock b684b12 checkout (flock-link's patch, verity/ml/flock/live as crates/flock-live,
+# flock-backend: build flock-pure into a flock b684b12 checkout (flock-link's patch, verity/flock/prover/live as crates/flock-live,
 # verity_unit.rs into flock-prover), then (MODE):
 #   selftest  flock-pure's negatives at SELF_VUS for REL (in-process verifier)
 #   sweep     the TABLES.md sweep (verity_flock.bench) from START, RUNS timed sessions per point, loopback verifier
@@ -10,7 +10,7 @@
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 W=/workspace/flock-backend; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/flock-backend}/out; mkdir -p $W $O
-REPO=$(pwd); SRC=$REPO/verity/ml/flock
+REPO=$(pwd); SRC=$REPO/verity/flock/prover
 REL=${REL:-bf16-hopper}; MODE=${MODE:-selftest sweep}
 command -v cc >/dev/null || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential pkg-config >/dev/null; }
 [ -x /usr/bin/time ] || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq time >/dev/null; }
@@ -20,7 +20,7 @@ source $HOME/.cargo/env
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
 export PATH=$W/py/bin:$PATH; python3 --version
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python
 cd $W; [ -d flock ] || git clone -q https://github.com/succinctlabs/flock.git
 cd $F && git checkout -q b684b12 && git checkout -q -- . && git clean -qfd crates && git apply $SRC/flock-link-b684b12.patch && git apply $SRC/flock-gpu-link-b684b12.patch || exit 1
 rm -rf crates/flock-live && cp -r $SRC/live crates/flock-live

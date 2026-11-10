@@ -24,11 +24,11 @@ TH=$( { [ "$Q" = max ] || [ "$Q" = -1 ]; } && nproc || echo $(( Q / PER_ > 2 ? Q
 B=/workspace/flock-gpu-link/flock/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/flock/prover/python:$REPO/integrations/vllm
 # the challengers' Lean, where this pod serves sessions: the verifier role's servers and LOOPBACK=1's
 if [ "$FLOCK_CHALLENGER" = 1 ] && { [ $ROLE = verifier ] || [ -n "${LOOPBACK:-}" ]; }; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=python3 CHALLENGER_WORK=$O/challenger-build
-  . verity/ml/flock/pod/challenger.sh
+  . verity/flock/prover/pod/challenger.sh
   challenger_build; challenger_built || exit 1
 fi
 rm -rf $W/set && mkdir -p $W/set && tar -xf $(ls $I/*.tar | head -1) -C $W/set || exit 1

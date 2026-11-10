@@ -1,6 +1,6 @@
 /-
 The session record's canonical text, the text `Json.compress` prints of what it parses to, which every
-writer emits (`verity/ml/flock/live/src/record_text.rs`, `verity_flock.record_text`) and S0 holds a record to. So the
+writer emits (`verity/flock/prover/live/src/record_text.rs`, `verity_flock.record_text`) and S0 holds a record to. So the
 record's text is a function of what the verifier reads of it.
 
 `printT` prints what `Json.compress` prints, by structural recursion, so proofs read its bytes (the proofs' honest printer

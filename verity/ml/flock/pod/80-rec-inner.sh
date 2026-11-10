@@ -46,7 +46,7 @@ CLAIMS_BIN=$L/claims-$CSHA/inner-claims
   fi
 ) > $O/build-claims.log 2>&1 &
 CLP=$!
-python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 verity/flock/prover/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
 TB=(); [ -d $D/tables ] && TB=(--tables $D/tables)
 PART=(--partition $D/partition.json)
@@ -79,7 +79,7 @@ echo "claims exit $?"
 # level 0 (its position moves); both go to replay through session.json and to V*'s reference through public.json
 for F in challenge query; do
   FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
-  python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS
+  python3 verity/flock/prover/pod/rec_inner.py forge --what $F --inner $FS
   env $INNER_COINS $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $FS/session > $O/forged-$F-replay.txt 2>&1
   python3 -m verity_flock.rec_vstar $FS > $O/forged-$F-vstar.json 2>&1; echo "forged $F vstar exit $?"
 done

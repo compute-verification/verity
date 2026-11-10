@@ -57,7 +57,7 @@ fi
 CUDA_TK=$(cat $W/cuda.env 2>/dev/null); export CUDA_TK LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-} PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH
 NSYS=$W/nsys-root/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
 PY=$W/py/bin/python3
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/flock/prover/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 for i in 1 2 3 4 5 6; do
   miss=$($PY -c 'import circuit_check.targets, verity.circuits.defs, verity.core.protocols.spot.one_stage.draw' 2>&1 \
     | sed -n "s/.*No module named '\([^'.]*\).*/\1/p" | tail -1)
@@ -79,10 +79,10 @@ if has build; then
 fi
 if has test; then
   $PY -c 'import pytest' 2> /dev/null || $HOME/.local/bin/uv pip install -q --python $PY pytest
-  T=${TESTS:-verity/ml/flock/tests/test_hm96_leaves.py verity/ml/flock/tests/test_arena_layout.py verity/ml/flock/tests/test_ligerito_folds.py}
+  T=${TESTS:-verity/ml/flock/tests/test_hm96_leaves.py verity/flock/prover/tests/test_arena_layout.py verity/flock/prover/tests/test_ligerito_folds.py}
   G=$W/ghash-b684b12
   [ -d $G/cuda-ghash ] || for F in $W/fw/*/flock; do mkdir -p $G && git -C $F archive b684b12 cuda-ghash | tar -x -C $G && break; done
-  (cd verity/ml/flock/tests && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \
+  (cd verity/flock/prover/tests && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \
     $PY -m pytest -q -rs -p no:cacheprovider $(for t in $T; do echo $REPO/$t; done)) > $O/test-$AS.txt 2>&1
   rc=$?; tail -3 $O/test-$AS.txt | sed "s/^/test-$AS /" | tee -a $O/job.log; log "test-$AS rc=$rc"
   [ $rc = 0 ] && ! grep -q skipped $O/test-$AS.txt || fail=1

@@ -354,8 +354,8 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
     repo = tmp_path / "repo"
     (repo / "tools/agree").mkdir(parents=True)
     (repo / "tools/agree/tool.py").write_text("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', "
-                                              "command=['true'], merge_requires={'agreement': ['verity/ml/flock/']})\n")
-    (repo / "verity/ml/flock").mkdir(parents=True)
+                                              "command=['true'], merge_requires={'agreement': ['verity/flock/prover/']})\n")
+    (repo / "verity/flock/prover").mkdir(parents=True)
     (repo / "verity/ml/flock/a.py").write_text("x = 1\n")
     git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)  # noqa: E731
     git("init", "-q")
@@ -365,7 +365,7 @@ def test_an_unreadable_moves_file_hides_no_declaration_at_its_current_path(tmp_p
 
     assert tools_registry.locate("agree", repo) == ("tools.agree.tool", "AGREE")
     assert merge.declaration(repo, "agree").name == "agree"
-    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/ml/flock/"]}
+    assert merge.required_steps(repo, "HEAD~1", "HEAD", "agree") == {"agreement": ["verity/flock/prover/"]}
     (repo / "tools/agree/tool.py").unlink()
     with pytest.raises(json.JSONDecodeError):
         tools_registry.locate("agree", repo)

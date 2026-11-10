@@ -10,7 +10,7 @@ export RI_PINNED=${RI_PINNED:-$(taskset -pc $$ | cut -d: -f2 | tr -d ' ')} RAYON
 . verity/ml/flock/pod/rec-env.sh
 python3 -c 'import pytest' 2>/dev/null || $UV pip install -q --python $W/py/bin/python pytest || exit 1
 FLOCK_CIRCUIT=$B PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -p no:cacheprovider -v --junitxml=$O/junit.xml \
-  verity/ml/flock/tests/test_rec_c3_open.py > $O/pytest.txt 2>&1
+  verity/flock/prover/tests/test_rec_c3_open.py > $O/pytest.txt 2>&1
 rc=$?
 tail -8 $O/pytest.txt
 wait $LP

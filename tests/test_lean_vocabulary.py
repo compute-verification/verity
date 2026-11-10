@@ -661,9 +661,9 @@ KNOWN: dict[str, str] = {
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
-    "verity/ml/flock/python/verity_flock/lowerings.py::Registry":
+    "verity/flock/prover/python/verity_flock/lowerings.py::Registry":
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
-    "verity/ml/flock/python/verity_flock/subcircuit_templates.py::Draw":
+    "verity/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
@@ -994,9 +994,9 @@ KNOWN: dict[str, str] = {
     "verity/ml/commitments/advice.py::Registration":
         "homonym, a hiding commitment to a private partition's rows: rename (`Advice.Committed`) (proofs)",
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
-    "verity/ml/flock/python/verity_flock/firewall_transcript.py::Session":
+    "verity/flock/prover/python/verity_flock/firewall_transcript.py::Session":
         "homonym, one inner proof through the firewall: rename (proofs)",
-    "verity/ml/flock/python/verity_flock/rec_links.py::Link":
+    "verity/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/ml/windows/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",

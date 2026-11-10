@@ -34,7 +34,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 @pytest.fixture(scope="module")
 def store():
     assert (FIXTURE / "stage" / "circuit.txt").is_file(), (
-        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/{FIXTURE.name}`")
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/flock/prover/tests/fixtures/{FIXTURE.name}`")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     return FIXTURE
 

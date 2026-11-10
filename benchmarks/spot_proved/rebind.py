@@ -13,7 +13,7 @@ from pathlib import Path
 
 TREE = Path.cwd()
 for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "integrations/vllm",
-           "verity/ml/flock/python", "."):
+           "verity/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 
 import numpy as np  # noqa: E402

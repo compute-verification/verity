@@ -36,8 +36,8 @@ TREE = {
     "lean/lib/Lib.lean": "def x := 1\n",
     "tools/verity/lean/lean_audit.py": "",
     "tools/verity/check/common.py": "",
-    "verity/ml/flock/check_build.sh": "set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n",
-    "verity/ml/flock/live/src/lib.rs": "fn a() {}\n",
+    "verity/flock/prover/check_build.sh": "set -e\nRUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}\n",
+    "verity/flock/prover/live/src/lib.rs": "fn a() {}\n",
     "verity/ml/flock/verifier/ci.py": "print('agree')\n",
     "verity/flock/verifier/lakefile.toml": 'name = "flock_verifier"\n',
 }

@@ -57,7 +57,7 @@ def discover() -> dict[str, dict[str, Path]]:
     """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name.  A file
     under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root, and
     only through regular packages: a directory without ``__init__.py`` would name a namespace-package copy of a module that
-    another package's root owns (``verity.ml.flock.python.verity_flock.rec_open``), and importing it registers its
+    another package's root owns (``verity.flock.prover.python.verity_flock.rec_open``), and importing it registers its
     Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     claimed: set[Path] = set()

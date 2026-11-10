@@ -46,7 +46,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
 H=$SRC/benchmarks/pouw/h1_lanes
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
+export PYTHONPATH=$SRC:$SRC/verity/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 PAR=${H1L_PAR:-8} LPAR=${H1L_LPAR:-8} K=${H1L_K:-4096} FW=${H1S_FIREWALL:-1}
 WK=$W/work OP=$W/opened.json
 mkdir -p "$OUT/lean" "$WK"
@@ -94,7 +94,7 @@ elif [ -n "${H1S_OPENED:-}" ]; then
     "${RESEARCH_RUN_DIR%/runs/*}/requests/${RESEARCH_RUN_DIR##*/}/inputs/${H1S_OPENED##*/}" ;; esac
   log "h1-served: the openings of $(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['window'][:16], 'unit', d['unit']['unit'], 'K', d['k'])" "$OP")"
 else
-  HPP=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python:$SRC/benchmarks/pouw/h1_prove
+  HPP=$SRC:$SRC/integrations/vllm:$SRC/verity/flock/prover/python:$SRC/benchmarks/pouw/h1_prove
   ledgers=()
   for l in ${H1S_LEDGER:?}; do ledgers+=(--ledger "$l"); done
   PYTHONPATH=$HPP "${H1S_PY:?}" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "${H1S_CALLS:?}" --session "${H1S_SESSION:?}" \
