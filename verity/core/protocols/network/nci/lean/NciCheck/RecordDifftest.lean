@@ -12,9 +12,11 @@ row of every unit where `NciCheck.Record` reads the record's description. `NciCh
 unless, on every case:
 
 * `NciCheck.Record.checkDetail` gives Python's `check_detail`: the summary's counts, the verdict and the failure, or
-  the first refusal's code;
-* `NciCheck.Record.check` gives Python's `check`, the verdict or the refusal's code and no other field;
+  the first refusal's code, with its message where it has one;
+* `NciCheck.Record.check` gives Python's `check`, the verdict or the refusal's code and message and no other field;
 * `NciCheck.Record.kinds` gives Python's `kinds`, the class of each row asked, or the refusal's code;
+* `NciCheck.Record.exported` gives Python's `exported`, of each row asked its unit's slot and why the row is θ, or
+  the refusal's code;
 * `NciCheck.RecordCount.checkDetail` gives Python's `count`: a block's Boolean gates, the verdict and the failure, or
   the first refusal's code;
 * **the same circuit**: where the case states the instance of SPOT's `wires` piece that Python builds from its own
@@ -32,23 +34,24 @@ namespace NciCheck.RecordDifftest
 open Lean (Json)
 open NciCheck.CountDifftest (compare unpublishable)
 
-/-- The fields of the whole verdict compared: a refusal's code, or the summary's counts and the verdict. -/
-def detailFields : List String := ["error", "blocks", "gates", "inputs", "fresh", "cross_wires", "free", "ingress",
-  "unregistered", "openings", "wired_rows", "wired_bits", "complies", "failure"]
+/-- The fields of the whole verdict compared: a refusal's code and message, or the summary's counts and the verdict. -/
+def detailFields : List String := ["error", "message", "blocks", "gates", "inputs", "fresh", "cross_wires", "free",
+  "ingress", "unregistered", "openings", "wired_rows", "wired_bits", "complies", "failure"]
 
-/-- The fields compared of what the form would publish: a refusal's code, or the judgment. -/
-def publicFields : List String := ["error", "complies"]
+/-- The fields compared of what the form would publish: a refusal's code and message, or the judgment. -/
+def publicFields : List String := ["error", "message", "complies"]
 
 /-- The fields of the count compared: a refusal's code, or a block's Boolean gates and the verdict. -/
 def countFields : List String := ["error", "bool_gates", "complies", "failure"]
 
-/-- How Lean's kinds differ from Python's on case line `i`: both the same list, or both a refusal of one code. -/
-def kindsDiffer (i : Nat) (lean py : Json) : List String :=
+/-- How Lean's list of `what` (the rows' kinds, or what the form exports of them) differs from Python's on case line
+`i`: both the same list, or both a refusal of one code. -/
+def rowsDiffer (what : String) (i : Nat) (lean py : Json) : List String :=
   let same := match lean, py with
     | .arr a, .arr b => a == b
     | .arr _, _ | _, .arr _ => false
     | _, _ => lean.getObjValD "error" == py.getObjValD "error" && lean.getObjValD "error" != Json.null
-  if same then [] else [s!"instance {i}: kinds: Lean {lean.compress}, Python {py.compress}"]
+  if same then [] else [s!"instance {i}: {what}: Lean {lean.compress}, Python {py.compress}"]
 
 /-- The wiring SPOT's reader reads from the `wires` piece's instance `j`, shown; `refused` where it refuses. -/
 def shown (j : Json) : String :=
@@ -92,7 +95,8 @@ def differences (i : Nat) (case py : String) : List String :=
     compare i "detail" detailFields detail (p.getObjValD "detail") ++
       compare i "public" publicFields pub (p.getObjValD "public") ++
       unpublishable i "Lean" pub ++ unpublishable i "Python" (p.getObjValD "public") ++
-      kindsDiffer i (Record.kinds inst tr (c.getObjValD "rows")) (p.getObjValD "kinds") ++
+      rowsDiffer "kinds" i (Record.kinds inst tr (c.getObjValD "rows")) (p.getObjValD "kinds") ++
+      rowsDiffer "exported" i (Record.exported inst tr (c.getObjValD "rows")) (p.getObjValD "exported") ++
       compare i "count" countFields (RecordCount.checkDetail inst tr (c.getObjValD "count")) (p.getObjValD "count") ++
       circuitDiffers i inst tr (c.getObjValD "spot") (detail.getObjValD "error")
 
