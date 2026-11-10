@@ -28,8 +28,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
-* `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
-  (`Slots.select`);
+* `slots`: the claims' partition over the circuit file, and the slots of that sample's checked proof blocks
+  (`Slots.select`); the file is read from its path, so `DifftestMain` serves it (`slotsWith`), not `table`;
+* `file_part`: the circuit file's summary at `n` units (`FilePart.ofCircuit`), served the same way (`filePartWith`);
 * `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
   more (`OneStageZk.fitsWhy`, `OneStageZk.drawFitsWhy`), which v2 refuses at `2^64`;
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
@@ -308,10 +309,11 @@ def selectSecond (j : Json) : V Json := do
   let (draw, read) ← Select.selectSecond sample ns ks (← Flock.unhex (← Flock.J.str j "source" "the second stage"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
-and the slots of the challenger's sample on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
-`select` is. -/
-def slots (j : Json) : V Json := do
+/-- `select`'s input with the circuit file `c` (`Slots.parseCircuit`) to `{"classes", "checked"}`: the claims'
+partition over the file in the program's strata (`Slots.fileLayout`), and the slots of the challenger's sample on the
+source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where `select` is, or where the file doesn't parse. -/
+def slotsWith (j : Json) (c : V Flock.Circuit) : V Json := do
+  let c ← c
   let rule ← Select.Rule.ofJson (getD j "rule")
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
@@ -324,9 +326,18 @@ def slots (j : Json) : V Json := do
     | c => some <$> Select.closureMap? c
   let table ← rule.tableOver p (getD j "query") table
   let rule ← Select.resolve rule p (getD j "query")
-  let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
+  let (l, checked) ← Slots.select rule c p (getD j "query") table cm
+    (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
+
+/-- `{"n"}` with the circuit file `c` (`Slots.parseCircuit`) to `{"n", "B", "m", "srcs"}`: `FilePart.ofCircuit c n`;
+refused where the file doesn't parse or `n` is not a natural number. -/
+def filePartWith (j : Json) (c : V Flock.Circuit) : V Json := do
+  let c ← c
+  let some n := nat? (getD j "n") | throw "n is not a natural number"
+  let f := FilePart.ofCircuit c n
+  return Json.mkObj [("B", Lean.toJson f.B), ("m", Lean.toJson f.m), ("n", Lean.toJson f.n), ("srcs", Lean.toJson f.srcs)]
 
 /-- `{"draw", "proved_units", "instances"}`, a sample whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do
@@ -759,7 +770,7 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select),
    ("file_population", FilePart.piece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements), ("replay_links", replayLinks),

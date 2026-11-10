@@ -3,13 +3,13 @@ import Spot
 /-!
 `whole-run-time run FILE [--no-whole] [--no-steps]`: the `run` piece (`Pieces.run`, the stream's whole run of one
 registration, `Run.run`) on one input, timed after it is parsed, then `Run.run`'s steps one at a time in its order, with
-`Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`.
+`Slots.popOk`'s reads split into `Partition.evaluate`, `Partition.unitGates` and `Slots.popUnits`.
 
 `whole-run-time desc FILE [--unit-gates [--ref]] [--pop-ok]`: on a `{"program", "query"}` input, `Program.parse`,
 `Partition.evaluate`, and per range one `Desc.gates` of its template and one `TemplateQuery.gates` of its last unit,
-`inputGates`' count; with `--unit-gates`, `Partition.unitGates` too; with `--ref`, `Partition.unitGatesRef`, the walk unit
-by unit `unitGates` replaced, whose gates must be `unitGates`' (exit 1 if not); with `--pop-ok`, last, `Slots.popOk`,
-whose layout holds a proof block per input gate.
+the root's input gates' count; with `--unit-gates`, `Partition.unitGates` too; with `--ref`, `Partition.unitGatesRef`, the
+walk unit by unit `unitGates` replaced, whose gates must be `unitGates`' (exit 1 if not); with `--pop-ok`, last,
+`Slots.popOk`.
 
 One `PHASE {json}` line per step on stdout. `whole_run.sh` builds it against the checkout's verifier and runs it; it is a
 measurement, not a verifier.
@@ -90,8 +90,7 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let _ ← timed "partition.evaluate" v.program (fun pr => Partition.evaluate pr v.query) isOk
     (fun r => match r with | .ok rs => [("ranges", toJson rs.size)] | .error _ => [])
   let _ ← timed "partition.unitGates" v.program (fun pr => Partition.unitGates pr v.query) isOk
-  let _ ← timed "slots.inputGates" v.program.desc Slots.inputGates (fun _ => true) (fun a => [("gates", toJson a.size)])
-  let _ ← timed "slots.layout" v.program (fun pr => Slots.layout pr v.query) isOk
+  let _ ← timed "slots.popUnits" v.program (fun pr => Slots.popUnits pr v.query) isOk
   let _ ← timed "popOk" v.program (fun pr => Slots.popOk pr v.query n) id
   let receipt ← IO.ofExcept (← timed "receipt" rec_ (fun r => Run.receipt r challenger received) isOk)
   let derived ← IO.ofExcept (← timed "derive" v.program (fun pr => Draw.derive pr v.query law v.workTable) isOk)
@@ -111,7 +110,7 @@ def runSteps (j : Json) (whole steps : Bool) : IO Unit := do
   let recd ← IO.ofExcept (← timed "record.record" ri Record.record isOk)
   let _ ← timed "canonical" recd PyJson.canonical isOk
 
-/-- `Slots.inputGates`' size, without the array. -/
+/-- The gates of the root's input nodes, counted. -/
 def inputCount (d : Flock.TemplateQuery.Desc) : Nat := Id.run do
   let some root := d.def? d.root | return 0
   return root.nodes.foldl (fun acc x =>

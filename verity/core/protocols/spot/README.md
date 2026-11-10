@@ -178,9 +178,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `verifier.run`): the public-items rule, R1-R7, the receipt, the sample from those bytes and its checks, the hold on
   the verdicts and the audit record. `Stream.outcome` holds each outcome on a sample from the coins to it, and an outcome the two don't make alike
   is a reject whose audit record fails `run`. `Spot/Slots.lean` puts that sample in the claims' terms
-  (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
-  root's input gates (sampled `all`: the input proof block is always checked), and the sample's checked proof blocks as
-  their slots in class, stratum and block order.
+  (`Claims.Sampling.Partition`, `Deploy.checked`) over the circuit file (`FilePart.ofCircuit`): one class in the
+  registration's strata, slot `u` unit `u`'s rows then the sources it owns, and the sample's checked blocks as slots.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
@@ -224,7 +223,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.spot.one_stage` is the one-stage audit's reference: `registration`,
-  `draw` (the sample's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`
+  `draw` (the sample's checks, not a sampler), `partition`, `slots`, `audit` and `verdict`. `consumers` reads its
+  profile. `service` is the proof system over it, whose `Stream`
   samples from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
   `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and

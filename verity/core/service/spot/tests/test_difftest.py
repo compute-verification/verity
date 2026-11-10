@@ -7,14 +7,15 @@ The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
-`slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
-nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
+`slots` piece that sample in the claims' slots over a circuit file (`one_stage.slots`) and for `file_part` the file's
+summary (`one_stage.slots.of_circuit`), on a deployed statement's file and registration (`SLOTS_FIXTURE`), for the
+`hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), for the `second_statements` piece round 2's statement check (`second_stage.check`) on the
 second-stage sessions' statements over one and two templates' interiors, for the `fits` piece v2's refusal of a length
 a session's statement can't hold (`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece
 (a registration's whole run, `Run.run`) those references in a `Stream`'s order.
-The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
+The `partition` and `select` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
 Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `X = 16` refuses, and `SHARED`, whose
@@ -45,6 +46,8 @@ import json
 import random
 import re
 import shutil
+import subprocess
+import sys
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
@@ -63,14 +66,14 @@ from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.spot import challenger as CH, second_stage as SS, service
 from verity.core.protocols.spot.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, proofs as PF,
-                                                            registered as G, registration as R)
+                                                            registered as G, registration as R, slots as SL)
 from verity.core.protocols.spot.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.spot.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
 from verity.core.protocols.spot.one_stage.proofs import order_why
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program, input_id, is_input
+from verity.ml.circuits.program import Program, input_id
 from verity.ml.circuits.refs import array_of, record_of, tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 from verity.ml.commitments.window import window_binding
@@ -1004,24 +1007,36 @@ def template_circuits(j):
 
 
 def slots(j):
-    """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
-    (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes (`program.is_input`),
-    each its own proof block. A proof block's slot is its index in that order, and the checked proof blocks are
-    `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
-    out = select(j)
-    j = _json(j)
+    """`Slots.select`: the claims' partition of the circuit file the input names (`circuit`, a path) in the strata of the
+    select piece's program under its query (`one_stage.slots.sizes` of `partition.strata`; `layout` of `of_circuit`,
+    `FilePart.ofCircuit`'s port, at their sum), and the checked proof blocks of that piece's sample, `(slot, 0)` of each
+    unit it proves (`draw.proved`: its units and a work sample's closure), in slot order (`one_stage.slots.checked`)."""
+    if not (isinstance(j, dict) and isinstance(j.get("circuit"), str)):
+        raise D.Reject("circuit is not a path")
+    out = select({k: v for k, v in j.items() if k != "circuit"})
     program = PROGRAMS[PO.program_sha512(j["program"])]
-    gates = P.unit_gates(program, j["query"])
-    pop = [[{"pus": [list(gates[u])], "unit": u} for lo, hi in rs for u in range(lo, hi)]
-           for _t, rs in P.strata(program, j["query"])]
-    body = program.root.body
-    inputs = [{"pus": [[g, g + 1]], "unit": None} for k, node in enumerate(body.nodes) if is_input(node.fn)
-              for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
-    classes = [pop, [inputs] if inputs else []]
-    proved = set(DR.proved(out["draw"]))
-    blocks = [b for c in classes for s in c for b in s]
-    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+    try:
+        ns = SL.sizes(P.strata(program, j["query"]))
+        if ns is None:
+            raise D.Reject("partition: the registration's strata, read stratum by stratum, are not its units in order")
+        classes = SL.layout(SL.of_circuit(Path(j["circuit"]), sum(ns)), ns)
+    except (OSError, ValueError, KeyError, IndexError) as e:
+        raise D.Reject(str(e)) from None
+    return {"checked": SL.checked(classes, DR.proved(out["draw"])), "classes": classes}
+
+
+def file_part(j):
+    """`FilePart.ofCircuit` (`one_stage.slots.of_circuit`, its port) on the circuit file the input names (`circuit`, a
+    path) at `n` units: `{"n", "B", "m", "srcs"}`."""
+    if not (isinstance(j, dict) and isinstance(j.get("circuit"), str)):
+        raise D.Reject("circuit is not a path")
+    if not _nat(j.get("n")):
+        raise D.Reject("n is not a natural number")
+    try:
+        f = SL.of_circuit(Path(j["circuit"]), j["n"])
+    except (OSError, ValueError, KeyError, IndexError) as e:
+        raise D.Reject(str(e)) from None
+    return {"B": f.B, "m": f.m, "n": f.n, "srcs": list(f.srcs)}
 
 
 _LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
@@ -3207,7 +3222,9 @@ TEMPLATE_CIRCUITS = D.Port(PIECES, "template_circuits", template_circuits,
                            st.one_of(template_circuit_cases(), template_circuit_cases(), JSON), package=PACKAGE)
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
-SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
+#: run on the fixture's circuit file only (`test_the_slots_are_the_file_layout`), not sampled
+SLOTS = D.Port(PIECES, "slots", slots, st.nothing(), package=PACKAGE)
+FILE_PART = D.Port(PIECES, "file_part", file_part, st.nothing(), package=PACKAGE)
 _FITS_HEX = st.binary(max_size=6).map(bytes.hex)
 _FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
                           lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3),
@@ -4805,7 +4822,7 @@ pieces = D.server_fixture(DECODE)
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (FILE_POPULATION, 400),
               (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
@@ -4894,26 +4911,6 @@ def test_the_select_piece_draws_every_rule(pieces):
             select(case)
 
 
-def test_the_slots_follow_the_strata(pieces):
-    """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the proof blocks' gates and
-    the input class's are every gate of the program once; and the checked proof blocks are the sampled proof blocks' slots and
-    every input slot, in slot order."""
-    desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
-    query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
-    case = {"closure": None, "program": desc, "query": query, "rule": {"law": "rate:2/5", "rule": "law"},
-            "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
-    out = slots(copy.deepcopy(case))
-    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
-    assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    blocks = [b for c in out["classes"] for s in c for b in s]
-    gates = sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi))
-    assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
-    units = [b["unit"] for b in blocks]
-    drawn = [units.index(u) for u in select(case)["draw"]["units"]]
-    assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
-
-
 #: Units of the toy and the real-template populations `unit_gates` is held to its walk at: L5's population on one
 #: GPU, and past it.
 UNIT_GATES_AT = [147, 1001]
@@ -4922,7 +4919,7 @@ UNIT_GATES_AT = [147, 1001]
 @pytest.mark.parametrize("n", UNIT_GATES_AT)
 def test_the_unit_gates_by_range_are_the_walks(pieces, n):
     """At `n` units of `PAIR`, `TRIPLE` and `QUAD` at 1 : 6 : 3, Lean's unit gates laid out a range at a time are its walk's
-    unit by unit and Python's (`unit_gates`), and its slots, which lay those gates out, are Python's (`slots`)."""
+    unit by unit and Python's (`unit_gates`), and its sample over those units is Python's (`select`)."""
     members = tuple((t, max(1, round(n * w / 10))) for t, w in ((0, 1), (1, 6), (2, 3)))
     desc = json.loads(_population(members))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
@@ -4932,7 +4929,7 @@ def test_the_unit_gates_by_range_are_the_walks(pieces, n):
     assert len(gates) == n and gates == walk
     case = {"closure": None, "program": desc, "query": query, "rule": {"law": "rate:1/40", "rule": "law"},
             "source": hashlib.shake_256(b"slots").hexdigest(1024), "work_table": None}
-    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(slots(copy.deepcopy(case))))
+    assert D.replay(SELECT, case, pieces) == ("output", D.canonical(select(copy.deepcopy(case))))
 
 
 #: A served model's template mix, per template its units in the population: L5's seven, at their shares of its units.
@@ -4971,29 +4968,113 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     assert len(gates) == n and gates == walk
 
 
-def test_the_call_queries_cut_call_by_call(pieces):
-    """On a program of root Calls, Lean's slots are the Python's whole under `Q_word` at `X = 16` and `Q_call` at `X = 8`:
-    the strata are the Calls' Definitions, `FORK`'s `Q_word` units two output units and its committed interior value, the
-    first's gate span holding the second's; both refuse the widths one-stage doesn't apply, and agree on a Call whose
-    `Q_word` unit commits 32 bits, in the 32-bit class, which `Q_call` at `X = 16` refuses."""
+def test_the_call_queries_refuse_the_widths_one_stage_does_not_apply(pieces):
+    """On a program of root Calls, Lean's sample is the Python's under `Q_word` at `X = 16` and `Q_call` at `X = 8`; both
+    refuse the widths one-stage doesn't apply, and agree on a Call whose `Q_word` unit commits 32 bits, in the 32-bit
+    class, which `Q_call` at `X = 16` refuses."""
     desc = json.loads(_calls((0, 2, 0, 3)))
+    wide = json.loads(_calls((0, 4)))
     case = {"closure": None, "program": desc, "rule": {"law": "rate:1/4", "rule": "law"},
             "source": hashlib.shake_256(b"calls").hexdigest(400), "work_table": None}
-    word = slots({**case, "query": _json(PO.query())})
-    assert D.replay(SLOTS, {**case, "query": _json(PO.query())}, pieces) == ("output", D.canonical(word))
-    assert [[r["unit"] for r in s] for s in word["classes"][0]] == [[0, 4], [1, 2, 3], [5]]
-    (first,), (second,) = word["classes"][0][1][0]["pus"], word["classes"][0][1][1]["pus"]
-    assert first[0] < second[0] < second[1] < first[1]
-    call = slots({**case, "query": _json(PO.call_query(8))})
-    assert D.replay(SLOTS, {**case, "query": _json(PO.call_query(8))}, pieces) == ("output", D.canonical(call))
-    assert [[r["unit"] for r in s] for s in call["classes"][0]] == [[0, 5], [1, 2, 3, 4], [6]]
-    wide = json.loads(_calls((0, 4)))
-    taken = {**case, "program": wide, "query": _json(PO.query())}
-    assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken))))
+    for program, query in [(desc, PO.query()), (desc, PO.call_query(8)), (wide, PO.query())]:
+        taken = {**case, "program": program, "query": _json(query)}
+        assert D.replay(SELECT, taken, pieces) == ("output", D.canonical(select(copy.deepcopy(taken)))), query
     for program, query in [(desc, PO.call_query(4)), (desc, PO.call_query(32)), (desc, PO.query(X=8)),
                            (desc, PO.query(version=2)), (wide, PO.call_query(16))]:
         refused = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
+        assert D.replay(SELECT, refused, pieces)[0] == "reject", query
+        with pytest.raises(D.Reject):
+            select(copy.deepcopy(refused))
+
+
+#: a deployed statement's files (`test_proofs.py`'s fixture): RoPE d64's circuit file of 32 units, each a stack of 32
+#: copies of its template instance, and its registration's program and query, the template's 32 instances
+SLOTS_FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
+VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
+#: the selection rule the fixture's slots are sampled under: 8 of its 32 units
+SLOTS_RULE = {"law": "rate:1/4", "rule": "law"}
+
+
+@pytest.fixture(scope="module")
+def stage(tmp_path_factory) -> Path:
+    sys.path.insert(0, str(VERIFIER))
+    import ci
+
+    try:
+        return ci.fetch(SLOTS_FIXTURE, tmp_path_factory.mktemp("store")) / "stage"
+    except (subprocess.CalledProcessError, OSError) as e:
+        pytest.skip(f"the evidence store is not reachable: {e}")
+
+
+@pytest.fixture(scope="module")
+def deployed(stage) -> tuple[dict, dict]:
+    """The fixture's registration: its program's descriptor, put among `PROGRAMS`, and its query."""
+    import verity.ml.definitions.registry.boolean_rope  # noqa: F401  (registers the RoPE primitives the program names)
+    from verity.ml.circuits.defs import REGISTRY
+
+    desc = json.loads((stage / "program.json").read_bytes())
+    PROGRAMS[PO.program_sha512(desc)] = codec.decode_program(desc, REGISTRY)
+    return desc, json.loads((stage / "partition.json").read_bytes())["query"]
+
+
+@pytest.mark.slow
+def test_the_slots_are_the_file_layout(pieces, stage, deployed):
+    """The honest registration: on the fixture's circuit file and its own program and query (one stratum, the template's
+    32 instances), Lean's slots are the Python's whole: one class, one stratum, slot `u` unit `u`, its proof block its
+    `3m` computed positions after the input gates (`m = upv · (constPos − W + 1)`), then the 2048 sources of its 64 read
+    input columns per copy; every proof block's positions are disjoint and inside the program; and the checked proof
+    blocks are the sample's slots.
+
+    It parses the 56 MB circuit file twice, in Lean and in Python: the one test of `FilePart.ofCircuit` on a deployed
+    circuit, whose `srcKey` keys message leaves through `leaves_in`, and of its port."""
+    desc, query = deployed
+    circuit = stage / "circuit.txt"
+    case = {"circuit": str(circuit), "closure": None, "program": desc, "query": query, "rule": SLOTS_RULE,
+            "source": hashlib.shake_256(b"file slots").hexdigest(400), "work_table": None}
+    out = slots(copy.deepcopy(case))
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
+    (pop,) = out["classes"]
+    assert [[b["unit"] for b in s] for s in pop] == [list(range(32))]
+    f = SL.of_circuit(circuit, 32)
+    assert (f.B, len(f.srcs)) == (32 * 128, 2048)
+    for u, b in enumerate(pop[0]):
+        (lo, hi), *owned = b["pus"]
+        assert (lo, hi) == (f.in_gates + 3 * f.m * u, f.in_gates + 3 * f.m * (u + 1))
+        assert [g for g, _ in owned] == [2 + u * f.B + x for x in f.srcs]
+    spans = sorted(iv for s in pop for b in s for iv in b["pus"])
+    assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:])) and spans[-1][1] <= f.size
+    units = sorted(select({k: v for k, v in case.items() if k != "circuit"})["draw"]["units"])
+    assert len(units) == 8 and out["checked"] == [[u, 0] for u in units]
+
+
+@pytest.mark.slow
+def test_the_file_part_port_is_the_lean(pieces, stage, tmp_path):
+    """`one_stage.slots.of_circuit` is `FilePart.ofCircuit` on the fixture's circuit file at 32 units, its own count, and
+    at 1 and 0; both refuse an `n` that isn't a natural number and a circuit file they can't read. Every number the
+    slots' layout reads of the file is held here directly."""
+    circuit = str(stage / "circuit.txt")
+    for n in (32, 1, 0):
+        case = {"circuit": circuit, "n": n}
+        assert D.replay(FILE_PART, case, pieces) == ("output", D.canonical(file_part(dict(case)))), n
+    for case in ({"circuit": circuit, "n": -1}, {"circuit": circuit, "n": "32"}, {"circuit": circuit},
+                 {"circuit": str(tmp_path / "none.txt"), "n": 32}):
+        assert D.replay(FILE_PART, case, pieces)[0] == "reject", case
+        with pytest.raises(D.Reject):
+            file_part(dict(case))
+
+
+@pytest.mark.slow
+def test_a_circuit_file_that_does_not_parse_is_refused(pieces, stage, deployed, tmp_path):
+    """Lean refuses as the Python does a circuit file it can't read, one that isn't a circuit file, and a `circuit` that
+    isn't a path."""
+    desc, query = deployed
+    junk = tmp_path / "junk.txt"
+    junk.write_text("flock-circuit/v1 t\nnot a META line\n")
+    case = {"closure": None, "program": desc, "query": query, "rule": SLOTS_RULE,
+            "source": hashlib.shake_256(b"file slots").hexdigest(400), "work_table": None}
+    for circuit in (str(tmp_path / "none.txt"), str(junk), [str(stage / "circuit.txt")], None):
+        refused = {**case, "circuit": circuit}
+        assert D.replay(SLOTS, refused, pieces)[0] == "reject", circuit
         with pytest.raises(D.Reject):
             slots(copy.deepcopy(refused))
 
@@ -5018,7 +5099,7 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
     with an instance of `IDENTITY`, of no gate; both take an instance of 262,144 bits, the widest class (the measured
     widths' `Gemm_v2{K=2048,N=16384}`), and `SHARED` under `Q_call` at `X = 16`, whose first unit passes `Q_call`'s width
     rule with 16 returned bits while it holds a constant a later unit reads, 24 bits in the 32-bit class, and at `X = 8`,
-    where that constant is in no unit, and agree on their slots."""
+    where that constant is in no unit, and agree on their samples."""
     case = {"closure": None, "rule": {"law": "rate:1/1000", "rule": "law"},
             "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None}
     shared = json.loads(_calls((0, 5)))
@@ -5026,13 +5107,13 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
     for program, query in [(_template_population(over, 1), P.template_instance_query(over.id)),
                            (json.loads(_population(((0, 1), (4, 2)))), P.template_instances_query([PAIR.id, IDENTITY.id]))]:
         refused = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, refused, pieces)[0] == "reject", query
+        assert D.replay(SELECT, refused, pieces)[0] == "reject", query
         with pytest.raises(D.Reject):
-            slots(copy.deepcopy(refused))
+            select(copy.deepcopy(refused))
     for program, query in [(_template_population(widest, 1), P.template_instance_query(widest.id)),
                            (shared, PO.call_query(16)), (shared, PO.call_query(8))]:
         taken = {**case, "program": program, "query": _json(query)}
-        assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken)))), query
+        assert D.replay(SELECT, taken, pieces) == ("output", D.canonical(select(copy.deepcopy(taken)))), query
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",

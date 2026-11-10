@@ -25,6 +25,31 @@ untraced = [
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
 # harness's Lean, Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
 # reference, one_stage with the profile, and what they import of verity.ml (the circuits, the partition object, the
-# commitments' domains, and LMS for the challenger's signed record).
+# commitments' domains, and LMS for the challenger's signed record). The `slots` tests fetch their fixture through
+# Flock's `verifier/ci.py`, whose child `python -m research data fetch` imports the research files listed last.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/protocols",
-          "verity/core", "verity/core/service/flock"]
+          "verity/core", "verity/core/service/flock",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
+          "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
+          "tools/research/src/research/compare.py", "tools/research/src/research/env.py",
+          "tools/research/src/research/record.py", "tools/research/src/research/remote.py",
+          "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
+          "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+          "tools/research/src/research/waitcap.py",
+          "tools/research/src/research/store/__init__.py", "tools/research/src/research/store/attempt.py",
+          "tools/research/src/research/store/canon.py", "tools/research/src/research/store/cli.py",
+          "tools/research/src/research/store/cli_prov.py", "tools/research/src/research/store/derivation.py",
+          "tools/research/src/research/store/ids.py", "tools/research/src/research/store/index.py",
+          "tools/research/src/research/store/kinds.py", "tools/research/src/research/store/local.py",
+          "tools/research/src/research/store/model.py", "tools/research/src/research/store/remote.py",
+          "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/tool.py",
+          "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
+          "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
+          "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_difftest.py"]
+paths = ["tools/research/src/research"]

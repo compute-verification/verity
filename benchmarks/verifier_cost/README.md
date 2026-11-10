@@ -123,11 +123,10 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
 three templates, or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition
 walks every gate, so `l5` takes `desc`). `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
-`Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
+`Slots.popOk`'s reads split into `Partition.evaluate`, `Partition.unitGates` and `Slots.popUnits`; on
 a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
 with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
-unit `unitGates` replaced, and fails unless the two give the same gates; `--pop-ok` adds `Slots.popOk` last, whose
-layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at that N. `$OUT` gets whole_run.jsonl, one row per N and step (milliseconds, peak RSS).
+unit `unitGates` replaced, and fails unless the two give the same gates; `--pop-ok` adds `Slots.popOk` last. `PERF_N` adds a `perf` profile at that N. `$OUT` gets whole_run.jsonl, one row per N and step (milliseconds, peak RSS).
 
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
