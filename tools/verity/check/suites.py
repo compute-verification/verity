@@ -105,9 +105,11 @@ deselects the other parts' tests; one that holds none of them passes only when t
 whole suite that collects none fails. Its key is the suite's with the part (`part_key`), and its share an equal one.
 
 `--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
-keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, and names what failed
-that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
-(`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
+keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, runs Lake with its local
+artifact cache off (`UNCACHED_ENV`: in the verifier's `lake build` and in every suite's tests, so what they test was compiled
+from the tree), and names what failed that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal
+that a key misses an input (`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes
+of runs that finished.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
 forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak
@@ -221,6 +223,11 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
 #: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
 #: failure no PR caused
 LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
+#: what an uncached run (`--fresh`, and every step of check's `--no-cache`) gives each Lake build it runs and each suite's tests:
+#: Lake's local artifact cache off, so every module is compiled from the tree, none unpacked from what an earlier build on the
+#: node or `tools/verity/lean/cache.py get` left there. No key holds it, so a fresh pass keys as the pass it is compared with;
+#: a test of Lake's cache sets its own
+UNCACHED_ENV = {"LAKE_ARTIFACT_CACHE": "false"}
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
@@ -2362,6 +2369,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
               f"{ROOT}'s own environment: `{' '.join(SYNC)} && uv run tools/verity/check/suites.py` there", file=sys.stderr)
         return 2
+    if a.fresh:
+        os.environ.update(UNCACHED_ENV)
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra

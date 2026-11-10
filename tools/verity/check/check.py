@@ -20,11 +20,12 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
     ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (drive's lock run):
                                                             lean-audit repairs a lock's bookkeeping and the caps it breaks and
                                                             warns rather than failing (`lean_audit.py --bookkeeping warn`)
-    ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
-                                                            nightly `audit-main`, which gates nothing); with --circuit-cache,
-                                                            circuit-check alone still reuses and stores its per-target passes,
-                                                            and only its entries of a pack are imported: drive's after-landing
-                                                            run, where a cold `--all` (~4 h) outlasted every run
+    ... --no-cache [--circuit-cache]                        reuse no pass, build with Lake's local artifact cache off, and run
+                                                            every job, those off the gate too (the nightly `audit-main`, which
+                                                            gates nothing); with --circuit-cache, circuit-check alone still
+                                                            reuses and stores its per-target passes, and only its entries of a
+                                                            pack are imported: drive's after-landing run, where a cold `--all`
+                                                            (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
                                                             policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
@@ -199,7 +200,8 @@ doesn't name:
                     gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
                     job, runs it
 
-Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
+Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
+local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
 
     pytest          `suites.py`'s own: a suite's pass is reused, on any machine, while its declared inputs, the base image and the
                     check code are unchanged, and names the recorded run that earned it (`--no-cache` passes `--fresh`)
@@ -2729,7 +2731,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
         skipped = argv.startswith("skipped:")
         print(f"check: {name}: {argv}", flush=True)
         return steps.end({"step": name, "status": "skipped" if skipped else "failed", "detail": argv, "seconds": 0.0})
-    e = env()
+    e = env() if cache else env() | SUITES.UNCACHED_ENV
     t0 = time.monotonic()
     hit = None
     key = STEP_KEYS[name](e) if cache and name in STEP_KEYS else None

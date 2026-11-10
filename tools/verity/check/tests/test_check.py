@@ -1388,6 +1388,22 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     assert after["lean-changed"].startswith("skipped: --no-cache")
 
 
+def test_an_uncached_check_runs_its_steps_with_lakes_artifact_cache_off(tmp_path, monkeypatch):
+    """`--no-cache` compiles what it tests: its steps (the verifier's `lake build`, and the Lean steps and suites after it,
+    which build and run Lean too) run with Lake's local artifact cache off, where Lake would unpack what an earlier build on
+    the node left there instead of compiling it.  A cached check's steps get no Lake setting, the caller's neither."""
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "true")
+    names = ("lean-build", "lean-suites", "pytest")
+    for cache, want in ((False, "false"), (True, "unset")):
+        out = tmp_path / f"cache-{cache}"
+        out.mkdir()
+        probe = "import os, sys; open(sys.argv[1], 'w').write(os.environ.get('LAKE_ARTIFACT_CACHE', 'unset'))"
+        _fake_run(monkeypatch, [[(s, _py(probe, out / f"{s}.said"), tmp_path)] for s in names])
+        ok, done = CHECK.run(out, 2, cache)
+        assert ok, done
+        assert {s: (out / f"{s}.said").read_text() for s in names} == dict.fromkeys(names, want)
+
+
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)

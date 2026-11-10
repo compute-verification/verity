@@ -30,7 +30,7 @@ $R "$S flock verity"            # these suites (a package name, a directory, or 
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
 $R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # only the suites your change touches: the pre-mark run
-$R "$S --fresh"                 # ignore the cache
+$R "$S --fresh"                 # ignore the cache, Lake's artifact cache too: what the suites test is compiled
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
