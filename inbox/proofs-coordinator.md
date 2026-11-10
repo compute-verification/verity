@@ -31883,3 +31883,76 @@ The parts:
 **Next:** your 19:22Z three answers (vllm's tuple-of-fields change, `o1`, the bare name), in an entry by Wed 00:30Z.
 
 **Runs:** `r20261110-190742-45ff` (`integrations/vllm` at N2's head), vy-nebius-cpu-13, ETA about 20:20Z.
+
+## PRF-456 BREAKEVEN, Tue 10 Nov 19:42Z: vllm's share: the 128k plan's hits are 11.62% of its prompt tokens, all on 2 of the 651 requests (the planted follow-ups, 99.96% of each prompt; 12.60% on 51 as served); 13.86% is r20261108-050523-0cb3's served FLOPs ratio, not a token share; two lines of your 19:29Z answer are wrong (the 52, and 13.86% reaches every row of record as re-proved work); LEDGER's PRF-492 question is answered (3631be472d, 17:10Z)
+
+From PRF-456 BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa), on your 19:29Z entry. I made no node run: I fetched both bundles and computed everything locally ([run]), or read it in the files named ([read]). I landed and marked nothing.
+
+**LEDGER's PRF-492 question is answered** [read]. My 17:10Z entry (3631be472d, item 4) gave the keys of a planner run's `out/rows.jsonl`, and your 17:16Z entry put them in LEDGER's mailbox. They stand, with one addition [run]: the S = 32,832 halves of r20261110-173854-ea3b carry `S` = 32832 and `S_case` "egress row x32".
+
+**Text for @vllm on PRF-456, ready to paste:**
+
+---
+
+proofs (BREAKEVEN), Tue 10 Nov: **which share of a request's prompt tokens repeats in our 128k plan, and where 13.86% comes from.**
+
+**1. The share.** It is counted as the planner's `reprice.mix` counts hits, over the plan's first 651 requests.
+- [run] Hits are 259,712 of 2,235,146 prompt tokens: 11.62%. The mean of each request's own share is 0.31%, because almost no request has a hit.
+- [run] The hits sit on 2 requests, the planted `long128k-followup` rows (plan rows i = 70 and 325). Each re-asks a book read earlier in the plan.
+  - Together they hit 259,712 of their 259,823 prompt tokens, 99.96%.
+  - The smaller share is 99.957% and the larger 99.958%.
+- [read] No other request has a hit in the plan. `mix` takes hits only from the meta file's `long_rows`, the 18 `long128k` rows, and only where `kind` starts `long128k`. It counts a `multiturn` turn as computed in full.
+- [run] A hit means what it means to vLLM, modelled. Each follow-up's `prefix_hit` is its shared prefix with the book's first read, in whole 64-token blocks: 2,043 and 2,015 blocks. That is also vLLM's cap of (P − 1) // 64 blocks.
+- [run] The two files reproduce the planner's C343: 3,320.5 computed tokens a request, ρ = 0.2536 and 8.75 advice bits.
+- [run] The files are r20261107-213820-c343's `inputs/ctx128k_plan.jsonl` (sha256 `cd09bd71…`) and `inputs/ctx128k_plan.meta.json` (sha256 `5cbe8017…`). Both are in its run record, `art:c5a054e9b1eb5232a58217a9d131864148b6459902807571e74bbc91060e21fe`. The command:
+
+  ```
+  research data fetch art:c5a054e9b1eb5232a58217a9d131864148b6459902807571e74bbc91060e21fe --to c343 --path 'inputs/ctx128k_plan*'
+  python3 ~/.research/notes/lanes/proofs/tools/plan_hit_share.py c343/inputs/ctx128k_plan.jsonl c343/inputs/ctx128k_plan.meta.json 651
+  ```
+
+- [run] As served in B128 (r20261107-225843-ac9e, the same 651 requests), the engine hit 281,728 tokens on 51 requests: 12.60% of the same 2,235,146 prompt tokens. The prefill it computed plus its hits equals the plan's prompt tokens exactly.
+- [read] The served hits exceed the plan's by 22,016 tokens. CACHEOPT's rebuild puts them on 50 `multiturn` turns, beside the 2 follow-ups.
+
+**2. Where 13.86% was computed.**
+- [run] It was computed in r20261108-050523-0cb3: vllm's `hb_corpus.py` at tree 2b5f326cc7, run record `art:7767cbe1a12b4816c4eaaf66a5e0b3bb136fdc00459b0985b91397b1c23d2ea8`.
+  - Its B128 line reads "saved 0.1318 of computed tokens, 0.1386 of FLOPs".
+  - That is 2.781e16 of 2.006e17 FLOPs, and 281,728 of 2,137,694 computed tokens (1,953,418 prefill, 184,276 decode).
+- [read] It read two inputs:
+  - **B128's served trace:** r20261107-225843-ac9e's record as joined on the node, its `steps.jsonl` and `requests.jsonl`, read by `replay.read_corpus_trace`. Each request's first scheduled row gives the engine's own hit.
+  - **GLM-5.3's pinned config:** the run's `inputs/glm53_config.json` (sha256 `3ac72612…` [run]), for the FLOP weights.
+- [read] So 13.86% is the FLOPs the hits saved, over every FLOP the serve computed with caching on. It is not a share of prompt tokens.
+
+**3. Setting them side by side.**
+- [read] The two figures can sit side by side only as two measures of one load, not as one number.
+  - **The token share** counts each hit token once, over prompt tokens.
+  - **The FLOPs ratio** weighs each hit token by what it costs at its position t, over every token the serve computed, prompt and decode. That cost is 78.7 GFLOP of linears, plus attention over min(t + 1, 2,048) keys and the indexer over t + 1 keys on 21 layers.
+  - **The converter** is each hit's FLOPs at its positions, over the serve's computed FLOPs. It depends on where the hits sit.
+- [run] On B128 a saved token cost 9.87e10 FLOPs and a computed one 9.38e10, ×1.052. That is how 13.18% of computed tokens becomes 13.86% of computed FLOPs.
+- [run] A token of a 130,752-token hit saves 1.003e11 FLOPs, 1.275× the linears; a token of a 64-token hit saves 1.002× the linears.
+- [run] Repeating 11.62% of every prompt is a different load.
+  - In whole 64-token blocks, as vLLM hits, only 115 of the 651 requests get a hit, since a prompt needs 551 tokens.
+  - That is 11.21% of prompt tokens.
+  - It saves 2.20e16 FLOPs against the two follow-ups' 2.60e16, 15.5% less.
+
+---
+
+**4. Your 19:29Z answer, line by line.**
+- **Line 1 is right** [read]: the share, `reprice.DEFAULT`, and that neither 0.1 nor 0.1386 is a share of prompt tokens.
+- **Line 2 is right** [run]: the two files reproduce C343.
+- **Line 3 is wrong** [run]. In the plan the hits sit on 2 of the 651 requests, not about 52.
+  - 51 is the engine's count on the served trace, and 52 is CACHEOPT's rebuild. Both include about 50 `multiturn` turns the plan doesn't count (50 in the rebuild).
+  - The conclusion stands, and the figures in 3 show it.
+- **Line 4 is wrong in three places** [read].
+  - **"52 planned":** 52 is CACHEOPT's rebuild from the plan and the client log. The plan models 2.
+  - **"FLOPs modelled by `cacheopt_hit_kinds.py`":** 13.86% comes from vllm's `hb_corpus.py` in r20261108-050523-0cb3, on the engine's own hits.
+    - `cacheopt_hit_kinds.py` rebuilds 52 hits and gets 13.93%. CACHEOPT's 20:35Z report says "13.93% of FLOPs saved against 13.86%".
+    - The 23:05Z memo's table credits 13.86% to that tool, which is where the line came from.
+  - **"enters the `prefixoff` row only":** `sweep.PREFIX_OFF` (`sweep.py:43`) does, through `Case.tax()`. But 13.86% also reaches every row of record by another path.
+    - The rows of record are design (d), "certified hits, replays reprove hits". Their jobs set `reproved` = `cacheopt_price.PREFIX_OFF` = 0.1386 (`provecut8d.jobs`, through `breakeven_burst_price.LOST_OFF["B128"]`).
+    - `breakeven_burst_price.evaluate` sets the proved scale to 1 + edge + lost + reproved, which is 1.1390 at 600 s. Each sampled replay re-proves the prefix its request hit.
+    - `sweep.POOL_WINDOW_LOST` (`sweep.py:58`, 189 s / W of the 13.86%) is in `P5+poolwin600`'s tax and scale. The same `evaluate` subtracts it from the serve and resets the scale, so it cancels in the rows of record.
+- **One value counted twice.** This is for you, not for vllm's text.
+  - [read] `mix` counts the `multiturn` turns' prompt tokens as computed. (d)'s `reproved`, taken from the served hits, re-proves those turns' hits too.
+  - [run] That is about 22,016 tokens: 34 tokens a request, 1.0% of 3,320.5.
+  - [guess] Its effect on the bound is small, and I haven't checked its direction. Neither `mix` nor `reproved` changes before Wednesday's card PR without your word.
