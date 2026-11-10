@@ -1,4 +1,4 @@
-# The PoUS grader: a program that imports only Lean. What it grades against is `Security`'s trusted text.
+# The PoUS grader: a program that imports only Lean. What it grades against is the security analysis's trusted text.
 name = "pous_grader"
 defaultTargets = ["Grader", "pous-grader"]
 

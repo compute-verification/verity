@@ -15,11 +15,11 @@ Commit window and writes ``summary.json``.
   (`certifier_serve.varied_body`): its prompt as token ids, ``max_tokens``, greedy (temperature 0, top_p 1), no stop
   strings, its ``user`` the id the certified I/O names it by. Its prompt and ``max_tokens`` must fit the engine's
   context, as vLLM refuses a request past ``max_model_len``. Any other body is answered 400.
-* **The scheduler** (`Scheduler`) is vLLM V1's synchronous one as network-e2e's derivation models it
-  (`encodings/derived.py`'s walk): first come first served, the running requests in admission order each scheduled
-  the rest of its known tokens within the step's token budget, then the waiting ones in arrival order while a seat and
-  budget are left, the last of them cut short (chunked prefill); no prefix cache and a KV pool no run fills, so no hit
-  and no preemption. A row that reaches its request's known tokens samples one token (greedy, the engine's); a request
+* **The scheduler** (`Scheduler`) is vLLM V1's synchronous one as the derived rules model it
+  (`verity_vllm.pipeline.advice_code.derived`'s walk): first come first served, the running requests in admission order
+  each scheduled the rest of its known tokens within the step's token budget, then the waiting ones in arrival order
+  while a seat and budget are left, the last of them cut short (chunked prefill); no prefix cache and a KV pool no run
+  fills, so no hit and no preemption. A row that reaches its request's known tokens samples one token (greedy, the engine's); a request
   finishes at its first EOS id (``--eos``) or at ``max_tokens``. Each step's rows are written in the runner's batch
   order, the scheduling order sorted stably by scheduled tokens (Model Runner V2's).
 * **The engine** (`Engine`: each sampling row's known tokens to its next token) is ``hash`` (a token from a SHA-512 of
