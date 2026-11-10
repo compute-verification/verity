@@ -55,3 +55,35 @@ screen).
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.
+
+## The grader
+
+`grader/grader.py` reads a run's training step off the Program the training-step frontend derives for it
+(`step_program`, in `integrations/vllm/verity_vllm/program/frontend/train_step.py`), beside this package's trace of the
+same step. From `grader/`:
+
+~~~text
+python grader.py HANDOVER --slowdown-code DIR --commit SHA [--trace STEP.products.json] --out OUT.json
+~~~
+
+`HANDOVER` is the directory `grader.write_handover` writes: `handover.json` and the step's Program at two batch shapes.
+`--slowdown-code` is the directory this package sits in, which the grader loads where it sits and, in a git checkout,
+holds to the commit named. It writes `OUT.json`: the step's matrix products as rows, with their multiply-adds and output
+wires, the circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of
+this package's capture beside them. It computes no ρ. Its tests are a suite of their own:
+`uv run tools/verity/check/suites.py benchmarks/training_slowdown/grader`.
+
+## What it reads, what it writes and what loads it
+
+- **Reads.** Each suite names what it reads outside its directory among its `inputs` (`pyproject.toml`,
+  `grader/pyproject.toml`). From `verity`: the circuits' Definitions the gate prices compile, and the codec, the census
+  and the Boolean prices the grader reads with. From `integrations/vllm/verity_vllm`: the training-step frontend, which
+  `capture.lower` lowers a traced step onto and the grader's steps are derived by. From the frontend's tests, by path:
+  the lf model. A run also reads what its caller names and the tree doesn't hold: the program, the starts registry,
+  each start's θ and an evaluator.
+- **Writes.** The run command writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's
+  digests), `OUT/families/` with each counterexample family's `verified.json` and, with `--keep-checkpoints`, each
+  checkpoint's weights. `starts` prints a registry entry, and the other two commands only print.
+- **Loaded by.** Nothing outside this directory: `tests/test_boundaries.py` holds everything outside `benchmarks/` to
+  that, and no other benchmark imports it. The grader loads the package from `--slowdown-code`, as a directory on
+  `sys.path`, and refuses a second copy in one process.
