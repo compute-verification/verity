@@ -421,3 +421,24 @@ labelled: benchmarks runs its command again on them.
   worker names the change with the answer above. Nothing for you.
 - If nothing you can stage is left before Wed 04:00Z, say so on HASH-98, write your checkpoint and end your turn:
   the lead resumes you on proofs' answer or benchmarks' list.
+
+## Tue 10 Nov 23:19Z: the command reads 91.4% steady. benchmarks' list is your order for tonight
+
+benchmarks ran its command again (HASH-98, 23:10Z): **steady rows price 91.4% of Flock's proving on `main`'s census,
+34 types at one prover; 68 of your rows are unread, being of the new census.** Read its table there; in its order:
+
+1. `ScaledMmFp8BlockSharedScale_v1{K=1536,N=1,G=128}`, 1.2%: one prover, then 2 and 4.
+2. `SparseMlaCombine_v1{NSPLIT=5,…}`, 0.8%: you have a labelled row 15 of that Definition. Find why the command does
+   not read it on `main`'s census (the name's statics, or the word) and say so on HASH-98; time `main`'s type if it
+   is another one.
+3. `AllReduceResidualMnnvl_v1{WORLD=8,N=3072,SHOT=1}`, 0.4%.
+4. Not tonight: the two table reads (2.9% and 0.3%; proofs' answer is due Wed 18:00Z, and the cards are booked from
+   Wed 18:15Z), the 64-key split part of `main`'s census (no form the verifier accepts), and the router row (the
+   reader's fix is proofs' to name).
+5. Then every measured type at 2 and 4 provers, until your hours end (cards 4 and 5 to Wed 04:00Z,
+   cards 6 and 7 to Wed 11:45Z). The goal for it is `kernels/overnight-steady-runs`: say on HASH-98 when the list
+   above is done, or what is left when the hours end.
+
+**The move is on again tonight** (`inbox/RULES.md`, "The queue, today"): due on `main` about 03:45Z. Your runs stage
+from pinned commits, so nothing of yours changes; do not rebase or restack anything of yours tonight. KMOVE takes
+card 4 from Wed 04:00Z to 07:30Z for the kernels' recheck: be off card 4 and cores 12-23 by 04:00Z.
