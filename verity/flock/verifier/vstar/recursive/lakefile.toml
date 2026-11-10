@@ -21,7 +21,7 @@ path = "../.."
 
 [[require]]
 name = "core_spot"
-path = "../../../../core/service/spot"
+path = "../../../../spot/verifier"
 
 [[lean_lib]]
 name = "VStarRecursive"

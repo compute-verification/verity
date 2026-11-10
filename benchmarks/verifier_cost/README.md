@@ -45,7 +45,7 @@ all through `--policy`, `--policy --unrolled` and the Python reference, which mu
 summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
 
 ~~~sh
-B1_BUILD=$(python3 -c 'import json; print(json.load(open("benchmarks/sampling_plan/glm53_blocks.json"))["build"])')
+B1_BUILD=$(python3 -c 'import json; print(json.load(open("verity/spot/sampling_plan/glm53_blocks.json"))["build"])')
 research data fetch "$B1_BUILD" --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \

@@ -26,18 +26,18 @@ untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_la
 # requires: PoUW's commitments (`pouw_commit`, in PoUW's tree), the proof system's Lean (`core_spot`) with the
 # core protocol interface and the LMS verifier, core's identity and randomness, and Flock's verifier with its
 # configuration.
-inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/spot/verifier/protocols/__init__.py",
           "verity/hardware/protocols/record.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
-          "verity/core/protocols/profile.py", "verity/core/protocols/spot",
+          "verity/spot/verifier/protocols/profile.py", "verity/spot/verifier/python",
           "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",
           "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/ml/flock/python", "verity/windows",
           "verity/errors.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "verity/commitments/identity", "verity/commitments/randomness",
-          "verity/core/service/spot/lakefile.toml", "verity/core/service/spot/lake-manifest.json",
-          "verity/core/service/spot/lean-toolchain", "verity/core/service/spot/Spot.lean",
-          "verity/core/service/spot/Spot", "verity/flock/verifier/interface",
+          "verity/spot/verifier/lakefile.toml", "verity/spot/verifier/lake-manifest.json",
+          "verity/spot/verifier/lean-toolchain", "verity/spot/verifier/Spot.lean",
+          "verity/spot/verifier/Spot", "verity/flock/verifier/interface",
           "verity/commitments/lms/lean/lakefile.toml", "verity/commitments/lms/lean/lake-manifest.json",
           "verity/commitments/lms/lean/lean-toolchain", "verity/commitments/lms/lean/Lms.lean",
           "verity/commitments/lms/lean/Lms",
@@ -45,7 +45,7 @@ inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py", "v
           "verity/flock/verifier/lean-toolchain", "verity/flock/verifier/Flock",
           # `test_lanes.py` holds `leaf_lanes.py`'s reads and known rows to `PouwWindow.Lanes`, with the proof system's
           # one-stage modules it imports
-          "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/spot/one_stage/__init__.py",
-          "verity/core/protocols/spot/one_stage/partition.py",
-          "verity/core/protocols/spot/one_stage/produced.py",
-          "verity/core/protocols/spot/one_stage/registered.py"]
+          "verity/core/protocols/pouw/leaf_lanes.py", "verity/spot/verifier/python/one_stage/__init__.py",
+          "verity/spot/verifier/python/one_stage/partition.py",
+          "verity/spot/verifier/python/one_stage/produced.py",
+          "verity/spot/verifier/python/one_stage/registered.py"]

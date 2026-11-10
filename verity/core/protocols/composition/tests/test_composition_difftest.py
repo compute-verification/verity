@@ -49,10 +49,10 @@ import verity_difftest as D
 from verity_difftest import canonical
 
 from verity.configuration.deploy import config as K
-from verity.core.protocols.spot import parties as SPP
+from verity.spot.verifier.python import parties as SPP
 from verity.circuits.types import Array, Value
 
-PROTOCOLS = Path(__file__).resolve().parents[2]
+PROTOCOLS = (Path(__file__).resolve().parents[4] / "protocols")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),

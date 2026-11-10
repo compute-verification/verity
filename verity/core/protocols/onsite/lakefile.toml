@@ -27,7 +27,7 @@ path = "../composition"
 # `PouwCheck.Period`).
 [[require]]
 name = "core_spot"
-path = "../../service/spot"
+path = "../../../spot/verifier"
 
 [[require]]
 name = "pouw_check"

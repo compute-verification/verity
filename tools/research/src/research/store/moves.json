@@ -2089,6 +2089,42 @@
       "paths": {
         "verity/ml/windows/": "verity/windows/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/recursion_figures/": "verity/spot/recursion_figures/",
+        "benchmarks/sampling_plan/": "verity/spot/sampling_plan/",
+        "benchmarks/spot_figures/": "verity/spot/spot_figures/",
+        "verity/core/protocols/__init__.py": "verity/spot/verifier/protocols/__init__.py",
+        "verity/core/protocols/bandwidth/": "verity/core/protocols/bandwidth/",
+        "verity/core/protocols/certifier/": "verity/core/protocols/certifier/",
+        "verity/core/protocols/composition/": "verity/core/protocols/composition/",
+        "verity/core/protocols/network/": "verity/core/protocols/network/",
+        "verity/core/protocols/pous/": "verity/core/protocols/pous/",
+        "verity/core/protocols/pouw/": "verity/core/protocols/pouw/",
+        "verity/core/protocols/profile.py": "verity/spot/verifier/protocols/profile.py",
+        "verity/core/protocols/pyproject.toml": "verity/spot/verifier/protocols/pyproject.toml",
+        "verity/core/protocols/remote_bandwidth/": "verity/core/protocols/remote_bandwidth/",
+        "verity/core/protocols/reporting.py": "verity/core/protocols/reporting.py",
+        "verity/core/protocols/spot/README.md": "verity/spot/verifier/python/README.md",
+        "verity/core/protocols/spot/__init__.py": "verity/spot/verifier/python/__init__.py",
+        "verity/core/protocols/spot/candidates.py": "verity/spot/candidates.py",
+        "verity/core/protocols/spot/challenger.py": "verity/spot/device/challenger.py",
+        "verity/core/protocols/spot/coins.py": "verity/spot/device/coins.py",
+        "verity/core/protocols/spot/consumers.py": "verity/spot/verifier/python/consumers.py",
+        "verity/core/protocols/spot/costfit.py": "verity/spot/costfit.py",
+        "verity/core/protocols/spot/one_stage/": "verity/spot/verifier/python/one_stage/",
+        "verity/core/protocols/spot/optimize.py": "verity/spot/optimize.py",
+        "verity/core/protocols/spot/parties.py": "verity/spot/verifier/python/parties.py",
+        "verity/core/protocols/spot/plancheck.py": "verity/spot/plancheck.py",
+        "verity/core/protocols/spot/pyproject.toml": "verity/spot/verifier/python/pyproject.toml",
+        "verity/core/protocols/spot/remote.py": "verity/spot/device/remote.py",
+        "verity/core/protocols/spot/second_stage.py": "verity/spot/verifier/python/second_stage.py",
+        "verity/core/protocols/spot/service.py": "verity/spot/verifier/python/service.py",
+        "verity/core/protocols/spot/tests/": "verity/spot/verifier/python/tests/",
+        "verity/core/protocols/tests/": "verity/spot/verifier/tests/",
+        "verity/core/service/spot/": "verity/spot/verifier/"
+      }
     }
   ]
 }

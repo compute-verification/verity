@@ -36,7 +36,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from verity.core.protocols.certifier import compile_slice as CS, replay_step as RS
-from verity.core.protocols.spot.one_stage import produced, registered as REG
+from verity.spot.verifier.python.one_stage import produced, registered as REG
 from verity.commitments import advice as ADV
 from verity.commitments.frame_v3 import BitRowLeaf
 from verity.commitments.rowleaf import bit_row, row_leaf

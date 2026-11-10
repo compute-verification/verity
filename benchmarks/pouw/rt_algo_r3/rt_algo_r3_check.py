@@ -553,7 +553,7 @@ def gen_cost(M: int, N: int, K: int) -> dict:
 
 
 #: int8 Llama-3.1-8B's linears a layer as (K, N), at 32 layers and 20k tokens/s: the joint-PoUW window model
-#: (benchmarks/sampling_plan/joint_pouw.py at 8e436d9a89, `LINEARS`, `CALLS`, `tokens_per_s`)
+#: (verity/spot/sampling_plan/joint_pouw.py at 8e436d9a89, `LINEARS`, `CALLS`, `tokens_per_s`)
 LLAMA_CALLS = ((4096, 6144), (4096, 4096), (4096, 28672), (14336, 4096))
 LLAMA_LAYERS, TOKENS_PER_S = 32, 20_000
 #: served_h1's per-unit kernel: a K = 4096 unit's 612 compressions in 89.6 ns

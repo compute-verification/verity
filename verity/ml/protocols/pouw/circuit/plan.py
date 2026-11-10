@@ -39,7 +39,7 @@ from fractions import Fraction
 from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Mapping, Protocol, Sequence
 
-from verity.core.protocols.profile import Stratified, Stratum
+from verity.spot.verifier.protocols.profile import Stratified, Stratum
 from verity.commitments import domains
 from verity.commitments.randomness import Key
 

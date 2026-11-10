@@ -43,7 +43,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.pouw.audit import hm96_salt
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.spot.verifier.python.one_stage import registered as G
 from verity.commitments import hm96
 from verity.commitments.hm96 import batch
 from verity.commitments.merkle import merkle_depth

@@ -17,7 +17,7 @@ inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/conf
           "benchmarks/pouw/receipts", "verity/hardware/pouw/machine_model/verity_machine_model",
           "verity/hardware/pouw/machine_model/data", "tools/research/src/research/__init__.py",
           "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", "verity/core/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
+          "verity/spot/verifier/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/serving.py",
           # serving.py takes its tags from the table of domain separators, verity.commitments.domains
           "verity/errors.py", "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto",

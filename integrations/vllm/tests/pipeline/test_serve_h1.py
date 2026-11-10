@@ -19,7 +19,7 @@ import pytest
 import torch
 
 from verity.ml.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.spot.challenger import CoinError
+from verity.spot.device.challenger import CoinError
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC

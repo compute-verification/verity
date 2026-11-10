@@ -101,7 +101,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
+from verity.spot.verifier.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.commitments import verify_opening
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES

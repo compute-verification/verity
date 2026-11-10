@@ -41,8 +41,8 @@ from typing import Any
 
 import pytest
 
-from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, registration as R
+from verity.spot.verifier.python.consumers import exfiltration_bound, location_bits
+from verity.spot.verifier.python.one_stage import audit as AU, draw as DR, registration as R
 from verity.circuits.codec import canonical_json
 from verity.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED

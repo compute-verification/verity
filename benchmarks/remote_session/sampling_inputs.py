@@ -49,7 +49,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
-from verity.core.protocols.spot import costfit  # noqa: E402
+from verity.spot import costfit  # noqa: E402
 
 from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 

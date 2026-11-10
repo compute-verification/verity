@@ -61,7 +61,7 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from verity.core.protocols.spot.one_stage import registered as REG
+from verity.spot.verifier.python.one_stage import registered as REG
 from verity.commitments import hm96
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.identity import identity_digest_sha512

@@ -55,7 +55,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
-from verity.core.protocols.spot.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
+from verity.spot.verifier.python.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.circuits import codec, partition_object as PO
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain

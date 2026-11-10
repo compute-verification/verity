@@ -16,8 +16,8 @@ import pytest
 
 from verity.configuration.deploy import config as K
 from verity.configuration.deploy.manifest import Channel, Role
-from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage import registration as RG
+from verity.spot.verifier.python import parties as SP
+from verity.spot.verifier.python.one_stage import registration as RG
 from verity.configuration.wire import Refused
 from verity_cli import run as R
 

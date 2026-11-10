@@ -74,7 +74,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **The session's times** (the result's `session_times`): each step of one recursive session after its build (inner,
   vstage, vcap, oprove, lean), its first invocation's wall and CPU seconds and peak RSS, what the session's figures (its
   cost, knowledge-soundness error and stop-leak bound per window and pooled over the monitoring periods) scale from. The
-  figures read the census and the periods, which stay off this public bench: `benchmarks/recursion_figures/figures.py
+  figures read the census and the periods, which stay off this public bench: `verity/spot/recursion_figures/figures.py
   RESULT.json` gives them.
 - **The negative** (`negative`, on by default): the lean step again over a copy of the inner run with one coin of
   rep 0 flipped (the pod script's `NEG_INNER`, `rec_inner.py forge`), once per `--neg` coin. A flipped coin moves only the V*

@@ -47,8 +47,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from verity.core.protocols.remote_bandwidth import audit, coins
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote
+from verity.spot.device import challenger as Ch
+from verity.spot.device import remote
 
 ROOT = Path(__file__).resolve().parents[5]
 KINDS = ("local", "serve", "gate")

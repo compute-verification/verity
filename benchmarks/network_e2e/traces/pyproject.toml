@@ -25,7 +25,7 @@ inputs = [
     # packages
     "verity/__init__.py",
     "verity/core/__init__.py",
-    "verity/core/protocols/__init__.py",
+    "verity/spot/verifier/protocols/__init__.py",
     "verity/core/protocols/certifier/__init__.py",
     "verity/core/protocols/certifier/release.py",
 ]

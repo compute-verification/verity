@@ -20,7 +20,7 @@
    "name": "core_spot",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../window/../../../../service/spot",
+   "dir": "../../../../../spot/verifier",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

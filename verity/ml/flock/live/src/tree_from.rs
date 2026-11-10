@@ -7,7 +7,7 @@
 //! ([`Challenger::tree_open`]) before the challenger's live-coin part answers the prover, so the session's record is the one a tree sampled
 //! here would give, and the challenger's release log is what the audit holds it to.
 //!
-//! The frames are `verity.core.protocols.spot.remote`'s: `u32be len(head) ‖ u32be 0 ‖ head`, the head a JSON
+//! The frames are `verity.spot.device.remote`'s: `u32be len(head) ‖ u32be 0 ‖ head`, the head a JSON
 //! object with its `type`. The client sends `hello` (with the session's `secret` in hex when it has one), then
 //! `tree {nonce, spec}` per session and `tree-open {after, n, round, stream, tree}` per round, then `close`. A refusal, a
 //! broken stream, a malformed answer or an opening that doesn't open its tree ends the connection, and every request after

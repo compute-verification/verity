@@ -30,8 +30,8 @@ from verity.core.protocols.pouw.audit import (
 )
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot.challenger import LiveCommitment, LiveOpening
+from verity.spot.device import challenger as Ch
+from verity.spot.device.challenger import LiveCommitment, LiveOpening
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024

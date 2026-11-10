@@ -521,7 +521,7 @@ def run(a: argparse.Namespace) -> dict:
     if live:
         from verity.core.protocols.pouw import window as Wd
         from verity.ml.protocols.pouw.circuit import h1tile as HT
-        from verity.core.protocols.spot import challenger as Ch
+        from verity.spot.device import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds
 

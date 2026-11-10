@@ -5,7 +5,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.profile import Stratified, Stratum
+from verity.spot.verifier.protocols.profile import Stratified, Stratum
 from verity.commitments.randomness import derive
 
 from verity.ml.protocols.pouw.circuit import ncp2

@@ -210,13 +210,13 @@ def _cut_label(cut: dict) -> str:
 
 def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     """Regenerate `budget_sampling.json` from OPT2's planner on `tree`, a checkout with
-    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
+    `verity/spot/sampling_plan/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
     is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
     each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
     samples a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
-    sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
+    sys.path[:0] = [str(tree), str(tree / "verity" / "spot" / "sampling_plan")]
     import int8_llama as P
     from inputs import I
 
@@ -238,7 +238,7 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
                         round(1 - costs.statement_fixed * sessions / total, 5), _cut_label(s["cut"])])
         regimes[name] = {"commit": commit, "statement": statement, "points": pts}
     head = subprocess.run(["git", "-C", str(tree), "rev-parse", "--short=10", "HEAD"], capture_output=True, text=True)
-    doc = {"source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (benchmarks/sampling_plan/"
+    doc = {"source": "budget.py --sampling-sweep: OPT2's int8 Llama-3.1-8B row (verity/spot/sampling_plan/"
                      f"int8_llama.py at {head.stdout.strip() or 'unknown'}), cost-model/v1, δ_s = 2^-41, a week of one "
                      "RTX PRO 6000; point = [B_s, eps_sample, draws a week, unit_share, linears' cut]",
            "regimes": regimes}

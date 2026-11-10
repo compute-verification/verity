@@ -55,7 +55,7 @@
    "name": "nci_check",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../protocols/network/lean/../nci/lean",
+   "dir": "../../../protocols/network/nci/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

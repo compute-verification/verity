@@ -136,7 +136,7 @@ from pathlib import Path
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing
 from verity.core.protocols.remote_bandwidth import store as rstore
-from verity.core.protocols.spot.challenger import Verify
+from verity.spot.device.challenger import Verify
 
 from verity.core.protocols.remote_bandwidth.session import challengers
 from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv
