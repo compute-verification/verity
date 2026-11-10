@@ -28954,3 +28954,33 @@ bash benchmarks/recursion_e2e/stage.sh SUBCIRCUIT=silu-mul-v2/i16384/bf16 N=256 
 - Two more levels, larger algebra parts and two more caps add the rest.
 
 That sums to 3,300 to 5,000 s. The run decides.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 16:37Z: the pooled field's Python half is pushed on a branch off #8539's head, and #8539 crossed with `queue/034a1702664b` on a scratch branch; six runs queued, none started
+
+All runs are `--on auto`, and none had started at 16:31Z. cpu-11 opens at about 17:05Z.
+
+**1. review-1's tied stream** (unchanged since 16:10Z). The fix is `b3a5cc07e5` on #8539's head, and its test is `d10aeecd4c`. #8539 is still unmarked [run, `research queue status`].
+- `r20261110-160628-c555` (cpu-8) runs the test alone at `d10aeecd4c`; it should fail.
+- `r20261110-160816-2002` (cpu-2) runs the nine suites at `b3a5cc07e5`.
+- My one line for review-1 comes when 2002 passes: "passed `tied` through: the stream's run of record now gives Lean's `Run.run` its check's tied values (`verifier.run(tied=)`), and a tied window runs to an accepted outcome on both verifiers; named nothing or another parameter, both refuse (`R8-shared-input`)".
+
+**2. The pooled field's Python half: `cursor/proofs-accountd-pooled-3f1c`** at `dd61f36688`, on `b3a5cc07e5`. No PR.
+- `cb5ba4e512`: the plancheck executable's two-stage answer adds `ln_count`, which is `classSum (classFactor D) D.classes` at its θ (`Spot/PlanCheckMain.lean`, code, not `Security/`), read by `plancheck.ln_counts`. Its test holds it to the certified bits (bits·ln 2 = θ ln(1/δ) + ln_count, within `Spot.Interval`'s bounds) and holds two classes to the sum of each.
+- `dd61f36688`: `Stream(point=TwoStagePoint(form, θ, S, p))`, which the stream's digest binds before any coin. It gives each two-stage outcome record a `pooled` field, also on `Outcome.pooled`:
+  - `pool` is the point with q = Q/N, the first stage's over the registration's N replay blocks, and the stream's δ, all exact.
+  - The one class is N replay blocks, with one cell per template at its outputs' public size class, sampling k_t, and N = the F the registration verdict published.
+  - `ln_count` is computed by Lean. It is null where no F was published, or where the patterns' form has F > 1.
+- The field sits on the stream's outcome record, outside what Lean's `Run.run` compares: a new key inside the audit record would make the Lean run disagree. The Lean half, Wed 12:00Z, moves it into the verifier's answer.
+- Locally, with the executable stubbed [run], the class equals `plancheck.two`'s for the same design, and F = 1 is published. Ruff finds nothing.
+- Runs: `r20261110-162832-16d3` (cpu-11) runs the new tests on a fresh spot suite; `r20261110-162926-c46e` (cpu-8) runs the nine suites.
+
+**3. Your 16:20Z order: `cursor/proofs-accountd-cross-034a`** at `dad8d911f9`, which is #8539's head merged with `queue/034a1702664b`. It holds nothing for #8539's head.
+- Seven files conflicted. Each kept both sides: R8's `tied` and published F beside the candidate's history tables (`R7-history`), in `registration.check`, `verifier.check`, `_params`, `run`, and the stream's three calls.
+- `_params` takes `tied` before `history`; every other caller passes `history` by keyword [read].
+- The rest: the layout-safe `BUILD_LOCK`, the README's F line beside round 2's step schedule, `OneStage.lean`'s docstring and the test imports.
+- Merged without conflict but changed on both sides, so they need the build: `Spot/Registration.lean`, `Run.lean`, `Pieces.lean`, `Security/Properties/Spot.lean` and both Security locks (through the lock driver).
+- Runs: `r20261110-163609-4a2d` (cpu-1) runs the nine suites; `r20261110-163702-cb4b` (cpu-8, `--cwd clone`) runs Lean tries on both `Spot.lean` files and `Spot/Pieces.lean`. If R8's and the history's changes to `Registration.check` together break `check_eq_checkRef`'s `simp`, it shows there.
+
+**Not changed:** network's 4 and 5 stand as written at 16:15Z.
+
+**Next:** my checkpoint at about 17:10Z, with whichever runs have read by then.
