@@ -71,16 +71,8 @@ class Setup:
 
 
 @dataclass(frozen=True, slots=True)
-<<<<<<< 99c8914848
-class ChallengerRecord:
-    """One session as the memory challenger records it: what it signed, the commitment released with it and its coin
-||||||| merged common ancestors
-class Session:
-    """One session as the memory challenger records it: what it signed, the commitment released with it and its coin
-=======
 class ChallengePhaseRecord:
     """One session as the memory challenger records it: what it signed, the commitment published before it and its coin
->>>>>>> 7af4d24fca3e
     openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
 
     signed: mc.SignedSession
