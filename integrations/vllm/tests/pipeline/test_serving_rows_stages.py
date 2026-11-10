@@ -36,6 +36,7 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import boolean_topp_stages as BT
 from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import sampling_rows as SR
 from verity.ml.definitions.registry import topp_keep_builder as K
@@ -110,8 +111,10 @@ def stager(t: str) -> UnitStager:
 
 
 def boolean(t: str) -> str:
-    """Stage template ``t``'s Boolean version (`boolean_topp_stages`), the template a ``--zk`` partition names."""
-    return descriptor_id(BB.boolean_version(SRW.template(t).fn))
+    """Stage template ``t``'s Boolean version, the template a ``--zk`` partition names: `boolean_topp_stages`' family of its
+    name at its statics (what `boolean_version` resolves it to, without loading the catalog)."""
+    fn = SRW.template(t).fn
+    return descriptor_id(bind(next(d for d in BT.BOOLEAN_STAGE_DEFINITIONS if d.name == fn.name), **fn.bindings))
 
 
 def composed(t: str, d: Path) -> UnitStager:
@@ -211,7 +214,7 @@ def test_a_partition_of_the_stages_on_bits_holds_the_same_units_on_the_same_rows
         tb = SRW.template(b)
         assert (tb.layout, tb.word, CR.reads(tb), CR.statement(tb)) == ("stage", t, "inline", {"reads": "inline"}), b
         assert CR.unit_rows(tb) == CR.unit_rows(SRW.template(t)) and tb.fn is not SRW.template(t).fn, b
-    s = Served(n=2)
+    s = Served()
     ms, mb = members(s), members(s, bits, dict.fromkeys(bits, 7))
     WI.validate(mb)
     of = dict(zip(bits, TMPLS))
@@ -305,6 +308,7 @@ def test_each_stage_on_bits_is_staged_in_the_form_verify_zk_takes(tmp_path):
         want = {descriptor_id(u.defn): u.defn.name for u in T.plan(v) for x, name, statics in ZK_UNITS
                 if x == v and u.defn.name == name and all(u.defn.bindings[k] == y for k, y in statics.items())}
         bits = [boolean(t) for t, _n in SRW.unit_templates(spec)[1:]]
+        assert bits == [descriptor_id(BB.boolean_version(SRW.template(t).fn)) for t, _n in SRW.unit_templates(spec)[1:]]
         s = Served(spec, n=1, seed=v)
         ms = members(s, bits, dict.fromkeys(bits, 2))
         for m, (g, _e) in zip(ms, read(s, ms, bits)):
