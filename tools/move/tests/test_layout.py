@@ -546,6 +546,51 @@ def test_a_list_entry_naming_a_directory_the_map_empties_becomes_the_cover_of_wh
     assert "gates.toml: lib/core/ -> verity\n" in p.stdout and "gates.toml: lib/core/__init__.py -> nothing" in p.stdout
 
 
+BELOW_MAP = """[roots]
+old = { lib = "lib" }
+new = { verity = "verity" }
+
+[paths]
+"lib/flock/src/" = "verity/flock/prover/src/"
+"lib/flock/tool.py" = "verity/flock/prover/tool.py"
+"lib/flock/flock-link.patch" = "verity/flock/prover/flock-link.patch"
+"lib/flock/pod/a.sh" = "verity/flock/pod/a.sh"
+"lib/flock/verifier/" = "verity/flock/agreement/"
+
+[tokens]
+"lib/flock" = "verity/flock/prover"
+
+[modules]
+"lib.flock.src" = "verity.flock.prover.src"
+"lib.flock.tool" = "verity.flock.prover.tool"
+"lib.flock.verifier" = "verity.flock.agreement"
+"""
+BELOW = {
+    "lib/flock/src/main.rs": "fn main() {}\n", "lib/flock/tool.py": "T = 1\n", "lib/flock/flock-link.patch": "patch\n",
+    "lib/flock/pod/a.sh": "#!/bin/sh\n", "lib/flock/verifier/ci.py": "C = 1\n",
+    "tests/test_gate.py": ('FILES = {"lib/flock/src.rs": "fn main() {}", "lib/flock/tool/x.py": "", "lib/flock/pod/zz.sh": "",\n'
+                           '         "lib/flock/verifier/x.py": ""}\n\n\ndef test(repo):\n    (repo / "lib" / "flock" / "new.rs").write_text("")\n'),
+    "job.sh": '#!/bin/sh\nfor p in link glue; do git apply "$SRC/lib/flock/flock-$p.patch"; done\n',
+}
+
+
+def test_a_path_below_a_split_directory_that_names_no_tracked_file_follows_the_tokens_row(tmp_path):
+    """`lib/flock/` goes three ways and its `[tokens]` row says a reference to it means the prover. A path below it that
+    the tree does not have, a test's own file (`src.rs`, a chain's `new.rs`) or the start of a name a variable ends
+    (`flock-$p.patch`), follows that row, and `[split]` must acknowledge it as it must a reference to the directory. One
+    whose first name the tree has there is left: `tool/` (`tool.py` has its own row) and `pod/` (a directory with no
+    row). One below a directory with a row follows that row, as before."""
+    ack = '\n[split]\n"tests/test_gate.py: lib/flock" = "the toy files are the prover\'s"\n"job.sh: lib/flock" = "the patches"\n'
+    r, p = _run(tmp_path / "acknowledged", BELOW, BELOW_MAP + ack)
+    assert p.returncode == 0, p.stderr
+    assert (r / "tests/test_gate.py").read_text() == (
+        'FILES = {"verity/flock/prover/src.rs": "fn main() {}", "lib/flock/tool/x.py": "", "lib/flock/pod/zz.sh": "",\n'
+        '         "verity/flock/agreement/x.py": ""}\n\n\ndef test(repo):\n    (repo / "verity" / "flock" / "prover" / "new.rs").write_text("")\n')
+    assert (r / "job.sh").read_text() == '#!/bin/sh\nfor p in link glue; do git apply "$SRC/verity/flock/prover/flock-$p.patch"; done\n'
+    _, bare = _run(tmp_path / "bare", BELOW, BELOW_MAP)
+    assert bare.returncode != 0 and "job.sh: lib/flock (" in bare.stderr and "tests/test_gate.py: lib/flock (" in bare.stderr
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]

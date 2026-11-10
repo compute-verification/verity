@@ -850,6 +850,12 @@ class Run:
             return f"{new}/{tail}" + ("/" if slash else "")
         is_dir = t in self.old_dirs or slash or (t not in self.known_old and self.L.file(t) is None)
         new, approx = self.L.path(t, is_dir)
+        if new is None and (k := self._below_split(t)):
+            new = self.L.tokens[k] + t[len(k):]
+            self.split_reference(path, k, f"{path}: {token} -> {new}")
+            self.note("paths that name no tracked file, below a directory the map splits, sent where its [tokens] row goes",
+                      f"{path}: {token} -> {new}")
+            return new + ("/" if slash else "")
         if new is None:
             if approx:
                 self.note("unmapped directory paths", f"{path}: {token}")
@@ -857,6 +863,22 @@ class Run:
         if approx:
             self.split_reference(path, t, f"{path}: {token} -> {new}")
         return new + ("/" if slash else "")
+
+    def _below_split(self, t: str) -> str | None:
+        """The directory with a `[tokens]` row that `t` is a path below, where `t` names nothing the tree tracks and its
+        first name below that directory is none the tree has there: no file or directory, and up to its first `.` no
+        file's name before its suffix (`circuits/boolean/forms` is in `boolean.py`, which has its own row). What is left
+        is a file of a test's own tree, or the start of a name a variable ends (`verity/ml/flock/flock-$p.patch`). Such a
+        path follows the row, as a reference to the directory does."""
+        k = next((k for k in sorted(self.L.tokens, key=len, reverse=True) if t.startswith(k + "/")), None)
+        if k is None or t in self.known_old or t in self.old_dirs:
+            return None
+        first = f"{k}/{t[len(k) + 1:].split('/')[0]}"
+        stem = f"{k}/{t[len(k) + 1:].split('/')[0].split('.')[0]}."
+        at = bisect.bisect_left(self.kept, stem)
+        if first in self.old_dirs or first in self.tracked_old or at < len(self.kept) and self.kept[at].startswith(stem):
+            return None
+        return k
 
     def _brace_list(self, t: str, tail: str, new: str | None, path: str) -> str | None:
         """Brace list `t` (`flock/{tool.py,verifier/tool.py}`) as a list of its paths, each mapped alone, where every one
@@ -1123,7 +1145,7 @@ class Run:
             if len(segs) == 1:
                 return chain                            # `run / "census"`: one word names a run's own directory as often as ours
             if not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
-                    or joined in dict(self.L.dirs) or joined in self.L.tokens):
+                    or joined in dict(self.L.dirs) or joined in self.L.tokens or self._below_split(joined)):
                 return chain
             new = self._map_token(joined, path)
             if new is None or new == joined:
@@ -1139,7 +1161,7 @@ class Run:
             segs = [m.group("first"), *re.findall(r"""["']([\w.\-]+)["']""", m.group("rest"))]
             joined = "/".join(segs)
             if len(segs) == 1 or not (joined in self.known_old or joined in self.old_dirs or joined in self.L.files
-                                      or joined in dict(self.L.dirs) or joined in self.L.tokens):
+                                      or joined in dict(self.L.dirs) or joined in self.L.tokens or self._below_split(joined)):
                 return m.group(0)
             new = self._map_token(joined, path)
             if new is None or new == joined or new.strip("/") == ".":
