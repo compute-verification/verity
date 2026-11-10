@@ -55,11 +55,11 @@ PIN_KINDS = ("definitions", "pieces", "units", "digests")
 
 
 def _locations(pkg: str) -> list[Path]:
-    """Package ``pkg``'s directories as Python imports it; none for a name it imports no package under."""
-    try:
-        spec = importlib.util.find_spec(pkg)
-    except ValueError:      # a loaded module without a spec
-        return []
+    """Package ``pkg``'s directories as Python imports it; none for a name it imports no package under.  A loaded module
+    answers for itself: `importlib.util.find_spec` refuses one that has no spec."""
+    if (loaded := sys.modules.get(pkg)) is not None:
+        return [Path(p).resolve() for p in getattr(loaded, "__path__", ())]
+    spec = importlib.util.find_spec(pkg)
     return [Path(p).resolve() for p in (spec.submodule_search_locations or [])] if spec else []
 
 
