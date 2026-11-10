@@ -264,12 +264,14 @@ theorem kraftWeights_halves (N : ℕ) : KraftWeights (fun j => (2⁻¹ : ℚ≥0
 set_option synthInstance.maxSize 1024 in
 /-- **`PeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
 `PeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
-finite set, and the weights `2^-(j+1)` on the number of failures, which sum to at most one (`kraftWeights_halves`).
-The premises hold together there, and the lemma shows nothing more. The period has no window and no connection: it
-covers no run with a failure, and holds no window's placement, check or registration to anything. Where a window is
-placed and a run is accepted, the window's placement (`WindowsPlaced`), its check's pinning (`CheckedUnique`), the
-read-back of a format with a connection (`RecordFormat.ReadsBy`) and its channel (`PeriodChannelReg`) are not shown
-here, with or without a failure; the weights' sum alone is shown at every number of connections. -/
+finite set, the network certifier's registration at every window (`CertifierRegisters`, which the charged form takes
+as a premise), of which the period has none, and the weights `2^-(j+1)` on the number of failures, which sum to at
+most one (`kraftWeights_halves`). The premises hold together there, and the lemma shows nothing more. The period has
+no window and no connection: it covers no run with a failure, and holds no window's placement, check or registration
+to anything. Where a window is placed and a run is accepted, the window's placement (`WindowsPlaced`), its check's
+pinning (`CheckedUnique`), its registration (`CertifierRegisters`), the read-back of a format with a connection
+(`RecordFormat.ReadsBy`) and its channel (`PeriodChannelReg`) are not shown here, with or without a failure; the
+weights' sum alone is shown at every number of connections. -/
 theorem PeriodLeakCharged_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
@@ -285,9 +287,15 @@ theorem PeriodLeakCharged_honest :
       PeriodChannelReg noFormat (fun (_ : Unit) _ => True) (((Finset.univ : Finset Unit) : Set Unit))
         (Set.univ : Set Unit) (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ()) (fun _ => ())
         (fun p => (recordingCode noFormat p.1 fun c => c.elim).1) ∧
+      (∀ (i : Fin 0) (s : Claims.Sampling.AuditStatement),
+        CertifierRegisters FlockDeploy.sha512
+          (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
+            (fun _ _ _ => [])).commit trivLay 1 (fun _ _ => []) s []
+          ((recordingCode noFormat ⟨0, 0, Empty.elim, Empty.elim⟩ fun c => c.elim).2 i)) ∧
       KraftWeights (fun j => (2⁻¹ : ℚ≥0) ^ (j + 1)) (Fintype.card Empty) :=
   ⟨PeriodLeakChecked_honest.1, PeriodLeakChecked_honest.2.1, PeriodLeakChecked_honest.2.2.1,
     PeriodLeakChecked_honest.2.2.2.1, PeriodLeakChecked_honest.2.2.2.2.1,
-    ⟨fun _ _ => ⟨trivial, (), Finset.mem_coe.2 (Finset.mem_univ _), trivial⟩, fun _ _ => rfl⟩, kraftWeights_halves _⟩
+    ⟨fun _ _ => ⟨trivial, (), Finset.mem_coe.2 (Finset.mem_univ _), trivial⟩, fun _ _ => rfl⟩, fun i _ => i.elim0,
+    kraftWeights_halves _⟩
 
 end NetTiming.Witness
