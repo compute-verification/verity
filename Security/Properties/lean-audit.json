@@ -1071,6 +1071,14 @@
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
   },
+  "Properties.Spot.SecurityProofs.designWellFormed": {
+   "honest": ["Properties.Spot.SecurityProofs.designWellFormed_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.designWellFormed_nontrivial"
+  },
+  "Properties.Spot.SecurityProofs.drawMisses": {
+   "honest": ["Properties.Spot.SecurityProofs.drawMisses_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.drawMisses_nontrivial"
+  },
   "Properties.Spot.SecurityProofs.secondMisses": {
    "honest": ["Properties.Spot.SecurityProofs.secondMisses_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.secondMisses_nontrivial"
@@ -7957,6 +7965,12 @@
    "type_hash": "acbb6080f1cd957386c50b95fde7e961d541958f674278973716c53b2c47099e",
    "unfolded_hash": "9ac37fd3daf9313de95d1f992a25d0cc87513f6c36155690eb67526f2404b3b2"
   },
+  "Properties.Spot.SecurityProofs.designWellFormed_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.designWellFormed_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Spot.SecurityProofs.drawMisses": {
    "owner": "@proofs",
    "signature": ["Properties.Spot.SecurityProofs.drawMisses : Properties.Spot.DrawMisses"],
@@ -7969,6 +7983,12 @@
    },
    "type_hash": "3f87a355ae74af656383010355fd73d01ba49126bc986f32fe55c0b1b87d2d0f",
    "unfolded_hash": "34b92f9bd7971faf316faabd229f438a54483db6c372030f0ea71d39fa25dec5"
+  },
+  "Properties.Spot.SecurityProofs.drawMisses_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.drawMisses_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.Spot.SecurityProofs.expLowerSound": {
    "owner": "@proofs",
@@ -10560,7 +10580,7 @@
     "outcome": "none"
    },
    "Properties.Spot.SecurityProofs.designWellFormed": {
-    "function": ["Spot.Slots.layout", "Properties.Spot.slotDesign"],
+    "function": ["Spot.Slots.fileLayout", "Properties.Spot.slotDesign"],
     "outcome": "accept"
    },
    "Properties.Spot.SecurityProofs.drawMisses": {
