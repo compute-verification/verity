@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 LEAN = HERE.parent
 spec = importlib.util.spec_from_file_location("lean_moved", LEAN / "moved.py")
@@ -59,8 +61,11 @@ def test_before_the_move_the_old_path_is_the_directory_and_the_new_one_is_unknow
     root = tree(tmp_path, "Security", EARLIER)
     assert M.resolve("Security", root) == "Security" and M.resolve("verity/Security/Proofs", root) == "Security/Proofs"
     assert M.resolve("security", root) is None
+    (root / M.MOVES).unlink()
+    assert M.resolve("Security", root) == "Security" and M.resolve("verity/Security", root) is None, "a tree with no record"
     (root / M.MOVES).write_text("{")
-    assert M.resolve("Security", root) == "Security" and M.resolve("verity/Security", root) is None, "an unreadable record"
+    with pytest.raises(ValueError):                    # a record that doesn't read is not "no moves"
+        M.resolve("Security", root)
 
 
 def test_former_paths_are_listed_latest_first():

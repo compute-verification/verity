@@ -33,11 +33,12 @@ LAKEFILES = ("lakefile.toml", "lakefile.lean")
 
 
 def recorded(root: Path = ROOT) -> list[dict[str, str]]:
-    """Each recorded move's `{old: new}`, oldest first; none when the record is missing or doesn't read."""
-    try:
-        doc = json.loads((root / MOVES).read_text())
-    except (OSError, ValueError):
+    """Each recorded move's `{old: new}`, oldest first; none where the tree has no record (a tree from before the first
+    move). A record that doesn't read is an error: it is a tracked file, and guessing "no moves" would build cold."""
+    p = root / MOVES
+    if not p.is_file():
         return []
+    doc = json.loads(p.read_text())
     moves = doc.get("moves") if isinstance(doc, dict) else None
     return [m["paths"] for m in moves or [] if isinstance(m, dict) and isinstance(m.get("paths"), dict)]
 
@@ -110,11 +111,8 @@ def carry(tree: Path, packages: list[str], moves: list[dict[str, str]], log=prin
             continue
         if prune and not any(".lake" in dirs for _, dirs, _ in os.walk(d)):
             shutil.rmtree(d, ignore_errors=True)
-        else:
-            try:
-                d.rmdir()
-            except OSError:
-                pass                                    # it still holds something: untracked work, a nested build
+        elif not any(d.iterdir()):                      # else it still holds something: untracked work, a nested build
+            d.rmdir()
     return moved
 
 
