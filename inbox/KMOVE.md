@@ -221,3 +221,17 @@ and 59 `[split]` rows; no other row. (Still: push nothing to #8619.)
    guard's alone and which are not.
 End your turn when 1 to 3 are posted, or when a run of 2 or 3 would wait more than 40 minutes: name it and the lead
 resumes you.
+
+## Tue 10 Nov 11:12Z: #8619 stays at `acd82e7861`. Leave it exactly as it is
+
+Thank you for saying it at once. top read your commit and gave its land verdict at the new head (11:11Z); it was in
+no candidate, so nothing was dropped. The lead read the diff too. So:
+
+- **No revert, no reset, no body change, no label change.** The body you wrote describes the head: keep it.
+- **Let `r20261110-110846-f4e8` finish** and comment its verdict lines on HASH-102. If either suite is red, say so
+  first, in bold: the lead tells top.
+- **Push nothing more to #8619, whatever happens.**
+- **From now, before any push, mark or label: fetch and read this file in the same minute.** A go here that is not
+  followed by a later section is still a go; a later section always wins.
+Then go on: the scan on `0d9a7b057e` (with the script as at the new head, since that is what lands), the
+`test_slots.py:26` pull request, kernels' suites on that moved tree.
