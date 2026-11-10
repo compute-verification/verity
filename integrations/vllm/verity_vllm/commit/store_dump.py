@@ -140,8 +140,7 @@ def drawn(com: Any) -> Touched | None:
     the run reads (`native_ranges.open_range_levels`).  None unless every step's block is a released one (``dropped``)."""
     if not com._gpu_blocks or not all(getattr(b, "dropped", False) for b, _u in com._gpu_blocks.values()):
         return None
-    rows = getattr(com, "rows", False)
-    t = Touched(node=_node(com), salt=step_rows.SALT_BYTES if rows else 0, chunk=int(com.chunk))
+    t = Touched(chunk=int(com.chunk))
     for s, (blk, _u) in com._gpu_blocks.items():
         t.ranges[s] = [(int(lo), int(hi)) for lo, hi, _ in _ranges(blk)]
         nodes = t.nodes.setdefault(s, set())
@@ -316,14 +315,8 @@ def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, dig
     """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it).
     With no ``touched``, a released window dumps slim to its drawn leaves (`drawn`)."""
     why = _refusal(com)
-<<<<<<< 99c8914848
     if not why and touched is None:
         touched = drawn(com)
-    rows = getattr(com, "rows", False)
-||||||| merged common ancestors
-    rows = getattr(com, "rows", False)
-=======
->>>>>>> 7af4d24fca3e
     keys = getattr(com, "row_keys", None) or {}
     if not why and touched is None and any(int(sc.step) not in keys for sc in rc.steps):
         why = f"{step_rows.NAME} steps without their salt keys (a slim dumped store): no full dump"

@@ -3,14 +3,8 @@
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
 state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
-<<<<<<< 99c8914848
-round)."""
-||||||| merged common ancestors
-bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`)."""
-=======
 round). Ingress schema v1 likewise: its encoder's JSON in whole blocks, `IngressSampled_v1` as `sampled_reference` in and out of
 the schema, and the statics it refuses."""
->>>>>>> 7af4d24fca3e
 from __future__ import annotations
 
 import json
