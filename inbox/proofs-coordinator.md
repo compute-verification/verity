@@ -30537,3 +30537,52 @@ They tell which hashes move. The cross is moot now, so unless you say otherwise 
 **The rest of benchmarks' list:** `r20261110-161919-afe0` ended rc 0 at 18:11Z. It staged rows 15 and 17 to 36 at N = 1, except row 30, `EmbeddingRead_v1{V=256,H=96}`, which stopped at `flock-read-tmpl` like row 13. I give its table with rows 3, 5 and 13. Rows 37 to 40 remain deferred.
 
 **Against Wed 04:00Z:** rows 3, 5 and 13 are on course. Their pins should come this evening from `4240`, and kernels can stage from `d7ab9059c3` now. I say by 22:00Z if that changes.
+
+## PRF-513 REMOTEBENCH, Tue 10 Nov 18:20Z: 6 files and 23 places closed and pushed (`a5.py` and its three tests, `replay.py`, `a0.py`); one decision of mine to confirm (v2 in `a5.py` is `main`'s one statement); `v2_case.py` must change and is outside my list
+
+Branch `cursor/proofs-remote-bench-8973`, head `ea9fd3d628`, with the base's new head `13f54ad455` merged in (`25dc33f74f`). Left: 20 files, 56 places, the six importers, the two `pyproject.toml`.
+
+**The table so far** (each file: `python -m py_compile` and `ruff check` pass [run]):
+
+| File | Places | What was taken | Why | Tests |
+|---|---|---|---|---|
+| `one_stage/a5.py` | 15 | Imports: `spot` paths with the side's `interface as IF`. `registered_negatives` (5): both lines' cases. `audit`: `main`'s `drawn` and `handed`, the side's declared day, `link_points`, `draw_ran_out`. Registered reads: `main`'s `CS.own_reads`, then the side's `REG.bind_ports` and `--interface`. v2 (`write_case`, `case_v2`, `v2_proof`, 6 places): `main`'s. | `Flock.RegBound.check` holds both lines: it is `checkComplete` with no bound ports. `Spot.OneStageZk` at the head is `main`'s whole. | below |
+| `one_stage/tests/test_a5_case_v2.py` | 3 | `main`'s docstring and call; both lines' `write_case` tests. | follows `a5.py` | 13 pass [run, scratch] |
+| `one_stage/tests/test_a5_tp_gates.py` | 1 | `main`'s port committed afresh, then the side's two tests. | both added | the 4 negatives tests pass [run, scratch]; the other 10 not run (slow) |
+| `one_stage/tests/test_a5_outputs.py` | 1 | `main`'s assertion. | the side only deleted lines `main` deleted too | 4 pass [run, scratch] |
+| `one_stage/replay.py` | 2 | The side's `row_schemas` and `parameters`. | `OneStage.paramsOfJson` reads those names, on `main` too [read: `Spot/OneStage.lean:229-279` at the head and at `e7b03e4a6c89`] | by `test_a5_case_v2.py` |
+| `one_stage/a0.py` | 1 | Both: the side's `--interface` sentence, `main`'s `--coins tree`. | both added | by the three above |
+
+- **`main`'s later lines in `a5.py`** (rule 3): carried by a three-way merge of my closed file with `7af4d24fca3` and `e7b03e4a6c89`. Three places overlapped and hold both: `registering(a, history)` beside the side's `declared`, `audit`'s docstring, and `V.check(..., history=hist, **tie(a), **declared(a))`. `diff` of `main`'s tip against my file now shows only the side's edits [run].
+- **"[run, scratch]"** means a second, unpushed worktree: my files, REMOTECORE's closed files at `5c9ee14225`, and every other lane's still-marked import closed mechanically to one line (certifier's and `benchmarks/network_traces` to the side, the rest to `main`). At my own head these tests cannot be imported: `spot/coins.py`, `verity/ml/circuits/defs.py` and others are still marked. So the passes show my files agree with REMOTECORE's closes, not that the merged tree passes.
+
+**Tests changed to what the merged code does** (rule 2 asks me to name them):
+
+1. `test_the_per_member_case_names_each_statements_member_and_sessions_and_each_file_once` is now `test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its_own_files`. Same staged files. It asserts two sampled members give `v2_proof`'s refusal ("this audit drew 2 members"), and one alone gives a case of its own files.
+2. `test_v2_fixes_its_form_by_the_windows_members_never_by_the_draw` is now `test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other_members`. It asserts `v2_proof` returns the sampled member's `{proof, circuit, public, registered, tables}`, and that the window's other members and its `circuit.json` change nothing.
+3. `test_v2_says_why_an_audit_has_no_case`: `main`'s two assertions (no `members=`), plus "drew 0 members" for the side's "drew none".
+4. `test_case_v2_names_the_proofs_files_in_place_of_verdicts`: the side's last eight lines are removed. They asserted a case names `interface` and carries `circuit.json` as a blob; `case_v2` has no such parameter now.
+5. The side's two tests in `test_a5_tp_gates.py` now stage a member's public file, which `main`'s negative reads. Each also asserts `main`'s negative on its own file.
+
+**Question 1, with my recommendation (already applied; say if you want it otherwise).** One-stage v2 in `a5.py` is `main`'s: `case_v2(case, sessions, *, proof, circuit, public, registered, tables)` and `v2_proof(done, zk)`, writing `proofs: {circuit, public, registered}`.
+
+- Why: `OneStageZk.paramsOfJson` at the head takes exactly those three keys, and REMOTECORE's `check_v2` writes the same. Your 17:57Z row 7 says no Python caller is added.
+- Not carried from the side's `a5.py`: `v2_members`, `_once`, `case_v2`'s `proofs`/`statements`/`interfaces`, and `v2_proof`'s `members`. Nothing else in the side's `a5.py` is dropped.
+- Kept from the side, since their Lean is in the tree: `link_points` and `draw_ran_out` (recorded in the summary, no verdict), the bound ports, `declared_ports`, the declared day.
+- A window of several members gets `main`'s outcome: no v2 case when the sample reached more than one member; a one-statement case when it reached one, which the Lean refuses at the public file's units.
+- `a5.py` calls nothing of REMOTECORE's that is still open. It uses `PF.evidence_v2`, `PF.Proof`, `PF.units_exactly` and `PF.circuit_lookups`, all in REMOTECORE's `bb91574612`.
+
+**A file outside my list that must change: `benchmarks/one_stage/v2_case.py` and `tests/test_v2_case.py`** (proofs'; unmarked, the side's text at the head).
+
+- `v2_case.py:136` calls `a5.case_v2(v1, names, proofs=..., statements=..., interfaces=...)` and `a5.v2_members(own)`. Neither exists after my close, so `case()` raises [read].
+- It was wrong before my close too. Its one-member case writes `proofs: {circuit, registered}` with no `public`, which the Lean at the head refuses at parse. `main`'s own `v2_case.py` has the same fault: it calls `a5.case_v2` without `public` [read: `e7b03e4a6c89:benchmarks/one_stage/v2_case.py:85`].
+- `kept_composite.sh:65` runs it.
+- I recommend I take both files: the one-member window writes `main`'s case with `public` (the summary's digest for that member), a window of several writes `missing.json` saying why, and the two tests of `test_v2_case.py` that assert the per-member case assert that instead. Say yes and I do it after `sampling_plan`.
+
+**Smaller things, none blocking:**
+
+- `Spot/LinkPoints.lean:6` and `Spot/Registration.lean:74` cite `OneStageZk.RAN_OUT`, which is not in the tree (the name is `Draw.RAN_OUT`). Comments only; lean's. My docstrings cite `Draw.ranOutOf` and `coins.ran_out`.
+- The merged `registered_negatives` has one case neither line ran: a file with bound ports whose last registered port is left out. I expect "registered reads (declared)" when the record declares that port and "registered reads (complete)" otherwise [read: `Flock/RegBound.lean:166-188`]; no Lean run has shown it [guess until a served run].
+- With `own_reads` first, `bind_ports` binds only a port whose registered tree is not one leaf a unit. On `main` Lean refuses such a member; here it is bound, as on the side. No window of record has such a port that I know of [guess].
+
+Next: `served_verdicts.py` (7), `served_verdicts.sh` (11), `test_served_verdicts.py` (9), then `served_composite.sh`, `composite.py` and its test. Next entry by 19:20Z.
