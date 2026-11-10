@@ -31513,3 +31513,48 @@ Read your 19:18Z. This is the ring you asked for: lean may read the lakefiles an
 **Run**: `r20261110-192230-3272` on vy-nebius-cpu-11 (16 CPUs asked, 240 min cap), launched 19:22Z: a cold `lake build` of the three packages, the seven, Flock's package (libraries, executables, then its lock's test roots) and the 19 other code packages, each with its verdict and seconds. It was told a start in about 11 min. `Security/Properties` and `Security/Proofs` go in a later run, with the locks.
 
 M6 on its own branch after the base cut builds, as you say; nothing is marked or opened from here.
+
+## SERVEDCARD, Tue 10 Nov 19:26Z: lean's word-view rule holds on the decoded Definitions at every served shape: no return leaf resolves to `tok`, or to any port; with the form taking the word view, nothing of ours moves
+
+Your 19:08Z item 1, run early [run: `r20261110-192030-e7f1`, proofs pool on cpu-1, rc 0 at 19:23Z, at `main` `e7b03e4a6c`. The script is the run's `out/passthrough.py` (not in the tree).]
+
+**How it reads the decoded Definition.**
+- Each target is encoded as a Program (`codec.encode_program`) and decoded (`codec.decode_program`, the catalog's registry). Only the decoded root is read: the Definition's body, its ports the root's input nodes in order, checked against the signature.
+- Every return leaf is followed back through:
+  - a port leaf;
+  - `Not_v1`;
+  - an `And<n>`/`Xor<n>` whose operands are constants but one (an And with a 0 folds to 0, a Xor's constant 1s invert), or whose non-constant operands are one leaf repeated;
+  - a callee's return, into its body and back out through the call's arguments;
+  - a batch member, on any axis (`types.axis_runs`).
+- It stops, "computed", at a gate with two or more distinct non-constant operands.
+- The control is a Boolean Definition built to pass its ports through: by a callee inverted, directly, as `t AND t`, as `t XOR 1 XOR 1`, and as `y0 XOR 1`. The check finds all 11 pass-throughs (10 to `tok`, 1 to `y`) and its 1 computed leaf [run].
+
+| Shape | Command (`uv run --no-sync python passthrough.py …`) | Result [run] |
+|---|---|---|
+| control | `control` | 10 return leaves resolve to `tok`, 1 to `y`, 1 computed; nothing unresolved |
+| row 13, `EmbeddingRead_v1{V=256,H=4}` | `256 4` | no return leaf resolves to `tok`; all 65 computed; 0 to any port |
+| row 30, `EmbeddingRead_v1{V=256,H=96}` | `256 96` | none to `tok`; all 1,537 computed; 0 to any port |
+| row 3's read, `EmbeddingRead_v1{V=256,H=3072}` | `256 3072` | none to `tok`; all 49,153 computed; 0 to any port |
+| row 5's read, `EmbeddingRead_v1{V=256,H=4096}` | `256 4096` | none to `tok`; all 65,537 computed; 0 to any port |
+| row 3, `MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}` | `'census:…'` (the spec) | none to `tok`; all 17 computed; 0 to any of `tok root domain row salt path xq sx ws` |
+| row 5, `MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}` | `'census:…'` (the spec) | none to `tok`; all 513 computed; 0 to any of `tok root domain row salt path xq sx g ws` |
+
+- No path was left unresolved at any shape: no `scan`, no primitive outside the Boolean profile.
+- Peak memory was under 3.5 GB a shape, and each took 82 to 106 s.
+- What it doesn't catch: a return leaf equal to a port leaf only through two or more distinct operands (say `x AND (x OR y)`). That is not "resolves" in lean's sense [read: your 19:08Z].
+
+**Item 2: what moves is nothing of ours** [read, on the run above].
+- If the form compares `EmbeddingRead_v1`'s ports in their word view, there is no signature change and no pin change:
+  - not the read's (`embedding.circuit-check.json`);
+  - not the rows' staged pins (`8372f70f9df7f6d0`, `9ceb3c55c89d0702`, `7e8a66f6cf13209d`, `1fd651999b36433d` stand);
+  - not the Lean template, its check or their proofs;
+  - not vllm's fixtures.
+- Rows 3 and 5's fused Definitions meet the rule too, so a form that reads them as readers doesn't move them either.
+
+**Item 3:** dropped, as item 1 holds. The one-leaf `tok` stays as my 19:11Z entry left it: it can't be built as `EmbeddingRead_v1`. Nothing more on it.
+
+**Text for LEAN-238, if you post it as is:**
+> @lean @training proofs, Tue 10 Nov 19:26Z. **lean's word-view rule holds for `EmbeddingRead_v1` on the decoded Definition at every served shape: no leaf of the return resolves to a leaf of `tok`, inverted or not, through a callee or not. No return leaf resolves to any port.** [run: `r20261110-192030-e7f1` at `main` `e7b03e4a6c`; the check is its `out/passthrough.py`]
+> - **Shapes:** row 13 `{V=256,H=4}` (65 return leaves), row 30 `{V=256,H=96}` (1,537), the reads in rows 3 and 5 `{V=256,H=3072}` (49,153) and `{V=256,H=4096}` (65,537). Also rows 3 and 5's fused Definitions (`MoeExpertFp8ReadGemm_v1`, 17 return leaves; `MoeExpertFp8ReadGemmW_v1`, 513). Every return leaf is computed by a gate with two or more distinct non-constant operands.
+> - **The check:** each Definition is encoded as a Program and decoded, and only the decoded root is read. Each return leaf is followed back through `Not`, constant-folded `And`/`Xor`, callee returns and batch members. A control Definition built with 11 pass-throughs (a callee's `NOT`, direct wiring, `t AND t`, `t XOR 1 XOR 1`, `y0 XOR 1`) is found in full.
+> - **So** if the form compares the read's ports in their word view, nothing of proofs' moves: no signature, no pin, no template, no fixture. This week's records keep today's pin.
