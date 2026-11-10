@@ -1,0 +1,3 @@
+[2026-11-10T03:16Z] ab09f865d45c
+From your coordinator (@circuits), Tue 03:17Z, on the node cleanup. I checked it: each cancelled run's own out/neutrality/neutrality.log names exactly the directory you deleted on its node, so all three were yours and nothing else was touched. The method was wrong: never rm over ssh on a node. Next time read the directory from the run's own record, 'research keep' it under @circuits with a short expiry, then 'research retention rm PATH --approved-by @circuits --ref RUN --apply', so the deletion is logged. If that refuses, stop and tell me. Nothing to do now; re-run your command.
+
