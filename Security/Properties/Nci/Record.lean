@@ -31,9 +31,10 @@ it complies (`Nci.CompliesRate`). It follows from four statements about the chec
 
 **Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
 row the check holds is a registered read or a table read of a parameter that the log's first record registers under
-the root the run commits it under, or a port of an opening whose reader is pinned (`Good`). A pin is the verifier's
-own, never the record's: its Definition's closure digest (`NciCheck.DefinitionDigest.closureDigest`) and its ports by
-role, so that an opening's key is never a row it registers.
+the root the run commits it under, or a port of an opening whose reader is pinned (`Good`). A pin is a Definition's
+closure digest (`NciCheck.DefinitionDigest.closureDigest`). A pinned reader's roles, which of its ports are the key,
+the root, the domain id, the opened rows and the verdict, are the check's layout of its Definition (`Form.layout`),
+never the record's word, so that an opening's key is never a row it registers.
 
 **A pin fixes the Definition** (`DigestPins`): two Program texts that give a Definition one closure digest decode it
 to the same Definition, callees and all (`Same`), or two of the byte strings the two digests hashed (`Hashed`) differ
@@ -42,7 +43,8 @@ counting, and a statement that offered it would say nothing.
 
 **What a pinned reader opens** (`PinnedOpens`): a statement about a pinned Definition that reads only the Definition
 (`OfDefinition`), held of a reference Program's copy, holds of the reader of every opened row the check holds under
-that pin, up to such a collision. It follows from `DigestPins` and `Provenance`.
+that pin, and the reader has the reference's roles, up to such a collision. It follows from `DigestPins`,
+`Provenance` and a layout that reads a Definition's signature alone (`LayoutReads`).
 
 What these do not say: that a unit's verdict output is 1 (a statement about the committed values, the proof block's);
 that equal roots hold equal rows, or that the data the log's first record registers was public
@@ -69,34 +71,33 @@ structure Row where
   port : String
   row : ℕ
 
-/-- A pinned reader of a table opening, the verifier's own: its Definition's closure digest, and its ports by role.
-`key` is the parameter that says which row is opened, `opened` the parameters an opening registers (the row, its salt
-and its path, never the key), `root` and `domain` the parameters that take the table's root and domain id, and
-`verdict` the output row that holds the verdict. -/
-structure Pin where
-  digest : String
+/-- A table reader's roles, by port: `key` is the parameter that says which row is opened, `root` and `domain` the
+parameters that take the table's root and domain id, `opened` the parameters an opening registers (the row, its salt
+and its path), and `verdict` the output row that holds the verdict. -/
+structure Roles where
   key : String
-  opened : List String
   root : String
   domain : String
+  opened : List String
   verdict : String
 
 /-- Why the check holds a row in θ: it is a registered read of the parameter `param`; a table read of the root
 (`root`), else the domain id, of the table `name` over `param`; or a port of an opening of that table by a reader
-pinned by `pin`. -/
+whose closure digest is the pin `pin`. -/
 inductive Held where
   | read (param : String)
   | table (name param : String) (root : Bool)
-  | opened (name param : String) (pin : Pin)
+  | opened (name param pin : String)
 
-/-- An instance's fields: the Program's text, the record's text, `Γ`, `α = num / den`, and the pins. -/
+/-- An instance's fields: the Program's text, the record's text, `Γ`, `α = num / den`, and the pins, each a closure
+digest. -/
 structure Instance where
   program : String
   record : String
   gamma : ℕ
   num : ℕ
   den : ℕ
-  pins : List Pin
+  pins : List String
 
 /-- What the rate rule reads of a record: a block's gates, and the most fresh bits a block reads. -/
 structure Summary where
@@ -107,7 +108,8 @@ structure Summary where
 (the registration log and the digest of the run's own record), or refuses. Of a record it has read: `inst` is the
 instance's fields, `wiring` the record's wires as `Spot.Wires.check` takes them, `slot tid u` the block of unit `u` of
 template `tid`, `held r` whether row `r` counts as θ and why, and `summarize` the summary. `rate Γ num den s` is the
-rate rule on a summary, `none` where it complies. -/
+rate rule on a summary, `none` where it complies, and `layout d` the roles of a reader whose Definition is `d`, none
+where it has no reader's layout. -/
 structure Form where
   Case : Type
   read : Json → Json → Except String Case
@@ -117,6 +119,7 @@ structure Form where
   held : Case → Row → Option Held
   summarize : Case → Summary
   rate : ℕ → ℕ → ℕ → Summary → Option String
+  layout : Defn → Option Roles
 
 /-! ## The record's circuit -/
 
@@ -293,19 +296,20 @@ def RunNames (run : Json) (P : Prog) (record : String) : Prop :=
   strAt run "program" = some (Flock.hexOf P.sha512) ∧
     strAt (getD run "window") "circuit" = some (Flock.hexOf (Flock.Sha512.hash record.toUTF8))
 
-/-- The reason the check gives for holding row `r` of the record `c` is good, against the log, the run and the
-Program's descriptor `pj`. A read's parameter is θ. An opened port is one its pin lists, the pin is the instance's,
-the reader's closure digest in `pj` is the pin's, and the same unit's root and domain ports, by the pin's roles, are
-table reads of the same table's root and domain id. -/
-def Good (F : Form) (c : F.Case) (pj : Json) (log : Array Json) (run : Json) (r : Row) : Held → Prop
+/-- The reason the check gives for holding row `r` of the record `c` is good, against the log, the run, the Program
+`P` and its descriptor `pj`. A read's parameter is θ. An opening's pin is the instance's and is the reader's closure
+digest in `pj`; the reader's Definition has a layout, by which the port is an opened one and the key is none, and the
+same unit's root and domain ports are table reads of the same table's root and domain id. -/
+def Good (F : Form) (c : F.Case) (P : Prog) (pj : Json) (log : Array Json) (run : Json) (r : Row) : Held → Prop
   | .read p => IsTheta log run p
   | .table _ p _ => IsTheta log run p
-  | .opened name p pin => IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin.digest ∧
-      r.port ∈ pin.opened ∧
-      (∀ row < (F.wiring c).cutsOf r.tid pin.root,
-        F.held c ⟨r.tid, r.unit, pin.root, row⟩ = some (.table name p true)) ∧
-      ∀ row < (F.wiring c).cutsOf r.tid pin.domain,
-        F.held c ⟨r.tid, r.unit, pin.domain, row⟩ = some (.table name p false)
+  | .opened name p pin => IsTheta log run p ∧ pin ∈ (F.inst c).pins ∧ closureDigest pj r.tid = .ok pin ∧
+      ∃ k d ro, P.index[r.tid]? = some k ∧ P.defs[k]? = some d ∧ F.layout d = some ro ∧
+        r.port ∈ ro.opened ∧ ro.key ∉ ro.opened ∧
+        (∀ row < (F.wiring c).cutsOf r.tid ro.root,
+          F.held c ⟨r.tid, r.unit, ro.root, row⟩ = some (.table name p true)) ∧
+        ∀ row < (F.wiring c).cutsOf r.tid ro.domain,
+          F.held c ⟨r.tid, r.unit, ro.domain, row⟩ = some (.table name p false)
 
 /-- **Every row the check holds is registered.** For a record the check reads, the trusted input's run names its
 Program and its text, and each held row's reason is `Good`. -/
@@ -313,7 +317,7 @@ def Provenance (F : Form) : Prop :=
   ∀ (j tr : Json) (c : F.Case) (P : Prog) (pj : Json), F.read j tr = .ok c →
     Flock.Program.decode (F.inst c).program.toUTF8 = .ok P → Flock.JsonParse.parse (F.inst c).program = .ok pj →
     ∃ log run, TrustedRun tr log run ∧ RunNames run P (F.inst c).record ∧
-      ∀ r h, F.held c r = some h → Good F c pj log run r h
+      ∀ r h, F.held c r = some h → Good F c P pj log run r h
 
 /-! ## A pin fixes the Definition -/
 
@@ -376,21 +380,27 @@ def DigestPins : Prop :=
 /-! ## What a pinned reader opens -/
 
 /-- `Opens` reads only the Definition: it holds of one Definition in any Program. -/
-def OfDefinition (Opens : Pin → Prog → ℕ → Prop) : Prop :=
-  ∀ pin P P' k k', Same P P' k k' → Opens pin P k → Opens pin P' k'
+def OfDefinition (Opens : Prog → ℕ → Prop) : Prop :=
+  ∀ P P' k k', Same P P' k k' → Opens P k → Opens P' k'
 
-/-- **The reader of a held opening is the pinned Definition.** `Opens pin P k` is a statement about Definition `k` of
-`P` with the pin's roles: that its verdict is 1 only when its opened ports open to the root on its root port, at its
-key. Let it read only the Definition, and hold of `key` in a reference Program whose closure digest of `key` is the
-pin's. Then it holds of the reader `key` of every opened row the check holds under that pin, in the instance's own
-Program, or two byte strings the two closure digests hashed differ and have one SHA-512. -/
+/-- **The layout reads the signature alone**: Definitions of one parameter list and one return type have one layout. -/
+def LayoutReads (F : Form) : Prop :=
+  ∀ d d' : Defn, d.params = d'.params → d.ret = d'.ret → F.layout d = F.layout d'
+
+/-- **The reader of a held opening is the pinned Definition.** `Opens P k` is a statement about Definition `k` of `P`
+under its layout's roles: that its verdict is 1 only when its opened ports open to the root on its root port, at its
+key. Let it read only the Definition, and hold of `key` in a reference Program where `key`'s closure digest is `pin`.
+Then in the instance's own Program it holds of the reader `key` of every opened row the check holds under `pin`, and
+that reader has the reference's layout; or two byte strings the two closure digests hashed differ and have one
+SHA-512. -/
 def PinnedOpens (F : Form) : Prop :=
-  ∀ (Opens : Pin → Prog → ℕ → Prop) (text₀ : String) (j₀ : Json) (P₀ : Prog) (k₀ : ℕ) (key : String) (pin : Pin),
+  ∀ (Opens : Prog → ℕ → Prop) (text₀ : String) (j₀ : Json) (P₀ : Prog) (k₀ : ℕ) (d₀ : Defn) (key pin : String),
     OfDefinition Opens → Flock.Program.decode text₀.toUTF8 = .ok P₀ → Flock.JsonParse.parse text₀ = .ok j₀ →
-    closureDigest j₀ key = .ok pin.digest → P₀.index[key]? = some k₀ → Opens pin P₀ k₀ →
+    closureDigest j₀ key = .ok pin → P₀.index[key]? = some k₀ → P₀.defs[k₀]? = some d₀ → Opens P₀ k₀ →
     ∀ (j tr : Json) (c : F.Case) (P : Prog) (pj : Json) (r : Row) (name p : String), F.read j tr = .ok c →
       Flock.Program.decode (F.inst c).program.toUTF8 = .ok P → Flock.JsonParse.parse (F.inst c).program = .ok pj →
       r.tid = key → F.held c r = some (.opened name p pin) →
-      (∀ k, P.index[key]? = some k → Opens pin P k) ∨ Collides j₀ pj key
+      (∀ k d, P.index[key]? = some k → P.defs[k]? = some d → Opens P k ∧ F.layout d = F.layout d₀) ∨
+        Collides j₀ pj key
 
 end NciCheck.Properties.Record
