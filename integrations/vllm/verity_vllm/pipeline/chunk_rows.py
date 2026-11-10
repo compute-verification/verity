@@ -86,8 +86,7 @@ def _piece_tables(prim: Any) -> frozenset[str]:
         from verity_flock import ir_lower as IL, read_slots as RS, tail as TL
 
         tables: frozenset[str] = frozenset()
-        if (getattr(prim, "family", None) not in ("Input", "Const") and prim.params and prim.id in IL.PIECES
-                and getattr(inspect.unwrap(IL.PIECES[prim.id]), "ands", None) is None):
+        if prim.params and prim.id in IL.PIECES and getattr(inspect.unwrap(IL.PIECES[prim.id]), "ands", None) is None:
             C = IL.Circuit()
             params, _ = signature_of(prim)
             IL.lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])

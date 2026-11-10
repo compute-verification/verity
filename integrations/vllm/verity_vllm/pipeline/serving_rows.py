@@ -425,14 +425,15 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
                              f"partition does not have; the serving rows' partition is {' / '.join(TEMPLATE_QUERIES)}")
         raise ValueError(f"partition query {q!r}: the serving rows' window is the template instances' partition "
                          f"({' / '.join(TEMPLATE_QUERIES)}), never a word partition")
+    caps = partition.get("chunk_cap") or {}
     if partition.get("zk"):
         for t in tmpls:
-            if chunked(t, partition.get("chunk_cap") or {}) and (why := CR.zk_refusal(template(t))) is not None:
+            if chunked(t, caps) and (why := CR.zk_refusal(template(t))) is not None:
                 raise ValueError(f"a partition for --zk sessions names {why}")
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     plan = EX.Plan(tmpls, rows)
-    ms = EX.wire(EX.cut(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), plan), plan)
+    ms = EX.wire(EX.cut(members(tmpls, rows, counts, caps), plan), plan)
     ms = ST.wire(CH.wire(SP.wire(KC.wire(ms, tmpls, rows), tmpls, rows), tmpls, rows), tmpls, rows)
     ms = PR.wire(ms, tmpls, rows, row_units)
     ms = WT.cut(ms, WT.reads(ms, rows, row_units))
