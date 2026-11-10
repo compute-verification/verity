@@ -85,7 +85,7 @@ def _no_catalog(monkeypatch) -> None:
 
 def _registered(monkeypatch, name: str, statics: tuple[str, ...]):
     """A composite of these statics, registered for this test only; its body is never built."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+    from verity.circuits.defs import REGISTRY, CompositeDefinition
 
     d = CompositeDefinition(name, 1, statics, lambda S: pytest.fail("signature built"), lambda B, S: pytest.fail("body built"),
                             register=False)
@@ -98,8 +98,8 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     attribute 'signature'``).  A Definition-valued static with statics of its own parses to that Definition bound to them, a
     Definition among those the same way, in a tuple too, beside a bare id, a literal and a tuple of literals; without the
     catalog."""
-    from verity.ml.circuits.defs import REGISTRY, bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import REGISTRY, bind
+    from verity.definitions.ops.boolean import gemm as BG
 
     TG.load_registries()
     _no_catalog(monkeypatch)
@@ -122,9 +122,9 @@ def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatc
     attribute 'params'`` in a process where no body had lifted the composite yet, while ``--all`` checks it.  Named, a composite's
     lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
     name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
-    from verity.ml.circuits.defs import REGISTRY, bind
-    from verity.ml.definitions.registry import lifted as L
-    from verity.ml.definitions.registry import moe, ref_prims
+    from verity.circuits.defs import REGISTRY, bind
+    from verity.definitions.registry import lifted as L
+    from verity.definitions.registry import moe, ref_prims
 
     from circuit_check import checks as CK
 
@@ -149,8 +149,8 @@ def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
     composite, the lifted module's; the on-demand ``Lifted[...]_v2`` family lifts primitives only, and made from it,
     ``Lifted[ArgmaxStepF32_v1]_v2``'s pin raised ``'CompositeDefinition' object has no attribute 'params'``, which killed the
     target's check in ``--all``.  A lift its id doesn't name (`MoeFfnFixed`'s is by hand) names no owner."""
-    from verity.ml.definitions.registry import lifted as L
-    from verity.ml.definitions.registry import ref_prims
+    from verity.definitions.registry import lifted as L
+    from verity.definitions.registry import ref_prims
 
     from circuit_check import sidecars as SC
 
@@ -169,7 +169,7 @@ def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
-        "verity.ml.protocols.pouw.circuit.h1tile.circuit-check#")]
+        "verity.protocols.pouw.prover.circuit.h1tile.circuit-check#")]
     roots = make()
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")

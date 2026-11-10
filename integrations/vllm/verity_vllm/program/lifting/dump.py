@@ -16,8 +16,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from verity.ml.definitions.registry import lifted as L
-from verity.ml.circuits.types import Value
+from verity.definitions.registry import lifted as L
+from verity.circuits.types import Value
 
 
 def _lift_class(prim: Any) -> str:

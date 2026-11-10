@@ -107,7 +107,7 @@ inputs = [
     "benchmarks/census/deployments.json",
     "benchmarks/census/adversary.json",
     "benchmarks/census/hardware.json",
-    "benchmarks/rho/data/hardware.toml",
+    "verity/protocols/inference_only/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
 ]
 
@@ -116,7 +116,7 @@ inputs = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_bench.py"]
-paths = ["verity/core/protocols/pouw/lean/check/models.json"]
+paths = ["verity/protocols/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_served_table.py"]

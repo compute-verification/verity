@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_indices_capture_gpu as X
-from verity.ml.definitions.numerics import dsv4_indices_twin as T
+from verity.definitions.numerics import dsv4_indices_twin as T
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 #: the cases simulated here (ratio 128's widest rows are left to the H200)
@@ -123,8 +123,8 @@ def test_ratio_4s_selection_is_ids_below_the_count_and_junk_past_it() -> None:
 def test_short_rows_are_the_reference_at_every_special_position(case: str) -> None:
     """`short_rows` against `Dsv4ShortContextTopK_v1{K,128}` on the c128a builder's special positions (the int64 ends, around
     0 and K * 128) and a few served ones; the served positions come first, as the combine reads their rows."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
 
     c = X.CASES_L[case]
     served = X.requests(case, "served", 1)["pos"]

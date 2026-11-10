@@ -19,15 +19,15 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
+from verity.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.correspondence.runtime import correspondence_digest  # noqa: E402
 from verity_vllm.check.match import program_compare as PC  # noqa: E402
 from verity_vllm.pipeline import components as CO, manifest as MF  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
-from verity.ml.definitions import boolean as BB  # noqa: E402
-from verity.ml.definitions.registry import b1  # noqa: E402
+from verity.definitions import boolean as BB  # noqa: E402
+from verity.definitions.registry import b1  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
 from verity_vllm.query.required import SAMPLING_EVENTS, request_manifest  # noqa: E402
 
@@ -149,7 +149,7 @@ def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(ro
     digest still the dir's recorded one.  A word descriptor that is not the recorded word digest is refused."""
     import shutil
 
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
     from verity_vllm.program import workload as W
 
     _word, bits, dirs, digests = row

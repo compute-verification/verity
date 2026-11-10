@@ -18,12 +18,12 @@ import math
 
 import torch
 
-from verity.ml.circuits.ops.sqrt import PouwF32SqrtRn
-from verity.ml.circuits.refs import Coll, concat, strided_view
-from verity.ml.circuits.types import Array
-from verity.ml.definitions.numerics import torch_kernels as TK
-from verity.ml.definitions.registry import cublas_bf16 as CB
-from verity.ml.definitions.registry import prims as P
+from verity.definitions.ops.sqrt import PouwF32SqrtRn
+from verity.circuits.refs import Coll, concat, strided_view
+from verity.circuits.types import Array
+from verity.definitions.numerics import torch_kernels as TK
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import prims as P
 from verity_vllm.program.frontend.rules.training_emit import _DT, BF16, F32, _batch, _call, _const, _operand_ok, _TrainRule, aten
 from verity_vllm.program.frontend.rules.training_views import _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type

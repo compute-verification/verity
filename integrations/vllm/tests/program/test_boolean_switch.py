@@ -1,4 +1,4 @@
-"""`TargetProfile.ir = "boolean"` (`verity.ml.definitions.boolean`): a derived Program on bits.
+"""`TargetProfile.ir = "boolean"` (`verity.definitions.boolean`): a derived Program on bits.
 
 * the table: each word Definition's Boolean version is the registered Boolean Definition whose `word` names it, a function-valued
   static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`), and a static
@@ -15,19 +15,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluation import evaluate, evaluate_words
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
-from verity.ml.circuits.ops import fp32 as W
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.circuits.ops import prims as MP
-from verity.ml.definitions import boolean as BB
+from verity.circuits.evaluation import evaluate, evaluate_words
+from verity.circuits import boolean as BL
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
+from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
+from verity.definitions.ops import fp32 as W
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops import prims as MP
+from verity.definitions import boolean as BB
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity.ml.definitions.replay import replayer
+from verity.definitions.replay import replayer
 
 F32, BF16 = Value(32), Value(16)
 PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
@@ -74,7 +74,7 @@ def _inputs(n: int, seed: int = 7):
 
 
 def test_the_table_reads_the_boolean_definitions_word_links():
-    from verity.ml.circuits.ops.boolean import attention as BA, gemm as BG
+    from verity.definitions.ops.boolean import attention as BA, gemm as BG
     assert BB.boolean_version(W.F32AddFtz) is bind(BA.F32AddFtz)
     assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
     word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
@@ -82,7 +82,7 @@ def test_the_table_reads_the_boolean_definitions_word_links():
 
 
 def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_statics_entry(monkeypatch):
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean.trace import word_of
 
     sig = lambda t: lambda S: ((("x", Array(S.N, t)),), Array(S.N, t))  # noqa: E731
     word = CompositeDefinition("Twice", 1, ("N",), sig(F32), lambda B, S, x: B.batch(W.F32AddFtz, x, x, axes=(0, 0)), register=False)
@@ -113,8 +113,8 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
 
 @pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
-    from verity.ml.circuits.ops.boolean import mufu as BM
-    from verity.ml.definitions.registry import b1, boolean_norms as BN
+    from verity.definitions.ops.boolean import mufu as BM
+    from verity.definitions.registry import b1, boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
     assert descriptor_id(cuda) == descriptor_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
@@ -153,7 +153,7 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import DeriveReport
 

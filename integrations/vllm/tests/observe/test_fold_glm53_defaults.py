@@ -180,7 +180,7 @@ def test_a_bmm_whose_weight_is_no_parameter_view_is_refused():
 
 def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_unchanged():
     """`memory.address_ordered`: W_UK_T's (448, 1, 3584)-strided view as 4,096 address runs, not one per element."""
-    from verity.ml.circuits.refs import Affine
+    from verity.circuits.refs import Affine
     from verity_vllm.observe.fold.memory import address_ordered
     from verity_vllm.observe.fold.views import element_runs
 
@@ -198,7 +198,7 @@ def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_u
 def test_a_permuted_weight_root_answers_its_transposed_reads_from_its_own_map():
     """`MemoryModel.write_root`: W_UK_T and W_UV interleave in one allocation; a read of `W_UV^T` (one element run per element) or of
     W_UK_T comes from the root's address -> leaf map, equal leaf for leaf to the interval scan, until a write over it."""
-    from verity.ml.circuits.refs import Affine, runs
+    from verity.circuits.refs import Affine, runs
     from verity_vllm.observe.fold.memory import MemoryModel
 
     def slow(m, v):
@@ -254,7 +254,7 @@ def _build_kind(settings, M, N=H, rows=None):
     from types import SimpleNamespace
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-    from verity.ml.definitions.registry import tp_allreduce as T
+    from verity.definitions.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
     plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": rows or M, "N": N}

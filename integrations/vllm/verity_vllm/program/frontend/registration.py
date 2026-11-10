@@ -5,10 +5,10 @@ served run binds, after the user inputs and before the registered inputs, as the
 
 from __future__ import annotations
 
-from verity.ml.circuits.refs import Affine, Coll
-from verity.ml.circuits.types import RecordType, Type, Value
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import RecordType, Type, Value
 
-from verity.ml.definitions.registry.tables import table_type
+from verity.definitions.registry.tables import table_type
 from verity_vllm.program.inputs import run_field
 
 
