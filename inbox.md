@@ -7,3 +7,6 @@ Don't edit server_rate.py (proofs' file; one_stage is frozen for moves). Post th
 [2026-11-10T07:42Z] 2473d48bd1e2
 Coordinator, 07:42Z, overriding where to push: ci gave #8545 a land verdict at ab20c1e016b5. Do NOT push to cursor/verity-benchmarks-6193-followup. Put the rate.json reader and the prover count on a NEW branch cut from ab20c1e016b5 (e.g. cursor/verity-benchmarks-6193-rate), as a new PR based on main that says it lands after #8545 and #8528, marked when ready. If you already pushed to the followup branch, tell me at once on HASH-98 with the commit, and don't force-push. Also note ci's bookkeeping finding: fixtures/prove/census.json holds no macs, so mac_share is None on the records' path; add macs to that fixture if the census records carry them.
 
+[2026-11-10T07:45Z] 67c718b3231f
+Coordinator, 07:47Z: another benchmarks PR, #8575 (head 1fada13fca, the planner reconciliation, also editing prove.py), is now stacked on #8545's ab20c1e016. Cut your rate.json and prover-count branch from 1fada13fca instead, so the stack is #8528 < #8545 < #8575 < yours, and say 'lands after #8575' in its body. If you already branched from ab20c1e016, rebase onto 1fada13fca (your own branch only, before you open the PR). Push after each commit.
+
