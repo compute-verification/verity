@@ -20,10 +20,10 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity.ml.circuits.silicon import fp32
 from verity.ml.definitions.registry import pearl_c_tile as PT
-from verity.core.protocols.pouw.circuit import pc8
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_u as U
-from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120
+from verity.ml.protocols.pouw.circuit import pc8
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_u as U
+from verity.ml.protocols.pouw.schemes.pearl_c_device import H100, SM120
 
 VECTORS = json.loads((Path(__file__).with_name("vectors") / "pearl_c_u.json").read_text())
 #: each device record by its pc8 name, with its atom's word and Boolean Definitions
