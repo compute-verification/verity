@@ -2487,6 +2487,16 @@
         "verity/ml/crypto/": "verity/commitments/crypto/",
         "verity/ml/randomness/": "verity/commitments/randomness/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/recursion_e2e/": "workloads/recursion_e2e/",
+        "examples/README.md": "workloads/README.md",
+        "examples/dither_full_util/": "workloads/dither_full_util/",
+        "examples/lifecycle/": "workloads/lifecycle/",
+        "examples/onsite_served/": "workloads/onsite_served/",
+        "examples/vllm/": "workloads/vllm/"
+      }
     }
   ]
 }

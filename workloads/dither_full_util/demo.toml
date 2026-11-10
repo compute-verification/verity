@@ -1,4 +1,4 @@
-# The full-utilization demo (examples/README.md): level 0, with no runner yet. Level 1 needs its run of record on the H200
+# The full-utilization demo (workloads/README.md): level 0, with no runner yet. Level 1 needs its run of record on the H200
 # and a run.sh that calls its runner.
 protocol = "pouw"
 workload = "none"              # an 8B model's linear layers at M = 16,384, s8, on seeded weights registered before the coin

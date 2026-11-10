@@ -141,7 +141,7 @@ verifier accepts the reference prover's run on tape `ω` and coins `r`. A concre
 session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
 compiled verdict exists).
 
-The witness is a run of `benchmarks/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the ZK server, at
+The witness is a run of `workloads/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the ZK server, at
 16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
 alg-p0, alg-p1, cap, cap-L1–L3), and the inner session was accepted. With a challenge or query coin flipped, the parts
 that read it refused.

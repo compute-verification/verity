@@ -1,6 +1,6 @@
 # The H200 demo
 
-It shows the remote protocol's sampled-proofs half (`examples/README.md`) at a frozen shape on one H200: a step's every
+It shows the remote protocol's sampled-proofs half (`workloads/README.md`) at a frozen shape on one H200: a step's every
 value committed, proof blocks sampled by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
 (`phases.sh`, the run of record). It claims nothing else.
 
@@ -26,7 +26,7 @@ The workload is the frozen MQA shape on seeded INT8 weights (`e2e_h200/served_we
 tiny|small|slice` for CPU runs; it isn't an integration yet (`demo.toml`: `workload = "none"`). Every party runs in the
 one run on one GPU node (an H200 node for `percall_job.sh`): the driver and its commit call on the prover's side, and the
 replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the demo runs and
-the runs behind it are `demo.toml`'s (`examples/README.md`).
+the runs behind it are `demo.toml`'s (`workloads/README.md`).
 
 ## What runs, and what stands in
 

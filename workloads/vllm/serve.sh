@@ -41,7 +41,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 PORT=${PORT:-18084} UNTIL=${UNTIL:-13:30} ADMIT=${ADMIT:-arrival} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} BURSTS=${BURSTS:-8} PER_BURST=${PER_BURST:-4} CAP=${CAP:-8388608}
 for v in REPO REV ROW HIDDEN_SO NORM_TAP_SO VENV CUDA_HOME HF_HOME SERVE_ROOT; do
-  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity demo vllm serve\` (examples/vllm/run.sh)"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "serve.sh: no $v: start it with \`verity demo vllm serve\` (workloads/vllm/run.sh)"; exit 2; }
 done
 TREE=$PWD
 ROOT=$SERVE_ROOT
@@ -241,7 +241,7 @@ EOF2
   [ "${PIPESTATUS[0]}" = 0 ] || { echo "LONG SMOKE FAILED"; kill -TERM "$SRV"; wait "$SRV"; exit 13; }
 fi
 
-"$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
+"$PY" "$TREE/workloads/vllm/serve_load.py" --port "$PORT" --model "$REPO" --bursts "$BURSTS" --per-burst "$PER_BURST" --out "$D/load.jsonl" \
   2>&1 | tee "$OUT/load.log"
 sleep 5
 for _ in $(seq 1 120); do                                   # the load's windows' advice, before they compile
@@ -316,7 +316,7 @@ done
 if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the network certifier releases it
   for i in $(seq 1 "${VARIED_RUNS:-3}"); do
     run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)")
-    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
+    "$PY" "$TREE/workloads/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \
       --release "$run" --jitter-ms "${VARIED_JITTER_MS:-400}" --seed "$i" --out "$D/varied_$i.jsonl" > "$OUT/varied_$i.log" 2>&1
     echo "$(date -u +%H:%M:%SZ) varied run $i ($run) rc=$?" | tee -a "$OUT/steps.txt"
   done

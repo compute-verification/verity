@@ -1,5 +1,5 @@
 # The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each
-# machine with `verity run THIS --on MACHINE --bindings FILE` (examples/onsite_served/README.md); the deploy
+# machine with `verity run THIS --on MACHINE --bindings FILE` (workloads/onsite_served/README.md); the deploy
 # bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe"]

@@ -19,4 +19,4 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
-paths = ["benchmarks/recursion_e2e"]
+paths = ["workloads/recursion_e2e"]

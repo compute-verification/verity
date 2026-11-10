@@ -288,7 +288,7 @@
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
         "examples/h200/",
-        "examples/dither_full_util/"
+        "workloads/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -342,7 +342,7 @@
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
-        "examples/onsite_served/",
+        "workloads/onsite_served/",
         "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
@@ -588,8 +588,8 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "examples/README.md",
-        "examples/lifecycle/",
+        "workloads/README.md",
+        "workloads/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -605,7 +605,7 @@
       "owns": [
         "verity/windows/",
         "integrations/vllm/",
-        "examples/vllm/",
+        "workloads/vllm/",
         "benchmarks/replay_determinism/",
         "ruff.toml"
       ],
@@ -634,7 +634,7 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/overhead/",
-        "benchmarks/recursion_e2e/",
+        "workloads/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
