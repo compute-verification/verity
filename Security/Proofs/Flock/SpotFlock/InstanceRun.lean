@@ -22,7 +22,7 @@ import all Lean.Data.Json.Basic
 # A run the two-stage instance accepts, given an honest session
 
 `SpotFlock.Instance.ok_held S`: at `held R bnd0 desc q c₀`, some run is accepted with a checked unit (`CheckedRun.Ok`)
-wherever `S : Session R desc q c₀`, the facts about the run that read `R`'s Flock statement, holds.
+wherever `S : HonestSession R desc q c₀`, the facts about the run that read `R`'s Flock statement, holds.
 
 What the registration decides of the run holds for every `R`, at the zero coin `coin0` (every element `0`) in rounds 0
 and 1:
@@ -37,15 +37,15 @@ Each stage reads 82 bytes of its coin (`2·k·width + 64`, a width of 9 bytes). 
 (`scopeOk_sound` at `Ref.scope`), the checked unit's proof block and replay block, and round 2's message stating one
 session statement (`stmtsOf_m₂`).
 
-`Session` holds the facts that read `R`'s Flock statement: the run's statement `x` and round-1 record `m₁`, the session
-statement `xS` and its witness `wF`; `xS` has `R.x`'s rounds, is in scope (`sessionOk`) and reads the run's
+`HonestSession` holds the facts that read `R`'s Flock statement: the run's statement `x` and round-1 record `m₁`, the
+session statement `xS` and its witness `wF`; `xS` has `R.x`'s rounds, is in scope (`sessionOk`) and reads the run's
 (`readsOk`, at the zero coins), Flock's check accepts it at `wF`, and it sets up.
 
 ## What this does not show
 
-That a `Session` exists. Each of its facts is about `R`'s Flock statement or about round 2's statement check against
-it, and none is proved for any statement: a concrete `Ref` would supply them, the honest prover's session at the sample
-`selectSecond_coin0` fixes. Until then the two-stage guarantee's non-vacuity at this instance is not proved.
+That an `HonestSession` exists. Each of its facts is about `R`'s Flock statement or about round 2's statement check
+against it, and none is proved for any statement: a concrete `Ref` would supply them, the honest prover's session at the
+sample `selectSecond_coin0` fixes. Until then the two-stage guarantee's non-vacuity at this instance is not proved.
 -/
 
 @[expose] public section
@@ -246,7 +246,7 @@ theorem stmtsOf_m₂ {xS : Msg} (hx : xS.length < 2 ^ 64) : stmtsOf (m₂Of xS) 
 /-- **An honest session of `held R bnd0 desc q c₀` at the zero coins**: what a run's acceptance reads of `R`'s Flock
 statement. The run's statement `x` and round-1 record `m₁`; the session statement `xS`, with `R.x`'s rounds, in scope
 (`sessionOk`), reading the run's (`readsOk`) and setting up; and the witness `wF` Flock's check accepts at it. -/
-structure Session where
+structure HonestSession where
   x : Msg
   m₁ : Msg
   xS : Msg
@@ -260,7 +260,7 @@ structure Session where
 
 variable {R desc q c₀}
 
-theorem decode_session (S : Session R desc q c₀) : ∃ st, decode S.x = some st := by
+theorem decode_session (S : HonestSession R desc q c₀) : ∃ st, decode S.x = some st := by
   cases hx : decode S.x with
   | none =>
     have h := S.reads
@@ -276,7 +276,7 @@ theorem unitStmt_held {xS : Msg} (hx : xS.length < 2 ^ 64) : unitStmt (held R bn
   rfl
 
 /-- **Round 2's check passes** the honest session's statement at the zero coins. -/
-theorem stmtOk_held (S : Session R desc q c₀) {st : Roots} (hst : decode S.x = some st) :
+theorem stmtOk_held (S : HonestSession R desc q c₀) {st : Roots} (hst : decode S.x = some st) :
     stmtOk (held R bnd0 desc q c₀) S.x S.m₁ (m₂Of S.xS) coin0 coin0 = true := by
   have hparse : parse (held R bnd0 desc q c₀) S.x = some
       { desc := desc, prog := bitsProgs (ms2 R.x), query := q,
@@ -295,7 +295,7 @@ theorem stmtOk_held (S : Session R desc q c₀) {st : Roots} (hst : decode S.x =
 
 /-- **A run the instance accepts**: at an honest session `S`, the run of `S`'s messages at the zero coins is accepted
 and its unit `0` is checked. -/
-theorem ok_held (S : Session R desc q c₀) : ∃ r : CheckedRun, r.Ok (held R bnd0 desc q c₀) := by
+theorem ok_held (S : HonestSession R desc q c₀) : ∃ r : CheckedRun, r.Ok (held R bnd0 desc q c₀) := by
   obtain ⟨st, hst⟩ := decode_session S
   obtain ⟨⟨ins, spec, sts⟩, hsetup⟩ := Option.isSome_iff_exists.1 S.setup
   have hparse : parse (held R bnd0 desc q c₀) S.x = some
