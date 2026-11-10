@@ -21234,3 +21234,100 @@ The full answer, with what I read (file and line) and what I guessed, is on CIR-
   - It is unproved at two-stage registrations for both forms alike.
 
 The rest of your 00:33Z list (runs, #8444, N2) follows in my next entry.
+
+## HOUSEKEEP, Tue 10 Nov 01:03Z: Task 1 done: audit 60 -> 44; quiet 12, landed 2, undated 1 and 1 overdue cleared; 5 overdue need the coordinator; PRF-477 dated, not placed
+
+**Audit, live** (`research msg linear audit --lane proofs`, main's code): 60 findings at 00:55Z (25 lapsed, 14 stray,
+12 quiet, 6 overdue, 2 landed, 1 undated), 44 at 01:01Z after my writes (25 lapsed, 14 stray, 5 overdue). Seven more
+issues crossed 24 h quiet after your 00:33Z run (PRF-266, 335, 384, 398, 404, 454, 472); I took them under the same
+rules. `slipped` is not a live finding: `--asks` prints "0 slipped with no `slip:` comment".
+
+**Writes:** 14 comments as proofs/HOUSEKEEP (each starts `proofs (HOUSEKEEP), Tue 10 Nov HH:MMZ.`, 54 to 80 words),
+3 state moves (PRF-471, PRF-372, PRF-266 to Todo), 2 dates (PRF-451 to 2026-11-11, PRF-477 to 2026-11-12). No Done,
+no cancel, no title, description, label, placement or milestone change. `state` and `edit` refuse `--worker`
+("--worker goes with `comment` alone"), so those five ran without it.
+
+### The brief's 17
+
+| Issue | Finding | Done | State now | Due now | Source |
+|---|---|---|---|---|---|
+| PRF-164 | quiet | comment | In Progress | 13 Nov | #7996 merged Mon 07:33Z [gh]; `Accepted.runPopOk` at Sampled/Event.lean:295 and `PopMatches` still inline at Bridge/V5/Statement.lean:335 on main 7af4d24fca [read]; next step "H4's PR, Fri 13 Nov" from LINEARHYG's 8 Nov comment; swarm row 356 (TRUST6 is on the custody lemmas) |
+| PRF-363 | quiet | comment | In Progress | 13 Nov | coordinator log line 15 (GSZK re-marked #7497 Sun 22:15Z), #7497 merged Mon 07:33Z [gh]; #7228 open at 9252b6ae, untouched since 4 Nov [gh]; goal to 30 Nov, log line 296 |
+| PRF-372 | quiet | comment, to Todo | Todo | 20 Nov | #7207's head 4c70110939 is an ancestor of `cursor/onsite-push1b-061a` (9068336929, 7 Nov 11:04Z), not of main; no PR from that branch [run: merge-base, gh]; Goals page: demos/onsite-demo due Tue 24 Nov 6 PM PST |
+| PRF-410 | quiet | comment | In Progress | 12 Nov | #7375 open at 584cc2ae, untouched since 5 Nov [gh]; swarm row 316 (FLASHPROVE resumes Wed 11 Nov, plan by Thu 12 Nov) |
+| PRF-471 | quiet, landed | comment, to Todo | Todo | 13 Nov | #8223 merged Mon 15:15Z [gh]; main's lock still has `open` `FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR` {issue PRF-471, due 2026-11-13} [read], so the done-condition fails; swarm row 213 (RELAND8008 done); no PR or note for the discharge [gh search, notes grep] |
+| PRF-461 | landed | comment | In Progress | 10 Nov | all five PRs merged (#7918 Mon 15:15Z) [gh]; GOALAUDIT's note, section spot-checks-closed (items 5 and 7 open, item 1's a1ee result not posted, item 6's callers not moved); swarm row 175 (items 5, 7 unstaffed) |
+| PRF-199 | slipped | nothing written | In Progress | 30 Nov | fix already there: `slip:` comments by the coordinator (Sun 13:16Z) and LINEARHYG (Mon 12:33Z) give what missed 3, 6 and 13 Nov and what holds 30 Nov; no due move since. Holders read now: PRF-460 In Progress due 30 Nov, PRF-209 Todo due 13 Nov |
+| PRF-282 | slipped | nothing written | In Progress | 13 Nov | fix already there: LINEARHYG's `slip:` (Mon 12:33Z) covers 29 and 30 Oct, 2, 6 and 7 Nov and what holds 13 Nov; no due move since. Holders read now: NET-169 In Progress, NET-170 to 173 Todo, all due 13 Nov; LEAN-186 due 30 Nov |
+| PRF-451 | overdue | due to 2026-11-11, comment quoting the source | In Progress | 11 Nov | GOALAUDIT's note on the goal that names PRF-451, proofs/spot-numbers-lean-checked: "re-dated to Wed 11 Nov 12 PM PST because `main` is frozen ... Done when #8346 and #8360 are on `main` and `write_form` is stated or captioned"; log 19:08Z "Goals re-dated/off-tracked per audit"; #8346 a63c6b8ed6 in `checked`, #8360 594bc81ff4 only in `next` [run: merge-base] |
+| PRF-366 | overdue | nothing: no source states a date | In Progress | 9 Nov | see below |
+| PRF-386 | overdue | nothing: no source states a date | Todo | 9 Nov | see below |
+| PRF-456 | overdue | nothing: no source states a date | In Progress | 9 Nov | see below |
+| PRF-459 | overdue | nothing: reads as done, not mine to close | In Progress | 9 Nov | see below |
+| PRF-468 | overdue | nothing: reads as done, not mine to close | In Progress | 9 Nov | see below |
+| PRF-477 | undated (orphan from Wed 19:58Z) | due to 2026-11-12; placed nowhere | In Progress | 12 Nov | your brief gives the date. The label proofs/spot-128k-attention-proved is on three issues, CIR-195, VLLM-261 and PRF-477, none in a project [Linear, read], so no issue shows the milestone; candidates below |
+
+### Newly quiet (from the live list)
+
+| Issue | Done | State now | Due now | Source |
+|---|---|---|---|---|
+| PRF-266 | comment, to Todo | Todo | 10 Nov | vllm's Tue 00:29Z comment on VLLM-182 (re-dated Fri 4 Dec; Daniel: no intermediate remote demo); PRF-371 in Backlog [Linear] |
+| PRF-335 | comment | In Progress | 13 Nov | #7390 merged Mon 07:34Z [gh]; NET-170 to 173 Todo, due 13 Nov [Linear] |
+| PRF-384 | comment | In Progress | 13 Nov | #7497 merged Mon 07:33Z; `KSByDeployed` in no `.lean` on main or checked [run: git grep]; branch `cursor/proofs-gsr3d6-prf384-0ea8` at 77d4d40f71, Sat 7 Nov 14:35Z; NET-209's Tue 00:17Z comment (Backlog until Fri 13 Nov) |
+| PRF-398 | comment | In Progress | 13 Nov | #7923 merged Mon 07:33Z; `public_boundary.py --all` on main 7af4d24fca: "7679 public files, 0 edges, 22 more the export's rewrite cuts" [run, 7.2 s, 170 MiB] |
+| PRF-404 | comment | In Progress | 11 Nov | soundness's 5 and 6 Nov comments and LINEARHYG's 7 Nov restatement (statement Mon 9 Nov 12 PM PST, proof marked Wed 11 Nov 6 PM PST); no PR for pair 11 [gh search by key] |
+| PRF-454 | comment | In Progress | 13 Nov | #7981, #7982, #7996 merged Mon 07:33Z; #7850 open, untouched since 7 Nov [gh]; no row for the layering moves in the swarm index or coordinator log |
+| PRF-472 | comment | In Progress | 10 Nov | #7812 and #7571 merged Mon 15:15Z; #7590 open at 26c8bc44e0 [gh]; swarm row 233 (PRREVIEW's verdicts) |
+
+**How I chose Todo:** only where no source shows a worker on the piece left since the last comment and no source
+names a worker or a dated step before Mon 16 Nov. A due date alone I did not count as a plan. PRF-471 is the one
+where that overrides the landed rule's "In Progress": its In Progress came from GitHub when #8223 opened, and nobody
+holds the discharge. One command undoes each: `research msg linear state PRF-471 'In Progress'`.
+
+### Needs the coordinator
+
+1. **PRF-366 (overdue).** Left, per LINEARHYG Mon 12:32Z: six `Claims.ZKMal.RefSession` premises and
+   `LeanRelease.TrustsStop` (LEAN-186, due 30 Nov) and εS as a number (M1, M2), unstaffed until after the post. Three
+   dates are in the sources and none is the issue's: 13 Nov (its milestone F-ZK), 20 Nov (its goal proofs/zero-knowledge,
+   Goals page), 30 Nov (the lock).
+2. **PRF-386 (overdue, Todo).** Its parent NET-208 was parked by network-accounting (Backlog, date cleared, Mon 23:42Z
+   and Tue 00:18Z: "I date it or park it for good on Fri 13 Nov"); its three PRs closed unmerged. On main the lock lists
+   no `RegMatches` guarantee (only `SamplingDeploy.RegMatchesTwo`, open, LEAN-186, due 12 Nov). The one comment is
+   4 Nov. A date, or Backlog with its parent.
+3. **PRF-456 (overdue, the program).** No note dates it. Its label's goal proofs/spot-figures is Fri 13 Nov 12 PM PST;
+   its done-condition is nearer proofs/spot-ten-percent and spot-overhead-measured, both Thu 12 Nov 6 PM PST. GOALAUDIT
+   says its lead HILLCLIMB is inactive. Its child PRF-458 is due today.
+4. **PRF-459 (overdue).** Reads as done: both its goals are done on the Goals page (kernels, Mon), and #8266, #8278,
+   #8294 and #8319 merged Mon 15:15Z. Its one open PR, #7970, says in its body "Withdrawn; it won't land" and is still
+   open on GitHub. Swarm row 80 still says "NOT MET (22:04Z)".
+5. **PRF-468 (overdue).** Its done-condition reads as met on main: #8051 merged Sun 13:19Z and #8056 Mon 07:33Z [gh];
+   `prove_leg.prove_units` on one streaming prover a device with `FC_VERIFY_AHEAD` 2
+   (benchmarks/one_stage/prove_leg.py:27, :342; verity_flock/proof_server.py:348, :363) [read];
+   tests/test_proof_server.py exists [read]; the H200 runs e0a4 (9 of 9) and b87b (6 of 6) are STATIONARY's comments
+   [not checked]; the interface with TWOPROVE is swarm row 307 and #8067, merged Mon 07:33Z [not checked beyond that].
+   Still open under its label: circuits' Mon 16:57Z request (move `benchmarks/spot_proved` and
+   `benchmarks/served_units` to #8281's units) and the goal's rerun (Goals page Thu 12 Nov 6 PM PST).
+6. **PRF-471 (now Todo).** Nobody holds the discharge of `LiveAcceptsZKR`; the lock's `open` entry is due Fri 13 Nov.
+7. **PRF-461.** Due today, so overdue at 00:00Z Wed; its goal is Wed 11 Nov 6 PM PST. Items 5 and 7 have no worker,
+   item 1's result (a1ee) is not on the issue, item 6's callers are MOESERVE-B's (idle).
+8. **PRF-477, not placed.** Candidates: (a) "Full proofs: protocol soundness" / "SPOT · Tue 10 Nov · SPOT post results
+   ready" (holds PRF-456, 459, 461, 468; dated two days before the goal); (b) "SPOT post: GLM-5.3 worked example, vllm's
+   serving data and checks" / "S1 · Wed 11 Nov · the post's data" (the proofs and vllm SPOT issues; project state
+   backlog; dated one day before). Neither is dated Thu 12 Nov.
+9. **PRF-266 (now Todo), PRF-472, and PRF-458 are due today** like PRF-461. PRF-266's piece waits on VLLM-182 (4 Dec).
+   PRF-472 and PRF-398 read as done (see their rows): the owner's to close.
+10. **PRF-363:** only #7228 (a skill PR) is left attached and it has no done-condition: close, or say what is left.
+    **PRF-384:** the 7 Nov plan's Mon and Tue pieces show no commit. **PRF-454:** no worker or date for the layering
+    moves. **PRF-372:** its 20 Nov is before the onsite goal's 24 Nov.
+11. **PRF-451's date** came from the goal's re-date, not from a line about the issue; it also carries no goal label.
+12. **Untouched, no rule in the brief:** 25 lapsed (F2: PRF-163, 164, 199, 209, 224, 328, 329, 331, 343, 390, 391, 392,
+    395, 428; F1: PRF-190; F3: PRF-210; F-KS: PRF-201, 246, 299, 363, 409, 410, 419, 421, 429) and 14 strays (PRF-208,
+    243, 246, 345, 348, 349, 351, 356, 376, 418, 438, 439, 440, 452). The milestone "SPOT · Tue 10 Nov" lapses at
+    00:00Z Wed for PRF-451, 456, 458, 459, 461, 468.
+
+**Failed or odd:** `inbox/HOUSEKEEP.md` read at 00:48Z (your 00:43Z note, nothing new). `/usr/bin/time` is not on
+this VM ("No such file or directory"), so I timed the boundary scan with a Python wrapper. `Linear().gql` refused one
+read of all projects with "HTTP 400: Query too complex"; paged, it worked.
+
+**Next:** Task 2 on #8468's head. The scan is a pure file scan (7.2 s, 170 MiB on main), so I run it on the PR's head
+in a /tmp worktree. Next entry by 01:58Z.
