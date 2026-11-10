@@ -29579,3 +29579,61 @@ This corrects my 16:36Z guess of "no on time": it was wrong, and I now expect ye
 **For PRF-460, ready to paste:**
 
 > File's two walks and the statement's inputs pass (run `r20261110-160744-7c72`). The partition's checks and the setup's walks are on `cursor/proofs-twowitness-0d28` at `7027dce9d3`, which `r20261110-170159-e2c3` tries. The statement carries no program, since the kernel can't run `Program.decode`'s string hash. Next: the setup's hypotheses at the instance, then the rest of `Ins.setup`.
+
+## HOUSEKEEP, Tue 10 Nov 17:07Z: the rehearsal's first pass: all 25 cross clean (23 against `af72`'s tip; #8543 and #8563, which cannot merge `af72`'s base, against a stand-in over `034a1702664b`); the cut's staging is not pushed yet, so the fixtures' check on its head waits; no red of ours is open
+
+**1. The cut's staging is not pushed** (`git ls-remote` at 17:06Z: still `48da`, `82b0`, `af72`, `b373`, `eb0b`). [run] The stager's block of 16:59Z (`lanes/top/20261110T0800Z-report-movestage.md`, notes `50ea733c55`) says it is run `r20261110-165808-bc76` on cpu-1, launched 16:58Z, due about 17:20Z, then the push; base `3b08ef6575f7` (`034a1702664b` plus the merge of the model's tables `e5a6a8da5ec`), vllm's pick `15b22f4861e2`, hand files at notes `a167a36f41` (16:58:05Z). [read]
+- Between my dry run's notes (`ff3af490d7`) and `a167a36f41` our hand file did not change; of all lanes' files only top's did (9 lines, its new insert). [run: `git diff` in the notes]
+- So the fixtures' check on the cut's head is still to do. What stands in for it is in the 16:39Z entry (`4fe6351ec1`): on `034a`'s tree through both moves, 8, 7 and 6 recorded inputs, none changed, none absent.
+
+**2. The rehearsal, pass 1.** Each PR as top's two commands will run it, dry: a scratch merge of BASE (the parent of the staging's one-map move) into the head, then `restack.py MERGED --main STAGE --kept --dry-run --json` with `034a1702664b`'s `restack.py`, in a scratch clone on my VM. No ref moved, nothing pushed. [run, 16:33Z to 17:06Z]
+
+**Counts: 25 of 25 clean. 23 against `af72`'s tip `41d5514d7680`; 2 only against the stand-in.**
+
+| PR | head | mark | restack | steps, or where it stops | an ordinary merge of the tip | result (scratch) |
+|---|---|---|---|---|---|---|
+| #8354 | `a53eb5d1686d` | ready | clean | both moves | conflicted (1) | `8ec6a929ebbe` |
+| #8368 | `533958045e8e` | ready | clean | both moves | conflicted (2) | `4936e80a190e` |
+| #8552 | `20d95f339db2` | ready | clean | both moves | conflicted (1) | `6ad431815115` |
+| #8406 | `fe32fa055d40` | ready | clean | both moves | conflicted (1) | `03bb3b1eb155` |
+| #8411 | `1562e328dae3` | ready | clean | both moves | clean | `4630491f566e` |
+| #8414 | `4975a307d3f7` | ready | clean | both moves | conflicted (3) | `f737f8852a86` |
+| #8423 | `e973bd0d968c` | ready | clean | both moves | clean | `d5b5a4b7f626` |
+| #8425 | `8d4002392314` | ready | clean | both moves | clean | `197b3ee585b1` |
+| #8453 | `0054c395fe85` | ready | clean | both moves | clean | `ac3f407593be` |
+| #8454 | `0e694dd53ec6` | ready | clean | both moves | clean | `2e276cdf0987` |
+| #8458 | `9c4fa7138715` | ready | clean | both moves | clean | `cb12571fc620` |
+| #8517 | `2e8a4eab4b65` | ready | clean | both moves | clean | `853e2b7b849a` |
+| #8536 | `b7afd40baa20` | ready | clean | both moves | conflicted (5) | `def5970528c2` |
+| #8540 | `b301a406cc3c` | ready | clean | both moves | clean | `cb5eca2a9894` |
+| #8565 | `38e2f7d06762` | ready | clean | both moves | conflicted (5) | `d4e7df90e2c8` |
+| #8576 | `1803be00c9f6` | ready | clean | both moves | clean | `751b91fca372` |
+| #8583 | `eccc38719cd5` | ready | clean | both moves | clean | `03c40a146ceb` |
+| #7952 | `4d3d22fda080` | waiting | clean | both moves | clean | `fc9f3e8ebb0c` |
+| #8120 | `b6e0c1dc5de8` | waiting | clean | both moves | conflicted (1) | `7fbe04ab7334` |
+| #8177 | `6dd74f50be00` | waiting (draft) | clean | both moves | clean | `2b950233b246` |
+| #8363 | `a81a1b11ea1d` | waiting | clean | both moves | conflicted (9) | `7c4301c50ae9` |
+| #8543 | `2007687fd9b8` | waiting | conflicted | at `git merge BASE`: `verity/core/service/spot/Spot/Pieces.lean`, `verity/core/service/spot/Spot/SecondStage.lean`, `verity/core/service/spot/tests/test_difftest.py` | conflicted (4) |  |
+| #8563 | `80bc72a80541` | waiting (draft) | conflicted | at `git merge BASE`: `verity/core/service/spot/Spot/Pieces.lean`, `verity/core/service/spot/Spot/SecondStage.lean`, `verity/core/service/spot/tests/test_difftest.py` | conflicted (3) |  |
+| #8568 | `a28822661c1a` | waiting | clean | both moves | clean | `1d60fa0211a4` |
+| #8578 | `0a713e7caaf6` | waiting | clean | both moves | clean | `f5e122546693` |
+
+- "an ordinary merge of the tip" is `git merge-tree` of the staging's moved tip into the unmoved head, with the number of conflicted files: 9 of the 23 would conflict by a plain merge and cross clean by the restack.
+- **#8543 and #8563 stop at `git merge BASE` on `af72`** (and on `eb0b`'s base), in `verity/core/service/spot/Spot/Pieces.lean`, `Spot/SecondStage.lean` and `tests/test_difftest.py`: those bases lack #8486, #7590 and #8444 as the queue landed them, which both heads build on. Both merge `034a1702664b` clean. [run] It is the old stagings' base, not the PRs.
+- **Against a stand-in over `034a1702664b`** (my scratch commits: the one map, every lane's rows and the adapted second map, the second move, vllm's pick `15b22f4861e2`; move lines with `--no-lock`; tip `0567c13da4a1`, local only): **#8543 clean, #8563 clean**, both moves crossed. [run] The pins step rewrote `verity/protocols/pous/lean/TRUSTED.sha256` in both: the stand-in has no regenerated files, so that pin is stale in its own tip. On `af72`'s tip no result needed the pins step.
+- **What "clean" was checked to mean, on all 23 and the 2** [run]: each result differs from the staging's tip in as many files as the PR's own diff (added, changed, deleted counted apart; #8414 in 8 against 19, since its other 11 are #8429's, which `main` holds); no result holds a file under `Security/`, `verity/core/` or `verity/ml/`; no line a result adds names an old place (`verity.core.`, `verity.ml.`, `verity/core/`, `verity/ml/`, `Security/`). #8454's head adds 6 such lines and #8414's 9; the results have none. #8517 and #8568 add files in new directories under `benchmarks/spot_figures`, which the map leaves in place.
+- No result is `locks-stale` or `pins-stale`. Not checked: any test or Lean build on a result.
+- **A correction to my own first pass:** it gave #7952 and #8120 as conflicted in four `pous` files. That was my script, not the PRs: it took as BASE the parent of an older `Layout-move:` commit that `main` already holds (`b3db2f4ad64c`), which those two old heads lack. With the staging's own base both are clean (rerun 16:56Z to 16:59Z). The tool now takes only the moves `origin/main` does not hold.
+- Time on a 4-core VM: 140 to 150 s a PR three at a time (275 s for the first, which makes the moves' checks), 17 minutes for 24.
+
+**3. On call: no red of ours is open.** Top's table of staging C's reds (`lanes/top/20261110T1625Z-reds-staging-c.md`) puts 9 rows under @proofs. By row:
+- 4 are ours and have rows: `test_class_statement.py` (row 27), `test_optimize.py` (31 to 33), `test_served_verdicts.py` (28 to 30), `verity/circuits` `test_population_recorded.py` (34 to 36 and the insert). The first three you answered at 16:28Z; the fourth passed on `41d5514d7680` with our rows in `r20261110-150732-3f59` (1 passed in 849 s), and circuits' 16:09Z post has the whole format suite passing. [read: my 15:34Z entry]
+- 2 are in `tests/test_boundaries.py` and are cured by vllm's pick, which C had none of: `test_every_source_belongs_to_a_unit_or_is_a_grouping` is not in the picked file, and `test_nothing_outside_benchmarks_imports_it` passes: the pick's list holds `verity/composite/datacenter/tests/test_datacenter.py`. [run: `e49dd4b99987` picked on `034a`'s tree after both moves, that test and its twin, 2 passed; the whole file there is 17 passed, 2 failed, and neither is ours: vllm's known load of `verity/definitions/circuits/library.py`, which the new sha's eight lines allow, and two directories without `__init__.py` that the stager's own commit "the suites' inputs and the package levels" adds and my tree lacks]
+- 1 is network-accounting's (`test_network_certifier_tie_service.py`, cured by #8648 in the base; their 16:26Z post) and 2 are compute-accounting's generated vectors (`verity/protocols/pouw/verifier` `test_lean_package.py`, `test_row_prims_lean.py`; the `[[regen]]` rows that did not run in C). [read]
+- TOP-394 read at 16:55Z: top's 16:39Z says every red of C is answered and none confirmed by a run; the stager runs those test files on the cut's head and top posts what is still red at about 17:45Z.
+
+**4. Now and next.**
+- Running on my VM since 17:06Z: the other 23 against the stand-in over `034a`, three at a time, done about 17:25Z. It only hedges a late push; the pass that counts is the one on the cut's head.
+- When the cut's head is pushed: `fixture_digests.py` on it, that our 48 rows read as `want` there, then the 25 against it (about 20 minutes), and an entry with that table.
+- I read TOP-394 and my mailbox again at about 17:25Z.
+- Tools and the list are in the notes (`lanes/proofs/layout/tools/`: `rehearse.py`, `table.py`, `leftover.py`, `oldnames.py`, `fixture_digests.py`; `lanes/proofs/layout/clean25.tsv`), notes `aaa8161733`.
