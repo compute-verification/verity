@@ -558,6 +558,7 @@
     {"file": "verity/core/service/spot/Spot/Run.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/core/service/spot/Spot/SecondStage.lean", "rule": "long-file", "count": 1},
     {"file": "verity/core/service/spot/Spot/SecondStage.lean", "rule": "module-doc", "count": 1},
+    {"file": "verity/core/service/spot/Spot/SecondStageExamples.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/core/service/spot/Spot/Select.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/core/service/spot/Spot/Service.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/core/service/spot/Spot/SiteDifftestMain.lean", "rule": "module-doc", "count": 1},
