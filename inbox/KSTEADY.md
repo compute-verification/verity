@@ -190,3 +190,42 @@ Yours is goal 5 (HASH-98), and its next result is hours away. So:
   repository, write one final CHECKPOINT that says exactly where a later worker picks up and what is stored where, sync,
   and end your turn with a three-line report. Take no more than 15 minutes over it.
 - Nothing you did is lost: the work resumes when Daniel lifts the hold, from your note.
+
+## Tue 10 Nov 15:59Z: benchmarks' ranked list is on HASH-98 (15:56Z). Re-order your two chains to it
+
+Read benchmarks' comment whole: it is the list of record, every type of #8281's partition by share of proving time,
+priced under the cut of record (`per-expert-fused`) at ONE prover a GPU. What it changes for your queue:
+
+- **Cancel three queued runs, which price no row** (none has started; cancel with a reason):
+  `r20261110-154547-1190` (`MoeExpertFp8GemmW_v1`) and `r20261110-154558-089c` (`MoeExpertFp8BlockGemm_v3`): the cut of
+  record fuses them into rows 3 and 5, which are steady already. `r20261110-154228-2c14`
+  (`FlashInferFp8Quant1x128_v2{K=2048}`): no type of this census (its four `FlashInferFp8Quant1x128` types are `_v1`,
+  0.04% together).
+- **`gq` is row 25, 0.51% of the time.** Let `r20261110-154042-7132` finish its ONE-prover row (a steady try of it
+  once stopped at the host's memory limit, so a row is worth having), then stop it: no 2 and 4 provers for it now.
+- **Steady today:** rows 3, 5, 29 and 33, 36.86% of the time. **90% takes rows 1, 2, 4 and 6 to 14.**
+- **The order, one prover first for every type** (benchmarks prices at one; 2 and 4 provers only after every row
+  below has its one-prover row, in the same order):
+  | Row | Type | Share | Spec and pin (proofs' table) |
+  |---|---|---|---|
+  | 4 | `BatchedGemm_v1{B=1,K=512,N=1,DOT=BF16Wgmma16}` | 10.77% | `census:` + the id, `90f9df32e5e20d20` |
+  | 6 | `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | 9.85% | no row: your queued 9df8 |
+  | 7 | `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` | 9.50% | running: 2f3f |
+  | 8 | `CublasSplitKGemmF32Out_v1{K=6144,N=1,SPLIT_K=3,DOT=BF16Wgmma16}` | 5.52% | `f7684104e1f464ef` |
+  | 9 | `LlBf16DotprodGemm_v1{N=1,K=6144,BS=128,VEC=8,FMA=1}` | 4.10% | `b0b234472279f8f9`: your queued be70 |
+  | 10 | `CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4,DOT=BF16Wgmma16}` | 2.64% | `6b13e83d07796e19` |
+  | 11 | `Gemm_v2{K=6144,N=1,DOT=BF16Wgmma16}` | 1.70% | `b8ae9f3ffbc30d25` |
+  | 12 | `BatchedGemm_v1{B=1,K=192,N=1,DOT=BF16Wgmma16}` | 1.67% | no row |
+  | 13 | `EmbeddingRead_v1{V=256,H=4}` | 1.35% | no row |
+  | 14 | `AllReduceMultimem_v1{WORLD=8,SIZE=96,...}` | 1.20% | no row |
+  Put row 4 at the front of the card that frees first. Check each pin against what you stage; a pin that differs is
+  said on HASH-98 before the run is timed.
+- **Rows 1 and 2, the 64-key sparse-MLA blocks (5.30%):** on this partition they are `SparseMlaHeadBlock_v1` at
+  `NVIS=64`; the form the verifier takes is circuits' #8520's `_v2`. proofs' worker stages them today and posts each
+  spec and pin on HASH-98 at about 19:00Z; composing one block takes 70 to 81 minutes and about 200 GB of host
+  memory, and it settles with you where it stages (node A's cores 0 to 11, or a CPU node). Answer it on HASH-98
+  the same checkpoint. They go to the front when they stage. One Lean `verify --zk` of that program took 982 s:
+  that is the verifier's read, not the prover's rate; say how your row treats it.
+- When cards 4 and 5 free (KMOVE's until 20:00Z, then KP2's hour; KHSHARE's one lease), say so on HASH-98 if a third
+  run at once would bring the 90% in: the lead writes the card and cores here first.
+Report each finished row on HASH-98 in one line with its row number of benchmarks' table.
