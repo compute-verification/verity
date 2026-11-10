@@ -28,7 +28,6 @@ public import Definitions.Nci.Formalism.Instances
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
-public import Definitions.Pous.Guarantees.StreamedWipeInfo
 public import Definitions.Pous.Guarantees.StreamedWipeServer
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
 public import Definitions.Pouw
