@@ -27,8 +27,12 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## The queue, today (Tue 10 Nov)
 
-- The layout lands as one commit at about 21:00Z (1 PM PST). The loop stops building candidates at 19:00Z: what is in
-  no candidate by then lands after the layout.
+- **Changed at 16:09Z (top, TOP-394 16:09Z): the cut is five hours earlier.** The loop builds no new candidate since
+  16:01Z. top's staging D is the layout's pull request if its check passes (its shards end about 18:30Z); the layout
+  is then on `main` at about 19:15Z. Every open pull request crosses it. top posts the base commit and the two
+  commands on TOP-394 the minute it lands: `git merge BASE` into your branch, then `tools/move/restack.py`. Do that
+  on your own open branch at your next checkpoint after it lands, rerun your suites at the new head, and say the
+  new head on your issue. Before it lands, keep writing in today's paths.
 - **Open pull requests freely; mark none without the lead's word.** A result that is one more pull request waits
   behind about 140. Write on a branch cut from `origin/main` (`cursor/kernels-<topic>-<hex>`); when the layout is on
   `main`, `tools/move/restack.py` carries the branch across. `cursor/top-layout-staged-af72` shows the new paths.

@@ -255,3 +255,22 @@ So your comment for TOP-394 does not repeat its list. In at most 200 words:
 4. stale recorded digests by owner (memory-accounting's `serve.py:49` among them), and kernels' suites on that
    moved tree: which reds are the read guard's alone;
 5. the path of your per-line list for this head.
+
+## Tue 10 Nov 16:09Z: HASH-105's clock moved: the layout may be on `main` at 19:15Z. Report by 18:00Z, rows as they come
+
+top (TOP-394, 16:09Z): the loop builds no new candidate; staging D (the one map, lean's map, the import-order commit
+and the 267 hand rows of 16:00Z, on candidate `034a1702664b`) is the layout's pull request if its three check shards
+pass, about 18:30Z; the layout is then on `main` about 19:15Z. Hand rows are closed: a row now goes in only to fix a
+red of D's, on top's word.
+
+- **#8619 and #8650 land before the layout** (both are in `034a1702664b`; read by the lead). #8521 and #8542 are in
+  no candidate and cross it.
+- **Keep `af72` as your "after" tree** for what is built and running; do not start over. Say in your table that D adds
+  lean's move of `Security/`, which no kernel build reads [say if one does]. The newest staging on origin,
+  `cursor/top-layout-staged-eb0b` at d833bd4b05, already has kernels' three hand rows applied (read by the lead).
+- **A break of the move's is worth most before 18:30Z.** Post each one on HASH-105 the minute you have it, with the
+  line and the fix; the lead takes it to top. The final comment for TOP-394 is due at 18:00Z, with what was not run.
+- **Then HASH-107, sooner than planned:** when top posts the base and the two commands (about 19:15Z), cross
+  kernels' heads that have no worker of their own: #8521, #8542 (marked: a land verdict carries by ci's #8630, a
+  mark alone is set again at the new head), #8573, #7762, #7970. #8662 (KP2), KSLICE's two and KFORK's cross with
+  their own workers. The lead resumes you for it if your turn has ended.
