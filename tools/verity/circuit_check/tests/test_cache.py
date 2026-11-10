@@ -1138,7 +1138,7 @@ def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
 #: the harness's lookups as they were before entries shared their read records: each entry's reads whole (`cache.read`),
 #: digested now, against what it holds
 WHOLE = """
-CC._current = lambda root, p, e: CC._digests(root, {k: list(v) for k, v in (r := CC._expand(p, e)).items()}) == r
+CC._current = lambda root, p, e: (lambda r: CC._digests(root, {k: list(v) for k, v in r.items()}) == r)(CC._expand(p, e))
 """
 
 
