@@ -221,10 +221,8 @@ theorem lands_on_writer_leaf {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiri
 theorem run_inr {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {n : ℕ} {a a' : α}
     (hs : step a = .ok (.inr a')) :
     Flock.Steps.run what step (n + 1) a = Flock.Steps.run what step n a' := by
-  first
-    | (rw [Flock.Steps.run.eq_2, hs]; all_goals rfl)
-    | (rw [Flock.Steps.run.eq_2]; simp only [hs, bind, Except.bind]; all_goals rfl)
-    | simp [Flock.Steps.run, hs, bind, Except.bind]
+  rw [Flock.Steps.run.eq_2, hs]
+  all_goals rfl
 
 /-- A walk that ends, one step on. -/
 theorem run_drop {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a a' : α} {b : β}
@@ -295,7 +293,7 @@ theorem resolve_of_run {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (n : ℕ) (hn
   Flock.Steps.run_mono hn h
 
 theorem le_fuel {n : ℕ} (h : n ≤ 8) : n ≤ Flock.Steps.FUEL :=
-  Nat.le_trans h (by first | decide | exact Nat.le_of_ble_eq_true rfl | (unfold Flock.Steps.FUEL; omega))
+  Nat.le_trans h (by decide)
 
 /-! ### A toy Program: a parameter returned as it is, through a callee, through a batch member, and copied -/
 
@@ -451,16 +449,15 @@ theorem copy_differs : resolve toyP (unit 8) ⟨false, 0, 0⟩ ≠ resolve toyP 
 def rsCall : Array TRange := #[⟨3, "ViaCall_v1", 0, 1⟩]
 
 theorem call_unit : UnitAt toyP rsCall "ViaCall_v1" 0 (unit 3) :=
-  ⟨0, 0, by decide, rfl, by decide, by first | rfl | simp, rfl⟩
+  ⟨0, 0, by decide, rfl, by decide, rfl, rfl⟩
 
 /-- **A parameter returned through a callee's return is passed on**: `ViaCall`'s unit passes input gate 1 on. -/
 theorem call_passedOn : PassedOn toyP rsCall ⟨"ViaCall_v1", 0, "x", 0⟩ 1 := by
   have h2 : (outRow dCall 0).2 = Flock.Program.Ty.widths (.value 16) := rfl
   have hx : dCall.body.ret.get ((outRow dCall 0).1 + 0) = ⟨false, 0, 0⟩ := rfl
   refine passedOn_of_out (sc := unit 3) (d := dCall) (f := 0) (l := 0) call_unit rfl (by decide) ?_ ?_
-  · first
-      | (rw [h2, Flock.Program.Ty.widths]; decide)
-      | (rw [h2]; simp [Flock.Program.Ty.widths])
+  · rw [h2, Flock.Program.Ty.widths]
+    decide
   · rw [hx]
     exact call_out
 
@@ -468,16 +465,15 @@ theorem call_passedOn : PassedOn toyP rsCall ⟨"ViaCall_v1", 0, "x", 0⟩ 1 := 
 def rsBatch : Array TRange := #[⟨6, "ViaBatch_v1", 0, 1⟩]
 
 theorem batch_unit : UnitAt toyP rsBatch "ViaBatch_v1" 0 (unit 6) :=
-  ⟨0, 0, by decide, rfl, by decide, by first | rfl | simp, rfl⟩
+  ⟨0, 0, by decide, rfl, by decide, rfl, rfl⟩
 
 /-- **A parameter returned through a batch member is passed on**: `ViaBatch`'s unit passes input gate 3 on. -/
 theorem batch_passedOn : PassedOn toyP rsBatch ⟨"ViaBatch_v1", 0, "x", 0⟩ 3 := by
   have h2 : (outRow dBatch 0).2 = Flock.Program.Ty.widths (.array 2 (.value 16)) := rfl
   have hx : dBatch.body.ret.get ((outRow dBatch 0).1 + 1) = ⟨false, 0, 1⟩ := rfl
   refine passedOn_of_out (sc := unit 6) (d := dBatch) (f := 0) (l := 1) batch_unit rfl (by decide) ?_ ?_
-  · first
-      | (rw [h2]; simp only [Flock.Program.Ty.widths]; decide)
-      | (rw [h2]; simp [Flock.Program.Ty.widths])
+  · rw [h2]
+    simp [Flock.Program.Ty.widths]
   · rw [hx]
     exact batch_out1
 
@@ -490,19 +486,19 @@ theorem step_call (P : Prog) (sc : Scope) (k j : ℕ) (h : ((P.defs[sc.d]!).body
     resolveStep P (sc, ⟨false, k, j⟩) =
       .ok (.inr (.child sc ((P.defs[sc.d]!).body.nodes[k]!).fn (sc.off + (P.defs[sc.d]!).body.offsets[k]!) k 0,
         (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).body.ret.get j)) := by
-  first
-    | (simp only [resolveStep, h]; all_goals rfl)
-    | (rcases sc with ⟨d, off, _ | starts⟩ | ⟨parent, d, off, node, member⟩ <;>
-        simp only [resolveStep, h] <;> rfl)
+  rcases sc with ⟨d, off, _ | starts⟩ | ⟨parent, d, off, node, member⟩ <;>
+    first
+      | (unfold resolveStep; simp only [h]; all_goals rfl)
+      | (unfold resolveStep; dsimp only; rw [h]; all_goals rfl)
 
 /-- A parameter's leaf, in the activation of a call node, is the node's argument's leaf in the caller. -/
 theorem step_param (P : Prog) (parent : Scope) (d off k m i j : ℕ)
     (h : ((P.defs[parent.d]!).body.nodes[k]!).form = .call) :
     resolveStep P (.child parent d off k m, ⟨true, i, j⟩) =
       .ok (.inr (parent, (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j)) := by
-  first
-    | (simp only [resolveStep, h]; all_goals rfl)
-    | (unfold resolveStep; simp only [h]; all_goals rfl)
+  unfold resolveStep
+  simp only [h]
+  all_goals rfl
 
 /-- A batch node's output leaf, its callee no primitive, is a member's return leaf in that member's activation. -/
 theorem step_batch (P : Prog) (sc : Scope) (k j : ℕ) (h : ((P.defs[sc.d]!).body.nodes[k]!).form = .batch)
@@ -515,10 +511,11 @@ theorem step_batch (P : Prog) (sc : Scope) (k j : ℕ) (h : ((P.defs[sc.d]!).bod
         (j / (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).outLeaves),
         (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).body.ret.get
           (j % (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).outLeaves))) := by
-  first
-    | (simp only [resolveStep, h, hp, Bool.false_eq_true, ↓reduceIte]; all_goals rfl)
-    | (rcases sc with ⟨d, off, _ | starts⟩ | ⟨parent, d, off, node, member⟩ <;>
-        simp only [resolveStep, h, hp, Bool.false_eq_true, ↓reduceIte] <;> rfl)
+  rcases sc with ⟨d, off, _ | starts⟩ | ⟨parent, d, off, node, member⟩ <;>
+    first
+      | (unfold resolveStep; simp only [h, hp, Bool.false_eq_true, ↓reduceIte]; all_goals rfl)
+      | (unfold resolveStep; simp only [h]; rw [hp]; all_goals rfl)
+      | (unfold resolveStep; dsimp only; rw [h]; dsimp only; rw [hp]; all_goals rfl)
 
 /-- A parameter's leaf, in the activation of a batch member, is that member's leaf of the node's argument in the
 caller. -/
@@ -526,8 +523,8 @@ theorem step_member (P : Prog) (parent : Scope) (d off k m i j : ℕ)
     (h : ((P.defs[parent.d]!).body.nodes[k]!).form = .batch) :
     resolveStep P (.child parent d off k m, ⟨true, i, j⟩) =
       .ok (.inr (parent, (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).memberRef m j)) := by
-  first
-    | (simp only [resolveStep, h]; all_goals rfl)
-    | (unfold resolveStep; simp only [h]; all_goals rfl)
+  unfold resolveStep
+  simp only [h]
+  all_goals rfl
 
 end NciCheck.Properties.Record.Attack
