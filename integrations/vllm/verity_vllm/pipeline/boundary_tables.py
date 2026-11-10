@@ -24,7 +24,7 @@ like the rest (`fill`, which the interior's tables take too). A read past L retu
 
 **What round 2 opens** (`Kept`): each table's rows and salts as built, in files on the node readable by their owner only,
 never under a run's directory or the serve's records, which leave it. `load` gives a served table by its name, for the
-interior to open a drawn span's table under round 1's root; `Kept.span` reads a span's rows at a range of positions with
+interior to open a sampled span's table under round 1's root; `Kept.span` reads a span's rows at a range of positions with
 their salts and public strings, and `Kept.table` rebuilds a table from them, held to its root. The range is an argument:
 the committed step schedule it is to come from isn't there yet.
 """
@@ -78,19 +78,19 @@ def name(run: str, prompt: int, outputs: int, slot: int, layer: int) -> str:
 
 
 def computed(prompt: int, served: int, finish: str | None) -> tuple[int, int]:
-    """The positions a request's tables hold, at least and at most: a request that stopped or hit its cap computed every
-    position but its last id's; one aborted, errored or still running computed some prefix of its prompt and ids."""
+    """The positions a request's tables hold, at least and at most: a request that stopped or reached its limit computed
+    every position but its last id's; one aborted, errored or still running computed some prefix of its prompt and ids."""
     n = int(prompt) + int(served)
     return (n - 1, n - 1) if finish in ("stop", "length") and n else (0, n)
 
 
 def class_rows(prompt: int, outputs: int, capacity: int = CAPACITY) -> int:
-    """C, the rows every table of class (``prompt``, ``outputs``) holds: the class's cap on positions, ``prompt`` +
+    """C, the rows every table of class (``prompt``, ``outputs``) holds: the class's bound on positions, ``prompt`` +
     ``outputs``, since a request computes at most its prompt's and its ids' (`computed`), and at most the tables'
     ``capacity``. A function of the class alone, so a table's published strings show nothing of its request's length."""
     for k, v in (("prompt", prompt), ("outputs", outputs)):
         if type(v) is not int or v < 1:
-            raise ValueError(f"a class's {k} cap is a positive integer, not {v!r}")
+            raise ValueError(f"a class's {k} bound is a positive integer, not {v!r}")
     if not HT.cap_ok(capacity):
         raise ValueError(f"a table's capacity is a power of two of at least 2, not {capacity!r}")
     return min(prompt + outputs, capacity)
@@ -435,7 +435,7 @@ class Kept:
 def load(directory: str | Path, table: str) -> Served:
     """The served table named ``table`` (`name`: its run, class, slot and layer) that rank 0 kept under a serve's private
     directory ``directory`` (its ``tables`` configuration's ``private``, as `Kept.of` puts it): what the interior opens
-    for a drawn span, committed again under round 1's program, name, words and capacity so that its root is round 1's
+    for a sampled span, committed again under round 1's program, name, words and capacity so that its root is round 1's
     port root. On the node only."""
     return Kept(Path(directory).resolve() / "tables").load(table)
 

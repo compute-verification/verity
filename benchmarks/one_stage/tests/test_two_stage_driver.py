@@ -140,7 +140,7 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+    assert got.record == BR.record(pub, PAIR, R.D.parse_design(f"subset:{Q}")) and got.read
 
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():
