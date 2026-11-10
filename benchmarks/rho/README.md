@@ -129,8 +129,8 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 ## What it writes and what loads it
 
-`run.py` and `periods.py` print Markdown. With `--out DIR`, `run.py` writes `rho.md`, `rho.json` and `figures/` there
-and `periods.py` writes `periods.md` and `periods.json`. Neither writes a file unless told where.
+`periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
+Neither writes a file unless told where.
 
 Nothing outside `benchmarks/` loads this package (`tests/test_boundaries.py`). A benchmark that needs the bound loads
 the package where it sits, with this directory put on `sys.path` and `rho` imported, and one that needs a number of
