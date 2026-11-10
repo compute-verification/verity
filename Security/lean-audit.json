@@ -298,6 +298,7 @@
   },
   "NetTiming.FaultyGate": {
    "owner": "@network-accounting",
+   "digest": "bbc940eb0195b83903ed55053117b14b34c4ced8f375905ce44f5cb54f4afdc3",
    "why": "A scope inside CheckedUnique, which the honest lemma concludes: the values a run holds sit only at committed gates of proof blocks of no class sampled all."
   },
   "NetTiming.OpensAtInputs": {
@@ -317,6 +318,7 @@
   },
   "NetTiming.PeriodChannelReg": {
    "owner": "@network-accounting",
+   "digest": "23f1f033133e643e62d0c88cf1bf65dacee93d89b3ab06989c88caa72d91eea4",
    "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as PeriodChannel states it over the schedules."
   },
   "NetTiming.PeriodEscapes": {
@@ -331,6 +333,7 @@
   },
   "NetTiming.RecordFormat.ReadsBy": {
    "owner": "@network-accounting",
+   "digest": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
    "why": "A property of the record format and the registered parameters: the client's cells read back from the record under a parameter alone, on every schedule the parameter allows; the format's own read-back is this at each schedule as its own parameter."
   },
   "NetTiming.ResetsIn": {
@@ -340,6 +343,7 @@
   },
   "NetTiming.WindowsPlaced": {
    "owner": "@network-accounting",
+   "digest": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
    "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as PeriodLeakAccepted takes them inline."
   },
   "Population.Dataflow.Checked": {
@@ -2515,6 +2519,7 @@
   },
   "NetTiming.WindowGoodChecked": {
    "owner": "@network-accounting",
+   "digest": "d7f24e08de9111d984f779e6be244db62f883f2bf7b2869e87498cd625318148",
    "issue": "NET-313",
    "due": "2026-11-30"
   },
@@ -5340,6 +5345,12 @@
    "why": "honest instance needs each window's escape bound and leak relation's error (its hypotheses hesc and hleak) at the deployed verifier, which SampledLeakAccepted gives one window from Compiled.KS and no lemma states at this guarantee's hypotheses",
    "unfolded_hash": "d339cc8ffd4bdca709ea2be68156cbfdfc72778e0544bab00fa6ce85d2386463"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
    "unfolded_hash": "8f6522076956b9aaec905dfd60718ee9c736ab517c760a58d222cc468a2b172d"
@@ -5534,19 +5545,13 @@
    "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
-  "Verity.SecurityProofs.ServingBlockSum": {
-   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
-  },
   "Verity.SecurityProofs.RefineIncorrect": {
    "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
+  },
+  "Verity.SecurityProofs.ServingBlockSum": {
+   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
   }
  },
  "witnesses_assumed": {
@@ -19003,7 +19008,30 @@
    "unfolded_hash": "30796106c5b5506746a4c3bdf67ae671561a427388e8ee016b6e3243267134d4"
   },
   "NetTiming.SecurityProofs.PeriodLeakChecked": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PeriodLeakChecked : NetTiming.Guarantees.PeriodLeakChecked"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.CommitmentScheme.Binds",
+     "NetTiming.PeriodChannelReg",
+     "NetTiming.RecordFormat.ReadsBy",
+     "NetTiming.WindowsPlaced"
+    ],
+    "open": [
+     "Claims.SamplingGeneric.Compiled.KS",
+     "NetTiming.CertifierRegisters",
+     "NetTiming.CheckedUnique",
+     "NetTiming.CheckedWitness",
+     "NetTiming.ScopeAcc",
+     "NetTiming.WindowGoodChecked",
+     "Verity.Assumptions.TrustedHost"
+    ],
+    "reads": ["NetTiming.RegisteredInputsHeld"]
+   },
+   "type_hash": "47d75336b422e05159fe97d9e86e5f611ed8d6e5b0f22ede9258d4473bfeec05",
+   "unfolded_hash": "809c3ada30bc417a4b5f7e9bccab62c83213d381c176561407bb38232aaadb72"
   },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
@@ -19186,10 +19214,77 @@
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
   },
   "NetTiming.Witness.PeriodLeakChecked_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PeriodLeakChecked_honest :",
+    "  And",
+    "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
+    "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "        List.nil))",
+    "    (And",
+    "      (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512",
+    "        (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "            List.nil).commit)",
+    "      (And",
+    "        (NetTiming.WindowsPlaced",
+    "          (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "              fun x x_1 x_2 => List.nil).partition",
+    "          0 Fin.elim0 Fin.elim0 Fin.elim0)",
+    "        (And",
+    "          (∀ (i : Fin 0),",
+    "            NetTiming.CheckedUnique i.elim0.prog i.elim0 i.elim0.design NetTiming.Witness.trivLay 1",
+    "              Finset.instEmptyCollection.emptyCollection fun x => And True True)",
+    "          (And (NetTiming.Witness.noFormat.ReadsBy (fun x x_1 c => c.elim) fun x x_1 => True)",
+    "            (NetTiming.PeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True) Set.univ Set.univ",
+    "              (fun x => { r := 0, D := 0, adm := Empty.elim, cells := Empty.elim }) (fun x => Unit.unit)",
+    "              (fun x => Unit.unit) fun p =>",
+    "              (NetTiming.recordingCode NetTiming.Witness.noFormat p.fst fun c => c.elim).fst)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["NetTiming.FaultyGate"],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "68f47edace8ba47666620eae67f250df3890c3bdb06f34be7701d119ce6324c2"
   },
   "NetTiming.Witness.PeriodLeakChecked_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PeriodLeakChecked_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.PrBad FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "        (NetTiming.RLeakCertifierChecked FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).commit",
+    "          (Claims.Witness.SamplingGeneric.certL Bool).parse (Claims.Witness.SamplingGeneric.certL Bool).partition 1 1 1",
+    "          (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
+    "          (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection)",
+    "          (fun x x_1 => And True True) 1 fun x => NetTiming.Witness.certOps)",
+    "        (Claims.Witness.SamplingGeneric.certL Bool).E List.nil Claims.Witness.silentP)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd ((Claims.Witness.SamplingGeneric.certL Bool).κ 0 List.nil) 0) 0)",
+    "            (instHMul.hMul ((Claims.Witness.SamplingGeneric.certL Bool).γ List.nil)",
+    "                (Claims.PrB FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V Claims.Witness.silentP",
+    "                  List.nil)).sqrt)",
+    "          (Claims.Finder.Pr FlockDeploy.sha512",
+    "            (Claims.Sampling.Bext FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "              (Claims.Witness.SamplingGeneric.certL Bool).E Unit Claims.Witness.silentP List.nil)))",
+    "        (Claims.Finder.Pr FlockDeploy.sha512",
+    "          (NetTiming.Btap FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "            (Claims.Witness.SamplingGeneric.certL Bool).E (Claims.Witness.SamplingGeneric.certL Bool).commit",
+    "            (Claims.Witness.SamplingGeneric.certL Bool).parse (fun x => NetTiming.Witness.certOps) Unit",
+    "            Claims.Witness.silentP List.nil))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a2e3c2d055b64a79c4efe5cf53e85cd98aa12a6933fab37ed85927a11f19aebf"
   },
   "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
    "owner": "@network-accounting",
@@ -27910,19 +28005,19 @@
    },
    "Flock.SecurityProofs.EndToEndRegistered": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28284,8 +28379,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -28667,6 +28762,9 @@
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.RefineIncorrect": {
+    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28676,9 +28774,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.RefineIncorrect": {
-    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -36037,6 +36132,12 @@
     "NetTiming.Regenerates": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
    }
   },
+  "Definitions.NetworkCertifier.Assumptions.RegisteredInputs": {
+   "digest": "2801acfe82101143a12112ba807ddf4231c2ee0cf702e6c4568d9008d4f6c181",
+   "definitions": {
+    "NetTiming.RegisteredInputsHeld": "cc323ff7646936e9a47ffe0e5ecfa89e25f863da08c30035c70aa6a82bb734b6"
+   }
+  },
   "Definitions.NetworkCertifier.Carried": {
    "digest": "b5050e07ed96d112f037af9c8b5a9421894aada371ada155b824dae32f1d3638",
    "definitions": {
@@ -36131,6 +36232,13 @@
     "NetTiming.Guarantees.PeriodLeakAccepted": "8626bd453a35bd0970731bcf8ac7f5b010e53a5aba05f8da321e0f204f6b07f4"
    }
   },
+  "Definitions.NetworkCertifier.Guarantees.PeriodChecked": {
+   "digest": "9bb4514c70197d545de07ab6cfe6d8bc812eab331b889f9764caab894e22544a",
+   "definitions": {
+    "NetTiming.Guarantees.PeriodLeakChecked": "71c1c458d0d11fdb8674710c0f8c95e17e3c32913d177766c02e1cb84ac06cb6",
+    "NetTiming.WindowGoodChecked": "d7f24e08de9111d984f779e6be244db62f883f2bf7b2869e87498cd625318148"
+   }
+  },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
    "digest": "54fea0a567a4758143eeefd5ddfa44f6ff75b5659e11d867439071d9d3d95129",
    "definitions": {
@@ -36170,6 +36278,22 @@
    "definitions": {
     "NetTiming.SameRegistration": "8429cc0f7aa35a113597b5d61becf814dd398483b71b3aa633f976567dc17395",
     "NetTiming.WindowGood": "af8db0513d67462c431108d83b6b01ca6e45c5ca437af0e30110094be909a702"
+   }
+  },
+  "Definitions.NetworkCertifier.PeriodChecked": {
+   "digest": "be28dc91c83c150ea78dba58647d3a3f84630f0360bd35e28973949ae0626a06",
+   "definitions": {
+    "NetTiming.RLeakCertifierChecked": "12b3ad6bc5c82747fab7cb5caa7fce96bfa7bc6f15e245fc3abca3ff0a163a8c",
+    "NetTiming.certifierRun": "2560a26e13ea705b5d504cd775df468e6b4c17ee2792ec6389008467f2266ec7"
+   }
+  },
+  "Definitions.NetworkCertifier.PeriodConditions": {
+   "digest": "e5ae4acbd31cf1611be670f41156b00c7d3d60ef442031046ad4cf65e9496a03",
+   "definitions": {
+    "NetTiming.PeriodChannelReg": "23f1f033133e643e62d0c88cf1bf65dacee93d89b3ab06989c88caa72d91eea4",
+    "NetTiming.RecordFormat.ReadsBy": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
+    "NetTiming.WindowsPlaced": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
+    "NetTiming.windowsCount": "a8a5d1eed48debde81802ce4f07c6155717c55655b8800a6439815d221d4e399"
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
@@ -36296,13 +36420,14 @@
    }
   },
   "Definitions.NetworkCertifier.TapRows": {
-   "digest": "b62d00035254be9c8162a3e34dd18779cbe153f4699f53317883b3b37191b8e3",
+   "digest": "9bd959494346ab2f72c957d5994f1a8ca25e6fddb5da3c7ac491a4e9c77d08fb",
    "definitions": {
     "NetTiming.Btap": "246d781adf04e8efd876044dad00a766c58d3a8c861390febdcd08342657bb35",
     "NetTiming.CertifierRegisters": "83a789fca1e42ae8389d318d47d4ef812d5b459ef08fe54ca39a07b83609fb9d",
     "NetTiming.RLeakCertifier": "303e979c81528fcf2604bf8bece9c269b86ab8f4646d1d3ae57786a6971b625e",
     "NetTiming.certifierLog": "391389f64c448493bd12b936293936342825de5925478b59dc78ac28562ed79a",
-    "NetTiming.certifierVal": "34ad827a7a46e2e88b13d83b35466e1c7b2c092ab03f727a83014785cc3ea14e"
+    "NetTiming.certifierVal": "34ad827a7a46e2e88b13d83b35466e1c7b2c092ab03f727a83014785cc3ea14e",
+    "NetTiming.fillTrace": "174efb84d6ea5c2f130794bc6fccf992b3d732221ca393d42d8c52ccd86afbf1"
    }
   },
   "Definitions.NetworkCertifier.Warden": {
@@ -36327,9 +36452,10 @@
    }
   },
   "Definitions.NetworkCertifier.Witness": {
-   "digest": "16dffeccf3cfbcb5fdca377e1fb7b627789cb758a5f280a6a0db9cecc2cf70b6",
+   "digest": "6cd4d7d2eefc09d3435da2443afe4f2e578da46cb2daf726ba961ec9c8b43c78",
    "definitions": {
     "NetTiming.Witness.certOps": "850046dee06cea45d59d052626cfd5c408fe7a94b4d3b00db74c4656ccd740d0",
+    "NetTiming.Witness.noFormat": "8aeb9540414e29567650c22ccf8cb119ae2955fc0b2a5b61aeec96935650a6d9",
     "NetTiming.Witness.notLay": "b12c501c588a135dc1f9cb4168be2e565fcef30d74cfd9b3d0cae68e5f929b4c",
     "NetTiming.Witness.trivLay": "5988642439af8c4776d03b25406c91ed65a4251e64c9904698e9f95f2423da53"
    }
