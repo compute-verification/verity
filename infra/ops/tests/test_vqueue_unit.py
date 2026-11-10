@@ -203,18 +203,62 @@ def test_while_stopped_exists_no_tick_starts_and_a_failed_tick_is_not_the_loop_s
     assert r.returncode == CONFIG and r.stdout.splitlines() == ["tick", f"vy-vqueue: tick rc={CONFIG} mode=live pin="]
 
 
+NOW, LIMIT = 100_000, 40 * 60          # the clock the sweep is given here, and how long it leaves what a launch left
+
+
+def left(path: Path, ago: int) -> Path:
+    """What a launch left at ``path``, last changed ``ago`` seconds before NOW: a file if the name has a suffix, else a
+    directory with a file in it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.suffix:
+        path.write_text("")
+    else:
+        path.mkdir()
+        (path / "f").write_text("")
+    os.utime(path, (NOW - ago, NOW - ago))
+    return path
+
+
+def sweep(tmp_path: Path) -> None:
+    """loop.sh's `sweep` over tmp_path's trains/ and tmp/, at NOW by its clock."""
+    env = {**os.environ, "TRAIN_TREES": str(tmp_path / "trains"), "TMPDIR": str(tmp_path / "tmp"), "CLONE": str(tmp_path / "no-clone")}
+    subprocess.run(["bash", "-c", f'now() {{ echo {NOW}; }}\n{function("sweep")}sweep'], env=env)
+
+
 def test_the_sweep_takes_what_a_launch_left_40_minutes_ago_and_nothing_else(tmp_path):
     trains, tmp = tmp_path / "trains", tmp_path / "tmp"
     old = [trains / "train-0123456789ab-1of3", trains / "train-0123456789ab-1of3.log", tmp / "check-lean-deps-x", tmp / "train-why.abc"]
-    kept = [trains / "train-ba9876543210-2of3", tmp / "check-lean-deps-y", tmp / "drive-launches", tmp / "research-merged-1"]
-    for p in old + kept:
-        p.mkdir(parents=True) if not p.suffix else p.write_text("")
-        (p / "f").write_text("") if p.is_dir() else None
-    for p in old + kept[2:]:
-        os.utime(p, (0, 0))
-    env = {**os.environ, "TRAIN_TREES": str(trains), "TMPDIR": str(tmp), "CLONE": str(tmp_path / "no-clone")}
-    subprocess.run(["bash", "-c", f'{function("sweep")}sweep'], env=env)
-    assert not [p for p in old if p.exists()] and all(p.exists() for p in kept)
+    new = [trains / "train-ba9876543210-2of3", trains / "train-ba9876543210-2of3.log", tmp / "check-lean-deps-y"]
+    others = [tmp / "drive-launches", tmp / "research-merged-1"]
+    for p in old + others:
+        left(p, LIMIT + 1)
+    for p in new:
+        left(p, LIMIT)
+    sweep(tmp_path)
+    assert not [p for p in old if p.exists()] and all(p.exists() for p in new + others)
+
+
+def test_a_train_tree_stays_while_its_launcher_lives_and_goes_once_the_launcher_is_gone(tmp_path):
+    """train.sh starts check.py in the tree it checked out, and check.py can stay there, on the venv under it, for as long as
+    its run, while the tree's own time stays at the launch.  So a tree long past the limit stays, with its log, while a
+    process works in it or under it, and goes at the first sweep after the last such process ended; a tree as old that no
+    process works in goes at once.  Each launcher here works in its tree until the test closes its input."""
+    trains = tmp_path / "trains"
+    live, under, gone = (left(trains / f"train-{c * 12}-{k}of3", 3 * LIMIT) for k, c in enumerate("abc", 1))
+    logs = [left(t.with_name(t.name + ".log"), 3 * LIMIT) for t in (live, under, gone)]
+    (under / ".venv" / "bin").mkdir(parents=True)
+    os.utime(under, (NOW - 3 * LIMIT, NOW - 3 * LIMIT))
+    launchers = [subprocess.Popen(["cat"], cwd=d, stdin=subprocess.PIPE) for d in (live, under / ".venv" / "bin")]
+    try:
+        sweep(tmp_path)
+        kept = sorted(p.name for p in trains.iterdir())
+    finally:
+        for p in launchers:
+            p.stdin.close()
+            p.wait()
+    assert kept == sorted(p.name for p in (live, under, *logs[:2])) and (under / ".venv" / "bin").is_dir() and (live / "f").exists()
+    sweep(tmp_path)
+    assert not list(trains.iterdir())
 
 
 def test_git_and_gh_get_the_token_of_the_moment_from_root_s_file(tmp_path):
