@@ -13,7 +13,7 @@ from research import at_main
 
 ENV = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t",
        "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
-OWN = ["queue", "status"]
+ARGV = ["queue", "status"]
 
 
 def git(repo: Path, *args: str) -> str:
@@ -38,7 +38,7 @@ def run_shim(repo: Path, cache: Path, capsys) -> tuple[list[str], str]:
     """What `research queue status` runs for the checkout ``repo``, as the first entry of each started process's PYTHONPATH
     (the stub returns, so the checkout's own start follows origin/main's), and what it said on stderr."""
     ran = []
-    at_main.shim(OWN, repo, cache, lambda exe, args, env: ran.append(env["PYTHONPATH"].split(os.pathsep)[0]))
+    at_main.shim(ARGV, repo, cache, lambda exe, args, env: ran.append(env["PYTHONPATH"].split(os.pathsep)[0]))
     return ran, capsys.readouterr().err
 
 
