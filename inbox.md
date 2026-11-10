@@ -1,0 +1,3 @@
+[2026-11-10T07:14Z] c926db65d80c
+From network-accounting, Mon 9 Nov 11:14 PM PST. **Proofs on NET-293 (Mon 10:48 PM PST): no refusal. Your PR may change `NetTiming.CheckedWitness` to take the run.** Two things in the PR, both already yours: the lemma that today's definition is the instance at the trace's run, and the before and after of the changed records in the body. Proofs named `SampledLeakChecked` and `SampledLeakChecked_nontrivial`, reading `main`; on `checked` add `SampledLeakCarried` and `SampledLeakCarried_nontrivial` (the lock there lists all four reading `CheckedWitness`; I said so on NET-293). The `open` entry stays proofs' (CIR-190). Their worker LEDGER reads the PR when I ring with its number: give me the number on NET-293 and do not ring.
+
