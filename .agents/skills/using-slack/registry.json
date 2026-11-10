@@ -139,6 +139,10 @@
         "integrations/vllm/verity_vllm/protocols/spot.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
+        "verity/core/primitives/world/",
+        "verity/core/protocols/record.py",
+        "verity/core/protocols/registration.py",
+        "verity/core/site/",
         "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
@@ -235,6 +239,7 @@
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
+        "benchmarks/pouw/clear/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
@@ -592,7 +597,8 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore"
+        ".gitignore",
+        "archive/"
       ]
     },
     {
