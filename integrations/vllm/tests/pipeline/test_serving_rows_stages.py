@@ -18,20 +18,20 @@ import re
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity.ml.windows import wiring as WI
+from verity.windows import wiring as WI
 from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
 from verity_vllm.query.program_view import spec_statics
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.definitions.registry import sampling as SA
-from verity.ml.definitions.registry import sampling_rows as SR
-from verity.ml.definitions.registry import topp_keep_builder as K
-from verity.ml.definitions.registry import topp_stages as T
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.definitions.registry import sampling as SA
+from verity.definitions.registry import sampling_rows as SR
+from verity.definitions.registry import topp_keep_builder as K
+from verity.definitions.registry import topp_stages as T
 
 V = 16
 SERVED_V = 154880

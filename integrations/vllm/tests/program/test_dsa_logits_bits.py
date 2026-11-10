@@ -14,13 +14,13 @@ __models__ = ("zai-org/GLM-5.3",)
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.definitions.boolean import boolean_version
-from verity.ml.definitions.registry import boolean_dsa as BD
-from verity.ml.definitions.registry import dsa as D
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops.boolean import elementwise as EW
+from verity.definitions.boolean import boolean_version
+from verity.definitions.registry import boolean_dsa as BD
+from verity.definitions.registry import dsa as D
 
 STATICS = ["N", "H", "D"]
 

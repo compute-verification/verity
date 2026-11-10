@@ -1,4 +1,4 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.core.protocols.spot.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor host (`verity.spot.device.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
@@ -24,7 +24,7 @@ verifier's check that a served window's coins are that challenger's.
   Its coin must have been opened once, after that root: a sample opened early, from another session or family,
   from a session the ledger didn't open withheld, or never, is refused.
 * **Sessions** (the pouw setting ``session``): a lane reserves a session on infra's challenger gate
-  (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
+  (``reserve --peer NAME --scheme S --families JSON``, `verity/composite/device/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
   root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its
   ``session``, ``seq``, ``root`` and coin ``commitment``,
@@ -58,7 +58,7 @@ verifier's check that a served window's coins are that challenger's.
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
   coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
   after its coins).
-* **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`), called through its one composed
+* **Credit** is core's rules of record (`verity.protocols.pouw.verifier.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
   Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `draw_k`: the proof system's selection
   at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
@@ -84,15 +84,15 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import salt_of
-from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote
-from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
+from verity.protocols.pouw.verifier.protocol import DomainError
+from verity.spot.device import challenger as Ch
+from verity.spot.device import remote
+from verity.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
                                                              extends, ledger_head, live_reason, pinned_session,
                                                              session_named)
 
@@ -161,7 +161,7 @@ def carried(given: Mapping[str, Any]) -> dict[str, Any]:
 
 def lms_verify(key: ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify`: LMS over SHA-512 at the verifier's challenger key's (64, W, H)."""
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
 
     p = lms.Params(64, key.W, key.H)
     try:
@@ -578,7 +578,7 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
 
 def program_salt_of(c: Mapping[str, Any]) -> bytes:
     """The window's Program salt, from its H1 commitment `c`'s salt coin over its weights' root."""
-    from verity.core.protocols.pouw.audit import salt_of
+    from verity.protocols.pouw.verifier.audit import salt_of
 
     from verity_vllm.protocols.pouw import h1 as PH
     return PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), LiveOpening.from_json(c.get("salt_opening")).coin,
