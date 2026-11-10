@@ -29,6 +29,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
+from verity.ml.definitions import boolean as BL  # noqa: E402
 from verity.ml.definitions.registry.catalog import load  # noqa: E402
 from verity.ml.definitions.registry.sampling import bit_at  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
@@ -96,11 +97,11 @@ def test_a_block_reading_bit_at_is_priced_and_one_with_no_price_is_undecided(fee
     table has none for it the explicit circuit's, the same count; with no price for it the block's gates are undecided
     (`gate-table`) and not guessed."""
     row = IO.session_row(feed, None, None)
-    table, unpriced = BC.gate_table(BC.primitives([BC.session(feed)[0]]))
+    table, unpriced = BL.gate_table([BC.session(feed)[0]])
     assert unpriced == [] and table["BitAtx32_v1"] == 147 and (row["table"], row["priced"]) == (table, {})
     assert row["gates"] == BC.gates(BC.session(feed)[0], row["table"])[0]
     bare = {key: gates for key, gates in table.items() if key != "BitAtx32_v1"}
-    monkeypatch.setattr(BC, "gate_table", lambda prims: (dict(bare), ["BitAtx32_v1"]))
+    monkeypatch.setattr(BL, "gate_table", lambda fns: (dict(bare), ["BitAtx32_v1"]))
     own = IO.session_row(feed, None, None)
     assert own["priced"]["BitAtx32_v1"]["gates"] == 147 and (own["table"], own["gates"]) == (table, row["gates"])
     monkeypatch.setattr(IO, "price", lambda key: None)

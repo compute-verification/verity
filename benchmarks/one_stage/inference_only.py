@@ -29,10 +29,11 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
 
 Nothing in the policy reads the run, and n is no count of it, so the check can fail.
 
-**The gate table** is `block_counts.gate_table`'s, each primitive's two-input gates through its Boolean version, plus
-`PRICES` for a primitive that has none: `BitAtx{W}_v1` (bit i of a word, 0 outside it), priced by an explicit circuit
-of it (`bit_at_gates`) that this suite evaluates against the primitive, not by a Boolean version circuit-check checks.
-Any other primitive the table can't price leaves the count undecided, and the verdict refuses (`gate-table`).
+**The gate table** is `definitions.boolean.gate_table`'s, each primitive's two-input gates through its Boolean version,
+plus `PRICES` for a primitive it can't price: `BitAtx{W}_v1` (bit i of a word, 0 outside it), which the table prices by
+its Boolean version where it has one, and otherwise by an explicit circuit of it (`bit_at_gates`) that this suite
+evaluates against the primitive. Any other primitive the table can't price leaves the count undecided, and the verdict
+refuses (`gate-table`).
 
 **The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's declared circuit: the picked window's circuit record at the
 policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is the run's block Definition, its gates
@@ -167,11 +168,11 @@ PRICES = ("BitAtx{W}_v1", price)
 
 
 def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
-    """The gate table over the primitives ``fns`` reach: `block_counts.gate_table`'s, each primitive it can't price
-    priced by `price` where it can be, and the keys of the rest."""
-    from verity_vllm.program.predict import block_counts as BC
+    """The gate table over the primitives ``fns`` reach: `definitions.boolean.gate_table`'s, each primitive it can't
+    price priced by `price` where it can be, and the keys of the rest."""
+    from verity.ml.definitions import boolean as BL
 
-    table, unpriced = BC.gate_table(BC.primitives(fns))
+    table, unpriced = BL.gate_table(fns)
     priced, left = {}, []
     for key in unpriced:
         p = price(key)
