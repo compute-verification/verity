@@ -48,10 +48,10 @@ RESULT = "result.json"
 QUERY = ("name", "uuid", "driver_version", "clocks.sm", "clocks.mem")
 #: a query that hasn't answered by then is taken as failed, so a sick GPU can't hold a finished job's lease
 QUERY_TIMEOUT_S = 60
-#: the words of a verdict of record (a verifier's decision, a stage's PASS or FAIL) and of a seal, which no measurement's
-#: verdict uses
-OF_RECORD = frozenset("accept accepts accepted reject rejects rejected pass passes passed fail fails failed "
-                      "seal seals sealed".split())
+#: the words of a verdict of record (a verifier's decision, a stage's PASS or FAIL) and of a seal, each in every form a
+#: verdict takes (the verb's and its noun's), which no measurement's verdict uses
+OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejects rejected rejecting rejection "
+                      "pass passes passed passing fail fails failed failing failure seal seals sealed sealing".split())
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------

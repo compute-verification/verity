@@ -280,7 +280,8 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a verdict with no target, and a verdict in
-a verifier's or a seal's words (accept, reject, pass, fail, seal). A result holds one run's measurements, one a name.
+a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure, rejection). A result
+holds one run's measurements, one a name.
 
 ## Out of scope here
 

@@ -207,7 +207,8 @@ def test_the_writer_refuses_a_verdict_of_record_and_a_seal(tmp_path, no_gpu):
     w.measurement("kept", 1.0, "s", target=2.0, verdict="within target")
     before = (tmp_path / kit.RESULT).read_bytes()
     for verdict in ("PASS", "FAIL", "accept", "Accepted", "rejected", "passed: within target", "the verifier accepts",
-                    "sealed", "seal"):
+                    "sealed", "seal", "passing", "Failing", "rejection", "the proof's acceptance", "a failure", "accepting",
+                    "rejecting: over target", "sealing"):
         with pytest.raises(ValueError, match="reads as a verdict of record or a seal .* nothing under benchmarks/ writes"):
             w.measurement("gate", 1.0, "s", target=2.0, verdict=verdict)
     with pytest.raises(ValueError, match="'within target' has no target"):
@@ -219,7 +220,8 @@ def test_the_writer_refuses_a_verdict_of_record_and_a_seal(tmp_path, no_gpu):
         with pytest.raises(ValueError, match="value is a finite number.*a verdict of record or a seal is never a measurement"):
             w.measurement("gate", value, "verdict")
     assert (tmp_path / kit.RESULT).read_bytes() == before and list(tmp_path.iterdir()) == [tmp_path / kit.RESULT]
-    for verdict in ("within target", "over target", "meets", "misses", "cannot tell"):
+    # a target check that only holds one of those words inside another is no verdict of record
+    for verdict in ("within target", "over target", "meets", "misses", "cannot tell", "surpasses target", "acceptable"):
         w.measurement(f"gate {verdict}", 1.0, "s", target=2.0, verdict=verdict)
 
 
