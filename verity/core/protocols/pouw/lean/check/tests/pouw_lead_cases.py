@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import random
 
-from verity.core.protocols.pouw.circuit import lead as L
+from verity.ml.protocols.pouw.circuit import lead as L
 
 RECORD_NAMES = ["short_root", "short_stream", "long_prover", "long_key_leaf", "no_calls", "too_many_calls",
                 "negative_calls", "calls_not_int", "bad_hex"]
