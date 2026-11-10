@@ -28,8 +28,9 @@ pinned Definition, with one member a slot) in its own audit's registration and P
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
-the checker form is a bad scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks
-(`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
+the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate or of
+what `NetTiming.Layout.Fits` asks (`scan_negatives`). Beside them, the compute audits (in the rows form at least one,
+whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
 sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
@@ -281,6 +282,30 @@ def leaves_of(t) -> int:
     return sum(leaves_of(f if kind == "Tuple" else f[1]) for f in t[1])
 
 
+def _widths(t) -> set[int]:
+    """The widths of a descriptor type's leaves, each once (`Flock.Program.Widths.homo`'s, where there is one)."""
+    kind = t[0]
+    if kind == "Value":
+        return {t[1]}
+    if kind == "Array":
+        return _widths(t[2]) if t[1] else set()
+    return set().union(*(_widths(f if kind == "Tuple" else f[1]) for f in t[1]))
+
+
+def _same_leaves(a, b) -> bool:
+    """`sameLeaves`: two types of as many leaves, each of one width, the same in both."""
+    return leaves_of(a) == leaves_of(b) and len(_widths(a)) == 1 and _widths(a) == _widths(b)
+
+
+def _ingress_return(ret, sin, state) -> bool:
+    """`ingressReturn`: a tuple of exactly a u16, a state of the leaves of `sin` (the later ingress template's, None
+    where there is none) and a view of the leaves of `state`, the egress template's."""
+    if ret[0] != "Tuple" or len(ret[1]) != 3:
+        return False
+    out, passed, view = ret[1]
+    return out == BOOL_U16 and (sin is None or _same_leaves(passed, sin)) and _same_leaves(view, state)
+
+
 def _parts(refs: dict, nodes: list) -> list[dict]:
     """`Flock.Program.parseParts`'s parts of a sequence: a concatenation's spliced in, an alias the parts of the earlier
     node's argument it names."""
@@ -469,7 +494,9 @@ def _audit(a, ctx: str) -> Audit:
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
+    with a row among its parameters (the checker form) refused first, and an ingress return that is not a u16, a
+    state of `sin`'s leaves and a view of the egress `state`'s (`_ingress_return`), the rows the scan's two ties
+    equate. Then what `NetTiming.Layout.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
@@ -507,6 +534,10 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: the ingress templates' entry ports' types or returns differ")
     if be["ret_type"] != ["Tuple", [BOOL_U16, row]]:
         raise D.Reject("scan: the egress template doesn't return a u16 and the schedule's row")
+    if not _ingress_return(bf["ret_type"], later[0][1]["params"][1][1] if later else None, be["params"][0][1]):
+        raise D.Reject("scan: the ingress templates don't return a u16, a state of a later bucket's sin's leaves and a "
+                       "view of an egress bucket's state's leaves, so a tie of the scan's state or view would equate "
+                       "rows of two lengths (NetworkCheck.Period.ingressReturn)")
     inputs = sum(int(w[1]) * _members(x) for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
     bits = lambda ps: sum(bits_of(t) for _, t in ps)  # noqa: E731
     nb = T // s.every
@@ -1219,7 +1250,8 @@ def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts:
                     every: int = 1, skew: int = 0) -> str:
     """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
     ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
-    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths`, and
+    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths` (in
+    the generator form the view is 16 bits a state word, the egress bucket reading it as u16 words), and
     `lanes` entry ports a bucket, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋` of one input of the slot
     entries (`_scan_root`), or `skew` rows on, cyclically; `checker`: in the checker form instead, `T` ingress and `T`
     egress instances (or `counts`) that take their rows."""
@@ -1387,7 +1419,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
         sched = bound = _small_schedule(r, small)
-        widths = (r.randint(1, 3), r.randint(1, 4), r.randint(1, 3), r.randint(1, 2))
+        # an egress bucket's state is its ingress bucket's view read as u16 words, so the view is 16 bits a word
+        widths = (r.randint(1, 3), r.randint(1, 4), OUT_BITS * (words := r.randint(1, 2)), words)
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes,
                                           every=sched.every))
         program = program_sha512(scan)
@@ -1766,7 +1799,8 @@ def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
     with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
-    negative of a check of what `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
+    negative of a check of the rows the scan's ties equate or of what `NetTiming.Layout.Fits` asks
+    (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
@@ -1807,8 +1841,11 @@ DEEP = 2 ** 30
 
 
 def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
-    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.Layout.Fits` asks and by none
-    before it, each one change to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals:
+    """Rows-form parameters each refused by one of `scanOf`'s checks of the rows its ties equate or of what
+    `NetTiming.Layout.Fits` asks, and by none before it, each one change to `p`'s generator-form scan under its own
+    SHA-512, with a fragment of both refusals: `view`, the ingress templates' view one bit more than the egress
+    template's `state`; `state` (when `T > 1`), the later ingress template's `sin` one bit more than the state the
+    templates return (its input node and the template's argument grown with it);
     `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
     template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
@@ -1816,7 +1853,7 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
     last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
     the last ingress template's row input node moved after the templates, so the template names a later node."""
-    desc = p["scan"]
+    desc, sched = p["scan"], p["schedule"]
 
     def parts() -> tuple[dict, list, list[int]]:
         d = json.loads(D.canonical(desc))
@@ -1831,7 +1868,22 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
         d["types"].append(t)
         return len(d["types"]) - 1
 
-    out = {}
+    out, two_lengths = {}, "would equate rows of two lengths"
+    state, prog, view, words = _scan_widths(desc)
+    out["view"] = own(json.loads(scan_descriptor(
+        sched["window"], sched["lanes"] * sched["slots"] * sched["cell_bytes"], (state, prog, view + 1, words),
+        lanes=sched["lanes"], every=sched["every"]))), two_lengths
+
+    d, nodes, ts = parts()
+    if len(ts) == 3:
+        x = nodes[ts[1]]
+        sin = d["definitions"][d["callees"][x["fn"]]]["body"]["params"][1]
+        sin[1] = ["Array", state + 1, ["Value", 1]]
+        ks, n = x["args"][1]["refs"]["affine"][1], x["n"] * (state + 1)
+        nodes[ks] = nodes[ks] | {"n": n, "out": typed(d, ["Array", n, ["Value", 1]])}
+        x["args"][1] = {"refs": {"affine": ["n", ks, 0, n]}, "type": typed(d, ["Array", x["n"], sin[1]])}
+        out["state"] = own(d), two_lengths
+
     d, nodes, ts = parts()
     v, mix = typed(d, ["Value", 1]), d["callees"].index(MIX.id)
     arr = typed(d, ["Array", DEEP, ["Value", 1]])

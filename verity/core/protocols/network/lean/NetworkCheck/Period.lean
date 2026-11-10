@@ -483,6 +483,23 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
     | none => none
   | _ => none
 
+/-- Whether two types have as many leaves, each of one width, the same in both (`Flock.Program.Widths.homo`): what a
+tie of two rows of gates, leaf by leaf, needs of their types. From the types' structure, no walk over their leaves. -/
+def sameLeaves (a b : Flock.Program.Ty) : Bool :=
+  a.leaves == b.leaves && (Flock.Program.Widths.homo a).isSome &&
+    Flock.Program.Widths.homo a == Flock.Program.Widths.homo b
+
+/-- Whether `ret` is the generator form's ingress return, over the leaves the scan's two ties equate: a tuple of
+exactly a u16, the state the next bucket reads and the view the bucket's egress unit reads, in that order. The state
+has the leaves of `sin`, the later ingress template's parameter of that name (no condition where there is no later
+template), and the view the leaves of `state`, the egress template's parameter (`sameLeaves`: a view of bits is read as
+u16 words, so the types themselves differ). -/
+def ingressReturn (ret : Flock.Program.Ty) (sin : Option Flock.Program.Ty) (state : Flock.Program.Ty) : Bool :=
+  match ret with
+  | .tuple fs => fs.size == 3 && fs[0]! == .array outBits (.value 1) && sin.all (sameLeaves fs[1]!) &&
+      sameLeaves fs[2]! state
+  | _ => false
+
 /-- Refuses with `why` unless `b`: one step of a `do` block, so what its acceptance gives is read off it step by step
 (`Properties.NetworkScan`). -/
 def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
@@ -666,7 +683,12 @@ is an ingress row's input node, so no egress gate depends on an ingress gate; an
 The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
 the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
 `j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
-`SlotEntry_v1` entries port. -/
+`SlotEntry_v1` entries port.
+
+The scan's two ties equate rows of one length: a later bucket's `sin` with the state the bucket before returned, and an
+egress bucket's `state` with the view its ingress bucket returned. So the ingress templates return exactly a u16, a
+state of `sin`'s leaves and a view of the egress template's `state`'s leaves (`ingressReturn`); a return of another
+shape is refused. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -694,6 +716,10 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     "scan: the ingress templates' entry ports' types or returns differ"
   need (de.ret == .tuple #[.array outBits (.value 1), row])
     "scan: the egress template doesn't return a u16 and the schedule's row"
+  need (ingressReturn df.ret (later.map (·.2.params[1]!.2)) de.params[0]!.2)
+    "scan: the ingress templates don't return a u16, a state of a later bucket's sin's leaves and a view of an egress \
+      bucket's state's leaves, so a tie of the scan's state or view would equate rows of two lengths \
+      (NetworkCheck.Period.ingressReturn)"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
