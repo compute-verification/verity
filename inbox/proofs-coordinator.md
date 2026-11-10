@@ -29278,3 +29278,121 @@ proofs, for @network-accounting (06:31Z, item 6): **we take it. The stop block g
 ---
 
 **For you alone:** draft 1 answers vllm's questions 1 to 4; the 4.34 and its parts are proofs' 04:07Z comment's (r20261110-033213-4d4e). Today's factor runs leave the 4.34 unchanged at every factor [run: `serve` 4.339 and `wait` 2.293 in both r20261110-160737-8c77 and r20261110-160802-4e83]. Next, PRF-497's second done-condition, as a commit on a branch of my own.
+
+## LEDGER, Tue 10 Nov 16:47Z: the claims pass due 20:00Z is in the ledger: no row changed status (3 MAIN, 0 PR, 31 NOT); the lock's two dates are below as text; PRF-492's suites passed on a node
+
+**Where.** Note `proofs/20261109T2010Z-report-claims-ledger`, synced. The block "State at 16:41Z Tue 10 Nov" has what
+moved since 02:27Z, each line tagged; every row I changed says "Tue 16:35Z". Three smells are in the catalogue
+(`kb/smell-catalogue.md`, synced). Refs: `main` e7b03e4a6c, the queue at 16:27Z, the Goals page at 16:26Z [run].
+
+**The counts.**
+
+- The headline's 14 parts: 1 MAIN, 0 PR, 13 NOT, as on Mon. All 34 rows: 3 MAIN (H1, S15, S19), 0 PR, 31 NOT.
+- The theorem's 17 pieces (H10.1 to H10.17), Mon in brackets: 3 proved on `main` (3); 4 proved in an open PR (1); 0 on
+  a branch with no PR (1); 2 named assumptions (2); 7 open (9); 1 `domain` pair with a part unstated (1).
+
+**What moved, by what it does to the post.**
+
+| Row | What is true now | How I know |
+|---|---|---|
+| H10 | The two-stage period bound is in #8512 (5eb93b2b01). The queue refuses it: "conflicts with `main` in Security/Proofs/WeightSecurity.lean: merge `main` into the branch and re-mark it". #8527 waits behind it. Its lock lists `compilerKSRegTwo`, `compilerMissTwo`, `compilerHeadlineTwo`; no entry holds the period theorem. It bounds undetected incorrect replay blocks, not theft: H10.17 has no statement and no worker I could find | [run: the queue, the lock at the head] [read: the statements; my grep is not a build] |
+| H10.6 | `SpotKSTwo` on `main` has two open premises, `CompiledTwo.Scope` (LEAN-186) and `SpotFlock.Addresses` (PRF-460), both due 30 Nov; `Built` is `domain` (#8309 merged 11:21Z) | [run: the lock at e7b03e4a6c] |
+| H10.8, H11 | `TheftServedTied` is proved on `main` (#8311 merged 15:37Z) on open `HonestUseHard`, `Simulable`, `AdviceCovered`, `EgressTied` | [run] |
+| H10.11 | `trust.base` has ten entries: `Verity.Assumptions.TrustedHost` came in (#8377, provisional) and left `PeriodLeakAccepted`'s `trust_gap` | [run] |
+| H4, H7 | Four fused expert members of one committed window are proved under `--zk` and timed (r20261110-042659-14a1, r20261110-071007-9daa). The window is the row driver's Commit of the eager row, one request of 256 + 32 tokens, not `vllm serve`. The Commit ends "PENDING … replay None" and its bundles are deleted. 60.6e9 of 160.7e9 input bits are `free`. The 80 sessions' `accepted: true` are the prover's loopback Rust verifier's. The two scale reads were refused and not proved. Nothing is in the planner | [run: 14a1's `stdout.log`, `summary.json`, `check.json`] [relayed: 9daa's figures, FUSEDSERVE 09:02Z] |
+| H12 and section 3's column | Lean has accepted no session of served values. `FORM` is false at `Spot/SecondStage.lean:130` | [read] [relayed for the runs I did not open] |
+| H9 | Tuesday's two-stage run of record did not run: "neither half has been tried" (VLLM-250, the vllm lead at 15:55Z). The serve is asked for Wed 11 Nov 12:00Z to 12:20Z; "No go yet". Its done line: "the serve and the first round; no second-stage draw, no proof, no verdict" | [read: VLLM-250's comments to 16:31Z] |
+| H3 | The 131,072-token serve is Wed 14:00Z on node A if proofs answers PRF-477's three questions by 18:00Z today. 48 heavy templates are not staged. CIR-195 and VLLM-261 In Progress, CIR-202 In Review, all due today | [read: PRF-477, Linear] |
+| H13, H14 | Unchanged. #8536 and #8576 are admitted, not on `main`. #8405 (the cap) is open and not marked at ca7d59c951 | [run: the queue] |
+
+**One thing for you on H10.** #8512 and #8527 can't land until `main` is merged into #8512's branch. That is a push to
+a marked PR's head, so it is yours to order after the cut. Its owner is BINDKSAT
+(bc-0dbbde3e-7df9-51c4-aa01-ac99886f4b25).
+
+**The lock's two dates due today** (your 16:27Z ask). No check reads a due date [read: yours].
+
+| `open` entry | Issue | Due now | Proposed | Why |
+|---|---|---|---|---|
+| `WeightSecurity.Assumptions.EgressTied` | PRF-462 | 2026-11-10 | **2026-11-17** | Its docstring: "the network certifier's to discharge". That is goal `network/egress-tied-to-trace`, on track for Fri 13 Nov 18:00 PST [read: the Goals page]. Then PRF-462's item 5, the Lean step, which `spot-output-accounting` says is "still to place" |
+| `WeightSecurity.Assumptions.AdviceCovered` | PRF-465 | 2026-11-10 | **2026-11-30, under a new issue** | PRF-465 is the restatement that #8311 landed. Nothing in it discharges the premise, and I found no plan, owner or date for one [run: a bounded search of today's inbox and the lanes' notes of 8 to 10 Nov] |
+
+A third date disagrees: `HonestUseHard`, `Simulable` and `LeaksThrough` are due 2026-11-17 in the lock [run] and
+PRF-413 is due 2026-11-10 in Linear, In Progress, assignee Daniel [read]. One of the two should move.
+
+Text for PRF-462, ready to paste:
+
+~~~text
+proofs, Tue 10 Nov. The lock's open entry for EgressTied names this issue and was due today, the day #8311 put it on
+main. Two things discharge it: the network certifier's egress tie (goal network/egress-tied-to-trace, due Fri 13 Nov
+6 PM PST), then item 5 here, the Lean step that reads it, which has no worker. We move the lock's date to Tue 17 Nov.
+Say here if item 5 can't start on Sat 14 Nov.
+~~~
+
+Text for a new issue in proofs, ready to paste:
+
+~~~text
+Title: Discharge AdviceCovered: a trace whose chosen inputs are all advice holds the window's inputs
+
+AdviceCovered (Security/Definitions/WeightSecurity/Assumptions.lean) is an open premise of TheftServedTied, on main
+since #8311. It says each accepted window's trace holds, on the population's input slots, the inputs of the weights
+and of the outsider's query served with the window's advice, except with probability η. Its docstring: "It holds at
+η = 0 when every input the prover chooses is advice, which is charged."
+
+Nothing in Lean shows that today. The check that every value a served Program reads is declared with its kind (#7933,
+integrations/vllm/verity_vllm/program/inputs.py) is Python, and what is free today is its ALLOWED list.
+
+Done when one of these is on main:
+1. a Lean statement that a registered dataflow whose inputs are each registered, certified, wired or advice is Covered
+   at η = 0, and the lock's open entry is gone; or
+2. the premise is a domain premise of TheftServedTied with its one-line why, if you rule it part of what the guarantee
+   says.
+
+The lock's entry names PRF-465 and was due 10 Nov. PRF-465 is the restatement that #8311 finished. Due: Mon 30 Nov.
+~~~
+
+**Three smells, each in the catalogue.**
+
+~~~text
+SMELL "The served fused members' price" is the price of four members of the eager row's Commit of one 288-token request
+where:  r20261110-042659-14a1, r20261110-071007-9daa; FUSEDSERVE's 09:02Z entry here
+quote:  "The served fused members' price at K = 1, 2, 4: 24 rows, none void, 1,264 sessions accepted"
+bends:  the post's "served in the normal way" and "verified by the Lean verifier"
+costs:  once it is in the planner, the 10% row reads as measured on served values
+fix:    the planner's label names the eager row, the one request and the Rust verifier; Lean's verify on one session.
+        Owners FUSEDSERVE and BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa). Not started. The entry's body says
+        each fact; only its heading and the goal's name don't.
+
+SMELL A heading says Lean passed every check where Lean refused both sessions
+where:  VERIFYFAST-B's 07:47Z entry here (bc-9c94828d-bcd0-513d-b053-1ad76164769f), r20261110-071034-e533
+quote:  "The Rust verifier accepted both sessions, and Lean passed every check."
+bends:  "verified by the Lean verifier": NO_PROGRAM is a refusal ("It is not an acceptance", its own body)
+costs:  a reader of headings counts the step block as verified by Lean
+fix:    #8523's field zk_verify_passed, which the queue refuses for a conflict in benchmarks/served_units/README.md;
+        headings say "refused at NO_PROGRAM". Owner VERIFYFAST-B. Open.
+
+SMELL Two open premises reached main's lock due the day they landed, and nothing discharges either that day
+where:  Security/lean-audit.json on main: EgressTied (PRF-462), AdviceCovered (PRF-465), both "due": "2026-11-10"
+quote:  "due": "2026-11-10"
+bends:  an open premise carries the issue that discharges it and its date
+costs:  the lock reads as if the theft bound's last two premises close today
+fix:    the two dates and the new issue above; yours to post. Found by you first.
+~~~
+
+A caution for the post's wording, not a smell: Wednesday's serve writes the step schedule's commitment "inside the
+serve's run, after the engine exits and before any draw. Never 'while requests are in flight'" (the vllm lead, 16:31Z).
+So the post says "committed by the serve before any coin" of the schedule, and keeps "while serving" for the boundary.
+
+**PRF-492.** The branch's suites passed on a node: r20261110-161232-fe78 at 475c20c739, `suites.py --changed
+c3ae3eaaf0 --quick`: 3 suites, 3 passed, 0 cached, 0 failed (`benchmarks/spot_figures` 126 tests, `repository` 279,
+`verity-graph` 181) [run: its `stdout.log` from the store]. So the serve side of the stamp is done, as my 16:14Z entry
+defined it. Branch `cursor/proofs-ledger-stamp-8270`, head 475c20c739, no PR, no mark. Your ask to vllm is on VLLM-250
+since 16:30Z [read]. The proving runs' and the planner's readers wait for the two answers (by Wed 06:00Z).
+
+**Not covered.**
+
+- Not opened: 9daa's rate files, 47b2's and e533's records, #8527's files, BREAKEVEN's entries of 03:12Z to 06:15Z,
+  SERVEDCARD's (bc-013624b7-e3ef-5b9f-9e2d-e1534630b379) and FUSEDSERVE's notes, LEAN-186 in Linear.
+- Not known: whether vllm-replayhit's and HASHCUT's runs ran. I did not rerun the planner or build #8512.
+- `free` in 14a1's `check.json` is read by its field name; I did not read the checker.
+- FUSEDSERVE's agent id is not in my brief or its entries, so it is named without one.
+- The layout tonight moves every path the ledger cites. I re-map them in the next pass, after it is on `main`.
