@@ -141,19 +141,30 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)` (between two rows the next
   row's, the most the rows allow there), and no bound past their last `k`; `F = 1` (`HE`: at most two of forward,
   input-gradient and weight-gradient products), `share(3)` for all three (`HEShared`).
-- `min_cut.bound_charged(c, k, n, blocks=…, untied=…, w=…, N=…, O=…, size=…)` is the bound over a monitoring
-  period's `blocks` blocks when at most `untied` of the words they read are untied, each at most `word` fresh bits in
-  the one block that reads it. It computes Lean's `HECharged` (`min_cut.HE_CHARGED`), the count over a set of blocks
-  with the rest charged whole: `N ≤ H + T + ½ √(S O / q) + ½ √(S T / (q b))`, `T` what all the blocks read between
-  them, `S` the squares of what the blocks that aren't charged read, summed, `O` the whole work's output wires and
-  `H` what the charged blocks hold, each at most its gates over the fewest gates of a MAC. A block that reads more
-  than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by default there
-  is none and no block is charged. `most` is the most untied words one block reads, where its caller states one:
-  below the threshold no block is charged and (H) is taken there. It gives the slowdown, the blocks charged at most, the MACs they hold and their
-  share of the blocks and of the MACs, and what it rests on: `HECharged`, (H) at the most a block that isn't charged
-  reads, (E), and two premises no Lean statement gives, the period's bound on the untied words and an untied word's
-  bits. With no untied word it is `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block
-  count.
+- `min_cut.bound_charged(c, k, n, blocks=…, untied=…, untied_macs=…, w=…, N=…, O=…, size=…)` is the bound over a
+  monitoring period's `blocks` blocks when at most `untied` of the words they read are untied, each at most `word`
+  fresh bits in the one block that reads it. It computes Lean's `HECharged` (`min_cut.HE_CHARGED`), the count over a
+  set of blocks with the rest charged whole: `N ≤ H + T + ½ √(S O / q) + ½ √(S T / (q b))`, `T` what all the blocks
+  read between them, `S` the squares of what the blocks that aren't charged read, summed, `O` the whole work's output
+  wires and `H` what the charged blocks hold, each at most its gates over the fewest gates of a MAC. The count is
+  taken with the untied words as inputs, so the MACs that feed them, at most `untied_macs`, are added whole. A block
+  that reads more than the threshold `w` of the untied words is charged whole; `w` is fixed before the period, and by
+  default there is none and no block is charged. `most` is the most untied words one block reads, where its caller
+  states one: below the threshold no block is charged and (H) is taken there. It gives the slowdown, the blocks
+  charged at most, the MACs they hold and their share of the blocks and of the MACs, and what it rests on:
+  `HECharged`, (H) at the most a block that isn't charged reads, (E), and two premises no Lean statement gives, the
+  period's bound on the untied words, a node's, and an untied word's bits. With no untied word it is `bound`'s
+  slowdown. `best_w` is the threshold at which it is largest for a block count. The two readings are quoted side by
+  side:
+
+  | reading | fixed before the period | a block over it | (H) is taken | adds to the policy's parameters |
+  |---|---|---|---|---|
+  | a threshold `w` | `w`, quoted with the figure | charged at its whole work, the tied circuit's `c` over the fewest gates of a MAC | at `k + word · w` | `w` |
+  | none | nothing | no block is charged | where the block that reads the most untied words reads | nothing |
+
+- `min_cut.capped(slowdown, uncredited)` is a slowdown beside the share of a block's work no block is credited for,
+  `1 / (uncredited + 1 / slowdown)`: the dark share of `theorem.multiple_bound`, which no count covers. A figure of
+  `bound` or `bound_charged` is quoted beside it at a stated share, never alone.
 - The class `min-cut` in `CLASSES` is `min_cut.macs_a_block` on the profile's own counted products, the trained
   weights' forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most
   `b_a`, an output at `b_a`, and `outputs_per_product` from the model's shape. It bounds the declared inference
@@ -170,7 +181,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, w, N, O, size) → Charged`, `best_w` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size) → Charged`, `best_w`, `capped` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |

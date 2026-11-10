@@ -1,5 +1,6 @@
 """The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, the
-bound over a period's blocks with untied words, the class in `CLASSES`, and `periods.py --bounds`."""
+bound over a period's blocks with untied words, with a threshold and with none, beside the work no block is credited
+for, the class in `CLASSES`, and `periods.py --bounds`."""
 
 import itertools
 import json
@@ -9,7 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from rho import instances, lean, min_cut
+from rho import instances, lean, min_cut, theorem
 from rho.classes import CLASSES, FlopBudget, Outside, premise_status, premises
 from rho.families import family
 from rho.params import Registry
@@ -205,11 +206,12 @@ def test_the_charged_count_is_the_lean_statement_which_no_lock_lists_a_proof_of(
             assert min_cut.macs_on(t, sq, o, q, b) == work_he_on(t, sq, q, b, o)
         assert min_cut.macs_on(m * k, m * k * k, o, q, b) == pytest.approx(min_cut.macs_at_most(m, k, o, q, b),
                                                                          rel=1e-13)
-    r = min_cut.bound_charged(C, TIED, blocks=54_300, untied=UNTIED, w=20_435, **SERVED)
+    r = min_cut.bound_charged(C, TIED, blocks=54_300, untied=UNTIED, untied_macs=FEED, w=20_435, one=True, **SERVED)
     q = r.beta_w * r.beta_x
     assert r.charged == 32 and r.charged_macs == 32 * C / r.mac_gates and r.mac_gates == C / MACS
-    assert r.macs == pytest.approx(
-        r.charged_macs + work_he_on(r.total, r.squares, q, r.b, SERVED["O"] / MACS * r.macs), rel=1e-12)
+    assert r.untied_macs == FEED and r.macs == pytest.approx(
+        FEED + r.charged_macs + work_he_on(r.total, r.squares_by_q * q, q, r.b, SERVED["O"] / MACS * r.macs),
+        rel=1e-12)
     assert r.slowdown == pytest.approx(54_300 * C * MACS / (r.macs * C), rel=1e-12)
 
 
@@ -220,10 +222,19 @@ SERVED = {"N": MACS, "O": MACS * WORDS * 16 / POSITION, "size": C}
 #: a bound on the untied words of a monitoring period's accepted execution phases: the function's input, a sampled
 #: proof's bound over the period to give
 UNTIED = 671_369
+#: the MACs that feed them, at most: the most a unit of ticket weight buys, 2,048 for each word of the least weight
+FEED = 2_048 * UNTIED
+
+
+def squares(r):
+    """`S` where (H) is asked once: `Q` at that one `q`."""
+    return pytest.approx(r.squares_by_q * r.beta_w * r.beta_x, rel=1e-12)
 
 
 def charged(blocks, w=math.inf, **over):
-    return min_cut.bound_charged(C, TIED, blocks=blocks, untied=UNTIED, w=w, **{**SERVED, **over})
+    """The count alone at the served policy's block, (H) once: none of the MACs that feed the untied words."""
+    return min_cut.bound_charged(C, TIED, blocks=blocks, w=w,
+                                 **{"untied": UNTIED, "untied_macs": 0, "one": True, **SERVED, **over})
 
 
 def test_with_no_untied_word_the_charged_bound_is_the_bounds_and_with_every_block_charged_it_is_one():
@@ -232,23 +243,23 @@ def test_with_no_untied_word_the_charged_bound_is_the_bounds_and_with_every_bloc
     With no threshold no block is charged and every word may be in one block."""
     tied = min_cut.bound(C, TIED, **SERVED)
     for blocks, w in itertools.product((1, 54_300, 1e15), (0, 5, math.inf)):
-        r = min_cut.bound_charged(C, TIED, N_OUT, blocks=blocks, untied=0, w=w, **SERVED)
+        r = min_cut.bound_charged(C, TIED, N_OUT, blocks=blocks, untied=0, untied_macs=0, w=w, one=True, **SERVED)
         assert r.slowdown == pytest.approx(tied.slowdown, rel=1e-12) and r.charged == 0 == r.charged_macs
-        assert (r.cap, r.beta_x, r.total, r.squares) == (TIED, tied.beta_x, blocks * TIED, blocks * TIED ** 2)
+        assert (r.cap, r.beta_x, r.total, squares(r)) == (TIED, tied.beta_x, blocks * TIED, blocks * TIED ** 2)
     for n, o, size, c, k, bw, bx, b in POINTS:
         work = {"N": n, "O": o, "size": size, "beta_w": bw, "beta_x": bx, "b": b}
-        assert min_cut.bound_charged(c, k, blocks=7.0, untied=0, **work).slowdown == pytest.approx(
+        assert min_cut.bound_charged(c, k, blocks=7.0, untied=0, untied_macs=0, one=True, **work).slowdown == pytest.approx(
             min_cut.bound(c, k, **work).slowdown, rel=1e-12)
     every = charged(100, 0)
     assert every.charged == 100 and every.slowdown == 1 == every.charged_of_blocks
     assert every.charged_macs == 100 * MACS and 0.99 < every.charged_of_macs < 1
     zero = charged(1e6, 0)
     assert zero.charged == UNTIED and zero.cap == TIED and zero.beta_x == min_cut.beta(TIED)
-    assert zero.total == 1e6 * TIED + 32 * UNTIED and zero.squares == 1e6 * TIED ** 2
+    assert zero.total == 1e6 * TIED + 32 * UNTIED and squares(zero) == 1e6 * TIED ** 2
     none = charged(54_300)
     assert none.w == math.inf and none.charged == 0 == none.charged_macs == none.charged_of_macs
     assert none.cap == TIED + 32 * UNTIED and none.beta_x == min_cut.beta(none.cap) == 2.7
-    assert none.squares == 54_300 * TIED ** 2 + 32 * UNTIED * (2 * TIED + 32 * UNTIED)
+    assert squares(none) == 54_300 * TIED ** 2 + 32 * UNTIED * (2 * TIED + 32 * UNTIED)
     assert none.slowdown == charged(54_300, UNTIED).slowdown > charged(54_300, UNTIED - 1).slowdown
     assert charged(54_300, UNTIED).charged == 0 < charged(54_300, UNTIED - 1).charged == 1
     assert none.statement == min_cut.HE_CHARGED
@@ -264,19 +275,19 @@ def test_a_stated_most_a_block_reads_lowers_the_cap_and_charges_no_block_below_t
     assert charged(54_300).most == UNTIED == charged(54_300, most=10 * UNTIED).most
     under = charged(54_300, 20_435, most=20_000)
     assert under.charged == 0 == under.charged_macs and under.cap == TIED + 32 * 20_000
-    assert under.squares == 54_300 * TIED ** 2 + 32 * UNTIED * (2 * TIED + 32 * 20_000)
+    assert squares(under) == 54_300 * TIED ** 2 + 32 * UNTIED * (2 * TIED + 32 * 20_000)
     assert under.slowdown == charged(54_300, most=20_000).slowdown > charged(54_300, 20_435).slowdown
     assert "no block charged, none reading more than the threshold w = 20435" in under.rests_on
     assert "at most 20000 of them in one block" in under.rests_on
     assert charged(54_300, 20_435, most=20_435.5).charged == 0 == charged(54_300, 20_435.5, most=20_436.5).charged - 32
-    assert min_cut.best_w(C, TIED, blocks=2_379, untied=UNTIED, most=335_684.5, **SERVED) == 335_684
+    assert min_cut.best_w(C, TIED, blocks=2_379, untied=UNTIED, untied_macs=0, most=335_684.5, one=True, **SERVED) == 335_684
     over = charged(54_300, 20_435, most=20_436)
-    assert (over.charged, over.cap, over.squares) == (32, TIED + 32 * 20_435, charged(54_300, 20_435).squares)
+    assert (over.charged, over.cap, over.squares_by_q) == (32, TIED + 32 * 20_435, charged(54_300, 20_435).squares_by_q)
     few = charged(54_300, most=10)
-    assert few.squares == 54_300 * TIED ** 2 + 32 * 543_000 * (2 * TIED + 320)
+    assert squares(few) == 54_300 * TIED ** 2 + 32 * 543_000 * (2 * TIED + 320)
     for blocks, w, most in itertools.product((1e4, 54_300, 1e15), (0, 1_582, math.inf), (0, 10, 20_000, UNTIED)):
         assert charged(blocks, w, most=most).slowdown >= charged(blocks, w).slowdown
-    assert min_cut.best_w(C, TIED, blocks=54_300, untied=UNTIED, most=20_000, **SERVED) == 20_000
+    assert min_cut.best_w(C, TIED, blocks=54_300, untied=UNTIED, untied_macs=0, most=20_000, one=True, **SERVED) == 20_000
     assert charged(54_300, most=10).slowdown == pytest.approx(37_518.7, abs=0.05)
 
 
@@ -286,26 +297,26 @@ def test_the_charged_bound_falls_with_the_untied_words_and_says_nothing_past_the
     block fewer of them. Where a block that isn't charged may read past (H)'s last row there is no bound."""
     tied = min_cut.bound(C, TIED, **SERVED).slowdown
     for blocks, w in itertools.product((1e4, 54_300, 25_165_824, 1e15), (0, 1_582, 20_435, math.inf)):
-        rows = [min_cut.bound_charged(C, TIED, blocks=blocks, untied=e, w=w, **SERVED).slowdown
+        rows = [min_cut.bound_charged(C, TIED, blocks=blocks, untied=e, untied_macs=0, w=w, one=True, **SERVED).slowdown
                 for e in (0, 1, 1e3, UNTIED, 10 * UNTIED)]
         assert rows == sorted(rows, reverse=True) and rows[0] == pytest.approx(tied, rel=1e-12) and rows[-1] >= 1
     few = charged(54_300, 20_435)
     assert few.charged_of_blocks == 32 / 54_300 and 0.89 < few.charged_of_macs < 0.90
     assert charged(54_300, 20_435, mac_gates=2 * C / MACS).slowdown > few.slowdown
     assert charged(54_300, 20_435, mac_gates=2 * C / MACS).charged_macs == few.charged_macs / 2
-    past = min_cut.bound_charged(C, TIED, blocks=54_300, untied=1e8, **SERVED)
+    past = min_cut.bound_charged(C, TIED, blocks=54_300, untied=1e8, untied_macs=0, one=True, **SERVED)
     assert past.cap > min_cut.BETA[-1][0] and (past.slowdown, past.macs, past.beta_x) == (1, math.inf, None)
     assert "no bound with no threshold" in past.rests_on
-    assert min_cut.bound_charged(C, TIED, blocks=0, untied=UNTIED, **SERVED).slowdown == 1
-    assert min_cut.bound_charged(C, TIED, blocks=54_300, untied=UNTIED, N=0, O=0, size=C).slowdown == 1
+    assert min_cut.bound_charged(C, TIED, blocks=0, untied=UNTIED, untied_macs=FEED, **SERVED).slowdown == 1
+    assert min_cut.bound_charged(C, TIED, blocks=54_300, untied=UNTIED, untied_macs=0, N=0, O=0, size=C).slowdown == 1
 
 
-def test_the_charged_bound_at_the_served_policy():
-    """The served policy's block with every tied value right, and a period's untied words. Every tied value right:
-    38 thousand, `bound`'s. One cap for every block at the bits half the words are: 6. Charging a block for one
-    untied word leaves nothing below a million blocks and everything from a datacenter's year. With no threshold a
-    period of ten thousand blocks keeps six thousand; a threshold adds to it from about fifty thousand blocks, where
-    two blocks are charged."""
+def test_the_charged_count_alone_at_the_served_policy():
+    """The count alone at the served policy's block: every untied word possibly in one block, and none of the MACs
+    that feed them. Every tied value right: 38 thousand, `bound`'s. One cap for every block at the bits half the words
+    are: 6. Charging a block for one untied word leaves nothing below a million blocks and everything from a
+    datacenter's year. With no threshold a period of ten thousand blocks keeps six thousand; a threshold adds to it
+    from about fifty thousand blocks, where two blocks are charged."""
     assert min_cut.bound(C, TIED, **SERVED).slowdown == pytest.approx(37_653.4, abs=0.05)
     assert min_cut.bound(C, TIED + 10_688_197, **SERVED).slowdown == pytest.approx(6.3, abs=0.05)
     for blocks, at_zero in ((1e4, 1.0), (54_300, 1.0), (1e6, 1.5), (8.61e16, 37_653.4), (6.191e18, 37_653.4)):
@@ -316,12 +327,69 @@ def test_the_charged_bound_at_the_served_policy():
                                 (25_165_824, math.inf, 13_521.7), (1.651e15, 0, 37_652.7),
                                 (1.651e15, math.inf, 13_529.4)):
         assert charged(blocks, w).slowdown == pytest.approx(slowdown, abs=0.05), (blocks, w)
-    assert min_cut.best_w(C, TIED, blocks=1e4, untied=UNTIED, **SERVED) == UNTIED
+    assert min_cut.best_w(C, TIED, blocks=1e4, untied=UNTIED, untied_macs=0, one=True, **SERVED) == UNTIED
     for blocks in (54_300, 1e6):
-        w = min_cut.best_w(C, TIED, blocks=blocks, untied=UNTIED, **SERVED)
+        w = min_cut.best_w(C, TIED, blocks=blocks, untied=UNTIED, untied_macs=0, one=True, **SERVED)
         assert w == 223_789 == UNTIED // 3 and charged(blocks, w).charged == 2
         assert all(charged(blocks, w).slowdown >= charged(blocks, x).slowdown for x in (0, 1_582, 20_435, math.inf))
-    assert min_cut.best_w(C, TIED, blocks=1e4, untied=0, **SERVED) == 0
+    assert min_cut.best_w(C, TIED, blocks=1e4, untied=0, untied_macs=0, one=True, **SERVED) == 0
+
+
+#: the period's rows at the served class: (blocks, nodes, the most untied words one block of a node reads, the best
+#: threshold, the blocks charged at it, the slowdown at it, the slowdown with no threshold). A node's rows are the
+#: function at one node's untied words; a datacenter's and the world's are scaled: so many nodes, each at one node's
+#: bound and all accepted, their block counts a week's, a month's and a year's. That one block of a node reads at
+#: most half the node's untied words is these rows' statement of their record, which the function takes as `most`:
+#: a sampled tile's rows are two blocks' or more.
+PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_567.7, 3_567.7),
+          (1e4, 1, UNTIED // 2, 335_684, 0, 7_781.3, 7_781.3),
+          (54_300, 1, UNTIED // 2, 223_789, 2, 12_546.5, 11_821.6),
+          (1e6, 1, UNTIED // 2, 223_789, 2, 28_787.1, 13_422.2),
+          (25_165_824, 1, UNTIED // 2, 20_344, 32, 35_549.7, 13_525.1),
+          (1e10, 1, UNTIED // 2, 20_344, 32, 37_647.8, 13_529.4),
+          (1.651e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.0, 13_529.4),
+          (7.077e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.3, 13_529.4),
+          (8.61e16, 12_500, 1_023_318, 20_435, 410_653, 37_653.4, 13_529.4),
+          (6.191e18, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.0, 13_529.4),
+          (2.653e19, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.3, 13_529.4),
+          (3.228e20, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.4, 13_529.4))
+
+
+def test_the_period_at_the_served_class_with_a_threshold_and_with_none():
+    """The two readings side by side at the served class, each row with its block count and its threshold, the MACs
+    that feed the untied words charged whole. With no threshold (H) is taken for every block where the block that
+    reads the most untied words reads, and the figure stops at 13.5 thousand however long the period. With the best
+    threshold it is the same up to ten thousand blocks, where no block is charged, and `bound`'s 38 thousand from a
+    datacenter's week, where the charged blocks are under a billionth of the blocks. The threshold that is best
+    there is the last before (H)'s second row."""
+    for blocks, nodes, most, w, over, at_w, at_none in PERIOD:
+        terms = {"blocks": blocks, "untied": nodes * UNTIED, "untied_macs": nodes * FEED, "most": most, **SERVED}
+        assert min_cut.best_w(C, TIED, **terms) == w, blocks
+        two, none = min_cut.bound_charged(C, TIED, w=w, **terms), min_cut.bound_charged(C, TIED, **terms)
+        assert (two.charged, none.charged) == (over, 0), blocks
+        assert two.slowdown == pytest.approx(at_w, abs=0.05) and none.slowdown == pytest.approx(at_none, abs=0.05)
+        assert f"w = {w}" in two.rests_on and "no threshold" in none.rests_on
+        assert all(f"fed by at most {nodes * FEED:.6g} MACs" in r.rests_on for r in (two, none))
+        assert two.slowdown >= none.slowdown and (over > 0 or two.slowdown == none.slowdown)
+        assert two.slowdown <= charged(blocks, w, untied=nodes * UNTIED, most=most).slowdown
+    assert TIED + 32 * 20_435 <= min_cut.BETA[1][0] < TIED + 32 * 20_436
+    assert PERIOD[6][4] / PERIOD[6][0] < 1e-9 and min_cut.bound(C, TIED, **SERVED).slowdown < 37_653.45
+
+
+def test_a_slowdown_is_quoted_beside_the_work_no_block_is_credited_for():
+    """`capped`: a share of a block's work that nothing checks is the developer's whole, so the slowdown is at most
+    one over that share whatever the count gives: a thousandth leaves under a thousand of `bound`'s 38 thousand. It is
+    `theorem.multiple_bound` at that dark share and the count's rate, and with no such share the count's own."""
+    tied = min_cut.bound(C, TIED, **SERVED).slowdown
+    assert min_cut.capped(tied, 0) == pytest.approx(tied, rel=1e-12)
+    assert min_cut.capped(tied, 0.001) == pytest.approx(974.1, abs=0.05)
+    assert min_cut.capped(tied, 0.001) < 1_000 < min_cut.capped(tied, 0.00097)
+    assert min_cut.capped(math.inf, 0.002) == 500 and min_cut.capped(math.inf, 0) == math.inf
+    for slowdown, share in itertools.product((1.0, 6.3, tied, 1e30), (0.0, 1e-4, 0.002, 0.5, 1.0)):
+        got = min_cut.capped(slowdown, share)
+        assert got == pytest.approx(theorem.multiple_bound(0.4, share, 1 / slowdown), rel=1e-12)
+        assert 1 <= got <= slowdown and (share == 0 or got <= 1 / share)
+    assert "is in no term here (`capped`)" in charged(54_300).rests_on
 
 
 def test_the_class_reads_the_files_rows_so_other_rows_in_the_registry_are_refused():

@@ -103,7 +103,11 @@ of its blocks reads. Under `HE`'s premises, with (H) at `k`, `N` is at most the 
 counted in `T`, whichever blocks hold its gates, and `O` is the whole work's, the charged blocks' MACs' among it. MACs
 are disjoint, so where each has at least `γ` gates and each block outside `G` at most `c`, those blocks hold at most
 `c / γ` MACs whole each: `γ N ≤ |Gᶜ| c + γ (T + …)`. At `G` every block, `T = m k` and `S = m k²` the first bound is
-`HE`'s. -/
+`HE`'s.
+
+It is no second statement of the count. The count over a set of blocks, each under its own cap and the rest's MACs
+held whole, is stated once, and this is its corollary at one (H) for every block of `G`, with the charged blocks' MACs
+priced in gates. -/
 def HECharged : Prop :=
   ∀ (ι V : Type) [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit) (W : Work d.D ι)
     (val : Finset (Fin d.D.N) → V) (k m c γ T S : ℕ) (P : Partition d.D m) (G : Finset (Fin m)) (βw βx b : ℝ),
