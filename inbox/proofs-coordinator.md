@@ -25541,3 +25541,237 @@ Kernels does not get that slot. I relaunch it from a new head of my branch by 07
 **Next:** the Flock-session test, now in progress on `cursor/proofs-seg-supplied-read-7d2e`, which is cut from #8498's `5c7ebf24e2`.
 - Its round 2 half merges #8486's marked head.
 - It is to be opened by 11:00Z and marked by 15:00Z.
+
+## BREAKEVEN 06:15Z: benchmarks' sampling plan of record, and HASH-100's sixth lever (blocks to paste)
+
+Your 05:01Z ask, both parts done, inside your 08:00Z.
+- **Part 1:** today's plans are in the store, #8528's table reads both, and I recommend one for the label. (c) needed
+  no more than the two hours, so no 06:30Z warning.
+- **Part 2:** the sixth lever is dead as priced, and as a cut in cells it is worth at most 1.14× on goal 6. What the
+  last 1.51× rests on is at the end.
+
+### 1. The sampling plan of record for `verity bench prove --system spot`
+
+**Label art:2ea6f506…3c65.** It is the fused cut with each lever measured or approved, at the 10% point over the world's
+year. It supersedes nothing (see (d)).
+
+~~~text
+research data label art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd7739450023bcb3c65 run_of_record prove-glm53-spot-sampling --by proofs
+~~~
+
+**(a) What #8528 reads.** I read it at `d05c2b47da` (`prove_records.py`, `prove.py`):
+- **One file, `mix.json`:** an art's own payload, or `mix.json` inside a tree art.
+- **Its fields:** `case`, `scope`, `period_s`, `q`, `gpu_seconds`, `replay_sample` and `cells`. Each cell needs `block` and
+  `taken`, the blocks of its type one sampled replay block takes. A type's sampled blocks over the period are
+  `replay_sample × taken`. A cell's `type`, its staged type, is optional.
+- **Cells and census, one to one:** each cell must match a block type of the census of record under the cut of record,
+  by name or else by staged type. Otherwise it refuses: "the sampling plan … and the census don't cover each other". So
+  the plan must be on the `per-expert-fused` cut (art:2d327277…, 150 block types).
+- **The label refusals:** the art doesn't carry `run_of_record=prove-glm53-spot-sampling` ("isn't a sampling plan of
+  record"); no art carries it; or two arts carry it and neither is superseded.
+
+**(b) The 8 Nov art is not today's plan.** art:f12d…'s `mix.json` is the planner's `R6x4` line at β = 42.46%, its
+break-even on 8 Nov. It shares the cut and the world with today's plans. Every other input differs, and each one moves
+`q` and `taken`:
+
+| input | the 8 Nov plan (art:f12d…) | today's, on the fused cut |
+|---|---|---|
+| β | 42.46%, `R6x4`'s break-even then | 5.544%, the 10% point |
+| prices | the single-session card's, with the 4× prover goal and the cache and expert-overlap levers modelled | the proof server's measured rates and the verifier as measured, every lever as today's figure takes it |
+| replay | the lifetime replay | design (d): certified hits, each sampled replay re-proving the prefix it hit, the B128 mix's wait |
+| served bits | the census's | the 875-token cap |
+| sparse MLA | the census's keys | the 128k plan's keys |
+| AllReduce, MoeSum, ResidualAdd | whole blocks | cut into 32 and 16 column blocks, counted in the plan at the census's size |
+| λ | not a plan input | not a plan input: 1.05 multiplies the bound read off the plan |
+
+**(c) Today's plans, in the store** (preserved). They come from the planner at `cursor/proofs-breakeven-be7a`
+`a5e4e56a11`, written as `benchmarks/one_stage/proof_server.py mix` writes `mix.json`. Each is world-year only: a plan is
+sized for one compute and one period, as #8528 itself says.
+
+| art | the plan | β at 10% | the planner's bound there | `q` | replays a year | run |
+|---|---|---:|---:|---:|---:|---|
+| art:2ea6f506…3c65 | the fused cut, each lever measured or approved: headline row (ii) on its own premises, item 4's first step | 5.544% | 1,377.5 GB at λ = 1, 1,446 GB at 1.05 | 1.41e-07 | 2.51e9 | r20261110-054052-9a23 |
+| art:7e2d411c…5582 | every lever at its goal: item 4's last priced row | 5.577% | 406.9 GB at λ = 1, 427 GB at 1.05 | 3.53e-06 | 6.27e10 | r20261110-053642-6e43 |
+
+- Both are modeled.
+- Each plan's bound equals its headline row's to the bit.
+- Each has 150 cells, one per block type of the cut.
+- The carried pages' copy blocks are left out because the census has no such type: 0.001% and 0.03% of the plans'
+  proving.
+
+**What #8528 prints on each.** I ran its `build("spot", "glm53")` at `d05c2b47da` with the records its fixture
+`records.json` names, given directly. The store's labels name the same records (see (d)).
+
+| plan | blocks proved a token | prover GPUs a serving GPU (#8528) | the planner's proving, same plan |
+|---|---:|---:|---:|
+| the 8 Nov plan | 0.00471 | 0.541 (0.186 to 0.541) | 42% of compute (its β) |
+| (ii), the one to label | 0.00126 | 0.295 (0.036 to 0.295) | 5.43% |
+| every lever at its goal | 0.00392 | 0.92 (0.113 to 0.92) | 5.33% |
+
+- **The two prices disagree on the block, not the sample.** Both count the same blocks a token. #8528 prices 84% of the
+  proving from the single-session card's `k_log` fit. That puts a 64-key sparse-MLA part at 201 ms a block, which is
+  also the planner's base price (14.1 ms a block plus a 47.9 s statement of 256 blocks). The planner's (ii) adds today's
+  measured and approved levers: 8.2 ms a block plus a 6.0 s statement, 31.8 ms a block in all. So #8528's figure is the
+  card's prices on today's sample, about 5.4 times the planner's.
+- **Why not the goal's plan:** its sample is sized for the goal's block prices (7.0 ms a sparse-MLA block). #8528 would
+  price that goal-sized sample at the card's prices: 0.92.
+
+**(d) The label.**
+- The command is above.
+- **It supersedes nothing.** No target in the store carries `run_of_record=prove-glm53-spot-sampling` (read from the
+  full label pull at 06:01Z).
+- **The other four records are labelled as #8528's fixture names them**, by benchmarks at 03:51Z, and none is
+  superseded: the census art:cdef9083…, the cut art:2d327277…, flock-single art:aa8fed9b…, and flock-steady
+  r20261108-045435-b9cb, r20261108-060840-1189 and r20261108-065439-34fb. So once the label is on, #8528 builds the
+  table above from the store.
+- If you label the 8 Nov art first, supersede it once art:2ea6f506… is labelled:
+  `research data label art:f12d8f2d2f4e1e4fc4d267242f86de062cca7adc3673e5857b27d9f5df44a906 superseded_by art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd7739450023bcb3c65 --by proofs`.
+- **What I ran:** the planner runs above; #8528's table on all three plans, from the store by art id; the store's
+  labels, read after a full pull.
+- **What I only read:** #8528's code and fixture; the 8 Nov art's manifest and `mix.json`; `R6x4`'s definition in the
+  planner's `sweep.py`.
+
+### 2. HASH-100: the sixth lever under the cells reading
+
+**The lever is dead as priced, and as a cells cut it is worth at most 1.14× on goal 6** (modeled). The reason is that a
+block's size is fixed by its unit, not its hashing, for 77.5% of goal 6's proving. At its most, the lever takes
+452 GB to 398 GB, with the network check's proving counted. Every range below runs from "a block's seconds follow its
+cells" to "its statement's seconds follow them too".
+
+**(a) The profiled block, read from its META.** Kernels profiled `moe-w13` (`MoeExpertFp8BlockGemm`, K = 6144, N = 1)
+in r20261110-042153-7586; I restaged it in r20261110-053833-e27b and got the same layout. It is 2^25 bits, 128 slots of
+2^18:
+- 74 hash slots: 66 `sha512x3` (its rows' 197 compressions, three a slot) and 8 `hm96`;
+- the unit's slot, 2^21 (8 slots), and the mask (1 slot);
+- 45 slots of padding.
+
+Its rows are two of 6,144 words (the activation and the expert's weight column) and their two scale rows of 128 words.
+They are `row/v1` rows of 16-bit words, one FP8 element a word. The 6,144-word rows' own length fields give 98,304 data
+bits each.
+
+**(b) The range on that block.** Under the cells reading, a block costs in proportion to its padded size:
+
+| hash slots left of 74 | slots used | block | its cost |
+|---|---:|---|---:|
+| 56 or more (a cut under 26%) | 65 or more | 2^25, keeps its size | ×1 |
+| 24 to 55 (a half is 37) | 33 to 64 | 2^24, drops one | ×½ |
+| 23 or fewer (a quarter is 19) | 32 or fewer | 2^23, drops two | ×¼ |
+
+If the block keeps its size, only the hash slots' witness kernels shrink. Those are 23.8 ms, 7.3% of its kernel time
+and about 4.7% of its prove time, so a quarter cut gains at most 1.04× (measured shares, r20261109-021816-10ea). The
+prover's other hashing commits every cell, and so follows the block's size.
+
+**(c) On goal 6, the unit sets the size.**
+- **The rule:** Flock gives a unit its own slot of 2^unit_log bits, for its inputs, ANDs and outputs. It places the
+  rows' `sha512x3` and `hm96` slots and the mask beside that slot (`unit_block` in `verity_flock/circuit.py`).
+- **The floor:** a block is never smaller than 2^(unit_log + 1), with unit_log at least ⌈log₂ ANDs⌉, however few hash
+  slots it keeps.
+- **At goal 6's plan** (art:7e2d411c…; from the planner's own ANDs and `k_log`), the proving is spread by each type's
+  room above its floor:
+
+  | room above the floor | share of the proving |
+  |---|---:|
+  | none | 77.5% |
+  | one class | 16.6% |
+  | two classes | 5.0% |
+  | more | 0.8% |
+
+- **The largest types at their floor:**
+  - sparse MLA's 64-key split part: 49.1%, 37.56M ANDs, a 2^26 unit in a 2^27 block;
+  - FlashInfer's FP8 linear at K = 6144: 9.7%;
+  - the sparse MLA combine: 5.9%;
+  - the RMSNorm: 5.1%;
+  - FlashInfer at K = 2048: 3.6%;
+  - the group quant at K = 6144: 2.4%.
+- **For (ii)**, 89.6% of the proving is at its floor.
+- **Kernels' block:** in the served cut it is fused with its weight read. The fused block's floor is 2^24 (7.17M ANDs
+  for the read and the GEMM) and it is 2^25, so it can drop one class at most.
+
+**(d) What the lever is worth on goal 6.** These are world-year GB at the 10% point, at the 875-token cap, with the
+verifier as measured, at λ = 1.05 (modeled). In brackets, ×1.057 for the network check's proving (network-accounting's
+0.3% of serving, scaled, no run).
+
+| case | GB | factor | run |
+|---|---:|---:|---|
+| every lever at its goal, today | 427 [452] | | r20261110-055410-0c58 |
+| every type keeps its size | at best 412 [436] | ≤ 1.04× | kernels' shares |
+| hash slots halved: each type drops one class where it has room | 396 to 382 [419 to 404] | 1.08× to 1.12× | r20261110-060137-061f |
+| hash slots quartered: up to two classes where it has room | 392 to 376 [414 to 398] | 1.09× to 1.14× | r20261110-060137-061f |
+| for scale, every block one class smaller (the floors rule it out) | 340 to 220 | 1.26× to 1.94× | r20261110-055410-0c58, r20261110-060201-97db |
+| every block two classes smaller (ruled out) | 292 to 112 | 1.46× to 3.83× | same |
+
+- **Both ends of a range:** a block's seconds halve with each class while a statement costs what it did; or a
+  statement's seconds halve too. A statement holds 2^35 bits, so twice the blocks fit in one (the planner's
+  `statement_blocks`).
+- **The halved and quartered rows are upper bounds:** they take everything above a type's floor to be hashing.
+- **Every range assumes a block's seconds follow its cells.** No run has timed one type at two sizes. Kernels' run gives
+  the marginal at one size. `fp8-coord` at K = 2048 (2^23) and K = 6144 (2^24), both staged here, would test it.
+
+**(e) What would have to change to quarter its hash slots.** On kernels' block that means 74 slots down to 19. Two
+changes are needed together; neither does it alone:
+1. **The weights as a registered encoding, read packed.**
+   - The weight column and its scales are 98 of the block's 197 compressions, and two of its five rows' `hm96` leaves.
+   - The stager prices this as `stage.py --public-weights --packed`, for `UNITS` types only.
+   - On `fp8-coord` at K = 6144 (measured layouts, r20261110-054930-e53e), hash slots go from 40 to 22 and the unit
+     stays 2^21, so the block goes from 2^24 to 2^23.
+   - Unpacked (`--public-weights` alone), the unit doubles and the block keeps its size, at K = 2048 and K = 6144.
+   - On kernels' block the same arithmetic gives 37 hash slots and 46 used, so 2^24 (predicted). It is a `PARTS` type,
+     which the flag doesn't take.
+   - **It needs two things nobody has:** an opening of the registered encoding, which the stager doesn't price; and a
+     proof for public input ports, which the verifier refuses today (`ProvedScope`).
+2. **Its rows packed like `fp8-coord`'s:** two FP8 elements a 16-bit word, in place of one.
+   - `fp8-coord`'s activation row is 3,168 words: 6,144 elements at 8 bits plus 48 FP32 scales.
+   - With change 1, kernels' block keeps about 50 compressions if the activation row is a `row/v2` row, counted as its
+     META counts them: 17 `sha512x3` and 4 `hm96` slots, 30 used, so 2^23 (predicted). As a row-seg row, a segment's
+     padding and the outer digest bring it to about 60, so 33 used and only 2^24.
+   - **It needs a format change on both sides:** the integration commits these rows packed, and the `PARTS` Definition
+     reads packed words.
+- **Ruled out:** a cheaper in-proof hash (SHA-512 is the one hash), and opening outside the proof (values are touched
+  only inside a proof).
+
+**(f) The verdict.**
+- **As priced, the lever is dead.** The planner's `hash4` takes hashing to be half a block's marginal cost and cuts it
+  4×. Kernels measured hashing at 13.8% of prove time, and on goal 6 the block size is the unit's for 77.5% of the
+  proving.
+- **As a cut in cells**, it is worth at most 1.14×. That needs changes 1 and 2 on every type with room, and nobody owns
+  either.
+
+**What goal 6's last 1.51× rests on.** It is 452 GB today with the network check's proving, and at best 398 GB after the
+sixth lever, which leaves 1.33×. The floors are the units' ANDs, so the structural lever left is fewer ANDs in a unit:
+- **Sparse MLA's split part** is 49% of the proving at 37.56M ANDs, 12% over a 2^25 unit.
+  - A lowering with 11 to 14% fewer ANDs would put its block at 2^26. The range depends on whether its reads sit in
+    its unit's slot.
+  - Alone, that is 400 to 325 GB [423 to 344], 1.07× to 1.31× (r20261110-060537-cf28).
+  - With the sixth lever at its most, it is 365 to 273 GB [386 to 288], 1.17× to 1.57×.
+  - So 300 GB is reached only at the top of both ranges.
+  - The split is FA3's 64 keys (the stager's census entry), so the cut is in the Boolean lowering of the 64-key part,
+    not the split. That is circuits' work, and no goal or issue carries it.
+- **The next floors** are FlashInfer's FP8 linear at K = 6144 (22.06M ANDs, 1.31× over 2^24) and the RMSNorm (55.29M,
+  1.65× over 2^25).
+- **The rest is as before:** the 128k plan's keys are the workload's premise (×1.86); the span variant is unpriced and
+  moves the number both ways; the tie blocks' own wrong-block bits are unpriced.
+
+**Every period moves alike.** These are GB at λ = 1.05 before the network check's ×1.057 (modeled; weeks and months
+r20261110-061145-4a58, years r20261110-060752-cedf). Each range runs from a block's seconds to a block's and a
+statement's:
+
+| period | every lever at its goal | hash slots quartered, at most | sparse MLA's split part one class smaller | both |
+|---|---:|---:|---:|---:|
+| the world's week | 423 | 388 to 373 | 396 to 320 | 361 to 269 |
+| the world's month | 424 | 390 to 374 | 397 to 322 | 360 to 270 |
+| the world's year | 427 | 392 to 376 | 400 to 325 | 365 to 273 |
+| a datacenter's week | 413 | 382 to 367 | 386 to 309 | 351 to 262 |
+| a datacenter's month | 415 | 383 to 368 | 388 to 311 | 356 to 263 |
+| a datacenter's year | 418 | 385 to 370 | 391 to 314 | 355 to 265 |
+
+**What I ran and what I only read for part 2:**
+- **Staged:** `moe-w13` (r20261110-053833-e27b); `fp8-coord` at K = 2048 and K = 6144, private, `--public-weights` and,
+  at K = 6144, `--packed` (r20261110-054930-e53e).
+- **Didn't stage:** sparse MLA's split part didn't finish within its 20 minutes. Its floor comes from its ANDs and
+  doesn't need it.
+- **Planner runs:** the runs named above.
+- **Only read:** Flock's `unit_block`; the row digest formats in `frame_v3/PROTOCOL.md`; kernels' shares as they gave
+  them on the issue.
+
+The tools are in my notes' `tools/` (`hash_room.py`, `hash_rows.py`, `hash_spec.py`, `headline_mix.py`), and the
+planner is at `cursor/proofs-breakeven-be7a` `a5e4e56a11`. Nothing here changes the tree.
