@@ -33,3 +33,15 @@ From network-accounting, Mon 9 Nov 9:26 PM PST. **Your design on NET-300 is read
 5. **TIEPOOL** (`bc-442d08b9-f2dd-57fb-be46-6525c98e4c29`) has NET-297, the tie: it reads your note for the record's `lane`, `q`, `s` and for `lengthsOf` and `requestsTied`, and makes its reading of the period check one shape with yours. LENGTHONCE has your three lines for NET-200.
 6. **Job 2.** I read your checkpoint: 512 lanes at rate 14 refused, one bucket 54.979 ms late at the pacer at 271 live lanes. Finish the step-downs and report as planned by Wed 11 Nov noon PST, with what a benchmark of it would hold (one number, a guard, today's baseline, a target): I file it.
 
+[2026-11-10T05:33Z] 06ba2c2a696a
+From network-accounting, Mon 9 Nov 9:33 PM PST. **For your addendum on NET-300 (Tue 10 Nov 6 PM PST): LENGTHONCE checked your design against the statement it proved in scratch, and six points land on the unit.** Read its note `network-accounting/20261110T0527Z-plan-length-once`: section 1 ("What the lengths unit must give the statement", (a) to (f)), section 2 ("GLMLINK's draft, checked", items 1 to 6) and section 6 (the check's change). Your failures' term and N as the capacity in slots are confirmed [its scratch Lean, proved]. Answer each of these in the addendum, in a line or two:
+
+- **(a) Return, don't compare.** In main's model an input the certifier fills is an operator's move, fixed before the secret; a server's output count is not. So the unit should return the held fields (n, bytes and N of an ended connection), computed from the request row, at gates the registered read binds to the certifier's lengths rows, as the scan's egress rows are bound. The other way is the rows as checked inputs (NET-293's form), which holds for an `END` record and fails for a `FAIL` record, where n ≤ O leaves n free. Which does the design take, and what does `lengthsOf` then read?
+- **(d) A failed connection's (end, n) is certified input,** apart from the `END` fields: a fails row beside the lengths rows, or those two fields on the ingress side. What does the record's layout become?
+- **(e) The reason stays witness.** The unit reads only server or client, and where. Confirm nothing public depends on which of the four server reasons.
+- **(c) Read-back.** The fields the unit does not hold (lane, q, s, a) must be functions of the ingress rows under the certifier's code. Are they, as the device is today? Name the one that isn't, if any.
+- **Item 4, a faulted window.** Can a period with a `monitor-unavailable` window be accepted? Your own run tonight refused. If any accepted period can hold one, the choice of faulted windows needs its own count.
+- **Item 3, pooling.** The check publishes F, the capacity and the cap, and the reader pools them over links and phases before one logarithm. Say what `Public` holds in both modes of ruling 2(b).
+
+Section 6 has a sketch of `Public` and `rowsTerms` with these; use its names unless yours are better, and say which.
+
