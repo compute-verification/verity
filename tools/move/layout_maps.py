@@ -271,6 +271,7 @@ NEW = {
     "verity/ml/circuits/ops/tests/test_boolean_rolled.py": "ml:ops-boolean",        # tests `ops/boolean/rolled.py`
     "verity/ml/flock/tests/test_rolled_lowering.py": "ml:flock-lowering",           # the roll's lowering
     "verity/ml/definitions/tests/test_sparse_mla_combine_columns.py": "ml:definitions-registry",   # tests `sparse_mla_split`
+    "verity/ml/definitions/numerics/token_select_rows.py": "ml:definitions-numerics",              # a row kernel, as `stop_rows.py`
     "benchmarks/memory/": "stays",                     # a benchmark of its own
     "benchmarks/pouw/pearlplus_lean/": "stays",        # a benchmark's Lean, in a directory part of which is archived
     "benchmarks/network_traces/tests/test_scan_zk_v3c.py": "stays",
