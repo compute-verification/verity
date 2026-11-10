@@ -251,8 +251,8 @@ paths = ["Security/*/{Core,Claims,Hash}{,.lean}", "Security/{Definitions,Models}
 from = "*"
 
 [[needed]]
-why = "what a public file needs to build and run: its Lake package's files, its suite's and distribution's pyproject, the packages above it"
-paths = ["**/{lakefile.toml,lake-manifest.json,lean-toolchain,pyproject.toml,__init__.py,conftest.py}", "uv.lock"]
+why = "what a public file needs to build, run and pass the Lean check: its Lake package's files and lock, its suite's and distribution's pyproject, the packages above it"
+paths = ["**/{lakefile.toml,lake-manifest.json,lean-toolchain,lean-audit.json,pyproject.toml,__init__.py,conftest.py}", "uv.lock"]
 from = "*"
 via = ["package"]
 

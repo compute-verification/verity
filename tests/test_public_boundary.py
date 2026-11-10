@@ -712,6 +712,20 @@ def test_the_export_drops_a_runner_whose_generator_it_does_not_copy(tmp_path_fac
     assert got["locks"]["lean/lean-audit.json"]["generator_withheld"] == []
 
 
+def test_a_lakefile_needs_its_packages_lock(tmp_path: Path) -> None:
+    """A Lake package's lock is one of its files: the Lean check of the public tree refuses a package without one, so
+    the lakefile needs it as it needs its manifest and its toolchain."""
+    files = {"p/lakefile.toml": 'name = "p"\n', "p/lake-manifest.json": "{}\n", "p/lean-toolchain": "t\n",
+             "p/lean-audit.json": "{}\n", "q/lakefile.toml": 'name = "q"\n'}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    tree = PE.PB.Tree(tmp_path, files=files)
+    assert {(e.kind, e.target) for e in tree.edges("p/lakefile.toml")} == {
+        ("package", "p/lake-manifest.json"), ("package", "p/lean-toolchain"), ("package", "p/lean-audit.json")}
+    assert tree.edges("q/lakefile.toml") == []
+
+
 def test_what_the_copied_files_hold_of_the_trees_lean(tmp_path_factory) -> None:
     tree, _, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
     held, L = PE.Held(tree, set(j.public)), PE.PUBLIC_LOCK
