@@ -130,15 +130,15 @@ theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
   have hσΓ : ∀ u, σ u ≤ Γ := fun u => by
     show (d.D.size (P.gates u) : ℝ) ≤ Γ
     exact_mod_cast (hP u).1
-  have hnov : ∀ u, (novelReads c (R u) : ℝ) ≤ α * σ u := fun u =>
-    (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_pull M hB P u)).trans (hP u).2
+  have hnov : ∀ u, (freshInput c (R u) : ℝ) ≤ α * σ u := fun u =>
+    (Nat.cast_le.2 (Nci.SecurityProofs.freshInput_pull M hB P u)).trans (hP u).2
   have hku : ∀ u, ((((bitBlock c (R u)).ins \ (bitDecl c).θ).card : ℕ) : ℝ) ≤ α * σ u := fun u => by
     rw [bitBlock_ins, bitDecl_θ]
     exact (Nat.cast_le.2
       (translation (R u) ((Nci.SecurityProofs.pull M P).gates_subset_computed u)).2.2).trans (hnov u)
   have hcard : ∀ u, (bitBlock c (R u)).gates.card ≤ s := fun u => by
     rw [bitBlock_gates]
-    have h1 : ((block c (R u)).card : ℝ) ≤ w₀ * (R u).card + novelReads c (R u) + c.D.width c.θ := by
+    have h1 : ((block c (R u)).card : ℝ) ≤ w₀ * (R u).card + freshInput c (R u) + c.D.width c.θ := by
       exact_mod_cast card_block_le hw (R u)
     have h2 : ((R u).card : ℝ) ≤ Γ := by
       exact_mod_cast (Nci.SecurityProofs.card_pull_gates_le u).trans (hP u).1

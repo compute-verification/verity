@@ -135,7 +135,7 @@ theorem failStep_some (gamma num den : ℕ) (hden : 0 < den) (u : Fin n) (v : �
     failStep gamma num den (ius c dv) u.val = some (v, rule) ↔ v = u.val ∧
       ((rule = "size" ∧ gamma < d.D.size (U.gates u)) ∨
        (rule = "nci" ∧ d.D.size (U.gates u) ≤ gamma ∧
-         (num : ℝ) / den * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ))) := by
+         (num : ℝ) / den * d.D.size (U.gates u) < (Nci.freshInput d (U.gates u) : ℝ))) := by
   rw [failStep, S.ius_get u, ratio_lt_iff _ _ _ _ hden]
   dsimp only
   split_ifs with h1 h2
@@ -169,7 +169,7 @@ theorem failure_some (gamma num den : ℕ) (hden : 0 < den) (u : Fin n) (rule : 
       (∀ u' < u, Meets d U gamma ((num : ℝ) / den) u') ∧
         ((rule = "size" ∧ gamma < d.D.size (U.gates u)) ∨
          (rule = "nci" ∧ d.D.size (U.gates u) ≤ gamma ∧
-           (num : ℝ) / den * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ))) := by
+           (num : ℝ) / den * d.D.size (U.gates u) < (Nci.freshInput d (U.gates u) : ℝ))) := by
   rw [failure_eq, findSome_range_some, S.ius_size]
   constructor
   · rintro ⟨i, hi, hs, hj⟩

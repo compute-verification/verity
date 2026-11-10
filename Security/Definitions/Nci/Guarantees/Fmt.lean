@@ -22,7 +22,7 @@ def ThreadedReadsInfoFmt : Prop :=
   ∀ (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
     0 < b_w → 0 < b_a → 0 < d → 0 < e → b_a ≤ Real.logb 2 n - μ →
     Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ →
-    ∀ R, SmallInfo c θv Γ S R → b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e
+    ∀ R, SmallInfo c θv Γ S R → b_a * (T.mults R).card ≤ freshInfo c θv R * T.bound S b_w d e
 
 /-- **Theorem 1 through a containment, each thread charged by its work**: a declaration `d` contains the reference
 circuit `c` through `M`, with `c`'s baseline values `θc` the ones `θv` gives their images, and `c` is as in
@@ -36,8 +36,8 @@ def ThreadedContainedInfoFmt : Prop :=
     (∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) →
     0 < b_w → 0 < b_a → 0 < dd → 0 < e → b_a ≤ Real.logb 2 n - μ →
     Assumptions.WeightsSupportFmt c θc T Γ K b_w dd e n μ →
-    ∀ W, W ⊆ d.D.computed → d.D.size W ≤ Γ → novelInfo d θv W ≤ K →
-      b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
+    ∀ W, W ⊆ d.D.computed → d.D.size W ≤ Γ → freshInfo d θv W ≤ K →
+      b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ freshInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs, each thread charged by its work**: with `d`, `c` and `M` as in
 `ThreadedContainedInfoFmt`, a set `W` of `d`'s computed gates, at most `Γ` of them, whose novel reads are a state that

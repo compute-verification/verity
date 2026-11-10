@@ -32,7 +32,7 @@ a subcircuit that reads nothing needs no division. -/
 def ThreadedReads : Prop :=
   ∀ (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded Γ S d e → Assumptions.WeightsIncompressible c T Γ S b_w b_a →
-    ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e
+    ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w d e
 
 /-- **Theorem 2 (high NCI means padding)** (the thread draft, Appendix B), for the reference circuits of Theorem 1: a
 declaration `d` that contains `c` (`M`) and complies at `(Γ, α)`, with its θ registered (`ThetaRegistered`),
@@ -93,7 +93,7 @@ since a thread's counted multiplications on the versions of one slot number at m
 def ThreadedReadsSlots : Prop :=
   ∀ (c : Declaration) (T : Threading c) (σ : T.Slots) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded Γ S d e → Assumptions.WeightsIncompressibleSlots c T σ Γ S b_w b_a →
-    ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e
+    ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w d e
 
 /-- **Theorem 2 per parameter slot**: `ThreadedThrottled` under `WeightsIncompressibleSlots`. -/
 def ThreadedThrottledSlots : Prop :=

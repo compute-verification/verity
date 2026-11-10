@@ -72,7 +72,7 @@ theorem keep_entered_subset (T : Threading c) (s : Finset (Fin c.D.N)) {k : ℕ}
 multiplications number at most its bound plus those outside `s`, written multiplied out. -/
 theorem fitBoundSlots_keep (T : Threading c) (σ : T.Slots) (s : Finset (Fin c.D.N)) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S)
+    (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
     (hR : ∀ t, ((keep T s).threadMults (P.gates (start t)) t).Nonempty →
       Nstar ≤ ((keepSlots σ s).threadSlots univ t).card)
     (hF : Assumptions.FitsSlots c (keep T s) (keepSlots σ s) P start b_w w_e) :
@@ -102,11 +102,11 @@ outside `I` for the threads started outside `I` that do counted work in their st
 multiplications by `FitBoundSlots`'s bound plus those inside `I`. -/
 theorem fitBoundSlots_init (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k) (I : Finset (Fin k))
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 ≤ b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S)
+    (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
     (hR : ∀ t, start t ∉ I → ((keep T (outside P I)).threadMults (P.gates (start t)) t).Nonempty →
       Nstar ≤ ((keepSlots σ (outside P I)).threadSlots univ t).card)
     (hF : ∀ j ∉ I, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤
-      novelReads c (P.gates j)) :
+      freshInput c (P.gates j)) :
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤
       k * T.reuse * Nstar * S ^ 2 +
         4 * w_e * (Nstar * b_w - S) * (T.M.filter fun g => ∃ j ∈ I, g ∈ P.gates j).card := by
@@ -155,7 +155,7 @@ def threadGates (T : Threading c) (K : Finset (Fin T.m)) : Finset (Fin c.D.N) :=
 counted multiplications by `FitBoundSlots`'s bound plus those of the other threads. -/
 theorem fitBoundSlots_threads (T : Threading c) (σ : T.Slots) (K : Finset (Fin T.m)) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S)
+    (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
     (hR : Assumptions.ReachSlots c (keep T (threadGates T K)) (keepSlots σ (threadGates T K)) Nstar)
     (hF : Assumptions.FitsSlots c (keep T (threadGates T K)) (keepSlots σ (threadGates T K)) P start b_w w_e) :
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤

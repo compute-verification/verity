@@ -29,14 +29,14 @@ and gives a verdict on every well-formed instance, are completeness, in `Proofs.
 **A verdict is the definition's.** The decoded Program is the definition's circuit as the check's docstring maps
 descriptor v1 to it (`LaysOut`: gate `g` of the canonical layout is gate `g`, of its primitive's width `Value<w>`, an input
 gate when its primitive is an input node, reading the gates its operands name). `LaysOut` fixes a circuit's gates,
-widths, input gates and reads, which is all `size` and `Nci.novelReads` read, and leaves its operations and outputs free.
+widths, input gates and reads, which is all `size` and `Nci.freshInput` read, and leaves its operations and outputs free.
 
 * `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
   topological order and its input gates reading nothing), `theta` names a baseline of it (`Verity.Declaration`), and the
   owners are a partition of its computed gates into IUs `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
 * `Reports`: for every declaration `d` laid out by the Program with the baseline `theta` names, and the partition `U`
   the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per IU `u` its `size` and
-  `Nci.novelReads` exactly, its `complies` is `true` exactly when every IU has at most `Γ` gates and NCI at most
+  `Nci.freshInput` exactly, its `complies` is `true` exactly when every IU has at most `Γ` gates and NCI at most
   `α = num / den` (`Meets`), and its `failure` is the first IU that doesn't, with the rule it breaks first.
 * `Witnesses`: a verdict whose `complies` is `true` means the declaration complies, `Nci.Complies Γ (num / den) d`,
   with the owners as the witness.
@@ -204,7 +204,7 @@ def Divides {D : Verity.Circuit} {n : ℕ} (owner : Array Json) (U : Verity.Part
 
 /-- IU `u` of `U` has at most `Γ` gates and NCI at most `α`, the policy's two bounds as `Nci.Complies` states them. -/
 def Meets (d : Verity.Declaration) {n : ℕ} (U : Verity.Partition d.D n) (Γ : ℕ) (α : ℝ) (u : Fin n) : Prop :=
-  d.D.size (U.gates u) ≤ Γ ∧ (Nci.novelReads d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
+  d.D.size (U.gates u) ≤ Γ ∧ (Nci.freshInput d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
 
 /-- **What a verdict is about.** On every instance with a verdict, the Program lays out a circuit of the definition's,
 the entries of `theta` name a baseline of it, and the owners are a partition of its computed gates. -/
@@ -216,7 +216,7 @@ def Decodes : Prop :=
 
 /-- The verdict `out` on `j` is the definition's: for every declaration `d` the Program lays out with the baseline
 `theta` names, and the partition `U` the owners are, at `Γ = gamma` and `α = num / den`: `gates` is `d`'s number of
-gates; `ius` lists per IU its `size` and `novelReads`; `complies` is `true` exactly when every IU meets both bounds; and
+gates; `ius` lists per IU its `size` and `freshInput`; `complies` is `true` exactly when every IU meets both bounds; and
 `failure` is `null` when every IU does, and otherwise the first IU `u` that doesn't, with `size` when it has more than `Γ`
 gates and else `nci`. -/
 def Reported (j out : Json) : Prop :=
@@ -226,7 +226,7 @@ def Reported (j out : Json) : Prop :=
     let α : ℝ := (i.num : ℝ) / i.den
     out.getObjVal? "gates" = .ok (toJson d.D.N) ∧
     out.getObjVal? "ius" = .ok (Json.arr (Array.ofFn fun u : Fin n =>
-      Json.arr #[toJson (d.D.size (U.gates u)), toJson (Nci.novelReads d (U.gates u))])) ∧
+      Json.arr #[toJson (d.D.size (U.gates u)), toJson (Nci.freshInput d (U.gates u))])) ∧
     (out.getObjVal? "complies" = .ok (.bool true) ↔ ∀ u, Meets d U i.gamma α u) ∧
     (out.getObjVal? "complies" = .ok (.bool false) ↔ ¬ ∀ u, Meets d U i.gamma α u) ∧
     (out.getObjVal? "failure" = .ok .null ↔ ∀ u, Meets d U i.gamma α u) ∧
@@ -235,7 +235,7 @@ def Reported (j out : Json) : Prop :=
         (∀ u' < u, Meets d U i.gamma α u') ∧
           ((rule = "size" ∧ i.gamma < d.D.size (U.gates u)) ∨
            (rule = "nci" ∧ d.D.size (U.gates u) ≤ i.gamma ∧
-             α * d.D.size (U.gates u) < (Nci.novelReads d (U.gates u) : ℝ)))
+             α * d.D.size (U.gates u) < (Nci.freshInput d (U.gates u) : ℝ)))
 
 /-- **The verdict is the definition's.** On every instance with a verdict, the verdict is `Reported`. -/
 def Reports : Prop :=

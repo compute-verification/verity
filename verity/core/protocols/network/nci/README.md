@@ -31,7 +31,7 @@ scenarios register a policy as if it were a subprotocol.
 ## The Lean
 
 - **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies Γ α` states an older form: D divides into blocks
-  of at most Γ gates, each reading at most α bits of fresh input per gate it holds (`Nci.novelReads`), so at most αΓ
+  of at most Γ gates, each reading at most α bits of fresh input per gate it holds (`Nci.freshInput`), so at most αΓ
   bits a block. Its link to the (c, k) form is proved: `Nci.Guarantees.CompliesCK` pads a complying partition into a
   (Γ, ⌊αΓ⌋)-partition (`Verity.Partition.IsCK`), and `Nci.Guarantees.ExpandComplies` carries compliance through the
   bit-level expansion at Γ·W for gates up to W bits wide.

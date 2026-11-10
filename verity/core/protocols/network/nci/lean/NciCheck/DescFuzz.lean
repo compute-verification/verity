@@ -5,8 +5,8 @@ import Std.Data.HashSet
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
 
 `NciCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `NciCheck.evaluate`) follows from three
-statements (`Novel.descAgrees_of_open`), each proved in `Security/Proofs/Properties/Nci/` (`Resolve.bodiesOk`,
-`OperandsResolve.operandsResolve_of`, `Novel.readsExact`), so `DescAgrees` is proved (`SecurityProofs.DescAgrees`), and
+statements (`Fresh.descAgrees_of_open`), each proved in `Security/Proofs/Properties/Nci/` (`Resolve.bodiesOk`,
+`OperandsResolve.operandsResolve_of`, `Fresh.readsExact`), so `DescAgrees` is proved (`SecurityProofs.DescAgrees`), and
 the fuzzer decides the statements as a cross-check of those proofs. Each is a `âˆ€` over Programs that pass
 `Desc.evaluate`'s refusals: `decode`, `orderViolation = none`, `Desc.rootLaidOut`, `Desc.inputsAtRoot`,
 `Desc.walkable` and `Desc.analyze`. On one such Program each conclusion is decidable, and `check` decides it:
@@ -21,7 +21,7 @@ the fuzzer decides the statements as a cross-check of those proofs. Each is a `â
 * `s2`, `Resolve.BodiesOk`: every Definition a `Good` activation runs (the root, and each composite callee of a node with
   members, `goodDefs`) is `BodyOk`: `RefOk` for every argument and return reference, `UpOk`, `DownOk`, and `OpOk` for a
   primitive callee.
-* `s3`, `Novel.ReadsExact`: on `NciCheck.circuitOf`'s circuit `c`, every gate a segment of `Desc.analyze`'s reads of root
+* `s3`, `Fresh.ReadsExact`: on `NciCheck.circuitOf`'s circuit `c`, every gate a segment of `Desc.analyze`'s reads of root
   node `k` names (of positive count) is a natural `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the
   segment's first piece (clause a), and those gates are exactly the gates outside node `k` that its gates read (clause b).
   `circuitOf` runs only where `s1prim`'s walk resolved every operand under the step cap, so it never runs `Steps.FUEL`
@@ -251,7 +251,7 @@ def segJson (s : Desc.Seg) : Json :=
     ("rowStride", toJson q.rowStride)]
   Json.mkObj [("ps", Json.arr (s.ps.map pj)), ("len", toJson s.len), ("reps", toJson s.reps), ("shift", toJson s.shift)]
 
-/-- `Novel.ReadsExact`'s conclusion for every root node: `none`, or the first node and clause where it fails; `some`
+/-- `Fresh.ReadsExact`'s conclusion for every root node: `none`, or the first node and clause where it fails; `some`
 with `skipped` for a segment past the cap. -/
 def readsExact (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable) (cap : Nat) : Option Json := Id.run do
   let offs := (P.defs[P.root]!).body.offsets

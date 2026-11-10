@@ -8,7 +8,7 @@ import Proofs.Nci.Support
 
 Support form gives the reference circuit's incompressibility in reads (`activationsIncompressible_of_support`,
 `partialSumsIncompressible_of_support`). Then pull a compliant division of the containing declaration back to `c`
-(`pull`): each piece has no more gates than its IU and reads no more novel information (`novelReads_pull`), so the
+(`pull`): each piece has no more gates than its IU and reads no more novel information (`freshInput_pull`), so the
 pieces form a division of `c` into IUs of at most `Γ` gates reading at most `αΓ` each. The reads form of the law
 (`UpdatedMatMulReads`), applied to `c` with that division, bounds the pieces' total reads from below by `G · f(αΓ)`;
 the IUs read at least as much, and at most `α size(d)` in total.
@@ -28,14 +28,14 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-/-- **Support form gives partial-sum incompressibility**: an IU's gates take at most `2^novelReads` values. -/
+/-- **Support form gives partial-sum incompressibility**: an IU's gates take at most `2^freshInput` values. -/
 theorem partialSumsIncompressible_of_support {D : Declaration} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
     {K b_w b_a : ℝ} (h : Assumptions.PartialSumsSupport D θv c Γ K b_w b_a) :
     Assumptions.PartialSumsIncompressible D c Γ K b_w b_a := by
   intro n P hP
   obtain ⟨s, hsum, hs⟩ := h n P hP
   refine ⟨s, hsum, fun u => ?_⟩
-  have hc : (support D θv (P.gates u) : ℝ) ≤ (2 : ℝ) ^ (novelReads D (P.gates u) : ℝ) := by
+  have hc : (support D θv (P.gates u) : ℝ) ≤ (2 : ℝ) ^ (freshInput D (P.gates u) : ℝ) := by
     rw [Real.rpow_natCast]
     exact_mod_cast support_le D θv (P.gates_subset_computed u) (subset_refl _)
   exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp ((hs u).trans hc)
@@ -49,15 +49,15 @@ theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaratio
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ (α * Γ) b_w b_a) :
     F α (α * Γ) b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed := by
   obtain ⟨n, P, hP⟩ := hP
-  have hpiece : ∀ u, (novelReads c ((pull M P).gates u) : ℝ) ≤ novelReads d (P.gates u) := fun u => by
-    exact_mod_cast novelReads_pull M hB P u
-  have hcap : ∀ u, c.D.size ((pull M P).gates u) ≤ Γ ∧ (novelReads c ((pull M P).gates u) : ℝ) ≤ α * Γ := fun u =>
+  have hpiece : ∀ u, (freshInput c ((pull M P).gates u) : ℝ) ≤ freshInput d (P.gates u) := fun u => by
+    exact_mod_cast freshInput_pull M hB P u
+  have hcap : ∀ u, c.D.size ((pull M P).gates u) ≤ Γ ∧ (freshInput c ((pull M P).gates u) : ℝ) ≤ α * Γ := fun u =>
     ⟨(card_pull_gates_le u).trans (hP u).1,
       ((hpiece u).trans (hP u).2).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)⟩
   have hreads := UpdatedMatMulReads Γ (α * Γ) b_w b_a c ch dd n (pull M P) hw ha hd hcap hA hPS
   have htotal : ch.G * readFactor (α * Γ) b_w b_a dd ≤ α * d.D.size d.D.computed :=
-    calc ch.G * readFactor (α * Γ) b_w b_a dd ≤ ∑ u, (novelReads c ((pull M P).gates u) : ℝ) := hreads
-      _ ≤ ∑ u, (novelReads d (P.gates u) : ℝ) := sum_le_sum fun u _ => hpiece u
+    calc ch.G * readFactor (α * Γ) b_w b_a dd ≤ ∑ u, (freshInput c ((pull M P).gates u) : ℝ) := hreads
+      _ ≤ ∑ u, (freshInput d (P.gates u) : ℝ) := sum_le_sum fun u _ => hpiece u
       _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := sum_le_sum fun u _ => (hP u).2
       _ = α * d.D.size d.D.computed := by
           rw [← mul_sum]
@@ -84,9 +84,9 @@ theorem ContainedTraining : Guarantees.ContainedTraining := by
     _ ≤ d.D.size d.D.computed := hF
 
 /-- Support form bounds a set's charge by its novel reads: its values are functions of what it reads. -/
-theorem le_novelReads_of_support {D : Declaration} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
-    (hR : R ⊆ D.D.computed) (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ novelReads D R := by
-  have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (novelReads D R : ℝ) := by
+theorem le_freshInput_of_support {D : Declaration} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
+    (hR : R ⊆ D.D.computed) (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ freshInput D R := by
+  have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (freshInput D R : ℝ) := by
     rw [Real.rpow_natCast]
     exact_mod_cast support_le D θv hR (subset_refl _)
   exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (h.trans hc)
@@ -185,19 +185,19 @@ end Dark
 no more novel information. -/
 theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
-    c.D.size (piece M P u) ≤ Γ ∧ (novelReads c (piece M P u) : ℝ) ≤ K :=
-  ⟨(card_piece_le u).trans (hP u).1, ((Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2).trans
+    c.D.size (piece M P u) ≤ Γ ∧ (freshInput c (piece M P u) : ℝ) ≤ K :=
+  ⟨(card_piece_le u).trans (hP u).1, ((Nat.cast_le.2 (freshInput_piece hB u)).trans (hP u).2).trans
     ((mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα).trans hαK)⟩
 
 /-- The pieces with the dark gates are within the caps, when each dark gate reads at most `K` itself. -/
 theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : Declaration} {M : PartialContainment c d} {n : ℕ}
     {P : Partition d.D n} (hα : 0 ≤ α) (hαK : α * Γ ≤ K) (hΓ : 1 ≤ Γ)
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hB : Assumptions.ThetaRegistered c d M) (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K)
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hB : Assumptions.ThetaRegistered c d M) (hX : ∀ v ∈ M.dark, (freshInput c {v} : ℝ) ≤ K)
     (i : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark}))) :
-    c.D.size ((withDark M P).gates i) ≤ Γ ∧ (novelReads c ((withDark M P).gates i) : ℝ) ≤ K := by
+    c.D.size ((withDark M P).gates i) ≤ Γ ∧ (freshInput c ((withDark M P).gates i) : ℝ) ≤ K := by
   obtain ⟨j, rfl⟩ := (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark})).surjective i
   rcases j with u | v
   · rw [withDark_gates_inl]
@@ -213,9 +213,9 @@ theorem partialSums_count {c d : Declaration} {M : PartialContainment c d} {n : 
     {ch : Chain c.D} {b_w b_a : ℝ} (ha : 0 ≤ b_a) {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
     (hsum : ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread (withDark M P) x.1 x.2.1 x.2.2 - 1) ≤ ∑ i, s i)
     (hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u)) :
+      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ freshInput d (P.gates u)) :
     ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) ≤
-      ∑ u, (novelReads d (P.gates u) : ℝ) +
+      ∑ u, (freshInput d (P.gates u) : ℝ) +
         b_a * ∑ v : {v // v ∈ M.dark}, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) := by
   have hY : ∑ u, ((outputsOther ch (piece M P u)).card : ℝ) ≤
       2 * (∑ u, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) : ℝ) +
@@ -249,10 +249,10 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
     {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K) (hw : 0 < b_w)
     (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
     (he : ∀ ℓ, ch.e ℓ ≤ emax)
-    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
+    (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (hA : Assumptions.ActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOther ch (piece M P u)).card) ≤
-      ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
+      ∑ u, (freshInput d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
         (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
       (univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
@@ -260,14 +260,14 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
     α * d.D.size d.D.computed + (1 - μ) * B := by
   have hdpos : (0 : ℝ) < dd := by exact_mod_cast hdd
   have hcapP := piece_caps (M := M) hα hαK hP hB
-  have hr : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ novelReads d (P.gates u) := fun u => by
-    exact_mod_cast novelReads_piece hB u
+  have hr : ∀ u, (freshInput c (piece M P u) : ℝ) ≤ freshInput d (P.gates u) := fun u => by
+    exact_mod_cast freshInput_piece hB u
   have hiu := fun u => iu_reads c ch Γ K b_w b_a dd hd ha.le hA (piece M P u) (piece_subset_computed u)
     (hcapP u).1 (hcapP u).2
   have h₁ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
       b_a * (dd * ((univ.filter (ch.Full (piece M P u))).card : ℝ) +
         ((ch.inputsUsed (piece M P u)).filter fun x => ¬ ch.Full (piece M P u) x.2.1).card)) ≤
-      ∑ u, (novelReads d (P.gates u) : ℝ) :=
+      ∑ u, (freshInput d (P.gates u) : ℝ) :=
     sum_le_sum fun u _ => (hiu u).trans (hr u)
   have hW := mu_weighting_budget univ hμ₀ hμ₁ h₁ h₂
   have hM := max_mul_sum_le univ hw ha hdpos hK hμ₀ hμ₁ (le_max_left (emax : ℝ) (K / (4 * b_w * dd)))
@@ -275,8 +275,8 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declarati
     (fun _ _ => by positivity) (fun _ _ => by positivity) (fun _ _ => by positivity)
     (fun u _ => (hiu u).trans (hcapP u).2) (fun u _ => card_products_le ch (piece M P u))
     (fun u _ => by exact_mod_cast card_products_le_columns ch (piece M P u) he) hW
-  have hrsum : ∑ u, (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size d.D.computed :=
-    calc ∑ u, (novelReads d (P.gates u) : ℝ) ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := sum_le_sum fun u _ => (hP u).2
+  have hrsum : ∑ u, (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size d.D.computed :=
+    calc ∑ u, (freshInput d (P.gates u) : ℝ) ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := sum_le_sum fun u _ => (hP u).2
       _ = α * d.D.size d.D.computed := by
           rw [← mul_sum]
           congr 1
@@ -298,11 +298,11 @@ theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
   obtain ⟨s, hsum, hs⟩ := hPS _ (withDark M P) (withDark_caps hα hαK hΓ hP hB hX)
   -- the charge of each piece, within its IU's reads, and of each dark gate, within its width
   have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
-    have h := le_novelReads_of_support ((withDark M P).gates_subset_computed _)
+      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ freshInput d (P.gates u) := fun u => by
+    have h := le_freshInput_of_support ((withDark M P).gates_subset_computed _)
       (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)))
     rw [withDark_gates_inl] at h
-    exact h.trans (by exact_mod_cast novelReads_piece hB u)
+    exact h.trans (by exact_mod_cast freshInput_piece hB u)
   have hsZ : ∀ v : {v // v ∈ M.dark},
       b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ c.D.w v.1 := fun v => by
     have h := le_width_of_support (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)))

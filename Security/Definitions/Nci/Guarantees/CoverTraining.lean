@@ -15,7 +15,7 @@ of bits.
 
 The route: a compliant division of `d` pulled back through the containment divides `c` into pieces, each no larger than
 its IU and reading no more novel information. A piece `R`'s block, the bits of `R` and of what it reads, computes every
-bit of `R` that reads something and is handed at most `novelReads R ≤ α σ` bits outside the free bits, where `σ ≤ Γ` is
+bit of `R` that reads something and is handed at most `freshInput R ≤ α σ` bits outside the free bits, where `σ ≤ Γ` is
 its IU's size; it has at most `w₀ Γ + α Γ + width(θ)` bits when no gate of `c` is wider than `w₀`. So the blocks cover
 `c`'s bits, each finishes at most `(k² + b k) / b` counted products at its own `k ≤ α σ`, and summed over the IUs the
 counted products are at most `(α² Γ + b α) / b · size(d)`.

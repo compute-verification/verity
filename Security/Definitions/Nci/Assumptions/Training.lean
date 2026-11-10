@@ -66,8 +66,8 @@ def TrainingIncompressible (c : Declaration) (ch : Chain c.D) (T : Threading c) 
       b_w * (ch.weightsUsed (P.gates u)).card +
           b_a * ((max ((ch.inputsUsed (P.gates u)).filter
             fun x => ¬ ch.LinkedWhole (P.gates u) x.1 x.2.1 x.2.2).card (s u) : ℕ) : ℝ)
-        ≤ novelReads c (P.gates u) ∧
+        ≤ freshInput c (P.gates u) ∧
       b_w * (T.weightsUsed (P.gates u)).card + b_a * ∑ t, (T.threadReads (P.gates u) t).card
-        ≤ novelReads c (P.gates u)
+        ≤ freshInput c (P.gates u)
 
 end Nci.Assumptions

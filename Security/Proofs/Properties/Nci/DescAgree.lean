@@ -6,12 +6,12 @@ import Properties.NciDesc
 
 `descAgrees_of` proves `Properties.DescAgrees` from two statements about the decoder and the description-sized analysis,
 each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from `Resolve.bodiesOk`, and the second by
-`Novel.novelExact_of`, from `Novel.readsExact`:
+`Fresh.freshExact_of`, from `Fresh.readsExact`:
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
   the canonical layout is located and reads only earlier gates (`GateOk`), so `NciCheck.circuitOf` lays it out.
-* `NovelExact`: on such a Program, for a division whose IUs are unions of root nodes, the novel reads `Desc.novelWidth`
+* `FreshExact`: on such a Program, for a division whose IUs are unions of root nodes, the novel reads `Desc.freshWidth`
   counts per IU, from what `Desc.analyze` resolves each root node to read, are `NciCheck.ius`'s, gate by gate.
 
 The rest is proved: `Desc.evaluate`'s refusals and folds (`descEvaluate_ok`, `nodeThetaFold_ok`, `nodeOwnerFold_ok`),
@@ -51,10 +51,10 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
       nodeOwnerFold P i.owner = .ok own ∧ iuCount own ≤ nodeCount P ∧ (∀ u < iuCount own, u ∈ usedOf own) ∧
       out = verdict (P.defs[P.root]!).gates
         ((Array.range (iuCount own)).map fun u => ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
-          Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))
+          Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))
         (failure i.gamma i.num i.den ((Array.range (iuCount own)).map fun u =>
           ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
-            Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))) := by
+            Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))) := by
   unfold Desc.evaluate at h
   rcases h1 : parse j with e | i <;> simp only [h1, bind, Except.bind] at h
   · cases h
@@ -541,9 +541,9 @@ def GatesLocated : Prop :=
 
 /-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
-IU), `Desc.novelWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `NciCheck.ius`'s novel
+IU), `Desc.freshWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `NciCheck.ius`'s novel
 reads. -/
-def NovelExact : Prop :=
+def FreshExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
     (c : GateTable) (dv : Division),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -553,7 +553,7 @@ def NovelExact : Prop :=
     (∀ k < nodeCount P, own[k]! ≠ none → (inputs P)[k]! = false ∧ nodeGates P k ≠ []) →
     (∀ k < nodeCount P, ∀ g ∈ nodeGates P k, dv.owner[g]! = own[k]! ∧ (g ∈ dv.theta ↔ mask[k]! = true)) →
     dv.n = iuCount own →
-    ∀ u < dv.n, Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads dv.n)[u]! = (ius c dv)[u]!.2
+    ∀ u < dv.n, Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads dv.n)[u]! = (ius c dv)[u]!.2
 
 theorem iuCount_eq (a b : Array (Option ℕ))
     (h : ∀ u, (∃ g < a.size, a[g]! = some u) ↔ (∃ k < b.size, b[k]! = some u)) : iuCount a = iuCount b := by
@@ -578,8 +578,8 @@ theorem ius_fst (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]
   simp [ius]
 
-/-- **`Desc.evaluate` agrees with `evaluate`, given `GatesLocated` and `NovelExact`.** -/
-theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgrees := by
+/-- **`Desc.evaluate` agrees with `evaluate`, given `GatesLocated` and `FreshExact`.** -/
+theorem descAgrees_of (hG : GatesLocated) (hN : FreshExact) : Properties.DescAgrees := by
   intro j out hev
   obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
     descEvaluate_ok j out hev
@@ -632,10 +632,10 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
   -- on every expansion, `evaluate` gives the verdict
   have hagree : ∀ j', Expands j j' → evaluate j' = .ok (verdict (P.defs[P.root]!).gates
         ((Array.range (iuCount own)).map fun u => ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
-          Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))
+          Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!))
         (failure i.gamma i.num i.den ((Array.range (iuCount own)).map fun u =>
           ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
-            Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!)))) := by
+            Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!)))) := by
     rintro j' ⟨i2, P2, hpar2, hdec2, theta', owner', hpar', hET, hEO⟩
     have hii : i2 = i := parses_unique hpar2 hi
     subst i2
@@ -741,7 +741,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
       hneq
     rw [(evaluate_ok j' _).2 ⟨_, P, c, dv, (parse_ok j' _).2 hpar', hdp, hc, hdv, rfl⟩]
     have hr : (Array.range (iuCount own)).map (fun u => ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
-        Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!)) = ius c dv := by
+        Desc.freshWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!)) = ius c dv := by
       apply Array.ext
       · simp [ius, (tally_spec c dv).1, hneq]
       · intro u hu1 hu2

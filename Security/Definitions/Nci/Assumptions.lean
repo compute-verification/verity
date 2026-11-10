@@ -60,9 +60,9 @@ as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s cou
 apply to it: an E2M1 product takes at most 37 values, but an IU that holds the product gate reads its weight and input
 wires whole, at least `b_w + b_a` bits. -/
 def ActivationsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
-  ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (novelReads D R : ℝ) ≤ K →
+  ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (freshInput D R : ℝ) ≤ K →
     b_w * (c.weightsUsed R).card +
-        b_a * ((c.inputsUsed R).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
+        b_a * ((c.inputsUsed R).filter fun x => ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ freshInput D R
 
 /-- **Incompressibility of weights and activations, in support form**: `ActivationsIncompressible` restated over what
 values determine rather than over wiring. For every IU `R` and every set `T` of its gates whose charge (`Chain.charge`,
@@ -75,7 +75,7 @@ It fails when the chain's values are determined by less than they are charged fo
 `b_w` and `b_a` are rates, in bits of support per entry, and are below an entry's width when products repeat values (at
 FP4, a product's sign and scale symmetries), so they are measured, not read from the format.
 
-Every value of `R` is a function of the values on `in(R)`, so `support(T) ≤ 2^novelReads(R)`; at cap `K + b_w + b_a`
+Every value of `R` is a function of the values on `in(R)`, so `support(T) ≤ 2^freshInput(R)`; at cap `K + b_w + b_a`
 this assumption gives `ActivationsIncompressible` at cap `K` (`activationsIncompressible_of_support`). It needs no
 bound on `R`'s size: the support form says what the values are, not what an IU can compute.
 
@@ -105,10 +105,10 @@ as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s co
 apply to it: an adder IU over a `k × k × k` block holds values determined by `2k²` entries, but it reads its `k³`
 products' wires to form them. -/
 def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
-  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
+  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (freshInput D (P.gates u) : ℝ) ≤ K) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
-      ∀ u, b_w * (c.weightsUsed (P.gates u)).card + b_a * s u ≤ novelReads D (P.gates u)
+      ∀ u, b_w * (c.weightsUsed (P.gates u)).card + b_a * s u ≤ freshInput D (P.gates u)
 
 /-- **Incompressibility of partial sums, in support form**: `PartialSumsIncompressible` restated over what values
 determine rather than over wiring. For every division `P` of `D` into IUs of at most `Γ` gates, each reading at most `K`
@@ -131,7 +131,7 @@ the IUs can be charged at most 183 (192 bits of entries) against the 448 require
 At `d = 7168` and the deployed `K = 2·10⁷` such a division absorbs at most 8.4% of the charge at FP4 and 17.8% at FP8
 (2.5 and 4 bits). -/
 def PartialSumsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
-  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
+  ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (freshInput D (P.gates u) : ℝ) ≤ K) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin c.L) × Fin c.N × Fin (c.e ℓ), (c.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
       ∀ u, (2 : ℝ) ^ (b_w * (c.weightsUsed (P.gates u)).card + b_a * s u) ≤ support D θv (P.gates u)

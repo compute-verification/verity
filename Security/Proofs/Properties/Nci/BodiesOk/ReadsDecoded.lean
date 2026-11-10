@@ -12,7 +12,7 @@ With the root a composite without parameters (`decode_root`), every callee decod
 and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program whose order passes (`rootFacts`).
 `CalleeOk`, `NodeOk` and the bodies `Desc.walkable` lays out are `ReadsExact.WidthFacts` (`widthFacts`), so the gates
 every root read names have their widths and are one root node's (`rootOneNode`, from `ReadsExact.rootOneNode_of`),
-and `Novel.ReadsExact` holds wherever `ReadsExact.RootSet` does (`readsExact_of_set`). Every
+and `Fresh.ReadsExact` holds wherever `ReadsExact.RootSet` does (`readsExact_of_set`). Every
 reference of a node calling a primitive is read by a member (`cover_reads`) and a node calling a composite has the
 shape `ReadsExact.compNodeSet` reads (`compShape_reads`), so `ReadsExact.RootSet` holds (`rootSet`).
 -/
@@ -96,9 +96,9 @@ theorem rootFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
   have := hcf d hd k hk
   omega
 
-/-- **`Novel.ReadsExact` from `ReadsExact.RootNodes` and `ReadsExact.RootSet`**, with the decoder's facts
+/-- **`Fresh.ReadsExact` from `ReadsExact.RootNodes` and `ReadsExact.RootSet`**, with the decoder's facts
 (`rootFacts`). -/
-theorem readsExact_of_nodes_set (hN : ReadsExact.RootNodes) (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
+theorem readsExact_of_nodes_set (hN : ReadsExact.RootNodes) (hS : ReadsExact.RootSet) : Fresh.ReadsExact :=
   ReadsExact.readsExact_of_rootReads (ReadsExact.rootReads_of
     (ReadsExact.rootSegs_of (fun bytes P hd ho => rootFacts bytes P hd ho) (ReadsExact.rootGates_of hN)) hS)
 
@@ -125,9 +125,9 @@ theorem widthFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode b
 theorem rootOneNode : ReadsExact.RootOneNode :=
   ReadsExact.rootOneNode_of fun bytes P hd ho hw => ⟨rootFacts bytes P hd ho, widthFacts bytes P hd hw⟩
 
-/-- **`Novel.ReadsExact` from `ReadsExact.RootSet`**, with the decoder's facts (`rootFacts`,
+/-- **`Fresh.ReadsExact` from `ReadsExact.RootSet`**, with the decoder's facts (`rootFacts`,
 `widthFacts`): the reads' widths are `ReadsExact.rootW_circuit`'s and their nodes `rootOneNode`'s. -/
-theorem readsExact_of_set (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
+theorem readsExact_of_set (hS : ReadsExact.RootSet) : Fresh.ReadsExact :=
   readsExact_of_nodes_set
     (ReadsExact.rootNodes_of (fun bytes P hd ho hw => ⟨rootFacts bytes P hd ho, widthFacts bytes P hd hw⟩)
       rootOneNode) hS

@@ -1019,9 +1019,9 @@ theorem into_mem (u : Fin n) (x : ℕ) :
     exact ⟨g.val, S.N_eq ▸ g.isLt, (S.unit_some g u).1 hgu, ((laysOut_gate S.hc S.hL g).2.2 a).1 hag,
       fun h => hau ((S.unit_some a u).2 h)⟩
 
-theorem novel_eq (u : Fin n) : Nci.novelReads d (U.gates u) =
+theorem fresh_eq (u : Fin n) : Nci.freshInput d (U.gates u) =
     (tally c dv)[u.val]!.2.fold (fun x a => if dv.theta.contains a then x else x + c.w[a]!) 0 := by
-  rw [hashSet_fold_sum _ _ (S.into_mem u), Nci.novelReads, Verity.Circuit.width, Finset.sdiff_eq_filter,
+  rw [hashSet_fold_sum _ _ (S.into_mem u), Nci.freshInput, Verity.Circuit.width, Finset.sdiff_eq_filter,
     Finset.sum_filter]
   refine Finset.sum_congr rfl fun a _ => ?_
   have h1 := S.theta_mem a
@@ -1032,9 +1032,9 @@ theorem novel_eq (u : Fin n) : Nci.novelReads d (U.gates u) =
     simp [ha, this, h2]
 
 /-- Entry `u` of `ius`: the size and novel reads of IU `u`. -/
-theorem ius_get (u : Fin n) : (ius c dv)[u.val]! = (d.D.size (U.gates u), Nci.novelReads d (U.gates u)) := by
+theorem ius_get (u : Fin n) : (ius c dv)[u.val]! = (d.D.size (U.gates u), Nci.freshInput d (U.gates u)) := by
   have hu : u.val < (tally c dv).size := by rw [(tally_spec c dv).1, ← S.n_eq]; exact u.isLt
-  rw [S.size_eq u, S.novel_eq u, ius, getElem!_pos _ u.val (by simpa using hu), Array.getElem_map,
+  rw [S.size_eq u, S.fresh_eq u, ius, getElem!_pos _ u.val (by simpa using hu), Array.getElem_map,
     ← getElem!_pos _ u.val hu]
 
 theorem ius_size : (ius c dv).size = n := by

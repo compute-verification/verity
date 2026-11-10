@@ -13,7 +13,7 @@ when that state, in the image of `c`'s novel gates, is at most `R` bits wide, th
 at most `r` and each window at most `ω` ticks long, every window reads at most `S = R + r ω`, and `FitBound` applies
 with `k = n J`. Divided by the run's `n t` server-ticks, it bounds the counted multiplications a server does a tick.
 
-Reads are counted by width (`Placed.stateIn`, `novelReads`), as in `Accounting.Guarantees.Actual.ThreadedRuntime`: a wipe
+Reads are counted by width (`Placed.stateIn`, `freshInput`), as in `Accounting.Guarantees.Actual.ThreadedRuntime`: a wipe
 bounds information, so plugging a wipe's residual in as `R` needs the read bound in its determination form. `r` bounds
 the links' capacity (`linkCapacity`), not the intake a run measures.
 -/

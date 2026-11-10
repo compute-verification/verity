@@ -65,7 +65,7 @@ def ContainedMatMulOn : Prop :=
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →
-    (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+    (∀ v ∈ M.dark, (freshInput c {v} : ℝ) ≤ K) →
     Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
       max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -82,7 +82,7 @@ def ContainedTrainingOn : Prop :=
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →
-    (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+    (∀ v ∈ M.dark, (freshInput c {v} : ℝ) ≤ K) →
     Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
     Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * ch.G →

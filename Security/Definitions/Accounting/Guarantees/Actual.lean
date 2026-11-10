@@ -64,7 +64,7 @@ def Windows : Prop :=
       ∀ (i : Fin n) (k : Fin ((t + ω - 1) / ω)),
         P.gates (finProdFinEquiv (i, k)) = A.region (X i) (Set.Ico (k * ω) ((k + 1) * ω) ∩ Set.Iio t) ∧
         (A.declaration (univ.biUnion X) t θ hθ).D.size (P.gates (finProdFinEquiv (i, k))) ≤ Φ (X i) * ω ∧
-        novelReads (A.declaration (univ.biUnion X) t θ hθ) (P.gates (finProdFinEquiv (i, k))) ≤
+        freshInput (A.declaration (univ.biUnion X) t θ hθ) (P.gates (finProdFinEquiv (i, k))) ≤
           M (X i) + linkCapacity ends β (X i) * ω
 
 /-- **A prohibited computation takes long on the actual circuit** (the runtime corollary). For a circuit `P`, the runs

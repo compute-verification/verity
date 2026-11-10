@@ -1,9 +1,9 @@
-import Proofs.Properties.Nci.Novel
+import Proofs.Properties.Nci.Fresh
 
 /-!
-# Toward `Novel.ReadsExact`: what `Desc.analyze`'s pieces and segments name
+# Toward `Fresh.ReadsExact`: what `Desc.analyze`'s pieces and segments name
 
-`Novel.ReadsExact` says that the segments `Desc.analyze` gives a root node name exactly the gates outside the node that
+`Fresh.ReadsExact` says that the segments `Desc.analyze` gives a root node name exactly the gates outside the node that
 its gates read. Its proof reads each piece, segment and sequence of segments as the list of positions it names in order
 (`pos`, `posAll`, `segPos`, `psPos`), a position being a target (a parameter's or a node's leaves, or the activation's
 gates of one width) and an index, and holds each of `Desc`'s operations on them to the positions it means:
@@ -1901,7 +1901,7 @@ theorem nodeOf_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k a : Nat} (hk 
 its summaries `memo` and `circuitOf`'s circuit `c`: for root node `k`, whose segments `rs` (`Desc.nodeReads`) have
 pieces naming gates only, every segment of positive count has pieces of positive count and names gates `a` of width
 `c.w[a]` of one root node; and the gates the segments of positive count name are exactly the gates outside node `k`
-that its gates read. `readsExact_of_rootReads` gives `Novel.ReadsExact` from it. -/
+that its gates read. `readsExact_of_rootReads` gives `Fresh.ReadsExact` from it. -/
 def RootReads : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -1944,7 +1944,7 @@ theorem gatePt_eq {y : Tgt × Int} {a : Int} {w : Nat} (h : gatePt y = some (a, 
 /-- **`ReadsExact` from `RootReads`**: `analyze`'s reads are `nodeReads`' (`readsOf_spec`), their gates the gate
 positions they name (`segGates_pos`), and a segment's first piece names a gate of the one root node its gates are in,
 which `Desc.nodeOf` finds (`nodeOf_root`). -/
-theorem readsExact_of_rootReads (h : RootReads) : Novel.ReadsExact := by
+theorem readsExact_of_rootReads (h : RootReads) : Fresh.ReadsExact := by
   intro bytes P reads c hd ho hl hi hw ha hc k hk
   rw [analyze_eq] at ha
   obtain ⟨memo, hm, hr⟩ := Walk.except_bind_ok ha

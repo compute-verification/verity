@@ -112,10 +112,10 @@ number of weight entries `R` uses, `τ_R` its number of full positions, `Q_R` th
 positions that are not full, and `d` the smallest inner dimension. -/
 theorem iu_reads (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ c.d ℓ)
     (hb_a : 0 ≤ b_a) (h : Assumptions.ActivationsIncompressible D c Γ K b_w b_a) (R : Finset (Fin D.D.N))
-    (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K) :
+    (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (freshInput D R : ℝ) ≤ K) :
     b_w * (c.weightsUsed R).card +
         b_a * (d * (univ.filter (c.Full R)).card + ((c.inputsUsed R).filter fun x => ¬ c.Full R x.2.1).card) ≤
-      novelReads D R := by
+      freshInput D R := by
   refine le_trans ?_ (h R hR hΓ hK)
   gcongr
   have hdisj : Disjoint ((c.inputsUsed R).filter fun x => c.Full R x.2.1 ∧ ¬ c.LinkedWhole R x.1 x.2.1 x.2.2)

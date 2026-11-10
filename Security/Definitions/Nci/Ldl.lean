@@ -8,7 +8,7 @@ import Mathlib.Data.Nat.Log
 The working draft's model ("Distinguishing inference from frontier training", §3–§5.1), on core's circuit and its one
 partition. The registered inputs `θ` are a declaration's baseline (`Verity.Declaration`), the blocks are a
 `Verity.Partition` of the operation gates, and a block's unregistered input bits `|in(I) \ θ|` are its novel reads
-(`Nci.novelReads`, which on a Boolean circuit, one bit per gate, is the number of those gates). Blocks carry no order:
+(`Nci.freshInput`, which on a Boolean circuit, one bit per gate, is the number of those gates). Blocks carry no order:
 each inherits the circuit's topological order.
 
 * `Decoder`, `LDL`: a fixed decoder and `LDL_{t,R}(y) = K^t(y | R)`, the least program length producing `y` within `t`.
@@ -47,7 +47,7 @@ def Exact {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop :=
 
 /-- **At most `k` unregistered input bits into every block**: `|in(I) \ θ| ≤ k`, in bits. -/
 def ReadCap (d : Declaration) {n : ℕ} (P : Partition d.D n) (k : ℕ) : Prop :=
-  ∀ u, novelReads d (P.gates u) ≤ k
+  ∀ u, freshInput d (P.gates u) ≤ k
 
 /-- **A `(c,k)`-partition**: exactly `c` operation gates and at most `k` unregistered input bits per block. -/
 def CKPartition (d : Declaration) {n : ℕ} (P : Partition d.D n) (c k : ℕ) : Prop :=

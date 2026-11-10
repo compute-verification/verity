@@ -117,7 +117,7 @@ def onePerGate : Partition tcDecl.D 10 where
 
 theorem complies : Complies 1 2 tcDecl := by
   refine ⟨10, onePerGate, fun u => ?_⟩
-  have h : ∀ u, tcDecl.D.size (onePerGate.gates u) = 1 ∧ novelReads tcDecl (onePerGate.gates u) = 2 := by decide
+  have h : ∀ u, tcDecl.D.size (onePerGate.gates u) = 1 ∧ freshInput tcDecl (onePerGate.gates u) = 2 := by decide
   rw [(h u).1, (h u).2]
   norm_num
 

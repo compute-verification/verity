@@ -6,11 +6,11 @@ import Definitions.Nci.Transfers
 
 For a division `P` of a circuit into machines, what `R_b` reads from outside itself is its transfers in and the input
 gates it reads, `in(R_b) = transfersInto b ∪ inputsRead b` (`into_eq`), two disjoint sets, and a transfer gate is
-computed, so never in a baseline. So `novelReads d R_b` is the width of `(transfersInto b ∪ inputsRead b) \ θ`
-(`novelReads_eq`): the bits on the wire into `b`, plus the width of the novel input gates `b` reads itself
-(`novelReads_eq_add`). In the Boolean profile, where every gate is one bit (`∀ g, d.D.w g = 1`, which
-`FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`novelReads_eq_card`,
-`novelReads_eq_card_add`).
+computed, so never in a baseline. So `freshInput d R_b` is the width of `(transfersInto b ∪ inputsRead b) \ θ`
+(`freshInput_eq`): the bits on the wire into `b`, plus the width of the novel input gates `b` reads itself
+(`freshInput_eq_add`). In the Boolean profile, where every gate is one bit (`∀ g, d.D.w g = 1`, which
+`FlockSoundness.Audit.Circuit.toCircuit` meets, `boolean_w`), these are numbers of gates (`freshInput_eq_card`,
+`freshInput_eq_card_add`).
 
 So NCI compliance is a ratio of two certified numbers. Machine `b`'s IU condition, `Complies`'s condition on one IU, holds
 exactly when `size R_b ≤ Γ` and `|transfersInto b| + |inputsRead b \ θ| ≤ α · size R_b` (`iu_iff_counts`), with
@@ -155,29 +155,29 @@ theorem disjoint_transfersInto_θ (b : Fin n) : Disjoint (transfersInto P b) d.�
   intro g h1 h2
   exact Bool.false_ne_true (((mem_transfersInto P).1 h1).2.symm.trans (d.θ_input g h2))
 
-/-- **Novel reads from transfers**: `novelReads d R_b = width((transfersInto b ∪ inputsRead b) \ θ)`. -/
-theorem novelReads_eq (b : Fin n) :
-    novelReads d (P.gates b) = d.D.width ((transfersInto P b ∪ inputsRead P b) \ d.θ) := by
-  rw [novelReads, into_eq]
+/-- **Novel reads from transfers**: `freshInput d R_b = width((transfersInto b ∪ inputsRead b) \ θ)`. -/
+theorem freshInput_eq (b : Fin n) :
+    freshInput d (P.gates b) = d.D.width ((transfersInto P b ∪ inputsRead P b) \ d.θ) := by
+  rw [freshInput, into_eq]
 
-/-- **Novel reads are the bits on the wire and the novel inputs read**: `novelReads d R_b` is the width of
+/-- **Novel reads are the bits on the wire and the novel inputs read**: `freshInput d R_b` is the width of
 `transfersInto b` plus the width of `inputsRead b \ θ`. -/
-theorem novelReads_eq_add (b : Fin n) :
-    novelReads d (P.gates b) = d.D.width (transfersInto P b) + d.D.width (inputsRead P b \ d.θ) := by
-  rw [novelReads_eq, union_sdiff_distrib, sdiff_eq_self_of_disjoint (disjoint_transfersInto_θ d P b)]
+theorem freshInput_eq_add (b : Fin n) :
+    freshInput d (P.gates b) = d.D.width (transfersInto P b) + d.D.width (inputsRead P b \ d.θ) := by
+  rw [freshInput_eq, union_sdiff_distrib, sdiff_eq_self_of_disjoint (disjoint_transfersInto_θ d P b)]
   unfold Circuit.width
   exact sum_union (disjoint_of_subset_right sdiff_subset (disjoint_transfersInto_inputsRead P b))
 
-/-- **Novel reads in the Boolean profile**: `novelReads d R_b = |(transfersInto b ∪ inputsRead b) \ θ|`. -/
-theorem novelReads_eq_card (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
-    novelReads d (P.gates b) = ((transfersInto P b ∪ inputsRead P b) \ d.θ).card := by
-  rw [novelReads_eq, width_eq_card hw]
+/-- **Novel reads in the Boolean profile**: `freshInput d R_b = |(transfersInto b ∪ inputsRead b) \ θ|`. -/
+theorem freshInput_eq_card (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
+    freshInput d (P.gates b) = ((transfersInto P b ∪ inputsRead P b) \ d.θ).card := by
+  rw [freshInput_eq, width_eq_card hw]
 
-/-- **Novel reads in the Boolean profile, as two counts**: `novelReads d R_b = |transfersInto b| + |inputsRead b \ θ|`,
+/-- **Novel reads in the Boolean profile, as two counts**: `freshInput d R_b = |transfersInto b| + |inputsRead b \ θ|`,
 the bits on the wire into `b` and the novel input gates `b` reads. -/
-theorem novelReads_eq_card_add (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
-    novelReads d (P.gates b) = (transfersInto P b).card + (inputsRead P b \ d.θ).card := by
-  rw [novelReads_eq_add, width_eq_card hw, width_eq_card hw]
+theorem freshInput_eq_card_add (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
+    freshInput d (P.gates b) = (transfersInto P b).card + (inputsRead P b \ d.θ).card := by
+  rw [freshInput_eq_add, width_eq_card hw, width_eq_card hw]
 
 /-- **One machine's IU condition from its counts** (the Boolean profile): `Complies`'s condition on the IU `R_b`
 (at most `Γ` gates, at most `α` bits of novel information per gate) holds exactly when `size R_b ≤ Γ` and
@@ -186,16 +186,16 @@ input gates `b` reads itself, against compute credit's total for `b`. It is stat
 need not comply as IUs: a server's session is one IU, while the clients and the auditor's warden, which reads every bit
 it relays, are not IUs of the server's workload. -/
 theorem iu_iff_counts (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) :
-    (d.D.size (P.gates b) ≤ Γ ∧ (novelReads d (P.gates b) : ℝ) ≤ α * d.D.size (P.gates b)) ↔
+    (d.D.size (P.gates b) ≤ Γ ∧ (freshInput d (P.gates b) : ℝ) ≤ α * d.D.size (P.gates b)) ↔
       (d.D.size (P.gates b) ≤ Γ ∧
         ((transfersInto P b).card + (inputsRead P b \ d.θ).card : ℝ) ≤ α * d.D.size (P.gates b)) := by
-  rw [novelReads_eq_card_add d P hw, Nat.cast_add]
+  rw [freshInput_eq_card_add d P hw, Nat.cast_add]
 
 /-- **NCI compliance is a ratio of two certified numbers** (the Boolean profile): when every input gate `R_b` reads
 outside the baseline reaches it through another machine instead (a client holds the prompt), `R_b`'s IU condition is
 `size R_b ≤ Γ` and `|transfersInto b| ≤ α · size R_b`, the bits on the wire into `b` against the gates credited to `b`. -/
 theorem iu_iff_wire (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1) (b : Fin n) (hθ : inputsRead P b ⊆ d.θ) :
-    (d.D.size (P.gates b) ≤ Γ ∧ (novelReads d (P.gates b) : ℝ) ≤ α * d.D.size (P.gates b)) ↔
+    (d.D.size (P.gates b) ≤ Γ ∧ (freshInput d (P.gates b) : ℝ) ≤ α * d.D.size (P.gates b)) ↔
       (d.D.size (P.gates b) ≤ Γ ∧ ((transfersInto P b).card : ℝ) ≤ α * d.D.size (P.gates b)) := by
   rw [iu_iff_counts d P Γ α hw, sdiff_eq_empty_iff_subset.2 hθ, card_empty, Nat.cast_zero, add_zero]
 

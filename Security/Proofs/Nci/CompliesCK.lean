@@ -64,9 +64,9 @@ theorem ExpandComplies : Guarantees.ExpandComplies := by
   have hcard : (P.gates u).card ≤ d.D.width (P.gates u) :=
     Circuit.card_le_width _ _ fun g hg => hw g (P.isInput_of_mem_gates hg)
   have hsize' : d.expand.D.size (P.expand.gates u) = d.D.width (P.gates u) := hsize
-  have hnovel : novelReads d.expand (P.expand.gates u) ≤ novelReads d (P.gates u) := by
-    have : novelReads d.expand (P.expand.gates u) = (d.expand.unregistered (P.expand.gates u)).card := by
-      simp [novelReads, Circuit.width, Declaration.unregistered]
+  have hnovel : freshInput d.expand (P.expand.gates u) ≤ freshInput d (P.gates u) := by
+    have : freshInput d.expand (P.expand.gates u) = (d.expand.unregistered (P.expand.gates u)).card := by
+      simp [freshInput, Circuit.width, Declaration.unregistered]
     rw [this]
     exact hunreg
   refine ⟨?_, ?_⟩
@@ -74,7 +74,7 @@ theorem ExpandComplies : Guarantees.ExpandComplies := by
     calc d.D.width (P.gates u) ≤ (P.gates u).card * W := Circuit.width_le _ _ W hW
       _ ≤ Γ * W := Nat.mul_le_mul_right _ hs
   · rw [hsize']
-    calc (novelReads d.expand (P.expand.gates u) : ℝ) ≤ novelReads d (P.gates u) := by exact_mod_cast hnovel
+    calc (freshInput d.expand (P.expand.gates u) : ℝ) ≤ freshInput d (P.gates u) := by exact_mod_cast hnovel
       _ ≤ α * (P.gates u).card := hr
       _ ≤ α * d.D.width (P.gates u) := mul_le_mul_of_nonneg_left (by exact_mod_cast hcard) hα
 

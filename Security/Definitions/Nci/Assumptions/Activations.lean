@@ -37,6 +37,6 @@ narrower than the weights they update, and with the read cap: without it an IU t
 many positions reads their weights once and computes the next layer's inputs itself. -/
 def ActivationsIncompressibleAll (c : Declaration) (T : Threading c) (L : T.Links) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R, Small c Γ K R →
-    b_w * (T.weightsUsed R).card + b_a * ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card ≤ novelReads c R
+    b_w * (T.weightsUsed R).card + b_a * ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card ≤ freshInput c R
 
 end Nci.Assumptions

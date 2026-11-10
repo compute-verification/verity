@@ -8,7 +8,7 @@ The draft's incompressibility charges an IU `b_w` bits for each weight entry and
 holds a product. Stated over wiring alone, that is false: a declaration can hold a weight in a constant gate, or rebuild
 it from a narrower wire, and its product gates then read less than they are charged. What an IU must read is what its
 values determine. Every value an IU `R` holds is a function of the values on `in(R)`, so over the assignments that keep
-the baseline at its committed values, the values of any gates of `R` take at most `2^novelReads(R)` distinct values,
+the baseline at its committed values, the values of any gates of `R` take at most `2^freshInput(R)` distinct values,
 whatever `R`'s gates compute. The support form charges a set of gates by how many distinct values it takes over those
 assignments, which wiring cannot change.
 

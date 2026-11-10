@@ -55,10 +55,10 @@ open Verity Finset
 theorem ReadBound : Guarantees.ReadBound := by
   intro Γ α c d M ⟨n, P, hP⟩ hB
   have hsize : ∀ u, c.D.size ((pull M P).gates u) ≤ Γ := fun u => (card_pull_gates_le u).trans (hP u).1
-  have hle : Reads Γ c ≤ ∑ u, novelReads c ((pull M P).gates u) := Nat.sInf_le ⟨n, pull M P, hsize, rfl⟩
-  calc (Reads Γ c : ℝ) ≤ ∑ u, (novelReads c ((pull M P).gates u) : ℝ) := by exact_mod_cast hle
-    _ ≤ ∑ u, (novelReads d (P.gates u) : ℝ) :=
-        Finset.sum_le_sum fun u _ => by exact_mod_cast novelReads_pull M hB P u
+  have hle : Reads Γ c ≤ ∑ u, freshInput c ((pull M P).gates u) := Nat.sInf_le ⟨n, pull M P, hsize, rfl⟩
+  calc (Reads Γ c : ℝ) ≤ ∑ u, (freshInput c ((pull M P).gates u) : ℝ) := by exact_mod_cast hle
+    _ ≤ ∑ u, (freshInput d (P.gates u) : ℝ) :=
+        Finset.sum_le_sum fun u _ => by exact_mod_cast freshInput_pull M hB P u
     _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) := Finset.sum_le_sum fun u _ => (hP u).2
     _ = α * d.D.size d.D.computed := by
         rw [← Finset.mul_sum]
@@ -69,7 +69,7 @@ theorem Inference : Guarantees.Inference := by
   intro Γ α d n P prompt hsize hreads hprompt
   have hc : Complies Γ α d := by
     refine ⟨n, P, fun u => ⟨hsize u, le_trans ?_ (hprompt u)⟩⟩
-    unfold novelReads
+    unfold freshInput
     refine Nat.cast_le.2 (Finset.sum_le_sum_of_subset fun a ha => ?_)
     rw [Finset.mem_sdiff] at ha
     exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2

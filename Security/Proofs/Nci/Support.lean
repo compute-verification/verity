@@ -5,10 +5,10 @@ import Proofs.Nci.Chain
 
 Every value an IU `R` holds is a function of the values on `in(R)` (`eval_agree_of_into`). Over the runs with the
 baseline at its committed values, the values on `in(R) ∩ θ` are fixed, so the gates of `R` take at most
-`2^novelReads(R)` distinct values (`support_le`). Adding one gate to a set adds at most one weight entry and one input
+`2^freshInput(R)` distinct values (`support_le`). Adding one gate to a set adds at most one weight entry and one input
 entry to its charge (`charge_insert_le`), so a set of `R`'s gates charged more than `R` reads has a subset charged
-between `novelReads(R)` and `novelReads(R) + b_w + b_a` (`exists_charge_window`). Support form at that cap bounds the
-subset's charge by `novelReads(R)`, a contradiction: `activationsIncompressible_of_support`. With it, the reads Lemmas
+between `freshInput(R)` and `freshInput(R) + b_w + b_a` (`exists_charge_window`). Support form at that cap bounds the
+subset's charge by `freshInput(R)`, a contradiction: `activationsIncompressible_of_support`. With it, the reads Lemmas
 1 and 2 give (`iu_reads`) rest on support form (`IuReads`).
 -/
 
@@ -48,10 +48,10 @@ theorem card_image_le_of_factor {α β γ : Type} [DecidableEq β] [DecidableEq 
         obtain ⟨b, hb, rfl⟩ := mem_image.mp (mem_coe.mp hy)
         exact Prod.ext hxy (h a ha b hb hxy)
 
-/-- **The counting bound**: the gates of an IU's subset `T` take at most `2^novelReads(R)` distinct values over the runs
+/-- **The counting bound**: the gates of an IU's subset `T` take at most `2^freshInput(R)` distinct values over the runs
 with the baseline at `θv`. -/
 theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
-    (hT : T ⊆ R) : support d θv T ≤ 2 ^ novelReads d R := by
+    (hT : T ⊆ R) : support d θv T ≤ 2 ^ freshInput d R := by
   classical
   set U := d.D.into R \ d.θ
   let r : d.D.Transcript → (g : U) → BitVec (d.D.w g) := fun a g => d.D.eval a g
@@ -65,7 +65,7 @@ theorem support_le (d : Declaration) (θv : d.D.Transcript) {R T : Finset (Fin d
         · rw [d.D.eval_input a (d.θ_input x hθ), d.D.eval_input b (d.θ_input x hθ), ha' x hθ, hb' x hθ]
         · exact congrFun hab ⟨x, mem_sdiff.mpr ⟨hx, hθ⟩⟩
     _ ≤ Fintype.card ((g : U) → BitVec (d.D.w g)) := card_le_univ _
-    _ = 2 ^ novelReads d R := by
+    _ = 2 ^ freshInput d R := by
         rw [Fintype.card_pi]
         simp only [card_bitVec]
         rw [prod_coe_sort U fun g => 2 ^ d.D.w g, prod_pow_eq_pow_sum]
@@ -190,10 +190,10 @@ theorem activationsIncompressible_of_support {D : Declaration} {θv : D.D.Transc
   intro R hR _ hK
   show c.charge R b_w b_a R ≤ _
   by_contra hlt
-  rcases exists_charge_window c hw ha R (N := novelReads D R) (Nat.cast_nonneg _) R with h1 | ⟨T, hT, h1, h2⟩
+  rcases exists_charge_window c hw ha R (N := freshInput D R) (Nat.cast_nonneg _) R with h1 | ⟨T, hT, h1, h2⟩
   · exact hlt h1
   · have hs := h R hR T hT (by linarith)
-    have hc : (support D θv T : ℝ) ≤ (2 : ℝ) ^ (novelReads D R : ℝ) := by
+    have hc : (support D θv T : ℝ) ≤ (2 : ℝ) ^ (freshInput D R : ℝ) := by
       rw [Real.rpow_natCast]; exact_mod_cast support_le D θv hR hT
     have := (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (hs.trans hc)
     linarith

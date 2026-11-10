@@ -5,31 +5,31 @@ import Proofs.Nci.Threads
 /-!
 # Reads in a set of gates, the pull into the contained circuit, and Theorem 1 over a read measure
 
-* `novelReads_le_readsIn`: what a set reads novelly is at most all it reads, `readsIn d R univ`.
-* `novelReads_pull_le_readsIn`: through a containment `M : c ≼ d`, a piece of a unit of `d` reads novelly at most what
+* `freshInput_le_readsIn`: what a set reads novelly is at most all it reads, `readsIn d R univ`.
+* `freshInput_pull_le_readsIn`: through a containment `M : c ≼ d`, a piece of a unit of `d` reads novelly at most what
   its unit reads in `M`'s image, baseline included, so no condition on the baselines is needed: a value the piece reads
   is a gate of `c` outside the piece or an input of `c`, and `M` sends either to a gate of its image that the unit reads.
-* `novelReads_piece_le_readsIn`: the same through a partial containment, for the piece of `S` a unit computes, with the
+* `freshInput_piece_le_readsIn`: the same through a partial containment, for the piece of `S` a unit computes, with the
   image of `S` and of the gates `S` reads in place of `M`'s image.
 * `threaded_reads_by`: Theorem 1 (`threaded_reads`) with reads counted by any measure `ρ`. Its proof reads the count
   twice, through `ρ R ≤ S` and through `ρ R` paying for the weights used and the thread values read, so it goes through
-  for any `ρ`; `threaded_count` (`Proofs.Nci.Threads`) is the counting. Theorem 1 is the instance `ρ = novelReads`.
+  for any `ρ`; `threaded_count` (`Proofs.Nci.Threads`) is the counting. Theorem 1 is the instance `ρ = freshInput`.
 -/
 
 namespace Nci.SecurityProofs
 
 open Verity Finset
 
-theorem novelReads_le_readsIn (d : Declaration) (R : Finset (Fin d.D.N)) : novelReads d R ≤ readsIn d R univ := by
-  unfold novelReads readsIn
+theorem freshInput_le_readsIn (d : Declaration) (R : Finset (Fin d.D.N)) : freshInput d R ≤ readsIn d R univ := by
+  unfold freshInput readsIn
   rw [inter_univ]
   exact sum_le_sum_of_subset sdiff_subset
 
 /-- **The pull into the contained circuit**: through a containment `M : c ≼ d`, the piece of `c` that a unit of `d`
 induces (`pull`) reads at most what the unit reads in `M`'s image, baseline included. -/
-theorem novelReads_pull_le_readsIn {c d : Declaration} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
-    (u : Fin n) : novelReads c ((pull M P).gates u) ≤ readsIn d (P.gates u) (univ.map ⟨M.emb, M.emb_inj⟩) := by
-  unfold novelReads readsIn
+theorem freshInput_pull_le_readsIn {c d : Declaration} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
+    (u : Fin n) : freshInput c ((pull M P).gates u) ≤ readsIn d (P.gates u) (univ.map ⟨M.emb, M.emb_inj⟩) := by
+  unfold freshInput readsIn
   calc c.D.width (c.D.into ((pull M P).gates u) \ c.θ) ≤ c.D.width (c.D.into ((pull M P).gates u)) :=
         sum_le_sum_of_subset sdiff_subset
     _ = d.D.width ((c.D.into ((pull M P).gates u)).map ⟨M.emb, M.emb_inj⟩) := width_map (M := M) _
@@ -41,8 +41,8 @@ theorem novelReads_pull_le_readsIn {c d : Declaration} (M : Containment c.D d.D)
 /-- **The pull through a partial containment**: the piece of `c` that a unit of `d` computes (`piece`) reads novelly at
 most what the unit reads in the image of `S` and of the gates `S` reads, baseline included: a value the piece reads is a
 gate of `S` or a gate outside `S` that `S` reads, and `M` sends either to a gate the unit reads, of the same width. -/
-theorem novelReads_piece_le_readsIn {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
-    (u : Fin n) : novelReads c (piece M P u) ≤ readsIn d (P.gates u) ((M.S ∪ c.D.into M.S).image M.emb) := by
+theorem freshInput_piece_le_readsIn {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
+    (u : Fin n) : freshInput c (piece M P u) ≤ readsIn d (P.gates u) ((M.S ∪ c.D.into M.S).image M.emb) := by
   have hA : ∀ a ∈ c.D.into (piece M P u) \ c.θ, a ∈ M.S ∪ c.D.into M.S := fun a ha =>
     into_piece_subset u (mem_sdiff.1 ha).1
   have hmaps : ∀ a ∈ c.D.into (piece M P u) \ c.θ,
@@ -63,7 +63,7 @@ theorem novelReads_piece_le_readsIn {c d : Declaration} (M : PartialContainment 
         exact Bool.false_ne_true hc.symm
     · rw [M.reads_emb g hgS]
       exact mem_image_of_mem _ hag
-  unfold novelReads readsIn Circuit.width
+  unfold freshInput readsIn Circuit.width
   calc ∑ a ∈ c.D.into (piece M P u) \ c.θ, c.D.w a
       = ∑ b ∈ (c.D.into (piece M P u) \ c.θ).image M.emb, d.D.w b := by
         rw [sum_image fun a ha b hb h => M.emb_inj a (hA a (mem_coe.1 ha)) b (hA b (mem_coe.1 hb)) h]
@@ -86,6 +86,6 @@ theorem threaded_reads_by (c : Declaration) (T : Threading c) (ρ : Finset (Fin 
 
 example : Guarantees.ThreadedReads := by
   intro c T Γ S b_w b_a d e hbw hba hd hT hW
-  exact threaded_reads_by c T (fun R => (novelReads c R : ℝ)) Γ S b_w b_a d e hbw hba hd hT hW
+  exact threaded_reads_by c T (fun R => (freshInput c R : ℝ)) Γ S b_w b_a d e hbw hba hd hT hW
 
 end Nci.SecurityProofs

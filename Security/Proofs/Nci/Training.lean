@@ -79,8 +79,8 @@ theorem training_piece (h : Assumptions.TrainingIncompressible c ch T Γ K b_w b
     ∃ s : ℕ,
       b_w * (ch.weightsUsed R).card +
           b_a * ((max ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card s : ℕ) : ℝ)
-        ≤ novelReads c R ∧
-      b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads c R := by
+        ≤ freshInput c R ∧
+      b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ freshInput c R := by
   obtain ⟨s, -, hs⟩ := h 2 (splitOff c.D R)
   have h0 := hs 0 (by rwa [splitOff_gates_zero hR.1])
   rw [splitOff_gates_zero hR.1] at h0
@@ -116,7 +116,7 @@ theorem trainingIncompressible_of_reads (hba : 0 ≤ b_a) (hW : Assumptions.Weig
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ K b_w b_a) :
     Assumptions.TrainingIncompressible c ch T Γ K b_w b_a := by
   intro n P
-  by_cases hall : ∀ u, c.D.size (P.gates u) ≤ Γ ∧ (novelReads c (P.gates u) : ℝ) ≤ K
+  by_cases hall : ∀ u, c.D.size (P.gates u) ≤ Γ ∧ (freshInput c (P.gates u) : ℝ) ≤ K
   · obtain ⟨s, hsum, hs⟩ := hPS n P hall
     exact ⟨s, hsum, fun u hu => ⟨max_charge_le (hA _ hu.1 hu.2.1 hu.2.2) (hs u), hW _ hu⟩⟩
   · push_neg at hall
@@ -179,22 +179,22 @@ theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatM
   obtain ⟨s, hsum, hs⟩ := partialSumsIncompressible_of_training ha.le h _ (withDark M P)
     (withDark_caps hα hαK hΓ hP hB hX)
   have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
+      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ freshInput d (P.gates u) := fun u => by
     have h' := hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u))
     rw [withDark_gates_inl] at h'
-    exact h'.trans (by exact_mod_cast novelReads_piece hB u)
+    exact h'.trans (by exact_mod_cast freshInput_piece hB u)
   have hsZ : ∀ v : {v // v ∈ M.dark},
-      b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ novelReads c {v.1} := fun v => by
+      b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ freshInput c {v.1} := fun v => by
     have h' := hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v))
     rw [withDark_gates_inr] at h'
     have : 0 ≤ b_w * ((ch.weightsUsed {v.1}).card : ℝ) := by positivity
     linarith
   have hZ : b_a * ∑ v : {v // v ∈ M.dark}, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤
-      ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := by
+      ∑ v ∈ M.dark, (freshInput c {v} : ℝ) := by
     rw [mul_sum]
     calc ∑ v : {v // v ∈ M.dark}, b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ)
-        ≤ ∑ v : {v // v ∈ M.dark}, (novelReads c {v.1} : ℝ) := sum_le_sum fun v _ => hsZ v
-      _ = ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := sum_coe_sort M.dark fun g => (novelReads c {g} : ℝ)
+        ≤ ∑ v : {v // v ∈ M.dark}, (freshInput c {v.1} : ℝ) := sum_le_sum fun v _ => hsZ v
+      _ = ∑ v ∈ M.dark, (freshInput c {v} : ℝ) := sum_coe_sort M.dark fun g => (freshInput c {g} : ℝ)
   have h₀ := matMulOn_of_counts hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP hB
     (activationsIncompressible_of_training ha.le h) (partialSums_count ha.le hsum hsP)
   exact h₀.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])

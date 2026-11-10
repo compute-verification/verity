@@ -44,7 +44,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
   code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   premise here: it is a guarantee, proved (`NciCheck.Properties.SecurityProofs.DescThrottles` in `Security/Properties`'
-  lock) from `DescAgrees` (`SecurityProofs.DescAgrees`, itself proved from `Novel.readsExact`) and the gate-by-gate
+  lock) from `DescAgrees` (`SecurityProofs.DescAgrees`, itself proved from `Fresh.readsExact`) and the gate-by-gate
   check's `Throttles`, and the check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.baseline_desc`). What is
   open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such
   a verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the

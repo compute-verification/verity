@@ -181,10 +181,10 @@ open Classical in
 multiplications"). -/
 theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
   intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS
-  have hcap : ∀ u, (novelReads D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
+  have hcap : ∀ u, (freshInput D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
     (hP u).2.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)
-  have htotal : ∑ u, (novelReads D (P.gates u) : ℝ) ≤ α * D.D.size D.D.computed := by
-    calc ∑ u, (novelReads D (P.gates u) : ℝ) ≤ ∑ u, α * (D.D.size (P.gates u) : ℝ) :=
+  have htotal : ∑ u, (freshInput D (P.gates u) : ℝ) ≤ α * D.D.size D.D.computed := by
+    calc ∑ u, (freshInput D (P.gates u) : ℝ) ≤ ∑ u, α * (D.D.size (P.gates u) : ℝ) :=
           sum_le_sum fun u _ => (hP u).2
       _ = α * D.D.size D.D.computed := by
           rw [← mul_sum]
@@ -239,7 +239,7 @@ theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
             linarith
         _ = ∑ u, (b_w * (#(c.weightsUsed (P.gates u)) : ℝ) + b_a * s u) := by
             rw [sum_add_distrib, mul_sum]
-        _ ≤ ∑ u, (novelReads D (P.gates u) : ℝ) := sum_le_sum fun u _ => hs u
+        _ ≤ ∑ u, (freshInput D (P.gates u) : ℝ) := sum_le_sum fun u _ => hs u
         _ ≤ α * D.D.size D.D.computed := htotal
     have h := min_mul_sum_le_reads univ hw ha hdpos hK hμ.1.le hμ.2.le (fun _ _ => Nat.cast_nonneg _)
       (fun _ _ => Nat.cast_nonneg _) (fun _ _ => Nat.cast_nonneg _) (fun _ _ => Nat.cast_nonneg _) hcap' hg h₁ h₂

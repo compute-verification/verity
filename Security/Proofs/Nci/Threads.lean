@@ -191,7 +191,7 @@ end Slots
 theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ) (hbw : 0 < b_w)
     (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e) (hW : Assumptions.WeightsIncompressible c T Γ S b_w b_a)
     (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
-    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e :=
+    b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w d e :=
   threaded_count T R hbw hba hd (hT R hR) (hW R hR) hR.2.2
 
 /-- **Theorem 1** (the thread draft, Appendix A). -/
@@ -201,7 +201,7 @@ theorem ThreadedReads : Guarantees.ThreadedReads := threaded_reads
 theorem threaded_reads_slots (c : Declaration) (T : Threading c) (σ : T.Slots) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ)
     (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e)
     (hW : Assumptions.WeightsIncompressibleSlots c T σ Γ S b_w b_a) (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
-    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e :=
+    b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w d e :=
   threaded_count_slots σ R hbw hba hd (hT R hR) (hW R hR) hR.2.2
 
 /-- **Theorem 1 per parameter slot**. -/
@@ -212,8 +212,8 @@ theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := by
   intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd ⟨n, P, hP⟩ hB hT hW
   set Λ := T.bound (α * Γ) b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
-  have hreads : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
-    (Nat.cast_le.2 (novelReads_piece hB u)).trans (hP u).2
+  have hreads : ∀ u, (freshInput c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
+    (Nat.cast_le.2 (freshInput_piece hB u)).trans (hP u).2
   have hpiece : ∀ u, Small c Γ (α * Γ) (piece M P u) := fun u =>
     ⟨piece_subset_computed u, (card_piece_le u).trans (hP u).1,
       (hreads u).trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα)⟩
@@ -223,7 +223,7 @@ theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := by
     exact h.symm
   calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (piece M P u)).card : ℝ) := by
         rw [hM, Nat.cast_sum, mul_sum]
-    _ ≤ ∑ u, (novelReads c (piece M P u) : ℝ) * Λ :=
+    _ ≤ ∑ u, (freshInput c (piece M P u) : ℝ) * Λ :=
         sum_le_sum fun u _ => threaded_reads_slots c T σ Γ (α * Γ) b_w b_a dd e hbw hba hdd hT hW _ (hpiece u)
     _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) * Λ := sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hreads u) hΛ
     _ = α * Λ * d.D.size d.D.computed := by
@@ -300,8 +300,8 @@ theorem weightsIncompressible_of_inputs {c : Declaration} (T : Threading c) (Γ 
       Disjoint (T.threadReads R t) (T.threadReads R s) := fun t _ s _ hts =>
     disjoint_left.2 fun g ht hs => hts (Option.some_injective _
       ((mem_filter.1 ht).2.symm.trans (mem_filter.1 hs).2))
-  have hle : ∑ g ∈ T.weightsUsed R ∪ V, (c.D.w g : ℝ) ≤ novelReads c R := by
-    unfold novelReads Circuit.width
+  have hle : ∑ g ∈ T.weightsUsed R ∪ V, (c.D.w g : ℝ) ≤ freshInput c R := by
+    unfold freshInput Circuit.width
     push_cast
     exact sum_le_sum_of_subset_of_nonneg (union_subset hU hV) fun _ _ _ => Nat.cast_nonneg _
   rw [sum_union hUV, sum_biUnion hdisj] at hle
@@ -370,7 +370,7 @@ theorem threaded_reads_of_structure {c : Declaration} (T : Threading c) (Γ : �
     (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
     (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t)
     (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
-    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w 1 0 :=
+    b_a * (T.mults R).card ≤ freshInput c R * T.bound S b_w 1 0 :=
   threaded_reads c T Γ S b_w b_a 1 0 hbw hba one_pos (threaded_one_zero T Γ S hθ hclosed)
     (weightsIncompressible_of_inputs T Γ S b_w b_a hW hthread) R hR
 

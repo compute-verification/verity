@@ -39,7 +39,7 @@ def ActivationsReads : Prop :=
     (∀ a, (L.src a).Nonempty →
       dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
     Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
-    ∀ R, Small c Γ K R → b_a * (T.mults R).card ≤ novelReads c R * T.bound K b_w dd e
+    ∀ R, Small c Γ K R → b_a * (T.mults R).card ≤ freshInput c R * T.bound K b_w dd e
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]): a declaration `d` that
 complies at `(Γ, α)` and contains the reference circuit `c` partly, computing the gates `S` of `c` and leaving the rest

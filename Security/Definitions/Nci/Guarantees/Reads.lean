@@ -22,9 +22,9 @@ runs. `b_w` and `b_a` are the widths of a weight entry and an activation entry, 
 def UpdatedMatMulReads : Prop :=
   ∀ (Γ : ℕ) (K b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d n : ℕ) (P : Partition D.D n),
     0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) →
-    (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
+    (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (freshInput D (P.gates u) : ℝ) ≤ K) →
     Assumptions.ActivationsIncompressible D c Γ K b_w b_a →
     Assumptions.PartialSumsIncompressible D c Γ K b_w b_a →
-      c.G * readFactor K b_w b_a d ≤ ∑ u, (novelReads D (P.gates u) : ℝ)
+      c.G * readFactor K b_w b_a d ≤ ∑ u, (freshInput D (P.gates u) : ℝ)
 
 end Nci.Guarantees

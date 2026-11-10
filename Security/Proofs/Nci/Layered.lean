@@ -132,7 +132,7 @@ theorem root_reads (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R �
 
 /-- **Lookups cost bits**: the lookups of a thread in `R` read disjoint columns of novel inputs, `b` bits each. -/
 theorem lookupsIn_bits (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed) (t : Fin T.m) :
-    (lookupsIn L R t).card * b ≤ novelReads c R := by
+    (lookupsIn L R t).card * b ≤ freshInput c R := by
   classical
   have hsub : (lookupsIn L R t).biUnion L.col ⊆ c.D.into R \ c.θ := by
     refine biUnion_subset.2 fun v hv => ?_
@@ -156,8 +156,8 @@ theorem lookupsIn_bits (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : 
     _ = c.D.width ((lookupsIn L R t).biUnion L.col) := by
         unfold Circuit.width
         rw [sum_biUnion hdisj]
-    _ ≤ novelReads c R := by
-        unfold novelReads Circuit.width
+    _ ≤ freshInput c R := by
+        unfold freshInput Circuit.width
         exact sum_le_sum_of_subset hsub
 
 /-- **Keyed circuits are threaded.** -/
@@ -168,7 +168,7 @@ theorem threaded_of_layered (L : Layered T d e eLk b) (Γ : ℕ) (S : ℝ) (E : 
   have hV : (lookupsIn L R t).card ≤ E := by
     by_contra h
     have h1 : (E + 1) * b ≤ (lookupsIn L R t).card * b := Nat.mul_le_mul_right b (by omega)
-    have h2 : (((E + 1) * b : ℕ) : ℝ) ≤ (novelReads c R : ℝ) :=
+    have h2 : (((E + 1) * b : ℕ) : ℝ) ≤ (freshInput c R : ℝ) :=
       Nat.cast_le.2 (h1.trans (lookupsIn_bits L R hR.1 t))
     exact absurd (hR.2.2.trans_lt hS) (not_lt.2 h2)
   have hnoroot : ∀ r ∈ R, r ∈ L.roots → T.thread r ≠ some t := by

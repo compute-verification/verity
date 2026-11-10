@@ -31,13 +31,13 @@ theorem Runtime : Guarantees.Actual.Runtime := by
   set m := (t' + ω - 1) / ω with hm_def
   obtain ⟨Q, hQ⟩ := Windows (S v).A ℓ Φ M ends β link n X θ hθ t' ω hω hX hC hΦ hM hL
   have hunit : ∀ u, ((S v).A.declaration (univ.biUnion X) t' θ hθ).D.size (Q.gates u) ≤ Γ ∧
-      (novelReads ((S v).A.declaration (univ.biUnion X) t' θ hθ) (Q.gates u) : ℝ) ≤ K := by
+      (freshInput ((S v).A.declaration (univ.biUnion X) t' θ hθ) (Q.gates u) : ℝ) ≤ K := by
     intro u
     obtain ⟨⟨i, k⟩, rfl⟩ := finProdFinEquiv.surjective u
     obtain ⟨-, hs, hr⟩ := hQ i k
     exact ⟨hs.trans (hcap i).1, (Nat.cast_le.2 hr).trans (hcap i).2⟩
   have hB5 := Nci.SecurityProofs.UpdatedMatMulReads Γ K b_w b_a _ c d _ Q hw ha hd hunit hAI hPS
-  have hsum : ∑ u, (novelReads ((S v).A.declaration (univ.biUnion X) t' θ hθ) (Q.gates u) : ℝ) ≤ (n * m : ℕ) * K :=
+  have hsum : ∑ u, (freshInput ((S v).A.declaration (univ.biUnion X) t' θ hθ) (Q.gates u) : ℝ) ≤ (n * m : ℕ) * K :=
     calc _ ≤ ∑ _u : Fin (n * m), K := sum_le_sum fun u _ => (hunit u).2
       _ = _ := by simp
   have hnK : 0 ≤ (n : ℝ) * K := by

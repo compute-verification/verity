@@ -14,11 +14,11 @@ proved here is the summaries' arithmetic, each step stated against the function 
 * `affine_resolves`: the batch fast path's gate for leaf `e` of a batch output (`Piece.affine`) is the gate §7's
   resolution reaches member by member (`Flock.Program.resolveStep`: member `e / L`, its return leaf `e % L`).
 * `sum_copies`: copies of a frame of gates, one period apart and each within its period, have copies times one copy's
-  width: `novelWidth`'s count of a batch's whole members that no other read meets.
+  width: `freshWidth`'s count of a batch's whole members that no other read meets.
 
 Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
-through §7's resolution), `Novel.ReadsExact`, proved in `Proofs.Properties.Nci.Agrees` (`Novel.readsExact`). That
-`novelWidth` is the width of the union of the gates it is given is proved in `Width` (`novelWidthExact`). The difftest
+through §7's resolution), `Fresh.ReadsExact`, proved in `Proofs.Properties.Nci.Agrees` (`Fresh.readsExact`). That
+`freshWidth` is the width of the union of the gates it is given is proved in `Width` (`freshWidthExact`). The difftest
 holds the description-sized check against the unrolled one too (`runs` `NciCheck.DescDifftestMain` in the package's
 `lean-audit.json`: 4,009 declarations).
 -/
@@ -126,7 +126,7 @@ theorem affine_resolves (q : Piece) (w : ℕ) (o b s : ℤ) (G L : ℕ) (hL : 0 
 
 /-- **Copies count as copies times one copy.** `cnt` copies of a frame of gates `S` (each below `span ≤ period`), copy
 `m` at `lo + m * period`, whose widths repeat from copy to copy (a batch's members, at the same offsets), have total
-width `cnt` times one copy's: `novelWidth`'s count of a frame that no other read meets, `x.cnt * distinctWidth x.res`. -/
+width `cnt` times one copy's: `freshWidth`'s count of a frame that no other read meets, `x.cnt * distinctWidth x.res`. -/
 theorem sum_copies (S : Finset ℕ) (lo period span cnt : ℕ) (hS : ∀ x ∈ S, x < span) (hp : span ≤ period)
     (w : ℕ → ℕ) (hw : ∀ m < cnt, ∀ x ∈ S, w (lo + m * period + x) = w (lo + x)) :
     ∑ y ∈ (Finset.range cnt).biUnion (fun m => S.image (lo + m * period + ·)), w y = cnt * ∑ x ∈ S, w (lo + x) := by

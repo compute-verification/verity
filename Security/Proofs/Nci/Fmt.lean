@@ -69,8 +69,8 @@ theorem threaded_reads_info_fmt (c : Declaration) (θv : c.D.Transcript) (T : Th
     (d e n : ℕ) (μ : ℝ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (he : 0 < e)
     (hrate : b_a ≤ Real.logb 2 n - μ) (hW : Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ)
     (R : Finset (Fin c.D.N)) (hR : SmallInfo c θv Γ S R) :
-    b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e := by
-  have hinfo := (le_novelInfo_iff c θv R _).2 (hW R hR)
+    b_a * (T.mults R).card ≤ freshInfo c θv R * T.bound S b_w d e := by
+  have hinfo := (le_freshInfo_iff c θv R _).2 (hW R hR)
   have hsum : 0 ≤ ∑ t, T.work d e R t := sum_nonneg fun t _ => work_nonneg T d e R t
   refine threaded_count_of T R (T.work d e R) _ (card_threadMults_le T R) (fun t => work_nonneg T d e R t) hbw hba
     hd (fun t h => work_threaded T d e he R t h) ?_ hR.2.2
@@ -82,7 +82,7 @@ theorem ThreadedReadsInfoFmt : Guarantees.ThreadedReadsInfoFmt := threaded_reads
 theorem smallInfo_piece {c d : Declaration} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {Γ : ℕ} {K : ℝ}
-    {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : novelInfo d θv W ≤ K) :
+    {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : freshInfo d θv W ≤ K) :
     SmallInfo c θc Γ K (univ.filter fun g => M.emb g ∈ W) := by
   have hPc : (univ.filter fun g => M.emb g ∈ W) ⊆ c.D.computed := fun g hg => by
     have := (mem_filter.1 (hWc (mem_filter.1 hg).2)).2
@@ -95,16 +95,16 @@ theorem smallInfo_piece {c d : Declaration} (M : Containment c.D d.D)
     exact card_le_card fun x hx => by
       obtain ⟨g, hg, rfl⟩ := mem_map.1 hx
       exact (mem_filter.1 hg).2
-  exact ⟨hPc, hPs, (novelInfo_le_of_containment M hθ hv hWc).trans hK⟩
+  exact ⟨hPc, hPs, (freshInfo_le_of_containment M hθ hv hWc).trans hK⟩
 
 theorem ThreadedContainedInfoFmt : Guarantees.ThreadedContainedInfoFmt := by
   intro c d M θc θv T Γ K b_w b_a dd e n μ hθ hv hbw hba hdd he hrate hW W hWc hΓ hK
-  have hinfo := novelInfo_le_of_containment M hθ hv hWc
+  have hinfo := freshInfo_le_of_containment M hθ hv hWc
   calc b_a * ((T.mults (univ.filter fun g => M.emb g ∈ W)).card : ℝ)
-      ≤ novelInfo c θc (univ.filter fun g => M.emb g ∈ W) * T.bound K b_w dd e :=
+      ≤ freshInfo c θc (univ.filter fun g => M.emb g ∈ W) * T.bound K b_w dd e :=
         threaded_reads_info_fmt c θc T Γ K b_w b_a dd e n μ hbw hba hdd he hrate hW _
           (smallInfo_piece M hθ hv hWc hΓ hK)
-    _ ≤ novelInfo d θv W * T.bound K b_w dd e :=
+    _ ≤ freshInfo d θv W * T.bound K b_w dd e :=
         mul_le_mul_of_nonneg_right hinfo (le_max_of_le_left (Nat.cast_nonneg _))
 
 theorem ThreadedOfStateFmt : Guarantees.ThreadedOfStateFmt := by

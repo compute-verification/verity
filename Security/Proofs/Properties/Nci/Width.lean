@@ -2,12 +2,12 @@ import Proofs.Properties.RemoteAudit.Sort
 import Proofs.Properties.Nci.Desc
 
 /-!
-# `Desc.novelWidth` is the width of its segments' gates
+# `Desc.freshWidth` is the width of its segments' gates
 
 A piece of a segment names gates with their widths (`pieceGates`, `segGates`): a parameter's leaves are none, a row of a
-piece of gates is its elements, and a segment of copies is each copy's pieces. `NovelWidthExact` says `Desc.novelWidth`
+piece of gates is its elements, and a segment of copies is each copy's pieces. `FreshWidthExact` says `Desc.freshWidth`
 is the total width of the distinct gates its segments name, wherever no gate is named with two widths. It holds
-(`novelWidthExact`), proved layer by layer:
+(`freshWidthExact`), proved layer by layer:
 
 * `distinctWidth_eq`: `coverStep`'s sweep over intervals sorted by start counts each gate once (`List.mergeSort` sorts,
   as Lean core proves).
@@ -17,7 +17,7 @@ is the total width of the distinct gates its segments name, wherever no gate is 
 * `frameFold_inv`: frames of one start, period and count merge into one with the union of their gates (`List.mergeSort`
   only permutes, `List.mergeSort_perm`).
 * `copiesStep_inv`: a segment of copies gives its copies' intervals or one frame of them, with its gates.
-* `tail_eq` and `novelWidth_sum` put them together, given `GateIvsExact` (`novelWidthExact_of`): `Desc.gateIvs` gives a
+* `tail_eq` and `freshWidth_sum` put them together, given `GateIvsExact` (`freshWidthExact_of`): `Desc.gateIvs` gives a
   piece list's gates as intervals, with their widths.
 * `gateIvsExact_of`: `gateIvs` takes each width's pieces to `ivsOf`, so `GateIvsExact` holds where `IvsOfExact` does.
 * `ivsOfExact_of`: `ivsOf` emits each periodic interval whose runs meet as one interval and sweeps the rest, sorted, merging
@@ -318,7 +318,7 @@ theorem agree_frame {W : ℕ → ℕ} {x : Cl} : Agree W (frameIvs x).toList ↔
     have := h m hm y hy (a - (x.lo + m * x.period)) (by omega) (by omega)
     rwa [show x.lo + m * x.period + (a - (x.lo + m * x.period)) = a by omega] at this
 
-/-- A frame as `novelWidth` counts it: its intervals within its span, the span within its period, their widths `W`'s. -/
+/-- A frame as `freshWidth` counts it: its intervals within its span, the span within its period, their widths `W`'s. -/
 def FrameOk (W : ℕ → ℕ) (x : Cl) : Prop :=
   (∀ y ∈ x.res.toList, y.2.1 ≤ x.span) ∧ x.span ≤ x.period ∧ Agree W (frameIvs x).toList
 
@@ -629,7 +629,7 @@ def pieceGates (q : Piece) : List (ℤ × ℕ) :=
 
 def piecesGates (ps : Array Piece) : List (ℤ × ℕ) := ps.toList.flatMap pieceGates
 
-/-- A segment's gates: its pieces', or each copy's when it has more than one (as `Desc.novelWidth` reads it). -/
+/-- A segment's gates: its pieces', or each copy's when it has more than one (as `Desc.freshWidth` reads it). -/
 def segGates (s : Seg) : List (ℤ × ℕ) :=
   if s.reps ≤ 1 then piecesGates s.ps else (List.range s.reps).flatMap fun m => piecesGates (s.copy m)
 
@@ -877,10 +877,10 @@ theorem copiesFold_inv (hG : GateIvsExact) (W : ℕ → ℕ) : ∀ (L : List Seg
     · simp only [hr, ↓reduceIte, decide_false, Bool.not_false, List.flatMap_cons, gs_append]
       simp only [Finset.union_assoc]
 
-/-- **`novelWidth` is the width of the segments' gates**, whose widths are `W`'s, given `GateIvsExact`. -/
-theorem novelWidth_sum (hG : GateIvsExact) (segs : Array Seg) (hnn : ∀ x ∈ segsGates segs, 0 ≤ x.1) (W : ℕ → ℕ)
+/-- **`freshWidth` is the width of the segments' gates**, whose widths are `W`'s, given `GateIvsExact`. -/
+theorem freshWidth_sum (hG : GateIvsExact) (segs : Array Seg) (hnn : ∀ x ∈ segsGates segs, 0 ≤ x.1) (W : ℕ → ℕ)
     (hW : ∀ x ∈ segsGates segs, W x.1.toNat = x.2) :
-    novelWidth segs = ∑ a ∈ gs (segsGates segs), W a := by
+    freshWidth segs = ∑ a ∈ gs (segsGates segs), W a := by
   have hmem : ∀ s ∈ segs.toList, ∀ x ∈ segGates s, x ∈ segsGates segs := fun s hs x hx =>
     List.mem_flatMap.2 ⟨s, hs, hx⟩
   set qs := (segs.filter (·.reps ≤ 1)).flatMap (·.ps) with hqs
@@ -917,15 +917,15 @@ theorem dedup_sum (L : List (ℤ × ℕ)) : (L.dedup.map Prod.snd).sum = ∑ x �
   ext x
   simp only [List.mem_toFinset, List.mem_dedup]
 
-/-- **`novelWidth` is the width of the union.** Of segments whose gates are naturals, none named with two widths,
-`Desc.novelWidth` is the total width of the distinct gates they name. -/
-def NovelWidthExact : Prop :=
+/-- **`freshWidth` is the width of the union.** Of segments whose gates are naturals, none named with two widths,
+`Desc.freshWidth` is the total width of the distinct gates they name. -/
+def FreshWidthExact : Prop :=
   ∀ segs : Array Seg, (∀ x ∈ segsGates segs, 0 ≤ x.1) →
     (∀ x ∈ segsGates segs, ∀ y ∈ segsGates segs, x.1 = y.1 → x.2 = y.2) →
-    novelWidth segs = ((segsGates segs).dedup.map Prod.snd).sum
+    freshWidth segs = ((segsGates segs).dedup.map Prod.snd).sum
 
-/-- **`NovelWidthExact`, from `GateIvsExact`.** -/
-theorem novelWidthExact_of (hG : GateIvsExact) : NovelWidthExact := by
+/-- **`FreshWidthExact`, from `GateIvsExact`.** -/
+theorem freshWidthExact_of (hG : GateIvsExact) : FreshWidthExact := by
   intro segs hnn hcons
   classical
   set L := segsGates segs
@@ -940,7 +940,7 @@ theorem novelWidthExact_of (hG : GateIvsExact) : NovelWidthExact := by
     simp only [W, h, ↓reduceDIte]
     obtain ⟨hy, hyx⟩ := Classical.choose_spec h
     rw [hinj _ hy x hx hyx]
-  rw [novelWidth_sum hG segs hnn W hW, dedup_sum]
+  rw [freshWidth_sum hG segs hnn W hW, dedup_sum]
   have himg : gs L = L.toFinset.image fun x => x.1.toNat := by
     ext a; simp [gs]
   rw [himg, Finset.sum_image fun x hx y hy h => hinj x (by simpa using hx) y (by simpa using hy) h]
@@ -1444,11 +1444,11 @@ theorem pisExact : PisExact := by
     obtain ⟨x, hx, ha⟩ := (pis_spec q hnn _).2 ⟨r, hr, t, ht, Int.toNat_of_nonneg h0⟩
     exact ⟨x, hx, ha⟩
 
-/-- **`NovelWidthExact`, from `PisExact`.** -/
-theorem novelWidthExact_of_pis (hP : PisExact) : NovelWidthExact :=
-  novelWidthExact_of (gateIvsExact_of (ivsOfExact_of hP))
+/-- **`FreshWidthExact`, from `PisExact`.** -/
+theorem freshWidthExact_of_pis (hP : PisExact) : FreshWidthExact :=
+  freshWidthExact_of (gateIvsExact_of (ivsOfExact_of hP))
 
-/-- **`novelWidth` is the width of the union.** -/
-theorem novelWidthExact : NovelWidthExact := novelWidthExact_of_pis pisExact
+/-- **`freshWidth` is the width of the union.** -/
+theorem freshWidthExact : FreshWidthExact := freshWidthExact_of_pis pisExact
 
 end NciCheck.Properties.SecurityProofs.Width

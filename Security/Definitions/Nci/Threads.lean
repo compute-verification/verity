@@ -49,7 +49,7 @@ structure Threading (c : Declaration) where
 /-- **A small subcircuit** (the draft's `F < F*`, `S < S*`, here as `≤`): at most `Γ` computed gates, reading at most
 `S` bits of novel information. -/
 def Small (c : Declaration) (Γ : ℕ) (S : ℝ) (R : Finset (Fin c.D.N)) : Prop :=
-  R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ (novelReads c R : ℝ) ≤ S
+  R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ (freshInput c R : ℝ) ≤ S
 
 namespace Threading
 

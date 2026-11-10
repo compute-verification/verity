@@ -95,9 +95,9 @@ theorem partialSums_count_packed {c d : Declaration} {M : PartialContainment c d
     {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
     (hsum : ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread (withDark M P) x.1 x.2.1 x.2.2 - 1) ≤ ∑ i, s i)
     (hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u)) :
+      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ freshInput d (P.gates u)) :
     ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) + b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤
-      ∑ u, (novelReads d (P.gates u) : ℝ) +
+      ∑ u, (freshInput d (P.gates u) : ℝ) +
         b_a * ∑ v : {v // v ∈ M.dark}, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) := by
   have hY : ∑ u, ((outputsOtherPacked ch (piece M P u)).card : ℝ) ≤
       2 * (∑ u, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) : ℝ) +
@@ -143,24 +143,24 @@ theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleC
   obtain ⟨s, hsum, hs⟩ := h _ (withDark M P)
   have hcap := withDark_caps hα hαK hΓ hP hB hX
   have hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
-      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ novelReads d (P.gates u) := fun u => by
+      b_a * s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u)) ≤ freshInput d (P.gates u) := fun u => by
     have h' := le_of_max_charge_right ha.le (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inl u))
       ⟨(withDark M P).gates_subset_computed _, (hcap _).1, (hcap _).2⟩).1
     rw [withDark_gates_inl] at h'
-    exact h'.trans (by exact_mod_cast novelReads_piece hB u)
+    exact h'.trans (by exact_mod_cast freshInput_piece hB u)
   have hsZ : ∀ v : {v // v ∈ M.dark},
-      b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ novelReads c {v.1} := fun v => by
+      b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤ freshInput c {v.1} := fun v => by
     have h' := le_of_max_charge_right ha.le (hs (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v))
       ⟨(withDark M P).gates_subset_computed _, (hcap _).1, (hcap _).2⟩).1
     rw [withDark_gates_inr] at h'
     have : 0 ≤ b_w * ((ch.weightsUsed {v.1}).card : ℝ) := by positivity
     linarith
   have hZ : b_a * ∑ v : {v // v ∈ M.dark}, (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ) ≤
-      ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := by
+      ∑ v ∈ M.dark, (freshInput c {v} : ℝ) := by
     rw [mul_sum]
     calc ∑ v : {v // v ∈ M.dark}, b_a * (s (Fintype.equivFin (Fin n ⊕ {v // v ∈ M.dark}) (Sum.inr v)) : ℝ)
-        ≤ ∑ v : {v // v ∈ M.dark}, (novelReads c {v.1} : ℝ) := sum_le_sum fun v _ => hsZ v
-      _ = ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := sum_coe_sort M.dark fun g => (novelReads c {g} : ℝ)
+        ≤ ∑ v : {v // v ∈ M.dark}, (freshInput c {v.1} : ℝ) := sum_le_sum fun v _ => hsZ v
+      _ = ∑ v ∈ M.dark, (freshInput c {v} : ℝ) := sum_coe_sort M.dark fun g => (freshInput c {g} : ℝ)
   have h₀ := matMulOn_of_counts_packed hα hK hw ha hdd hαK hμ₀ hμ₁ hd he hP hB
     (activationsIncompressible_of_training_packed ha.le h) (partialSums_count_packed ha.le hsum hsP)
   exact h₀.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])

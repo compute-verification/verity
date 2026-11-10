@@ -34,7 +34,7 @@ def EvaluatesBlocks (D : Decoder) (t : ℕ) (R : Committed) (ext : Fin R.B → R
     (aBlk : ℕ) : Prop :=
   ∃ enc : Fin R.B → R.d.D.Transcript → List Bool, ∀ u X, R.Honest X →
     (∀ X', R.Honest X' → (∀ g ∈ R.d.D.into (R.P.gates u) \ R.d.θ, X' g = X g) → enc u X' = enc u X) ∧
-    (enc u X).length ≤ Nat.clog 2 R.B + novelReads R.d (R.P.gates u) + aBlk ∧
+    (enc u X).length ≤ Nat.clog 2 R.B + freshInput R.d (R.P.gates u) + aBlk ∧
     D (enc u X) t = some (ext u (R.P.localEval X u))
 
 /-- NEW PREMISE. **Activation rate** ([LDL-ACTIVATION-RATE]) `β` with deficit `Λ` (the draft's `β_x` and `λ_x`; Lean

@@ -17,11 +17,11 @@ open Verity Finset
 /-- **Theorem 1 with reads counted by information**: if the reference circuit `c` is `(d, e)`-threaded over the
 subcircuits small by information and its weights are incompressible in support form, every such subcircuit `R`
 computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a` bits of information its novel reads
-carry. It is `ThreadedReads` with `novelInfo`, which is at most `novelReads`, in place of `novelReads`. -/
+carry. It is `ThreadedReads` with `freshInfo`, which is at most `freshInput`, in place of `freshInput`. -/
 def ThreadedReadsInfo : Prop :=
   ∀ (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.ThreadedInfo θv Γ S d e → Assumptions.WeightsSupport c θv T Γ S b_w b_a →
-    ∀ R, SmallInfo c θv Γ S R → b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e
+    ∀ R, SmallInfo c θv Γ S R → b_a * (T.mults R).card ≤ freshInfo c θv R * T.bound S b_w d e
 
 /-- **Reads bounded by a state**: if a set `R` of computed gates reads, outside the baseline, only gates of a state `Sst`
 and an ingress `Sin`, and the state's values over the runs with the baseline at `θv` are a function `f` of `k` bits,
@@ -32,7 +32,7 @@ def InfoOfState : Prop :=
   ∀ (D : Declaration) (θv : D.D.Transcript) (R Sst Sin : Finset (Fin D.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (D.D.w g)),
     R ⊆ D.D.computed → D.D.into R \ D.θ ⊆ Sst ∪ Sin → (∀ a ∈ admissible D θv, ∃ s, values Sst a = f s) →
-      support D θv R ≤ 2 ^ (k + D.D.width Sin) ∧ novelInfo D θv R ≤ k + D.D.width Sin
+      support D θv R ≤ 2 ^ (k + D.D.width Sin) ∧ freshInfo D θv R ≤ k + D.D.width Sin
 
 /-- **Theorem 1 through a containment**: a declaration `d` contains the reference circuit `c` through `M`, with `c`'s
 baseline values `θc` the ones `θv` gives their images, and `c` is as in `ThreadedReadsInfo` at cap `K`. Every set `W`
@@ -44,8 +44,8 @@ def ThreadedContainedInfo : Prop :=
     (∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) →
     (∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) →
     0 < b_w → 0 < b_a → 0 < dd → T.ThreadedInfo θc Γ K dd e → Assumptions.WeightsSupport c θc T Γ K b_w b_a →
-    ∀ W, W ⊆ d.D.computed → d.D.size W ≤ Γ → novelInfo d θv W ≤ K →
-      b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
+    ∀ W, W ⊆ d.D.computed → d.D.size W ≤ Γ → freshInfo d θv W ≤ K →
+      b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ freshInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs**: with `d`, `c` and `M` as in `ThreadedContainedInfo`, a set `W` of `d`'s computed
 gates, at most `Γ` of them, whose novel reads are a state that is a function of `k` bits and an ingress `Sin`, holds at
