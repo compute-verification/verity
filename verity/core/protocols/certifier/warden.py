@@ -67,14 +67,16 @@ whether and where a connection fails, chooses one of at most (cells + 1) outcome
 are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`), as the active certifier's do.
 
-**The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
-loop reads every server, so when a server writes within a bucket, which the prover chooses, moves when the bucket
-reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live connection's cells as a
-part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it at `origin` + t·τ +
-`paced` on the host's monotonic clock, a time fixed before the bucket is made; each connection's socket reaches the
-pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached the pacer after its
-time, or whose release started more than `slack` after it, faults every grid's window `monitor-unavailable`, as a late
-tick does. A window's three records are published once every bucket of it that was handed is released, or by the
+**The pacer** (`Warden(paced=…)`, which a warden on the host's clock must have): a bucket written on the loop leaves
+when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
+moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
+connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
+at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made; each connection's
+socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached
+the pacer after its time, whose release started more than `slack` after it, or that the pacer released with a
+connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
+warden on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
+published once every bucket of it that was handed is released, or by the
 next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
 
@@ -175,6 +177,13 @@ class WardenParams:
     def window_programs(self) -> int:
         """A window's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
+
+    def caps(self, windows: int) -> list[int]:
+        """Each connection's cell cap over `windows` windows, the period check's rows-form `cells`
+        (`NetworkCheck.Period.Schedule.caps`): `egress_cells` for each of the `lanes · windows · window` connections the
+        network certifier can carry, as `_tick` admits only while fewer than `lanes` are live and serves each
+        connection in its admission bucket."""
+        return [self.egress_cells] * (self.lanes * windows * self.window)
 
     @property
     def payload(self) -> int:
@@ -339,10 +348,11 @@ class Warden:
     - with `watermark`, a connect like `connect` (off by default), the watermark stream (the module docstring's "The
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
-    - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
-      the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
-      `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
-      bucket's `pacer.Report` once its writes end;
+    - with `paced`, seconds past `slack`, each tick hands its bucket to the pacer (`pacer.Pacer`; the module
+      docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock, `origin`'s
+      clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
+      `pacer.Report` once its writes end. On the host's clock (`clock` `time.monotonic`) `paced` is required: only a
+      warden on an injected clock writes each bucket on its loop;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
@@ -354,6 +364,9 @@ class Warden:
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
                  watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
+        if paced is None and clock is time.monotonic:
+            raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
+                             "runs, which a server's writes move; give it `paced`, seconds past the slack")
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")
@@ -512,14 +525,15 @@ class Warden:
 
     def _report(self, report: Report) -> None:
         """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
-        or whose release started more than `slack` after it, faults every grid's window `monitor-unavailable`: the open
-        window's certifiers, or the records held for a closed one, published once every bucket of it that was handed is
+        whose release started more than `slack` after it, or released unwritten (a connection's socket hadn't reached
+        the pacer, so its cells are on no wire), faults every grid's window `monitor-unavailable`: the open window's
+        certifiers, or the records held for a closed one, published once every bucket of it that was handed is
         released. A connection's writes fault nothing, as on the loop: a client that doesn't read holds its own."""
         if report.end is not None:
             self.releases.append(report)
             return
         w = report.t // self.params.window
-        if report.arrived > 0 or report.start > self.slack:
+        if report.arrived > 0 or report.start > self.slack or not report.written:
             if w in self._held:
                 out, records = self._held[w]
                 self._held[w] = (out, [(r if not r.status.complete else
@@ -771,7 +785,8 @@ class Warden:
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
 
-def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record], fails: Sequence[Record]) -> dict:
+def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record],
+          fails: Sequence[Record]) -> dict:
     """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its

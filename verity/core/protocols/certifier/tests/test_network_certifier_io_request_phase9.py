@@ -3,11 +3,11 @@ ingress: what a bucket's verdict holds alone, and what rests on the verifier's l
 buckets.
 
   a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
-     advice digest or Commit: `tie_service.IoTieVerdict` keys the verdicts to the advice's digest, built only
-     from proofs verified on the verifier's own lanes (`io_request.lanes`).
+     advice digest or Commit.
   b. Closed: a carried prompt-field count is no free addend. Checked alone, a bucket still accepts a lane's carry-in's
-     fields + Δ with its carry-out's + Δ, but the bucket before holds its carry-out's fields, and the verifier's
-     lanes chain each connection from (0, 0) to (0, n), so a link's verdicts accept no Δ.
+     fields + Δ with its carry-out's + Δ, but the bucket before holds its carry-out's fields, and lanes chained over
+     each connection from (0, 0) to (0, n) (`io_request.lanes`) accept no Δ. The scan's ingress units carry the
+     count in their state instead (`test_network_certifier_ingress_scan`).
   c. Open here: the prompt id values are tied to nothing (the ingress-ids tie, `io_ids`, holds them to the Commit's
      `c00.input/ids`).
   d. Changed: the ordinal is read. Each cell's header carries its connection's ordinal, and a lane's cells must be on

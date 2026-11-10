@@ -178,14 +178,10 @@ abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-s
 abbrev STORE_SALT : String := "verity/store/salt/v1"
 
 -- Not yet read from here: the network certifier and network accounting
-abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"
 abbrev CERTIFIER_CERTIFICATES : String := "verity-network-certifier/certificates/v3"
 abbrev CERTIFIER_CLOCK : String := "verity-network-certifier/clock/v1"
 abbrev CERTIFIER_EMPTY : String := "verity-network-certifier/empty/v2"
 abbrev CERTIFIER_FRAME : String := "verity-network-certifier/frame/v2"
-abbrev CERTIFIER_INGRESS_TIE_SPEC : String := "verity-network-certifier/ingress-tie-spec/v1"
-abbrev CERTIFIER_INGRESS_TIE_STATEMENT : String := "verity-network-certifier/ingress-tie-statement/v1"
-abbrev CERTIFIER_INGRESS_TIE_VERDICT : String := "verity-network-certifier/ingress-tie-verdict/v1"
 abbrev CERTIFIER_NETWORK_VERDICT : String := "verity-network-certifier/network-verdict/v0"
 abbrev CERTIFIER_NODE : String := "verity-network-certifier/node/v2"
 abbrev CERTIFIER_OUT_RECORD : String := "verity-network-certifier/out-record/v1"

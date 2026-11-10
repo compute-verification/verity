@@ -647,7 +647,7 @@ IoTieRequest = CompositeDefinition(
         "none after a pad or the request's END, leaving its carry-out (left_out, fields_out) with no count past 2^32 "
         "(`IoTieRequestEnd`): the ingress tie of one bucket row of the warden's registered root (the row the proof "
         "system's registered read, bit 8k + i bit i of byte k), every cell opened; a link-window's tie is its T rows'")
-IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins (`tie_service.gate`)
+IoTieRequest.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 #: the circuit digests circuit-check pins (`head_check.pinned_digest`)
 PINS = Path(__file__).with_name("io_request.circuit-check.json")
 

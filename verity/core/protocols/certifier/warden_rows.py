@@ -66,7 +66,8 @@ head names and the schedule's (ordinals and first rows in admission order, r cel
 row), and refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read
 opens. So a read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a
 cell twice. The proof block's cell is at its slot's words of the row (`Wiring.place`). A population of one proof block a
-bucket (the I/O tie's) reads whole rows instead (`bucket_port`): proof block `reads_from + t` opens row t, every slot
+bucket (the ties': `egress.EgressBucket`, `IoTieRequest`) reads whole rows instead (`bucket_port`): proof block
+`reads_from + t` opens row t, every slot
 held or not, and no wiring.
 
 **The proof blocks' wiring is the Program's** (`Units`): which cell each proof block reads is pinned with the Program,
@@ -80,8 +81,7 @@ so a statement's positions are all it can vary, and Lean's registered reads hold
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the network certifier's ordinal: the k-th connection to
-reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice
-request k (`order[k] + 1`).
+reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it.
 """
 
 from __future__ import annotations
@@ -507,8 +507,9 @@ def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | 
 
 
 def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
-    """The verifier's own `--registered` port of a population of one proof block a bucket (`IoTieBucket`): proof block
-    `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
+    """The verifier's own `--registered` port of a population of one proof block a bucket (`egress.EgressBucket`,
+    `IoTieRequest`): proof block `reads_from + t` opens row t, its bucket's every slot, held or not. It names no
+    connection, so it reads no
     wiring, and the head's rows alone fix its reads, so there is no proof blocks' wiring to name: the port names the
     head's value."""
     _schedules(head, params)

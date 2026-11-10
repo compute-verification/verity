@@ -1,5 +1,6 @@
 """N2, the egress side of the step-indexed scan: each egress bucket's cells computed, as the proof block's gates, from
-the scan's slot state, the generator form. Nothing here is in a Spec yet.
+the scan's slot state, the generator form. Its Spec is the egress tie's (`scan_service.EgressTie`), whose ``egress``
+statement is an execution phase's T proof blocks of it.
 
 **One proof block a link ℓ and bucket t** (`EgressBucket`). It reads one row, ``state``, the egress view of the slot
 state S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t), and computes the row of R
@@ -11,7 +12,7 @@ verifier's `HmOut`; `warden_rows.bucket_port`: proof block `reads_from + t` read
 the network certifier's registered row only when the row the state renders is it, bit for bit. Only o0 is public: a
 proof block's public output
 is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
-nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
+nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.BoundaryGates.Fits`: no
 egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
 reads S_t rather than S_{t−1} because the network certifier's egress row of a connection's admission bucket already
 holds its lane, a `PAD` on its q.

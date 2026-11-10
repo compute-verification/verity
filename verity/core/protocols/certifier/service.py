@@ -18,7 +18,8 @@ execution phase. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served link's profile) is registered in order and
 its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
-reject the link. A run's is the AND over its links'.
+reject the link; on a network certifier link each execution phase's egress tie must accept it too (`egress`, below). A
+run's is the AND over its links'.
 
 **The period sample** (`LinkWindows.period_draw`) samples the link-windows instead. The prover first commits the
 period: every window's salted root (`root`), which the challenger records before it reads a coin (a coin source with
@@ -81,8 +82,8 @@ It runs on every execution phase, as a structural check must. In a proof it is a
 bits with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
 N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
-retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
-proves in zero knowledge, outside this protocol.
+retired, superseded by the egress tie: the step-indexed scan (`ingress_scan`, `egress`) as a Spec of the proof system
+(`scan_service`), every bucket proved, which the network verdict of a network certifier link reads.
 
 **The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof
 block's public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt),
@@ -122,8 +123,10 @@ zero-knowledge.
 N2 compares no grid in the clear and takes no frames, so its claim is counts only: on every execution phase the egress
 head's counts are the profile's (and the ingress head's, where that end declares one), which puts the link's timing at
 the profile. The egress grid is the head's counts filled with the head's frames in order (`grid.fill`), and the head's
-digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Nothing here holds the egress
-grid to the Program's.
+digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. On a network certifier link
+the egress tie holds them (`scan_service`): its proof that the network certifier's egress rows are the ones the
+committed trace renders is what `network_verdict(egress=…)` reads, and the link's network verdict counts an execution
+phase only where that tie accepted it. On any other link nothing here holds the egress grid to the Program's.
 
 **A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
 and the run-time syncs, so no profile fixes them before the run. Its proof block is `NetworkServedLinkWindow` v4{EGRESS,
@@ -144,7 +147,13 @@ charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifi
 declares no sync and the charge is 0. Its proof block is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each
 head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
 digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
-records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
+records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records. Each
+connection's egress cell count, n + 1 for its request Program's n outputs, is the scan's to hold
+(`egress.EgressBucket`, whose proof opens only on the network certifier's row), not this proof block's. Its network
+verdict takes the link's egress tie (`network_verdict(egress=scan_service.Scans(…))`, the verifier's own: an
+`EgressTie` of this link, its certifier session and the schedule whose digest `WardenProfile` names, on this link's
+grid) and refuses an execution phase the tie doesn't accept, so a run whose egress differs from the committed trace by
+one token is refused though its counts accept; without a tie it refuses the link by name (`EGRESS_TIED`).
 
 A link whose egress end has no occupancy profile and is neither served nor a warden's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.
@@ -173,9 +182,8 @@ Lean takes as an input rather than checks:
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
-The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
-ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
-through both to the verdict it recorded, and the properties of the Lean's verdict are
+The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. Every proving run of N2 recorded
+before the switch replayed through both to the verdict it recorded, and the properties of the Lean's verdict are
 `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
@@ -187,7 +195,8 @@ the certificates' signatures are checked
 on the host from their public fields, not in the proof. One clock per spatial unit across links (`Audit.syncs`) is
 not checked here: each registration is one execution phase, checked alone. The frames, their content and their order
 within the counts, are not held: an accepted outcome says nothing of them, so the claim is counts only (timing at the
-profile).
+profile). On a network certifier link the network verdict adds the egress tie's claim (`scan_service`'s "What it
+doesn't establish" states its limits).
 """
 from __future__ import annotations
 
@@ -213,6 +222,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC, lean_audit as LA, served as SV
+from verity.core.protocols.certifier import scan_service as SC
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, LmsKey, PublicKey, \
     parameters_digest
@@ -237,6 +247,9 @@ PERIOD_DRAW = "verity-network-certifier/period-draw/v1"
 #: the sampled network verdict's refusal by name: the windows registered and proved are not the period's sample of record
 #: (`lean_draw` on the coins the period sample read), or that sample can't be made
 PERIOD_DRAWN = "period-draw"
+#: a network certifier link's network verdict's refusal by name: no egress tie (`scan_service.Scans`) holds its egress
+#: to the committed trace
+EGRESS_TIED = "egress"
 VALUE = "certificates"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 VERIFIER = "network-audit"
@@ -1232,8 +1245,26 @@ class LinkWindows:
             return None, f"the Lean's draw is not subset:{k} over the {n} windows: {json.dumps(got)[:300]}"
         return sorted(units), None
 
+    def _egress(self, egress: SC.Scans) -> SC.EgressTieVerdict:
+        """The egress tie's verdict on this link, once `egress` is a tie of this network certifier link's: its link,
+        its session the certifier session and its schedule the one whose digest `warden` names on this link's grid;
+        else `ValueError` naming what differs."""
+        if self.warden is None:
+            raise ValueError("an egress tie holds a network certifier link's egress, and this link isn't one")
+        if type(egress) is not SC.Scans:
+            raise ValueError("a network certifier link's egress tie is a scan_service.Scans, the verifier's own")
+        tie = egress.egress
+        if tie.link != self.link:
+            raise ValueError(f"the egress tie is on link {tie.link!r:.80}, not {self.link!r:.80}")
+        if tie.session != self.certifier_session:
+            raise ValueError("the egress tie's session isn't this link's certifier session")
+        if tie.params.digest != self.warden.digest or tie.params.grid != self.params:
+            raise ValueError("the egress tie's schedule isn't the one this link's network certifier digest names")
+        return egress.verdict(self.link)
+
     def network_verdict(self, stream: S.Stream, windows: int | None = None,
-                        drawn: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                        drawn: Mapping[str, Any] | None = None,
+                        egress: SC.Scans | None = None) -> dict[str, Any]:
         """The link's network verdict of record: the AND over its execution phases 0 … `windows` − 1 (by default the
         egress profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every
         w, the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
@@ -1258,11 +1289,23 @@ class LinkWindows:
         the windows registered, when the Lean can't sample, when `drawn`'s proof blocks aren't the Lean's, and when a
         registered window isn't one the Lean sampled; a sampled window not registered is in `refused`. `selection` is
         the sample of record, ``by`` ``lean``
-        (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
-        served or warden profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
-        stream's period sample."""
+        (or ``all`` at K = n), and its units are the Lean's.
+
+        On a network certifier link the verdict holds the egress to the committed trace too: `egress`, the verifier's
+        own egress tie (`scan_service.Scans`), must accept every execution phase 0 … n − 1, and a phase it doesn't accept
+        is in `refused`: every phase, sampled or not, since the scan's registrations are not among the roots a period
+        commits. Without one the link is refused by name, `why[EGRESS_TIED]`, and `refused` lists N2's own refusals
+        alone. `egress` is the tie's registrations and accepted bits (None without one), which `digest` binds.
+
+        Raises `ValueError` on a link with no egress occupancy, served or active-warden profile, as `verify` does, on a
+        stream that isn't this link's, on a sample that isn't this stream's period sample, and on an egress tie of
+        another link, certifier session or schedule, or given for a link that isn't a network certifier's."""
+        tie = None if egress is None else self._egress(egress)
         n = self._period(stream, windows)
         why: dict[str, Any] = {}
+        if self.warden is not None and tie is None:
+            why[EGRESS_TIED] = "a network certifier link's egress is held to the committed trace only by its egress " \
+                               "tie (scan_service.Scans), and none was given"
         if drawn is None:
             expected = list(range(n))
         else:
@@ -1293,11 +1336,18 @@ class LinkWindows:
                   and (drawn is None or _root_of(reg) == drawn["roots"][w]))
             if not ok:
                 refused.append(w)
+        tied: dict[str, Any] = {}
+        if self.warden is not None:
+            if tie is not None:
+                got = tie.accepted
+                refused = sorted(set(refused) | {w for w in range(n) if w >= len(got) or not got[w]})
+            tied = {"egress": None if tie is None else {"registrations": list(tie.registrations),
+                                                        "accepted": list(tie.accepted)}, "why": why}
         accepted = not refused and not why
         sampled = {} if drawn is None else {"drawn": dict(drawn), "of_record": expected, "why": why}
         digest = _sha512({"format": NETWORK_VERDICT, "stream": stream.digest, "windows": n, "records": records,
-                          "accepted": accepted, **sampled})
-        out = {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
+                          "accepted": accepted, **sampled, **tied})
+        out = {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest, **tied}
         if drawn is not None:
             bound = OA.core_law({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
             out |= {"why": why,

@@ -467,8 +467,9 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
     client's abort, each one's response held to 1 ≤ k < `max_tokens[o]` ids and none of them EOS; any other's length
     finish is at `max_tokens[o]` exactly. `cells` are the link's frames in canonical order, padding left out. A
     violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
-    whatever ids and finish the server writes; this is the rule the I/O tie holds each response's length and finish
-    to. An abort is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
+    whatever ids and finish the server writes; this is the rule a compact run's egress tie is to hold each response's
+    length and finish to (`scan_service.EgressTie` renders id-form cells only: `protocol/compact-finish.md`). An abort
+    is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
     stops = frozenset(eos)
     got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
     out: list[tuple[int, str]] = []
@@ -1235,7 +1236,7 @@ class Proxy:
         slowest = ClockSync(max(sync_set.deltas), min(sync_set.rhos))
         admission = None if served is None else Admission(
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._fresh_salt, start,
                                  served=admission)
         self.pair, self.paced = pair, paced
         self.releases: list[Report] = []
@@ -1366,12 +1367,14 @@ class Proxy:
 
     def _report(self, report: Report) -> None:
         """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
-        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
-        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
-        is published once the writes of every bucket of it that was handed are reported."""
+        whose release started more than `slack` after it, or released unwritten (its link isn't the pacer's), faults
+        its window `monitor-unavailable`, and one the link refused, `delivery-refused`: the open window's certifier, or
+        the record held for a closed one. A window's record is published once the writes of every bucket of it that
+        was handed are reported."""
         w = report.t // self.egress.buckets
         if report.end is None:
-            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+            faulted = report.arrived > 0 or report.start > self.slack or not report.written
+            reason = Reason.MONITOR_UNAVAILABLE if faulted else None
         else:
             self.releases.append(report)
             reason = None if report.written else Reason.DELIVERY_REFUSED
@@ -1438,7 +1441,7 @@ class Proxy:
 
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
-    def _draw_salt(self, window: int) -> bytes | None:
+    def _fresh_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, sample its salt and give the certifier's own frame, the
         placeholder's."""
         if window % self.pouw_window:
