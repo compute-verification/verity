@@ -1441,7 +1441,7 @@ class Proxy:
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
     def _fresh_salt(self, window: int) -> bytes | None:
-        """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
+        """At a PoUW window's first certifier window, sample its salt and give the certifier's own frame, the
         placeholder's."""
         if window % self.pouw_window:
             return None

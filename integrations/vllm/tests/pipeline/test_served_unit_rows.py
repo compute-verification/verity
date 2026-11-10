@@ -1,5 +1,5 @@
 """The served partitions' chunked templates (``chunk_cap`` of ``SERVED``, GLM-5.3's at TP 8: step 16's every family, its sparse
-MLA's splits, and step 0's prefill) keep their statements in ``circuit.json`` (`serving_rows.circuit_record`: the rows C-Flock's
+MLA's splits, and step 0's prefill) keep their statements in ``circuit.json`` (`serving_rows.circuit_record`: the rows Flock's
 stager stages, `chunk_rows.unit_rows`, and their `chunk_rows.reads`) byte for byte, at the SHA-512 vLLM's own chunk and split rows
 gave them. The window stands in: its population program would lower them."""
 import hashlib

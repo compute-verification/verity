@@ -6,7 +6,7 @@ public import Definitions.Core.Partition
 /-!
 # A whole Program's gate table from its units' tables (definitions only)
 
-A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof units' templates wired together: each row
+A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof blocks' templates wired together: each row
 unit reads the Program's input regions, and each tile unit reads its rows' outputs. Its table here is a `Whole`: the
 Program's input gates, then its units' computed gates, each unit an instance of a `BlockKind`, a unit template's own table
 (`TileCircuit.Spec`, whose inputs are its first `nIn` gates) with the gate each instance's input reads (`port`). An

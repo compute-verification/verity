@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.Recursion.VStarBDeploy
 `ksLin2_route` takes V*'s staging as `KSBoundRouteCols` does: `VstarShowsB`, the staging shown at every list of pairs, and
 `RunPairs`. `VstarShowsB` is false at `deployRec` (`vstarShowsB_deployed_rejects`: with `HeldB`, it leaves the compiled
 verifier no accepted run at any statement with a part). What the route reads of it is `StagedB`, the staging at an
-accepted run's pairs, which holds at the coin server's transcript read by a reader wherever that reader reads it back
+accepted run's pairs, which holds at the challenger's live-coin part's transcript read by a reader wherever that reader reads it back
 at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`), and `RunPairs` holds at `decCoin` (`runPairs_deployRec`).
 
 * `ksLin2_route_staged`: `ksLin2_route` with `StagedB` for `VstarShowsB`, no `RunPairs` and, at a layout whose held
@@ -23,7 +23,7 @@ at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`), and `RunPairs` hold
   `plain_KSFlockLin_DE`. What stays is the decoder's canonicity (`CanonicalProofFiles`), the calls half of the plain
   verifier's last-message binding (`PlainCallsBindOrSlack`), the reader reading the transcript back (`ReadsBackB`), at
   the dense form `HeldB`, `PartChecksBV`, `PartOpensB` and `DecompB` for some inner check, and the readers'
-  `ReadersTrue` (the inner verifier's calls are searched at each draw's coins, `callsLogCollAt_deployRec`).
+  `ReadersTrue` (the inner verifier's calls are searched at each sample's coins, `callsLogCollAt_deployRec`).
 -/
 
 @[expose] public section
@@ -98,7 +98,7 @@ theorem ksLin2_route_staged (rel relO : _root_.Flock.Readable.Parsed → _root_.
   exact ksLin2_of_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) decO hCF Cp x P M R hbody
 
 /-- **`KSLin2` at the intended choice with V\*'s staging discharged**: `ksLin2_route_staged` at `ksLin2_deployed`'s
-choice, with the staging at the coin server's transcript read by `untr` at the staged V\* statements (`showsPart`,
+choice, with the staging at the challenger's live-coin part's transcript read by `untr` at the staged V\* statements (`showsPart`,
 `cmtTr`), where `StagedB` holds wherever `untr` reads it back at an accepted run (`ReadsBackB`,
 `stagedB_deployRec_part`). What V*'s parts still owe at the dense form is `HeldB`, `PartChecksBV`, `PartOpensB` and
 `DecompB`, for some inner check `chk`, the two parts' facts only at staged statements. -/
@@ -140,7 +140,7 @@ theorem ksLin2_deployed_parts (rel : _root_.Flock.Readable.Parsed → _root_.Flo
 
 /-- **What `ksLin2_route_staged` reads of the bound record's steps `nextE`**, at the deployed relation, columns, rows'
 digest input and caps `CpDep`: `KSFlockLin` at `DE`, (P4) modulo what `E*` reads (`LastBindsEC`) and `LastCoinFree`,
-at SHA-512. The inner verifier's calls need nothing of `nextE`: the record searches them at each draw's coins
+at SHA-512. The inner verifier's calls need nothing of `nextE`: the record searches them at each sample's coins
 (`callsLogCollAt_deployRec`). `Binds` holds at every `nextE` (`binds_deployed`). It holds at the deployed plain
 verifier's steps (`stepsBase_V`). -/
 def StepsBase (nextE : Msg → List Msg → List Coin → Claims.OC Out) (wE : Msg → ℝ) (join : List Msg → Msg)

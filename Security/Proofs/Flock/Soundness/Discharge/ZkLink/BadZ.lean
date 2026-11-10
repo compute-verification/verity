@@ -217,7 +217,7 @@ theorem rowPads_padsTab (N : ℕ) (v : Fin N → F × F) : rowPads N (padsTab N 
   funext p
   simp [rowPads, padsTab, p.isLt]
 
-/-- **A pads clash**: within one run, two of a rep's pads openings, both drawn at one position (rep `r`'s
+/-- **A pads clash**: within one run, two of a rep's pads openings, both sampled at one position (rep `r`'s
 `PendZ.qpos`), verify there to one root with different pairs, under any salts. -/
 def PadsClashAtZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
   ∃ r < 2, ∃ root : D, ∃ jj < q, ∃ jj' < q, ∃ p : Fin N,

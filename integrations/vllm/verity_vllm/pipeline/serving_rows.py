@@ -19,11 +19,11 @@ The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "l
 "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>:
 cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window samples by the work table `work_table_of` derives from the
 registered compiler's transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest
-sampled as the stratified law samples it.  The members are its templates in order, each instance count read off the Build's
+sampled as the stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's
 Programs; the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
 templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
-``Q_word``, never: with the stratified law it is refused by name, its strata being templates).  ``partition.json`` beside the window
+``Q_word``, never: with the stratified sampling design it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
 (``model.layers.0.``, or a MoE layer's ``moe/L40``), or to the rows under any of a list of them, ``scope.steps`` (``[lo, hi)``)
 to those steps of each request.  A chunked template's units (``CHUNKED``: a ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate,
@@ -387,7 +387,7 @@ def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_ga
     """The verifier's work table (`draw.work_table`) for a window of ``counts`` (template -> its units, in the partition's order)
     under ``law``: under ``work:K``, each transfer-gate template (the units holding transfer gates, which the registered compiler
     lists) works 0 with its floor all its units, so every one of them is in the sample (`draw.work_k`: selection All, never
-    sampled), and every other template works 1 with floor 1, its sample the stratified law's share of K; None for any other law.
+    sampled), and every other template works 1 with floor 1, its sample the stratified sampling design's share of K; None for any other law.
     Refused when the compiler lists transfer gates under another law, when one of its transfer-gate templates is not among the
     window's (its units would be left out of the proved set), or when every template is one (nothing is sampled: that window's
     selection is all)."""
@@ -761,7 +761,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
-    gates, which the window's law proves whole (`population`); ``weight_values`` (the committer's weights, by registered
+    gates, which the window's sampling design proves whole (`population`); ``weight_values`` (the committer's weights, by registered
     parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`).  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values

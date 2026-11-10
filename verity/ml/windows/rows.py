@@ -120,14 +120,14 @@ class ValueRows:
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16- or
     32-bit leaves (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
     row), committed under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts
-    concatenated, when the caller has drawn them (`value_salts`), else drawn here."""
+    concatenated, when the caller has sampled them (`value_salts`), else sampled here."""
     value: Any
     positions: tuple[int, ...]
     salts: bytes | None = field(default=None, repr=False, compare=False)
 
 
 def value_salts(value: Any, positions: Sequence[int] | np.ndarray) -> bytes:
-    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts draw many
+    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts sample many
     (``salts.at``, `pouw.h1.registered.Salts`), else one by one."""
     at = getattr(value.salts, "at", None)
     return at(positions) if at is not None else b"".join(bytes(value.salts[int(i)]) for i in positions)
@@ -321,12 +321,12 @@ class RowTable:
 
 @dataclass(frozen=True)
 class Binding:
-    """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
+    """What the roots are bound to: the verifier's population program and query (the partition over them), the sampling design it samples by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
     at least one linked member's ``x`` table, under ``context`` (hex, 64 bytes known before the first segment: the live coin
     commitment's root).  A ``work`` law
-    draws by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
+    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
@@ -623,7 +623,7 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the window's, or the
     commit is refused.
 
-    ``salt_key``: tests only; an integration draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
+    ``salt_key``: tests only; an integration samples 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
 
@@ -786,7 +786,7 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
     (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
-    own commitment as it ran, made before any draw; ``stand-in``: a fresh commitment to values opened from its record afterwards,
+    own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
     whose link to the record's roots is provenance."""
     if kind not in registrar.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
@@ -1034,7 +1034,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
     the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
     registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
-    ``index_salt`` (192 bytes, a committer's drawn under its key) or else fresh bytes from the OS.  ``registered``: by member
+    ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the OS.  ``registered``: by member
     key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body

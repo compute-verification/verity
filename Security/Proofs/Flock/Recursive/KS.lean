@@ -29,9 +29,9 @@ public import Proofs.Flock.Claims.Recursion.VerdictRowEFree
 
 `recursiveKSAt_of` is `ksLin2_deployedR_layRP` at the deployed join (`FlockDeploy.joinR`), at the layout of record
 `DeployedR.layR rest`. At the plain record at the deployed reader, conflicts are tied to collisions
-(`plainR_conflictTied`) and the table bound at the abort law is `plainR_tableBoundAbortLin_R`, from `PlainRdInR` alone
+(`plainR_conflictTied`) and the table bound at the abort distribution is `plainR_tableBoundAbortLin_R`, from `PlainRdInR` alone
 (`hIn`; the cap prefix is `capPrefixR`, proved with no hypotheses). Its last-message binding is `rColsBind_sha512` and
-`rCallsBind_sha512`, and it needs no `StepsLogFree` (the finders search the inner verifier's calls at each draw's
+`rCallsBind_sha512`, and it needs no `StepsLogFree` (the finders search the inner verifier's calls at each sample's
 coins). The extra calls `layR` records are true at the outer relation (`moreSlotsTrue_deployed`). It takes `DecompBP`
 at what each part's circuit accepts at its own witness `ws[s]` (`hD`, `PartAcceptsP`). `recursiveKSAt_of_decomp` takes
 `DecompB` at `PartAccepts` instead, as `RecKSDecompL` at `layR`, which pins (`decompBP_of_decompB`).

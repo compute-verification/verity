@@ -8,7 +8,7 @@ public import Properties.Verity.Game
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
 circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
-draws nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
+samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
 at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
@@ -80,7 +80,7 @@ def finder : Claims.Finder where
   out _ := none
   cost _ := 0
 
-/-- **The device's signer**: it signs nothing and draws nothing at the close. -/
+/-- **The device's signer**: it signs nothing and samples nothing at the close. -/
 def signer : Signer := ⟨fun _ => [], 0, fun _ _ _ _ => [], fun _ _ => []⟩
 
 /-- The forger that saw no signature and outputs nothing, on one coin, with no SHA-512 call. -/

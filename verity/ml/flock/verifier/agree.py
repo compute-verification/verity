@@ -9,13 +9,13 @@
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (`verity/ml/flock/verifier/README.md`'s D list): upstream must then return that
-verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim draws by, which the Lean
+verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim samples by, which the Lean
 verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
 refused for that first), and upstream must return each session's expected verdict; a session with none (a fuzz case) only
 needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the soundness proof does not cover, and
 `--lean-refuses-drawless WHY` at a session without a sample, both of which the Lean verifier refuses last, once every check
-has passed (the form's first): a session they cover (every session, and each without a sample; neither a drawn session of
+has passed (the form's first): a session they cover (every session, and each without a sample; neither a sampled session of
 `--lean-refuses-drawn`) refused with their `WHY` passed every check, and is compared as accepted, any other verdict as it
 is, and the Lean verifier must accept none of them. So is every session of a set without `--program`, which the Lean
 verifier refuses last (`NO_PROGRAM`). A session directory may carry its own public file (`pub.bin`, a forgery's false
@@ -48,7 +48,7 @@ def groups(a):
 
 
 def drawn(s):
-    """The session's record carries a unit draw (M0 from eb90718f)."""
+    """The session's record carries a unit sample (M0 from eb90718f)."""
     try:
         return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
     except (OSError, ValueError):
@@ -130,7 +130,7 @@ def upstream_cmd(a, public, extra=()):
 
 def verdicts(a, slots=None):
     """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
-    one upstream process per chunk, and each drawn session in its own upstream process (`replay --drawn-only` builds only its
+    one upstream process per chunk, and each sampled session in its own upstream process (`replay --drawn-only` builds only its
     sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). A session's verdict does
     not depend on its chunk: the logs are written in the sequential run's order (by public file, then session)."""
     tasks = []                                                        # (kind, order, command, sessions)

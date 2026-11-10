@@ -753,7 +753,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
 def pearlplus_parts(serve: Path) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
     manifest (its salt key among its fields), the one file its opened tile reads by the blob holding it, and the Lean
-    verdict of record's verdict, tiles drawn and work."""
+    verdict of record's verdict, tiles sampled and work."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"

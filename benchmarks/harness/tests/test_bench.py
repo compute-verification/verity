@@ -1072,8 +1072,8 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
     """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
-    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins drawn (the server
-    draws each window's); an unset ``$`` value is refused, naming it."""
+    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins flipped (the server
+    samples each window's); an unset ``$`` value is refused, naming it."""
     from verity.core.protocols.pouw import verifier
     from verity_vllm.pipeline import serve_pearl as SPL
 

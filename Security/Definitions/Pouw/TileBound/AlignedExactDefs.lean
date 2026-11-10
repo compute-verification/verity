@@ -15,10 +15,10 @@ What `no-aligned-exact-region/sm120-unpromoted` instantiates them with:
   counts divide by `Fintype.card ρ`. `f` applies the line rule.
 * **`f i j r c`** is: word `(i, j)` is exact on every step of one fixed window, for fixed F lines, weights and
   activations, when row `i`'s noise line comes from `r` and column `j`'s from `c`.
-* **The activations are the prover's**, chosen after it sees E_B and F (both per job) and before E_A (per unit) is drawn.
+* **The activations are the prover's**, chosen after it sees E_B and F (both per job) and before E_A (per unit) is sampled.
   So a citation needs `RowCompat` for every in-domain choice of activations, aligned-spike families included, and the
   fresh side is the rows. The transposed predicate `fun j i c r => f i j r c` would make the columns the fresh side,
-  which is sound only if E_B were drawn after the activations are fixed. Pearl-C's keying doesn't give that.
+  which is sound only if E_B were sampled after the activations are fixed. Pearl-C's keying doesn't give that.
 -/
 
 @[expose] public section

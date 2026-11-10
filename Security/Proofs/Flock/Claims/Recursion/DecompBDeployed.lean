@@ -69,7 +69,7 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
 
-/-- The brings whose transcript is the coin server's record. -/
+/-- The brings whose transcript is the challenger's live-coin part's record. -/
 abbrev bB : Brings := { b with tr := recTr aux nOf hd rest }
 
 /-- The compiled record at layout `L`, whose inner view runs `IVStar` at `nextR rd`. -/

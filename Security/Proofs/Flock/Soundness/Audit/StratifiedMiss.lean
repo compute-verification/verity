@@ -3,9 +3,9 @@ module
 public import Proofs.Flock.Soundness.Audit.Stratified
 
 /-!
-# The stratified law's count curve
+# The stratified sampling design's count curve
 
-`miss K` is the largest escape of a set of at least `K` wrong units (`Law.miss`). Under the stratified law a set's escape
+`miss K` is the largest escape of a set of at least `K` incorrect proof blocks (`Law.miss`). Under the stratified sampling design a set's escape
 depends only on its count `c_s` in each stratum (`stratified_escape`). Stratum `s`'s escape falls by the factor
 `r_s(c) = (n_s − c − k_s)/(n_s − c)` when its `(c + 1)`-th unit is wrong, and that factor falls as `c` grows. So the
 likeliest set to escape fills the strata greedily, taking the largest factors first, as
@@ -14,7 +14,7 @@ likeliest set to escape fills the strata greedily, taking the largest factors fi
 * `stratified_miss_eq_greedy`: a count vector `a` that some `τ ∈ (0, 1]` separates attains `miss (∑ a)`, which is then
   `∏ s C(n_s − a_s, k_s)/C(n_s, k_s)`. Every factor `a` takes must be at least `τ`, and every factor it leaves at most
   `τ`. A greedy fill has such a `τ`, the smallest factor it took, so `audit_exfiltration`'s `hk : miss (K + 1) < δ`
-  holds for a stratified law once the greedy fill at `K + 1` escapes with less than `δ`.
+  holds for a stratified sampling design once the greedy fill at `K + 1` escapes with less than `δ`.
 * `stratum_exchange`, the step: within one stratum, `C(n_s − c, k_s) · τ^a ≤ C(n_s − a, k_s) · τ^c` for every
   `c ≤ n_s`.
 -/
@@ -53,7 +53,7 @@ theorem count_ratio_anti {N k i j : ℕ} (hij : i ≤ j) (hj : j ≤ N) :
     rw [Nat.add_sub_cancel_left, Nat.add_sub_cancel_left]
     nlinarith [Nat.zero_le (d * k)]
 
-/-- One more wrong unit: `C(N − (c + 1), k) · (N − c) = C(N − c, k) · (N − c − k)`. -/
+/-- One more incorrect proof block: `C(N − (c + 1), k) · (N − c) = C(N − c, k) · (N − c − k)`. -/
 theorem choose_sub_succ_mul {N k c : ℕ} (hc : c < N) :
     ((N - (c + 1)).choose k : ℝ≥0∞) * ((N - c : ℕ) : ℝ≥0∞) = ((N - c).choose k : ℝ≥0∞) * ((N - c - k : ℕ) : ℝ≥0∞) := by
   have h := Nat.choose_mul_succ_eq (N - (c + 1)) k
@@ -63,7 +63,7 @@ theorem choose_sub_succ_mul {N k c : ℕ} (hc : c < N) :
 theorem le_of_mul_natCast_le {x y : ℝ≥0∞} {z : ℕ} (hz : 0 < z) (h : x * (z : ℝ≥0∞) ≤ y * (z : ℝ≥0∞)) : x ≤ y :=
   (ENNReal.mul_le_mul_iff_left (by exact_mod_cast hz.ne') (ENNReal.natCast_ne_top z)).1 h
 
-/-- **The exchange, in one stratum of `N` units drawing `k`**: `C(N − c, k) · τ^a ≤ C(N − a, k) · τ^c` for every
+/-- **The exchange, in one stratum of `N` units sampling `k`**: `C(N − c, k) · τ^a ≤ C(N − a, k) · τ^c` for every
 `c ≤ N`, when `τ` is at most the factors `a` takes (`htake`, at the last one) and at least those it leaves (`hleave`, at
 the next one), cross-multiplied. -/
 theorem stratum_exchange {N k a c : ℕ} {τ : ℝ≥0∞} (ha : a ≤ N) (hc : c ≤ N)
@@ -132,8 +132,8 @@ theorem stratum_exchange {N k a c : ℕ} {τ : ℝ≥0∞} (ha : a ≤ N) (hc : 
       _ ≤ E (c + d) * τ ^ c := by gcongr; exact down d le_rfl
 
 /-- **The stratified count curve.** A count vector `a` that some `τ ∈ (0, 1]` separates, every factor it takes at least
-`τ` and every factor it leaves at most `τ`, attains the stratified law's `miss` at `∑ a`: no set of at least `∑ a` wrong
-units escapes more often than the sets with counts `a`, which escape with `∏ s C(n_s − a_s, k_s)/C(n_s, k_s)`. A greedy
+`τ` and every factor it leaves at most `τ`, attains the stratified sampling design's `miss` at `∑ a`: no set of at least `∑ a` incorrect
+proof blocks escapes more often than the sets with counts `a`, which escape with `∏ s C(n_s − a_s, k_s)/C(n_s, k_s)`. A greedy
 fill, taking the largest factor left one unit at a time, has such a `τ`. -/
 theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (a : Fin m → ℕ) (ha : ∀ s, a s ≤ (stratum σ s).card) {τ : ℝ≥0∞} (hτ0 : 0 < τ) (hτ1 : τ ≤ 1)

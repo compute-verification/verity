@@ -4,7 +4,7 @@ public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Accounting.RemoteHeld.Meets
 
 /-!
-# The drawn guarantees' premises meet, and their conclusions bite
+# The sampled guarantees' premises meet, and their conclusions bite
 
 Each guarantee of `RemoteHeld.Draw` (`PooledDraw`, `LiveCoinsDrawn`, `HeldDrawn`, `HeldOverTimeDrawn`,
 `HeldOverTimeLinksDrawn`) has its premises met at an honest instance (`*_honest`) and its conclusion false for an audit
@@ -15,7 +15,7 @@ that accepts everything (`*_nontrivial`).
   `openings_zero_subset`), `Counted` on any trace that finds nothing wrong, and its distinguishers gain nothing
   (`Draw.prfAdvantage_honest`). Over `Meets.burst` on its coins (a node bringing absent blocks back by every route) it
   meets every premise of the memory-line forms too, at any rates, W2's measured ones among them (`Meets.w2_meets`).
-* **Bites.** The toy (`toy`): one window of one receipt, none correct, drawn once, on an audit that accepts every
+* **Bites.** The toy (`toy`): one window of one receipt, none correct, sampled once, on an audit that accepts every
   outcome with that receipt wrong (`acceptAll`), its node holding nothing and bringing nothing in, inside the device
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
   receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its draw always opens the wrong receipt,
@@ -154,7 +154,7 @@ theorem heldOverTimeLinksDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (p
 
 /-! ## The toy that an audit accepting everything gets wrong -/
 
-/-- One window of one receipt, none correct, drawn once. -/
+/-- One window of one receipt, none correct, sampled once. -/
 def toy : Session 1 1 (fun _ => 1) 1 Unit where
   size _ _ := ⟨1, by norm_num⟩
   correct _ _ := ∅

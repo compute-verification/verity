@@ -48,15 +48,15 @@ def PolyNonCollision : Prop :=
     prob (PMF.uniformOfFintype (ZMod P)) (fun g => residues x ≠ residues y ∧ blockHash g x = blockHash g y) ≤
       ((W - 1 : ℕ) : ℝ≥0∞) / P
 
-/-- **Non-collision at any key distribution.** As `PolyNonCollision`, with the key drawn from any distribution `ν` on
-`GF(p)`: the probability is at most `W − 1` times `ν`'s largest point mass. `lane_points` in `digest.py` draws
+/-- **Non-collision at any key distribution.** As `PolyNonCollision`, with the key sampled from any distribution `ν` on
+`GF(p)`: the probability is at most `W − 1` times `ν`'s largest point mass. `lane_points` in `digest.py` samples
 `g ∈ [2, p − 1]` from a uniform 31-bit value, three points twice as likely as the rest, so its largest point mass is
 `2^-30`. -/
 def PolyNonCollisionKeyed : Prop :=
   ∀ (W : ℕ) (ν : PMF (ZMod P)) (x y : Chunk W),
     prob ν (fun g => residues x ≠ residues y ∧ blockHash g x = blockHash g y) ≤ ((W - 1 : ℕ) : ℝ≥0∞) * ⨆ g, ν g
 
-/-- **Unpredictability under partial reads.** Draw a block from any distribution `μ` (the stored block, conditioned on
+/-- **Unpredictability under partial reads.** Sample a block from any distribution `μ` (the stored block, conditioned on
 everything its guesser has seen) and fix any word `j` (one it did not read). For every nonzero key `g` and every guess
 `t`, which may depend on the key and on that view, the hash at `g` equals `t` with probability at most `3 · wordGuess μ j`,
 three times the best guess of word `j` from every other word of the block.

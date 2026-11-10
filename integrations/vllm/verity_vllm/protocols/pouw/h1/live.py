@@ -251,7 +251,7 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
 
 
 def _salts(reg: Any) -> np.ndarray:
-    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, drawn in one pass where its salts are drawn on
+    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, sampled in one pass where its salts are sampled on
     read (`pouw_h1_registered.Salts.at`)."""
     got = reg.salts.at(range(reg.leaves)) if hasattr(reg.salts, "at") else b"".join(reg.salts)
     return np.frombuffer(got, np.uint8).reshape(reg.leaves, 1, -1)

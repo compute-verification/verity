@@ -8,12 +8,12 @@ public import Proofs.Flock.Claims.Recursion.KSLin2
 A recursive statement may carry its inner population's link table (`CompiledStatement.links`: the table's root `T` and
 row count `N`), whose rows say that input row `p` of unit `r` holds output row `o` of unit `w`. The linked relation `RL`
 is the relation `R` and a link clause `Q` at the inner witness and the table's rows, which the extractor reads off the
-outer witnesses of its judged draw (`EL`: `E*`, then the rows `rows` reads there).
+outer witnesses of its judged sample (`EL`: `E*`, then the rows `rows` reads there).
 
 `PrBad_EL_le` is the union bound: where the linked extractor fails, `E*` fails at `R`, or it recovers a witness in `R`
 whose link clause fails. The second event is a collision the link finder `BL` finds, wherever accepting with a witness in
 `R` and a failing link clause is a collision among the SHA-512 evaluations of `ins` (`LinkBindsAt`): `ins` reads, at
-each draw `E*` may serve, the draw's coins, its run's messages and `E_O`'s outer witnesses there, and the extracted
+each sample `E*` may serve, the sample's coins, its run's messages and `E_O`'s outer witnesses there, and the extracted
 witness and table rows. So `KSLin2On` at `R` gives `KSLin2LinkOn` at `RL`, its bound one term more, `Pr[B_L]`
 (`ksLin2LinkOn_of`), and `KSLin2LinkOn` gives `KSLin2On` back wherever `B_L` finds nothing (`ksLin2On_of_linkOn`).
 -/
@@ -28,19 +28,19 @@ section Links
 
 variable {Coin W Col T Tb : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- `E*`'s coins for `E_O` at its judged draw. -/
+/-- `E*`'s coins for `E_O` at its judged sample. -/
 def judgedC {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {x : Msg} (c : (E H D I DO decO).C x) : (EO D I DO decO).C x :=
   Prod.fst (β := Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) c
 
-/-- `E*`'s draws for its waits: wait `i`'s `j`-th rerun's run coins and `E_O`'s coins. -/
+/-- `E*`'s samples for its waits: wait `i`'s `j`-th rerun's run coins and `E_O`'s coins. -/
 def waitsC {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {x : Msg} (c : (E H D I DO decO).C x) :
     Fin (I.waits (xI D x)) → Fin (I.cap (xI D x)) → (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x :=
   Prod.snd (α := (EO D I DO decO).C x) c
 
 /-- **`E*` with the link table's rows**: `E*`, and where it extracts `w`, `w` with the rows `rows` reads off `E_O`'s
-outer witnesses at the judged draw (none where `E_O` gives up there). -/
+outer witnesses at the judged sample (none where `E_O` gives up there). -/
 noncomputable def EL (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (rows : Msg → List Flock.Wit → Tb) : Extractor Coin (W × Tb) D.V where
   C := (E H D I DO decO).C
@@ -52,21 +52,21 @@ noncomputable def EL (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO 
 def RL (D : Deploy Coin) (I : Inner Coin W) (Q : Msg → W → Tb → Prop) : Rel (W × Tb) :=
   fun x p => Recursion.R D I x p.1 ∧ Q x p.1 p.2
 
-/-- The draws `E*` may serve at its coins `c`: the judged draw `(r₀, c.1)`, then every wait's. -/
+/-- The samples `E*` may serve at its coins `c`: the judged sample `(r₀, c.1)`, then every wait's. -/
 def drawsOf {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {x : Msg} (r₀ : Fin (D.V.k x) → Coin) (c : (E H D I DO decO).C x) :
     List ((Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :=
   (r₀, judgedC c) :: (List.finRange (I.waits (xI D x))).flatMap fun i =>
     (List.finRange (I.cap (xI D x))).map (waitsC c i)
 
-/-- What the link finder reads at a draw: the run's coins, the run's messages, and `E_O`'s outer witnesses there (none
+/-- What the link finder reads at a sample: the run's coins, the run's messages, and `E_O`'s outer witnesses there (none
 where it gives up). -/
 noncomputable def drawView (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : (ℕ → Coin) × List (Msg × Out) × List Flock.Wit :=
   (coinSeq d.1, (run H P D.V x ω d.1).msgs, ((EO D I DO decO).eval H P x ω d.1 d.2).1.getD [])
 
-/-- The link finder's inputs at one run and `E*`'s coins: `ins` at the draws `E*` may serve, the witness and the rows. -/
+/-- The link finder's inputs at one run and `E*`'s coins: `ins` at the samples `E*` may serve, the witness and the rows. -/
 noncomputable def linkInputs (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T)
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Flock.Wit) → W → Tb → List Msg)
@@ -74,10 +74,10 @@ noncomputable def linkInputs (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin
     (rs : Tb) : List Msg :=
   ins H x ((drawsOf r₀ c).map (drawView H D I DO decO P x ω)) w rs
 
-/-- **`B_L`, the link finder** (extraction-based): draw the tape, the judged run's coins and `E*`'s; run `E*` with the
-table's rows (`EL`); where it extracts `(w, rows)`, run `E_O` at each draw `E*` may serve and output the first
+/-- **`B_L`, the link finder** (extraction-based): sample the tape, the judged run's coins and `E*`'s; run `E*` with the
+table's rows (`EL`); where it extracts `(w, rows)`, run `E_O` at each sample `E*` may serve and output the first
 collision among the SHA-512 evaluations of the inputs `ins` reads there (`linkInputs`). Its cost is the judged run's
-calls, both parties', the extraction's, `E_O`'s at every draw, and the inputs'. -/
+calls, both parties', the extraction's, `E_O`'s at every sample, and the inputs'. -/
 noncomputable def BL (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (rows : Msg → List Flock.Wit → Tb)
     (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Flock.Wit) → W → Tb → List Msg)
@@ -116,7 +116,7 @@ def LinkBindsAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flo
         Collision H q q'
 
 /-- **What the linked extractor returns**: `E*`'s witness, with the rows read off `E_O`'s outer witnesses at the judged
-draw. -/
+sample. -/
 theorem EL_eval_fst (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (rows : Msg → List Flock.Wit → Tb) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (D.V.k x) → Coin) (c : (E H D I DO decO).C x) :

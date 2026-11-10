@@ -131,7 +131,7 @@ section Round
 operands and the weight-side coins it reuses), the round's first live coin `Draw` (σ₁, the noise), the
 words the prover computes after it `Tr`, their commitment (in `Root`), the check's live coin `Chk` (σ₂), whether the
 check passes on the words (`ok`), and whether the checked cells of the words open under a root (`opens`). The prover
-sends the commitment before σ₂ is drawn and answers the check with `Ans` (the opened words and their openings);
+sends the commitment before σ₂ is sampled and answers the check with `Ans` (the opened words and their openings);
 `accept` is what the verifier checks of the answer against the commitment, and `ok` and `opens` what the analysis reads
 of the words the commitment binds (`ExtractAdv` links them).
 * `opens o r c T`: the cells the check coin `c` selects open under the root `r` at `T`'s words, by the verifier's own
@@ -144,7 +144,7 @@ of the words the commitment binds (`ExtractAdv` links them).
   (`ditherSelected`, the served design; `noFoldRound` checks its cells on every coin).
 
 The commitment's hash is the random oracle `Orc` (a uniform table: SHA-512 as a random oracle, a named use not yet
-decided), which `commit`, `opens` and `accept` read. The proof layer (C-Flock's proofs of the opened words) is the
+decided), which `commit`, `opens` and `accept` read. The proof layer (Flock's proofs of the opened words) is the
 service's, not the round's. -/
 structure RoundProto where
   Inst : Type
@@ -171,7 +171,7 @@ abbrev Word : Type := ZMod (2 ^ 32)
 /-- **The no-fold protocol's knobs**: `A` is `n × m`, `B` is `m × n'` with `m = nb · L`,
 `L` the segment length; the noise (`Draw`, and `noise`, the noised operands `(Ã, B̃)` from the committed operands and
 the noise: HYB noise in protocol v1, whatever v2 freezes); the check's coin `Chk` and the `s` words it selects
-(`cells`: the frozen protocol's stratified draw, any width, no power-of-two size); `merkle`, the commitment to the
+(`cells`: the frozen protocol's stratified sample, any width, no power-of-two size); `merkle`, the commitment to the
 words: each word a Merkle leaf (hm96 rows in frame-v3-sha512 trees), no fold, under the oracle `Orc` that stands for
 SHA-512; and `opens`, the verifier's check under the oracle that a word with its authentication path `Path` opens a
 root at a cell. -/
@@ -419,7 +419,7 @@ end Prover
 
 /-- **The service's verdict on a period**: what the verifier accepts, from the oracle, the verifier's
 coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
-signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs
+signed counts). It reads no code: the sampling blocks' checks run inside Flock's zero-knowledge proofs
 (`ProofSystemSound` ties it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop

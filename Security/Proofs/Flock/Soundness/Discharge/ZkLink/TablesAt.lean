@@ -11,11 +11,11 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 import all Init.Data.Nat.Power2.Basic
 
 /-!
-# The `--zk` table at each draw, from flock-verify's setup (statements)
+# The `--zk` table at each sample, from flock-verify's setup (statements)
 
-`tablesAt` is the plain headline's table at draw `S`: `stmtOf` of the statement setupH sets up at the coin
-server's draw `dj S`, wherever flock-verify accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
-what `verify --zk` sets up at the draw (`zkInputs I`):
+`tablesAt` is the plain headline's table at sample `S`: `stmtOf` of the statement setupH sets up at the challenger's
+live-coin part's sample `dj S`, wherever flock-verify accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
+what `verify --zk` sets up at the sample (`zkInputs I`):
 
 * the statement `stmtOf st` at setupH's statement `st` and its regions, link layout at `PT_LOCAL`;
 * `Zk.schedule st.m`'s schedule and `t_pad`, the padding constant `PAD_C`, two extra lanes;
@@ -23,17 +23,17 @@ what `verify --zk` sets up at the draw (`zkInputs I`):
 * the inner code `verifyInner` reads: `innerN` columns, column `j` at the point `j + 1` (`codeAt`), `K_PAD` padding
   symbols, `Q` queries at `w.lo mod innerN`, and the unique-decoding radius.
 
-`DrawSetupZK` is a draw `verify --zk` sets up (`DrawSetup` at `zkInputs I`) with its schedule and the facts the table
-needs of it; at a draw with none the table is a reference setup's statement with `contra`'s two regions alone, which no
+`DrawSetupZK` is a sample `verify --zk` sets up (`DrawSetup` at `zkInputs I`) with its schedule and the facts the table
+needs of it; at a sample with none the table is a reference setup's statement with `contra`'s two regions alone, which no
 witness satisfies (as `tableAt`'s `refusedC`).
 
 * `RecordsLiveZK`, `DrawOkZK`: DecodeZL's `RecordsLive` and `DrawOk` at `--zk` (`AcceptsZK`, `zkInputs I`).
-* `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the draw's `--zk` table is the executable's: its
+* `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the sample's `--zk` table is the executable's: its
   statement is `stmtOf` of setupH's, its dimensions and inner code are `Zk.verify`'s, and its extra claims at the
   record's link points are the executable's (`ExtraRealizes`, as `ofCircuit_extra`).
 * `tablesAtZK_live`: its proof, with `0 < g` from setupH (`setupH_g_pos`, D9), the schedule's shape and padding from
   the m check (`schedule_zk`), the inner code's length (`innerN_pow`) and its query positions' uniformity
-  (`prCoin_innerPos_le`), and the table the same at every `DrawSetupZK` of a draw (`tableZK_eq`).
+  (`prCoin_innerPos_le`), and the table the same at every `DrawSetupZK` of a sample (`tableZK_eq`).
 -/
 
 @[expose] public section
@@ -154,11 +154,11 @@ theorem innerN_pow (lay : Zk.PadLayout) (h : lay.len ≤ 444) :
   have := (Nat.pow_le_pow_iff_right (by norm_num : 1 < 2)).1 hle
   omega
 
-/-! ## A draw `verify --zk` sets up -/
+/-! ## A sample `verify --zk` sets up -/
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A draw `verify --zk` sets up**: a `DrawSetup` at `zkInputs I` (setupH accepts the draw under the `--zk` tags and
+/-- **A sample `verify --zk` sets up**: a `DrawSetup` at `zkInputs I` (setupH accepts the sample under the `--zk` tags and
 coin tree), `Zk.schedule`'s schedule and `t_pad` at its `m`, and the facts of them the `--zk` table needs: the schedule's
 shape and `m`, `t_pad`'s padding, the inner code's length (below `2^64`, so `codeAt`'s points are distinct, and at least
 the pads message's), and its query positions' uniformity; and the statement passes the `--zk` shape check, as
@@ -200,7 +200,7 @@ def innerDom : Fin (innerN (layOf y.x.st y.sch)) ↪ 𝔽 :=
     simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (hlt a), Nat.mod_eq_of_lt (hlt b)] at this
     exact Fin.ext (by omega)⟩
 
-/-- **The `--zk` table of a draw `verify --zk` sets up**, at statement regions `regs`. -/
+/-- **The `--zk` table of a sample `verify --zk` sets up**, at statement regions `regs`. -/
 noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) : TabZK 𝔽 mPts where
   S := stmtOf y.x.st y.x.wf.1 regs
@@ -233,10 +233,10 @@ noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x
   hL := y.hL
   hδ := le_rfl
 
-/-- The draw's `--zk` table: setupH's statement at its regions. -/
+/-- The sample's `--zk` table: setupH's statement at its regions. -/
 noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_linkLayout y.x.st y.x.wf.1 y.x.wf.2).1
 
-/-- A refused draw's `--zk` table: the statement with `contra`'s two regions alone, which no witness satisfies. -/
+/-- A refused sample's `--zk` table: the statement with `contra`'s two regions alone, which no witness satisfies. -/
 noncomputable def refused : TabZK 𝔽 mPts :=
   y.tabAt (DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) DrawSetup.contra_wf
 
@@ -289,7 +289,7 @@ theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkE
   exact ⟨⟨x, sch, tPad, hz, hshape, hmsch, hpad, hN, innerN_ge _,
     fun D => prCoin_innerPos_le _ _ hd D, hzk⟩, rfl, rfl, rfl⟩
 
-/-- A draw's `--zk` table is the same at every `DrawSetupZK` of it: setupH and `Zk.schedule` are functions. -/
+/-- A sample's `--zk` table is the same at every `DrawSetupZK` of it: setupH and `Zk.schedule` are functions. -/
 theorem tableZK_eq (y₁ y₂ : DrawSetupZK I mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ := y₁
   obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ := y₂
@@ -303,7 +303,7 @@ variable (ht : I.tags.typed = false) {Reg : Type} (dj : Finset (Fin n) → Lean.
   (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The `--zk` table at draw `S`** (`tableAt` at `--zk`): the draw's table when `verify --zk` sets up the draw's JSON
+/-- **The `--zk` table at sample `S`** (`tableAt` at `--zk`): the sample's table when `verify --zk` sets up the sample's JSON
 `dj S`, and otherwise the reference setup `y₀`'s refused table. -/
 noncomputable def tableAtZK (S : Finset (Fin n)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZK I mPts S (dj S)) then (Classical.choice h).table else y₀.refused
@@ -314,7 +314,7 @@ noncomputable abbrev tablesAtZK : Finset (Fin n) → Reg → TabZK 𝔽 mPts := 
 /-! ## The live session's record -/
 
 /-- **`wr` is the challenger's record of the live `--zk` session** (DecodeZL's `RecordsLive` at `--zk`): whenever
-flock-verify accepts what `wr` writes for the outcome `o` at draw `S`, the record carries the draw `dj S`, the proof
+flock-verify accepts what `wr` writes for the outcome `o` at sample `S`, the record carries the sample `dj S`, the proof
 files are `o`'s, and the record decodes to a session whose table's `root_B`, link points and rep streams' rounds are
 `o`'s. -/
 def RecordsLiveZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
@@ -328,7 +328,7 @@ def RecordsLiveZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
         sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = pick (o.rep0, o.rep1) r
 
-/-- **The challenger's draw at `S`, at `--zk`** (DecodeZL's `DrawOk` at `zkInputs I`): it proves `S`, and setupH sets up
+/-- **The challenger's sample at `S`, at `--zk`** (DecodeZL's `DrawOk` at `zkInputs I`): it proves `S`, and setupH sets up
 at it under the `--zk` tags and coin tree with `mPts` link points. -/
 def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
@@ -338,14 +338,14 @@ def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
 /-! ## The statement -/
 
 /-- **Wherever flock-verify accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
-`--statement` tags are untyped, with `wr` the challenger's record (`RecordsLiveZK`): whenever the draw `S` is `DrawOkZK`
-(pointwise: link points depend on `|S|`, so no `mPts` holds at every draw) and `verify --zk` accepts what `wr` writes
+`--statement` tags are untyped, with `wr` the challenger's record (`RecordsLiveZK`): whenever the sample `S` is `DrawOkZK`
+(pointwise: link points depend on `|S|`, so no `mPts` holds at every sample) and `verify --zk` accepts what `wr` writes
 for `o` at it, setupH's statement `st` at `dj S` under the `--zk` tags is
-well formed (`StmtWF`, `RegionsWF`), `Zk.schedule st.m` is `(sch, t_pad)`, the draw has a `DrawSetupZK` at `st`, `sch`
+well formed (`StmtWF`, `RegionsWF`), `Zk.schedule st.m` is `(sch, t_pad)`, the sample has a `DrawSetupZK` at `st`, `sch`
 and `t_pad` whose table (`stmtOf st` at `st`'s regions, `Zk.verify`'s dimensions, pads and inner code) is
 `tablesAtZK … S R`, and at the record's link points `Setup.ofCircuit st`'s extra claims are that table's
-(`ExtraRealizes`, as `ofCircuit_extra`). The reference setup `y₀` (a refused draw's table) is data, so no hypothesis is
-taken at its draw `S₀`. -/
+(`ExtraRealizes`, as `ofCircuit_extra`). The reference setup `y₀` (a refused sample's table) is data, so no hypothesis is
+taken at its sample `S₀`. -/
 def TablesAtZKLive : Prop :=
   ∀ (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
     (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),

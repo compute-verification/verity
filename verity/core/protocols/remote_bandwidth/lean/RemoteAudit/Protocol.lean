@@ -22,7 +22,7 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 * the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
   kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
 * the evidence `{"append_coins": [hex, …], "coins": [hex, …], "events": [...]}`: the verifier's log of the session, its
-  coins (W challenges and W openings coins, then the append coins in the order drawn) and every event it took with
+  coins (W challenges and W openings coins, then the append coins in the order sampled) and every event it took with
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
@@ -121,7 +121,7 @@ structure Public where
 
 def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
 
-/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows drawn `g` a coin (`coins.openings_coins`), one
+/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows sampled `g` a coin (`coins.openings_coins`), one
 a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.draws`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g

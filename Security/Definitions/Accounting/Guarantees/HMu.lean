@@ -31,7 +31,7 @@ What the coins can't give, and so what stays a premise:
 * The skip decision must be in the view, with no leak: a cheater that learns one bit about the fresh coins can skip
   exactly when that bit pins the skipped value, and is then lucky on every deficient round. So a leak of `ℓ` bits costs
   a factor `2^ℓ` on the absolute luck, but no bound relative to the deficiency survives.
-* The fold's keys are drawn with σ, so a bound may not average over the start state. For a pattern with two or more
+* The fold's keys are sampled with σ, so a bound may not average over the start state. For a pattern with two or more
   words in the first unit it reaches (two copies of one entry in a unit, a rank-1 skip across a unit's words, the served
   `y ⊕ rotl(z, 16)` projection), Lemma B′ needs a fibre bound at the start state the cheater knows. (Inj) alone gives
   none, and an all-state no-kernel statement isn't one.

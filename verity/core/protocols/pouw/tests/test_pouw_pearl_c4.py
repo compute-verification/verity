@@ -1,6 +1,6 @@
 """``pearl-c-nvfp4-v0`` (`pearl_c4`), with MXFP4 as its contrast line: the casts, the noise lines, the noise atom, the clean-up's
 algebra, the chain's exactness on the domain (which the design's argument turns on), the accounting, the per-row rules and
-debit, the work law through `pearl_c_work`, and the pinned vectors."""
+debit, the work sampling design through `pearl_c_work`, and the pinned vectors."""
 
 from __future__ import annotations
 
@@ -365,16 +365,16 @@ def test_row_rules_and_debit(fmt):
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
     clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
-    # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare draws (a trace, under
+    # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare samples (a trace, under
     # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
     # with B̃'s overfit factor; MXFP4 is contrast only)
     assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
-    # share; MXFP4 chains hold identity atoms on some draws (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
+    # share; MXFP4 chains hold identity atoms on some samples (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
     assert clean.total == clean.forming + clean.identity + clean.split and (fmt != "nvfp4" or clean.identity == 0)
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every sample: salt-dead (x[2] at
-    # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
+    # 3ρ reaches code 0.5 on the extreme sample, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
     d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096, e, e)
@@ -680,9 +680,9 @@ def atom_words(c: int, e, ae: int, at) -> list[int]:
 
 @pytest.mark.parametrize("fmt", FMTS)
 def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
-    """The law against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
+    """The sampling design against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
     words, so its p_t is enumerable.  `change_probabilities_exact`' p_t at the block's modal byte is 1 − the most common
-    code value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no
+    code value's share of the atom's words there, to 1e-12 (the sampling design leaves out the atom's one RZ rounding, which moves no
     word across a cell edge here), and 0 on salt-dead codes."""
     f = F.FORMATS[fmt]
     x, e, at = two_draw_row()
@@ -697,7 +697,7 @@ def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
 
 
 def test_the_modal_byte_is_the_realised_bytes_mode():
-    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line drawn afresh: the
+    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line sampled afresh: the
     most frequent realised byte."""
     f, rng = F.NVFP4, random.Random(3)
     x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
@@ -1083,7 +1083,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
 
 
 def test_the_work_law_audits_pearl_c4_under_h3():
-    """The work law on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
+    """The work sampling design on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
     and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
     whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest
     prover gives up nothing (`volunteer`)."""
@@ -1296,7 +1296,7 @@ def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
 def test_b_tilde_is_keyed_by_this_jobs_salt(tmp_path):
     """D-SK: B̃'s noise is keyed by the job's salt (seed-B = keyed(salt ‖ root_b)), so B̃ exists only once the salt
     does, and the salt-free base split is two-sided.  The verifier forms B̃ itself from that seed, so a prover whose B̃
-    was formed under another epoch's salt, or under none, fails the checked values of a drawn tile, in the work law and
+    was formed under another epoch's salt, or under none, fails the checked values of a sampled tile, in the work sampling design and
     in the device replay."""
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)

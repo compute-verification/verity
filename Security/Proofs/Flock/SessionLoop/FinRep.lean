@@ -11,20 +11,20 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 `Loop.FinRepProofs` asks that rep stream `k`'s run from the views (`Loop.viewRep`) return a proof whose file is the loop's
 `k`-th, `Finish.proofFile` on the loop's table (`Loop.realOf`) and request (`Loop.repInOf`). `proofFile` runs the
-firewall's rep (`repFw`, answered by the request's coins from round `0`) and encodes its proof (`proofFile_ok`). So (c) is
+ZK server's rep (`repFw`, answered by the request's coins from round `0`) and encodes its proof (`proofFile_ok`). So (c) is
 two parts, each named here, none a premise of a guarantee:
 
-* **`Loop.FinRepCut`**: where the firewall's rep on the loop's table and request returns a proof, the session's rep
+* **`Loop.FinRepCut`**: where the ZK server's rep on the loop's table and request returns a proof, the session's rep
   (`repFwC`) answered by the opened coins (`asksCut`), from a history at the rep's first round, returns the same.
 * **(c.3) `Loop.FinRepFwView`**: where that session's rep returns a proof, the rep from the views returns a proof whose
-  file at the session's shape is the firewall's at the table's.
+  file at the session's shape is the ZK server's at the table's.
 
 **`Loop.finRepProofs_of_parts`**: they give `FinRepProofs`.
 
 `FinRepCut` is `repFw_cut` at the opened coins, which agree with the request's only below each round's count: an opening
 carries the round's `n` coins, then `T_n`, its salt and its path (`CoinLayer.openOf`), and the session's coin is all of it
-(`CoinLayer.rd`), where the firewall answers `0` past `n` (`asksOf`). A squeeze reads only its first `n` coins
-(`squeezeP`), and the firewall checks `n` against the request's (`asksOf`), so the two runs agree, given every squeeze's
+(`CoinLayer.rd`), where the ZK server answers `0` past `n` (`asksOf`). A squeeze reads only its first `n` coins
+(`squeezeP`), and the ZK server checks `n` against the request's (`asksOf`), so the two runs agree, given every squeeze's
 count below `2^64` (the round header's `u64`, `Finish.repFwC_br`). It holds in the masked scope (`Loop.finRepCut`), where
 the table's `m`, its schedule and the extra claims are small enough (`Loop.finRepBounds`). Its premises, stated here:
 
@@ -40,7 +40,7 @@ namespace Flock.Firewall.Finish
 
 open Flock With Transcript
 
-/-- **A proof file that `proofFile` returns**: the request's pads commitment returned, the firewall's rep answered by
+/-- **A proof file that `proofFile` returns**: the request's pads commitment returned, the ZK server's rep answered by
 the request's coins returned at its last coin, and the file is its proof's `encZk` at `shapeZk`. -/
 theorem proofFile_ok {t : Tab} {rep : ℕ} {dom : ByteArray} {q : RepIn} {f : ByteArray}
     (h : proofFile t rep dom q = .ok f) :
@@ -113,7 +113,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 namespace Loop
 
 /-- **Rep stream `k`'s proof file, as the loop's `Finish` makes it**: its table and salts for levels ≥ 1 (`realOf`), its
-request (`repInOf`, at the frame's draws) and the file `proofFile` returns. -/
+request (`repInOf`, at the frame's samples) and the file `proofFile` returns. -/
 def RepAt {R : Type} (draws : R → ℕ → ByteArray)
     (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)) (x : Msg) (w : Flock.Wit) (ρ : R)
     (h : List (Msg × Msg)) (spec : SessionSpec) (k : ℕ) (tb : _root_.Flock.Firewall.Finish.Tab)
@@ -249,7 +249,7 @@ def FinRepPads : Prop :=
         (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).tx]! *
         (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).ty]!
 
-/-- **A rep's draws are pads `repFw_cut` takes**: `Draws.ofBytes` reads `h` at the layout's length and sets `h_ab := h_a·h_b`
+/-- **A rep's samples are pads `repFw_cut` takes**: `Draws.ofBytes` reads `h` at the layout's length and sets `h_ab := h_a·h_b`
 and `w := x·y`, no index of which the other set moves. -/
 theorem drawsOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     (_root_.Flock.Firewall.Frame.Draws.ofBytes lay b).h.size = lay.len ∧
@@ -330,7 +330,7 @@ theorem drawsOfBytes_pads (lay : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
 
 /-- **(c.2) holds in the masked scope**: there every table commits with `hm96-sha512` (`ZkTables.tables_of_setup`), rep
 stream `k`'s table is `tabOfLevel0` at table `k / 2`'s statement (`Count.tabOfLevel0_sched`), whose `--zk` schedule is
-the frame's (`Drive.start`), and the request's draws are `Draws.ofBytes` at that layout (`drawsOfBytes_pads`). -/
+the frame's (`Drive.start`), and the request's samples are `Draws.ofBytes` at that layout (`drawsOfBytes_pads`). -/
 theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) :
     FinRepPads L₀ src real wk x w := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
@@ -376,7 +376,7 @@ theorem finRepPads (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.
   rw [getElem!_pos (Masked.stsOf x) (k / 2) hj]
   exact (hall (k / 2) hj).2.2
 
-/-- **The session's rep at the opened coins is the firewall's**: at a `Finish` `FinishIs` reads, where the firewall's rep
+/-- **The session's rep at the opened coins is the ZK server's**: at a `Finish` `FinishIs` reads, where the ZK server's rep
 on rep stream `k`'s table and request (`RepAt`), answered by the request's coins from round `0`, returns a proof and
 transcript at its last coin (`proofFile_ok`), `repFwC` on the same inputs answered by the opened coins (`asksCut`), from a
 history at the rep's first round, returns the same. -/
@@ -479,7 +479,7 @@ theorem finRepBounds (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Floc
   simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
   exact lt_of_le_of_lt (Nat.add_le_add_right hx 2) (by norm_num)
 
-/-- **`FinRepCut` holds in the masked scope**: the firewall's rep is `repFwC` at the request's coins (`repFw_eq`, at the
+/-- **`FinRepCut` holds in the masked scope**: the ZK server's rep is `repFwC` at the request's coins (`repFw_eq`, at the
 table and pads (c.2) gives), and `repFwC` at those coins and at the opened coins from the rep's first round, which agree
 with them below each round's count and run past none (c.1), is related (`repFwC_br`), every squeeze below `2^64` coins
 (`finRepBounds`, `zkSchedule_small`). -/
@@ -496,7 +496,7 @@ theorem finRepCut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     (fun k i => Masked.slotAt (finCoins x ops) k i) hend hcoin tb.st tb.sch tb.tPad (k % 2) _ tb.g tb.cm0.toC _ _ _
     q.vals tb.extra tb.lanePad _ (by omega) hxs hn hq _ 0 l (by omega) (p, tr) q.coins.size hrun).1
 
-/-- **(c.3) The firewall's rep at the views**: at a `Finish` `FinishIs` reads, at the schedules and level 0's
+/-- **(c.3) The ZK server's rep at the views**: at a `Finish` `FinishIs` reads, at the schedules and level 0's
 commitments (a) gives, rep stream `k`'s extra claims and pads commitment from the views, and a history at its first
 round, where the session's rep on the loop's table and request (`RepAt`), answered by the opened coins, returns a proof
 `p`, rep stream `k`'s run from the views returns a proof whose file at the session's shape is `p`'s at the table's. -/
@@ -527,7 +527,7 @@ def FinRepFwView : Prop :=
           (_root_.Flock.Firewall.Finish.shapeZk tb.st tb.sch (_root_.Flock.Firewall.Finish.claimsOf q.xs).size) p
 
 /-- **`FinRepCut` and (c.3) give (c).** Rep stream `k`'s file is `proofFile`'s on the loop's table and request
-(`proofsOf_at`), the firewall's rep answered by the request's coins and its proof encoded (`proofFile_ok`); answered by
+(`proofsOf_at`), the ZK server's rep answered by the request's coins and its proof encoded (`proofFile_ok`); answered by
 the opened coins from the rep's first round instead, it returns the same proof (`FinRepCut`), and the rep from the views
 returns a proof of the same file (c.3). -/
 theorem finRepProofs_of_parts (h : FinRepCut L₀ src real wk x w ∧ FinRepFwView vs L₀ src real wk x w) :

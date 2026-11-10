@@ -4,10 +4,10 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 
 /-!
-# `zk_session_soundHJ_custody` from the printed draw file
+# `zk_session_soundHJ_custody` from the printed sample file
 
 `Composed/CustodyJJson.lean` under hidden outputs: `zk_session_soundHJ_custody_json` takes `RecordsLiveZKJ` as it is
-and, for `DrawFileZK`, that each draw file is the JSON value `flock-verify draw` printed for the verifier's own draw
+and, for `DrawFileZK`, that each sample file is the JSON value `flock-verify draw` printed for the verifier's own sample
 under `subset kd` (`drawFileZK_of_toJson_subset`).
 -/
 
@@ -23,9 +23,9 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the record's custody and the printed draw
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the record's custody and the printed sample
 file.** `zk_session_soundHJ_custody` with `RecordsLiveZKJ` (`live-verifier`: the record is the live session's) and each
-draw file the JSON value `flock-verify draw` printed for the verifier's own draw under `subset kd` in place of
+sample file the JSON value `flock-verify draw` printed for the verifier's own sample under `subset kd` in place of
 `RecordCustodyZKJ`. -/
 theorem zk_session_soundHJ_custody_json
     (I : Inputs) (ht : I.tags.typed = false)
@@ -40,8 +40,8 @@ theorem zk_session_soundHJ_custody_json
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, the coin server's custody of the record, and its draw file as `flock-verify draw`
-    -- printed the verifier's draw
+    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `flock-verify draw`
+    -- printed the verifier's sample
     (hTags : TagsOkZHJ I)
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)

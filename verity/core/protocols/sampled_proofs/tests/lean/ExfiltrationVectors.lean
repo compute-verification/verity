@@ -79,7 +79,7 @@ theorem miss_of_meets {n k e K : ℕ} (h : meets n k e K = true) :
       ENNReal.div_le_iff_le_mul (Or.inl hc) (Or.inl (ht _))]
     exact_mod_cast hle
 
-/-- `(n, k, e, b)`: `n` units, `k` drawn, `δ = 2^-e`, `b` output bits per unit. -/
+/-- `(n, k, e, b)`: `n` units, `k` sampled, `δ = 2^-e`, `b` output bits per unit. -/
 def grid : List (ℕ × ℕ × ℕ × ℕ) :=
   [(16, 1, 4), (16, 4, 4), (16, 8, 10), (64, 4, 4), (64, 8, 10), (64, 16, 20), (512, 4, 10), (512, 16, 10),
     (512, 64, 20), (4096, 38, 10), (4096, 128, 20), (65536, 1024, 20)].flatMap fun (n, k, e) =>
@@ -96,7 +96,7 @@ theorem grid_counts : ∀ c ∈ grid, ∃ hk : c.2.1 ≤ c.1,
 
 /-! ## Stratified laws
 
-A stratified vector's law has strata of `N_s` units drawing `k_s` (`Law.stratified`). A fill `c` that some `τ ∈ (0, 1]`
+A stratified vector's law has strata of `N_s` units sampling `k_s` (`Law.stratified`). A fill `c` that some `τ ∈ (0, 1]`
 separates attains its `miss (∑ c)` (`Law.stratified_miss_eq_greedy`): every factor `(N_s − j − k_s)/(N_s − j)` the fill takes
 is at least `τ`, and every factor it leaves is at most `τ`. `searchS` fills greedily in exact integers, taking the largest
 next factor by cross-multiplication, so the factors it takes never rise and `τ` is the last one. `meetsS` checks both
@@ -149,7 +149,7 @@ theorem miss_eq_of_sep {n m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (h
     (fun s h => natCast_div_le_div (by omega) hq (by rw [mul_comm]; exact (hs s).2.2 h))]
   exact prod_natCast_div _ _ _
 
-/-- **`meetsS` is `miss (K + 1) < 2^-e ≤ miss K`** for every stratified law whose strata are the rows' sizes and draws. -/
+/-- **`meetsS` is `miss (K + 1) < 2^-e ≤ miss K`** for every stratified sampling design whose strata are the rows' sizes and samples. -/
 theorem miss_of_meetsS {e K : ℕ} {r : List (ℕ × ℕ × ℕ × ℕ)} {τ τ' : ℕ × ℕ} (h : meetsS e K r τ τ' = true)
     {n : ℕ} (σ : Fin n → Fin r.length) (hσ : ∀ s, (Law.stratum σ s).card = r[s.1].1) :
     ∃ hk : ∀ s, r[s.1].2.1 ≤ (Law.stratum σ s).card,
@@ -223,7 +223,7 @@ def certS (sh : List (ℕ × ℕ)) (e : ℕ) : Option (ℕ × List (ℕ × ℕ �
     (K, List.zipWith (fun x y => (x.1, x.2.1, x.2.2, y.2.2)) next cur, τ, τ')
 
 /-- `(strata, e, b)`: strata `(N_s, k_s)`, `δ = 2^-e`, `b` output bits per unit. Exact ties at every step, near-ties,
-floor-like strata of one or two draws, and a stratum that draws nothing. -/
+floor-like strata of one or two samples, and a stratum that samples nothing. -/
 def gridS : List (List (ℕ × ℕ) × ℕ × ℕ) :=
   [([(1000, 10), (2000, 20)], 10), ([(1000, 10), (2001, 20)], 10), ([(999, 10), (2000, 20)], 20),
     ([(10000, 100), (10001, 100)], 10), ([(3, 1), (6, 2), (9, 3)], 4), ([(287, 1), (1148, 2), (287, 1), (4096, 38)], 20),
@@ -235,7 +235,7 @@ theorem gridS_meets : gridS.all (fun (sh, e, _) => match certS sh e with
     | some (K, r, τ, τ') => decide (r.map (fun x => (x.1, x.2.1)) = sh) && meetsS e K r τ τ'
     | none => false) = true := by decide +kernel
 
-/-- **Each stratified vector's `K` meets `hk`, and no smaller count does**, for every stratified law with the vector's
+/-- **Each stratified vector's `K` meets `hk`, and no smaller count does**, for every stratified sampling design with the vector's
 strata: `miss (K + 1) < 2^-e ≤ miss K`. -/
 theorem gridS_counts : ∀ v ∈ gridS, ∃ K r τ τ', certS v.1 v.2.1 = some (K, r, τ, τ') ∧
     r.map (fun x => (x.1, x.2.1)) = v.1 ∧ ∀ {n : ℕ} (σ : Fin n → Fin r.length), (∀ s, (Law.stratum σ s).card = r[s.1].1) →

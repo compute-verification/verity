@@ -11,9 +11,9 @@ flags) as a `Claims.Verifier`, built as `FlockDeploy.V true` is: the same messag
 rounds, the last message, each round answered by its live coin) and the same decision (`FlockDeploy.decision`: the
 shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks), at the recursive setup
 (`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement; then the verdict's
-last refusals (`fullDrawO`: `RecSetup.fullDraw` at the record's draw, which refuses a recursive session without
-`--rec-inner` and, under it, a draw short of every unit; then `RecSetup.innerDrawn`, which refuses a session over an
-inner session whose record holds no draw; then `RecSetup.denseOnly`, which refuses a holo or sparse inner shape), which
+last refusals (`fullDrawO`: `RecSetup.fullDraw` at the record's sample, which refuses a recursive session without
+`--rec-inner` and, under it, a sample short of every unit; then `RecSetup.innerDrawn`, which refuses a session over an
+inner session whose record holds no sample; then `RecSetup.denseOnly`, which refuses a holo or sparse inner shape), which
 `FlockDeploy.V` doesn't run.
 
 `nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when
@@ -70,10 +70,10 @@ def recOfO (x : Claims.Msg) : Bool :=
 /-- Check 5's source at the statement (`RecCoins.filesInput`'s, with the inner session's record), where it reads. -/
 def srcOfO (x : Claims.Msg) : Option RecCoins.Source := (insO x).bind (·.src)
 
-/-- **The verdict's last refusals**, as `verifyCmd` calls them: `RecSetup.fullDraw` at the record's draw (a recursive
-session without the verifier's inner shape, `RecSetup.noInner`, and under that shape a V* session whose record's draw is
+/-- **The verdict's last refusals**, as `verifyCmd` calls them: `RecSetup.fullDraw` at the record's sample (a recursive
+session without the verifier's inner shape, `RecSetup.noInner`, and under that shape a V* session whose record's sample is
 not every unit of its population), then `RecSetup.innerDrawn` (a session over an inner session whose record holds no
-draw), then `RecSetup.denseOnly` (a session at a holo or sparse inner shape, which `RecursiveKS` doesn't cover). -/
+sample), then `RecSetup.denseOnly` (a session at a holo or sparse inner shape, which `RecursiveKS` doesn't cover). -/
 def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
   (do
     RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record

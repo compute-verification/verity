@@ -13,9 +13,9 @@ public import Mathlib.Tactic.Ring
 /-!
 # Clopper–Pearson's upper bound is a miss-bound table (`missBound_cpUpper`)
 
-`t` uniform draws from a type of `a + b` elements land `k` times among `a` of them for `C(t, k)·a^k·b^(t−k)` of the
-`(a + b)^t` draws (`card_count`), so the count is `Bin(t, a/(a+b))` (`pr_count_le`). Over work-weighted tickets, a set
-`S` holding the share `p` of the tickets is drawn `X ~ Bin(t, p)` times. The bound at `X` falls below `p` only if `X` is
+`t` uniform samples from a type of `a + b` elements land `k` times among `a` of them for `C(t, k)·a^k·b^(t−k)` of the
+`(a + b)^t` samples (`card_count`), so the count is `Bin(t, a/(a+b))` (`pr_count_le`). Over work-weighted tickets, a set
+`S` holding the share `p` of the tickets is sampled `X ~ Bin(t, p)` times. The bound at `X` falls below `p` only if `X` is
 at most the largest `x ≤ t` whose bound is below `p`, and `Pr_p[X ≤ x] ≤ δ` there: some share `r < p` is in the set
 `cpUpper` takes the infimum of, and `p` lies between `r` and `1`. So Clopper–Pearson's table at `δ` is a miss bound at
 `δ`, for every `δ ≥ 0` (`missBound_cpUpper`), and at no `δ < 0` (`missBound_cpUpper_nontrivial`).
@@ -63,7 +63,7 @@ theorem card_count_succ (t k : ℕ) :
           exact (card_filter _ _).symm
     _ = _ := by rw [sum_ite, sum_const, sum_const, smul_eq_mul, smul_eq_mul]
 
-/-- **`t` uniform draws land `k` times in `P`** for `C(t, k)·a^k·b^(t−k)` of them, `a` the elements in `P` and `b` the
+/-- **`t` uniform samples land `k` times in `P`** for `C(t, k)·a^k·b^(t−k)` of them, `a` the elements in `P` and `b` the
 rest. -/
 theorem card_count (t k : ℕ) :
     ((univ : Finset (Fin t → α)).filter fun c => (univ.filter fun i => P (c i)).card = k).card
@@ -94,7 +94,7 @@ theorem card_count (t k : ℕ) :
       · rw [Nat.choose_eq_zero_of_lt (by omega : t < j + 1)]
         ring
 
-/-- **The count of `t` uniform draws in `P` is binomial**: it is at most `x` with probability `Pr_p[X ≤ x]`,
+/-- **The count of `t` uniform samples in `P` is binomial**: it is at most `x` with probability `Pr_p[X ≤ x]`,
 `p = a/(a + b)`. -/
 theorem pr_count_le (t x : ℕ) (hα : 0 < Fintype.card α) :
     pr (fun c : Fin t → α => (univ.filter fun i => P (c i)).card ≤ x)

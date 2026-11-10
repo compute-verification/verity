@@ -4,10 +4,10 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
 /-!
-# The planned rate of the hidden-output `--zk` plan of `J` tables, at every draw
+# The planned rate of the hidden-output `--zk` plan of `J` tables, at every sample
 
 `ZkBind/Rate.lean` at `planZHJ dj y₀ S R = List.ofFn (tableZHJ dj y₀ S)`, the plan `PublicAudit`'s rate premise `_hr`
-reads. Each of its tables, at every draw `S` (table `j`'s `DrawSetupZHJ`'s table, or `y₀`'s refused one), carries a
+reads. Each of its tables, at every sample `S` (table `j`'s `DrawSetupZHJ`'s table, or `y₀`'s refused one), carries a
 schedule `Zk.schedule` returned (`DrawSetupZHJ.hz`), so a cap `L` (`ZkBind.ZkLogLenCap L`) bounds every table's rate:
 
 * `logLen_tableZHJ_le`, `rateZ_planZHJ_le`: table `j`'s `logLen₀ ≤ L`, and the plan's rate `≤ 2^L/(e·k)` at every table.
@@ -25,7 +25,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 variable {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
   (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) {Reg : Type}
 
-/-- **Table `j`'s `logLen₀` is under the cap at every draw**: its `DrawSetupZHJ`'s schedule, or `y₀`'s, is one
+/-- **Table `j`'s `logLen₀` is under the cap at every sample**: its `DrawSetupZHJ`'s schedule, or `y₀`'s, is one
 `Zk.schedule` returned. -/
 theorem logLen_tableZHJ_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (lvOf (tableZHJ dj y₀ S j).sch 0).logLen ≤ L := by
@@ -39,7 +39,7 @@ theorem planZHJ_get (S : Finset (Fin n)) (R : Reg) (i : Fin (planZHJ (Reg := Reg
     (planZHJ (Reg := Reg) dj y₀ S R).get i = tableZHJ dj y₀ S (Fin.cast (planZHJ_length dj y₀ S R) i) :=
   List.get_ofFn _ _
 
-/-- **The planned rate at every draw and table is at most `2^L/(e·k)`.** -/
+/-- **The planned rate at every sample and table is at most `2^L/(e·k)`.** -/
 theorem rateZ_planZHJ_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (R : Reg)
     (i : Fin (planZHJ (Reg := Reg) dj y₀ S R).length) (k : ℕ) :
     rateZ (planZHJ (Reg := Reg) dj y₀ S R) i k ≤ 2 ^ L / (Real.exp 1 * k) := by
@@ -48,7 +48,7 @@ theorem rateZ_planZHJ_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (R 
   exact div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (logLen_tableZHJ_le dj y₀ hL S _))
     (by positivity)
 
-/-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every draw
+/-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every sample
 `S`, registration `R` and table `i`. -/
 theorem hr_planZHJ {L k : ℕ} {ρ : ℝ} (hL : ZkLogLenCap L) (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.exp 1 * k))
     (S : Finset (Fin n)) (R : Reg) (i : Fin (planZHJ (Reg := Reg) dj y₀ S R).length) :

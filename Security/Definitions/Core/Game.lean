@@ -12,9 +12,9 @@ public import Mathlib.Order.CompleteLattice.Basic
 A `Game α` is the verifier's side of a public-coin interaction, written as a program:
 
 * `send M k`: the developer (the prover) sends a message `m : M` of its choice, and the interaction continues as `k m`;
-* `coin C k`: the verifier draws `c : C` uniformly at random, independently of everything before, and the interaction
-  continues as `k c`. This is a live coin: it is drawn after every earlier message is fixed (in Verity, the coin server
-  draws it from the operating system after recording the round's digest);
+* `coin C k`: the verifier samples `c : C` uniformly at random, independently of everything before, and the interaction
+  continues as `k c`. This is a live coin: it is sampled after every earlier message is fixed (in Verity, the challenger's live-coin part
+  samples it from the operating system after recording the round's digest);
 * `ret a`: the interaction ends with the verifier's output `a`.
 
 Messages may be anything: a declaration, a commitment, whole tables of an interactive oracle proof. A deterministic
@@ -65,7 +65,7 @@ instance instMonad : Monad Game where
 /-- The prover sends a message of type `M`. -/
 def recv (M : Type) : Game M := .send M .ret
 
-/-- The verifier draws a uniform coin from `C`. -/
+/-- The verifier flips a uniform coin from `C`. -/
 def draw (C : Type) [Fintype C] [Nonempty C] : Game C := .coin C .ret
 
 /-- Relabel the output. -/

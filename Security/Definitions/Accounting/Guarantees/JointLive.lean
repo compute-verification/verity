@@ -7,7 +7,7 @@ public import Definitions.Core.Blocks
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
 In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
-drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
+sampled after the bytes it answers and the evidence last; its claims are read off the run it ends in
 (`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
 (`PeriodLive.finder`, `PeriodLive.collides`).
@@ -135,7 +135,7 @@ holds there, the seed and the spot reads on the run's outcome, with the strategy
   and `StreamedWipeMeetsFamily`);
 * at every strategy `s` the run's coins at boundary `b` are the wipe's (`Verity.Wipe.OfRun.Preserves`): on the run,
   the foreign content the device holds there, the seed and the spot reads are uniform and independent, as the wipe's
-  game draws them;
+  game samples them;
 * over `G` at every strategy `s`, block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory
   exceeds `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with
   probability at most `δ_PoUS b s`.
@@ -147,7 +147,7 @@ $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{Wipe},b}(s) 
 `ε_Wipe,b(s)` the survivor bound's error at the run's moves at boundary `b`. On the run, the wipe's event at a fraction
 `f`, more than `f · fill + 2λ` bits plus the unfilled state kept, is inside that event wherever
 `foreignBits b ≤ f · fill + 2λ` (`Accounting.SecurityProofs.Live.prob_survives_of_survivorBound`).
-**Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that draws its foreign content with
+**Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that samples its foreign content with
 the wipe's coins meets it at every strategy (`Verity.Wipe.OfRun.drawn_preserves`); a run whose foreign content is the
 prover's, a function of what came before the boundary, does not. The state a block carries across a wipe (the KV cache,
 committed before the wipe and re-read after it) is outside the integrity bound. -/

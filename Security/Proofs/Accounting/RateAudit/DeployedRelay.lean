@@ -17,7 +17,7 @@ and the tier reads are the device's plus its completed bits.
 
 **A pass, a window, a session.** `RatePaid` bounds each simulated pass at `m` relayed words; a window's unpaid words
 are its passes' at each candidate (`GrindChain.pr_unpaid_le`), with the completed bits, at most `X`, paid from the
-slack; the session is `DeployedSession.pr_paid_of_window` and the draws, as in `Deployed.lean`.
+slack; the session is `DeployedSession.pr_paid_of_window` and the samples, as in `Deployed.lean`.
 -/
 
 @[expose] public section
@@ -283,7 +283,7 @@ noncomputable def toGrindMem (A : DeployedWindow P N b h ρ S L q r s G) : Grind
   cand := A.cand
   pick := A.pick
 
-/-- **A window's unpaid words with any side sources**, its draw beside: with `X` covering every pass's completed bits,
+/-- **A window's unpaid words with any side sources**, its sample beside: with `X` covering every pass's completed bits,
 the probability that its reads and `P` slacks `X + slack` fall short of its correct receipts' words is at most
 `P·G·ε`. -/
 theorem pr_unpaid_draw_mem_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
@@ -429,8 +429,8 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
   have e : P * (S + (L - ρ) + X + (lam + m * b)) = P * (L - ρ) + P * S + P * X + P * (lam + m * b) := by ring
   omega
 
-/-- `RemoteSessionConservationRelay`'s reading on any store `store ω` drawn before the session's coins, from a bound
-`ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the draws' terms hold at every
+/-- `RemoteSessionConservationRelay`'s reading on any store `store ω` sampled before the session's coins, from a bound
+`ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the samples' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
 theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (lam m rounds cRoot F : ℕ) (dbar dw : ℝ)

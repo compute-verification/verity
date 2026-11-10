@@ -16,7 +16,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, ZK server 
 * **build**: a class's unit at G steps built as a Definition, and each Definition it calls, with seconds and peak RSS.
 * **prove**: the window and the rows as `served_tie_window` opens and binds them natively (``bindings``). Statements of
   one template, block j of G steps a unit:
-  - ``window-i``: the honest window's blocks, each once (Selection All: every unit drawn), at most ``--per`` a statement;
+  - ``window-i``: the honest window's blocks, each once (Selection All: every unit sampled), at most ``--per`` a statement;
     ``--blocks executed`` takes only the blocks holding the window's executed steps;
   - ``cases``: the start, short, id and other cases' blocks (`served_tie_window.cases`), each case's rows registered
     consistently under the run root, and honest blocks to the statement's least shape.

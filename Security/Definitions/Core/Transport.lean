@@ -9,7 +9,7 @@ The channels between an auditor party and the prover (`verity.ml.crypto.transpor
 reads them. `Roles` says which nodes are the prover's own machines and which auditor parties are under `Confined p`, the
 per-party premise beside `Faithful p` and `Secret p`; a `Channel` names its auditor end and who can read its bytes in
 transit. `ViewIsRecord` is what zero knowledge needs of the transport, for one test, with its probabilities `Game.value`
-over uniform draws (`Game.draw`). The premises on a channel are in `Assumptions/Transport`: `WitnessPathPrivate c` (the
+over uniform samples (`Game.draw`). The premises on a channel are in `Assumptions/Transport`: `WitnessPathPrivate c` (the
 per-channel premise), `ImprintPathPrivate c`, `ChannelHides` and `ChannelAuthentic`.
 -/
 
@@ -53,7 +53,7 @@ such a reader, and nothing otherwise. -/
 noncomputable def seen {Node W : Type} (C reads : Node → Prop) (w : W) : Option W :=
   if ∃ o, C o ∧ reads o then some w else none
 
-/-- **`view-is-record`**, for one test `E`: the coalition's view (`view`, of the run's randomness `ω`, drawn uniformly) is
+/-- **`view-is-record`**, for one test `E`: the coalition's view (`view`, of the run's randomness `ω`, sampled uniformly) is
 within `η` of a simulator's output (`sim`, on coins `ω'` of its own) from the public record alone (`record`). -/
 def ViewIsRecord {Ω Ω' Rec V : Type} [Fintype Ω] [Nonempty Ω] [Fintype Ω'] [Nonempty Ω'] (view : Ω → V)
     (record : Ω → Rec) (sim : Rec → Ω' → V) (E : V → Prop) (η : ℝ≥0∞) : Prop :=

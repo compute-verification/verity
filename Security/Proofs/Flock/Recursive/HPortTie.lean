@@ -33,7 +33,7 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`: `accRead_at_unit`'s
   premises at every session). `reachedChecked_of` discharges it: an accepted record is a session-game outcome
   (`Accepted`'s tie), so each session's record is reached and written, and `ChecksC3Reached` (named, `ChecksReached`'s
-  form at `ChecksC3`) transfers the checks to it along the record's draw (`checksC3_of_recordDraw`).
+  form at `ChecksC3`) transfers the checks to it along the record's sample (`checksC3_of_recordDraw`).
 * `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
   (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
   first entry of that value (`site_of_checkShared`).
@@ -588,8 +588,8 @@ def ChecksC3Reached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
 
 /-- **`ReachedChecked` from `ChecksC3Reached`**: an accepted record is a session-game outcome (`Accepted`'s outcome
 tie), so each session's record is one its game reaches (`Reached`, `ZkOuter.outcome_writes`) — a transcript the
-session writes and accepts. `ChecksC3Reached` then checks some written, accepted transcript; under V*'s full draw
-every written record carries one draw (`execOS_subset_full_mem`, through the record's custody `hRec`), so the checks
+session writes and accepts. `ChecksC3Reached` then checks some written, accepted transcript; under V*'s full sample
+every written record carries one sample (`execOS_subset_full_mem`, through the record's custody `hRec`), so the checks
 transfer to the outcome's own transcript (`checksC3_of_recordDraw`). -/
 theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}

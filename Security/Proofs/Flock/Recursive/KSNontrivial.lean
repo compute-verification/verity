@@ -19,7 +19,7 @@ the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
 * **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `RecursiveKSAtRec` at accept-all is false at
   every brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled
-  statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a coin-server
+  statement with a V\* session whose inner statement passes `PlainIn`'s checks (`DeployedParses`), with a live-coin
   record at whose transcript its V\* parts are in scope (`PartsInScope`). The inner statement need not be false. The
   silent prover is accepted on every run; the accepting record stages no V\* statement, so each session's statement is
   empty, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), and `E*` extracts nothing
@@ -157,7 +157,7 @@ theorem EO_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I :
     exact eval_serve_firstWait_none _ _ _ _ _ (fun os => hA _ _ os (hs _)) H run _
   · rfl
 
-/-- **`E*` extracts nothing where the record stages no V\* statement**: `E_O` gives up on the judged draw, so the
+/-- **`E*` extracts nothing where the record stages no V\* statement**: `E_O` gives up on the judged sample, so the
 inner view there is rejected (`dec`) and the inner `E^rep` stops. -/
 theorem E_none_of_vstar_nil {W : Type} (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (x : Msg)
@@ -436,7 +436,7 @@ theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
 values, is false at the verifier that accepts everything (`RecAt.acceptAll` of the deployment's compiled record), at
 every brings, from the named assumption
 `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled statement with a V\* session whose
-inner statement is in the plain scope (`DeployedParses`), with a coin-server record at whose transcript its V\* parts
+inner statement is in the plain scope (`DeployedParses`), with a live-coin record at whose transcript its V\* parts
 are in scope (`PartsInScope`). Everything else is proved here: the statement is dense (`denseAt_of_parses`) and in the
 plain scope (`plainIn_of_parses`); the silent prover is accepted on every run, and the accepting record stages no V\*
 statement, which the outer Flock's parser refuses (`RecDeploy.zkRec_parse_nil`), so `E*` extracts nothing and

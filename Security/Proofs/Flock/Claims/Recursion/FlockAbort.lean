@@ -14,7 +14,7 @@ after the second, whatever either message says (`qV_out`). A run opens one colum
 (`qCols_run`), and the code is the one word `(1, 1)` at radius `0`.
 
 * **`qDI` meets `Claims.Flock.KS`.** No prover makes the verifier reject, so no prover's acceptance depends on the query
-  position. `E^rep`'s first wait sees both positions opened unless its first three reruns draw one position, so
+  position. `E^rep`'s first wait sees both positions opened unless its first three reruns sample one position, so
   `PrBad ≤ 1/4 ≤ κ` at every prover and every decoder within the radius.
 * **It fails `Inner.KSAbort`.** A prover that aborts its run at position `0` reads only the run's own coin 0 and no
   fresh coins (`A = Unit`, `qKeep`). `E^rep`'s accepted reruns then open position `1` alone, from which the decoder
@@ -38,7 +38,7 @@ open Claims
 /-- The query position, as the length of the verifier's message: `1` at coin `true`, `0` at `false`. -/
 def qPos (b : Bool) : Msg := if b then [0] else []
 
-/-- **The toy verifier**: two rounds. It answers the first message with the query position its coin 0 draws and accepts
+/-- **The toy verifier**: two rounds. It answers the first message with the query position its coin 0 samples and accepts
 after the second, whatever either message says. -/
 def qV : Verifier Bool :=
   ⟨fun _ => 2, fun _ as cs => .ret (if as.length < 2 then .msg (qPos (cs.getD 0 false)) else .acc)⟩
@@ -88,7 +88,7 @@ theorem qV_vLog (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω
     (run H P qV x ω r).vLog = [] := by
   simp [run, stepWith, qV, OC.eval]
 
-/-- A run opens `1` at the query position its coin 0 draws. -/
+/-- A run opens `1` at the query position its coin 0 samples. -/
 theorem qCols_run (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (qV.k x) → Bool) :
     qCols (run H P qV x ω r).seen = [(if coinSeq r 0 then 1 else 0, 1)] := by
   cases h : coinSeq r 0 <;> simp [run, stepWith, qV, OC.eval, Trace.seen, qCols, qPos]
@@ -197,7 +197,7 @@ theorem waitAcc_good {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) 
           exact hgood r ho
       · exact h
 
-/-- **`E^rep`'s waits where every rerun accepts**: if the first wait's first `k` draws assemble a candidate `check`
+/-- **`E^rep`'s waits where every rerun accepts**: if the first wait's first `k` samples assemble a candidate `check`
 accepts, `firstWait` returns it. -/
 theorem firstWait_finRange_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k m K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (hacc : ∀ r, (run r).out = .acc)
@@ -282,14 +282,14 @@ theorem qDec_ok : decOK qDI qDec := by
 
 /-! ## `Claims.Flock.KS` holds -/
 
-/-- The query coins of `E^rep`'s first three draws in its first wait. -/
+/-- The query coins of `E^rep`'s first three samples in its first wait. -/
 def q3 {n m K : ℕ} (hm : 0 < m) (hK : 3 ≤ K) (ρ : Fin m → Fin K → Fin n → Bool) : Fin 3 → Bool :=
   fun i => coinSeq (ρ ⟨0, hm⟩ (Fin.castLE hK i)) 0
 
-/-- Three query coins not all one draw both positions. -/
+/-- Three query coins not all one sample both positions. -/
 theorem bool3 : ∀ f : Fin 3 → Bool, ¬ (f 0 = f 1 ∧ f 1 = f 2) → ∀ b, ∃ j, f j = b := by decide
 
-/-- **`E^rep` succeeds** unless its first wait's first three reruns draw one query position: two that differ open both
+/-- **`E^rep` succeeds** unless its first wait's first three reruns sample one query position: two that differ open both
 positions, so a decoder within the radius lists the word. -/
 theorem qE_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hdec : Flock.ListWithin qDI.len qDI.enc qDI.θ decode) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -343,7 +343,7 @@ theorem Pr_bool3 : Pr (fun f : Fin 3 → Bool => f 0 = f 1 ∧ f 1 = f 2) = 1 / 
   norm_num
 
 /-- **`qDI` meets `Claims.Flock.KS`**: at every prover and every decoder within the radius, `E^rep` fails only where its
-first wait's first three reruns draw one query position, a quarter of the draws, and `κ ≥ 1/4`. -/
+first wait's first three reruns sample one query position, a quarter of the samples, and `κ ≥ 1/4`. -/
 theorem qFlockKS (H : Msg → Msg) : Flock.KS H qDI := by
   intro decode hdec x Ω _ _ P
   have hw : 0 < qDI.waits x := by show 0 < 2; omega
@@ -407,7 +407,7 @@ theorem qE_abort_none (H : Msg → Msg) (ω : Unit)
     refine qAssemble_none qDec [] vs ?_
     simp [qDec, h0]
 
-/-- The judged run's coin 0 is `true` half the time, whatever else is drawn. -/
+/-- The judged run's coin 0 is `true` half the time, whatever else is sampled. -/
 theorem Pr_coin0 {n : ℕ} (h0 : 0 < n) {Y : Type} [Fintype Y] [Nonempty Y] :
     Pr (fun s : Unit × ((Fin n → Bool) × Unit) × Y => coinSeq s.2.1.1 0 = true) = 1 / 2 := by
   have hc : UnifMap (fun r : Fin n → Bool => coinSeq r 0) := by

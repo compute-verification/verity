@@ -359,7 +359,7 @@ theorem stage_zk_at_one_statement {p : SampledProofs.OneStageZk.Params} {c : Sam
     | undecided s => simp at h
 
 /-- One-stage v2 never accepts in the per-member form: no guarantee in the lock yet covers a sample over several
-members' statements under one draw. -/
+members' statements under one sample. -/
 theorem stage_zk_one_statement {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
     {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
     (h : SampledProofs.OneStageZk.checkBlobs p c e bs = .accept pub prof) : p.form.perMember = false := by

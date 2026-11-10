@@ -17,7 +17,7 @@ unit's reads (`hpr`) and the wires' order (`hw`).
 
 * `tablePHJ_typed`, `tablePHJ_parse`: each table's inputs are untyped and parse the session's circuit (`tagsAt` changes
   the identity alone, which an untyped `HmOut.parse` does not read).
-* `sitesPHJI`, `sitesPHJI_parse`, `sitesPHJI_bcSite`: each drawn unit's acceptance, VU and block, the one circuit they
+* `sitesPHJI`, `sitesPHJI_parse`, `sitesPHJI_bcSite`: each sampled proof block's acceptance, VU and block, the one circuit they
   parse, and `BcSiteH` at every satisfiable site (`HiddenExec.tableH_bcSiteI` at table `j`'s inputs).
 * `ppPHJI`, `layPHJI`, `rsPHJI`, `rsPHJI_computes`: `SitesH.progPlaces_instProg`, `instLayoutH` and `instRowsH` at those
   sites, `InstKeysRow` from the parse at the reference setup's statement (`instKeysRowPHJ`).
@@ -59,7 +59,7 @@ theorem tablePHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
   · rw [tablePHJ_refused dj x₀ h]
     exact (parseH_tagsAt ht _ _ _ _).trans hc
 
-/-- **The plan's sites**: each drawn unit's acceptance (at the rows' fit `hrf`), VU and block are its table's. -/
+/-- **The plan's sites**: each sampled proof block's acceptance (at the rows' fit `hrf`), VU and block are its table's. -/
 noncomputable def sitesPHJI : SitesH (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀) where
   A S R u _ := castM (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
     (tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.twinA

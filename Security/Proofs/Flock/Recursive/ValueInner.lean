@@ -194,7 +194,7 @@ theorem zeroRows_get (n w u k : ℕ) : ((Flock.RecCoins.zeroRows n w)[u]!)[k]! =
 
 /-- **A source loaded from the inner-session files has a decodable record**: `Inner.load` reaches
 `Record.decode` only after setting up the statement, checking its shape and schedule and taking the spec at the
-record's draw (`Files.drawnSpec`). -/
+record's sample (`Files.drawnSpec`). -/
 theorem record_decode_of_load {unit : String} {f : Flock.RecCoins.Files} {inn : Flock.RecCoins.Inner}
     (h : Flock.RecCoins.Inner.load unit f = .ok inn) :
     ∃ spec sess, Flock.Record.decode spec f.record = .ok sess := by

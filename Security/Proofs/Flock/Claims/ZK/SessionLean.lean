@@ -30,7 +30,7 @@ transport's trusts on them are theorems:
 
 **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` at that release, with the transport's other trusts
 (`ProgReads`, `LinkRoundEq`, `FinalRoundEq`) and the tables' side as before. What it still reads of the loop is that it
-runs at `x`'s setup: the loop sets up from the auditor's draw (`Hello.Setup.setup`), which is `x`'s where `x` reads
+runs at `x`'s setup: the loop sets up from the auditor's sample (`Hello.Setup.setup`), which is `x`'s where `x` reads
 (`FlockDeploy.Ins.setup`).
 -/
 

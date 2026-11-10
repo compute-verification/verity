@@ -7,7 +7,7 @@ public import Definitions.Accounting.Remote.Fork
 
 The bound on the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`), the probability that some window
 opens a receipt presented with an accepted row other than the one its root holds, which `PooledDraw` and the memory
-line's drawn guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
+line's sampled guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
 receipt shows over the window's continuations (`Receipts.held`), so a receipt moves with probability at most the
 square root of the chance that two runs from the cut on independent openings coins show it with two different accepted
 rows (`Accounting.SecurityProofs.TS.Plurality`'s argument, at `cont t`). Two such runs at one root, rank and verifier

@@ -1,71 +1,71 @@
-"""PoUW's check of one audit window as a core protocol (`verity/core/protocols/interface`): the Python
-reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served window's verifier of record
+"""PoUW's check of one audit execution phase as a core protocol (`verity/core/protocols/interface`): the Python
+reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served execution phase's verifier
 (`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
-The proof system registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
+The proof system registers the execution phase, samples, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
-  strings, the grid's bits, the declared range of tile counts, the window's context, the check query's SHA-512
+  strings, the grid's bits, the declared range of tile counts, the execution phase's context, the check query's SHA-512
   (one-stage's `query_digest` of the tile template's instance query) and the rows' fixed length
   ``{"stop": "fixed", "max_tokens": [...]}``, each slot's max_tokens.  The template is one the verifier pins (`TILES`,
-  Lean's `PouwCheck.tiles`), with that template's tile work and query.  A live window's parameters (``coins`` live)
-  also hold ``live``, the inputs of its salt session as the verifier holds them (`LIVE`), and no other window's do.
-* **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
+  Lean's `PouwCheck.tiles`), with that template's tile work and query.  A live execution phase's parameters (``coins`` live)
+  also hold ``live``, the inputs of its salt session as the verifier holds them (`LIVE`), and no other execution phase's do.
+* **Commitment**: the execution phase's registration, one-stage's record (`registration.record`) as canonical JSON, its execution phase
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`, and optionally ``activations``, the
-  per-window values it committed after serving, and ``registered``, the registered weights' entries
+  per-execution-phase values it committed after serving, and ``registered``, the registered weights' entries
   (`WINDOW_VALUES`, each ``{program, values}``, `values_root`).  Its digest is the record's own, `registration.digest`,
-  the one the service's receipt, draw and outcome cite.
+  the one the service's receipt, sample and outcome cite.
 * **Evidence**: the service's answer for that registration, read as `Core.Answer.ofJson` and `Core.Integrity.ofJson`
   read it (only what `toJson` writes, in the shapes `answer` returns): its verdict, the registration digest it is for,
   and on acceptance the integrity profile and the public outputs ``{"draw": d}``, `d` the verifier's sample as one-stage's
-  `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′), and a live window's ``salt``, its salt
+  `draw.py` writes it (any of its laws; PoUW's rule then holds it to subset:K′), and a live execution phase's ``salt``, its salt
   coin and the salt it gives (`window_salt`).
 * **The check** accepts when the registration is PoUW's (`window.REGISTERED`, its `length` item a fixed-length
-  window's at the verifier's max_tokens (`window.length_problem`), each item the verifier's own
-  at the registered level, N = point(level + 1) in the declared range, the law subset:K′ with K′ = `window.k_prime`, the check's
-  query and scheme), the service accepted this registration, and its profile and draw are of the registered partition's N
-  units drawn subset:K′ at the window's δ, and a live window's salt is its live coin's (`window_salt`: taken from a
+  execution phase's at the verifier's max_tokens (`window.length_problem`), each item the verifier's own
+  at the registered level, N = point(level + 1) in the declared range, the sampling design subset:K′ with K′ = `window.k_prime`, the check's
+  query and scheme), the service accepted this registration, and its profile and sample are of the registered partition's N
+  units sampled subset:K′ at the execution phase's δ, and a live execution phase's salt is its live coin's (`window_salt`: taken from a
   salt-only session the auditor's ledger opened on `salt.anchored_epoch_root` of the registered weights' root W, the
-  root X of the activations the window committed before its salt, and the answer's epoch, after that root, as a live
-  Pearl-C pass's is; a seeded window's answer carries no salt).  It publishes
-  exactly `window.PUBLIC` and the service's profile.  The service's reject is a reject and its undecided (the verifier
-  of record hasn't run) is undecided.
+  root X of the activations the execution phase committed before its salt, and the answer's execution phase, after that root, as a live
+  Pearl-C pass's is; a seeded execution phase's answer carries no salt).  It publishes
+  exactly `window.PUBLIC` and the service's profile.  The service's reject is a reject and its undecided (the
+  verifier hasn't run) is undecided.
 
 `opening` is the rule on one unit's opening beside it (`served_commit.check`'s, which calls it): the tile proof's public
-file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
+file opens the unit's rows under the registered execution phase root, through its entry and the entry's side trees.
 
-`pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
-its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.  In a
-certified window, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
-`salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
+`pass_epoch` is the rule on the pass an execution phase is received from (`served_commit.Challenger.pass_epoch`, which calls it):
+its manifest re-starts its execution phase under the challenger's own coin commitment, and the execution phase's context names it.  In a
+certified execution phase, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
+`salt.pouw_salt` of that reveal and the PoUW execution phase the context names, and its weights those the certifier recorded
 before it sampled that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
-challenger runs it before it asks the certifier for one, since the certifier reveals a window once.  A live Pearl-C
+challenger runs it before it asks the certifier for one, since the certifier reveals an execution phase once.  A live Pearl-C
 pass (`pouw_pearl_c_host.epoch_of`), whose manifest's coins are a live session's, took its salt coin from a
-salt-only session of the auditor host's challenger opened on its salt epoch's root (`salt.epoch_open_root` of its
+salt-only session of the auditor host's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
 weights' root and its ``pass_index``): its verifier holds the auditor's ledger and that session's files as `rounds`
 reads them (`LIVE`), and the pass passes `live_salt` under them.
-`draw` is the rule on the window's sample (`Challenger.select`'s): the epoch's sampling coin opens after the registration,
+`draw` is the rule on the execution phase's sample (`Challenger.select`'s): the execution phase's sampling coin opens after the registration,
 and the sampled proof blocks are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.  `work_units` is the same rule under the law ``work:k``: each work
-stratum's ``Draw.subset`` on its own stream of that key (`credit.drawn` draws a served H1 window with it).
-`salt` is the rule on a live window's salt coin, read through the
-same session as `rounds`: S is the session the auditor's signed ledger reserves for the window and R the root its open
-entry opened S on, which the verifier recomputes from the window's record and S (`salt.window_open_root`); the
+and a replay of a recorded sample `COIN_EARLY` too.  `work_units` is the same rule under the sampling design ``work:k``: each work
+stratum's ``Draw.subset`` on its own stream of that key (`credit.drawn` samples a served H1 execution phase with it).
+`salt` is the rule on a live execution phase's salt coin, read through the
+same session as `rounds`: S is the session the auditor's signed ledger reserves for the execution phase and R the root its open
+entry opened S on, which the verifier recomputes from the execution phase's record and S (`salt.window_open_root`); the
 session's signed log shows R alone as what its salt coin followed, and under the commitment it signed the salt coin
 opened once, after R.  `live_salt` is its Pearl-C form (LIVESALT2, `Properties.Pouw.LiveSalt`): R is the pass's salt
-epoch's root, `salt.epoch_open_root` of its weights' root W and its ``pass_index`` k, the session is reserved for the salt
+execution phase's root, `salt.epoch_open_root` of its weights' root W and its ``pass_index`` k, the session is reserved for the salt
 coin alone (`window.SALT_FAMILIES`) and counts only when the ledger ends it complete, and the pass's coins, salt coin,
 salt and session are held to what the ledger and the session's files show.
-`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof system's challenger
+`rounds` is the rule on a live execution phase's round coins (`window.rounds_reason`, over the proof system's challenger
 `sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
-opens and ends for the window, under the window's pinned key, run from a commit the host's pins log records on main's
+opens and ends for the execution phase, under the execution phase's pinned key, run from a commit the host's pins log records on main's
 first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover
 hands in; under the commitment that session signed, round r's coin opened once, after the r-th round root, and the
 round roots are the ones its signed log shows it received.  `salt` reads its session through the same
-`pinned_session`, so a window whose session ran any tree but main's is credited neither.
+`pinned_session`, so an execution phase whose session ran any tree but main's is credited neither.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -109,12 +109,12 @@ CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
 _DIGEST = re.compile(r"[0-9a-f]{128}")
-#: the window's optional groups of committed values (`values_root`): the activations it committed after serving, before
+#: the execution phase's optional groups of committed values (`values_root`): the activations it committed after serving, before
 #: its salt (X), and the registered weights' entries (W, where it registers no ``W`` root)
 WINDOW_VALUES = ("activations", "registered")
 #: `values_root`'s domain tag
 VALUES_TAG = domains.POUW_PERIOD_VALUES.encode()
-#: one-stage's window domain (`registration.window_domain`), the window root's
+#: one-stage's execution phase domain (`registration.window_domain`), the execution phase root's
 SERVED_DOMAIN = domains.ONE_STAGE_SERVED_DOMAIN
 #: a tile proof's first two rows: its A row and its B row, each side's fp8-p row schema
 #: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
@@ -124,7 +124,7 @@ PC8_PORTS = ("a0", "b0")
 SALT_BYTES = 192
 BC_BYTES = 128
 ROW_V2 = domains.HM96_SHA512_ROW
-#: a salted unit's public row: the window's certified salt, the unit's position (a u64) and its entry's side roots
+#: a salted unit's public row: the execution phase's certified salt, the unit's position (a u64) and its entry's side roots
 PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * DIGEST_BYTES["sha512"])
 #: a J10-R unit's public row (`h1tile.PouwH1Tile5`'s): `PUBLIC_ROW_BITS`, then its call's first position ``call`` and its
 #: ``blocks``, its first row block and its first column block in its call's stream, each a u64
@@ -246,8 +246,8 @@ def _str(x: Any) -> bool:
 # ---- the three inputs ---------------------------------------------------------------------------------------------------
 
 def params(j: Any) -> dict:
-    """The verifier's own parameters of the window: a live window's (``check.coins`` live) also hold ``live``, its salt
-    session's inputs as `LIVE` names them, and no other window's do."""
+    """The verifier's own parameters of the execution phase: a live execution phase's (``check.coins`` live) also hold ``live``, its salt
+    session's inputs as `LIVE` names them, and no other execution phase's do."""
     if not isinstance(j, dict) or sorted(set(j) - {LIVE_PARAM}) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}, and optionally {LIVE_PARAM}")
     c = j["check"]
@@ -526,7 +526,7 @@ def _num_den(p: str, ctx: str) -> str:
 
 def unit_draw(j: Any) -> dict:
     """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
-    and a live window's ``salt``, an object (`window_salt` reads it)."""
+    and a live execution phase's ``salt``, an object (`window_salt` reads it)."""
     if not (isinstance(j, dict) and sorted(j) in (["draw"], ["draw", "salt"])):
         raise Refused("public: keys are not draw, and optionally salt")
     d, ctx = j["draw"], "public.draw"
@@ -555,7 +555,7 @@ def law_name(d: dict) -> str:
 
 
 def evidence(b: bytes) -> dict:
-    """The service's answer for the registration (`answer_of`), and on acceptance its profile and draw."""
+    """The service's answer for the registration (`answer_of`), and on acceptance its profile and sample."""
     a = answer_of(canonical(b))
     a["salt"] = None
     if a["verdict"] == "accept":
@@ -662,8 +662,8 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
 # ---- a unit's opening ------------------------------------------------------------------------------------------------------
 
 def window_domain(p: dict, rec: dict) -> CommitmentDomain:
-    """The window root's domain: one-stage's window domain (`registration.window_domain`) of the registered program and
-    partition, over the check's P entries in the window's context."""
+    """The execution phase root's domain: one-stage's execution phase domain (`registration.window_domain`) of the registered program and
+    partition, over the check's P entries in the execution phase's context."""
     n = p["check"]["entries"]
     binding = identity_digest_sha512(SERVED_DOMAIN, {"program": rec["program"], "partition": rec["partition"],
                                                      "port": Wd.PORT, "schema": Wd.ENTRY_SCHEMA, "leaves": n,
@@ -740,14 +740,14 @@ def j10r_blocks(m: int, k: int, tile: tuple[int, int], i: int, j: int) -> tuple[
     """`h1tile.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one stream at
     call scale, row block R I at R I RB and column block C J at M RB + C J CB, for a call of slot `m` (its A rows), an
     R × C `tile` and K = `k`: RB = ⌈(K + 32 (m_K - 1)) / 512⌉ a row's blocks and CB = ⌈(K + 256) / 512⌉ a column's
-    (`h1tile.Layout`'s). Every input is the window's public structure, so the verifier derives them."""
+    (`h1tile.Layout`'s). Every input is the execution phase's public structure, so the verifier derives them."""
     r, c = tile
     rb, cb = -(-(k + 32 * (n_digits(k) - 1)) // 512), -(-(k + 256) // 512)
     return r * i * rb, m * rb + c * j * cb
 
 
 def public_row_salt(context: str, position: int) -> bytes:
-    """The public row's hm96 salt, which anyone derives from the window's context and the unit's position: three SHA-512
+    """The public row's hm96 salt, which anyone derives from the execution phase's context and the unit's position: three SHA-512
     blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
     ctx = context.encode()
     head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
@@ -761,7 +761,7 @@ OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
 
 
 def ok_salt(context: str, position: int) -> bytes:
-    """The ok row's hm96 salt, which anyone derives from the window's context and the unit's position: its content is
+    """The ok row's hm96 salt, which anyone derives from the execution phase's context and the unit's position: its content is
     the one the verifier accepts (`OK_ROW`), so the salt hides nothing. `SALT_BYTES` bytes of SHA-512 in counter mode
     (`SHA-512(m ‖ u32be c)` for c < 3, each output whole) over m = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position)."""
     head = OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")
@@ -771,7 +771,7 @@ def ok_salt(context: str, position: int) -> bytes:
 def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
     """A ``--registered`` port's reads (`registered.READS_V1`) for a statement over one call's units from unit `u0`:
     ``reads_from`` `u0` and ``reads`` the row each of the call's units reads, in unit order, trailing nones dropped, so
-    the file is as long as the call, not the window (Flock's `Registered.Port.readAt`: none below ``reads_from``)."""
+    the file is as long as the call, not the execution phase (Flock's `Registered.Port.readAt`: none below ``reads_from``)."""
     rows = list(rows)
     while rows and rows[-1] is None:
         rows.pop()
@@ -793,16 +793,16 @@ def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, byte
 
 def certified_salt(raw: bytes | None, context: str, reveal: bytes, committed: bytes | None, stream: bytes | None,
                    prover: bytes | None) -> bytes:
-    """The certified window's salt that `pass_epoch` checks the pass's against (`_certified_salt`), which `opening` holds
-    every drawn salted unit's public row to.  Raises `Co.DomainError` or `Refused` where `pass_epoch` refuses."""
+    """The certified execution phase's salt that `pass_epoch` checks the pass's against (`_certified_salt`), which `opening` holds
+    every sampled salted unit's public row to.  Raises `Co.DomainError` or `Refused` where `pass_epoch` refuses."""
     if raw is None:
         raise Co.DomainError("the window names no pass, whose epoch the challenger re-starts from its manifest")
     return _certified_salt(_manifest(raw), reveal, context, committed, stream, prover)[0]
 
 
 def _salt_reason(p: dict, t: Tile | None, salt: Any) -> str | None:
-    """A certified window (its context names a PoUW window, `salt.window_of`) opens only a salted template's units, under
-    the 64-byte certified salt the verifier holds; any other window, no salt and no salted unit."""
+    """A certified execution phase (its context names a PoUW execution phase, `salt.window_of`) opens only a salted template's units, under
+    the 64-byte certified salt the verifier holds; any other execution phase, no salt and no salted unit."""
     if PS.window_of(p["context"]) is not None:
         if t is None or t.salted is None:
             return ("the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the "
@@ -832,18 +832,18 @@ def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
 
 def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any,
             salt: bytes | None = None) -> str | None:
-    """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered window root, else why
-    not (`served_commit.check`).  `units` is the sample's (None for a unit opened undrawn, the filler's); `op` the prover's
+    """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else why
+    not (`served_commit.check`).  `units` is the sample's (None for a unit opened unsampled, the filler's); `op` the prover's
     opening ``{"entry", "entry_value", "entry_salt", "window_path", "a": {"index", "path"}, "b": …}``: the unit's entry,
-    its salt and its path to the window root, and each side's row with its path to the entry's side root.  The proof's
+    its salt and its path to the execution phase root, and each side's row with its path to the entry's side root.  The proof's
     A row and B row are its circuit's first two ports, ``a0`` and ``b0`` (`PC8_PORTS`), whose schemas the header names,
     and its body starts with their b ‖ c.  The header's keys, in its key order (serde's), list the opened side rows
     first and in port order (`_ports`): a header that orders them otherwise is refused, never read in its own order.
 
-    `salt` is a certified window's salt (`certified_salt`), and a certified window opens only a salted template's units
+    `salt` is a certified execution phase's salt (`certified_salt`), and a certified execution phase opens only a salted template's units
     (`Tile.salted`, `_salt_reason`).  A salted unit's opening lists each side's rows, ``"a": [{"index", "path"}, …]`` (R
     rows) and ``"b"`` (C rows): tile (i, j) of its entry (`window.tile_in`) is A rows R·i + k and B rows C·j + k, and
-    the proof's body starts with their b ‖ c and then its public row's, which must be `public_bc` of the window's context,
+    the proof's body starts with their b ‖ c and then its public row's, which must be `public_bc` of the execution phase's context,
     `salt`, the unit's position and the entry's side roots."""
     if units is not None and unit not in units:
         return f"unit {unit} is not drawn"
@@ -937,12 +937,12 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     return None
 
 
-# ---- the pass's epoch and the window's sample --------------------------------------------------------------------------------
+# ---- the pass's execution phase and the execution phase's sample --------------------------------------------------------------------------------
 
 MANIFEST_SCHEMA = domains.VLLM_PEARL_C_RUN
-#: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it
+#: a pass recorded before the execution phase's coins, salted from a beacon: only a replay of a recorded pass reads it
 MANIFEST_RECORDED = domains.VLLM_PEARL_C_RUN_V1
-#: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
+#: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW execution phase's reveal: only a certified execution phase's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
 MANIFEST_CERTIFIED = domains.VLLM_PEARL_C_RUN_CERTIFIED
 #: the e2e-service passes' coin commitment, whose binding and weights' root are the first 32 bytes
@@ -952,7 +952,7 @@ COINS_RECORDED = domains.POUW_EPOCH_COINS_RECORDED
 COIN_VERSIONS = {Co.SCHEME: (DIGEST_BYTES["sha512"], domains.POUW_WEIGHTS_ROOT),
                  COINS_RECORDED: (32, domains.POUW_WEIGHTS_ROOT_RECORDED)}
 #: the e2e-service's first coin commitments, named `coins.SCHEME` but on SHA-256 as core
-#: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
+#: was then: bound by `tagged_sha256`, and the sample's key and stream `derive_v1`'s.  Only a replay of a recorded sample
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
 DRAW_DOMAIN = domains.POUW_SERVED_ZK_SAMPLING
@@ -971,7 +971,7 @@ def _hex(s: Any) -> bytes | None:
 
 
 def coins_of(j: Any, recorded: bool) -> tuple[str, int, bytes]:
-    """A coin commitment ``{"scheme", "epoch", "root"}`` (`CoinCommitment.from_json`) as (scheme, epoch, root), of a scheme
+    """A coin commitment ``{"scheme", "epoch", "root"}`` (`CoinCommitment.from_json`) as (scheme, execution phase, root), of a scheme
     the verifier reads: `coins.SCHEME`, and `COINS_RECORDED` only in a replay of a recorded pass."""
     if not isinstance(j, dict) or j.get("scheme") not in ((Co.SCHEME, COINS_RECORDED) if recorded else (Co.SCHEME,)):
         raise Refused(f"a coin commitment's scheme is {Co.SCHEME!r}")
@@ -1000,13 +1000,13 @@ def tagged_sha256(tag: str, *parts: Any) -> bytes:
 
 
 def derive_v1(source: bytes, domain: str, context: dict) -> bytes:
-    """`randomness.derive` as it was (``verity/randomness/derive/v1``, SHA-256): `COIN_EARLY`'s draw key."""
+    """`randomness.derive` as it was (``verity/randomness/derive/v1``, SHA-256): `COIN_EARLY`'s sample key."""
     ctx = b"".join(frame(k) + frame(context[k]) for k in sorted(context))
     return hashlib.sha256(domains.RANDOMNESS_DERIVE_V1.encode() + b"\0" + frame(source) + frame(domain) + frame(ctx)).digest()
 
 
 def stream_v1(key: bytes, index: str, n: int) -> bytes:
-    """`Key.stream` as it was (``verity/randomness/stream/v1``, SHA-256 blocks): `COIN_EARLY`'s draw stream."""
+    """`Key.stream` as it was (``verity/randomness/stream/v1``, SHA-256 blocks): `COIN_EARLY`'s sample stream."""
     head = domains.RANDOMNESS_STREAM_V1.encode() + b"\0" + key + frame(frame(index))
     return b"".join(hashlib.sha256(head + c.to_bytes(8, "big")).digest() for c in range((n + 31) // 32))[:n]
 
@@ -1045,8 +1045,8 @@ def coin_reason(c: tuple[str, int, bytes], o: Co.CoinOpening, label: str, after:
 
 
 def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
-    """`audit.weights_root`, an epoch's weights' root, under a coin commitment's scheme (`COIN_VERSIONS`); a live H1
-    window's open root binds `weights.weights_root` instead (`salt`)."""
+    """`audit.weights_root`, an execution phase's weights' root, under a coin commitment's scheme (`COIN_VERSIONS`); a live H1
+    execution phase's open root binds `weights.weights_root` instead (`salt`)."""
     n, tag = COIN_VERSIONS[scheme]
     return fold_roots(tag, roots)[:n]
 
@@ -1121,10 +1121,10 @@ def _recorded(us: list[dict], roots: dict[int, bytes], committed: bytes | None, 
 
 def recorded_reason(raw: bytes | None, committed: bytes | None, stream: bytes | None, prover: bytes | None
                     ) -> str | None:
-    """Why a certified window's pass `raw` is not over the weights, `stream` and `prover` that `committed` binds, what PoUW
-    recorded with the certifier before it sampled the window's salt (`salt.committed`); None when it is.  `pass_epoch`'s
+    """Why a certified execution phase's pass `raw` is not over the weights, `stream` and `prover` that `committed` binds, what PoUW
+    recorded with the certifier before it sampled the execution phase's salt (`salt.committed`); None when it is.  `pass_epoch`'s
     rule, with the same words, short of the reveal, which a challenger asks for only after this passes: the certifier
-    reveals a window once, so a registration whose stream or prover wasn't recorded gets no reveal."""
+    reveals an execution phase once, so a registration whose stream or prover wasn't recorded gets no reveal."""
     if raw is None:
         return "the window names no pass, whose epoch the challenger re-starts from its manifest"
     try:
@@ -1136,10 +1136,10 @@ def recorded_reason(raw: bytes | None, committed: bytes | None, stream: bytes | 
 
 def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | None, stream: bytes | None,
                     prover: bytes | None) -> tuple[bytes, str]:
-    """A certified window's pass under the window's `stream` and `prover`: `committed`, what the certifier recorded
-    before it sampled the window's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
-    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW window the
-    window's `context` names, the window, the stream and the prover."""
+    """A certified execution phase's pass under the execution phase's `stream` and `prover`: `committed`, what the certifier recorded
+    before it sampled the execution phase's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
+    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW execution phase the
+    execution phase's `context` names, the execution phase, the stream and the prover."""
     us, roots = _certified_workload(m)
     if type(reveal) is not bytes or len(reveal) != PS.SALT_BYTES:
         raise Co.DomainError(f"the verifier's reveal is not a {PS.SALT_BYTES}-byte salt")
@@ -1153,7 +1153,7 @@ def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | Non
     return salt, "certifier"
 
 
-#: a live Pearl-C pass's inputs as its verifier holds them (`pass_epoch`'s `live`): the window's pinned challenger key,
+#: a live Pearl-C pass's inputs as its verifier holds them (`pass_epoch`'s `live`): the execution phase's pinned challenger key,
 #: the auditor's ledger's lines, the host's pins log, the verifier's copy of main's first-parent history and the
 #: session's files
 LIVE = ("key", "ledger", "main", "pins", "session")
@@ -1161,7 +1161,7 @@ LIVE_FORM = ("a live pass's verifier holds {key, ledger, main, pins, session}: t
              "ledger, the host's pins log, main's first-parent history and the session's files")
 LIVE_UNHELD = ("the pass's coins are a live session's: only a verifier holding the auditor's ledger reads a pass salted by "
                "a live session")
-#: a live window's parameters hold the same inputs for its salt session (`params`, `window_salt`)
+#: a live execution phase's parameters hold the same inputs for its salt session (`params`, `window_salt`)
 LIVE_PARAM = "live"
 LIVE_PARAMS = ("live is exactly when check.coins is live, and is then {key, ledger, main, pins, session}: the pinned "
                "challenger key, the auditor's ledger, the host's pins log, main's first-parent history and the salt "
@@ -1182,7 +1182,7 @@ def _live_salt(m: dict, live: Any, verify: Ch.Verify) -> tuple[bytes, str]:
 
 
 def _coin_salt(m: dict, coins: Any, recorded: bool, us: list[dict], roots: dict[int, bytes]) -> tuple[bytes, str]:
-    """A pass salted by epoch coins the verifier holds as a commitment (`coins_of`): its salt coin opens against them
+    """A pass salted by execution-phase coins the verifier holds as a commitment (`coins_of`): its salt coin opens against them
     after the weights' root (`Epoch.start`'s)."""
     try:
         c = coins_of(coins, recorded)
@@ -1206,7 +1206,7 @@ def _coin_salt(m: dict, coins: Any, recorded: bool, us: list[dict], roots: dict[
 def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None, context: str = "",
                 committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None,
                 live: Any = None, verify: Ch.Verify | None = None) -> tuple[bytes, str]:
-    """`manifest_epoch`: the pass's epoch salt re-started from its manifest, and how it was had.  Raises `DomainError`
+    """`manifest_epoch`: the pass's execution phase's salt re-started from its manifest, and how it was had.  Raises `DomainError`
     (the coin rule's) or `Refused` (a manifest it can't read)."""
     if reveal is not None:
         return _certified_salt(m, reveal, context, committed, stream, prover)
@@ -1251,14 +1251,14 @@ def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = Fal
                live: Any = None, verify: Ch.Verify | None = None) -> tuple[str | None, tuple[str, str] | None]:
     """How the pass's salt was had (``coin``, ``live coin``, ``recorded beacon`` in a replay of a recorded pass, or
     ``certifier``) and None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts
-    its epoch under `coins`, the challenger's own coin commitment (its JSON), and the window's `context` names it by its
+    its execution phase under `coins`, the challenger's own coin commitment (its JSON), and the execution phase's `context` names it by its
     SHA-512.  A live Pearl-C pass, whose manifest's coins are a live session's (`window.LIVE_SCHEME`), is read only
     through the verifier's `live` inputs (`LIVE`, ``{key, ledger, main, pins, session}``, the challenger's signatures
     checked with `verify`, by default `lms_verify`; a verifier that holds none refuses it) and passes `live_salt` under
-    them (``live coin``, its ``salt`` refusals here ``coin``'s); `coins` plays no part in it.  A certified window's
-    verifier holds `reveal`, the certifier's salt for the PoUW window the context names, as `salt.revealed` read it,
+    them (``live coin``, its ``salt`` refusals here ``coin``'s); `coins` plays no part in it.  A certified execution phase's
+    verifier holds `reveal`, the certifier's salt for the PoUW execution phase the context names, as `salt.revealed` read it,
     `committed`, what PoUW recorded with the certifier before it sampled that salt, as `salt.committed` read it, and the
-    window's `stream` and `prover`; its window
+    execution phase's `stream` and `prover`; its execution phase
     passes only a pass salted by it (`MANIFEST_CERTIFIED`, the salt `salt.pouw_salt(reveal, p, stream, prover)`) over
     weights whose root `salt.pouw_record` binds with the stream and the prover in `committed`, and a certified pass
     passes only there."""
@@ -1276,7 +1276,7 @@ def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = Fal
 
 
 def width(n: int) -> int:
-    """Bytes per word of an exact uniform draw below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
+    """Bytes per word of an exact uniform sample below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
     return (n.bit_length() + 64 + 7) // 8
 
 
@@ -1324,12 +1324,12 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
     return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
 
 
-#: a live window's coins as the sample's check of record reads them
+#: a live execution phase's coins as the sample's check of record reads them
 SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the verifier's key for it, {key, record} "
                "(`challenger.trusted_commitment`), not a bare commitment")
 
 
-#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin
+#: the refusal of a sample whose coins aren't the record of the challenger the execution phase's parameters pin
 COIN_KEY = "coin-key"
 NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
 OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
@@ -1338,9 +1338,9 @@ SEEDED_PINNED = ("the window's parameters pin a challenger key, so its draw's co
 
 
 def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tuple[str, str] | None]:
-    """A live window's commitment from `coins`, ``{"key", "record"}``: `key` must be `pinned`, the challenger key the
-    window's parameters pin (``coin-key``), the record must be signed under it (`challenger.record_reason`) and its
-    commitment a live window's draw session's (`window.DRAW_FAMILIES`); else None and the refusal."""
+    """A live execution phase's commitment from `coins`, ``{"key", "record"}``: `key` must be `pinned`, the challenger key the
+    execution phase's parameters pin (``coin-key``), the record must be signed under it (`challenger.record_reason`) and its
+    commitment a live execution phase's sample session's (`window.DRAW_FAMILIES`); else None and the refusal."""
     if sorted(coins) != ["key", "record"]:
         return None, ("coin", SIGNED_LIVE)
     try:
@@ -1362,13 +1362,13 @@ def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tup
 
 def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
          units: Any, key: Any = None) -> tuple[str, str] | None:
-    """None when `units` are the window's sample: the epoch's sampling coin `opening` opens against `coins` (the challenger's
+    """None when `units` are the execution phase's sample: the execution phase's sampling coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
     registration and its `receipt`; else the refusal (``coin``, ``coin-key``, ``draw`` or ``sampler``, and why). A
-    seeded commitment (`coins_of`) has its ``draw`` coin, and is refused when the window's parameters pin a challenger
-    key. A live one (`window.LIVE_SCHEME`, a certified window's) is read only from its draw session's
-    (`window.DRAW_FAMILIES`) signed record with the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the window's
+    seeded commitment (`coins_of`) has its ``draw`` coin, and is refused when the execution phase's parameters pin a challenger
+    key. A live one (`window.LIVE_SCHEME`, a certified execution phase's) is read only from its sample session's
+    (`window.DRAW_FAMILIES`) signed record with the key it is signed under, ``{"key", "record"}``: that key must be `key`, the challenger key the execution phase's
     parameters pin (``coin-key``, so a record the prover signed under a key of its own, over coins it holds, is
     refused), and this check verifies the record under it (`challenger.record_reason`; a bare live commitment is
     refused, `SIGNED_LIVE`); it has its ``pouw/draw`` coin 0 (`challenger.live_reason`)."""
@@ -1411,13 +1411,13 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
 
 
 def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's sample under the work law (Lean `Flock.Draw.workK`): ⌈k·work·size/total⌉, at least `floor`, at most
+    """A stratum's sample under the work sampling design (Lean `Flock.Draw.workK`): ⌈k·work·size/total⌉, at least `floor`, at most
     `size`."""
     return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 def work_units(coin: bytes, stream: str, registration: str, receipt: dict, strata: list[dict]) -> list[int] | None:
-    """`draw`'s rule under the law ``work:k`` (Lean `workUnits`): the units the sampling coin `coin` draws over the work strata
+    """`draw`'s rule under the sampling design ``work:k`` (Lean `workUnits`): the units the sampling coin `coin` samples over the work strata
     `strata` (each ``{template, units, work, floor, k}``, its units ``[lo, hi)`` ranges in order), ascending. Stratum s is
     ``Draw.subset`` of its k_s over its n_s units on the stream ``("draw", template)`` of the key the coin derives under
     the stream's digest `stream`, the registration `registration` and its `receipt` (`draw_key_context`), its local index
@@ -1435,7 +1435,7 @@ def work_units(coin: bytes, stream: str, registration: str, receipt: dict, strat
     return sorted(out)
 
 
-# ---- a live window's salt and round coins -----------------------------------------------------------------------------
+# ---- a live execution phase's salt and round coins -----------------------------------------------------------------------------
 
 NO_RESERVE = ("the auditor's ledger opens the window's session without reserving it: a window's open root binds the "
               "session a signed reserve entry names")
@@ -1457,7 +1457,7 @@ LIVE_SESSION = ("the pass's session is not the gate's answer, without its secret
                 "opened on its epoch's root: its session, seq, root and commitment")
 PASS_FORM = ("the pass's manifest names no epoch: `pass_index` is an integer in [0, 2^64), its epoch's number among its "
              "weights' root's epochs")
-#: a live window's salt rule (`window_salt`)
+#: a live execution phase's salt rule (`window_salt`)
 WINDOW_SALT_KEYS = ("coins", "epoch", "opening", "salt", "session")
 SEEDED_SALT = "the window's coins are seeded, and its service answer carries a live salt"
 NO_WINDOW_SALT = ("the window's coins are live, and its service answer carries no salt: its salt coin is a salt-only "
@@ -1519,7 +1519,7 @@ def _carries(s: Any, sid: str, seq: int, root: bytes, commitment: str) -> bool:
 
 def _salt_epoch(key: Any, ledger: Any, pins: Any, main: Any, session: Any, r: bytes, verify: Ch.Verify
                 ) -> tuple[tuple[str, str] | None, Any]:
-    """The salt-only session opened on salt epoch root `r` (`_salt_session` for ``{root: r}``), when it counts
+    """The salt-only session opened on salt execution phase root `r` (`_salt_session` for ``{root: r}``), when it counts
     (LIVESALT2): a Pearl-C salt session's commitment, reserved for its salt coin alone and opened binding that reserve,
     ended complete having released that coin and nothing else, its log showing `r` alone as the root the coin followed.
     (None, (the ledger's session, its signed commitment, its open entry)), or the refusal and None."""
@@ -1546,7 +1546,7 @@ def _salt_epoch(key: Any, ledger: Any, pins: Any, main: Any, session: Any, r: by
 
 
 def values_root(g: Any) -> bytes | None:
-    """The root of a group of committed values the window names (`WINDOW_VALUES`), or None when `g` is not one: ``{program,
+    """The root of a group of committed values the execution phase names (`WINDOW_VALUES`), or None when `g` is not one: ``{program,
     values}``, ``program`` a string and ``values`` a non-empty object of entries by value name, each naming its value
     (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: the served
     loop's `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
@@ -1571,9 +1571,9 @@ def _sized(b: bytes) -> bytes:
 
 
 def window_anchors(rec: dict) -> tuple[bytes, bytes] | str:
-    """What an H1 window's salt epoch's root binds besides its epoch, from its registration `rec` (its ``roots`` and
+    """What an H1 execution phase's salt execution phase's root binds besides its execution phase, from its registration `rec` (its ``roots`` and
     ``window``): (W, X), or why it names none.  W is its weights' root: its ``W`` root, a SHA-512 digest, or, when it
-    registers none, the root of its registered weights' entries (``window.registered``, `values_root`); a window with
+    registers none, the root of its registered weights' entries (``window.registered``, `values_root`); an execution phase with
     both names no one W (`WINDOW_NO_W`).  X is the root of the activations it committed after serving
     (``window.activations``, `values_root`; `WINDOW_NO_X`): the anchors H1's cut reads at coin 0 (x, sx, the A rows),
     which `salt.anchored_epoch_root` fixes before the salt."""
@@ -1590,13 +1590,13 @@ def window_anchors(rec: dict) -> tuple[bytes, bytes] | str:
 
 
 def window_salt(p: dict, rec: dict, s: Any, verify: Ch.Verify = lms_verify) -> str | None:
-    """Why the salt `s` an accepted window's service answer carries (``public.salt``, None when it carries none) is not
-    its live salt, or None, its registration `rec` (``roots`` and ``window``).  A seeded window's answer carries none
-    (`SEEDED_SALT`).  A live window's carries ``{coins, epoch, opening, salt, session}`` (`WINDOW_SALT_FORM`): its salt
-    epoch's number k among its weights' root W's epochs, an integer in [0, 2^64), and its salt coin's commitment,
+    """Why the salt `s` an accepted execution phase's service answer carries (``public.salt``, None when it carries none) is not
+    its live salt, or None, its registration `rec` (``roots`` and ``window``).  A seeded execution phase's answer carries none
+    (`SEEDED_SALT`).  A live execution phase's carries ``{coins, epoch, opening, salt, session}`` (`WINDOW_SALT_FORM`): its salt
+    execution phase's number k among its weights' root W's execution phases, an integer in [0, 2^64), and its salt coin's commitment,
     opening, salt and session as `live_salt` reads a live Pearl-C pass's.  W and X are the registration's
     (`window_anchors`), so R = `salt.anchored_epoch_root(W, X, k)` binds the weights and the activations committed
-    before the coin: a window whose activations were committed after its salt names an X its session's R doesn't, and
+    before the coin: an execution phase whose activations were committed after its salt names an X its session's R doesn't, and
     the ledger opened no session on its R.  R and the session are read only from the registration and the verifier's
     `p["live"]` inputs (`LIVE`), never the answer: the session opened on ``{root: R}`` counts as `live_salt`'s does
     (`_salt_epoch`), ``coins`` is the commitment it signed, ``opening`` its ``pouw/salt`` coin 0 opened after R
@@ -1644,10 +1644,10 @@ def window_salt(p: dict, rec: dict, s: Any, verify: Ch.Verify = lms_verify) -> s
 def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
               ) -> tuple[bytes | None, tuple[str, str] | None]:
     """A live Pearl-C pass's salt and None, or None and the refusal (``manifest``, ``coin`` or ``salt``, and why): `salt`'s
-    rule with the pass's epoch's root R in place of a window's open root, its session and commitment read from the
+    rule with the pass's execution phase's root R in place of an execution phase's open root, its session and commitment read from the
     auditor's ledger and the session's own files, never the manifest.  The pass's manifest `manifest` (an object) is
     `MANIFEST_SCHEMA`'s, its every call index below 2^32 (`CALL_RANGE`), W `audit.weights_root` of its workload's weights
-    (`_workload`, `_check_workload`), and its ``pass_index`` k, an integer in [0, 2^64) (`PASS_FORM`), its salt epoch's
+    (`_workload`, `_check_workload`), and its ``pass_index`` k, an integer in [0, 2^64) (`PASS_FORM`), its salt execution phase's
     number among W's: R is `salt.epoch_open_root` of W and k, computed here and never read from the manifest.  The
     session is the one the auditor's signed v2 ledger `ledger` opens on ``{root: R}`` and ends closed under the pinned
     challenger key `key`, run from a commit the host's pins log `pins` records on main's first-parent line `main`, from
@@ -1659,9 +1659,9 @@ def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifes
     commitment's ``pouw/salt`` coin 0 opened after R (`challenger.live_reason`), its ``salt`` `audit.salt_of` of that
     coin over W, and its ``session`` the gate's open answer for the session without its secret: the ledger's session,
     its open's seq, R and the commitment the ledger's end names (`_carries`).  The verifier's signatures are checked
-    with `verify`.  A pass of epoch k over W reads the session opened on `epoch_open_root(W, k)`, so the passes of one
-    epoch read one session and one salt, and one session salts one epoch.  Whether two passes of an epoch share a call
-    index is the Pearl-C period's to refuse."""
+    with `verify`.  A pass of execution phase k over W reads the session opened on `epoch_open_root(W, k)`, so the passes of one
+    execution phase read one session and one salt, and one session salts one execution phase.  Whether two passes of an execution phase share a call
+    index is the Pearl-C credit period's to refuse."""
     m = manifest
     if not isinstance(m, dict):
         return None, ("manifest", "the pass's manifest is not a JSON object")
@@ -1709,7 +1709,7 @@ def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifes
 
 
 def live_epoch(raw: bytes) -> tuple[dict, bytes, int]:
-    """A live Pearl-C pass's manifest, read from its bytes `raw`, and its salt epoch as `live_salt` reads it: W,
+    """A live Pearl-C pass's manifest, read from its bytes `raw`, and its salt execution phase as `live_salt` reads it: W,
     `audit.weights_root` of its workload's weights, and k, its ``pass_index``, an integer in [0, 2^64). Raises `Refused`
     when the manifest names none (`PASS_FORM` among them), `DomainError` when its workload is malformed."""
     m = _manifest(raw)
@@ -1722,18 +1722,18 @@ def live_epoch(raw: bytes) -> tuple[dict, bytes, int]:
 
 def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
          opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when `opening` is a live window's salt coin, opened after the window's own open root, every coin and root of
+    """None when `opening` is a live execution phase's salt coin, opened after the execution phase's own open root, every coin and root of
     it read through the challenger's own session as `rounds` reads them, never one the prover hands in: the one session
     the auditor's signed v2 ledger `ledger` opens and ends closed for `window` (``{root}``) under the pinned challenger
     key `key`, run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent
     history `main` holds, from that session's files `session` (`challenger.pinned_session` and `session_named`, its
     signatures checked with `verify`).  S is the session the ledger's signed reserve entry names (a session opened without one is
-    refused) and R the root its signed open entry opened S on; R is `salt.window_open_root` of the window's weights'
-    root `weights_root` and its round-0 request table's root `requests_root` (hex, from the window's record) and S; the
+    refused) and R the root its signed open entry opened S on; R is `salt.window_open_root` of the execution phase's weights'
+    root `weights_root` and its round-0 request table's root `requests_root` (hex, from the execution phase's record) and S; the
     session's signed log shows R, alone, as the root its salt coin followed; and under the commitment the session
-    signed, a live epoch's, `opening` is the epoch's ``pouw/salt`` coin 0 opened after R (`challenger.live_reason`).
-    Else the refusal (``coin`` or ``salt``, and why).  A session opened for one window's weights and requests salts no
-    other window, and a window salted in one session passes under no other."""
+    signed, a live execution phase's, `opening` is the execution phase's ``pouw/salt`` coin 0 opened after R (`challenger.live_reason`).
+    Else the refusal (``coin`` or ``salt``, and why).  A session opened for one execution phase's weights and requests salts no
+    other execution phase, and an execution phase salted in one session passes under no other."""
     refused, got = _salt_session(key, ledger, pins, main, window, session, verify)
     if refused is not None:
         return refused
@@ -1763,9 +1763,9 @@ def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any,
 
 def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
            verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when `openings` are a live window's round coins, read through the challenger's own session and never a
+    """None when `openings` are a live execution phase's round coins, read through the challenger's own session and never a
     commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
-    `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the window's pinned challenger key
+    `challenger.ledger_head` took) opens and ends closed for `window` (``{root}``) under the execution phase's pinned challenger key
     `key` (its JSON), run from a commit the host's pins log `pins` records and the verifier's copy of main's first-parent
     history `main` holds, from that session's files `session` (``{close, hellos, log, record}``;
     `challenger.trusted_session_of`, its signatures checked with `verify`).  Under the commitment the challenger signed, round r's coin opened once, after

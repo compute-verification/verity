@@ -4,9 +4,9 @@ public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Soundness.Game.Expect
 
 /-!
-# The coin law: a game played on `Claims`' coin sequence
+# The coin distribution: a game played on `Claims`' coin sequence
 
-The live games (`FlockSoundness.Game`) draw a coin of their own type at each `coin` node; `Claims.run` gives the
+The live games (`FlockSoundness.Game`) flip a coin of their own type at each `coin` node; `Claims.run` gives the
 verifier one coin `r_j : Coin` per round, answering the prover's message `a_j`. This file plays a game on the round
 coins and proves that the result has the game's law.
 
@@ -18,9 +18,9 @@ coins and proves that the result has the game's law.
   at a `send` node it is the move, and the round's coin `r_j` stays pending; a `coin` node right after reads the pending
   coin (its projection), any other `coin` node opens a round of its own, whose message the game ignores.
 * `RoundsLe g I s p n`: the interaction ends within `n` rounds, counting the round that carries the decision.
-* `ex_playOn` (**the coin law**): `Ex_r f(playOn … r) = expect f g (toStrat s)` over `r : Fin n → Coin` uniform: each
-  game coin is uniform, independent of the other coins, and drawn after the message it answers.
-* `forkX`, `ex_fork`: the same for two plays sharing their first `j` round coins (`Claims.forkCoins j`), the law of
+* `ex_playOn` (**the coin distribution**): `Ex_r f(playOn … r) = expect f g (toStrat s)` over `r : Fin n → Coin` uniform: each
+  game coin is uniform, independent of the other coins, and sampled after the message it answers.
+* `forkX`, `ex_fork`: the same for two plays sharing their first `j` round coins (`Claims.forkCoins j`), the sampling design of
   `B`'s two runs: one play to round `j`, then two independent continuations.
 -/
 
@@ -246,7 +246,7 @@ theorem playOn_coin_cons {C : Type} [Fintype C] [Nonempty C] {k : C → Game β}
   simp only [playOn]
   rw [coinSeq_cons_zero, coinSeq_cons_succ]
 
-/-! ## The coin law -/
+/-! ## The coin distribution -/
 
 omit [Inhabited Coin] in
 theorem expectP_none (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) :
@@ -254,7 +254,7 @@ theorem expectP_none (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStr
   cases g <;> rfl
 
 omit [Inhabited Coin] in
-/-- A pending coin, averaged, is a coin not yet drawn: the projection is uniform. -/
+/-- A pending coin, averaged, is a coin not yet sampled: the projection is uniform. -/
 theorem ex_expectP_some [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) :
     Ex (fun u : Coin => expectP f g I s (some u)) = expectP f g I s none := by
   cases g with
@@ -265,7 +265,7 @@ theorem ex_expectP_some [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Ifac
     rw [I.1.unif (fun c => expect f (k c) (toStrat _ _ (s c)))]
     rfl
 
-/-- **The coin law**: the game played on uniform round coins has the game's law, `expect` against the decoded
+/-- **The coin distribution**: the game played on uniform round coins has the game's law, `expect` against the decoded
 strategy, whenever it ends within the rounds. -/
 theorem ex_playOn [Nonempty Coin] (f : β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I)
     (p : Option Coin) (n : ℕ), RoundsLe g I s p.isSome n →
@@ -304,7 +304,7 @@ theorem ex_playOn [Nonempty Coin] (f : β → ℝ) : ∀ (g : Game β) (I : Ifac
           I.1.unif (fun c => expect f (k c) (toStrat _ _ (s c)))]
         rfl
 
-/-- The coin law at the root: no round open. -/
+/-- The coin distribution at the root: no round open. -/
 theorem ex_playOn_root [Nonempty Coin] (f : β → ℝ) (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I) (n : ℕ)
     (hR : RoundsLe g I s false n) :
     Ex (fun r : Fin n → Coin => f (playOn g I s none (coinSeq r))) = expect f g (toStrat g I s) :=
@@ -322,7 +322,7 @@ theorem ex_fork_zero [Nonempty Coin] (F : β → β → ℝ) (g : Game β) (I : 
     funext fun r => ex_playOn (F (playOn g I s p (coinSeq r))) g I s p n hR]
   exact ex_playOn (fun b => expectP (F b) g I s p) g I s p n hR
 
-/-- **The fork law**: two plays sharing their first `j` round coins, the rest independent, have the law `forkX`: one
+/-- **The fork law**: two plays sharing their first `j` round coins, the rest independent, have the sampling design `forkX`: one
 play to round `j`, then two independent continuations. -/
 theorem ex_fork [Nonempty Coin] (F : β → β → ℝ) : ∀ (g : Game β) (I : Iface Coin g) (s : RStrat Coin g I)
     (p : Option Coin) (n j : ℕ) (hj : j < n), RoundsLe g I s p.isSome n →

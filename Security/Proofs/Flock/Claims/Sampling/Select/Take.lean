@@ -146,8 +146,8 @@ theorem seqMiss_mono (strata : ℕ → Flock.Draw.Stratum) (m m' : ℕ → Array
     ⟨j, D, hst, hm i List.mem_cons_self D hD,
       seqMiss_mono strata m m' is (fun i' hi' => hm i' (List.mem_cons_of_mem _ hi')) src _ hrest⟩
 
-/-- **`stratifiedWith` on `take`**: a run from `p` that returns a draw `D` runs each stratum's `subset` in turn, each
-stopping where `onWith` stops it, every unit it draws in `D`. -/
+/-- **`stratifiedWith` on `take`**: a run from `p` that returns a sample `D` runs each stratum's `subset` in turn, each
+stopping where `onWith` stops it, every unit it samples in `D`. -/
 theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p')) :
     SeqMiss ((List.range' 0 strata.size).map fun i =>
@@ -208,7 +208,7 @@ theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum
     refine seqMiss_mono (fun i => strata[i]!) _ _ _ (fun i _ Dl hDl x hx => ?_) _ _ hseq
     rw [hD, DrawExec.mem_qsort]; exact hDl x hx
 
-/-- The stages a law's draw over `[0, n)` runs (`Flock.Draw.drawWith`), stage `i` missing as `miss i` says: one for
+/-- The stages a sampling design's sample over `[0, n)` runs (`Flock.Draw.drawWith`), stage `i` missing as `miss i` says: one for
 `subset` and `bernoulli`, one per stratum for `stratified` and `work`. -/
 def lawStages (law : Flock.Draw.Law) (n : ℕ) (miss : ℕ → Array ℕ → Prop) : List Stage :=
   match law with
@@ -225,8 +225,8 @@ def unitOf (law : Flock.Draw.Law) (i x : ℕ) : ℕ :=
   | .work _ strata => (strata.map Flock.Draw.WorkStratum.toStratum)[i]!.unit x
   | _ => x
 
-/-- **`drawUnits` as stages**: a draw from `src` that ends runs `law`'s stages in turn from its first byte, every unit
-each stage draws among the units it returns. -/
+/-- **`drawUnits` as stages**: a sample from `src` that ends runs `law`'s stages in turn from its first byte, every unit
+each stage samples among the units it returns. -/
 theorem drawUnits_seq (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (units : Array ℕ) (read : ℕ)
     (h : Draw.drawUnits law n src = .ok (units, read)) :
     SeqMiss (lawStages law n fun i Dl => ∀ x ∈ Dl, unitOf law i x ∈ units) src 0 := by

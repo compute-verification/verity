@@ -1,7 +1,7 @@
 """A frozen instance set's range as the Flock prover and verifier read it, with its frame-v3 statement commitments.
 
 The instances are B-Ligero's synthetic sets (the recipe the frozen ``bench-instances-bf16-hopper/v1``,
-``bench-instances-fp8-ada/v1`` and ``bench-instances-fp8-hopper/v1`` tiers name; :data:`RELATIONS`), drawn exactly as its
+``bench-instances-fp8-ada/v1`` and ``bench-instances-fp8-hopper/v1`` tiers name; :data:`RELATIONS`), sampled exactly as its
 chain prover drew them, with the model-recorded accumulators. The statement commits them as B-Ligero's ``+blake3``
 configuration did: tree ``a`` over the x rows and ``b`` over the W columns (``blake3-keyed/row/v2`` row leaves), tree ``y``
 over the output words (a word leaf of ``y_public`` of the final accumulator), each under the :func:`binding_digest` domain
@@ -402,7 +402,7 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
 
 
 def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf: str = "blake3", procs: int = 1) -> dict:
-    """VUs ``[lo, hi)`` of the synthetic E4M3 stream at ``K_`` words (``rng([seed, i])``, two draws per VU, as
+    """VUs ``[lo, hi)`` of the synthetic E4M3 stream at ``K_`` words (``rng([seed, i])``, two samples per VU, as
     :func:`_draw`) for an 8-bit relation with no spine input set, chained with its unit model. The manifest names the
     recipe, not a count, so every sub-batch of a batch binds the same one."""
     from concurrent.futures import ProcessPoolExecutor

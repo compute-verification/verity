@@ -41,7 +41,7 @@ server the prover picked:
   `AnsweredOnTime`), each round's program stayed within `(D, Q, L)`. It says nothing of what `τ` answers.
 * `Instantiates`, the instantiation (`pous-ring-instantiation`) in reduction form: on a certified coin
   (`Certified`, which reads the challenger-signed `AnsweredOnTime`: every recorded answer the challenged block of `C*`),
-  the challenger's draw is the ring game's and `τ`'s answers in the ring model are the challenged blocks of `C`. It is
+  the challenger's sample is the ring game's and `τ`'s answers in the ring model are the challenged blocks of `C`. It is
   the step from the deployed device to the ring model, so no Lean theorem discharges it.
 
 Under the two, the extractor's server passes the ring game's session on every certified capacity coin where the account
@@ -75,7 +75,7 @@ set_option exponentiation.threshold 20000
 /-- **What the verifier reads of a period's PoUS audit**, at the joint run's coins: the verifier's list of
 memory-challenger keys and the session id the auditor designated, fixed for the period; the server's commitment and
 salt, its `C*` (`store`), setup's public outputs, the memory challenger's table of row digests and the payload as the
-ring game's bits (`W`), each fixed before the capacity coins are drawn, so a function of the compute and bandwidth audits'
+ring game's bits (`W`), each fixed before the capacity coins are flipped, so a function of the compute and bandwidth audits'
 coins alone; and the memory challenger's signed session and its device record (`MemoryChallenger.Properties.Challengers`), a
 function of all the run's coins. -/
 structure Audits (ΩW ΩQ : Type) where
@@ -196,7 +196,7 @@ noncomputable def answers (τ : Strategy ΩW ΩQ) (o : ΩW × ΩQ)
 
 end Audits
 
-/-- **The memory challenger's draw, as the ring game reads it** (`Passes`'s): the code's sampler reads index `I j` from
+/-- **The memory challenger's sample, as the ring game reads it** (`Passes`'s): the code's sampler reads index `I j` from
 stream `j` at `2^19` blocks, and the code builds the coin tree over those indices under the session id `sid`,
 publishing `v` (`coinView`). -/
 def Drawn (sid : ByteArray) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
@@ -205,7 +205,7 @@ def Drawn (sid : ByteArray) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω 
     coinView sid x.2.1 I = some v
 
 /-- `pous-ring-device` and `pous-ring-speed`, per run: **the device model**, falsifiable by measurement. At every value
-`o` of the other audits' coins, every capacity coin `x` and every draw of the memory challenger (`Drawn`), the
+`o` of the other audits' coins, every capacity coin `x` and every sample of the memory challenger (`Drawn`), the
 strategy `τ` the device runs:
 
 * computes each round's answer within `(D, Q, L)` (at most `D` rounds with a multiplication, `Q` key queries and `L`
@@ -232,7 +232,7 @@ def DeviceModel {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ 
 
 /-- `pous-ring-instantiation`, per run, in reduction form: **in the ring model, the period's strategy answers what its
 certified session recorded.** On every capacity coin where the period is certified (`Certified`, which reads the memory
-challenger's signed `AnsweredOnTime`: every recorded answer is the challenged block of `C*`), the challenger's draw is
+challenger's signed `AnsweredOnTime`: every recorded answer is the challenged block of `C*`), the challenger's sample is
 the ring game's (`Drawn`, the code's sampler and coin tree on the coin's own streams, which says nothing of how they are
 distributed: `Hash.Assumptions.Sha512Prf` carries that, in `PeriodHeldSha512`) and `τ`'s answers in the ring model are
 the challenged blocks of `C`. It carries the challenger's record into the ring model and bounds no strategy's state

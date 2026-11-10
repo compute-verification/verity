@@ -23,7 +23,7 @@ has no amortization across words (the claim `rate-codec-work`).
 
 Everything else (the random oracle at a fresh seed, the certified stream, on-chip state laid out before the seed,
 device memory read only through `ingress`, side sources answering any function of the store and the chip's address, the
-side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample drawn after the output) is
+side link's `L` bits with the stream's `ρ` among them, the `q` queries, the sample sampled after the output) is
 `RateAudit.lean`'s, and a run's world is `Rate.World`, whose `store` answers completions.
 
 `RealizesRatePartial` is `RealizesRate` (`RateAuditJoint.lean`) for a joint run whose bandwidth audit a partial device

@@ -32,7 +32,7 @@ Why it's realistic: `T_j` is token `j`'s forward computation, its activations an
 An updated weight is computed from gradients, optimizer state and the previous weights, and a block that rebuilds it
 reads those; the forward activations of a token carry what the weights did to that token, not the weights. It fails
 wherever `ParameterHardAt` does, and also when the gates a block reads inside the token computations tell it about an
-updated weight that it would otherwise have to read: a `T_j` drawn to include the backward pass's per-token gradients
+updated weight that it would otherwise have to read: a `T_j` sampled to include the backward pass's per-token gradients
 would, since an updated weight is a sum of them. -/
 def ConditionalParameterHardAt (d : RegisteredCircuit) (B : Nci.Covering.MulBlocks d) (s : ℕ) (cw : ℝ) : Prop :=
   ∀ S : Nci.Covering.Subcircuit d.D, S.gates.card ≤ s →

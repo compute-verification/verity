@@ -12,7 +12,7 @@ template and link-window, its members the Program's ranges. A warden_serve run's
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
 ``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
-challenger's coins (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the
+challenger's coins (``--challenger``): its flags refused by name where they can't sample, the group's root bound to the
 warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
 its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
 egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""

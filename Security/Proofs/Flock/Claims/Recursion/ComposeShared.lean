@@ -22,8 +22,8 @@ namespace RecDeploy
 open Flock
 
 /-- **What V*'s parts share** of their recursive statements, as files: the verifier's own inner shape, V*'s shared
-rows, the inner statement's three files, a record of check 5's coins, the inner session's record, the coin server's
-transcript, the circuit registration, and how the inner statement is set up (its id, lookup tables and draw);
+rows, the inner statement's three files, a record of check 5's coins, the inner session's record, the challenger's live-coin part's
+transcript, the circuit registration, and how the inner statement is set up (its id, lookup tables and sample);
 the inner population's link table (`--rec-links`, its root and row count); and the verifier's program of the inner
 statement (`--rec-inner-program`). -/
 structure RecShared where

@@ -14,11 +14,11 @@ rounded for display. `--line-by python` computes it in `line.py` alone, a readin
 
 Group g's coin chal_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
-names it (`audit.AuditRun.close` asks for the coin after the window's last root), and a paced window is drawn at its
+names it (`audit.AuditRun.close` asks for the coin after the window's last root), and a paced window is sampled at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, chal_(g+2)'s request
 names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
 coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
-challenger past s_(g+1). Drawn G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
+challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
 root of draw c's last window, and another window's A_g is the first request that leaves after its last root,
 chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
 Both times are the challenger's monotonic clock in its release log, whose lines its close signs
@@ -288,7 +288,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
     naming the same value (chal_(g+1)'s, or another window's) would.
 
-    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
+    Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
     request names the last root of draw c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.

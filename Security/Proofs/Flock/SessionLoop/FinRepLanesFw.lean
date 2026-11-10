@@ -13,7 +13,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
 out-of-domain value, lane messages and pair's sums) is the workers' clear values plus the request's pads. Here it holds
 outright, reading no table's rows:
 
-* the firewall computes level 0 itself: its values are `l0Clear` at the coins from the round its PIOP ends at, on its
+* the ZK server computes level 0 itself: its values are `l0Clear` at the coins from the round its PIOP ends at, on its
   packed table and its PIOP's basis, plus the request's pads (`Finish.repFwC_l0`); that PIOP ends at `ligP0` and its
   basis is `ligBasis`'s, which reads the claims' points alone (`piopFw_at`, `Rs.sws_congr`);
 * the views' masked values from `zp 64` to `h_ab` are the same `l0Clear` plus the request's pads
@@ -57,8 +57,8 @@ variable (L₀ : LeanRelease Flock.Wit Tp)
 
 set_option maxHeartbeats 4000000 in
 /-- **`FinRepLanes` with no rows**: in the masked scope, with a witness, at a statement the loop serves whose inner
-round 0, level 0 and pads the source draws from the tape (`LoopInnerRound0`, `Level0Src`, `RepSrc`), at table `j`'s
-rep `r`'s run the returned proof's level 0 is the workers' clear values plus the request's pads. The firewall's level 0
+round 0, level 0 and pads the source samples from the tape (`LoopInnerRound0`, `Level0Src`, `RepSrc`), at table `j`'s
+rep `r`'s run the returned proof's level 0 is the workers' clear values plus the request's pads. The ZK server's level 0
 is `l0Clear` at the coins from `ligP0` on its table and `ligBasis` plus the pads (`repFwC_l0`, its PIOP's basis by
 `piopFw_at` and the claims' points, `finRepXs`); from `zp 64` to `h_ab` the views' masked values are the same plus the
 same pads (`swSrcE_l0_views`) and the clear values plus the tape's pads (`swSrcE_masked_pad_any`), and the two pads
@@ -225,7 +225,7 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     unfold FlockComplete.piopRoundsZk
     rw [hxsz]
     omega
-  -- the firewall's level 0
+  -- the ZK server's level 0
   obtain ⟨hO, hMs, hEs⟩ := _root_.Flock.Firewall.Finish.repFwC_l0 (Masked.ligCoin (finCoins x ops)) (refK x)
     (Masked.ligRespE (finCoins x ops)) (fun k => Masked.coinOf_ligRespE (finCoins x ops) k) tb.st tb.sch tb.tPad _ _
     tb.g tb.cm0.toC (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC

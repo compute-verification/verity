@@ -1,5 +1,5 @@
 /-
-The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier draws, its
+The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier samples, its
 digest, and R1–R7 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
@@ -44,9 +44,9 @@ log's record with that digest, whose leaves, words and word bits must be the val
 nothing is registered afresh.
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
-proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most drawn units under the
-law the draw runs on, over the draws that end, give different link points, a law it can't draw on, or one no draw of
-which ends (`link-points`, `linkRefused`): some draw ends, a draw that ends gives each member one count, and one that
+proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most sampled proof blocks under the
+sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
+which ends (`link-points`, `linkRefused`): some sample ends, a sample that ends gives each member one count, and one that
 runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 -/
 module
@@ -127,7 +127,7 @@ structure Verifier where
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
   held : Array String := #[]
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
-  draws; none when it reads no declarations -/
+  samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
   /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
   link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
@@ -327,8 +327,8 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
-/-- `registration.link_refused`: the verifier names members, and the law the draw runs on doesn't derive, no draw under
-it ends, or some member's fewest and most drawn units under it, over the draws that end, give different link points
+/-- `registration.link_refused`: the verifier names members, and the sampling design the sample runs on doesn't derive, no sample under
+it ends, or some member's fewest and most sampled proof blocks under it, over the samples that end, give different link points
 (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&

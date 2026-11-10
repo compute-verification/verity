@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.FinishSwMk
 The switched prover's pre-final view (`Table.swPre`) is the worker's view where its rows hold, and elsewhere the honest
 prover's on the pads moved by Lemma A's amounts (`Table.shift`, `Table.padShift`), which moves each exposed pad by the
 difference between the worker's clear value and the honest one. Either way its masked values are the worker's clear
-values plus the drawn pads, so the readings `FinishSwMk` takes where the rows hold hold everywhere:
+values plus the sampled pads, so the readings `FinishSwMk` takes where the rows hold hold everywhere:
 
 * **`Table.swPre_masked_any`**: the switched pre-final view's masked values are the worker's view's, at any values.
 * `Masked.swCutE_masked_any`, `Masked.swSrcE_masked_any`, **`Masked.swSrcE_masked_pad_any`**: so the switched source's
@@ -19,7 +19,7 @@ values plus the drawn pads, so the readings `FinishSwMk` takes where the rows ho
 @[expose] public section
 
 /-- **The switched pre-final view's masked values are the worker's view's**, whether or not its rows hold: where they
-fail, the honest values on the moved pads add up to the worker's on the drawn ones. -/
+fail, the honest values on the moved pads add up to the worker's on the sampled ones. -/
 theorem FlockSoundness.ZK.Table.swPre_masked_any {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).masked = (T.onVals.view (w, v) ω).masked := by

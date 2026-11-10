@@ -59,7 +59,7 @@ from verity.core.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
 VARIANTS = (SM120, SM120_UNPROMOTED)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm120-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run draws its own)
+#: the check's prover hm96 salt key (a served run samples its own)
 SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm120-gpu-check/salt-key").digest()
 
 

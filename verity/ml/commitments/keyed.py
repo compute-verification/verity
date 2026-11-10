@@ -8,7 +8,7 @@ M_top is the frame-v3-sha512 message whose SHA-512 is the subtree's root in :fun
 is hashed from the IV as any frame-v3-sha512 tree; d takes its root's place and is not a frame-v3 message.  M_top's first block
 holds the subtree's domain id, so distinct domains give a window prefix-free keyed messages.  d hides its subtree only while a
 window keys one d at each position and its positions are injective, and only while ks_w was committed (its hm96 leaf) before
-salt_w was drawn: the committer that keys digests refuses everything else.
+salt_w was sampled: the committer that keys digests refuses everything else.
 """
 from __future__ import annotations
 

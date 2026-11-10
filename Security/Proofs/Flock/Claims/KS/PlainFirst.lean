@@ -4,18 +4,18 @@ public import Proofs.Flock.Claims.KS.PlainEvent
 public import Proofs.Flock.Claims.KS.LiveMix
 
 /-!
-# A simulation of the plain runs, and the record's draw
+# A simulation of the plain runs, and the record's sample
 
 The plain mixture's first bound (`PlainDrawSim`'s `plain_first_of_simD`) reads a simulation of `P`'s deployed runs:
 
-* `PlainSimRun`, `PlainSim`: coins `Φ (u, r')` of `V false` at the tape `u` and the live coins `r'`, with the law of
+* `PlainSimRun`, `PlainSim`: coins `Φ (u, r')` of `V false` at the tape `u` and the live coins `r'`, with the sampling design of
   uniform coins, and a prover `P'` of the live session such that wherever `V false` accepts at `Φ (u, r')`, the live
   outcome of `P'` at the tape `(ω, u)` is the run's (`viewOf`);
 * `plainCoins`, `plainSim_of_run`: where each deployed coin takes a live coin's first entries and the rest from the
-  tape, the law holds, so `PlainSimRun` gives `PlainSim`.
+  tape, the sampling design holds, so `PlainSimRun` gives `PlainSim`.
 
-The record's draw is the statement's only up to key order on accepting runs (`RecordDrawEquiv`, `recordDrawEquiv`),
-and that is all the checks give (`drawEq_ne`), so the chain reads the session set up at the statement's draw.
+The record's sample is the statement's only up to key order on accepting runs (`RecordDrawEquiv`, `recordDrawEquiv`),
+and that is all the checks give (`drawEq_ne`), so the chain reads the session set up at the statement's sample.
 -/
 
 @[expose] public section
@@ -28,8 +28,8 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`P`'s accepting runs carry the statement's draw up to key order**: on every accepting run of `V false` at `x`
-and `ω`, the last message's record has a draw `JsonEquiv` to the statement's, what `checks` compares. -/
+/-- **`P`'s accepting runs carry the statement's sample up to key order**: on every accepting run of `V false` at `x`
+and `ω`, the last message's record has a sample `JsonEquiv` to the statement's, what `checks` compares. -/
 def RecordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Prop :=
   ∀ r : Fin ((V false).k x) → Coin, (Claims.run sha512 P (V false) x ω r).out = .acc →
     ∀ s spec sts link c₁ mids f,
@@ -38,8 +38,8 @@ def RecordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω
             (Claims.coinSeq r)) = .decide s spec sts link c₁ mids f →
         Option.Rel JsonEquiv (Exec.recordDraw f.record) s.read.draw
 
-/-- **Every prover's accepting runs carry the statement's draw up to key order**: an accepting decision passes
-`checks`, whose draw check is `drawEq` (`checks_draw`). -/
+/-- **Every prover's accepting runs carry the statement's sample up to key order**: an accepting decision passes
+`checks`, whose sample check is `drawEq` (`checks_draw`). -/
 theorem recordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : RecordDrawEquiv P x ω := by
   intro r h s spec sts link c₁ mids f hact
   have hacc := run_acc_next sha512 P (V false) x ω r h
@@ -49,7 +49,7 @@ theorem recordDrawEquiv {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω 
   exact Claims.Bridge.Custody.checks_draw ((next_decide_sha512 hact).1 hacc).2
 
 /-- **`drawEq` passes on different terms**: two objects with the same fields in trees of different shapes are
-`JsonEquiv`, so the checks passing does not give the record the statement's draw as the same term. -/
+`JsonEquiv`, so the checks passing does not give the record the statement's sample as the same term. -/
 theorem drawEq_ne : ∃ a b : Json, drawEq (some a) (some b) = true ∧ a ≠ b := by
   refine ⟨.obj ⟨⟨.inner 2 "a" .null .leaf (.inner 1 "b" .null .leaf .leaf)⟩⟩,
     .obj ⟨⟨.inner 2 "b" .null (.inner 1 "a" .null .leaf .leaf) .leaf⟩⟩, (drawEq_iff _ _).2 (.some rfl), fun h => ?_⟩
@@ -69,7 +69,7 @@ def PlainSimRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (m
             (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f →
         liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r' = viewOf 1 mPts spec link c₁ f
 
-/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the law of uniform coins,
+/-- **A prover of the live session at one table simulates `P`**: the coins `Φ (u, r')` have the sampling design of uniform coins,
 and `P'` simulates `P` on them (`PlainSimRun`). -/
 def PlainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ)
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ]

@@ -18,7 +18,7 @@ when every table's Merkle scheme is the registry's, `Zk.verify_eq_verifyWith`):
   oracle only answers a round's digest, so the round accounting is the compiled verifier's under every oracle;
 * the masked replay consumes `m + (kLog − 6)` rounds (`replayWith_moves`), the ring switch `claims + 1`
   (`ringSwitchWith_moves`);
-* Ligerito draws level 0's query coins after `k0 + 8` rounds of its own (`ligeritoWith_query`): the non-ZK
+* Ligerito flips level 0's query coins after `k0 + 8` rounds of its own (`ligeritoWith_query`): the non-ZK
   verifier's `2 + k0 + 4` (the OOD point and its coin, the `k0` lane challenges, level 1's two OOD intros; the
   accounting `Refine.ligerito_refines` proves) and the pair's two `ρ` coins after the last lane challenge;
 * so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `zkQueryRound` of its

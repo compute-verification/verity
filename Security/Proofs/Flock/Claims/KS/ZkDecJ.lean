@@ -8,13 +8,13 @@ public import Proofs.Flock.Claims.KS.PlainWrP
 # The deployed `--zk` decoders at the masked statement
 
 `ZkLiveAccAtJ`'s decoders (`hdec`) at the deployed statement, from `ZkPlanJ`, `ZkPlanHJ` and `ZkDrawJ`: where the
-statement parses in scope and `Deploy.V` sets it up at a draw, the old `--zk` openings and decoder, at public or hidden
-outputs, are right at C-Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at the setup at that
-draw at `wrS`.
+statement parses in scope and `Deploy.V` sets it up at a sample, the old `--zk` openings and decoder, at public or hidden
+outputs, are right at Flock ZK's padded tables (`zkTabs`) on the outcomes `verify --zk` accepts at the setup at that
+sample at `wrS`.
 
-* `acc_draw_of_setup`: wherever some run accepts, the statement carries a draw at the inputs `Deploy.V` reads of it
+* `acc_draw_of_setup`: wherever some run accepts, the statement carries a sample at the inputs `Deploy.V` reads of it
   (`acc_draw`, the checks refusing a session without one).
-* `setupAt_of_setupOf`: `Deploy.V`'s setup of the statement is `verify --zk`'s at its draw (`setupAt`), with no
+* `setupAt_of_setupOf`: `Deploy.V`'s setup of the statement is `verify --zk`'s at its sample (`setupAt`), with no
   `--public-inputs` (`InScope` refuses them, `publicInputs_none_of_inScope`).
 * `tags_of_inScope`: the scope gives `verify --zk`'s inputs untyped tags with retained rounds and `hm96-sha512/v1`
   leaves (`Read.form`).
@@ -37,7 +37,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
+/-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
 theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d := by
@@ -47,7 +47,7 @@ theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.N
 
 end Gen
 
-/-- **A statement some run accepts carries a draw**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
+/-- **A statement some run accepts carries a sample**, at the inputs `Deploy.V` reads of it (`acc_draw`). -/
 theorem acc_draw_of_setup {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts)) :
     ∃ d, ins.read.draw = some d :=
@@ -58,7 +58,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its draw**: `Read.setup` under `--zk`
+/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its sample**: `Read.setup` under `--zk`
 reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
 theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
@@ -74,7 +74,7 @@ theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its draw**: `Read.setup` under `--zk`
+/-- **`Deploy.V`'s setup of a masked statement in scope is `verify --zk`'s at its sample**: `Read.setup` under `--zk`
 reads `zkTags` and `zkCoins` (`zkInputs`), and the scope refuses `--public-inputs`. -/
 theorem setupAt_of_setupOf {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
@@ -120,7 +120,7 @@ theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hset := hset)
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at a masked statement in scope**: where the statement parses
-in scope, `Deploy.V` sets it up at the draw `d` and at least one table, at every layout and link layout at the
+in scope, `Deploy.V` sets it up at the sample `d` and at least one table, at every layout and link layout at the
 session's link points, the openings `opnD` and decoder `decD` are right at `zkTabs` on the outcomes `verify --zk`
 accepts at the setup at `d` at `wrS` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public
 outputs `decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, every

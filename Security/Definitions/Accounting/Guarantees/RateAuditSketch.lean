@@ -207,7 +207,7 @@ that conservation counts (one prover, the reads of every tier of its memory). At
 holds for a prover whose memory may hold any function of the store, which is `RateAudit`'s model: a digest that
 compresses the tile is what the verbatim class (`rate-sketch-verbatim`) is there for. `RateAudit`'s tag pays in that
 model because it hashes the tile itself, so its table is the store. What rules the table out is capacity, not reads:
-it is `|Sig|·N·d` bits (`2^65536·N·512` at `k_s = 16`, `2^κ·N·d` with signs drawn from the oracle at a `κ`-bit seed),
+it is `|Sig|·N·d` bits (`2^65536·N·512` at `k_s = 16`, `2^κ·N·d` with signs sampled from the oracle at a `κ`-bit seed),
 and one cut to `M` bits covers a fraction `M/(|Sig|·N·d)` of the signs. A bound for an arbitrary prover must bound its
 memory, and with memory near the store's size it is a static cell-probe lower bound for random `±1` sketches, which
 this statement neither proves nor refutes.

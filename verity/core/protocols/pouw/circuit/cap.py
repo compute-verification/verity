@@ -100,9 +100,9 @@ bound, all through their committed rows (`PORTS`; the cut is `pc8.unit_cut`'s).
     (the row tally's TN cap-flags rows, its sd row and its cap-sums row).
   - The tally's verdict is `Pc8TileCap`'s: every passing row's words are good, and the inequality holds.  It is the
     tally's public output (``public`` in `PORTS`: the verifier reads it; no row holds it), beside the tile digest, and
-    the verifier accepts a drawn tile only when its tile check passes (the digest is the miner's h0) and the verdict is
+    the verifier accepts a sampled tile only when its tile check passes (the digest is the miner's h0) and the verdict is
     ok.
-  - A drawn tile's closure holds its A rows, its strip, all TM·TN of its word units, its TM row digests and row
+  - A sampled tile's closure holds its A rows, its strip, all TM·TN of its word units, its TM row digests and row
     tallies, its tile and its tally (`plan.tile_layout`): every cap word is proved, never sampled.
   - The cap's rows: A's salt-dead counts (``sd``), each word's ``cap-word`` (C̃ ‖ U) and ``cap-flags`` (flags ‖ their
     count ‖ the later +0 promotions ‖ good) rows, each tile row's ``cap-chunks`` (its chunk digests ‖ zeros) and

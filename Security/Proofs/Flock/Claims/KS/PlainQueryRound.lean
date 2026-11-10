@@ -14,7 +14,7 @@ the plain verifier's own transcript, `verifyRepWith hs` run in `V` with any hash
 * zerocheck consumes `m − 3` rounds (`zerocheckWith_moves`), and lincheck `kLog − 3` on a circuit fold that refuses a
   point of the wrong length (`lincheckWith_moves`; the statement's fold, `Stmt.folded_size`), the ring switch
   `claims + 1` (`ZkQuery.ringSwitchWith_moves`);
-* Ligerito draws level 0's query coins after `k0 + 6` rounds of its own: the OOD point and its coin, the `k0` lane
+* Ligerito flips level 0's query coins after `k0 + 6` rounds of its own: the OOD point and its coin, the `k0` lane
   challenges, and level 1's two OOD intros (`plainLigeritoWith_query`);
 * so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `plainQueryRound` of
   its stream, against the committed `root_B` (`plainQueryRound_verifyRepWith`), and the reader's columns

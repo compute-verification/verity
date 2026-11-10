@@ -93,8 +93,8 @@ theorem card_draws_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
   rw [hfil, Fintype.card_piFinset, h1, h2, ← Finset.prod_mul_distrib]
   exact Finset.prod_le_prod₀ (fun _ _ => Nat.zero_le _) fun j _ => card_draw_le N hN (I j).val
 
-/-- **A union bound over the draw**: if each value `i` is drawn (`d t i`) on at most a `1/|I|` share of `T`, any event
-`F` of the drawn value is at most as likely as under a uniform `i`. -/
+/-- **A union bound over the sample**: if each value `i` is sampled (`d t i`) on at most a `1/|I|` share of `T`, any event
+`F` of the sampled value is at most as likely as under a uniform `i`. -/
 theorem pr_draw_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty A] [Nonempty T] [Nonempty I]
     (d : T → I → Prop) [∀ t i, Decidable (d t i)]
     (hfib : ∀ i, (Finset.univ.filter fun t => d t i).card * Fintype.card I ≤ Fintype.card T)
@@ -171,7 +171,7 @@ def EvAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (W : Bits (schAt N).n) (A : Server
     (ω : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω) (v : Option (ByteArray × ByteArray)) (I : Fin 105 → Fin N) : Prop :=
   ∃ v', v = some v' ∧ AccAt N W A ω I
 
-/-- The streams' draw is at most the uniform indices' (`ε_rs = 0` in the upper bound). -/
+/-- The streams' sample is at most the uniform indices' (`ε_rs = 0` in the upper bound). -/
 theorem pr_passesAt_le (N : ℕ) [NeZero N] {S D Q L : ℕ} (session : ByteArray) (W : Bits (schAt N).n)
     (A : ServerAt N S D Q L) :
     pr (PassesAt N session W A) ≤
@@ -275,8 +275,8 @@ theorem endToEndRingDemo : EndToEndRingDemo := by
 
 /-! ### The honest and nontrivial lemmas at any block count
 
-As `Pous.EndToEnd.SecurityProofs`' at `2^19`. At `N` the draw may reject a word, so the honest lemma is pointwise: the
-honest full-state server passes on every `ω`, coins and streams from which the code's sampler draws its indices. -/
+As `Pous.EndToEnd.SecurityProofs`' at `2^19`. At `N` the sample may reject a word, so the honest lemma is pointwise: the
+honest full-state server passes on every `ω`, coins and streams from which the code's sampler samples its indices. -/
 
 theorem coinViewAt_some (N : ℕ) (hN : 0 < N) (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
     (c : HmCoins) (I : Fin 105 → Fin N) : ∃ v, coinViewAt N session c I = some v := by
@@ -309,7 +309,7 @@ theorem honestRing_answers {B w p : ℕ} [NeZero p] (sc : Scheme (ringRO B w p))
 
 set_option exponentiation.threshold 20000 in
 /-- **`endToEndRingAt` holds at the honest instance**: at every block count `N ≤ 2^64` and 32-byte session id, the
-honest full-state server passes on every `ω`, coins and streams from which the code's sampler draws its indices `I`. -/
+honest full-state server passes on every `ω`, coins and streams from which the code's sampler samples its indices `I`. -/
 theorem endToEndRingAt_honest (N : ℕ) [NeZero N] (hN64 : N ≤ 2 ^ 64) (session : ByteArray) (hs : session.size = 32)
     (W : Bits (schAt N).n) (x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) (I : Fin 105 → Fin N)
     (hI : ∀ j, FlockSoundness.Randomness.uniformOn N (bytesOf (x.2.2 j)) = some (I j).val) :

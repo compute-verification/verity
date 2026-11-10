@@ -13,7 +13,7 @@ Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`
 verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
 `RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
 `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`
-at no link table, `RecVStar.checkLabels` and the draw's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
+at no link table, `RecVStar.checkLabels` and the sample's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
 which `setupO` runs on a V\* statement) makes the same calls in the same order. This module matches them.
 
 * `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
@@ -43,7 +43,7 @@ open FlockDeploy (noIdentifier)
 and the scope check read): the model's reading `i` of part `j`'s staged statement holds, field by field, the values the
 compiled part `j`'s check passes to the same calls: `--zk`, the statement's tags (`tags0`) and the session's
 (`tags`), the part's circuit and staged public file, no lookup table, one table, the part's partition and program, the
-verifier's registered reads, the record's draw, the inner shape, check 5's source, the inner commits and link the
+verifier's registered reads, the record's sample, the inner shape, check 5's source, the inner commits and link the
 compiled component holds (`h`), `--rec-part j`, the bindings, the rows and no link table. -/
 structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags)
     (circuitB pubB : ByteArray) (partition : Lean.Json) (program : ByteArray)
@@ -74,8 +74,8 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
 part `j`'s check calls it on the session's tables `sts`: the inner checks, the inner shape at no link table, the
 registration's and V\*'s list's caps, V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public
-rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the draw's law
-where there is a draw. -/
+rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's law
+where there is a sample. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) (draw : Option Lean.Json)
@@ -120,7 +120,7 @@ theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit → V (For
 
 /-- **The model's recursive setup passes where the compiled part's does.** Suppose the model's reading `i` of part
 `j`'s staged statement holds the compiled part's inputs (`SetupMatch`), the inner shape has no RecSparse phase and the
-session's tags hm96-sha512 rows (as the compiled part's do wherever it has a draw). Suppose the model's Flock setup
+session's tags hm96-sha512 rows (as the compiled part's do wherever it has a sample). Suppose the model's Flock setup
 gives the compiled session `(spec, sts)`, every table passes the registered-reads and identifier checks and the
 registration is full (`BaseSetup`'s conclusion), and the compiled checks block passes on `sts` (`RecChecks`). Then the
 model's recursive setup (`RecIns.setup`) passes with `(spec, sts)`. -/
@@ -267,7 +267,7 @@ def PartRegistered (pr : Option Lean.Json) (registered : Option (Array Registere
 
 /-- **What an accepted compiled part shows of its setup.** Where part `j`'s verdict (`VStar.Recursive.partVerdict`)
 is `.ok ()`, its readers read (the statement's tags, without plain leaves, the part's circuit and staged public file,
-under `FIELD_MAX` bytes, its registered reads and bindings, its record and the record's draw, under hm96-sha512 rows;
+under `FIELD_MAX` bytes, its registered reads and bindings, its record and the record's sample, under hm96-sha512 rows;
 its rows are the inner session's, `h.rows`), Flock's session and the verifier's
 own checks on it pass (`BaseSetup`'s inputs: `checkProgram`, `buildSessionOf`, `checkComplete`, `checkCover`,
 `KnownRead.check`), the checks block passes (`RecChecks`), and so does the scope check. -/

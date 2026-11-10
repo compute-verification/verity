@@ -11,7 +11,7 @@ pads `h_x, h_y` sit at `n_E + 1, n_E + 2` of the pads layout (`padsOf`, `Compose
 from cells at the executable's own indices, and each statement reads its tables' coordinates at the indices its
 sizes give.
 
-* `ExeCell`: one table's cell, each `TapeZk` field the table draws as an array at its indices up to the live tables'
+* `ExeCell`: one table's cell, each `TapeZk` field the table samples as an array at its indices up to the live tables'
   largest sizes (`zMax`, `schMax`): the mask slot's words, the lane paddings by lane (`2^lanes + 4` lanes), the extra
   lanes, each rep's pads `h`, `μ` and their padding, level 0's salts by tree position, the pads trees' and `τ`'s salts,
   and each rep's levels ≥ 1 salts by level and position; besides them, the coordinates the honest prover never reads
@@ -63,7 +63,7 @@ namespace Masked
 
 /-! ## The cell -/
 
-/-- **A table's base draws at the executable's indices**: the mask slot's `2^35` words; the lane paddings by lane
+/-- **A table's base samples at the executable's indices**: the mask slot's `2^35` words; the lane paddings by lane
 (`schMax + 4` lanes of `schMax` coefficients) and the extra lanes; each rep's pads `h` by layout index; each rep's
 `pad_h`, `pad_μ`, and `μ` by layout index; the revealed salts (level 0's, the pads trees', `y_τ`); each rep's levels ≥ 1
 salts by level and position, and the leftover ones. -/
@@ -76,7 +76,7 @@ abbrev ExeBase : Type :=
       ((Fin schMax → ZkView.Salt) × (Fin 2 → Fin _root_.Flock.Zk.Q → ZkView.Salt) × (Fin 2 → ZkView.Salt) ×
         (Fin 2 → (Fin (schMax + 1) × Fin schMax → ZkView.Salt) × (Fin schMax → ZkView.Salt))))
 
-/-- **A table's cell**: its base draws; level 0's salts by tree position, each rep's pads tree's salts by position and
+/-- **A table's cell**: its base samples; level 0's salts by tree position, each rep's pads tree's salts by position and
 `τ`'s salt; the ideal seeds. -/
 abbrev ExeCell : Type :=
   ExeBase × ((Fin (schMax + schMax) → ZkView.Salt) × (Fin 2 → Fin (_root_.Flock.Zk.Q + 2 ^ 64) → ZkView.Salt) ×

@@ -15,8 +15,8 @@ AND's row in creation order, then the outputs in one group from `outStart`.
 
 `laid_recOpen`: whenever the laid-out net's rows hold at the column values `v` (`LaidRows`), if the input columns hold
 the bytes of the row's elements, of `acc`, of the coefficients and of 64-byte siblings (`ColsHold`), and the direction
-columns hold the position's low bits, then the output columns hold the bytes `sound_recOpen` gives: the verifier of
-record's climb of the row's SHA-512 leaf and 64 zero bytes, then the consistency term and the rest of `acc`. It needs no
+columns hold the position's low bits, then the output columns hold the bytes `sound_recOpen` gives: the
+verifier's climb of the row's SHA-512 leaf and 64 zero bytes, then the consistency term and the rest of `acc`. It needs no
 freshness hypothesis: every builder `recOpen` runs adds rows only as `fresh` does (`fresh_recOpen`), so `laid_rows` applies.
 
 `colsHold_words`: columns that hold the bits of 16-bit words, bit `q % 16` of word `q / 16`, hold the bytes of the
@@ -173,7 +173,7 @@ theorem colsHold_outs {st : St} {inBits outBits : Array ℕ} {w : List Lin} {v :
 
 /-! ## The laid-out net -/
 
-/-- **V*'s laid-out opening computes the verifier of record's climb and the opening's consistency term.** For a Merkle
+/-- **V*'s laid-out opening computes the verifier's climb and the opening's consistency term.** For a Merkle
 scheme `ms` whose node is `SHA-512(l ‖ r)`, `H ≤ 32` levels and input ports `p` laid out as `row, aux, acc, coef, dirs`,
 whenever `recOpenLaid`'s rows hold at the column values `v` (`LaidRows`): if the `row` columns hold the bytes of the
 `LANES` elements `r`, the `acc` columns those of two elements `a` and then `rest`, the `coef` columns those of `c`, the

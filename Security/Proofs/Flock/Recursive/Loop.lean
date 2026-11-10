@@ -17,10 +17,10 @@ values `vs`, one after another, each on its own tape.
 
 * `LoopSessions`: the public context `pubOf`, the `m` statements `stmt j` at it and their witnesses `wit j`.
 * `LoopSessions.zkmalAt_prover`: the `m` statements in turn are `ZKmalAt` at the sum of their errors and `m` times their
-  fork factor (`zkmalAt_layout` with no first part), the simulator drawing coins `CB j` for statement `j`, each in
+  fork factor (`zkmalAt_layout` with no first part), the simulator sampling coins `CB j` for statement `j`, each in
   bijection with the statement's simulator's at every public context (`LoopSessions.Sized`, as `Sessions.hS`).
 * `LoopSessions.atWorker`: V*'s statements at one worker's context (`WCtx`), whose public context is the auditor's tape
-  and the firewall's commitments.
+  and the ZK server's commitments.
 * `LoopSessions.simAt_pubStmts`: the simulator reads only V*'s public statements (`LoopSessions.pubStmts`), never a
   witness.
 * `outerSessionsZK_of`: `OuterSessionsZK` at those statements, with `ε_o` the supremum over contexts of their errors and
@@ -64,10 +64,10 @@ structure LoopSessions (Ctx Pub WS : Type) where
   stmt : ℕ → Pub → Claims.Msg
   wit : ℕ → Ctx → WS
 
-/-- **One worker's context**: the auditor's tape, the firewall's commitments, the worker's randomness and the salts. -/
+/-- **One worker's context**: the auditor's tape, the ZK server's commitments, the worker's randomness and the salts. -/
 abbrev WCtx (Ωa Ωp : Type) (nh : ℕ) : Type := Ωa × (Fin nh → ByteArray) × Ωp × (Fin nh → ZkView.Salt)
 
-/-- One worker's context at the firewall's commitments to `msgs` under the salts `y`, the inner coins live
+/-- One worker's context at the ZK server's commitments to `msgs` under the salts `y`, the inner coins live
 (`Flock.Guarantees.firewallCommits`). -/
 abbrev wctxAt {Ωa Ωp : Type} {nh : ℕ} (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (a : Ωa)
     (p : Ωp) (y : Fin nh → ZkView.Salt) : WCtx Ωa Ωp nh :=
@@ -75,7 +75,7 @@ abbrev wctxAt {Ωa Ωp : Type} {nh : ℕ} (msgs : Ωa → Ωp → (i : Fin nh) �
 
 namespace LoopSessions
 
-/-- The simulator's coins for the first `n` statements: one draw of `CB j` for each statement `j < n`, in turn. -/
+/-- The simulator's coins for the first `n` statements: one sample of `CB j` for each statement `j < n`, in turn. -/
 def SimCoins (CB : ℕ → Type) : ℕ → Type
   | 0 => Unit
   | n + 1 => SimCoins CB n × CB n
@@ -93,7 +93,7 @@ def nilSim : Claims.Simulator where
   C _ := Unit
   prog _ _ := Claims.ZKMal.spRun (fun _ => .ret []) 0 []
 
-/-- **`iterSimG`'s coins after `nilSim` are `SimCoins`**: one draw of `CB j` for each session `j < n`, in turn. -/
+/-- **`iterSimG`'s coins after `nilSim` are `SimCoins`**: one sample of `CB j` for each session `j < n`, in turn. -/
 noncomputable def simCoinsEquiv {WA WB : Type} (T₀ : Claims.ZKMal.SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB]
     [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (Q : (n : ℕ) → Claims.ZKMal.Seq WA WB (T₀.at c NB ΩB n))
     (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
@@ -166,7 +166,7 @@ noncomputable def sim (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [
     (fun j _ _ => Claims.ZKMal.progOf Sim (CB j) (V.stmt j pc))
     (fun j x => Claims.ZKMal.goesOn ((V.lay kS pc).start x j)) V.m
 
-/-- The statements' simulator draws `SimCoins CB m` at every public context. -/
+/-- The statements' simulator samples `SimCoins CB m` at every public context. -/
 noncomputable def coinsE (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (kS : Claims.Msg → ℕ) (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
     (pc : Pub) : SimCoins CB V.m ≃ (V.sim NB ΩB kS Sim CB pc).C [] :=
@@ -199,7 +199,7 @@ noncomputable def err {NB ΩB Θ : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB
       []).Pr H)
 
 /-- Obligation (V*'s statements fix each one's simulator randomness, as `Sessions.hS`): statement `j`'s simulator
-draws from as many values as `CB j` has, at every public context. -/
+samples from as many values as `CB j` has, at every public context. -/
 def Sized (Sim : Claims.Simulator) (CB : ℕ → Type) : Prop :=
   ∀ j < V.m, ∀ pc, Nonempty (CB j ≃ Sim.C (V.stmt j pc))
 
@@ -265,7 +265,7 @@ end
 
 /-- Obligation (the simulator's public context is the honest one's, as `SessionsPublic`): at every honest witness,
 registration, tape, inner randomness and salts, the statements' public context at the honest context is `pubS` of the
-owed outputs, the registration's view (`regLeaves`), the tape and the firewall's commitments. -/
+owed outputs, the registration's view (`regLeaves`), the tape and the ZK server's commitments. -/
 def Public {Ow Prog Wit Rv Ωa Ωp Pub WS : Type} {nr nh : ℕ} (V : LoopSessions (HCtx Prog Wit Ωa Ωp nr nh) Pub WS)
     (rows : Prog → Fin nr → ByteArray) (pub : (Fin nr → ByteArray) → Rv) (honest : Ow → Prog → Wit → Prop)
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
@@ -280,7 +280,7 @@ the worker's values satisfy its circuit. -/
 def Honest {Ctx Pub WS Ω : Type} (V : LoopSessions Ctx Pub WS) (R : Claims.Rel WS) (ctx : Ω → Ctx) : Prop :=
   ∀ u, ∀ j < V.m, R (V.stmt j (V.pubOf (ctx u))) (V.wit j (ctx u))
 
-/-- **V*'s statements at one worker**: the public context is the auditor's tape and the firewall's commitments, read
+/-- **V*'s statements at one worker**: the public context is the auditor's tape and the ZK server's commitments, read
 from the worker's context, with `m` statements `stmt j` at it and their witnesses `wit j`. -/
 def atWorker {Ωa Ωp WS : Type} {nh : ℕ} (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg)
     (wit : ℕ → WCtx Ωa Ωp nh → WS) : LoopSessions (WCtx Ωa Ωp nh) (Ωa × (Fin nh → ByteArray)) WS :=
@@ -464,7 +464,7 @@ theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ
 
 /-- **`RecursiveZK`'s `_hOuter` at V*'s statements run by the session loop** (`OuterViewZK`), at one worker whose
 messages `msgs` are fixed before the first commitment (the committed-coin case): the view is V*'s statements at the tape
-and the firewall's commitments (`LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers'
+and the ZK server's commitments (`LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers'
 values `vs`, against `V*` at its tape `θ` of the tape and the commitments; the simulator is their public statements'
 (`LoopSessions.pubStmts`), which reads no witness; and `ε_o` is the statements' error at
 `Flock.zk_deployZk_sw_stops`'s bound (`loop_zkmalR`). It takes `SessionLoopZKDeployed`'s premises on the deployed

@@ -5,35 +5,35 @@ check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
-  (`Registration.check`) against the challenger's copies under the law the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`Draw.countVaries`: `shapes`), a
+  (`Registration.check`) against the challenger's copies under the sampling design the rule names over that population
+  (`Select.Rule.lawOver`, whatever law the copies carry), a sampling design whose sampled count varies (`Draw.countVaries`: `shapes`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 <<<<<<< ours
-* `select`: a closure map, refused before any coin is read (`closure`: a work draw widened by one is outside the
-  sampled audit's soundness statement); the draw of record on the bytes of the challenger's coins (`Select.select`,
-  under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a draw that
+* `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
+  sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
+  under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
   read any byte carries evidence (`coins`) that the bytes are exactly the coins the session the ledger opens for the
   registration's window (the verifier's `windowRoot`) released after the registration's digest, every one read and each
   opening checked against the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none
-  (`coinsHold`, code `coins`), missing evidence or no window refused; then the draw is held to the registration and the
+  (`coinsHold`, code `coins`), missing evidence or no window refused; then the sample is held to the registration and the
   expanded law (`Draw.checkDraw`);
 ||||||| base
-* `select`: the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
-  population, `Select.resolve`); the verifier has no coins of its own, so a draw that read any byte carries evidence
+* `select`: the sample of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
+  population, `Select.resolve`); the verifier has no coins of its own, so a sample that read any byte carries evidence
   (`coins`) that the bytes are exactly the coins the session the ledger opens for the registration's window (the
   verifier's `windowRoot`) released after the registration's digest, every one read and each opening checked against
   the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none (`coinsHold`, code
-  `coins`), missing evidence or no window refused; then the draw is held to the registration and the expanded law
+  `coins`), missing evidence or no window refused; then the sample is held to the registration and the expanded law
   (`Draw.checkDraw`);
 =======
-* `select`: a closure map, refused before any coin is read (`closure`: a work draw widened by one is outside the
-  sampled audit's soundness statement); the draw of record on the bytes of the challenger's coins (`Select.select`,
-  under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a draw that
+* `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
+  sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
+  under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
   read any byte carries evidence (`coins`) that the bytes are exactly the coins the session the ledger opens for the
   registration's window (the verifier's `windowRoot`) released after the registration's digest, every one read and each
   opening checked against the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none
-  (`coinsHold`, code `coins`), missing evidence or no window refused; then the draw is held to the registration and the
+  (`coinsHold`, code `coins`), missing evidence or no window refused; then the sample is held to the registration and the
   expanded law (`Draw.checkDraw`);
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
@@ -46,8 +46,8 @@ check the stream ran on it, in the stream's order.
   stage's do (`coins`);
 >>>>>>> theirs
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
-* `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier of record, and the
-  audit record (`Record.record`) over the draw's proved units, and under a two-stage rule the interior registration's
+* `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
+  audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample; the symbol accepts when every audit record does.
 
 A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
@@ -131,7 +131,7 @@ def receipt (record : Json) (challenger received : String) : V Json := do
   return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
     ("verifier", Json.str challenger), ("received", Json.str received)]
 
-/-- The draw's coins are the challenger's: a draw that read any byte carries evidence that holds of the bytes it read
+/-- The sample's coins are the challenger's: a sample that read any byte carries evidence that holds of the bytes it read
 (`Challenger.coinsReason`, after the registration's digest, for the window whose open root `window` the verifier holds),
 so missing evidence, or a verifier that holds no window, is a refusal and never a skip; one that read none (`All`)
 carries none (`null`). -/

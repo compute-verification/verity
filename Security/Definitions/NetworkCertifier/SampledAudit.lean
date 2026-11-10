@@ -10,9 +10,9 @@ public import Mathlib.Order.Interval.Finset.Nat
 
 Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
-units and N2's head checks are classes drawn `all`, and the internal step units are sampled. This module says what an
+units and N2's head checks are classes sampled `all`, and the internal step units are sampled. This module says what an
 accepted audit then establishes about the egress, in the network certifier's terms (`EgressPrediction`, `Accepted`), on
-sampling's own vocabulary: its statement, partition, design, faulty set and `M_δ`.
+sampling's own vocabulary: its statement, partition, design, incorrect set and `M_δ`.
 
 **The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows
 (per slot, a presence gate and the frame's bit gates) and its ingress (input gates, in bit order). It fits the program
@@ -22,15 +22,15 @@ whose layout doesn't fit, as it refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
 at step `t`'s egress gates. The advice is the inputs other than the ingress, plus values held at a set of gates
-(`valOver`). A faulty proof block's committed values need not be what its gates compute, so they enter as advice.
+(`valOver`). An incorrect proof block's committed values need not be what its gates compute, so they enter as advice.
 
 **The relation** (`RAcc`) has three parts:
 
-* the sampling relation: the faulty set is in `M_δ`;
-* the faulty set holds no proof block of a class sampled `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's
+* the sampling relation: the incorrect set is in `M_δ`;
+* the incorrect set holds no proof block of a class sampled `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's
   `P_a` factor is `0` on any set that meets it), so the transfer-gate proof blocks and head checks are exact, an error
   of `0`;
-* some advice, holding values only at the faulty proof blocks' committed gates, makes `Accepted` by the circuit's
+* some advice, holding values only at the incorrect proof blocks' committed gates, makes `Accepted` by the circuit's
   Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
   complete (`Covered`).
 
@@ -120,11 +120,11 @@ network check reads. -/
 def Covered {L K S : ℕ} (k : ℕ) (o : List (Obs L K S)) : Prop :=
   ∀ t (_ : t < k) (h : t < o.length), ∀ κ, o[t].status κ = Status.complete
 
-/-- Gate `g` is a committed gate of a faulty unit: it is on the boundary of the proof unit at a slot of `F`. -/
+/-- Gate `g` is a committed gate of an incorrect proof block: it is on the boundary of the proof block at a slot of `F`. -/
 def FaultyGate (C : Prog) (P : Partition) (F : Finset ℕ) (g : ℕ) : Prop :=
   ∃ v ∈ F, ∃ u, P.blocks[v]? = some u ∧ g ∈ u ∧ C.Boundary u g = true
 
-/-- The slots of the classes the rules draw `all`, from slot `o`, as `classesPa` walks the classes. -/
+/-- The slots of the classes the rules sample `all`, from slot `o`, as `classesPa` walks the classes. -/
 def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → Finset ℕ
   | r :: rs, c :: cs, o =>
     (match r with
@@ -132,13 +132,13 @@ def allSlotsFrom : List OneStage → List (List (List (List ℕ))) → ℕ → F
       | _ => ∅) ∪ allSlotsFrom rs cs (o + c.flatten.length)
   | _, _, _ => ∅
 
-/-- **The slots drawn `all`**: the proof units of the classes whose rule draws every member. -/
+/-- **The slots sampled `all`**: the proof blocks of the classes whose rule samples every member. -/
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and:
-the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot sampled `all`; and the
+the sampling relation holds (`RelS`: the incorrect set is in `M_δ`); the incorrect set holds no slot sampled `all`; and the
 advice `(traceVal C ref, free)`, its inputs the trace's committed values and `free` holding values exactly at the
-faulty proof blocks' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every
+incorrect proof blocks' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every
 observation sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
 are pinned to the trace, so the registered ones are what the registration commits. -/
 def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)

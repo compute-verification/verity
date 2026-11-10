@@ -40,8 +40,8 @@ theorem mapM_array_ok_mem {α β : Type} (f : α → V β) (xs : Array α) (hf :
   obtain ⟨ys, h⟩ := mapM_list_ok_mem f xs.toList fun a ha => hf a (Array.mem_toList_iff.1 ha)
   exact ⟨ys.toArray, by rw [h]; rfl⟩
 
-/-- **What the masked record needs of the statement** (`StmtOkZk`), at a good case: a non-empty `Σ`, a printable draw
-that decodes to the statement's instances, the statement's draw the one it was set up at, and a `hello` that parses to
+/-- **What the masked record needs of the statement** (`StmtOkZk`), at a good case: a non-empty `Σ`, a printable sample
+that decodes to the statement's instances, the statement's sample the one it was set up at, and a `hello` that parses to
 an object with a `coins` object and prints. -/
 def StmtAt (c : Case H rel) : Prop :=
   0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧

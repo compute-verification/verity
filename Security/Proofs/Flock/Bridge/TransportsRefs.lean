@@ -306,7 +306,7 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Discharge.Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
-/-- **The game's value binding at a C-Flock session, with or without shared rows** (`TransportsLiveCR`'s `vb`). -/
+/-- **The game's value binding at a Flock session, with or without shared rows** (`TransportsLiveCR`'s `vb`). -/
 noncomputable abbrev vbS := (rsZHJS (Reg := Reg) dj y₀ ht hc hscope hU hpub).bindingZ
   (rsZHJS_computes dj y₀ ht hc hscope hU hpub)
 
@@ -390,7 +390,7 @@ noncomputable def rowsOfL (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (L :
     ⟨r.2.1.val, L.ref r.2.1.val r.1.val, Discharge.Layout.portRowW c r.2.1, r.2.2.val⟩
 
 /-- **A shaped registered opening opens the deployed commitment at the public file's leaf map** (`transports_shaped`
-with or without shared rows): at a file whose ports are rows the verifier of record reads (`RowsOk`), each row in its
+with or without shared rows): at a file whose ports are rows the verifier reads (`RowsOk`), each row in its
 port's format, at roots no two ports share and refs below their ports' counts. -/
 theorem transports_shapedS (R : Reg) (hrows : RowsOk c)
     (hfirst : ∀ q q' : ℕ, q' < q → q < c.ports.size →

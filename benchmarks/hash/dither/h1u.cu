@@ -59,7 +59,7 @@
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
 //   kh_seeds_at(data, idx, pos, U, seeds, stream)   kh_seeds of U units anywhere: unit u's at position pos[u] from
 //              data's record idx[u] (kh_seeds' data, 30 words a record)
-//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
+//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L sampled leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
 //              kh_units_multi's receipts under J10-R's call-scale noise (the verifier's form; at the end of this file), with
@@ -2768,7 +2768,7 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
 }
 
 // J10-R (J10R's Definition, `h1tile.j10r_reference`, in the verifier's form, whose credit derives a unit's call and
-// blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
+// blocks at the execution phase's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
 // scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
 // columns 32 cj .. of it.
 // cseed: the call's seed as 8 big-endian words (16 read as h1s_noise reads a unit's). Each unit keeps its own fold keys
@@ -2803,7 +2803,7 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
 
-// Option A's prover side (partials.py): drawn leaves' lane partials after the sample. L units on gathered operands, unit u
+// Option A's prover side (partials.py): sampled leaves' lane partials after the sample. L units on gathered operands, unit u
 // A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
 // seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
 // leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes

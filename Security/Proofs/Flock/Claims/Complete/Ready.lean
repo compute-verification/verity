@@ -18,7 +18,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Honest
   the mask slot's weights at its claim points are rank-deficient), counted `4·m` times (`εZk`).
 * **`δc H x = 1` exactly where `ready H x` fails**, which is on the statements that:
   * set up no plain session (`setupOf false x = none`), which the verifier refuses at every run;
-  * set up a session that draws no unit: `checks` ends in `drawLaw zk tags false none`, which refuses;
+  * set up a session that samples no unit: `checks` ends in `drawLaw zk tags false none`, which refuses;
   * are `2^64` bytes or more: the last message (`Final.encode`) writes the statement's length in a 64-bit word;
   * have a table whose regions do not fit (`RegionsFit`: some region's bytes at some block are not its free bits): the
     extra claims refuse (`Stmt.regionValue`), the honest prover's as the verifier's, and the relation, on the circuit's
@@ -78,7 +78,7 @@ def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : Sessio
       record.toUTF8.size < 2 ^ 64
 
 open Classical in
-/-- **The statements the deployed verifier can accept** against `H`: it sets up the session, the session draws a unit,
+/-- **The statements the deployed verifier can accept** against `H`: it sets up the session, the session samples a unit,
 the statement is under `2^64` bytes, each table's regions fit, its setup against `H` is the one at SHA-512, and the
 honest record fits. -/
 noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=
@@ -104,7 +104,7 @@ theorem ready_sha512 (x : Claims.Msg) :
 /-- **Flock's `δc` at the plain verifier** against `H`: `ε` where the verifier can accept, else `1`. -/
 noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then ε x else 1
 
-/-- **A drawn session's `δc` at SHA-512 is below 1**: where the statement sets up a session that draws, is under `2^64`
+/-- **A sampled session's `δc` at SHA-512 is below 1**: where the statement sets up a session that samples, is under `2^64`
 bytes, has regions and an honest record that fit, and has fewer than `2^128` outer coins, `ready` holds
 (`ready_sha512`), so `δc` is `ε`. -/
 theorem δc_sha512_lt_one {x : Claims.Msg} {s spec sts} (hs : setupOf false x = some (s, spec, sts))
@@ -233,7 +233,7 @@ def RecordFitsAt (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (spec : Sessio
 
 open Classical in
 /-- **The statements the masked verifier can accept** against `H`, at any number of tables: `readyZk`'s but its one
-table, at the honest masked prover on each table's share. The session draws a unit, the statement is under `2^64`
+table, at the honest masked prover on each table's share. The session samples a unit, the statement is under `2^64`
 bytes, every table's regions fit, its setup against `H` is the one at SHA-512, its `Hello` names the keyed coin tree,
 and the honest record fits. -/
 noncomputable def ready (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : Bool :=

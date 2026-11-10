@@ -25,7 +25,7 @@ open Accounting
 variable {G N b h s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
   {I : Type} [DecidableEq I] {Ω : I → Type} {r : PeriodRun d α C Ω}
 
-/-- The joint run a period is at the coins `ξ`, with PoUB's coordinate drawn as the bandwidth audit's coins. -/
+/-- The joint run a period is at the coins `ξ`, with PoUB's coordinate sampled as the bandwidth audit's coins. -/
 def bandwidthRun (real : RealizesBandwidthOfAuditPerRunPeriod G (N := N) (b := b) (h := h) (s := s) r)
     (ξ : (i : I) → Ω i) : Run d α Unit (BandwidthCoins N b h s) Unit where
   acct := r.acct

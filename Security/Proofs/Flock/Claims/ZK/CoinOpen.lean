@@ -8,7 +8,7 @@ public import Flock.Firewall.Contract
 /-!
 # The Lean coin check is the deployed coin layer's (`Flock.Firewall.Coins`)
 
-`flock-firewall coins` (`Flock.Firewall.Coins.cmd`) is the check every coin a firewalled masked prover hands on has passed:
+`flock-firewall coins` (`Flock.Firewall.Coins.cmd`) is the check every coin a masked prover behind the ZK server hands on has passed:
 `coin_tree::Checked` asks it at `Hello`, at `Hello`'s answer and at each opening, and its verdict is the transport's. Its
 verdict over a session is `Release.start` at the answer, then `Release.openAll` over the openings in order. At SHA-512
 (`shaH`, the hash `Coins.hk` takes under the nonce prefix) that verdict is the model's: the keyed coin-tree walk of

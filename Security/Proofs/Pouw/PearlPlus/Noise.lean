@@ -22,7 +22,7 @@ public import Proofs.Properties.Evaluate
 # Pearl+'s bridge, part (b), the noise: the check's -h3 noise is `NoiseSha512`'s
 
 The check hashes with the compiled SHA-512 every tree reads (`Flock.Sha512.hash`) and keys a row's seed by its
-`sha512/row-seg/v1` digest (`Flock.HmRow.segDigest`). The deployed semantics (`sha512Sem`) draws the same lines through the
+`sha512/row-seg/v1` digest (`Flock.HmRow.segDigest`). The deployed semantics (`sha512Sem`) samples the same lines through the
 spec's SHA-512 (`Pouw.PearlC.Sha512.digest`) and row digest (`NoiseSha512.rowDigest`). Each statement here says the
 check's value is the spec's on the same bytes, and where the check returns a value, the spec's line or seed is it.
 -/

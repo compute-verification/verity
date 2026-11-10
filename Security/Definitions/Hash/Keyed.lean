@@ -24,8 +24,8 @@ message below the top from the initial value and returns the top message unhashe
 messages it hashed: those below the top, bottom first, then the keyed message. `H` of the top message is the subtree's
 unkeyed root, which the committer never computes.
 
-The window's key is committed before its salt is drawn, as the hm96 leaf over `ks` under 192 OS salt bytes
-(`Hm96.leaf` at `x = ks`), the window's key leaf, which a drawn unit's proof opens `ks` against.
+The window's key is committed before its salt is sampled, as the hm96 leaf over `ks` under 192 OS salt bytes
+(`Hm96.leaf` at `x = ks`), the window's key leaf, which a sampled proof block's proof opens `ks` against.
 -/
 
 @[expose] public section

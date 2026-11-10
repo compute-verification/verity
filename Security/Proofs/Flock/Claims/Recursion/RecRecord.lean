@@ -4,7 +4,7 @@ public import Proofs.Flock.Claims.Recursion.VStarCross
 public import Flock.RecRecord
 
 /-!
-# The coin server's record reads back
+# The challenger's live-coin part's record reads back
 
 `Flock.RecRecord.readFull`, the record format's own total reader, reads back what `recordFullW` writes
 (`readFull_recordFullW`): the rounds, the record's kind and tops' format, the prover's Hello (`readHello_helloW`) and
@@ -12,13 +12,13 @@ the link's level-0 tops and points (`readObj_objW`), piece by piece: literals, h
 numbers, lists and objects at their indentation and coins. No JSON library is involved, so no property of one is
 assumed.
 
-At the deployment's model (`recTr`, `recRead`) the coin server's transcript of the inner rounds is that record, as
-`rec_live`'s coin server writes it (`recOf`): round 0's message, the link, as its table's level-0 top (one node a
+At the deployment's model (`recTr`, `recRead`) the challenger's live-coin part's transcript of the inner rounds is that record, as
+`rec_live`'s live-coin part writes it (`recOf`): round 0's message, the link, as its table's level-0 top (one node a
 128-byte commit string, `nodesOf`) and its coin's values as the link points; each later round before the last as a
 recorded round, its message's first commit strings as its tops (as many a level as `aux` says) and the rest, where
-there is any, as its one `c_k`, with its coin's values; and no last round, whose openings the coin server never sees.
+there is any, as its one `c_k`, with its coin's values; and no last round, whose openings the challenger's live-coin part never sees.
 Everything else (stream, index, level-0 count, kind, Hello, the record past the link points) is whatever `aux`, `hd`
-and `rest` say. `recRead` reads the transcript back to each round's message and drawn values before the last round,
+and `rest` say. `recRead` reads the transcript back to each round's message and sampled values before the last round,
 at every accepted run (`readsBack_recTr`, `ReadsBackB`). The difftest (`verity/ml/flock/tests/test_lean_rec_record.py`)
 holds the model to the honest records: `recordFullW` writes `rec_live.record_bytes`' bytes up to the link points, and
 the rounds `Record.msgs` shows are the link's and the recorded rounds', one fewer than the inner verifier's, each the
@@ -323,7 +323,7 @@ theorem readFull_recordFullW (x : Record) (rest : List UInt8) : readFull (record
   rfl
 
 
-/-! ## The model of the coin server's record -/
+/-! ## The model of the challenger's live-coin part's record -/
 
 /-- **A message's commit strings**: its 128-byte pieces in order, the last shorter where its length is no multiple
 of 128. -/
@@ -409,7 +409,7 @@ theorem msg_roundD (cv : β → Nat → List F128) (a : Round) (n : Nat) (mo : L
 theorem coins_roundD (cv : β → Nat → List F128) (a : Round) (n : Nat) (mo : List UInt8 × β) :
     (roundD cv a n mo).coins = cv mo.2 n := rfl
 
-/-- **The model of the coin server's record of the message rounds `ms`** (`rec_live`'s `commit`, `round` and
+/-- **The model of the challenger's live-coin part's record of the message rounds `ms`** (`rec_live`'s `commit`, `round` and
 `record`), each answered by `o` whose coin drew `cv o n` at its count `nOf i`: round 0's message as the link's one
 table's level-0 top (that table Hello's first) and its coin as the link points; each later round before the last as
 a recorded round (`roundD`), whose other fields are `aux`'s; nothing of the last round; and the record's kind, tops'
@@ -491,8 +491,8 @@ noncomputable def outCoin : Out → Coin
 /-- **The values a round's answer drew**: its coin's first `n`. -/
 noncomputable def coinVals (o : Out) (n : ℕ) : List Flock.F128 := ((outCoin o).vals n).toList
 
-/-- **The coin server's transcript as its record**: at a compiled statement `x`, `rec_live`'s record of the inner
-rounds as `recOf` models it, round `i` drawing `nOf x i` values, each recorded round's other fields `aux x j`, the
+/-- **The challenger's live-coin part's transcript as its record**: at a compiled statement `x`, `rec_live`'s record of the inner
+rounds as `recOf` models it, round `i` sampling `nOf x i` values, each recorded round's other fields `aux x j`, the
 record's kind, tops' format and Hello `hd x`'s, and the record past its link points `rest x ms`. -/
 noncomputable def recTr (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (x : Msg)
@@ -503,7 +503,7 @@ noncomputable def recTr (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg
 def recRead : TrReader := fun _ t =>
   (Flock.RecRecord.readFull t.data.toList).map fun r => r.msgs.map fun mc => (mc.1, mc.2.toArray)
 
-/-- **The record reads back at every accepted run, before the last round**: wherever the coin server's transcript is
+/-- **The record reads back at every accepted run, before the last round**: wherever the challenger's live-coin part's transcript is
 its record (`recTr`, whatever `aux`, `nOf`, `hd` and `rest`), `recRead` reads it back to the run's inner messages
 before the last, and every round it shows with the values its coin drew (`run_inner`: each inner round is answered
 by its coin's bytes). -/

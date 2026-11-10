@@ -208,7 +208,7 @@ theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Pu
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
 /-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes
-with the window's salt, is accepted, publishing the rule's items and the service's draw. -/
+with the window's salt, is accepted, publishing the rule's items and the service's sample. -/
 theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
     (draw : Flock.Draw.UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) (hw : SaltKept p c e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=

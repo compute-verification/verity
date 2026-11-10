@@ -16,31 +16,31 @@ sessions.
   once.
 * **Served proof-block types** (`--units`): instead of A6's coordinates, each of `benchmarks/served_units/stage.py`'s types
   (GLM-5.3's at TP8, synthetic values), staged by that script with no Program: `--sizes` takes counts or `full` (the most
-  instances under the prover's 2^35 witness bits, from a probe staging's k_log) and `half`. Their draws are uniform
+  instances under the prover's 2^35 witness bits, from a probe staging's k_log) and `half`. Their samples are uniform
   subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the newest session of each
   point and arm against the type's own partition and no Program, which it refuses once every other check has passed.
-* **Draws.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
+* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
   (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
-  design's path: the firewall's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
+  design's path: the ZK server's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
-  so their difference is the ZK server's. Arm `dev` leaves both unset: the device builds the witness, which the firewall
+  so their difference is the ZK server's. Arm `dev` leaves both unset: the device builds the witness, which the ZK server
   can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness).
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
   `fixed + marginal c` over its sizes, and a dot product's proof overhead: its GPU-seconds a proof block over the
   GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware.rate`).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
-  fixed seconds and a drawn block's, the deployed sample's price; `fw` less `nofw` at the same draws is the send
+  fixed seconds and a sampled block's, the deployed sample's price; `fw` less `nofw` at the same samples is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
 * **Verification.** Lean `verify --zk --partition --program` on each cold session of arm `fw` and the first timed session
   of each warm process, one at a time.
 * **Fit.** Weighted least squares in relative error, with standard errors from the residuals: per K, the cold process
   `a + a_c c + a_k k` (GPU-s), the in-process session `g + g_c c + g_k k`, the process's setup (its wall less its session),
   staging `s + s_c c` and verification `v + v_c c + v_k k` (CPU-s); and across K, `costfit`'s features (one, ands,
-  ands*staged, ands*drawn). `observations.json` holds `costfit.Observation`s: prove is a cold process's wall, verify the
+  ands*staged, ands*sampled). `observations.json` holds `costfit.Observation`s: prove is a cold process's wall, verify the
   single-threaded verifier's CPU time (its wall stretches on a loaded node).
 * **CPU** (`--cpu`, `zk_cost_cpu.sh`): the same sessions by `flock-circuit prove --zk` on the node's CPUs, as the CPU nodes
   prove a block's sample. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
@@ -109,7 +109,7 @@ def free_port() -> int:
 
 class Peak:
     """The peak of the summed RSS of some processes and all their descendants, sampled every `every` seconds in a thread:
-    a firewalled session's prover, its live verifier (`serve`) and the ZK server's Lean child peak together, and their sum is
+    a ZK server session's prover, its live verifier (`serve`) and the ZK server's Lean child peak together, and their sum is
     what a node must hold for the session (ru_maxrss gives only the largest one process)."""
 
     def __init__(self, every: float = 0.5) -> None:
@@ -201,7 +201,7 @@ def stage_served(spec: str, n: int, d: Path) -> dict:
 
 
 def stage_units(a, out: Path) -> list[dict]:
-    """Each ``--units`` type at each ``--sizes`` entry (a count, ``full`` or ``half``), and its draws' files."""
+    """Each ``--units`` type at each ``--sizes`` entry (a count, ``full`` or ``half``), and its samples' files."""
     plan = []
     for spec in a.units.split():
         tag = spec.lower().replace(":", "-").replace(",", "-").replace("=", "")
@@ -633,8 +633,8 @@ def overhead(a) -> int:
                 if arm_rec["marginal_s"]:
                     arm_rec["overhead_marginal"] = arm_rec["marginal_s"] / native
             t["arms"][arm] = arm_rec
-        # per statement and arm, its sessions fitted over the drawn blocks k (k = c among them): the statement's fixed
-        # seconds and a drawn block's
+        # per statement and arm, its sessions fitted over the sampled blocks k (k = c among them): the statement's fixed
+        # seconds and a sampled block's
         for c in st:
             fits = {}
             for arm in ("dev", "nofw", "fw"):

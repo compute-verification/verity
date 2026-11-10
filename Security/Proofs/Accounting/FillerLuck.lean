@@ -11,7 +11,7 @@ Cauchy–Schwarz and Parseval: `(2p − 1)² ≤ 2^R/2^K`), read at every defici
 parity by splitting the column's noise into its parity and a uniform rest (`exists_parity_equiv`); a word ring's
 equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each setting of the other rows and columns
 (`Equiv.piSplitAt`). The windows are inductions over the rounds; `FillerBlocksDeficit` is `budget_tail` at `Λ = 1`.
-A pinned receipt's draw passes with probability at most one less its wrong share at every setting of the live coins
+A pinned receipt's sample passes with probability at most one less its wrong share at every setting of the live coins
 (`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
 -/
 
@@ -271,7 +271,7 @@ theorem mul_exp_le (v : ℝ) : (1 - v) * Real.exp v ≤ 1 := by
   have he : Real.exp (-v) * Real.exp v = 1 := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
   nlinarith [Real.exp_pos v]
 
-/-- **One draw's budget**: an event of probability at most `1 − v` weighted by `e^v` sums to at most `|Ω|`. -/
+/-- **One sample's budget**: an event of probability at most `1 − v` weighted by `e^v` sums to at most `|Ω|`. -/
 theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : prob q ≤ 1 - v) :
     (∑ a, (by classical exact if q a then Real.exp v else 0)) ≤ (Fintype.card Ω : ℝ) := by
   classical
@@ -394,7 +394,7 @@ theorem prob_le_one_sub_not {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q 
     rw [div_le_iff₀ hC, sub_mul, one_mul, div_mul_cancel₀ _ hC.ne']
     convert key
 
-/-- **One pinned draw's budget**: a uniform tile's receipt right, weighted by `e^v` with `v` the wrong share at the live
+/-- **One pinned sample's budget**: a uniform tile's receipt right, weighted by `e^v` with `v` the wrong share at the live
 coins, sums to at most `|C × τ|`. -/
 theorem sum_pinned_le {C τ V : Type} [Fintype C] [Fintype τ] (G R : C → τ → V) (v : C → ℝ)
     (hv : ∀ c, v c = prob fun t => R c t ≠ G c t) :

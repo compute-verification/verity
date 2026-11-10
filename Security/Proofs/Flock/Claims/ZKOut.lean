@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.ZK.NonVacuous
 
 Zero knowledge per outcome gives the leak form (`zkOutLeak`): an event's probability is the sum over the outcomes of the
 outcome's and the event's (`pr_eq_sum_fiber`), each bounded by its simulator's, and the sum of the simulators' is the
-number of outcomes times the simulator's that draws the outcome uniformly (`pr_prod_eq_sum`).
+number of outcomes times the simulator's that samples the outcome uniformly (`pr_prod_eq_sum`).
 
 `ZKOut` is not true of everything (`ZKOut_fails`): the quiet prover against the verifier that accepts its first
 message, with a simulator that outputs the empty transcript, fails it at every error below `1`.

@@ -8,10 +8,10 @@ public import Definitions.Core.Draw
 
 The game behind the rate audit: the bandwidth audit's game (`Bandwidth/Game.lean`) for a store that is encoded, on a
 device whose side link carries a certified stream and whose regeneration is paid for in compute. A device holds a store
-`E` of `N` encoded words of `b` bits in device memory, encoded under a seed drawn after registration. In each window
+`E` of `N` encoded words of `b` bits in device memory, encoded under a seed sampled after registration. In each window
 the trusted host streams `ρ` fresh bits `R` to the device over its side link (PCIe), and the verifier reveals a fresh
 seed `σ`; the prover must commit, before a deadline, to the tag `H(σ, R, j, E_j)` of every word `j`, so every tag
-absorbs the stream; the verifier then checks `s` words drawn uniformly. The guarantee
+absorbs the stream; the verifier then checks `s` words sampled uniformly. The guarantee
 (`Definitions/Accounting/Guarantees/RateAudit.lean`) bounds the probability that a device is accepted while the device memory
 its window read falls short of the store by more than what it could have held on chip, taken in over the link's free
 capacity, guessed, or rebuilt with the compute it had.
@@ -34,7 +34,7 @@ The certified stream's `ρ` bits (certified ingress) must come in too, because a
 when the seed arrived, and answers a read with the bit at its address (passive memory), so a bit DMA'd into HBM during
 the window crossed a side link, and the chip's read of it is a side read, counted in `L`. The chip makes at most `q`
 oracle queries. It
-outputs a tag for every word. The sample is drawn after the output and independently of it, which is what the
+outputs a tag for every word. The sample is sampled after the output and independently of it, which is what the
 commitment before the deadline enforces. A program remembers every answer it has had, so the chip's working memory in
 the window is unbounded: `S` bounds only what is on chip when the seed arrives.
 
@@ -51,12 +51,12 @@ it read: device memory held at least that many bits, laid out before the seed, t
 ingress (`Prover.ingress`) counts every read, so it is at least the footprint, and is the bits that crossed from device
 memory to the chip.
 
-**What is a parameter.** `S`, `L`, `q`, `c_tag`, `c_enc` and the compute budget are bounds the device class is drawn
+**What is a parameter.** `S`, `L`, `q`, `c_tag`, `c_enc` and the compute budget are bounds the device class is sampled
 with; the claims registry names the measurement that falsifies each for a deployed device (`bandwidth-s-chip`,
 `bandwidth-side-cap`, and `rate-codec-work` for `c_enc`). Treating the stored words as uniform is
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.
 
-**Windows.** `n` windows on one store each draw fresh coins (a stream, an oracle and a sample), each played by its own
+**Windows.** `n` windows on one store each flip fresh coins (a stream, an oracle and a sample), each played by its own
 device (`Devices`). Window `i`'s device, its layout included, may be any function of the other windows' coins, earlier
 or later, and never of its own.
 -/
@@ -78,7 +78,7 @@ abbrev Oracle (N b h ρ : ℕ) : Type := Bits ρ × Fin N × Bits b → Bits h
 abbrev Pub (N b h ρ : ℕ) : Type := Bits ρ × Oracle N b h ρ
 
 /-- A window's coins: the live coins (`Verity.Coins`) with the certified stream and the oracle at the fresh seed as
-their public part, and the `s` sampled words as their draw. -/
+their public part, and the `s` sampled words as their sample. -/
 abbrev Coins (N b h ρ s : ℕ) : Type := Verity.Coins (Pub N b h ρ) s N
 
 /-- The coins are finite, as a product: an instance of its own, because instance search with its default size does not

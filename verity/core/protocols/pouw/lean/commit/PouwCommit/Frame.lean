@@ -10,7 +10,7 @@ public import Identity.Domains
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
 
 <<<<<<< ours
-C-Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha256` (`Flock.FV3.Sha256`, 32-byte digests) or `sha512`
+Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha256` (`Flock.FV3.Sha256`, 32-byte digests) or `sha512`
 (`Flock.FV3.Sha512`, 64). A domain over positions `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
 `H("domain", binding, uint(owner + 2), identity, uint(count))`, `identity` the positions' range identity under the frame's
 tagged hash; its leaves, nodes, pads and empty root are `Flock.FV3.Domain`'s. What this module adds is what the Python
@@ -95,7 +95,7 @@ def Domain.mk? (h : Hash) (binding : ByteArray) (owner : Int) (count : Nat) : Ex
 
 namespace Domain
 
-/-- The domain as C-Flock's: positions start at 0. -/
+/-- The domain as Flock's: positions start at 0. -/
 def fv3 (d : Domain) : FV3.Domain d.hash.scheme := { id := d.id, count := d.count }
 
 /-- The frame leaf over `value` at `rank` (its position too: positions are ranks), schema `schema`. -/

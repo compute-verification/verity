@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Refine.Rep
 
 `ligerito_refines` leaves the model's requests as ones that passed their Merkle checks (`ReqOK`), which does not fix
 their positions. Here the same run also says which request comes first: level 0's, at the positions of the coins of the
-round Ligerito draws them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
+round Ligerito samples them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
 `ligerito_accepts_opening_req0`).
 -/
 

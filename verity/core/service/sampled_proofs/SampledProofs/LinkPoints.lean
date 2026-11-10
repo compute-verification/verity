@@ -1,19 +1,19 @@
 /-
 A member's link points. Each session of a member's statement opens its link at `PT_LOCAL + nbl g c` points, for its
 `c` proved units and its circuit's `g` units a proof block (META `vus_per_block`), as `HmRow.setup` and `HmOut`'s
-setup compute it. A draw over several members draws a random count of each member's units, so the guarantee for the
-per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points per member. A draw that runs out of the
-verifier's public coins fails the window (`OneStageZk.RAN_OUT`), so only a draw that ends gives counts: between the
+setup compute it. A sample over several members samples a random count of each member's units, so the guarantee for the
+per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points per member. A sample that runs out of the
+verifier's public coins fails the window (`OneStageZk.RAN_OUT`), so only a sample that ends gives counts: between the
 member's fewest and most units (`ended`, `bounds`), and the registration refuses a member whose fewest and most give
-different counts, and a law no draw of which ends (`refused`, `Registration.check`'s `link-points`).
+different counts, and a sampling design no sample of which ends (`refused`, `Registration.check`'s `link-points`).
 
-A draw that ends (`Draw.drawUnits`) draws, under `subset k`, `k` distinct units of the population (`k` above the
+A sample that ends (`Draw.drawUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
 population never ends); under `bernoulli a b`, none when `a = 0`, each unit when `a ≥ b > 0`, and any number of them
 otherwise (`b = 0 < a` never ends); and under `stratified` and `work`, `k_s` distinct units of each stratum `s` (a
-stratum with `k_s` above its size never ends). The fewest is what is left after the draw's units fill the rest of the
+stratum with `k_s` above its size never ends). The fewest is what is left after the sample's units fill the rest of the
 population, or of each stratum, first; the most is `k`, or each stratum's `k_s`, where the member holds that many. A
-law no draw of which ends gives no counts, and the registration refuses it (`ends`, `NEVER_ENDS`), so one it passes
-has a draw that ends. O(members × strata × ranges), the descriptor's size, never the units'.
+sampling design no sample of which ends gives no counts, and the registration refuses it (`ends`, `NEVER_ENDS`), so one it passes
+has a sample that ends. O(members × strata × ranges), the descriptor's size, never the units'.
 -/
 module
 
@@ -40,17 +40,17 @@ def size (rs : Array (Nat × Nat)) : Nat := rs.foldl (fun acc (lo, hi) => acc + 
 def overlap (a b : Array (Nat × Nat)) : Nat :=
   a.foldl (fun acc (lo, hi) => b.foldl (fun acc (lo', hi') => acc + (min hi hi' - max lo lo')) acc) 0
 
-/-- The fewest and most of the units `us` a stratified draw over `strata` holds when it ends: summed over the strata,
+/-- The fewest and most of the units `us` a stratified sample over `strata` holds when it ends: summed over the strata,
 `k_s` less the stratum's units outside `us`, and `k_s` or the stratum's units in `us`, whichever is fewer; `none` when a
-stratum draws more than it has, so the draw never ends. -/
+stratum samples more than it has, so the sample never ends. -/
 def strataEnded (strata : Array Flock.Draw.Stratum) (us : Array (Nat × Nat)) : Option (Nat × Nat) :=
   if strata.any (fun s => s.size < s.k) then none
   else some (strata.foldl (fun (lo, hi) s =>
     let o := overlap us s.units
     (lo + (s.k - (s.size - o)), hi + min s.k o)) (0, 0))
 
-/-- The fewest and most of the units `us` of `[0, population)` a draw under `law` holds when it ends (module
-docstring); `none` when no draw under `law` ends. -/
+/-- The fewest and most of the units `us` of `[0, population)` a sample under `law` holds when it ends (module
+docstring); `none` when no sample under `law` ends. -/
 def ended (law : Flock.Draw.Law) (population : Nat) (us : Array (Nat × Nat)) : Option (Nat × Nat) :=
   let n := size us
   match law with
@@ -59,7 +59,7 @@ def ended (law : Flock.Draw.Law) (population : Nat) (us : Array (Nat × Nat)) : 
   | .stratified _ strata => strataEnded strata us
   | .work _ strata => strataEnded (strata.map (·.toStratum)) us
 
-/-- Each member's fewest and most drawn units under `law` over `[0, population)` when the draw ends (`ended`): a member
+/-- Each member's fewest and most sampled proof blocks under `law` over `[0, population)` when the sample ends (`ended`): a member
 is its units, `[lo, hi)` ranges, and its circuit's units a proof block. A member with no unit, a range of none, ranges
 that meet, a unit outside the population, or no unit a proof block is refused. -/
 def bounds (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat × Nat) × Nat)) :
@@ -72,15 +72,15 @@ def bounds (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat × 
       throw s!"link points: member {i}: its units are not nonempty, disjoint [lo, hi) ranges of the population's {population}"
     pure (ended law population us)
 
-/-- Whether some draw under `law` over `[0, population)` ends: whether `ended` gives counts, which reads only the law and
+/-- Whether some sample under `law` over `[0, population)` ends: whether `ended` gives counts, which reads only the sampling design and
 the population, never the member's units. -/
 def ends (law : Flock.Draw.Law) (population : Nat) : Bool := (ended law population #[]).isSome
 
-/-- The refusal of a law no draw of which ends (`ends`). -/
+/-- The refusal of a sampling design no sample of which ends (`ends`). -/
 def NEVER_ENDS : String := "link points: no draw under the law ends, so each of its windows fails"
 
-/-- The members whose fewest and most drawn units, over the draws that end, give different link points (`bounds`), by
-index; refused (`NEVER_ENDS`) when no draw under `law` ends. -/
+/-- The members whose fewest and most sampled proof blocks, over the samples that end, give different link points (`bounds`), by
+index; refused (`NEVER_ENDS`) when no sample under `law` ends. -/
 def refused (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat × Nat) × Nat)) : V (Array Nat) := do
   let bs ← bounds law population ms
   if !ends law population then throw NEVER_ENDS
@@ -90,16 +90,16 @@ def refused (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat ×
     | some (lo, hi) => nbl g lo != nbl g hi
     | none => false
 
-/-- The law the draw runs on (`OneStage.drawnFrom`): the verifier's own expanded over its program and query
-(`Draw.deriveLaw`), else its subset or Bernoulli law as C-Flock reads it (`Draw.flockLaw`); with the population. -/
+/-- The sampling design the sample runs on (`OneStage.drawnFrom`): the verifier's own expanded over its program and query
+(`Draw.deriveLaw`), else its subset or Bernoulli law as Flock reads it (`Draw.flockLaw`); with the population. -/
 def lawOf (p : Program) (query law : Json) (table : Option Json) : V (Flock.Draw.Law × Nat) := do
   let population ← Partition.units p query
   match ← Draw.deriveLaw p query law table with
   | some l => pure (l, population)
   | none => pure (← Draw.flockLaw law population, population)
 
-/-- `{"law", "population", "members"}` (the law as `Draw.flockLaw` reads it, each member `{"units", "vus_per_block"}`) to
-`{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a law no draw of which ends
+/-- `{"law", "population", "members"}` (the sampling design as `Draw.flockLaw` reads it, each member `{"units", "vus_per_block"}`) to
+`{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a sampling design no sample of which ends
 (`NEVER_ENDS`), is refused. -/
 def piece (j : Json) : V Json := do
   let some population := nat? (getD j "population") | throw "the population is not a natural number"

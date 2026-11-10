@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.ZK.Indexed
 `Claims.Sampling.ZK` is `ZKmalRx` at the sampled verifier's rounds, `ZKmalR` at a record masked at one tape
 (`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published
 leaf layer is `l x`, with the simulator given `l x`. Its binding term is `γ` times `Fork` of the sampled prover's own two
-runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it draws (the
+runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it samples (the
 selection's and each checked unit's session's) committed at its `Hello`.
 The route of record is the other: Flock's zero knowledge at each session composes to it in turn
 (`SamplingDeploy.zk_seq`, `Sampling/Seq.lean`), since the composed tape guesses which session's `Fork` to charge

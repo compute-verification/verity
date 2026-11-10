@@ -9,7 +9,7 @@ public import Mathlib.Data.Fintype.Card
 A circuit has gates `0, …, N - 1` in topological order: a gate reads only earlier gates. Some gates are input gates
 and some are output gates. Gate `g` holds one value of `w g` bits (`verity.ir`'s `Value<w>`). An input gate's value is
 given; every other gate computes its value from the gates it reads, the wires into it. The Boolean profile, which
-C-Flock proves, is `w = 1` (`Boolean.lean`).
+Flock proves, is `w = 1` (`Boolean.lean`).
 
 For a set `S` of gates, in the notation of the NCI draft:
 * `size S`: the number of gates in `S`. The size of a circuit is `size computed`, its number of non-input gates;

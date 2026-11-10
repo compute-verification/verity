@@ -7,12 +7,12 @@
 case (``case.json``), the verifier's partition (``partition.json``), a5's ``summary.json`` (its ``members``, each ``k``,
 ``template``, ``n`` and ``base``, and each template's pin and units a proof block under ``circuits``), each member's
 ``m<k>/`` with its public file (the first of a template's members, its ``compose.log`` and its circuit file; a member
-reading registered values, the verifier's ``registered.json``), each drawn member's ``session-m<k>/sessions/*/`` with
+reading registered values, the verifier's ``registered.json``), each sampled member's ``session-m<k>/sessions/*/`` with
 each session's ``session.json`` and ``*.bin``, and the window's registered circuit record ``circuit.json`` where the run
 kept it. The case is a5.py's `case_v2` of those, in a5's form (`a5.v2_proof`): a window of one member, v1's params with
 the partition and ``proofs: {circuit, registered}``; of several, the per-member form, every member's units, its
 template's pin, units a proof block (the summary's, else its circuit file's META) and registered file, and a statement
-a drawn member, which v2 refuses until its guarantee is in the lock
+a sampled member, which v2 refuses until its guarantee is in the lock
 (`OneStageZk.MULTI_REFUSED`). A member reading registered values names ``circuit.json`` as its ``interface`` when its
 SHA-512 is the summary's ``circuit``, as a5 does. Then v1's commitment, the evidence with the sessions' proofs and the
 blobs' paths. A window without ``summary.json`` is ``m0`` alone, its pin its ``compose.log``'s.

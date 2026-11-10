@@ -6,7 +6,7 @@ public import Definitions.Core.Hash
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
 
-The vocabulary the claims of every proof system read, inner or outer: C-Flock's (`Definitions/Claims.lean`), the
+The vocabulary the claims of every proof system read, inner or outer: Flock's (`Definitions/Claims.lean`), the
 recursion's (`Definitions/Claims/Recursion.lean`), the sampled proofs' (`Definitions/Claims/Sampling.lean`) and the
 composition of zero knowledge through a recursion (`Definitions/Core/Rec.lean`). It is
 Core's, and keeps the namespace `Claims` its records were written under. Its forms:
@@ -52,7 +52,7 @@ abbrev Msg := Hash.Msg
 abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 
 /-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
-draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
+samples 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
 def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
 /-! ## Relations -/
@@ -210,7 +210,7 @@ def RP.bind {R α β : Type} : RP R α → (α → RP R β) → RP R β
   | .hash q k, f => .hash q fun a => (k a).bind f
   | .rerun r k, f => .rerun r fun v => (k v).bind f
 
-/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
+/-- The samples a program reruns at, in order, against `H` and the runs `run`. -/
 def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List R
   | .ret _ => []
   | .hash q k => RP.rerunsAt H run (k (H q))
@@ -287,7 +287,7 @@ def StrictBirthday (H : Msg → Msg) (F : Finder) : Prop :=
 
 /-- **`ExpectedCR` (`ecr/sha-512`): the linear expected-time bound**, at one finder: `F` finds a collision with
 probability at most its expected SHA-512 calls over `2^256`. Read for finders whose cost is an expectation
-(extraction-based and rewinding ones, which have no worst-case `q`: `KSLin`, C-Flock's link) and, where one record
+(extraction-based and rewinding ones, which have no worst-case `q`: `KSLin`, Flock's link) and, where one record
 should serve every break, for the others too. It is the weaker claim there: at a fixed cost `q ≤ 2^257`,
 `StrictBirthday`'s `q²/2^513` is at most `q/2^256`. PoUW's service premises per prover read it at their binding and
 zero-knowledge finders through `ecrBound`, at a budget computed from the adversary's time. -/
@@ -296,7 +296,7 @@ def ExpectedCR (H : Msg → Msg) (F : Finder) : Prop :=
 
 open Classical in
 /-- **`ecr/sha-512` at one finder as a number, at a cost budget, or no bound**: `q / 2^256` where the finder meets
-`ExpectedCR` and its expected SHA-512 calls are at most the budget `q`, and `⊤` otherwise, as C-Flock's link bound reads
+`ExpectedCR` and its expected SHA-512 calls are at most the budget `q`, and `⊤` otherwise, as Flock's link bound reads
 its collision assumption (`⊤` at a prover whose link finders fail it, the number read at the session's calls `t'`).
 The assumption is a predicate on one finder, since some finder outputs a collision after no calls, so it is asked of
 this finder only.
@@ -325,7 +325,7 @@ abbrev BCoins (Ω Coin : Type) (k : ℕ) := Fin k × Ω × (Fin k → Coin) × (
 def forkCoins {Coin : Type} {k : ℕ} (j : Fin k) (r r' : Fin k → Coin) : Fin k → Coin :=
   fun i => if i.val < j.val then r i else r' i
 
-/-- **`B`** (extraction-free): guess `j`, draw `ω, r_1..r_j`, run twice from the shared start with fresh continuations,
+/-- **`B`** (extraction-free): guess `j`, sample `ω, r_1..r_j`, run twice from the shared start with fresh continuations,
 and output the first collision among the verifier's SHA-512 calls in the two runs. Its cost is both runs' calls, both
 parties'. -/
 def B {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)

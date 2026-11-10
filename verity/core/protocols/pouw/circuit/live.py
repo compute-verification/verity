@@ -2,7 +2,7 @@
 value.
 
 Rule A: a credited row serves an admitted request, a slot the round's slot table assigns to a request in the gate-signed
-request table under the window-open root. Round s's request table is the requests admitted before round s's root, one table
+request table under the execution phase-open root. Round s's request table is the requests admitted before round s's root, one table
 a round. Under the default, round-0-only admission, it is round 0's (`pouw_h1_requests.request_table`, whose root is in
 `credit.requests_root` and so in `salt.window_open_root`). Round s's slot table is under round s's root before its coin.
 Both are hiding leaves, so credit, which sees their roots only, can't count m_s itself: this unit counts it in a proof, one
@@ -11,7 +11,7 @@ unit a round, proved every round (never sampled).
     PouwLiveSlots_v1{T}   (slot: Array<T, U32>, req: Array<T, Array<5, U32>>, m: U32, s: U32) -> Value<1>
 
 T is the tables' leaf count, the pouw setting ``rows`` (H1's T, a multiple of 32: `pouw_h1_requests.slot_table` and
-`request_table` write T leaves each), so m ≤ T. The window's slot M = `h1window.slot`, the least power of two at or above T
+`request_table` write T leaves each), so m ≤ T. The execution phase's slot M = `h1window.slot`, the least power of two at or above T
 (and at least R), is credit's tile grid, not the unit's: M - T slots have no leaf, and their rows are dead. ``slot`` is
 round s's slot leaves: q + 1 for a row of request q, 0 (``EMPTY_SLOT``) past the batch. The step's rows are its requests'
 rows in order, row r spanning n_r slots of computed tokens (a cache hit is no row, nor is a CUDA-graph pad row past Σ_r n_r,
@@ -31,7 +31,7 @@ is round s's). These are the network advice's I1 request index and step rows. ok
 So ok = 1 means exactly the slots [0, m) are assigned to admitted requests, none past what its request can take that step:
 m is rule A's count (`admitted`), at most Σ_q takes. Without the last check one admitted request named in all T slots
 would credit m_s = T rows, the padded ones among them. A step that splits a prompt's prefill (chunked prefill), resumes a
-preempted request or verifies draft tokens is refused (its rows are more than `takes`); a static window (the vLLM
+preempted request or verifies draft tokens is refused (its rows are more than `takes`); a static execution phase (the vLLM
 integration's `pouw_h1_static.Static`) has none. A tile of the
 round whose rows all lie at or past m (R·ti ≥ m) is dead. Its admit bits, [i < m], are all 0, so its receipt is `h1tile`'s
 canonical dead-tile receipt (`PouwH1Tile_v4`, `h1tile.reference`'s gated branch). Dense credit's population is the live
@@ -40,20 +40,20 @@ tiles, so a dead tile is never sampled. The Lean statement is `Pouw.SecurityProo
 
 `live_ok` is the unit on words, and `traced(T)` its gate circuit.
 
-**The live Program** (`program`) is a window's S rounds' units: one template, `PouwLiveSlots_v1{T}`, called once a round,
-unit s round s's. It is a Program of its own beside the window's (`h1window.program`), so the window's tile Program, its
+**The live Program** (`program`) is an execution phase's S rounds' units: one template, `PouwLiveSlots_v1{T}`, called once a round,
+unit s round s's. It is a Program of its own beside the execution phase's (`h1window.program`), so the execution phase's tile Program, its
 partition and its sample are untouched. Its parameters are named `PREFIX` and their role: ``slots`` (S·T slot leaves, round
 s's from row s·T), ``requests`` (T headers, read by every round), ``m`` (S rows) and ``round`` (S rows, row s the unit's
 ``s``). Its circuit file is the period-open's
 ``circuit_files["live"]``, and its partition is ``Q_template_instances`` over its template (`query`).
 
 **Round s's statement** ``live@<s>`` reads registered values (`live_reads.reads_file`; the names below are
-`live_reads`', which builds no Program), each under the window Program's digest:
+`live_reads`', which builds no Program), each under the execution phase Program's digest:
 
 * port ``slot_<i>`` reads row i of round s's slot table ``<prefix>slots@<s>`` (`SLOTS`: T rows of `SLOT_WORDS` u16 words,
-  the leaf's u32 little-endian), bound to the window's open root, its root round s's ``slots``;
+  the leaf's u32 little-endian), bound to the execution phase's open root, its root round s's ``slots``;
 * port ``req_<i>`` reads row i of round 0's request table ``<prefix>requests@0`` (`REQUESTS`: T rows of `HEADER_WORDS`
-  words, the header's five u32 little-endian), bound to the window's session (its root, round 0's ``request_table``, is
+  words, the header's five u32 little-endian), bound to the execution phase's session (its root, round 0's ``request_table``, is
   inside the open root, as ``ids@0``'s is);
 * port ``m`` reads ``<prefix>m@<s>`` (`M_ROWS`) at its known content (`m_table`): one row, m's two words, under
   `core_check.public_row_salt` of the open root and s;
@@ -66,7 +66,7 @@ So a round's statement that proves ok = 1 at public m on the tables its round ro
 A's count, and one whose m isn't the round's served rows opens no row of ``live-ok``.
 
 **`PouwLiveSlots_v2{T}`** is v1 with one more public port, ``cap``, each request leaf's public cap: the max_tokens its
-period's open commits for request q (credit's fixed length, ``length.max_tokens``), 0 past them.
+credit period's open commits for request q (credit's fixed length, ``length.max_tokens``), 0 past them.
 
     PouwLiveSlots_v2{T}   (slot, req, m, s, cap: Array<T, U32>) -> Value<1>
 
@@ -77,11 +77,11 @@ a prover could still give request q another's cap, or a later round, and so move
 another. Under v2 each request takes a decode row in round s ≥ 1 only when s < its public max_tokens. Its Program
 (`program_v2`, ``PouwLiveWindow_v2``) has a fifth parameter ``caps``, T rows read by every round. Round s's statement reads
 port ``cap_<i>`` at row i of the known ``<prefix>caps`` (`live_reads.caps_table`: T rows, each one u32's two words, under
-`core_check.public_row_salt` of the open root and i), which credit builds from the period's committed max_tokens. Credit
+`core_check.public_row_salt` of the open root and i), which credit builds from the credit period's committed max_tokens. Credit
 reads only v2 (`credit.LIVE_FN`) up to T = `PIECE_ROWS`. v1 stays unchanged.
 
 **`PouwLiveRows_v1{T, R}`** is a round's live check cut by rows, for a T past `PIECE_ROWS`. v2 reads 3T + 3 rows, and
-C-Flock's composer lowers it as one unit inside its 2^27-bit block only up to T = 64 (T 128 takes a 2^28-bit block and T 512
+Flock's composer lowers it as one unit inside its 2^27-bit block only up to T = 64 (T 128 takes a 2^28-bit block and T 512
 a 2^30-bit one: r20261027-194709-05e5), so its count can't grow with T. Piece j of round s reads R
 rows of round s's slot table, rows [base, base + R) with base = jR, the first R request headers and their public caps:
 
@@ -123,7 +123,7 @@ INDEX, ROUND, SLOT, CAP, PROMPT = 0, 1, 2, 3, 4
 PORTS = ("slot", "req", "m", "s")
 PORTS_V2 = (*PORTS, "cap")
 PORTS_ROWS = (*PORTS, "base", "cap")
-#: the largest T whose v2 unit C-Flock lowers inside one 2^27-bit block, and the rows of a piece past it
+#: the largest T whose v2 unit Flock lowers inside one 2^27-bit block, and the rows of a piece past it
 PIECE_ROWS = 64
 
 
@@ -297,7 +297,7 @@ PouwLiveWindow = CompositeDefinition(
 
 
 def program(T: int, S: int, prefix: str = "") -> Program:
-    """The live Program of a window of S rounds whose tables have T leaves, its parameters named ``prefix`` and their roles
+    """The live Program of an execution phase of S rounds whose tables have T leaves, its parameters named ``prefix`` and their roles
     (`ROLES`). Refused (ValueError) when T or S isn't a positive integer."""
     if not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in (T, S)):
         raise ValueError(f"the live Program's T and S are positive integers, not {T!r} and {S!r}")

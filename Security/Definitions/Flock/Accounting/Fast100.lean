@@ -79,7 +79,7 @@ def piopNumMax (m L₀ : ℕ) : ℕ :=
 /-- The rational bound on one rep over the covered statements. -/
 def repUp (s : Schedule) : ℚ := (piopNumMax s.m s.listBound₀ : ℚ) / 2 ^ 128 + ligUp s.levels
 
-/-- The rational bound on the link term over the covered statements. -/
+/-- The rational bound on the binding error over the covered statements. -/
 def linkUp (s : Schedule) : ℚ := s.listBound₀ * 1024 * (64 / 2 ^ 128) ^ 2
 
 end FlockSoundness.Accounting

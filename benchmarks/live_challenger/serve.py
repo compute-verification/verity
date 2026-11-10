@@ -12,7 +12,7 @@ log signed when the session ends.
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first, at `lms.DEPLOYED` (about 1.1G SHA-512 hashes over `--keygen-workers`) or at `--params W,H` (tests).  A key inside
   `--out` is refused, since a run's `out/` is published.
-- **The coins** are the operating system's bytes as the Lean verifier of record reads them (`one_stage.verifier.coins`:
+- **The coins** are the operating system's bytes as the Lean verifier reads them (`one_stage.verifier.coins`:
   `IO.getRandomBytes`, A3), its `sampled-proofs-verifier` built with `lake` on first use; a host where the Lean can't
   answer starts no session, and neither does one whose source no claim instance names (`challenger.served_claim`: A3's
   is `uniform/io-getrandombytes`).

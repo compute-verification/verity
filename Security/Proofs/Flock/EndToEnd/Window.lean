@@ -19,9 +19,9 @@ derive member `m`'s marginal from `g`: `hmarg m` says that in the window, member
 for instance by a member strategy that runs the rest of the window around member `m`'s session. It is a hypothesis
 about how the window is built, not an assumption about the world, and the corollary adds no named assumption.
 
-Each member's `kd m` is fixed. When the members' draws are shares of one window draw, the share sizes are random. Apply
+Each member's `kd m` is fixed. When the members' samples are shares of one window sample, the share sizes are random. Apply
 the corollary to the window conditioned on the share sizes, one `kd m` per member, or to a window whose share sizes are
-fixed. This is the union bound of the members' bounds, not the tight hypergeometric bound of the window's draw.
+fixed. This is the union bound of the members' bounds, not the tight hypergeometric bound of the window's sample.
 -/
 
 @[expose] public section
@@ -54,7 +54,7 @@ window has probability at most `p m` (`hmarg`), and `p m` is at most member `m`'
 then
 $$\Pr[\forall m,\ \text{member } m \text{ accepted} \wedge \exists m,\ K_{0,m} \le \text{wrong}_m] \le
   \sum_m \left(\frac{\binom{n_m-K_{0,m}}{kd_m}}{\binom{n_m}{kd_m}} + \varepsilon_{ks,m} + \delta_{link,m}\right).$$
-Each `kd m` is fixed: for shares of one window draw, apply it conditioned on the share sizes. -/
+Each `kd m` is fixed: for shares of one window sample, apply it conditioned on the share sizes. -/
 theorem window_union {α ι : Type} (g : Game α) (s : Strategy g) (ms : Finset ι)
     (acc : ι → α → Prop) (wrong : ι → α → ℕ) (n kd K₀ : ι → ℕ) (p εks δlink : ι → ℝ≥0∞)
     (hmarg : ∀ m ∈ ms, prob (fun a => acc m a ∧ K₀ m ≤ wrong m a) g s ≤ p m)

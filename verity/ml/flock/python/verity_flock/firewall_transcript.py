@@ -5,10 +5,10 @@ decides the same transcript, held to the verifier's public input (``verity/firew
 anything the transcript says of itself; `firewall_agree.py` compares the two.
 
 <<<<<<< HEAD
-The recorder watches the ZK server from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
+The recorder watches the ZK server from outside: a live-coin part that keeps every call made to it (`RecordingCoins`), a salt
 source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`InnerRun.handle`). It
 ||||||| merged common ancestors
-The recorder watches the ZK server from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
+The recorder watches the ZK server from outside: a live-coin part that keeps every call made to it (`RecordingCoins`), a salt
 source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`Session.handle`). It
 =======
 The recorder watches the ZK server from outside: a challenger that keeps every call made to it (`RecordingCoins`), a salt

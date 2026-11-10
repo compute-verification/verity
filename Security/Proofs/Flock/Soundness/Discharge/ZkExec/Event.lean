@@ -17,14 +17,14 @@ places, all of which this file restates:
 * the verdict is `Flock.Zk.verify` (the masked replay, level 0's hiding, the inner proof), not `Flock.verify`.
 
 `AcceptsZK I t` is that verdict on the transcript `t`: the session's statement set up from `zkInputs I` and the
-record's draw (`Exec.setupOf`, `Stmt.setupTables`), every table's shape check, and `Zk.verify` accepting the record and
+record's sample (`Exec.setupOf`, `Stmt.setupTables`), every table's shape check, and `Zk.verify` accepting the record and
 proofs.
 `verifyCmd` refuses more: a statement's registered reads (`checkRegistered`, under `--registered`), its header's
 identifier against the verifier's own (`checkIdentifier`, `--identifier`), and a coin-tree key an earlier session of the
 run used (`CoinTree.checkFresh`), which only shrink the event.
 
 `AcceptsZK` covers every tag `--statement` names, hidden outputs (`setupTables` calls `setupHidden` per table) and any
-table count and draw: nothing here fixes them. Lemmas that read `setupH`'s statement take `hh : hiddenOutputs = false`.
+table count and sample: nothing here fixes them. Lemmas that read `setupH`'s statement take `hh : hiddenOutputs = false`.
 -/
 
 @[expose] public section
@@ -47,7 +47,7 @@ def zkTags (I : Inputs) : Flock.Tags :=
 def zkInputs (I : Inputs) : Inputs := { I with tags := zkTags I, coins := zkCoins I }
 
 /-- **flock-verify accepts the `--zk` transcript**: the session's statement sets up from `zkInputs I` and the record's
-draw, every table passes `Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
+sample, every table passes `Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
 def AcceptsZK (I : Inputs) (t : Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
     Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()

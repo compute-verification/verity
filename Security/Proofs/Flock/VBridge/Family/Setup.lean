@@ -16,10 +16,10 @@ executable statement `Stmt` stands behind it, so the setup the table files are r
   from `S`'s matrices (`modelFold`), with `β` at the pin and halved at the round challenges as `Stmt.folded`'s fallback
   (Statement.lean:332-336), the extra claims the model's at the link points (`claimOf`), and plain SHA-512 rows (`flock-leaf/sha512-unsalted`);
 * `modelSetup_realizes`: it realizes `S` (`SetupRealizes`) at any `fast100` schedule of `S.m`;
-* `foldsOk_modelSetup`: its fold returns 64 elements at the round challenges `residualLins` draws (`ts_size`), so
+* `foldsOk_modelSetup`: its fold returns 64 elements at the round challenges `residualLins` samples (`ts_size`), so
   `FoldsOk` holds;
 * `CoinsAgree`: the rounds `verifierRows` takes have `run_of_frames`' counts (`roundSizes_shaped`), and Ligerito's
-  frames close at most the `ligCoins` rounds V*'s Ligerito draws after them (`ligRoundsLe_of`, at a schedule of the
+  frames close at most the `ligCoins` rounds V*'s Ligerito samples after them (`ligRoundsLe_of`, at a schedule of the
   seams);
 * at the family, `innerSetup` is `modelSetup` of each history's hidden statement, and `ShapeAt` (V*'s `m`, `k_log` and
   schedule are the class's) gives `ShapeIs`, `SetupRealizes`, `FoldsOk` and `CoinsAgree` there;
@@ -151,7 +151,7 @@ theorem ts_size {sh : Shape} {src : Flock.RecAlgebra.CoinSource} {extras : Array
   simp [Flock.RecAlgebra.symbolic]
 
 /-- **`FoldsOk` at the model setup**: its `folded` always returns, `2^k_log` entries halved at the `k_log − 6` round
-challenges `residualLins` draws (`ts_size`), so 64 of them. -/
+challenges `residualLins` samples (`ts_size`), so 64 of them. -/
 theorem foldsOk_modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) {sh : Shape} (hk : sh.kLog = S.kLog) :
     FoldsOk (modelSetup S ptLocal mPts) sh := by
   intro rounds extras lins info _ h
@@ -176,7 +176,7 @@ theorem size_at {rounds : Array (Array F128)} {a b c : ℕ} (h : a = b) (hs : (r
     (rounds[b]!).size = c := h ▸ hs
 
 /-- **`verifierRows`' rounds have `run_of_frames`' counts** up to Ligerito's: at the rounds `verifierRows` takes
-(`roundSizes`), `run` draws the zerocheck's `6`, `m − 13`, `1` and `m − 6` single coins (`zerocheck_coins`), the
+(`roundSizes`), `run` samples the zerocheck's `6`, `m − 13`, `1` and `m − 6` single coins (`zerocheck_coins`), the
 lincheck's `α`, `β`, `k_log − 6` round challenges and `r'` (`lincheck_coins`), `7` per claim and the `claims` batching
 coins (`ringSwitch_spec`), and Ligerito's `L` rounds after them. -/
 theorem roundSizes_shaped {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.RecAlgebra.structureOf sh = .ok S)
@@ -223,17 +223,17 @@ theorem roundSizes_shaped {sh : Shape} {S : Flock.RecAlgebra.GfS} (hS : Flock.Re
 
 /-- **Ligerito's rounds are at most those `verifierRows` takes after ring switching**: the rounds a Ligerito run's
 frames close (`chunks (ligFrames …)`, `.sq` frames of the schedule's counts only, FramesLigerito.lean:130-141, 207-219)
-are at most the rounds `run` draws after the ring switch's (`roundSizes`, RecAlgebra.lean:532-539). -/
+are at most the rounds `run` samples after the ring switch's (`roundSizes`, RecAlgebra.lean:532-539). -/
 def LigRoundsLe (sh : Shape) (sch : Flock.Schedule) : Prop :=
   ∀ (T : F128) (cap : Array ByteArray) (lig : LigeritoProof),
     3 + (sh.m - 6) + 2 + (sh.kLog - 6) + 1 + sh.claims + 1 + (chunks (ligFrames sch T cap lig)).1.length ≤
       (roundSizes sh).length
 
-/-- The rounds level `i` of `R` draws after level 0 (RecAlgebra.lean:415–432): four challenges, then two intros and a
+/-- The rounds level `i` of `R` samples after level 0 (RecAlgebra.lean:415–432): four challenges, then two intros and a
 query fold below the last level, the queries and the batching coin at it. -/
 def levelCoins (R i : ℕ) : ℕ := if i + 1 < R then 11 else 7
 
-/-- The rounds Ligerito draws up to its final check (RecAlgebra.lean:436–450): the level-0 point and its batching
+/-- The rounds Ligerito samples up to its final check (RecAlgebra.lean:436–450): the level-0 point and its batching
 coin, `k0` challenges, two intros, the query fold, then the levels'. -/
 def ligCoins (sch : Flock.Schedule) : ℕ :=
   sch.k0 + 9 + ((List.range' 0 (sch.levels.size - 1)).map (levelCoins (sch.levels.size - 1))).sum
@@ -281,7 +281,7 @@ theorem levelsLoop_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)
       simp only [levelCoins, hi', ↓reduceIte]
       omega
 
-/-- **Ligerito up to its final check draws `ligCoins` rounds** at a schedule of the seams (`DimSeam`, `LevelSeam`). -/
+/-- **Ligerito up to its final check samples `ligCoins` rounds** at a schedule of the seams (`DimSeam`, `LevelSeam`). -/
 theorem ligeritoRun_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)] {sch : Flock.Schedule}
     {M : Flock.RecAlgebra.Messages F128} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ}
@@ -320,7 +320,7 @@ theorem ligeritoRun_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c
   unfold ligCoins
   omega
 
-/-- `ligerito` returns only after Ligerito up to its final check, having drawn every recorded round
+/-- `ligerito` returns only after Ligerito up to its final check, having sampled every recorded round
 (RecAlgebra.lean:511–513). -/
 theorem ligerito_drawn {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128} {tIn : F128}
     {sws : Array Flock.Switched} {k k' : ℕ} {src : Flock.RecAlgebra.CoinSource}
@@ -405,7 +405,7 @@ theorem countP_levels (sch : Flock.Schedule) (p : LigeritoProof) :
     omega
 
 /-- **A Ligerito run's frames close at most `ligCoins` rounds**: every `.sq` frame of `ligFrames` but the batching
-coins' is a draw of `ligeritoRun`'s, and none closes without one (FramesLigerito.lean:130–141, 207–228). -/
+coins' is a sample of `ligeritoRun`'s, and none closes without one (FramesLigerito.lean:130–141, 207–228). -/
 theorem chunks_ligFrames_le (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof) :
     (chunks (ligFrames sch T cap p)).1.length ≤ ligCoins sch := by
   rw [chunks_length]

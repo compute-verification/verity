@@ -7,9 +7,9 @@ public import Definitions.Population.Dataflow
 
 * `wellFounded_dep`: on finitely many units, an acyclic population's dependency relation is well-founded.
 * `eq_of_writes`, **robust determinacy**: in a covered acyclic population, two assignments that hold the same inputs,
-  whose incorrect units lie in `B`, and that agree on the slots `B` writes, are equal. An assignment is determined by its
-  inputs and its incorrect units' writes. With `B = ∅` it is determinacy.
-* `eq_off_down`, **the cone**: two assignments that hold the same inputs and whose incorrect units lie in `B` agree on every
+  whose incorrect proof blocks lie in `B`, and that agree on the slots `B` writes, are equal. An assignment is determined by its
+  inputs and its incorrect proof blocks' writes. With `B = ∅` it is determinacy.
+* `eq_off_down`, **the cone**: two assignments that hold the same inputs and whose incorrect proof blocks lie in `B` agree on every
   slot written by a unit outside `B`'s downstream cone. `eq_honest_off_down` reads it against the honest evaluation.
 * `exists_correct`: a checked population has, on every input, an assignment in which every unit is correct
   (`eval`, by well-founded recursion over the slots).
@@ -56,7 +56,7 @@ theorem write_eq_of_reads {V : Type} {f : P.Fns V} {σ τ : S → V} {u : U} (h�
     _ = τ s := (hτ ⟨s, hs⟩).symm
 
 /-- **Robust determinacy**: an assignment is determined by its inputs and the writes of a set containing its incorrect
-units. -/
+proof blocks. -/
 theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) : σ = τ := by
@@ -79,7 +79,7 @@ theorem eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f
   · obtain ⟨v, hv⟩ := hc s hs
     exact key v s hv
 
-/-- **Determinacy**: with no incorrect unit, an assignment is determined by its inputs. -/
+/-- **Determinacy**: with no incorrect proof block, an assignment is determined by its inputs. -/
 theorem eq_of_correct [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {σ τ : S → V}
     (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : ∀ u, P.Correct f σ u) (hτ : ∀ u, P.Correct f τ u) : σ = τ :=
   P.eq_of_writes hc ha f (B := ∅) hin (by simp [P.incorrect_eq_empty hσ]) (by simp [P.incorrect_eq_empty hτ])
@@ -90,7 +90,7 @@ theorem mem_down [Fintype U] {B : Finset U} {v : U} :
   classical
   simp [down]
 
-/-- **The cone**: assignments that hold the same inputs and whose incorrect units lie in `B` agree on every slot that a
+/-- **The cone**: assignments that hold the same inputs and whose incorrect proof blocks lie in `B` agree on every slot that a
 unit outside `B`'s downstream cone writes. -/
 theorem eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.incorrect f σ ⊆ B) (hτ : P.incorrect f τ ⊆ B) :
@@ -183,7 +183,7 @@ theorem exists_correct [Finite U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : 
   ⟨eval h.1 h.2 f a, fun _ hs => eval_input h.1 h.2 f a hs, eval_correct h.1 h.2 f a⟩
 
 /-- **Integrity against the honest run**: in a checked population, an assignment that holds the inputs agrees with
-the honest one (every unit correct, the same inputs) on every slot written by a unit outside its incorrect units'
+the honest one (every unit correct, the same inputs) on every slot written by a unit outside its incorrect proof blocks'
 downstream cone. -/
 theorem eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest σ : S → V}
     (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) (hσ : ∀ s ∈ P.input, σ s = a s) :

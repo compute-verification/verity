@@ -643,7 +643,7 @@ def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncach
 
 
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
-    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
+    """An after-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
     slot while pytest kept to its half of the rest, 175, would leave lean-suites' 175 unused and run the 147-167 GiB SHA-512
     targets one at a time.  Pytest's share is unchanged."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")

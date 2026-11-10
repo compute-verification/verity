@@ -433,7 +433,7 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
       _ = 0 := Pr_false
       _ ≤ _ := (D.nums x s).κ_nonneg (hε x s)
 
-/-- **Every prefix, averaged**: a draw is a fork of a draw at session `s`'s first round (`Ex_fork`), so session `s`'s
+/-- **Every prefix, averaged**: a sample is a fork of a sample at session `s`'s first round (`Ex_fork`), so session `s`'s
 failure is the average over prefixes of `prefix_bad_le`'s. -/
 theorem PrBad_EOs_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T} (hF : Flock.KS H DO)
@@ -531,8 +531,8 @@ theorem sessPrB_mul_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inh
   · rw [zero_mul]
     exact Finset.sum_nonneg fun j _ => Pr_nonneg _
 
-/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A draw's prefix is a fork of
-a draw (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
+/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A sample's prefix is a fork of
+a sample (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
 round guesses (`SessionRounds`). -/
 theorem Ex_sessPrB_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}

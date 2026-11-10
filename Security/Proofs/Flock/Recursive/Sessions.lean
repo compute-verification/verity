@@ -22,7 +22,7 @@ them (`Proofs.Flock.Recursive.Firewall`); their zero knowledge is `Proofs.Flock.
   commit strings `l`, at the coin vector the auditor's tape fixes (`coin`), on the honest witness `wit`. Its view
   (`view`), its simulator (`sim`), the honest witnesses (`Honest`), every table passing `CoinedOK` (`TablesOK`) and
   its error (`err`, and `errAt` at an hm96 hiding bound `δ`).
-* `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the firewall's commitments (`firewallCommits`: the inner
+* `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the ZK server's commitments (`firewallCommits`: the inner
   coins live, each message reading the commit strings before it).
 -/
 
@@ -79,7 +79,7 @@ noncomputable def proverExe (stopped : Stopped) : TableProver := fun C c w p =>
 
 /-! ## V*'s sessions -/
 
-/-- The commit strings of `m` under the salts `y`: hm96's `(SHA-512(m) ⊕ M·y, c(y))`, a firewall leaf's two halves. -/
+/-- The commit strings of `m` under the salts `y`: hm96's `(SHA-512(m) ⊕ M·y, c(y))`, a ZK server leaf's two halves. -/
 def commitStrs {n : ℕ} (m : Fin n → ByteArray) (y : Fin n → ZkView.Salt) : Fin n → ZkView.Bits × ByteArray :=
   fun i => (ZkView.bitsOf (Sha512.hash (m i)) + ZkView.My (y i), ZkView.saltHash (y i))
 
@@ -106,10 +106,10 @@ structure Sessions (Ctx Pub : Type) : Type 1 where
   hz : ∀ j pc l, (C j pc l).z = z j
   NR : Fin S → ℕ
   NS : Fin S → ℕ
-  /-- Obligation (V*'s statement fixes each session's randomness): session `j`'s prover draws from `NR j` values at
+  /-- Obligation (V*'s statement fixes each session's randomness): session `j`'s prover samples from `NR j` values at
   every public context and commit strings. -/
   hR : ∀ j pc l, Fintype.card (RandAt (C j pc l) (coin j pc l)) = NR j
-  /-- Obligation (the same of its simulator): session `j`'s simulator draws from `NS j` values at every public context
+  /-- Obligation (the same of its simulator): session `j`'s simulator samples from `NS j` values at every public context
   and commit strings. -/
   hS : ∀ j pc l, Fintype.card (SimAt (C j pc l) (coin j pc l)) = NS j
   Vw : Fin S → Type
@@ -200,11 +200,11 @@ end Sessions
 /-! ## The honest context -/
 
 /-- What the honest prover holds in (ii): the private circuit, the witness, the registration's salts, the auditor's
-tape, the firewall's commitments, the inner prover's randomness and the firewall's salts. -/
+tape, the ZK server's commitments, the inner prover's randomness and the ZK server's salts. -/
 abbrev HCtx (Prog Wit Ωa Ωp : Type) (nr nh : ℕ) : Type :=
   Prog × Wit × (Fin nr → ZkView.Salt) × Ωa × (Fin nh → ByteArray) × Ωp × (Fin nh → ZkView.Salt)
 
-/-- The honest context at the firewall's commitments to `msgs` under the salts `y`, the inner coins live: message `i`
+/-- The honest context at the ZK server's commitments to `msgs` under the salts `y`, the inner coins live: message `i`
 reads the commit strings before it (`Flock.Guarantees.firewallCommits`). -/
 abbrev hctxAt {Prog Wit Ωa Ωp : Type} {nr nh : ℕ}
     (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)

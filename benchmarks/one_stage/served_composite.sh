@@ -10,7 +10,7 @@
 # CASE_LEASE_MIN minutes (default 60) and CASE_MEM_GB GiB of host memory (default 170: its Python and its Lean each hold
 # the whole re-encoded store), all within CASE_TIMEOUT (default 90m). Then, where the tree has `served_cases.py`, the
 # cases on the window's registration record R (its docstring), each under SERVE_DIR/private: sampled proofs' one-stage
-# v1 case (onsite's), remote's sampled proofs case (a5's v2 case, which only a `--zk` audit of one drawn member writes,
+# v1 case (onsite's), remote's sampled proofs case (a5's v2 case, which only a `--zk` audit of one sampled member writes,
 # in the form `one-stage`) and the inference-only case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run without V3c
 # whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division

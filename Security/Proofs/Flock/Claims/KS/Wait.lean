@@ -3,15 +3,15 @@ module
 public import Proofs.Flock.Claims.ERepCost
 
 /-!
-# One wait, truncated: from `k` accepted runs to `E^rep`'s `K` draws
+# One wait, truncated: from `k` accepted runs to `E^rep`'s `K` samples
 
-`E^rep`'s wait stops at `k` accepted reruns among `K` fresh draws (`waitAcc`). A per-tape knowledge bound speaks of `k`
+`E^rep`'s wait stops at `k` accepted reruns among `K` fresh samples (`waitAcc`). A per-tape knowledge bound speaks of `k`
 independent accepted runs: at a tape with acceptance `ε`, `ε · Q/ε^k ≤ a + rate·ε`, where `Q` is the probability that
 `k` independent runs all accept and their openings fail (`accFail`), so `Q/ε^k` is the failure probability under the
-law of `k` accepted runs (the old soundness's `expectAcc`).
+sampling design of `k` accepted runs (the old soundness's `expectAcc`).
 
-* **Coupling** (`wait_couple`): the first `k` accepted runs among the draws have the law of `k` independent accepted
-  runs, so `ε^k · Pr[the wait collects k runs and fails] ≤ Q`, by induction on the draws.
+* **Coupling** (`wait_couple`): the first `k` accepted runs among the samples have the sampling design of `k` independent accepted
+  runs, so `ε^k · Pr[the wait collects k runs and fails] ≤ Q`, by induction on the samples.
 * **Chernoff** (`wait_short_le`, `short_le_exp`): the wait collects fewer than `k` with probability at most
   `2^k·(1 − ε/2)^K` (Markov on `2^{−#accepted}`), at most `2^k·e^{−k}` once `εK ≥ 2k`.
 * **Truncation** (`ERep_trunc`): `Pr[acc ∧ ¬R(x, E^rep)] ≤ 4·𝔼[a] + 2^{−m} + 2k/K + e^{−k/8}` once `rate ≤ 1/4`,
@@ -83,7 +83,7 @@ theorem Ex_pi_prod {D : Type} [Fintype D] [Nonempty D] (f : D → ℝ) :
 
 /-! ## What a wait collects -/
 
-/-- What one wait collects over the coin draws `rs`, from `acc` so far: `waitAcc`'s result. -/
+/-- What one wait collects over the coin samples `rs`, from `acc` so far: `waitAcc`'s result. -/
 def waitRes {R : Type} (run : R → Trace) (k : ℕ) : List R → List Seen → List Seen
   | [], acc => acc
   | r :: rs, acc =>
@@ -201,7 +201,7 @@ theorem wait_couple {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k :
             ring
         _ = RHS := by ring
 
-/-- A wait that collects fewer than `k` accepted runs saw fewer than `k` accepting draws:
+/-- A wait that collects fewer than `k` accepted runs saw fewer than `k` accepting samples:
 `(1/2)^k ≤ (1/2)^{#collected} · ∏_r (1/2 if r accepts, else 1)`. -/
 theorem waitRes_short {R : Type} (run : R → Trace) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), acc.length ≤ k → (waitRes run k rs acc).length < k →
@@ -225,7 +225,7 @@ theorem waitRes_short {R : Type} (run : R → Trace) (k : ℕ) :
       simp only [List.map_cons, List.prod_cons, hr, ↓reduceIte, one_mul]
       exact ih
 
-/-- **Chernoff, by Markov on `2^{−#accepted}`**: a wait over `K` draws collects fewer than `k` accepted runs with
+/-- **Chernoff, by Markov on `2^{−#accepted}`**: a wait over `K` samples collects fewer than `k` accepted runs with
 probability at most `2^k·(1 − ε/2)^K`. -/
 theorem wait_short_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k K : ℕ) :
     Pr (fun ρ : Fin K → D => (waitRes run k ((List.finRange K).map ρ) []).length < k) ≤

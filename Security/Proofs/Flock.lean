@@ -42,6 +42,6 @@ public import Proofs.Flock.Claims.Complete.Zk
 public import Proofs.Flock.EndToEnd.Joint.Bound
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
-/-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
+/-! Flock's proofs: the verifier's, level3's and soundness's. -/
 
 @[expose] public section

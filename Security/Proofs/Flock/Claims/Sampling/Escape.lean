@@ -5,25 +5,25 @@ public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Claims.Sampling.Wait
 
 /-!
-# The designs' acceptance probabilities, as their draws' probabilities
+# The designs' acceptance probabilities, as their samples' probabilities
 
 `Definitions.Claims.Sampling` states each design's acceptance probability `P_a(B)` in closed form, over slots in `ℕ`.
-Here each is the `Claims.Pr` that a model draw misses `B`:
+Here each is the `Claims.Pr` that a model sample misses `B`:
 
 * `Pr_pi_forall`, `Pr_and_prod`, `Ex_pi_prod`: independent coordinates.
 * `mem_window`, `window_subset`, `window_zero`, `window_window`: `window o n B` is `B` on `[o, o + n)`, shifted to
-  `[0, n)`; `finOf N B`, `disjoint_image_val_iff`: slots below `N` as units of a draw over `Fin N`.
+  `[0, n)`; `finOf N B`, `disjoint_image_val_iff`: slots below `N` as units of a sample over `Fin N`.
 * `stratum_miss_eq`, `strataPa_eq_Pr`: **independent uniform `k_s`-subsets of consecutive strata** (`StrataΩ`,
   `strataDraw`) miss `B` with probability `strataPa`; `strataPa_append`, `strataPa_window`.
-* `OneStage.Pa_all`, `Pa_subset`, `Pa_bernoulli`: the `all`, uniform-subset and Bernoulli draws miss `B` with
-  probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata draw (`OneStage.strata`: the
+* `OneStage.Pa_all`, `Pa_subset`, `Pa_bernoulli`: the `all`, uniform-subset and Bernoulli samples miss `B` with
+  probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata sample (`OneStage.strata`: the
   stratified and work laws by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
   `OneStage.strata_le`.
 * `classesPa_eq_prod`, `classesPa_eq_Pr`, `Design.Pa_eq_Pr`: **the classes' product**: `P_a` on the partition is the
   product over its classes of each rule's `P_a` on the class's window (`classPa`), the probability that independent
-  draws of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes drawn as strata are one strata draw.
+  samples of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes sampled as strata are one strata sample.
 
-`Live.lean` proves these distributions of the executable draw on uniform bytes, and `Select` of the deployed sampled
+`Live.lean` proves these distributions of the executable sample on uniform bytes, and `Select` of the deployed sampled
 verifier's (`drawMisses`, and `DrawLaw` from it, `drawLaw_of_slots`).
 -/
 
@@ -94,7 +94,7 @@ theorem window_window {o o' n n' : ℕ} (h : o' + n' ≤ n) (B : Finset ℕ) :
   · exact iff_of_false (fun h => hu (mem_range.1 (window_subset _ _ _ h)))
       fun h => hu (mem_range.1 (window_subset _ _ _ h))
 
-/-- The slots of `B`, as units of a draw over `Fin N`. -/
+/-- The slots of `B`, as units of a sample over `Fin N`. -/
 def finOf (N : ℕ) (B : Finset ℕ) : Finset (Fin N) := univ.filter fun u => u.val ∈ B
 
 theorem map_finOf {N : ℕ} {B : Finset ℕ} (hB : B ⊆ range N) : (finOf N B).map Fin.valEmbedding = B := by
@@ -124,7 +124,7 @@ theorem disjoint_image_val_iff {N : ℕ} (S : Finset (Fin N)) {B : Finset ℕ} (
   rw [← window_zero hB, ← disjoint_shift_iff 0 S B, window_zero hB]
   simp only [zero_add]
 
-/-! ## Strata draws -/
+/-! ## Strata samples -/
 
 /-- **A stratum's uniform `k`-subset misses `B`**: a uniform `k`-subset of `n` slots from `o` misses `B` with
 probability `C(n − |B ∩ [o, o + n)|, k)/C(n, k)`. -/
@@ -151,13 +151,13 @@ instance instFintypeStrataΩ : (ss : List (ℕ × ℕ)) → Fintype (StrataΩ ss
     have := instFintypeStrataΩ ss
     inferInstanceAs (Fintype ({S : Finset (Fin n) // S.card = k} × StrataΩ ss))
 
-/-- The slots the strata's subsets draw, stratum `s` from offset `o + n_0 + ⋯ + n_{s−1}`. -/
+/-- The slots the strata's subsets sample, stratum `s` from offset `o + n_0 + ⋯ + n_{s−1}`. -/
 def strataDraw : (ss : List (ℕ × ℕ)) → ℕ → StrataΩ ss → Finset ℕ
   | [], _, _ => ∅
   | (n, k) :: ss, o, ω =>
     (ω : {S : Finset (Fin n) // S.card = k} × StrataΩ ss).1.1.image (fun u => o + u.val) ∪ strataDraw ss (o + n) ω.2
 
-/-- **`strataPa` is the strata draw's miss probability**: independent uniform `k_s`-subsets of consecutive strata of
+/-- **`strataPa` is the strata sample's miss probability**: independent uniform `k_s`-subsets of consecutive strata of
 `n_s` slots, from `o`, miss `B` with probability `strataPa ss o B`. -/
 theorem strataPa_eq_Pr : ∀ (ss : List (ℕ × ℕ)) (o : ℕ) (B : Finset ℕ),
     strataPa ss o B = Pr (fun ω : StrataΩ ss => Disjoint (strataDraw ss o ω) B)
@@ -178,7 +178,7 @@ theorem strataPa_append : ∀ (ss ss' : List (ℕ × ℕ)) (o : ℕ) (B : Finset
     rw [List.cons_append, strataPa, strataPa, strataPa_append ss ss' (o + n) B, List.map_cons, List.sum_cons,
       add_assoc, mul_assoc]
 
-/-- A strata draw inside a window reads `B` shifted by the window's offset. -/
+/-- A strata sample inside a window reads `B` shifted by the window's offset. -/
 theorem strataPa_window : ∀ (ss : List (ℕ × ℕ)) {o o' n : ℕ} (B : Finset ℕ), o' + (ss.map Prod.fst).sum ≤ n →
     strataPa ss o' (window o n B) = strataPa ss (o + o') B
   | [], _, _, _, _, _ => rfl
@@ -188,7 +188,7 @@ theorem strataPa_window : ∀ (ss : List (ℕ × ℕ)) {o o' n : ℕ} (B : Finse
 
 /-! ## One-stage designs -/
 
-/-- **The `all` draw misses `B`** (it draws every slot below `N = Σ ns`) with probability `P_a(B)`: one exactly when
+/-- **The `all` sample misses `B`** (it samples every slot below `N = Σ ns`) with probability `P_a(B)`: one exactly when
 `B` is empty. -/
 theorem OneStage.Pa_all (ns : List ℕ) {B : Finset ℕ} (hB : B ⊆ range ns.sum) :
     OneStage.all.Pa ns B = Pr (fun _ : Unit => Disjoint (range ns.sum) B) := by
@@ -206,7 +206,7 @@ theorem OneStage.Pa_subset (ns : List ℕ) {K : ℕ} (hK : K ≤ ns.sum) {B : Fi
     fun S => disjoint_image_val_iff S.1 hB, subset_miss_eq hK, card_finOf hB]
   rfl
 
-/-- **The Bernoulli draw misses `B`** (slot `u` drawn when its coin in `[0, den)` is below `num`) with probability
+/-- **The Bernoulli sample misses `B`** (slot `u` sampled when its coin in `[0, den)` is below `num`) with probability
 `P_a(B) = ((den − num)/den)^|B|`. -/
 theorem OneStage.Pa_bernoulli (ns : List ℕ) {num den : ℕ} [NeZero den] (h : num ≤ den) {B : Finset ℕ}
     (hB : B ⊆ range ns.sum) :
@@ -217,8 +217,8 @@ theorem OneStage.Pa_bernoulli (ns : List ℕ) {num den : ℕ} [NeZero den] (h : 
     bernoulli_miss_eq h, card_finOf hB]
   rfl
 
-/-- The strata `(n_s, k_s)` a one-stage design draws uniform subsets of, all but Bernoulli's: the stratified and work
-laws' own, and one stratum of every slot for `all` (drawing all of it) and `subset`. -/
+/-- The strata `(n_s, k_s)` a one-stage design samples uniform subsets of, all but Bernoulli's: the stratified and work
+laws' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
 def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
   | .all => some [(ns.sum, ns.sum)]
   | .subset K => some [(ns.sum, K)]
@@ -228,7 +228,7 @@ def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
     let W := ((ns.zip w).map fun p => p.1 * p.2).sum
     some ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W))))
 
-/-- **Every design but Bernoulli's is a strata draw**: its `P_a` is `strataPa` of its strata. -/
+/-- **Every design but Bernoulli's is a strata sample**: its `P_a` is `strataPa` of its strata. -/
 theorem OneStage.Pa_strata {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
     {B : Finset ℕ} (hB : B ⊆ range ns.sum) : d.Pa ns B = strataPa ss 0 B := by
   cases d with
@@ -285,7 +285,7 @@ theorem OneStage.strata_sum {ns : List ℕ} {d : OneStage} {ss : List (ℕ × �
           ((ns.zip w).map fun p => p.1 * p.2).sum)))) = Prod.fst := rfl
     rw [this, List.map_fst_zip (by simp [hw, hf])]
 
-/-- A well-formed design's strata each draw at most their size. -/
+/-- A well-formed design's strata each sample at most their size. -/
 theorem OneStage.strata_le {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
     (hw : d.WellFormed ns) : ∀ p ∈ ss, p.2 ≤ p.1 := by
   cases d with
@@ -338,8 +338,8 @@ theorem classesPa_eq_prod : ∀ (rs : List OneStage) (cs : List (List (List (Lis
     refine prod_congr rfl fun i _ => ?_
     simp [classPa, classOff, add_assoc]
 
-/-- **The classes drawn independently**: when each class's factor is the probability that its own draw misses, the
-classes' product is the probability that independent draws of every class all miss. -/
+/-- **The classes sampled independently**: when each class's factor is the probability that its own sample misses, the
+classes' product is the probability that independent samples of every class all miss. -/
 theorem classesPa_eq_Pr (rs : List OneStage) (cs : List (List (List (List ℕ)))) (o : ℕ) (B : Finset ℕ)
     (hl : rs.length = cs.length) {Ω : Fin rs.length → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
     (E : ∀ i, Ω i → Prop) (hE : ∀ i : Fin rs.length, classPa rs cs o B i = Pr (E i)) :
@@ -349,15 +349,15 @@ theorem classesPa_eq_Pr (rs : List OneStage) (cs : List (List (List (List ℕ)))
     Pr_congr (q := fun ω : (i : Fin rs.length) → Ω i => ∀ i ∈ univ, E i (ω i)) (by simp)]
   exact (prod_congr rfl fun i _ => hE i).trans (Pr_pi_forall univ E).symm
 
-/-- **The design's `P_a` on the partition is the probability that the classes' independent draws all miss.** -/
+/-- **The design's `P_a` on the partition is the probability that the classes' independent samples all miss.** -/
 theorem Design.Pa_eq_Pr (d : Design) (P : Partition) (B : Finset ℕ) (hl : d.rules.length = P.classes.length)
     {Ω : Fin d.rules.length → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)] (E : ∀ i, Ω i → Prop)
     (hE : ∀ i : Fin d.rules.length, classPa d.rules P.classes 0 B i = Pr (E i)) :
     d.Pa P B = Pr (fun ω : (i : Fin d.rules.length) → Ω i => ∀ i, E i (ω i)) :=
   classesPa_eq_Pr d.rules P.classes 0 B hl E hE
 
-/-- **Classes drawn as strata are one strata draw**: when each class's `P_a` is a strata draw's over its slots, the
-classes' product is the strata draw of all their strata, in order. -/
+/-- **Classes sampled as strata are one strata sample**: when each class's `P_a` is a strata sample's over its slots, the
+classes' product is the strata sample of all their strata, in order. -/
 theorem classesPa_strata : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (sss : List (List (ℕ × ℕ)))
     (o : ℕ) (B : Finset ℕ), rs.length = cs.length → sss.length = cs.length →
     (∀ p ∈ (rs.zip cs).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length ∧
@@ -375,7 +375,7 @@ theorem classesPa_strata : ∀ (rs : List OneStage) (cs : List (List (List (List
       strataPa_append, hsum, classesPa_strata rs cs sss (o + c.flatten.length) B (by simpa using hl)
         (by simpa using hs) fun p hp => h p (by simp [hp])]
 
-/-- **A design whose classes are drawn as strata is one strata draw over the partition's proof blocks.** -/
+/-- **A design whose classes are sampled as strata is one strata sample over the partition's proof blocks.** -/
 theorem Design.Pa_strata (d : Design) (P : Partition) (sss : List (List (ℕ × ℕ)))
     (hl : d.rules.length = P.classes.length) (hs : sss.length = P.classes.length)
     (h : ∀ p ∈ (d.rules.zip P.classes).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length ∧

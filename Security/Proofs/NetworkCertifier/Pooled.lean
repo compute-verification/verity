@@ -9,7 +9,7 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 A uniform `k`-subset of `n` blocks misses a set of `f` blocks with probability `C(n - f, k) / C(n, k)`, at most
 `(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its incorrect
-set fixed before its own draw, every draw missing its window's set while the sets hold `F` blocks in total has
+set fixed before its own sample, every sample missing its window's set while the sets hold `F` blocks in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
 (`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
 each window's soundness error added by a union bound, that is `horizonIncorrectBlocks`.
@@ -150,7 +150,7 @@ theorem pr_disjoint_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (draw : 
     have hqk : q ≤ k / n := (le_div_iff₀ hn').2 hq
     exact pow_le_pow_left₀ (by linarith) (by linarith) _
 
-/-- The draw's hypotheses are satisfiable: the coins that are the `k`-subsets themselves. -/
+/-- The sample's hypotheses are satisfiable: the coins that are the `k`-subsets themselves. -/
 theorem drawUniform_val (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.val.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →

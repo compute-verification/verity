@@ -25,7 +25,7 @@ is its line in ``seals.jsonl``, once written, in window order; a sealer with a `
 writes only each seal's store files on its thread, and the rest of the seal runs in that spawned process. With ``release``
 (`serve_release.Draws`, ``--retain device --release-after``) a window's seal, on either path, first waits for its
 draw-gated release (on the first thread), which keeps only the leaves its
-subprotocols' drawn blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
+subprotocols' sampled blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
 where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the
 worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and ``close_phases_s``, and where its steps'
 Commit time went on the serving thread and the worker (``commit_s``, `commit_s_of`). ``window_bytes``

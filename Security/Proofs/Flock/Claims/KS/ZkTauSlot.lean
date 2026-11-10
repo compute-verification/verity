@@ -117,7 +117,7 @@ theorem coinsK_tailShape (F K D : Type) (sch : Schedule) (lv₀ lv₁ : Level) (
   simp only [tailShape, Lock.coinsK, Lock.coinsK_append, coinsK_oodShape, coinsK_qbShape, this]
   omega
 
-/-- **The masked level 0's coins**: its two first coins, its `k0` lane rounds, its `e` extra draws and levels 1+. -/
+/-- **The masked level 0's coins**: its two first coins, its `k0` lane rounds, its `e` extra samples and levels 1+. -/
 theorem coinsK_ligPadShape (F K D : Type) (sch : Schedule) (e t : ℕ) (lv₀ lv₁ : Level) (rest : List Level)
     (hlevs : sch.levels = lv₀ :: lv₁ :: rest) (hl : ∀ l ∈ lv₁ :: rest, l.lanes = 4) :
     Lock.coinsK (ligPadShape F K D sch e t) = sch.k0 + e + 16 + 11 * rest.length := by

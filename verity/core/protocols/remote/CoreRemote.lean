@@ -4,7 +4,7 @@ their work subprotocol:
 
 * `Core.Remote.V1.protocol` (`verity/remote/v1`), **the composite of record**: the inference-only policy, Pearl+'s run
   verdict (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`: a served run's retained passes, the
-  work-weighted draw over their tiles at δ = 1/100, and the run's credit at Pearl's assumption) and sampled proofs.
+  work-weighted sample over their tiles at δ = 1/100, and the run's credit at Pearl's assumption) and sampled proofs.
   `Verity.Registration.Composite.remote` reads it.
 * `Core.Remote.protocol` (`verity/remote/v0`), **development**: H1's period credit in Pearl+'s place, with the
   period's windows tied to the run's record (`windows`). It is no verifier: `Core.Composites` doesn't list it, so no

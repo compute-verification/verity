@@ -28,7 +28,7 @@ In (i), as in `PublicAudit`'s:
   typing `_hbr`'s existential carries is it: gap 2 runs at `holoAtτ st hp hp.τ` (`zk_sessions_recursive_fork_regVτ`),
   whose class, regions and schedules are `holoAt st hp`'s own terms, and the event's "no hidden types" conjunct
   (`HoloSatSome`) refutes `holds` at `hp.τ` (`holoSatSome_of_holds`);
-* the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each draw
+* the hidden statement is the word the transported prover's runs open at R's level 0 against `cap` at each sample
   (`regStmt`), and the raw event is bounded by the typed sessions' at the transported prover (`prob_recT_le`,
   `verifies_zsOf`), where the event's checks at candidate 3 (`ChecksVR`) keep every session's own list at the whole
   histories `recGame` plays (`acceptsV_checked`), at the transcripts the sessions write (`leaves_sessions`);
@@ -290,14 +290,14 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
   exact recursiveAuditC3AtNoA3 CT im obj prog st ish reg wr coins cap salt bcs' hstk zr hCust hRC tbl bc hIC htbl bind
     rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr
 
-/-- **The recursive audit at candidate 3, as the verifier of record runs it, with no A3.** -/
+/-- **The recursive audit at candidate 3, as the verifier runs it, with no A3.** -/
 theorem RecursiveAuditHoloNoA3 : Flock.Guarantees.RecursiveAuditHoloNoA3 := by
   refine And.intro ?_ ?_
   swap
   · exact RecursiveFirewallPrivate
   exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
-/-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
+/-- **The recursive audit at candidate 3, as the verifier runs it.** -/
 theorem RecursiveAuditHolo : Flock.Guarantees.RecursiveAuditHolo := by
   refine And.intro ?_ ?_
   swap

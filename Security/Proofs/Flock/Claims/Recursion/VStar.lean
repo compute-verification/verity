@@ -69,7 +69,7 @@ the inner verifier.
   recording its check's calls, `PartLogs`, and the public ones among the setup's evaluations at the run's V*
   statements, `PubReg`). So `CallsLogColl` admits the setup's evaluations beside the recorded calls. It serves its
   consumer as the first half does (`PrBAbort_le_reg`): a collision among the recorded calls and the setup's
-  evaluations, or a registered tie, at either draw is one `Be` or `Br` finds (`coll_or_reg_split`).
+  evaluations, or a registered tie, at either sample is one `Be` or `Br` finds (`coll_or_reg_split`).
 * `codeFacts_of_parts`: all of it at once. With `ReadsThrough`, `PartCallsTrue` at every part, `ReadsPub`,
   `FinalOpens` and V*'s parts at each shape (`VStarParts`: the part facts above at one layout and opening), the
   readers give `InnerViewRun`, `CallsNil`, `CallsTrue`, `CallsOpenPlayed`, `CallsLogColl` and `InnerAcceptsR`.
@@ -1280,7 +1280,7 @@ theorem callsLogColl_of_parts {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coi
   · exact logColl_of_parts hR hVL hLH hOH hSH hDH hPH hg ht hst hf
   · exact logColl_of_parts hR hVL hLS hOS hSS hDS hPS hg ht hst hf
 
-/-- The calls `Be` reads at a draw are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
+/-- The calls `Be` reads at a sample are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
 where it gives up (`CallsNil`). -/
 theorem calls_true_of {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hT : CallsTrue H D I DO)
@@ -1290,8 +1290,8 @@ theorem calls_true_of {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO
   · exact hN0 x
   · exact hT decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
 
-/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record or the setup makes at that draw's V*
-statements, or the finders charge a collision at that draw (`innerF_vLog_sub` off one). -/
+/-- `P_I`'s aborting run records only calls that `E_O`'s witnesses there record or the setup makes at that sample's V*
+statements, or the finders charge a collision at that sample (`innerF_vLog_sub` off one). -/
 theorem innerF_vLog_sub_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
     {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {decC : Msg → Msg → Coin}
     (hL : CallsLogColl H D I DO) (hpc : PublicCoin H I decC) (ω : Ω)
@@ -1309,7 +1309,7 @@ theorem innerF_vLog_sub_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin
 
 /-- **`B` at `P_I`'s aborting runs finds only what the forks charge, from `CallsLogColl`**: `PrBAbort_le_PrBI` with
 `CallsLogColl` and `CallsTrue` for `CallsRecord`. Where a kept run's calls aren't all recorded, the finders charge a
-collision at its draw, `Be`'s or `Br`'s at the fork `B_I` makes there (`coll_or_reg`); `B_I` guesses among the inner
+collision at its sample, `Be`'s or `Br`'s at the fork `B_I` makes there (`coll_or_reg`); `B_I` guesses among the inner
 rounds, which are among the compiled verifier's (`InnerRounds`), so the forks' charges sum to at most
 `k(x)·(Pr[Be] + Pr[Br])` (`sum_forkReg_le`). -/
 theorem PrBAbort_le_reg {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}

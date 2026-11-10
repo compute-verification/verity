@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Instance
 /-!
 # The Flock instantiation, at the oracle layer
 
-The verifier's session on a draw runs the tables its plan derives from the draw and the transcript,
+The verifier's session on a sample runs the tables its plan derives from the sample and the transcript,
 concurrently, and accepts when every table accepts (`flockSession`). The prover chooses the
 schedule, so every other table's coins are part of its strategy.
 
@@ -18,12 +18,12 @@ schedule, so every other table's coins are part of its strategy.
   accepted while its committed values do not satisfy its statement with probability at most
   `2^-205` (`table_value_sound`, `execArith_correct`);
 * `flock_session_sound`: so the session is `SessionSound` at `2^-205`, given **the lowering**
-  (`LoweringSound`, named): a drawn wrong unit lies in a table whose statement no committed table
+  (`LoweringSound`, named): a sampled incorrect proof block lies in a table whose statement no committed table
   satisfies;
 * `flock_inputs_sound`: the input unit, an always-proved table, likewise (`InputsLoweringSound`);
 * `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
   `δ(K) = miss K + 2^-205`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-205`;
-* `flock_oracle_drawn`, `flock_oracle_cone`: drawn units, and a consumer's value through its cone;
+* `flock_oracle_drawn`, `flock_oracle_cone`: sampled proof blocks, and a consumer's value through its cone;
 * `flock_two_stage_sound`, `flock_two_stage_full_profile`: two-stage (b1) on Flock, one-stage over
   the coarse partition plus `2^-205`.
 
@@ -103,13 +103,13 @@ namespace Partition
 
 variable {C : Circuit} {n : ℕ} (P : Partition C n)
 
-/-- **The verifier's session on a draw**: the tables its plan derives from the draw and the
+/-- **The verifier's session on a sample**: the tables its plan derives from the sample and the
 transcript, run concurrently; it accepts when every table accepts. -/
 noncomputable def flockSession (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable)
     (S : Finset (Fin n)) (tr : Fin C.N → Bool) : Game Bool :=
   (batch ((plan S tr).map FlockTable.game)).map fun outs => decide (∀ o ∈ outs, o.1 = true)
 
-/-- **The lowering** (named hypothesis): a drawn unit that is wrong in the transcript lies in a
+/-- **The lowering** (named hypothesis): a sampled proof block that is wrong in the transcript lies in a
 table of the plan whose statement no committed table satisfies. At the oracle layer a unit's
 statement carries its committed inputs and outputs, so this is the lowering theorem's content: the
 statement is satisfiable only if the unit's gates map its committed inputs to its committed
@@ -139,7 +139,7 @@ theorem flockSession_le
   exact (value_mono (fun out h => ⟨h, hno out.2⟩) _).trans (T.value_le)
 
 /-- **Flock's batched session is `SessionSound` at `2^-205`**, given the lowering: the first
-wrong drawn unit's table bounds the whole session. -/
+wrong sampled proof block's table bounds the whole session. -/
 theorem flock_session_sound
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan) :
     P.SessionSound (flockSession plan) (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := by
@@ -174,8 +174,8 @@ theorem flock_oracle_count_subset
   have := P.flock_oracle_count plan hlow (Law.subset n k hk) K σ
   rwa [Law.subset_miss hk hK] at this
 
-/-- **Drawn units of the Flock audit** are correct up to `2^-205`, even for a consumer who looks
-after the draw. -/
+/-- **Sampled proof blocks of the Flock audit** are correct up to `2^-205`, even for a consumer who looks
+after the sample. -/
 theorem flock_oracle_drawn
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
     (L : Law n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
@@ -183,9 +183,9 @@ theorem flock_oracle_drawn
       ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   P.oracle_drawn (P.flock_session_sound plan hlow) σ
 
-/-- **A consumer's value in the Flock audit**: for committed wires `T` fixed before the draw, the
+/-- **A consumer's value in the Flock audit**: for committed wires `T` fixed before the sample, the
 audit accepts with a wrong wire of `T` with probability at most the largest miss probability in
-`T`'s cone, plus `2^-205` for the drawn units and `2^-205` for the input unit. -/
+`T`'s cone, plus `2^-205` for the sampled proof blocks and `2^-205` for the input unit. -/
 theorem flock_oracle_cone
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
     {a : Fin C.N → Bool} (hin : InputsLoweringSound plan a) (L : Law n) (T : Finset (Fin C.N))
@@ -213,7 +213,7 @@ theorem flock_two_stage_sound
   exact flockSession_le plan S _ hT hno τ
 
 /-- **Two-stage (b1) on Flock is one-stage over the coarse partition**: when the second stage
-proves every fine unit of each drawn coarse unit,
+proves every fine unit of each sampled coarse unit,
 `Pr[accept ∧ wrong_c(R) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} e_{L₁}(B) + 2^-205`. -/
 theorem flock_two_stage_full_profile (r : Refines Pf Pc)
     (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockTable) (hlow : Pf.LoweringSound plan)

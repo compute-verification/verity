@@ -27,7 +27,7 @@ local instance lawfulBEqByteArrayL0 : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-- **A masked Ligerito prover that returns** names the commitment's cap and drew independent pair coins: its one
+/-- **A masked Ligerito prover that returns** names the commitment's cap and flipped independent pair coins: its one
 refusal is on dependent ones. -/
 theorem ligeritoPZk_capRho (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ)

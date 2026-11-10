@@ -6,7 +6,7 @@ public import Proofs.NetworkCertifier.WitnessToys
 # The egress and ingress counts' honest and nontrivial lemmas
 
 Each count the lock holds to witnesses has an honest and a nontrivial lemma, each at a positive instance: four steps,
-two execution blocks of one advice bit each, a possible faulty set that is not empty.
+two execution blocks of one advice bit each, a possible incorrect set that is not empty.
 
 The four egress counts over `AccSeqs` (the fixed advice budget and the reference schedule's three) take no premise
 outside a named assumption's module, so their honest lemmas say that the deployed Program accepts the honest
@@ -17,7 +17,7 @@ link of two slots carries any payload at every step, so the sequences counted ar
 (`accSeqsAt_acceptAll_not_le`), against the bound's value at `fxRate`'s parameters.
 
 The count under a sampled audit (`EncardAccSeqsSampledLe`) takes that the layout fits the circuit. Its honest lemma
-concludes that at `sampProg`, with the free inputs' count, the faulty-bits bound at `δ = 1/4`, the faulty set `{0}`
+concludes that at `sampProg`, with the free inputs' count, the faulty-bits bound at `δ = 1/4`, the incorrect set `{0}`
 possible there, and the acceptance of the step `obs1`; its nontrivial lemma is the same count at `acceptAll`, against
 the bound's value at those parameters.
 
@@ -88,8 +88,8 @@ theorem EncardAccSeqsLeConstantRatePerWindow_nontrivial :
 /-! ## Under a sampled audit -/
 
 /-- **`sampProg`'s audit meets the sampled count's premises and accepts its honest step**: `notLay` fits `sampProg`
-over one step, its one free input admits two values, each possible faulty set at `δ = 1/4` commits at most three bits,
-the faulty set `{0}` is possible there, and the step `obs1` is accepted. -/
+over one step, its one free input admits two values, each possible incorrect set at `δ = 1/4` commits at most three bits,
+the incorrect set `{0}` is possible there, and the step `obs1` is accepted. -/
 theorem EncardAccSeqsSampledLe_honest :
     notLay.Fits sampProg 1 ∧ (AsReg sampProg notLay 1 ∅ fun _ => false).encard ≤ ((2 ^ 1 : ℕ) : ℕ∞) ∧
       (∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3) ∧
@@ -99,7 +99,7 @@ theorem EncardAccSeqsSampledLe_honest :
   ⟨sampLay_fits, sampAs_encard, sampBits, single_mem_sampFaulty, obs1_sampAcc⟩
 
 /-- **`EncardAccSeqsSampledLe`'s bound fails at the verifier that accepts everything**, at `sampProg`'s parameters:
-`c = 1`, `β = 3`, its possible faulty sets at `δ = 1/4`, `D = 1`. -/
+`c = 1`, `β = 3`, its possible incorrect sets at `δ = 1/4`, `D = 1`. -/
 theorem EncardAccSeqsSampledLe_nontrivial :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).encard ≤
       ((2 ^ 1 * (faultySets sampDesign sampPart (1 / 4)).card * 2 ^ 3 * 1 ^ 1 : ℕ) : ℕ∞) :=

@@ -21,7 +21,7 @@ hypotheses. This file supplies the pieces and those two.
   which is the converse of `opened_plain_of`'s use of `merkleCheck_of`.
 * `levelCheck_of_merkleOk`, `levelPass_of_merkleOk`: the honest run's checks (`FlockComplete.Replay.Lg.MerkleOk`, at
   hashes whose `plain` operations are the scheme's, e.g. `With.std` by `plain_named`) are `levelCheck`s at the
-  positions its query coins draw, with the level's `q` of them.
+  positions its query coins sample, with the level's `q` of them.
 * `DecAt.hholds_rowDPieces`: every piece holds (`hholds`), at the layout tie (`hside`) and coin tie (`hpos`) in
   `runs_assembled`'s form at each table, where at each rep the verifier rows run and every level's check passes at
   their positions (`hrun`).
@@ -115,7 +115,7 @@ theorem opening_eq (p : LigeritoProof) (cap : Array ByteArray) (R ℓ : ℕ) :
   unfold FlockComplete.Replay.Lg.opening FlockSoundness.Refine.capAt openAt
   by_cases h0 : ℓ = 0 <;> by_cases h1 : ℓ < R <;> simp [h0, h1]
 
-/-- **The honest run's Merkle check at level `ℓ` is `levelCheck`** at the positions the level's query coins draw
+/-- **The honest run's Merkle check at level `ℓ` is `levelCheck`** at the positions the level's query coins sample
 (`MerkleOk`, at hashes whose `plain` operations are the scheme's). -/
 theorem levelCheck_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = MerkleOps.ofScheme plain)
     {sch : Flock.Schedule} {cap : Array ByteArray} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {k : ℕ}
@@ -126,7 +126,7 @@ theorem levelCheck_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = 
   rw [hops, With.ofScheme_merkleCheck, opening_eq] at h'
   simpa only [levelCheck, FlockVBridge.Family.Conss.getD_default] using h'
 
-/-- **Every level passes at positions `pos ℓ`** where they are the ones the honest run's query coins draw: `q` of
+/-- **Every level passes at positions `pos ℓ`** where they are the ones the honest run's query coins sample: `q` of
 them (`positions_size`, at `fast100`'s seamed levels), and the level's check passes there. -/
 theorem levelPass_of_merkleOk {hs : Hashes Flock.V} (hops : plain.opsWith hs = MerkleOps.ofScheme plain)
     {sch : Flock.Schedule} (hseam : ∀ lv ∈ sch.levels, FlockSoundness.Refine.LevelSeam lv)
@@ -290,7 +290,7 @@ theorem hholds_rowDPiecesAt (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ ×
   exact queryOpens_of_check hc (Nat.lt_of_lt_of_le hj hle)
 
 /-- **`hlev` at the honest run**: where rep `r`'s proof passes FlockComplete's Merkle checks (`MerkleOk`) at the query
-coins `cf` from round `k`, and any run of the verifier rows draws its positions from those coins (`htie`, the coin
+coins `cf` from round `k`, and any run of the verifier rows samples its positions from those coins (`htie`, the coin
 tie), every level passes at the rows' positions. -/
 theorem levels_of_merkleOk {i : ℕ} (r : Fin 2) {hs : Hashes Flock.V}
     (hops : plain.opsWith hs = MerkleOps.ofScheme plain)

@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.Recursion.LastCallsR
 opens its own (`colsRV rd`, trimmed: `deployPlainTrimR`), so `StepsBaseC` is `StepsBase` at any columns `colsE`, and
 `ksLin2_stepsC_partAccepts` and `bitsLin2_stepsC_partAccepts` are `ksLin2_deployedE_partAccepts` and
 `bitsLin2_deployedE_partAccepts` at any steps and columns meeting it: `ksLin2_route_staged` at `layoutBTops (finOpen
-rest)` and the coin server's record (`recTr`), which reads nothing of the columns beyond `StepsBaseC`.
+rest)` and the challenger's live-coin part's record (`recTr`), which reads nothing of the columns beyond `StepsBaseC`.
 
 At the deployed reader's steps and trimmed columns (`stepsBase_R`):
 
@@ -19,7 +19,7 @@ At the deployed reader's steps and trimmed columns (`stepsBase_R`):
   half and calls half, both proved at SHA-512 (`rColsBind_sha512`, `rCallsBind_sha512`);
 * `LastCoinFree` holds at any columns (`lastCoinFree_R`).
 
-The inner verifier's calls need nothing of the steps: the finders search them at each draw's coins
+The inner verifier's calls need nothing of the steps: the finders search them at each sample's coins
 (`callsLogCollAt_deployRec`), so `StepsLogFree` is not among them. So `ksLin2_deployedR_partAccepts` and
 `bitsLin2_deployedR_partAccepts` are the B corollaries at the deployed reader, reopened on `PlainRdInR` and `DecompB`
 at `PartAccepts`. This bounds no number by itself: those premises are open.
@@ -46,7 +46,7 @@ def StepsBaseC (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w).LastCoinFree
       FlockDeploy.sha512
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record
 (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_route_staged` with `HeldB` from
 `heldB_layoutBTops`, `StagedB` from `stagedB_deployRec_part` at `recRead` (`readsBack_recTr`), the inner check
 `PartAccepts` (`exists_chk_iff`), `PartOpensB` from `partOpensB_recRead` and `ReadersTrue` from
@@ -158,7 +158,7 @@ theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List
 
 /-! ## The B corollaries at the deployed reader -/
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record
 (`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. Its
 premises are `DecompB` at `PartAccepts` and `PlainRdInR`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
 deployed reader with none. -/

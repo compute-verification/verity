@@ -13,7 +13,7 @@ an accepting run or fork with its collision (`zkForkEv`, `zkEv₁`) and the mixt
 `P`'s roots (`zkRoot`), two of those bounds come from deterministic facts about `P'` (`ZkSimWJ`):
 
 * the first, from `P'` simulating `P`'s accepting runs at `Φ` (`ZkSimRun`), by `zk_first_of_sim`, with no premise on
-  the record's draw;
+  the record's sample;
 * the self-clash bound, from a live self-clash at `P'`'s outcome giving an accepting run of `P` at `Φ` with a
   collision among the verifier's calls (`ZkClashRun`), by `liveMix_le_Pr`;
 * the fork bounds at `P'`'s strategies (`Adv`'s three and level 0's `Adv₀`) are asked as they are, each at most its
@@ -119,8 +119,8 @@ end Gen
 
 open Classical in
 /-- **A simulator of each masked prover at the witness-lane verdict**: at a masked statement in scope that sets up at
-a draw, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
-of the session at C-Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
+a sample, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
+of the session at Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
 coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right
@@ -213,8 +213,8 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **A simulator of each masked prover at the witness-lane verdict**: at a masked statement in scope that sets up at
-a draw, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
-of the session at C-Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
+a sample, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
+of the session at Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
 coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right

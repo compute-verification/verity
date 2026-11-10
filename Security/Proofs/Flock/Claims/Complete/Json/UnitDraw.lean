@@ -4,10 +4,10 @@ public import Proofs.Flock.Claims.Complete.Json.Stmt
 import all Lean.Data.Json.Basic
 
 /-!
-# The session's draw at one table
+# The session's sample at one table
 
 At one table the session's `unitDraw` is the public file's header's (`Stmt.spec`). In scope, Flock's plain verifier sets
-a drawn statement up through `setupOne`, which writes the draw into that header (`HmRow.drawn`), so the session's draw
+a sampled statement up through `setupOne`, which writes the sample into that header (`HmRow.drawn`), so the session's sample
 is the statement's, and not `null` (`unitDraw_one`): what `stmtOk` shows at a good case, from the scope and the setup
 alone.
 -/
@@ -20,7 +20,7 @@ open Flock FlockDeploy
 open Lean (Json JsonNumber)
 open FlockSoundness FlockSoundness.Refine
 
-/-- **In scope, at one table, the session's draw is the statement's.** -/
+/-- **In scope, at one table, the session's sample is the statement's.** -/
 theorem unitDraw_one {rel : Readable.Parsed → Readable.Relation}
     {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployPlain rel) x) (hset : setupOf false x = some (s, spec, sts))

@@ -17,7 +17,7 @@ The down-projection tag: `k` rows of uniform signs, each row's inner product wit
   accumulator, from `+0`. The signs are the A operand, as the E4M3 codes of `±1` (`signCode`: `0x38`, `0xB8`); the data
   are the B operand, the integers `−16 … 16` (`smallValue`), each as the E4M3 code of its value (`smallCode`). These are
   the integers E4M3 holds without a gap: every integer it holds above 16 is even.
-* **Commit, then project** (`signMatrix`): a claimed product `C = A·B`, committed before the signs are drawn, is
+* **Commit, then project** (`signMatrix`): a claimed product `C = A·B`, committed before the signs are sampled, is
   checked as `S·C = (S·A)·B`, with `S` the `k × m` matrix of the signs.
 * **What unread elements decide** (`unreadSum`): with a row fixed, a block whose unread elements each take one of two
   values `a_j ≠ b_j` (a bit, say) has inner product `c + Σ_j [ε_j] · v_j`, with `v_j = sgn (s j) · (b_j − a_j) ≠ 0` and

@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 `c.upv` stacked copies of the unit net's rows: the program's own wiring (`Const.Prog.rowsWireC`) carried along
 `rows_circuitProg`. Its constant is on the gate the program wires it to (`keyInst_one`).
 
-`keyProg_correct`: a transcript with no wrong unit makes every unit correct, so each copy's committed columns are the
+`keyProg_correct`: a transcript with no incorrect proof block makes every unit correct, so each copy's committed columns are the
 transcript's (`copyVal_committed`). `keyProg_recOpen`: when the verifier built `c`'s unit net from V*'s laid-out opening
 (`netOf`), copy `j` of unit `u` computes `laid_recOpen`'s outputs at any transcript carrying 1 on the unit's constant
 gate (`unit_recOpen`).
@@ -40,7 +40,7 @@ theorem keyInst_one (outs : Finset (Fin (keyGates hU n))) (u : Fin n) :
     (keyInst hU n outs u).wire ((Rows.ofNet hU).stack c.upv).one = Const.Prog.oneAt (Placed.keyProg c hU n) u :=
   (Const.Prog.castW_wire_one _ _).trans (Const.Prog.rowsWireC_wire_one _ u)
 
-/-- **No wrong unit, every unit correct.** -/
+/-- **No incorrect proof block, every unit correct.** -/
 theorem keyProg_correct {outs : Finset (Fin (keyGates hU n))} {X : Fin (keyGates hU n) → Bool}
     (hw : ((Placed.keyProg c hU n).partition outs).wrong X = ∅) (u : Fin n) :
     ((Placed.keyProg c hU n).partition outs).Correct X u := by

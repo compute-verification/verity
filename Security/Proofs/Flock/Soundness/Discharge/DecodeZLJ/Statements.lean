@@ -8,16 +8,16 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Statements
 /-!
 # The decoder at `J` tables: statements
 
-`headline_tables_subset`'s open guarantee is `hdec : DecodesOnJ …`: at every draw, registration and table `j` of the
+`headline_tables_subset`'s open guarantee is `hdec : DecodesOnJ …`: at every sample, registration and table `j` of the
 plan, on every live outcome whose session directory flock-verify accepts, table `j`'s reps run on the tapes decoded from
 its streams `(j, 0)`, `(j, 1)`, and the salted table's verdict accepts. This file states it at the tables flock-verify
 sets up at `count > 1` (`accepts_tables`), with dec-zl's one-table decoder run on each table's two streams:
 
-* `partJson d count j`: part `j` of the draw `d`'s units, the subset draw `partDraw` that `Stmt.setupTables` sets table
+* `partJson d count j`: part `j` of the sample `d`'s units, the subset sample `partDraw` that `Stmt.setupTables` sets table
   `j` up at.
-* `SetupJ I mPts j d`: under table `j`'s tags (`tagsAt`), setupH accepts the draw `d`, at a `fast100` schedule of at
+* `SetupJ I mPts j d`: under table `j`'s tags (`tagsAt`), setupH accepts the sample `d`, at a `fast100` schedule of at
   least two levels and `mPts` link points. `SetupJ.spec` is its table, built as `DrawSetup.specAt` builds one.
-* `tableJ`, `planJ`: table `j` at the draw's JSON is `SetupJ.spec` at part `j` where flock-verify sets that part up, and
+* `tableJ`, `planJ`: table `j` at the sample's JSON is `SetupJ.spec` at part `j` where flock-verify sets that part up, and
   the fallback `T₀` elsewhere; the plan has `I.count` tables.
 * `decJ`, `opnJ`: table `j`'s decoder (`wZL ++ (wOP ++ wLIG)` at its dimensions, claims and schedule) and openings
   (`opnOf` at setupH's statement for part `j`, on proof files `2j` and `2j + 1`).
@@ -36,7 +36,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **Part `j` of the draw `d`**: `partDraw` at `d`'s population and units, the subset draw `Stmt.setupTables` sets
+/-- **Part `j` of the sample `d`**: `partDraw` at `d`'s population and units, the subset sample `Stmt.setupTables` sets
 table `j` of `count` up at, when `d` decodes. -/
 def partJson (d : Json) (count j : ℕ) : Json :=
   match Draw.UnitDraw.ofJson d with
@@ -49,7 +49,7 @@ theorem tagsAt_typed (tags : Tags) (count j : ℕ) : (tagsAt tags count j).typed
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A table flock-verify sets up**: under table `j`'s tags, `Stmt.setupH` accepts the draw `d`; the statement's
+/-- **A table flock-verify sets up**: under table `j`'s tags, `Stmt.setupH` accepts the sample `d`; the statement's
 `fast100` schedule has at least two levels (as `TabSpec` asks) and its link points are `mPts`. -/
 structure SetupJ (j : ℕ) (d : Json) where
   st : Flock.Stmt
@@ -89,12 +89,12 @@ noncomputable def SetupJ.spec {j : ℕ} {d : Json} (x : SetupJ I mPts j d) : Tab
     omega⟩
 
 open Classical in
-/-- **Table `j` at the draw `d`**: the table flock-verify sets up at part `j` of `d` (`SetupJ.spec`) when it sets that
+/-- **Table `j` at the sample `d`**: the table flock-verify sets up at part `j` of `d` (`SetupJ.spec`) when it sets that
 part up, and the fallback `T₀` otherwise. -/
 noncomputable def tableJ (T₀ : TabSpec mPts) (d : Json) (j : ℕ) : TabSpec mPts :=
   if h : Nonempty (SetupJ I mPts j (partJson d I.count j)) then (Classical.choice h).spec ht else T₀
 
-/-- **The plan of `J` tables** at the challenger's draws `dj`: at draw `S`, `I.count` tables, table `j` the one
+/-- **The plan of `J` tables** at the challenger's samples `dj`: at sample `S`, `I.count` tables, table `j` the one
 flock-verify sets up at part `j` of `dj S` (`tableJ`), for every registration. -/
 noncomputable def planJ (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) {Reg : Type} :
     Finset (Fin n) → Reg → List (TabSpec mPts) :=
@@ -114,7 +114,7 @@ noncomputable def decJ (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (
     (wOP (nXT ((plan S R).get j) + 2) ++ wLIG ((plan S R).get j).sch))
 
 variable (I) in
-/-- **Table `j`'s openings**: `opnOf` at the statement setupH sets up under table `j`'s tags at part `j` of the draw
+/-- **Table `j`'s openings**: `opnOf` at the statement setupH sets up under table `j`'s tags at part `j` of the sample
 `dj S`, and its `fast100` schedule, on proof files `2j` and `2j + 1`. -/
 noncomputable def opnJ (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (dj : Finset (Fin n) → Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) (j : Fin (plan S R).length) :
@@ -134,7 +134,7 @@ def TagsOkJ : Prop :=
 
 variable (I) in
 /-- **`wr` is the challenger's record of the live session of `J` tables**: whenever flock-verify accepts what `wr`
-writes for the outcome `o` at draw `S`, the record carries the draw `dj S`, the proof files are `o`'s, and the record
+writes for the outcome `o` at sample `S`, the record carries the sample `dj S`, the proof files are `o`'s, and the record
 decodes to a session whose link points are `o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
 def RecordsLiveJ (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript) : Prop :=
@@ -147,14 +147,14 @@ def RecordsLiveJ (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg →
           some s ∧ s.rounds.toList = o.reps j r
 
 variable (I mPts) in
-/-- **The challenger's draw at `S`, at `J` tables**: wherever setupH sets table `j` up at its part of `dj S`, it does so
+/-- **The challenger's sample at `S`, at `J` tables**: wherever setupH sets table `j` up at its part of `dj S`, it does so
 with `mPts` link points. -/
 def DrawOkJ (dj : Finset (Fin n) → Json) (S : Finset (Fin n)) : Prop :=
   ∀ j < I.count, ∀ st, Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
     (some (partJson (dj S) I.count j)) I.partition I.program = .ok st → st.mPts = mPts
 
 /-- **The decoder is right at `J` tables** (R11b at `--session-tables J`): given the tags, `wr` the challenger's record
-and the challenger's draws setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables flock-verify
+and the challenger's samples setting each table up at `mPts` link points, `DecodesOnJ` holds at the tables flock-verify
 sets up (`planJ`, at any fallback `T₀`) with the decoder `decJ` on each table's two streams, single coins as field
 elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and its openings `opnJ`. -/
 def DecodesOnJExec : Prop :=

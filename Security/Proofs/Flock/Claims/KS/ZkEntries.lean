@@ -11,7 +11,7 @@ are, with their rows' witness lanes, the masked reader's entries. This file prov
 acceptance, the masked `Entries`:
 
 * `Claims.Flock.slotOpensZ_entries`: a masked rep whose first request is level 0's, at the positions `Flock.positions`
-  draws from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off
+  samples from `coins`, with one opened row per position, opens at level 0 exactly the entries `zkRepCols` reads off
   `coins` and those rows, in order, at every width the rows are cut to.
 * `Claims.Flock.zkRepColsOf_ok`: the masked reader's entries at a proof that decodes are `zkRepCols`'s at level 0, the
   coins of round `zkQueryRound` and the proof's level-0 rows, cut to the witness lanes.
@@ -36,7 +36,7 @@ open FlockSoundness FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkS
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A masked rep's level-0 openings are the reader's entries**: when the rep's first request is level 0's, at the
-positions `Flock.positions` draws from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0
+positions `Flock.positions` samples from `coins`, `q` of them, and its openings are `rows`, one per position, its level-0
 openings' positions and rows, each cut to `w` symbols, are `zkRepCols`'s entries cut to `w`, in order. -/
 theorem slotOpensZ_entries {D Sl : Type} (out : OutZC 𝔽 D Sl) (r : ℕ) (lv : _root_.Flock.Level)
     (coins : Array _root_.Flock.F128) (rows : Array (Array _root_.Flock.F128)) (R : Model.Req)

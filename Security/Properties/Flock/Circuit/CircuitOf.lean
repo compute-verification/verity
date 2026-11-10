@@ -8,7 +8,7 @@ public import Properties.Flock.Circuit.Outs
 /-!
 # The registered circuit file as core's circuit
 
-The circuit a C-Flock session checks is defined from its circuit file: the descriptor `D` the verifier parses
+The circuit a Flock session checks is defined from its circuit file: the descriptor `D` the verifier parses
 (`Flock.Desc.parse`), the unit's rows built from it (`hU : Built D.unroll.unit`) and the population `n` (the public
 file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and partition (`keyCircuit`,
 `keyPartition`) the session's game is stated over. Here that circuit is core's:

@@ -387,7 +387,7 @@ theorem drawOfJ_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Json) :
   unfold drawOfJ shaSubJ
   rw [getObjVal?_mapKey_ne _ _ (draw_ne_proofKey spec)]
 
-/-- The checks after the verdict read the statement and the draw, which `shaSubJ` keeps, and no proof file. -/
+/-- The checks after the verdict read the statement and the sample, which `shaSubJ` keeps, and no proof file. -/
 theorem checksAtJ_shaSubJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (stmt : Claims.Msg) (ds : Array ByteArray) (j : Json)
     (bs : Array ByteArray) (j' : Json) :

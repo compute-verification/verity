@@ -170,7 +170,7 @@ def test_the_unit_accepts_the_committed_words_and_rejects_a_changed_one():
 
 @pytest.mark.parametrize("g", [7, -1])
 def test_a_tag_weight_outside_its_coins_is_rejected(g):
-    """G = g - 3 is 4 or -4: in no `Coins`, which draw g from Fin 7."""
+    """G = g - 3 is 4 or -4: in no `Coins`, which sample g from Fin 7."""
     c = L.Call.draw(random.Random(3), 16, 8, 21)
     c.g[2][5] = g
     assert c.unit_ok(0, 0, 0, c.words()) == 0

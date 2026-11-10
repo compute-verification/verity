@@ -6,9 +6,9 @@ public import Proofs.Flock.Claims.ERep
 # `E^rep`'s expected reruns, and `ERepCost`
 
 At a tape `ω` a run accepts with probability `ε`. `E^rep` replays the judged run (one rerun), and only an accepted judged
-run (probability `ε`) starts the `m` waits. A wait that stops at `k` accepted runs among `K` fresh draws makes
+run (probability `ε`) starts the `m` waits. A wait that stops at `k` accepted runs among `K` fresh samples makes
 `N(K, a)` reruns in expectation from `a` accepted so far, and `ε · N(K, a) ≤ k − a` (`waitRuns_exp`, by induction on
-the draws: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`). So the waits add at most `ε · m · k/ε = m·k`, and
+the samples: `ε·N(K+1, a) = ε + ε·(ε·N(K, a+1)) + (1−ε)·(ε·N(K, a))`). So the waits add at most `ε · m · k/ε = m·k`, and
 `E^rep` reruns the prover at most `1 + m·k` times in expectation (`ERep_runs_exp`), the second half of `ERepCost`
 (`ERep_cost`).
 
@@ -73,7 +73,7 @@ theorem Ex_sum_pi {E : Type} [Fintype E] [Nonempty E] (f : E → ℝ) :
 
 /-! ## One wait's reruns -/
 
-/-- A wait's reruns over the coin draws `rs`, from `a` accepted so far. -/
+/-- A wait's reruns over the coin samples `rs`, from `a` accepted so far. -/
 def waitRuns {R : Type} (run : R → Trace) (k : ℕ) : List R → ℕ → ℕ
   | [], _ => 0
   | r :: rs, a => if k ≤ a then 0 else waitRuns run k rs (if (run r).out = .acc then a + 1 else a) + 1
@@ -108,7 +108,7 @@ theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Tra
       · exact ih
     · exact ih
 
-/-- `N(K, a)`: one wait's expected reruns over `K` uniform draws, from `a` accepted so far. -/
+/-- `N(K, a)`: one wait's expected reruns over `K` uniform samples, from `a` accepted so far. -/
 noncomputable def waitExp {D : Type} [Fintype D] (run : D → Trace) (k K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => (waitRuns run k ((List.finRange K).map σ) a : ℝ)
 
@@ -149,7 +149,7 @@ theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k 
       linarith
     · simp [waitExp, waitRuns, List.finRange_succ, Ex]
 
-/-- The waits' bound, over the judged run's coins and `m` waits of `K` draws: `𝔼[1[acc] · Σᵢ wait_i + 1] ≤ 1 + m·k`. -/
+/-- The waits' bound, over the judged run's coins and `m` waits of `K` samples: `𝔼[1[acc] · Σᵢ wait_i + 1] ≤ 1 + m·k`. -/
 theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k m K : ℕ) :
     Ex (fun s : D × (Fin m → Fin K → D) => (if (run s.1).out = .acc then (1 : ℝ) else 0) *
       ∑ i, (waitRuns run k ((List.finRange K).map (s.2 i)) 0 : ℝ) + 1) ≤ (1 : ℝ) + m * k := by

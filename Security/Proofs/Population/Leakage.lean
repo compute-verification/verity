@@ -17,7 +17,7 @@ number of egress values the observer can tell apart is the leakage, in bits its 
   values, `E(B)` the egress slots in `B`'s cone (`coneEgress`), and `E(B) ≤ Σ_{u ∈ B} E(u)` (`card_coneEgress_le`).
   `card_leak_le_coneEgress` is the uniform form: at most `m` incorrect proof blocks and `E(u) ≤ E_max` give
   `#honest · C(|U|, m) · |V| ^ (m E_max)`, that is `log₂ C(|U|, m) + m · E_max · log₂ |V|` bits beyond the honest egress.
-  `card_leak_le_coneEgress_sum` is the weighted form: a draw that bounds `Σ_{u ∈ B} E(u) ≤ M` gives `|V| ^ M` times the
+  `card_leak_le_coneEgress_sum` is the weighted form: a sample that bounds `Σ_{u ∈ B} E(u) ≤ M` gives `|V| ^ M` times the
   number of incorrect sets within that budget.
   Amplification needs no hypothesis: a correct unit that routes secrets to the egress does so inside the cone, which
   `E` prices. `scale_coneEgress` and `scale_amp` show the bound is attained, and `vmStatic_coneEgress` that a machine's
@@ -222,7 +222,7 @@ theorem card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V
         rw [sum_const, card_powersetCard, card_univ]
         simp
 
-/-- **Weighted by cone egress**: when the draw bounds the incorrect proof blocks' total cone egress `Σ_{u ∈ B} E(u) ≤ M`
+/-- **Weighted by cone egress**: when the sample bounds the incorrect proof blocks' total cone egress `Σ_{u ∈ B} E(u) ≤ M`
 instead of their number, the egress takes at most `#honest · #𝓑 · |V| ^ M` values, `𝓑` the incorrect sets within that
 budget. -/
 theorem card_leak_le_coneEgress_sum [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]

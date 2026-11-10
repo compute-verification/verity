@@ -16,7 +16,7 @@ and `nextJ`'s verdict reads the coin-substituted value, so its reader reads `liv
   `TxNoOffAtJK`'s shape on `liveOfJ`'s first two rep streams and the proof files (`cols_plain` at a parsed value). The
   link carries the first coin's points (`liveOfJ_points`), `spec.points` of them, so the extra claims number
   `2 · |regions|`.
-* `txNoOffAtJK_of_colsJ`: on an accepting step at SHA-512 whose statement carries the draw `d`, a reader that looks up
+* `txNoOffAtJK_of_colsJ`: on an accepting step at SHA-512 whose statement carries the sample `d`, a reader that looks up
   no column off `C` gives `TxNoOffAtJK`: the decoder's rep streams have `liveOfJ`'s coins (`decodeJWithK_live`).
 * `plainVerdictAtJK_of_nextJ_cols`: `plainVerdictAtJK_of_nextJ` with that premise for the reader's.
 -/
@@ -109,7 +109,7 @@ theorem colsJ_plain {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : L
     FlockDeploy.plainProofShape_eq hsched, hx, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
 /-- **The step's reader gives the reader's premise at its parsed session**: on an accepting `nextJ` step at SHA-512
-whose statement carries the draw `d`, if the step's reader looks up no column off `C` at table 0 (`colsJ … 0`), the
+whose statement carries the sample `d`, if the step's reader looks up no column off `C` at table 0 (`colsJ … 0`), the
 deployed plain reader looks up none in the step's own parsed session at the setup at `d` (`TxNoOffAtJK id`). The
 decoder's table-0 rep streams have `liveOfJ`'s coins at the substituted value (`decodeJWithK_live`), and those are the
 reader's columns (`colsJ_plain`). -/
@@ -150,7 +150,7 @@ theorem txNoOffAtJK_of_colsJ {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg
     ← getD_empty, ← getD_empty, ← hcols]
   exact hno
 
-/-- **An accepting `nextJ` step gives the verdict at the draw, at its reader's columns**: `plainVerdictAtJK_of_nextJ`
+/-- **An accepting `nextJ` step gives the verdict at the sample, at its reader's columns**: `plainVerdictAtJK_of_nextJ`
 with the step's reader looking up no column off `C` at table 0 (`colsJ … 0`) for the premise at its parsed session
 (`txNoOffAtJK_of_colsJ`). -/
 theorem plainVerdictAtJK_of_nextJ_cols (mPts : ℕ) {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg}

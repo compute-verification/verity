@@ -42,7 +42,7 @@ class Operands:
 
 def stack_y(scheme: Any, salt: bytes, w: int, b: np.ndarray, noise: tuple, first: int = 0) -> tuple[np.ndarray, np.ndarray]:
     """Y (as int8 rows: every entry lies in [−128, 127], Lean `rangeU`) and c₀ for the int7 weight rows ``b`` (n x k, the
-    weight's rows from ``first``), with F₁ from the epoch salt (per epoch, weight and row, as `ncp.stack` draws it),
+    weight's rows from ``first``), with F₁ from the epoch salt (per epoch, weight and row, as `ncp.stack` samples it),
     F₂ = −P·F₁ and F₃ = F₁ + F₂ (`ncp.assemble`)."""
     n, k = b.shape
     pi, sigma = np.asarray(noise[0]), np.asarray(noise[1], dtype=np.int64)

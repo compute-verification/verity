@@ -22,13 +22,13 @@ At `VE`'s steps (`stepsBase_VE`):
 
 * `LastCoinFree` holds (`lastStepFree_of_VE`), and `LastBindsEC` at SHA-512 with no premise
   (`lastBindsEC_deployedE_sha512`);
-* `KSFlockLin` at `DE` holds from the plain record's table bound at the abort law, linearly, at `VE`
+* `KSFlockLin` at `DE` holds from the plain record's table bound at the abort distribution, linearly, at `VE`
   (`TableBoundAbortLin` at `deployPlainE`), as at the deployed plain verifier (`plainE_KSFlockLin`, with `VE`'s code
   facts and `ConflictTied` at `VE`). That table bound is proved at `deployPlain` (`plain_tableBoundAbortLin`) and not
   yet at `VE`: it is the premise `htab`.
 
 So `ksLin2_deployedE_recRead` and `bitsLin2_deployedE_recRead` are the B corollaries at `VE`'s steps, reopened on
-`htab`, and `ksLin2_deployedE_partAccepts` and `bitsLin2_deployedE_partAccepts` are those at the coin server's record
+`htab`, and `ksLin2_deployedE_partAccepts` and `bitsLin2_deployedE_partAccepts` are those at the challenger's live-coin part's record
 (`recTr`), as `ksLin2_deployed_partAccepts` and `bitsLin2_deployed_partAccepts` are at the deployed plain verifier's
 steps: they take `DecompB` at `PartAccepts` at `VE`'s bound and `htab`, and nothing else. The transfer: `VE` accepts
 every run the deployed plain verifier accepts (`FlockDeploy.run_out_VE`), so the bound record at `VE`'s steps accepts
@@ -47,7 +47,7 @@ open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody 
 open Claims.Bridge.Live
 
 /-- **`KSFlockLin` at the trimmed plain record at `VE`**, at SHA-512 and the deployed caps `CpDep`, from the table
-bound at the abort law, linearly, at the untrimmed record at `VE`: `plain_KSFlockLin`'s assembly with `VE`'s code
+bound at the abort distribution, linearly, at the untrimmed record at `VE`: `plain_KSFlockLin`'s assembly with `VE`'s code
 facts (`plainE_kSplits`, `plainE_hone`, `plainE_colsOk`) and `ConflictTied` at `VE` (`plainE_conflictTied`). -/
 theorem plainE_KSFlockLin (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (htab : Claims.Recursion.TableBoundAbortLin sha512 (deployPlainE rel) (wordLen false) (wide false) CpDep) :
@@ -72,7 +72,7 @@ open FlockDeploy (Coin)
 
 /-! ## `StepsBase` at `VE` -/
 
-/-- **`StepsBase` at `VE`'s steps**, from the plain record's table bound at the abort law, linearly, at `VE`
+/-- **`StepsBase` at `VE`'s steps**, from the plain record's table bound at the abort distribution, linearly, at `VE`
 (`htab`): `KSFlockLin` at `DE` from `plainE_KSFlockLin`, as `DE` differs from the trimmed plain record at `VE` only in
 a weight `KSFlockLin` doesn't read (`deE_VE_trim`); the other two with no premise. -/
 theorem stepsBase_VE (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
@@ -198,10 +198,10 @@ theorem bitsLin2_steps_recRead (nextE : Msg → List Msg → List Coin → Claim
 
 /-! ## The B corollaries at `VE` -/
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record and
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record and
 `VE`'s steps**: `ksLin2_steps_recRead` at `stepsBase_VE`. Beside `ksLin2_deployed_recRead`'s open premises
 (`PartChecksBV` at `showsPart recRead`, `DecompB`, the readers' `ReadersTrue` and `ReadsBackB`) it takes the plain
-record's table bound at the abort law at `VE` (`htab`). `VE` accepts every run the deployed plain verifier accepts
+record's table bound at the abort distribution at `VE` (`htab`). `VE` accepts every run the deployed plain verifier accepts
 (`FlockDeploy.run_out_VE`), so the inner verifier here accepts the honest runs; this is not a theorem at the deployed
 plain verifier's steps. This bounds no number by itself: its premises are open. -/
 theorem ksLin2_deployedE_recRead (b : Brings)
@@ -226,7 +226,7 @@ theorem ksLin2_deployedE_recRead (b : Brings)
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   ksLin2_steps_recRead _ b rest wE join final w (stepsBase_VE wE join final w htab)
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record and
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record and
 `VE`'s steps**: `bitsLin2_steps_recRead` at `stepsBase_VE`. It reads `StrictBirthday` and `ExpectedCR`, the named
 SHA-512 collision assumptions, and `ksLin2_deployedE_recRead`'s open premises, `htab` among them: a bound on a number
 under named premises, not a proved security level. -/
@@ -254,12 +254,12 @@ theorem bitsLin2_deployedE_recRead (b : Brings)
 
 /-! ## The B corollaries at `VE`, from `DecompB` and `htab` -/
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record
 (`recTr`) and `VE`'s steps, from `DecompB` and `htab`**: `ksLin2_deployedE_recRead` at the brings whose transcript is
 `recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`exists_chk_iff`), `ReadsBackB` from `readsBack_recTr`
 and `ReadersTrue` from `readersTrue_layoutBTops`, as `ksLin2_deployed_partAccepts` is at the deployed plain
 verifier's steps. Its premises are `DecompB` at what each part's circuit accepts, at `VE`'s bound, and the plain
-record's table bound at the abort law at `VE` (`htab`); `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
+record's table bound at the abort distribution at `VE` (`htab`); `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
 deployed reader with none. -/
 theorem ksLin2_deployedE_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -285,7 +285,7 @@ theorem ksLin2_deployedE_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.R
     (fun shape hsh => (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD shape hsh))
     (readersTrue_layoutBTops (finOpen rest) Bd.IVStar bR _ hmSlotsCommit_of_full)
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the challenger's live-coin part's record
 (`recTr`) and `VE`'s steps, from `DecompB` and `htab`**: `bitsLin2_deployedE_recRead` at `recTr aux nOf hd recRest`,
 with its inner check `PartAccepts`, `ReadsBackB` from `readsBack_recTr` and `ReadersTrue` from
 `readersTrue_layoutBTops`. It reads `StrictBirthday` and `ExpectedCR`, the named SHA-512 collision assumptions, and

@@ -4,16 +4,16 @@ public import Proofs.Flock.SoundAtBridge.Union
 public import Proofs.Flock.SoundAtBridge.Session
 
 /-!
-# PoUW's proof premise from C-Flock's rows link (trusted)
+# PoUW's proof premise from Flock's rows link (trusted)
 
 `Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`, the
-layer whose relation reads the path's coins) from C-Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
-per unit, when proof `i` of round `w` on the window's path `x` is a C-Flock session `sess x w i` (a `RowsSession`)
+layer whose relation reads the path's coins) from Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
+per unit, when proof `i` of round `w` on the window's path `x` is a Flock session `sess x w i` (a `RowsSession`)
 with outcome `out x w i`. It closes the three gaps between the two as follows:
 
-1. **the probability bridge** is three named premises: the window's law at each `(w, i)` is its sessions'
+1. **the probability bridge** is three named premises: the window's sampling design at each `(w, i)` is its sessions'
    (`WindowLaw`), the layer accepts a proof only where flock-verify accepts its session (`AcceptedLive`), and the
-   relation holds at the value layer's rows wherever every drawn unit of the session is right (`RelOfRows`);
+   relation holds at the value layer's rows wherever every sampled proof block of the session is right (`RelOfRows`);
 2. **the opening against the plurality** is one named premise, `OpenedPlurAt`: an accepted proof's opening is the
    layer value `rows` of the plurality value layer `XplurZC`, outside `δo`; it holds at `δo = 0` when the layer's
    opening is defined as that value (`openedPlur_zero`);
@@ -24,9 +24,9 @@ So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + δ_link + δ_rows + q_R�
 whole of `EndToEndRegisteredRows`' bound, its rewinding terms `1/(e·M) + k/(e·Rw)` included, times the session's `n`.
 
 Importing this module makes `X` a token (ArkLib's global `notation3 "X"`, `ArkLib.Data.Polynomial.Trivariate`), so a
-module whose declarations bind `X` can't import it. `RowsSession` reads C-Flock's definitions, whose modules all reach
+module whose declarations bind `X` can't import it. `RowsSession` reads Flock's definitions, whose modules all reach
 `Trivariate` through one edge, `Discharge.ZkSession.InnerSound` (BCIKS20's unique decoding), under
-`ZkSession.Compose`; the edge leaves this closure only when C-Flock's definitions leave its proof modules. The
+`ZkSession.Compose`; the edge leaves this closure only when Flock's definitions leave its proof modules. The
 composition over any family of sessions, `Proofs.Flock.SoundAtBridge.Union`, imports no ArkLib module.
 -/
 
@@ -40,7 +40,7 @@ open scoped ENNReal
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
-/-- **Gap 1, the window's law** (open): at each round `w` and
+/-- **Gap 1, the window's sampling design** (open): at each round `w` and
 proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' law
 (`SessionLaw`): the session's coins are the path's, fresh and uniform given its setting and its prover. -/
 def WindowLaw (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) : Prop :=
@@ -61,9 +61,9 @@ def OpenedPlurAt (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
   ∀ w i, Pouw.RelativeSecurity.prob
     (fun x => pf.accepted x w i ∧ pf.opened x w i ≠ rows (sess x w i) (sess x w i).Xv) ≤ δo
 
-/-- **Gap 1, the relation is what the drawn units certify** (open): on every path, when no drawn unit of proof `i`'s
-session is wrong (`WrongAt`) and every drawn unit's rows are right at its own owned reads (`RowsAt`), proof `i`'s
-relation holds at `rows` of the value layer; it can hold only for a relation that reads no undrawn unit and no input
+/-- **Gap 1, the relation is what the sampled proof blocks certify** (open): on every path, when no sampled proof block of proof `i`'s
+session is wrong (`WrongAt`) and every sampled proof block's rows are right at its own owned reads (`RowsAt`), proof `i`'s
+relation holds at `rows` of the value layer; it can hold only for a relation that reads no unsampled unit and no input
 row at a read the verifier doesn't own. -/
 def RelOfRows (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) : Prop :=
@@ -78,13 +78,13 @@ open Flock.SoundAtBridge Accounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **PoUW's proof premise from C-Flock's rows link, at `δ_ZK = δo + δ`.** For any window of proofs
+/-- **PoUW's proof premise from Flock's rows link, at `δ_ZK = δo + δ`.** For any window of proofs
 (`pf : Accounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
-path `x` is the C-Flock session `sess x w i` (`EndToEndRegisteredRows`' setting with one registrant's opening per
+path `x` is the Flock session `sess x w i` (`EndToEndRegisteredRows`' setting with one registrant's opening per
 unit, `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `EndToEndRegisteredRows`' named assumptions at every session and every unit's opening (`RowsSession.CR`), the
-window's law (`WindowLaw`), acceptance (`AcceptedLive`), the opening's agreement with the plurality outside `δo`
-(`OpenedPlurAt`) and the relation's reading of the drawn units (`RelOfRows`), and `δ ≥ 0` with
+window's sampling design (`WindowLaw`), acceptance (`AcceptedLive`), the opening's agreement with the plurality outside `δo`
+(`OpenedPlurAt`) and the relation's reading of the sampled proof blocks (`RelOfRows`), and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
 at every session a path runs (`RowsSession.bound`, `n` its units), each proof is accepted with an opening that fails
 its relation on the path with probability at most `δo + δ` (`pf.SoundAt (δo + δ)`). -/

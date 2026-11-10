@@ -183,7 +183,7 @@ theorem pr_mono {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} (h : ∀ x, P x →
 
 open Classical in
 /-- A probability over a store and live coins whose public part is a pair is the same over the store, the public
-part's two halves and the draw, in that order. -/
+part's two halves and the sample, in that order. -/
 theorem pr_coins_flat {S A B D : Type} [Fintype S] [Fintype A] [Fintype B] [Fintype D]
     (P : S × ((A × B) × D) → Prop) :
     pr P = pr (fun x : S × A × B × D => P (x.1, (x.2.1, x.2.2.1), x.2.2.2)) := by

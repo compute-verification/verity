@@ -763,7 +763,7 @@ opening verifies (`verifyOpening_zeroRoot`). The zero block decodes under every 
 payload `zeroPayload`; a registration whose payload tree holds that payload at block 0, and a pass over the whole store
 whose receipt tree holds the zero block's receipt at position 0, accept the opening of position 0
 (`opensAtPosition_honest`). The payload is the zero block's decoding under the codec key, which an honest prover stores
-after the key is drawn; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
+after the key is sampled; at `Registration.register` the root comes before the seed, so this exhibits acceptance at the
 deployed registration (`Registration.make?`), parameters and plan, not a prover that registered first. -/
 
 theorem size_sha512 (b : ByteArray) : (RemoteAudit.sha512 b).size = 64 := by

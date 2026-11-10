@@ -37,7 +37,7 @@ def tagged(tag: str, *parts: Part) -> bytes:
 
 def fold_roots(tag: str, roots: Mapping[int, bytes]) -> bytes:
     """Registered values' roots folded under `tag`: `tagged` of each ``id, root`` by ascending id. Every PoUW weights'
-    root is this fold at its own tag: an H1 window's of θ's ``b/<K>`` roots (`weights.weights_root`), an epoch's of its
+    root is this fold at its own tag: an H1 execution phase's of θ's ``b/<K>`` roots (`weights.weights_root`), an execution phase's of its
     weights' (`audit.weights_root`, `core_check.weights_root`)."""
     return tagged(tag, *(p for i in sorted(roots) for p in (i, roots[i])))
 
@@ -90,7 +90,7 @@ def grid_tiles(shape: Shape, h: int, w: int) -> list[Tile]:
 
 @dataclass(frozen=True, slots=True)
 class Context:
-    """What a scheme's noise may depend on for one matmul: the epoch's salt, the declaration and the committed roots."""
+    """What a scheme's noise may depend on for one matmul: the execution phase's salt, the declaration and the committed roots."""
 
     salt: bytes
     matmul: Matmul

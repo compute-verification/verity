@@ -13,13 +13,13 @@ reads no witness and no prover: every fact is about `decR` and the statement's s
 * **The statement and the shapes** are `decR`'s refusals: it keeps the last message only at the statement
   (`FlockDeploy.decR_stmt`) and the proofs only where they are shaped for their files (`FlockDeploy.decR_shaped`).
 * **Custody** at the reader's record is `custodyRecJ`.
-* **The draw** (`drawTiedS`): at a statement that carries a draw (`parse_innerOk` gives one), the session's `unitDraw`
-  is the statement's draw, which is not `null`. At several tables the setup sets it (`setupTables_spec`). At one table
-  it is the public file's parsed header's `unit_draw`, which the setup put the draw into (`HmRow.drawn`), which the
-  loaded header keeps as an object (`loadPublic_header`, at `unitDraw_of`); the header's draw decodes
+* **The sample** (`drawTiedS`): at a statement that carries a sample (`parse_innerOk` gives one), the session's `unitDraw`
+  is the statement's sample, which is not `null`. At several tables the setup sets it (`setupTables_spec`). At one table
+  it is the public file's parsed header's `unit_draw`, which the setup put the sample into (`HmRow.drawn`), which the
+  loaded header keeps as an object (`loadPublic_header`, at `unitDraw_of`); the header's sample decodes
   (`setupOne_stmt`), so it is not `null`.
 
-`DrawTied` asks the tie at statements without a draw too, where at one table the header may carry any `unit_draw`;
+`DrawTied` asks the tie at statements without a sample too, where at one table the header may carry any `unit_draw`;
 `.after` reads it only where the statement carries one (`holdsR_afterS`, `DrawTiedS`).
 -/
 
@@ -33,7 +33,7 @@ open FlockDeploy (setupOf drawEq)
 
 open private setupOne_stmt unitDraw_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
-/-- **At a statement that carries a draw, the session's draw is it**, not `null`, at any number of tables. -/
+/-- **At a statement that carries a sample, the session's sample is it**, not `null`, at any number of tables. -/
 theorem unitDraw_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hx : setupOf false x = some (s, spec, sts))
     (hq : s.read.check = .ok ()) {d : Json} (hdr : s.read.draw = some d) :
@@ -70,8 +70,8 @@ open Claims.Recursion.VStarB
 
 noncomputable section
 
-/-- **The session's draw is the statement's, where the statement carries one**: `DrawTied` at the statements with a
-draw. -/
+/-- **The session's sample is the statement's, where the statement carries one**: `DrawTied` at the statements with a
+sample. -/
 def DrawTiedS : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
     s.read.check = .ok () → s.read.draw.isSome = true → drawEq (drawOfU spec.unitDraw) s.read.draw = true
@@ -90,7 +90,7 @@ theorem drawTiedS : DrawTiedS := by
   exact FlockDeploy.drawEq_refl _
 
 /-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
-passes and which carries a draw, where the session's draw is the statement's there and custody passes at the reader's
+passes and which carries a sample, where the session's sample is the statement's there and custody passes at the reader's
 record: `holdsR_after` at `DrawTiedS`. -/
 theorem holdsR_afterS (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs : List Coin)
     (hlen : as.length = cs.length)

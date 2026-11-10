@@ -9,8 +9,8 @@ public import Proofs.Flock.Claims.ZK.FrameUnrefused
 /-!
 # `FinRepRows`: every table's rows hold at its base
 
-At a `Finish` `FinishIs` reads, table `j`'s rows hold at its base (`FinRows`) where the firewall's run on each of its
-reps fixes them (`Composed.rowsAt_of_fw`). The firewall's rep stream `2j + r` is `repFwC` answered by the opened coins
+At a `Finish` `FinishIs` reads, table `j`'s rows hold at its base (`FinRows`) where the ZK server's run on each of its
+reps fixes them (`Composed.rowsAt_of_fw`). The ZK server's rep stream `2j + r` is `repFwC` answered by the opened coins
 from the rep's first round (`Loop.finRepCut`), on the loop's table and request (`Loop.RepAt`), and `Masked.fwRows_at`
 reads its rows off that run:
 
@@ -27,7 +27,7 @@ consumes, none a premise of a guarantee:
 * `Loop.FinRepTarget`: the ring switch's `T` is the opening's (`Composed.openT`);
 * `Loop.FinRepRestart`: level 0's restart is `Σ y₁'·bFold`.
 
-**`Loop.finRepRows`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source draws
+**`Loop.finRepRows`**: in the masked scope, with a witness, at a statement the loop serves whose level 0 the source samples
 from the tape (`Loop.Level0Src`), the four give `FinRepRows`.
 -/
 
@@ -64,7 +64,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **The firewall's rep stream `k` at a `Finish` `FinishIs` reads**: on the loop's table `tb` and request `q`
+/-- **The ZK server's rep stream `k` at a `Finish` `FinishIs` reads**: on the loop's table `tb` and request `q`
 (`RepAt`), at the pads commitment `ic'` of the request's pads, `repFwC` answered by the opened coins from a history `l`
 at the rep's first round returns the proof `p`, transcript `tr` and history `l'`. -/
 def RepRun (ν : finS.Nonce) (t : finS.Tape) (κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg)
@@ -165,7 +165,7 @@ theorem proofsOf_ok_of_ctx {ν : finS.Nonce} {t : finS.Tape} {κ m₀ ρ₀ ops}
   | ok files => exact ⟨files, rfl⟩
 
 /-- **`FinRepRows` from the four consumed facts**: in the masked scope, with a witness, at a statement the loop serves
-(no coin fault shows at the opened coins, `frameUnrefused_ofLoop`) whose level 0 the source draws from the tape
+(no coin fault shows at the opened coins, `frameUnrefused_ofLoop`) whose level 0 the source samples from the tape
 (`Level0Src`), table `j`'s rows hold at its base: at each rep `r`, the loop's rep stream `2j + r` (`proofsOf_at`,
 `proofFile_ok`) runs as `repFwC` at the opened coins (`finRepCut`) on the session's table, schedule and packed table
 (`finRepTab`, `schedsPZk_live`, `Level0Src.realOf`) at pads of the table's layout (`finRepPads`) and as many extra

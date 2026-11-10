@@ -231,11 +231,11 @@ last two by `horizonIncorrectBlocks` and `horizonLeak`). All 25 are under `shape
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 <<<<<<< HEAD
-possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
+possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 18 through
 `AcceptedRunsAreProgramRuns`. Three are the
 ||||||| merged common ancestors
-possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
+possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 20 through
 `AcceptedRunsAreProgramRuns`. Four are the
 =======
@@ -315,20 +315,20 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
 <<<<<<< HEAD
 - **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledIncorrectBlocksLe` is the bound over
   many periods, cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows
-  on independent live coins (the period's coins are the product `Fin m → Ω`), window `i` drawing a uniform
+  on independent live coins (the period's coins are the product `Fin m → Ω`), window `i` sampling a uniform
   `k_i`-subset of its `n_i` proof blocks, with the blocks incorrect at its registration fixed by the earlier windows'
-  coins and its audit accepting while its draw meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every
+  coins and its audit accepting while its sample meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every
   window, every window accepts while the monitoring period holds at least `F` incorrect blocks with probability at most
   `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
-  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
+  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sample's sampling design and each window's error are hypotheses, which A3 and
 ||||||| merged common ancestors
-- **The wrong units over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
+- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
   cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent
-  live coins (the period's coins are the product `Fin m → Ω`), window `i` drawing a uniform `k_i`-subset of its `n_i` units,
-  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its draw
+  live coins (the period's coins are the product `Fin m → Ω`), window `i` sampling a uniform `k_i`-subset of its `n_i` units,
+  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its sample
   meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the
-  monitoring period holds at least `F` wrong units with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
-  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
+  monitoring period holds at least `F` incorrect proof blocks with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
+  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sample's sampling design and each window's error are hypotheses, which A3 and
 =======
 - **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
   cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent

@@ -1,6 +1,6 @@
 """serve-openai's draw-gated release (`pipeline.serve_release`): a window's device-held values are released only once
-every named subprotocol has drawn it; the union of the leaves the drawn blocks open is kept, inputs an unsampled block wrote
-included, and opens against the pre-coin root after the drop; a later draw, or a read of a dropped leaf, is refused by name."""
+every named subprotocol has sampled it; the union of the leaves the sampled blocks open is kept, inputs an unsampled block wrote
+included, and opens against the pre-coin root after the drop; a later sample, or a read of a dropped leaf, is refused by name."""
 from __future__ import annotations
 
 import json
@@ -47,7 +47,7 @@ def test_no_release_before_the_last_protocols_draw(cs):
     t.start()
     draws._cv.entered.acquire()
     draws.put(0, "sampled_proofs", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-    draws._cv.entered.acquire()                 # woken by the first draw, and waiting again for the second
+    draws._cv.entered.acquire()                 # woken by the first sample, and waiting again for the second
     assert "rec" not in got and getattr(dev, "released", None) is None and dev.device_pool.held > 0
     draws.put(0, "pouw_h1", [])
     t.join()
@@ -58,7 +58,7 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
     host, rc, dev = committed(cs)
     C = dev.chunk
     down = (2, "model.layers.0.mlp.down_proj", 0, C)
-    written_by_unsampled = (0, "model.embed_tokens", C, 2 * C)      # the drawn block's input, from a block nobody drew
+    written_by_unsampled = (0, "model.embed_tokens", C, 2 * C)      # the sampled block's input, from a block nobody drew
     h1 = (0, "model.layers.0.self_attn.qkv_proj", 10, 20)
     draws = SL.Draws(PROTOCOLS)
     draws.put(0, "sampled_proofs", [down, written_by_unsampled])
@@ -81,13 +81,13 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
             for i in leaves:
                 assert bytes(com.open_range(s, i, i + 1).value) == host_leaf(host, C, s, i)
         with pytest.raises(RuntimeError, match="draw-gated release"):
-            com.open_range(1, 0, 1)                 # no draw read step 1
+            com.open_range(1, 0, 1)                 # no sample read step 1
 
 
 def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(cs, tmp_path):
     """The seal holds the step-input port's committed positions to the rows the window ran, at every step
     (`serve_seal.port_positions`, and `seal_process`'s handoff): they are read just before the release, which still keeps
-    only the draw's leaves."""
+    only the sample's leaves."""
     from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
 
     pos = bytes(range(40, 48)) * 8
@@ -162,7 +162,7 @@ def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_wa
     draws.put(0, "sampled_proofs", [(0, "model.layers.9.mlp.down_proj", 0, 1)])
     with pytest.raises(KeyError, match="no committed member by that name"):
         draws.release(0, dev)
-    assert dev.released["discarded"].startswith("KeyError") and dev.released["kept_bytes"] == 0   # a window whose draws can't
+    assert dev.released["discarded"].startswith("KeyError") and dev.released["kept_bytes"] == 0   # a window whose samples can't
     assert dev.device_pool.held == 0                       # be read keeps nothing: never redrawn, so it would hold the pool forever
     with pytest.raises(KeyError, match="did not commit"):
         SL.leaves_of(dev, [(9, "model.embed_tokens", 0, 1)])

@@ -49,7 +49,7 @@ theorem regListed_deployedB (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     RegListed (recBound rel (deployedB b) L IV) :=
   regListed_recBound rel (regSetup_deployedB b) L IV
 
-/-- The coin server's record keeps the deployed setup: `deployedB` commutes with replacing `tr`. -/
+/-- The challenger's live-coin part's record keeps the deployed setup: `deployedB` commutes with replacing `tr`. -/
 theorem deployedB_tr (b : Brings) (t : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) :
     { deployedB b with tr := t } = deployedB { b with tr := t } := rfl
 
