@@ -284,7 +284,7 @@
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/tp-sampled-replay/v1"},
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "not_run", "detail": "verity-sweep/boundary-linkage/v1"},
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "not_run", "detail": "verity-sweep/sampled-replay/v1"},
-    {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 18},
+    {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 17},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 27},
     {"file": "verity_vllm/pipeline/tp/rejudge.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/tp-rejudge/v1"},
     {"file": "verity_vllm/pipeline/tp/rejudge.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 15},
