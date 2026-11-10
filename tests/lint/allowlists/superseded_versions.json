@@ -2,6 +2,7 @@
   "rule": "superseded Definition versions (tools/verity/circuit_check/tests/test_superseded_versions.py)",
   "held": {},
   "entries": [
+    {"file": "integrations/vllm/verity_vllm/program/frontend/seed_rule.py", "kind": "superseded", "symbol": "SeedCheck", "detail": "SeedCheck_v1"},
     {"file": "verity/core/protocols/certifier/arith_encode.py", "kind": "superseded", "symbol": "ChargeCount", "detail": "ChargeCount_v1"},
     {"file": "verity/core/protocols/certifier/cache_step.py", "kind": "superseded", "symbol": "CacheStep", "detail": "CacheStep_v1"},
     {"file": "verity/core/protocols/certifier/charge_chain.py", "kind": "superseded", "symbol": "ChargeLink", "detail": "ChargeLink_v1"},
