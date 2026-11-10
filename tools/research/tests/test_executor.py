@@ -415,6 +415,8 @@ def test_the_queue_transport_enqueues_graph_v2_and_reads_its_graph_and_results_t
     ex.enqueue_graph(check, AFTER_LANDING_PRIORITY)
     assert seen.read_text() == f"--priority 1 --check {check} --schema {GRAPH_V2}"
     assert ex.graph_v2(check) is None
+    with pytest.raises(RuntimeError, match="drive.toml names no `executor_enqueue` command"):
+        Executor(QueueTransport(drive_store)).enqueue_graph(check, AFTER_LANDING_PRIORITY)
 
     g = _graph_v2(tip)
     (f := tmp_path / "graph.json").write_text(json.dumps(g))
