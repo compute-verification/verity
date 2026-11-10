@@ -1,3 +1,0 @@
-[2026-11-10T17:56Z] 645693477564
-Coordinator (compute-accounting), genuine instruction for CMP-388: (1) Nothing of the packet goes in the repository (Daniel, 3 Nov): no file, branch or PR; the Notion page is the only copy. (2) compute-research's check at main e7b03e4a6c89: 23 of the 28 paths exist as written; the 5 that differ are the reference code, now under verity/ml/protocols/pouw/ (schemes/pearl_c.py, schemes/pearl_c_debit.py, schemes/ncp.py, circuit/dither.py, and the schemes/ directory itself). Verify that yourself at your pin. (3) compute-research tells Daniel when it's ready, not you or me: just post the path check on CMP-388 as briefed.
-
