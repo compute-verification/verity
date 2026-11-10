@@ -27,8 +27,9 @@
     the verifier read from its challenger, or none when it read none (Seed salt), and it names the reset serving
     chose for its pool, its week and whether the week's reset is spent, as the verifier holds them, at most one reset
     a week, or none of them for a verifier with no pool (Pool chain);
-  - R8, under a template query: each run Input node's leaves are read by one proof block alone, never broadcast to a
-    batch or read by two (`partition.shared_inputs`, `R8-shared-input`), so a served port reaches a proof block only as
+  - R8, under a template query: each run Input node's leaves, other than a parameter's the verifier expects registered,
+    are read by one proof block alone, never broadcast to a batch or read by two (`partition.shared_inputs`,
+    `R8-shared-input`), so a served port reaches a proof block only as
     its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
     on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
     replay block (`plancheck.two`'s `fanout`).
@@ -252,8 +253,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
     chain (`R7-pool-chain`).  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
-    reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone
-    (`partition.shared_inputs`), and the verdict carries the fan-out F of `query` on `program` (`partition.fanout`),
+    reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
+    is a parameter's that `registered` names (`partition.shared_inputs`), and the verdict carries the fan-out F of `query` on `program` (`partition.fanout`),
     which it publishes whatever its codes; under any other query it carries none."""
     c = _Collect()
     days = _declarations(day, declarations)
@@ -271,7 +272,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
-    fan, shared = _readers(program, query)
+    fan, shared = _readers(program, query, registered or {})
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
@@ -373,14 +374,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     return c.verdict(fanout=fan)
 
 
-def _readers(program: Program, query: Mapping[str, Any]) -> tuple[int | None, list[int]]:
+def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str]) -> tuple[int | None, list[int]]:
     """R8's reading of a template query's partition of `program`: its fan-out and the run Input nodes its proof blocks
-    don't each read alone (`partition.fanout`, `partition.shared_inputs`); `(None, [])` for any other query, or one
-    that doesn't apply. A function of the program and query alone, so a verdict publishes F whatever the record."""
+    don't each read alone (`partition.fanout`, `partition.shared_inputs`), an Input node of a parameter the verifier
+    expects `registered` being a registered value; `(None, [])` for any other query, or one that doesn't apply. A
+    function of the program, query and verifier alone, so a verdict publishes F whatever the record."""
     if not P.is_template_query(query):
         return None, []
     try:
-        return P.fanout(program, query), P.shared_inputs(program, query)
+        return P.fanout(program, query), P.shared_inputs(program, query, G.held_gates(program, registered))
     except P.QueryRefused:
         return None, []
 

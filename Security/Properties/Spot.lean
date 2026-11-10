@@ -122,11 +122,13 @@ def R4 (rec : Json) (v : Registration.Verifier) : Prop :=
 def R5 (rec : Json) (v : Registration.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
 
 /-- R8: under a template query that applies to the verifier's program, its proof blocks each read their own leaves of
-every run Input node (`Partition.readAlone`, of `Partition.sharedInputs`): no batch of more than one member broadcasts
-one or reads a leaf of one twice, and no two instance nodes read one leaf. A value one proof block computes that the
-program takes as an Input joins no proof blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks
-read could hold rows one of them computed. -/
-def R8 (v : Registration.Verifier) : Prop := Partition.readAlone v.program v.query = true
+every run Input node but a parameter's the verifier expects registered (`Partition.readAlone`, of
+`Partition.sharedInputs`, outside `Registration.heldGates`): no batch of more than one member broadcasts one or reads a
+leaf of one twice, and no two instance nodes read one leaf. A value one proof block computes that the program takes as
+an Input joins no proof blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows
+one of them computed. -/
+def R8 (v : Registration.Verifier) : Prop :=
+  Partition.readAlone v.program v.query (Registration.heldGates v) = true
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/

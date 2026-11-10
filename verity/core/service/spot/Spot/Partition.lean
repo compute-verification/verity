@@ -274,13 +274,16 @@ def spanLt (a b : Nat × Nat × Nat) : Bool :=
   a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && a.2.2 < b.2.2)))
 
 /-- `partition.shared_inputs` over a template query's ranges `rs`: the run Input nodes (an input bound at `run`,
-`Program.inputId?`; a registered input is a registered value) whose leaves the proof blocks don't each read alone, ascending: a batch of more
-than one member reading one whole (an argument it broadcasts) or by a run that names a leaf twice, two of a batch's
-runs that overlap, or two instance nodes' runs that overlap. -/
-def sharedInputs (P : Flock.Program.Prog) (rs : Array TRange) : Array Nat := Id.run do
+`Program.inputId?`; a registered input, and an input node whose gates lie in one of `held`, the gates `(first, count)`
+of the parameters the verifier expects registered, are registered values) whose leaves the proof blocks don't each
+read alone, ascending: a batch of more than one member reading one whole (an argument it broadcasts) or by a run that
+names a leaf twice, two of a batch's runs that overlap, or two instance nodes' runs that overlap. -/
+def sharedInputs (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat) := #[]) : Array Nat := Id.run do
   let nodes := Flock.Registered.rootNodes P
+  let offs := ((P.defs[P.root]?).map (·.body.offsets)).getD #[]
   let run := fun (i : Nat) => match nodes[i]? >>= fun x => P.defs[x.fn]? with
-    | some f => f.prim && f.binding == some Flock.Program.RUN
+    | some f => f.prim && f.binding == some Flock.Program.RUN &&
+        !held.any fun (first, count) => first ≤ offs.getD i 0 && offs.getD (i + 1) 0 ≤ first + count
     | none => false
   let mut shared : Array Nat := #[]
   let mut spans : Array (Nat × Nat × Nat) := #[]
@@ -326,7 +329,9 @@ def templateRanges? (p : Program) (query : Json) : Option (Array TRange) :=
 /-- The fan-out a registration verdict publishes (`registration._readers`): a template query's, else none. -/
 def fanout? (p : Program) (query : Json) : Option Nat := (templateRanges? p query).map (fanout p.prog)
 
-/-- R8: no run Input of a template query's partition is one its proof blocks don't each read alone (`sharedInputs`). -/
-def readAlone (p : Program) (query : Json) : Bool := ((templateRanges? p query).map (sharedInputs p.prog)).all (·.isEmpty)
+/-- R8: no run Input of a template query's partition, outside the gates `held`, is one its proof blocks don't each read
+alone (`sharedInputs`). -/
+def readAlone (p : Program) (query : Json) (held : Array (Nat × Nat) := #[]) : Bool :=
+  ((templateRanges? p query).map (sharedInputs p.prog · held)).all (·.isEmpty)
 
 end Spot.Partition

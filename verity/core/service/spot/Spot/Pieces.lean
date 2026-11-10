@@ -182,15 +182,25 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
-/-- `{"program", "query"}`, a program object and a template query, to `{"fanout", "shared"}`: its fan-out and the run
-Input nodes its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`); refused for another
-query or one that doesn't apply. -/
+/-- `{"program", "query", "held"?}`, a program object, a template query and the gates `[[first, count], ...]` of the
+parameters a verifier expects registered, to `{"fanout", "shared"}`: its fan-out and the run Input nodes outside `held`
+its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`); refused for another query or one
+that doesn't apply. -/
 def fanout (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let bad : V (Nat × Nat) := throw "held is not a list of [first, count]"
+  let held ← match getD j "held" with
+    | .null => pure #[]
+    | .arr xs => xs.mapM fun x => match x with
+      | .arr #[a, b] => match nat? a, nat? b with
+        | some first, some count => pure (first, count)
+        | _, _ => bad
+      | _ => bad
+    | _ => throw "held is not a list of [first, count]"
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
-    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs))]
+    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`), whatever the record. -/

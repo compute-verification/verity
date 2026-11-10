@@ -18,7 +18,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -745,8 +745,9 @@ def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read(
     """R8, under a template query: the verdict publishes the fan-out F of the verifier's own program (`partition.fanout`),
     1 for a population program, whose instances each read their own share of the Input node; and it refuses a run
     Input node whose leaves two proof blocks read (`R8-shared-input`, `partition.shared_inputs`), which F can't see:
-    two calls reading one table whole, or a batch broadcasting it.  The same table registered is a registered value,
-    which R8 doesn't refuse; and a batch reading its own share of the Input, or a call reading a leaf twice, is no
+    two calls reading one table whole, or a batch broadcasting it.  The same table registered, as a registered input
+    or as a parameter the verifier expects registered (`registered.held_gates`), is a registered value, which R8
+    doesn't refuse; and a batch reading its own share of the Input, or a call reading a leaf twice, is no
     sharing."""
     prog, q, rec = _registration(6)
     v = _check(rec, prog, q)
@@ -761,6 +762,8 @@ def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read(
         v = _check(rec, shared, q)
         assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
     assert all(P.shared_inputs(p, q) == [] for p in _two_programs(registered=("t",)))
+    assert all(P.shared_inputs(p, q, G.held_gates(p, ["t"])) == [] for p in _two_programs())
+    assert all(P.shared_inputs(p, q, G.held_gates(p, ["x"])) != [] for p in _two_programs())
     t = Array(2, Value(8))
     twice = CompositeDefinition("OneStageTestOneCallTwice", 0, (), lambda S: ((("t", t),), Value(8)),
                                 lambda B, S, x: B.call(PAIR, array_of([x[0], x[0]])), register=False)

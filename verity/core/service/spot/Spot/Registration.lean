@@ -67,7 +67,8 @@ windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 100
 which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
 record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 
-Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone
+Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
+unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value
 (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an Input joins
 no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes).
 -/
@@ -229,6 +230,11 @@ private def onceOk (pool : Option Pool) (log : Array Json) : Bool :=
   match pool with
   | some p => !(p.reset && p.spentBefore log)
   | none => true
+
+/-- The Input gates `(first, count)` of the parameters `v` expects registered, which R8 reads as registered values
+(`registered.held_gates`). -/
+def heldGates (v : Verifier) : Array (Nat × Nat) :=
+  v.params.filterMap fun p => if v.registered.any (·.1 == p.name) then p.gates else none
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
 def fixedOf (v : Verifier) : Array String :=
@@ -545,7 +551,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
   -- R8
-  c := kept (Partition.readAlone v.program v.query) c "R8-shared-input"
+  c := kept (Partition.readAlone v.program v.query (heldGates v)) c "R8-shared-input"
   return c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
@@ -618,7 +624,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
   -- R8
-  c := kept (Partition.readAlone v.program v.query) c "R8-shared-input"
+  c := kept (Partition.readAlone v.program v.query (heldGates v)) c "R8-shared-input"
   return c
 
 /-! ## `check` is `checkRef` -/
@@ -715,6 +721,6 @@ theorem portIndex_find (roots : Array Json) (p : String) :
 set_option maxHeartbeats 400000 in -- its `simp` unfolds each join point of both checks into both of its branches
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
-  simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
+  simp (maxSteps := 400000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
 
 end Spot.Registration

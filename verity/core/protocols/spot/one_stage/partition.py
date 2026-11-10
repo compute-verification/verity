@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.cut import boundary_widths, call_scope
@@ -325,8 +325,9 @@ def fanout(program: Program, query: Mapping[str, Any]) -> int:
     return max([1, *held.values()])
 
 
-def shared_inputs(program: Program, query: Mapping[str, Any]) -> list[int]:
-    """The run Input nodes of `program` (`program.INPUT_ID`; a registered input is a registered value, held by R7) whose
+def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[range] = ()) -> list[int]:
+    """The run Input nodes of `program` (`program.INPUT_ID`; a registered input, and an Input node whose gates lie in one
+    of `held`, the gates of the parameters the verifier expects registered, are registered values, held by R7) whose
     leaves a template query's proof blocks don't each read alone, in node order: a batch of more than one member reading
     one whole (an argument it broadcasts), or two proof blocks reading one of its leaves, as the summary sees them a root
     node at a time. A batch's members read disjoint elements of each argument it maps (`cut.member_refs`), so a batch
@@ -336,8 +337,9 @@ def shared_inputs(program: Program, query: Mapping[str, Any]) -> list[int]:
     registered value: a run Input two proof blocks read could hold rows one of them computed, which `fanout` can't see.
     `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "an Input's readers")
-    nodes = program.root.body.nodes
-    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)}
+    nodes, offsets, held = program.root.body.nodes, program.root.body.offsets, list(held)
+    run_input = {k for k, node in enumerate(nodes) if is_input(node.fn) and not is_registered(node.fn)
+                 and not any(h.start <= offsets[k] and offsets[k + 1] <= h.stop for h in held)}
     shared: set[int] = set()
     spans: dict[int, list[tuple[int, int]]] = {}
     for k, _t, _lo, n in part.ranges:

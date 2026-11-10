@@ -2720,20 +2720,27 @@ def unit_gates(j):
 
 
 def fanout(j):
-    """A template query's fan-out and the run Input nodes its proof blocks don't each read alone over a program
-    (`partition.fanout`, `partition.shared_inputs`; `Partition.fanout`, `Partition.sharedInputs`), refused for another
-    query or one that doesn't apply."""
+    """A template query's fan-out and the run Input nodes outside `held`, the gates `[[first, count], ...]` of the
+    parameters a verifier expects registered, its proof blocks don't each read alone over a program (`partition.fanout`,
+    `partition.shared_inputs`; `Partition.fanout`, `Partition.sharedInputs`), refused for another query or one that
+    doesn't apply."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
-    desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
+    desc = _obj(j.get("program"), "program")
+    held = [] if j.get("held") is None else j["held"]
+    if not isinstance(held, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(x) for x in h)
+                                             for h in held):
+        raise D.Reject("held is not a list of [first, count]")
+    query = _obj(j.get("query"), "query")
     sha = PO.program_sha512(desc)
     if sha not in PROGRAMS:
         raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
     if not P.is_template_query(query):
         raise D.Reject("not a template query")
     try:
-        return {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query)}
+        return {"fanout": P.fanout(PROGRAMS[sha], query),
+                "shared": P.shared_inputs(PROGRAMS[sha], query, [range(f, f + n) for f, n in held])}
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
 
@@ -2775,7 +2782,8 @@ def _readers(rows: int, plan: tuple, registered: bool) -> Program:
 def fanout_cases(draw) -> dict:
     """A program and a query for the fan-out: a population program of `PAIR`, or a root over `x`, two to five pairs of
     bytes, a run Input or a registered one, of one to four instances of `PAIR` wired at random (`_readers`), under `PAIR`'s
-    template query, or rarely a query that is not one or doesn't apply."""
+    template query, or rarely a query that is not one or doesn't apply; with no `held`, the first parameter's gates, or
+    gate intervals at random."""
     query = draw(st.sampled_from([P.template_instance_query(PAIR.id)] * 6 + [P.template_instances_query([PAIR.id]),
                                                                             P.template_instance_query(TRIPLE.id),
                                                                             PO.query()]))
@@ -2788,7 +2796,13 @@ def fanout_cases(draw) -> dict:
                          st.tuples(*[source] * 6))
         program = _readers(draw(st.integers(2, 5)), tuple(draw(st.lists(step, min_size=1, max_size=4))),
                            draw(st.integers(0, 3)) == 0)
-    return {"program": _json(codec.encode_program(program)), "query": _json(query)}
+    case = {"program": _json(codec.encode_program(program)), "query": _json(query)}
+    held = draw(st.integers(0, 3))
+    if held == 1:
+        case["held"] = [[g.start, len(g)] for g in G.held_gates(program, [program.fn.signature()[0][0][0]])]
+    elif held == 2:
+        case["held"] = draw(st.lists(st.lists(st.integers(0, 48), min_size=2, max_size=2), max_size=2))
+    return case
 
 
 PIECES = "sampled-proofs-difftest"
@@ -4911,7 +4925,8 @@ def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
     broadcasting it, share the run Input `x` at F 1, and the registration is refused (`R8-shared-input`); a call reading
     another's result, whose result a batch of two maps, joins all three at F 4, which the registration publishes; and
-    `x` registered is no run Input."""
+    `x` registered, as a registered input or as a parameter the verifier expects registered (`held`), is no run
+    Input."""
     for s, f, shared in zip(READER_SETUPS, (1, 1, 4), ([0], [0], [])):
         case = {"program": s.desc, "query": _json(s.query)}
         assert fanout(case) == {"fanout": f, "shared": shared}
@@ -4927,6 +4942,10 @@ def test_r8_reads_the_readers_python_does(pieces):
     program = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
     case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instance_query(PAIR.id))}
     assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": []}))
+    s = READER_SETUPS[0]
+    case = {"program": s.desc, "query": _json(s.query), "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
+    assert case["held"] and fanout(case) == {"fanout": 1, "shared": []}
+    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
 
 
 @pytest.mark.parametrize("name, change, code", [
