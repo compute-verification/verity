@@ -301,4 +301,53 @@ theorem passAll_keys {bs : Core.Blobs} :
       rw [Array.contains_push, hk]
       rfl
 
+/-- **A session's record is the blobs'**: two sessions that pass on one session's files read one record. -/
+theorem Passes.record_eq {c : Ctx} {bs : Core.Blobs} {keys : Array String} {s : _root_.Spot.OneStageZk.RunFiles}
+    {record : String} {units : Array ℕ} (h : Passes c bs keys s record units) {B : ByteArray} {record' : String}
+    (hB : bs.get s.record s!"session {s.name}'s record" = .ok B) (hu : String.fromUTF8? B = some record') :
+    record = record' := by
+  obtain ⟨B', hB', hu'⟩ := h.blob
+  rw [hB] at hB'
+  obtain rfl : B = B' := Except.ok.inj hB'
+  rw [hu] at hu'
+  exact (Option.some.inj hu').symm
+
+/-- **A session's coin-tree key stays in the run**: of sessions that pass in order, the key session `i`'s record names
+is a key of the run they pass to. -/
+theorem passAll_key_kept {bs : Core.Blobs} {xs : List (Ctx × _root_.Spot.OneStageZk.RunFiles)}
+    {r r' : _root_.Spot.OneStageZk.Run} (h : PassAll bs r xs r') {i : ℕ} (hi : i < xs.length) {B : ByteArray}
+    {record k : String} (hB : bs.get xs[i].2.record s!"session {xs[i].2.name}'s record" = .ok B)
+    (hu : String.fromUTF8? B = some record) (hk : xs[i].1.coinKey record = some k) :
+    r'.coinKeys.contains k = true := by
+  obtain ⟨ri, record', units, -, hp, hpost⟩ := passAll_getElem h hi
+  obtain rfl := hp.record_eq hB hu
+  refine (passAll_keys _ hpost).2 k ?_
+  show (keysWith ri.coinKeys (xs[i].1.coinKey record')).contains k = true
+  rw [hk]
+  show (ri.coinKeys.push k).contains k = true
+  rw [Array.contains_push, beq_self_eq_true, Bool.or_true]
+
+/-- **Each session's coins are its own**: of sessions that pass in order, no later session's record names the
+coin-tree key an earlier one's names, so no two of them flip their coins from one coin tree. -/
+theorem passAll_coins_own {bs : Core.Blobs} {xs : List (Ctx × _root_.Spot.OneStageZk.RunFiles)}
+    {r r' : _root_.Spot.OneStageZk.Run} (h : PassAll bs r xs r') {i j : ℕ} (hij : i < j) (hj : j < xs.length)
+    {Bi Bj : ByteArray} {ri rj k : String}
+    (hBi : bs.get (xs[i]'(Nat.lt_trans hij hj)).2.record
+      s!"session {(xs[i]'(Nat.lt_trans hij hj)).2.name}'s record" = .ok Bi)
+    (hui : String.fromUTF8? Bi = some ri)
+    (hBj : bs.get xs[j].2.record s!"session {xs[j].2.name}'s record" = .ok Bj)
+    (huj : String.fromUTF8? Bj = some rj) (hk : (xs[i]'(Nat.lt_trans hij hj)).1.coinKey ri = some k) :
+    xs[j].1.coinKey rj ≠ some k := by
+  obtain ⟨rj', record, units, hpre, hp, -⟩ := passAll_getElem h hj
+  obtain rfl := hp.record_eq hBj huj
+  intro hkj
+  have hi' : i < (xs.take j).length := by
+    rw [List.length_take]
+    exact Nat.lt_min.2 ⟨hij, Nat.lt_trans hij hj⟩
+  have e : (xs.take j)[i]'hi' = xs[i]'(Nat.lt_trans hij hj) := List.getElem_take
+  have hin : rj'.coinKeys.contains k = true :=
+    passAll_key_kept hpre hi' (by rw [e]; exact hBi) hui (by rw [e]; exact hk)
+  rw [hp.fresh hkj] at hin
+  cases hin
+
 end Verity.Sampled.Verdicts
