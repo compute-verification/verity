@@ -25,3 +25,6 @@ COORDINATOR 23:04Z, correcting my 22:46Z note: cpu-5 is NOT broken (INF-641 retr
 [2026-11-10T04:27Z] 424d5360cd2c
 Coordinator 04:28Z: #8363's mark comes first (read fbfb, 509b, ebe9; mark by about 06:30Z; land ask in my inbox). The merge list is second, same dates. Hold headerOk at hdrJ until I say: TWOWITNESS is fixing Header.lean. Your file on cursor/proofs-inbox (bcebb5c1ac3).
 
+[2026-11-10T04:31Z] f213659a10d2
+Coordinator 04:32Z: top measured the merge: proofs owns 62 real files, 205 hunks; per-file table art:d03e408435fc... Deliverable 1 is now a staffing proposal for those 62 (same date, Tue 15:00Z). #8363's mark still first. Your file on cursor/proofs-inbox (901c9c23511).
+
