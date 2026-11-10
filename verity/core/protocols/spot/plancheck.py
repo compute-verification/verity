@@ -128,9 +128,7 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     return out | ({"search": {x: str(v) for x, v in search.items()}} if search is not None else {})
 
 
-def check(designs: Sequence[dict]) -> list[Fraction | bool | tuple[Fraction | None, Fraction] | None]:
-    """Lean's answer to each design, in order: a leak design's certified bits (None when refused), a work design's
-    verdict, a two-stage point's certified bits (None when refused) and the θ they are at."""
+def _answers(designs: Sequence[dict]) -> list[dict]:
     if not designs:
         return []
     p = subprocess.run([str(executable(EXE))], input="".join(json.dumps(d) + "\n" for d in designs),
@@ -140,10 +138,27 @@ def check(designs: Sequence[dict]) -> list[Fraction | bool | tuple[Fraction | No
     out = [json.loads(line) for line in p.stdout.splitlines()]
     if len(out) != len(designs):
         raise LeanError(f"{EXE} answered {len(out)} of {len(designs)} designs")
-    answers: list[Fraction | bool | tuple[Fraction | None, Fraction] | None] = []
     for d, o in zip(designs, out):
         if "error" in o:
             raise LeanError(f"{EXE} can't read {d}: {o['error']}")
+    return out
+
+
+def ln_counts(points: Sequence[dict]) -> list[Fraction | None]:
+    """Lean's `ln_count` for each two-stage point, in order: its classes' share of `TwoStageCheck.lnCount` at its θ,
+    `classSum (classFactor D) D.classes`, exact (None where `lnCount` is none). A point's certified bits are
+    (θ·lnUpper(1/δ, p) + ln_count)/lnLower(2, p) for a nonnegative sum; a list of classes' `ln_count` is the sum of
+    each class's."""
+    if any(d.get("kind") != "two" for d in points):
+        raise ValueError("ln_count is a two-stage point's (kind 'two')")
+    return [None if o["ln_count"] is None else Fraction(o["ln_count"]) for o in _answers(points)]
+
+
+def check(designs: Sequence[dict]) -> list[Fraction | bool | tuple[Fraction | None, Fraction] | None]:
+    """Lean's answer to each design, in order: a leak design's certified bits (None when refused), a work design's
+    verdict, a two-stage point's certified bits (None when refused) and the θ they are at."""
+    answers: list[Fraction | bool | tuple[Fraction | None, Fraction] | None] = []
+    for d, o in zip(designs, _answers(designs)):
         if d["kind"] == "leak":
             answers.append(None if o["bound"] is None else Fraction(o["bound"]))
         elif d["kind"] == "two":

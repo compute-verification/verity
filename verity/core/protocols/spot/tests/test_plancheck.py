@@ -1,8 +1,8 @@
 """Lean's check of the planner's designs (`plancheck`, the `sampled-proofs-plancheck` executable): it accepts the
 planner's one-stage leak and work designs at Figure 1's scales, certifying a little more than the planner's
 `b K + loc_bits(n, K)` in exact arithmetic, and refuses each design with its rate a hair below the planner's rule, so
-its acceptance is not vacuous; a two-stage point's bits bound its count by enumeration on a small design; a design it
-can't read is an error."""
+its acceptance is not vacuous; a two-stage point's bits bound its count by enumeration on a small design, and its
+`ln_count` is its classes' share of them; a design it can't read is an error."""
 from __future__ import annotations
 
 import math
@@ -146,6 +146,23 @@ def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
     for union in (False, True):
         with pytest.raises(ValueError, match="registration verdict"):
             P.two(cells, k, 2, .9, .3, 3, union, theta=1.0)
+
+
+@pytest.mark.parametrize("served,union", [(None, False), (3, True), (3, False)])
+def test_a_two_stage_points_ln_count_is_its_classes_share_of_its_bits_and_adds_over_them(served, union):
+    """`ln_count` is the classes' share of the bits a point certifies: the bits times ln 2 are θ ln(1/δ) plus it, up to
+    `Spot.Interval`'s bounds at the point's precision. Two classes give the sum of each one's, exactly, as does one class
+    of twice the replay blocks; a point out of range gives none; and only a two-stage point has one."""
+    cells, k = SMALL[1]
+    d = P.two(cells, k, 2, .9, .3, served, union, 1.0, search=None, fanout=None if served is None else 1)
+    ((bits, theta),), (ln,) = P.check([d]), P.ln_counts([d])
+    assert theta == 1 and bits is not None and ln is not None and ln > 0
+    assert math.isclose(float(bits) * math.log(2), math.log(1 / .3) + float(ln), rel_tol=1e-12)
+    one = d["classes"][0]
+    assert P.ln_counts([d | {"classes": [one, one]}, d | {"classes": [one | {"count": str(2 * int(one["count"]))}]},
+                        d | {"theta": "-1/1"}]) == [2 * ln, 2 * ln, None]
+    with pytest.raises(ValueError, match="two-stage"):
+        P.ln_counts([P.leak(64, 8, Fraction(1), 0, DELTA)])
 
 
 def test_a_two_stage_point_out_of_range_is_refused():

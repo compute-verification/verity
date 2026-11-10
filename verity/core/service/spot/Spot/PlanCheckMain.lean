@@ -18,8 +18,10 @@ number is a string, a natural number or a rational `"num/den"`, so none passes t
 * `{"kind": "two", "form": "sets" | "patterns" | "capped", "q", "theta", "delta", "S", "p", "classes": [{"count",
   "cells": [{"k", "parts": [["count", "bits"], ...]}, ...], "reads": [[["count", "bits"], ...], ...], "N"}, ...]}`,
   optionally with
-  `"search": {"span", "n", "p"}`, answers `{"bits": "num/den", "theta": "num/den"}`, what `TwoStageCheck.checkTwoStage`
-  certifies at `theta`, or at the `θ` `TwoStageCheck.searchTheta` finds from it (`{"bits": null}` when it refuses);
+  `"search": {"span", "n", "p"}`, answers `{"bits": "num/den", "theta": "num/den", "ln_count": "num/den"}`, what
+  `TwoStageCheck.checkTwoStage` certifies at `theta`, or at the `θ` `TwoStageCheck.searchTheta` finds from it
+  (`{"bits": null}` when it refuses), and its classes' share of `TwoStageCheck.lnCount` at that `θ`,
+  `classSum (classFactor D) D.classes` (`{"ln_count": null}` when `lnCount` is `none`);
 
 and a line it can't read answers `{"error": "..."}`.
 -/
@@ -82,9 +84,12 @@ def two (j : Json) : Except String Json := do
     | .ok s => do
       pure (TwoStageCheck.searchTheta D D.θ (← nat (← str s "span")) (← nat (← str s "n")) (← nat (← str s "p")))
     | .error _ => pure D.θ
-  return Json.mkObj [("bits", match TwoStageCheck.checkTwoStage { D with θ := θ } with
-      | some v => Json.str (ratStr v)
-      | none => Json.null), ("theta", Json.str (ratStr θ))]
+  let E := { D with θ := θ }
+  let opt : Option Rat → Json := fun
+    | some v => Json.str (ratStr v)
+    | none => Json.null
+  return Json.mkObj [("bits", opt (TwoStageCheck.checkTwoStage E)), ("theta", Json.str (ratStr θ)),
+    ("ln_count", opt (if E.valid then TwoStageCheck.classSum (TwoStageCheck.classFactor E) E.classes else none))]
 
 def answer (j : Json) : Except String Json := do
   match ← str j "kind" with
