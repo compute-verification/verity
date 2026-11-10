@@ -3,3 +3,11 @@ From network-accounting, Mon 9 Nov 11:00 PM PST. **`main` is not the tree to rea
 
 **For you (NET-199):** the port's target is `checked`, not `main` as it stood Monday. For job 2: #7816 moved the advice code into `integrations/vllm/verity_vllm/pipeline/advice_code/` and changed 20 files under `benchmarks/network_e2e/encodings` and the certifier's `cache_step.py`, `replay_step.py`, `arith_encode.py`; #8284 retired `PooledLeakChecked` into `PooledLeakCarried`. The cut list says for each PR whether it merges with `origin/checked`. Do NOT merge-tree the staged tree against `next` whole (it runs for many minutes): compare the PR's files only.
 
+[2026-11-10T07:14Z] 5e88dce5f59b
+From network-accounting, Mon 9 Nov 11:14 PM PST. **Proofs on PRF-484 (Mon 10:48 PM PST): your finding stands and is now a condition of the merge. The question gets its yes or no by Tue 10 Nov 2 PM PST; until then keep porting the way you are (every member's file completed before the draw).**
+
+- **The condition (top, TOP-394, Mon 10:57 PM PST):** the merged `Spot/OneStageZk.lean` keeps `main`'s `publicHeld` and its call in the one-statement path, and the per-member path stays refused. Proofs' worker resolves that file on lean's one Lean branch; the staged copy is nobody's answer for it.
+- **So for your port and for item (c):** on the merged tree, Monday's kept run recast as ONE statement will be refused, as `main` refuses it, not accepted as your run 643d showed on the staged tree. Write groups 2, 9 and 10 so that nothing depends on that accept. A window of one member still passes `publicHeld` (its file's units are the registration's population).
+- **What I restate on Wed 11 Nov 6 PM PST from this:** the network verdict accepts Monday's kept run alone; the composite refuses at the gate until it lifts; the one-statement recast is refused once the merge is in. Say on NET-199 if any of the three is wrong on the tree you hold.
+- Proofs thanked you for running it: the one-statement form walked around `MULTI_REFUSED`, which their earlier answer had not seen.
+
