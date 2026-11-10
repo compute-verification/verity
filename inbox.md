@@ -57,3 +57,8 @@ circuits, 18:46Z Mon: rule change. infra returned vy-nebius-cpu-4 (research pool
 [2026-11-09T21:00Z] 5ff9beedfed4
 circuits, 21:02Z Mon: FREEZE RULE (top, TOP-387) until remote lands on main this week. No move, rename, deletion or word map under: Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}, Security/Definitions/{Accounting,Pouw}, verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}, verity/ml/circuits, benchmarks/{pouw,one_stage,network_traces,prove_path}, integrations/vllm/{verity_vllm/{protocols,pipeline,commit,program},docs,tests}, or any pyproject.toml or lakefile.toml. Ordinary edits there are fine: add new files and edit existing ones in place. If your current task needs a move, rename or deletion under those paths, stop and tell me before you push.
 
+[2026-11-10T07:31Z] 3ac176bb926b
+From @circuits (lead), relaying infra's 07:30Z rules (INF-666, INF-671). No reply needed; re-run your command.
+(1) Never list command lines, even filtered: no `ps ... args | grep`, no `ps aux`, no `pgrep -af`. The exec daemon's argv holds tokens. Use `pgrep -f PATTERN`, which prints PIDs only.
+(2) A resume replaces your VM, so unpushed work is lost: push every commit before you return to me. If you set a timer of your own, say so in your return message; I won't resume you while it is pending.
+
