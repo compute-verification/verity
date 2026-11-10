@@ -2,15 +2,14 @@
 Two parameters of one name. `desc "w"` is a program whose template `RegisteredTestTwoParams_v0` has two parameters named
 `w`, the first reading the program's registered input `A` and the second its registered input `B`; `desc "v"` names the
 second `v` (`verity/core/protocols/spot/tests/test_registered.py`'s `_two_params`, whose descriptors these are, each
-pinned by its SHA-512 in both). `Program.decode` takes both, and `Registered.regParams` lists `w` at each of `desc "w"`'s
-parameters, so a port of parameter `w` covers both (`coverMiss`), where `desc "v"`'s `v` needs a port of its own.
+pinned by its SHA-512 in both). `Program.decode` refuses `desc "w"`, as the Python decoder and `Builder` do, so
+`Registered.coversParam`, which matches a port to a parameter by name, never meets one name for two parameters.
 
 Flock's registered reads in `flock-verify verify`'s order (`Registered.ofJson` and `paramsOf`, then `checkProgram`,
-`namesOnce`, `check`, `checkComplete` and `checkCover`) accept a statement of `desc "w"` whose two ports `w` and `u` both
-open `A`'s registered root, the second parameter's rows read at `A`'s root rather than `B`'s, on a file that names no port
-of the second parameter; the same file is refused for `desc "v"`, and accepted once its port `u` names parameter `v`. No
-check of Flock's reads which registered input a parameter reads: the verifier's file states each port's value and root,
-and the verifier's builder of that file (`registered.reads`) refuses `desc "w"`.
+`namesOnce`, `check`, `checkComplete` and `checkCover`) refuse a statement of `desc "w"` at `checkCover`'s decode. For
+`desc "v"`, a file whose ports `w` and `u` both open `A`'s registered root is refused while no port reads parameter `v`,
+and accepted once `u` names it: no check of Flock's reads which registered input a parameter reads, and the verifier's
+file, built from its own program (`registered.reads`), states each port's value and root.
 -/
 module
 
@@ -42,12 +41,13 @@ def names (second : String) : Array String := (Registered.regParams (prog second
 #guard hexOf (Sha512.hash (desc "v")) ==
   "352f7f13f7e80ef597b363b4fee73e5b2cd0a6c44cd4aae4a39337dbb87be66dcd137737f06e3319226a2faee21a86c9a0921e027960d737e16164fbe5baa000"
 
--- both decode, and each of the template's two instances reads a registered input at both its parameters
-#guard (Program.decode (desc "w")).toBool && (Program.decode (desc "v")).toBool
-#guard names "w" == #["w", "w", "w", "w"]
+def twice : String := s!"definition '{T}': parameters: a name twice"
+
+-- `desc "w"` is refused; `desc "v"` decodes, each of its template's two instances reading a registered input at both
+-- its parameters, and a port of parameter `w` alone leaves its `v` uncovered
+#guard match Program.decode (desc "w") with | .error e => e == twice | .ok _ => false
+#guard (Program.decode (desc "v")).toBool
 #guard names "v" == #["w", "v", "w", "v"]
--- one port of parameter `w` covers both of `desc "w"`'s; `desc "v"`'s `v` needs its own
-#guard (Registered.coverMiss (prog "w") T #["w"]).isNone
 #guard (Registered.coverMiss (prog "v") T #["w"]).map (·.1) == some "v"
 
 /-- A template query of `T`, whose instances are the program's two root calls. -/
@@ -98,9 +98,9 @@ def why (program : ByteArray) (f : Json) : String :=
   | .error e => e
   | .ok () => ""
 
--- `desc "w"`: accepted, the second `w`'s rows read at `A`'s root, on a file naming no port of that parameter
+-- `desc "w"`: refused, on a file naming no port of its second parameter
 #guard (Registered.paramsOf (file none)).toOption == some #["u", "w"]
-#guard why (desc "w") (file none) == ""
+#guard why (desc "w") (file none) == twice
 -- `desc "v"`: the same file is refused, its `v` read by no port; a file whose `u` reads `v` is accepted, at `A`'s root too
 #guard why (desc "v") (file none) ==
   "registered reads (cover): parameter v of RegisteredTestTwoParams_v0 reads a registered input of the verifier's program, and no port of the verifier's registered reads reads it: its rows would be committed afresh"

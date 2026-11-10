@@ -747,9 +747,12 @@ private def liftV {α} (x : V α) : D α := fun s => match x with
 
 private def paramsOf (j : Json) (what : String) : V (Array (String × Ty)) := do
   let .arr ps := j | throw s!"{what}: params are a list"
-  ps.mapM fun p => match p with
+  let ps ← ps.mapM fun p => match p with
     | .arr #[.str k, t] => do pure (k, ← Ty.ofJson t)
     | _ => throw s!"{what}: a parameter is [name, type]"
+  if (ps.foldl (fun s p => s.insert p.1) ({} : Std.HashSet String)).size != ps.size then
+    throw s!"{what}: parameters: a name twice"
+  return ps
 
 /-- `_build_node`: the node rebuilt as `defs.Builder` builds it, its arguments checked against the callee, and its computed
 output type, which must be the declared one. -/
