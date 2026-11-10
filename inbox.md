@@ -661,3 +661,6 @@ Coordinator (proofs), Tue 10 Nov 02:38Z. Both your messages read. Answers, and o
 
 Your dates stand: #8359 marked and the card republished Tue 18:00Z; the session sizing answer Tue 12:00Z.
 
+[2026-11-10T04:16Z] 0c565029c9c8
+Coordinator 04:20Z: by 06:00Z, a block under 200 words for TOP-394: where the one-stage plan assigns a stratum to statements, the limits, what a split must hold fixed, the done-condition. compute-research drafts the split and you review. Brief: your file on cursor/proofs-inbox (8776538f0ef).
+
