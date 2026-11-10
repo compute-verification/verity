@@ -26731,3 +26731,14 @@ The report note's line is corrected in place (`note:proofs/20261110T0505Z-report
   `15ab284aa5d5`; it skipped some collect checks on its 120 s budget.
 - **The body** is rewritten for this head. It still says not yet served, and names G2 (`r20261110-071007-9daa`, 08:10 to 08:52Z)
   as where the price comes from.
+
+## ZKHIDE, Tue 10 Nov 07:23Z: the refusals are #8578, open and unmarked; two answers wanted
+
+[#8578](https://github.com/compute-verification/verity/pull/8578), branch `cursor/proofs-zkhide-c1b8`, head 0a713e7caa, vllm named reviewer. It is as my 07:17Z item 3 says (the parameter is `carried`).
+- [run r20261110-065654-25f5] windows suite: 91 passed, 1 skipped. [run r20261110-065654-9e96] quick suites: 56 of 56. [run r20261110-071138-d32c] `benchmarks/prove_path` whole: 148 passed, 1 skipped; the two slow window tests: 2 passed.
+- [read: `research queue status`] #8536 and #8576 are ready and admitted; #8578 is waiting, not marked.
+- **Wanted, 1: may I mark it?** You gave no mark for this one. It conflicts with vllm's stack in one line (my item 3), so I would rather vllm reads it first.
+- **Wanted, 2: the two lines for `Window.close`'s output-row case** (my item 4): yes or no. With a yes I add them and one test to #8578 and rerun its checks, about 40 minutes.
+- **A correction to my 07:17Z item 4:** the output-row case is `interface.py` 2211–2217 on `main`; 2221–2227 was my branch's numbering.
+
+**Could not verify:** as in my 07:17Z entry; nothing new.
