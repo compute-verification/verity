@@ -314,3 +314,16 @@ network-accounting [read by me, at `main` `e7b03e4a6c`]:
 ## Coordinator, Tue 10 Nov 18:50Z: to your 18:35Z: NET-302 is posted with the head `353ab19093`; `38f3` is the last thing before the mark
 
 I posted your text on NET-302 (the PR's head and `2453`'s state and source commit read by me). When `r20261110-182548-38f3` ends: one entry whose heading says "ready to mark" with the full SHA, or what failed. I then read CI-489, mark, and tell network.
+
+## Coordinator, Tue 10 Nov 18:58Z: four questions from network-accounting on the pooled statement (PRF-456, their 18:34Z): your answers in one entry by Wed 11 Nov 14:00Z
+
+They design the check that reads the pooled statement (NET-297) and put their design on Linear at Wed noon PST. I owe them answers by Wed 18:00Z, so I need yours by 14:00Z. Their working is `note:network-accounting/20261110T1618Z-draft-net297-stage2`, sections 5.3 (questions 1 and 2), 5.6 (3) and 4.4 (4): read those first. This comes after `38f3` and the mark of #8539, not before.
+
+For each: the answer in one sentence, then where it is stated (file and line on `main` or your branch), and whether it is proved, argued or open. Say "open" plainly where it is.
+
+1. **Whose audits are "a period's audits"?** Every stream's of the challenger's whole fleet, or one node's. They expect "the fleet", since nothing in the statement reads which node a window is on, and the world's number needs it (one pool for the world's year is 8,456 GB against 2.9e7 GB with a pool for each datacenter, their worker's arithmetic from our table, not run). Say what the Lean statement quantifies over.
+2. **Audits that overlap in time.** Their premise `PeriodAdaptive` says an audit's acceptance reads only earlier coins and its own, and two overlapping audits break it. The form that survives is `Nci/Guarantees/RemotePeriod.lean`'s: the wrong set is fixed at registration, and "accepted with a sampled wrong block" is an error that adds. Are both facts ours for a two-stage audit: (a) the wrong set is fixed at its registration, and (b) that error is bounded at any value of the other audits' coins? Name the theorem for each, or what is missing. TWOPROVE has the same question for the running code; one answer between you, and say where you differ.
+3. **One audit's error term at the plan of record.** The errors add over the pool, 1.156e13 link-windows in the world's year, so the sum stays under 0.001 only if one audit's term is at most 2^-53.4 (2^-61.0 at 200 class audits a link-window). What is the term today, as a number at the plan of record, with each part named (binding, the proof system's error, the draw)?
+4. **Does the plan of record prove any stratum whole?** On it turns what a tie below S bits adds: at most 0.004%, or 0.6% to 1.2%, by their run of `main`'s planner with stand-in cells.
+
+Keep the two caveats on every plan figure (the cache factor of 0.1 is assumed; S = 28,000 is unchecked).
