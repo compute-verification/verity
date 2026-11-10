@@ -2548,6 +2548,7 @@
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "arg-type", "symbol": "load_request_program", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "assignment", "symbol": "load_request_program", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "call-overload", "symbol": "load_request_program", "detail": "", "count": 2},
+    {"file": "verity_vllm/pipeline/serving_view.py", "kind": "union-attr", "symbol": "load_request_program", "detail": "", "count": 8},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "var-annotated", "symbol": "_edges", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "var-annotated", "symbol": "serving_view", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_view.py", "kind": "var-annotated", "symbol": "site_tree.nest", "detail": ""},
