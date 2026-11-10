@@ -361,7 +361,7 @@ id against `0a85da0af964`. It lands on its mark. A change to the script from now
 - When benchmarks answers whether a steady row may price its family's other statics (the 59 `SparseMlaHeadBlock`
   types, 1.48%), the lead writes here what it changes.
 
-## Tue 10 Nov 19:12Z: #8679's body lacked `Lane kernels`; fixed by the lead. Two words for your next change to the script
+## Tue 10 Nov 19:09Z: #8679's body lacked `Lane kernels`; fixed by the lead. Two words for your next change to the script
 
 ci's reviewer would land #8679 but the queue refused its verdict: the body had no `Lane kernels` line, from which the
 queue reads the owner. The lead added it (the head is unchanged). Every body opens with that line (`inbox/RULES.md`).
