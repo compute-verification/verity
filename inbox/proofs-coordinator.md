@@ -28386,3 +28386,38 @@ Resumed at 15:56Z. `main`'s AGENTS.md is the one I work from [run: no diff]. #85
 4. **The pooled field, the Python half, on a branch off #8539's head: about 20:30Z.**
    - What it is: the two-stage answer publishes `pool` (form, q, θ, δ, S, p) and `ln_count = classSum (classFactor D) classes`, with the Python mirror in `second_stage.py` and tests, all on `main`'s paths.
    - Not today: the Lean half (`Spot/SecondStage.lean`, `Spot/Record.lean`, a difftest piece and the `ln_count` Properties statement) and its records runs. They go to Wed 12:00Z, after the layout.
+
+## PRF-460 TWOWITNESS, Tue 10 Nov 16:12Z: `cb9f` and `671b` failed on my own proofs, not the slots; fixed in two commits, and `7c72` tries File and Inputs on cpu-12 (ETA 17:15Z)
+
+**`r20261110-074023-cb9f`** (cpu-12, slot `p0`, build slot `build-0`, commit `794b403a8c`) failed with rc 1 [run]. Its log had been evicted from the node; I restored it from the evidence store, and its sha256 matches the eviction record.
+
+| File | Result |
+|---|---|
+| File | lean exit 1, 360 s: `File.lean:192:0: error: fwd: the condition is stuck`, on `HmOut.checkRows`' sort (`qsort`) of the rows' names. |
+| Sizes | lean exit 0, 503 s. All 24 theorems on the three allowed axioms, `decode_x` and `x_small` among them. |
+| Inputs | lean exit 1, 689 s, one error: `Inputs.lean:119:2: error: fwd: stuck at Except.instMonad.toFunctor.1 some (jsonOf "draw" (printJson drawJ).toUTF8) tainted by some (FlockDeploy.jsonOf)`. No sibling verdict follows lean's exit 1. |
+
+- In File, `parse_cX` (the walk through `HmRow.parse`) elaborated, and the probe put `sha512Hex_of`, `prog_hex` and `part_hex` on the three allowed axioms.
+- In Inputs, the other ten theorems are on the three allowed axioms. `ins_x`, `insOf_x`, `readOf_x` and `hiddenOf_x` show `sorryAx` only because of that error.
+- Inputs' error is a step of the walk, not the kernel and not the slot. `Raw.ins` reads the sample, the partition and the registered reads with `Option.mapM`. On a file that is there, `Option.mapM` unfolds to a `Functor.map` with a projection at its head, and the walk's rules only match a constant head. The concrete instance has none of these three files, so this walk is the first to reach that branch.
+
+**`r20261110-075225-671b`** (cpu-12, slot `p1`, build slot `build-1`, commit `9683789014`) failed with rc 1 [run]. File: lean exit 1, 450 s, `File.lean:176:18: error: unexpected token 'X'; expected '_' or identifier`. ArkLib's global `notation3 "X"` reaches File through its imports, so my `qsort_io` didn't parse. The walk then stuck at 199:0 on the same sort.
+
+**Head** [read]: `cursor/proofs-twowitness-0d28` at `9ccbf2ef98`, pushed.
+- `91f8c9c2e7` renames `qsort_io`'s binder to `ns`.
+- `9ccbf2ef98` adds `optMapM_ok`, the rule `(some a).mapM f = .ok (some b)` for `Option.mapM`. The walk walks its side condition `f a = .ok b`, where `jsonOf_draw`, `jsonOf_part`, `jsonOf_reg` and `ofJson_reg` apply. It also adds `map_norm_draw`.
+
+**Run `r20261110-160744-7c72`** [run]: cpu-12, slot `p0` (cores 12-56), build slot `build-2`, which has 99 files changed and so rebuilds for about 38 minutes first, as `b43f`'s did. It tries File, then rebuilds two dependencies, then tries Inputs with `--siblings`. ETA about 16:55Z for File and 17:15Z for the whole run [guess].
+
+**What (A) still needs, in order** [guess for the order and the sizes]:
+1. File's `parseOut_cX`, which reads the circuit file through `HmOut.parse` (`7c72`).
+2. Inputs' `ins_x`, and through it `insOf_x`, `readOf_x` and `hiddenOf_x` (`7c72`).
+3. File's premises at the fixed nets' layouts:
+   - `hc1` and `hc2`, i.e. `canon lsM = canon pinJ`;
+   - `hps`, `hph` and `hck`, from `FixedNetsBuild`;
+   - `hcl` and `hH`, at `classHash` and `circuitHash`.
+4. The setup's walk of `Ins.setup (ins r)`, which gives `setupOf true (x r)` and `Stmt.checked`.
+5. `zkOk`, `templateOk` and `scopeCheck` on that setup.
+6. A records run, and `--siblings` for each new file. The PR waits for your decision on marks after the cut.
+
+**Dates** [guess]: (A) Wed 18:00Z holds if `7c72` passes or needs one more cycle; steps 3 to 5 are new walks, which is where the risk is. (D) Fri 12:00Z holds. I stay on `main`'s paths, move no file and land nothing today.
