@@ -1445,7 +1445,7 @@ def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
     data[k]["rows"][CS.LINKED] = data[k]["rows"][CS.LINKED][:1]
     data[k]["refs"] = np.stack([np.zeros(m.n, dtype=np.int64) if p == CS.LINKED else np.arange(m.n) for p, _ in m.rows], axis=1)
     linked = replace(m, tables=tuple((p, 1 if p == CS.LINKED else m.n) for p, _ in m.rows), links=((0, 0),),
-                     link_units=(m.n,))
+                     link_units=(m.n,), schemas=tuple((p, CS.TABLE_SCHEMA if p == CS.LINKED else s) for p, s in m.schemas))
     table = CS.RowTable(0, "feed", m.template, dict(m.rows)[CS.LINKED], ((0,),))
     return replace(window, members=(*window.members[:k], linked, *window.members[k + 1:]), row_tables=(table,),
                    context="cd" * RT.DIGEST_BYTES)
@@ -1478,6 +1478,19 @@ def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(mo
     CS.commit(window, data, salt_key=bytes(32))
     with pytest.raises(ValueError, match=re.escape(why)):
         CS.commit(edit(window, data), data, salt_key=bytes(32))
+
+
+def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
+    """A linked member's ``x`` rows take their row table rows' salts, so `rows.Binding` refuses a linked ``x`` port of
+    another schema than the row tables': the same row under two schemas is two strings under one salt."""
+    window, data, _w = given_by_reference(monkeypatch)
+    linked = _beside_a_row_table(window, data)
+    k = _first(linked, SID)
+    m = linked.members[k]
+    assert m.schema(CS.LINKED) == CS.TABLE_SCHEMA != V2
+    with pytest.raises(ValueError, match=re.escape(f"its {CS.LINKED!r} rows are {V2} rows, a row table's are {CS.TABLE_SCHEMA}")):
+        replace(linked, members=(*linked.members[:k], replace(m, schemas=tuple((p, V2) for p, _ in m.schemas)),
+                                 *linked.members[k + 1:]))
 
 
 class Table(Held):

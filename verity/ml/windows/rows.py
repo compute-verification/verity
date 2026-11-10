@@ -320,8 +320,9 @@ class Binding:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the sampling design it samples by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
-    at least one linked member's ``x`` table, under ``context`` (hex, 64 bytes known before the first segment: the live coin
-    commitment's root).  A ``work`` law
+    at least one linked member's ``x`` table (rows of the tables' schema, `TABLE_SCHEMA`, refused otherwise: a linked row
+    takes its row table row's salt, which then hides one string), under ``context`` (hex, 64 bytes known before the first
+    segment: the live coin commitment's root).  A ``work`` law
     samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
@@ -363,6 +364,9 @@ class Binding:
                                      "row, or one row a unit in its writer's order")
         covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
         for m in self.members:
+            if m.links and m.schema(LINKED) != TABLE_SCHEMA:
+                raise ValueError(f"{m.key}: its {LINKED!r} rows are {m.schema(LINKED)} rows, a row table's are {TABLE_SCHEMA}: a "
+                                 "linked row takes its row table row's salt, and a salt hides one string (Member.schemas)")
             for t, r in m.links:
                 if not (0 <= t < len(covered) and 0 <= r < len(covered[t])):
                     raise ValueError(f"{m.key}: link {(t, r)} is no row of the window's {len(covered)} row tables")
