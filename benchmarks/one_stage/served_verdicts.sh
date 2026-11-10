@@ -311,7 +311,9 @@
 # (PEARLPLUS-CIRCUIT, within PEARLPLUS_CIRCUIT_TIMEOUT, default 30m), and step 3 says whether its record is that one.
 # With a gate, serve() then opens the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) on that record
 # (`served_verdicts.py pearlplus-period open --circuit-record`, cap 1: the window's one salt session joins it; the
-# PEARLPLUS-PERIOD lines) before serve-openai starts, and closes it once the windows are sealed and the endpoint stopped
+# PEARLPLUS-PERIOD lines) before serve-openai starts (under SIGNED_LIMITS=1 after weights() and before the first request
+# instead, its open signing the limits and the first registration record's digest: IO_LIMITS's comment), and closes it
+# once the windows are sealed and the endpoint stopped
 # (or when it never listens, or is stopped), so before Pearl+'s piece draws: open, serve, seal, close, draw. The close
 # first reads the ledger, waiting up to PEARLPLUS_CLOSE_WAIT seconds (default 300) for it to end each window's salt
 # session, since the gate closes a period only once its windows have ended: the lane's reserves since the open must be
@@ -504,6 +506,7 @@ CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
+  DREG_DIGEST=
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$CKPT" \
     --key "$D/private/weights.key" --out "$WREG" --deployment-record "$DREG") > "$OUT/weights_registration.txt" 2>&1
   local rc=$? log=$OUT/weights_registration.txt
@@ -524,9 +527,10 @@ EOF
 )"
   [ -s "$DREG" ] || return 0
   cp "$DREG" "$OUT/"
+  DREG_DIGEST=$(grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 | cut -d'"' -f4)
   say "DEPLOYMENT-REGISTRATION the serve's first registration record, which registers those roots: written before the first" \
-    "request by the developer (no auditor holds its digest), digest" \
-    "$(grep -o '"deployment": "[0-9a-f]\{128\}"' "$log" | tail -1 | cut -d'"' -f4)"
+    "request by the developer ($(signed_limits && echo "the lane's period signs its digest at its open: PEARLPLUS-PERIOD" \
+      || echo "no auditor holds its digest")), digest $DREG_DIGEST"
 }
 V3C=${V3C_CLASS-4,32,4} v3c_ok=0
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
@@ -643,15 +647,29 @@ served_compare() {  # under PEARLPLUS_TIE, once Pearl+'s piece wrote W and befor
   cp "$dir/served_compare.json" "$dir/circuit_facts.json" "$OUT/served-compare/" 2>/dev/null
   return "$rc"
 }
+signed_limits() {  # SIGNED_LIMITS=1 under PEARLPLUS_TIE with a gate: the period's open signs the limits and D0's digest
+  [ "${SIGNED_LIMITS:-0}" = 1 ] && [ -n "$PEARLPLUS_TIE" ] && [ -n "$PEARLC_CHALLENGER_GATE" ]
+}
 pearl_period() {  # under PEARLPLUS_TIE with a gate, in serve(): $1 open (on PEARLPLUS-CIRCUIT's record) or close the lane's
-  # Pearl-C period the window's salt session joins, its reserves first held to the windows' salt sessions
-  local out
+  # Pearl-C period the window's salt session joins, its reserves first held to the windows' salt sessions. Under
+  # SIGNED_LIMITS=1 the open also signs the inference-only policy's id (LIMITS_POLICY), the limits fixed before the serve
+  # (IO_LIMITS) and the digest of the deployment's first registration record (weights()'s), all or none
+  local out signs=()
   if [ "$1" = open ]; then
     [ -n "$PEARLPLUS_TIE" ] && [ -n "$PEARLC_CHALLENGER_GATE" ] || return 0
     [ -f "$PEARLPLUS_CIRCUIT" ] || { say "PEARLPLUS-PERIOD not opened: PEARLPLUS-CIRCUIT built no record, so the window's salt session joins no period"; return 1; }
+    if signed_limits; then
+      if [ -s "$IO_LIMITS" ] && [ -n "${DREG_DIGEST:-}" ] && fixed_limits; then
+        signs=(--policy "${LIMITS_POLICY:-verity/inference-only/v0}" --alpha "$ALPHA" --gamma "$GAMMA" --registration "$DREG_DIGEST")
+      else
+        say "PEARLPLUS-PERIOD signs no limits (SIGNED_LIMITS=1): its open signs the limits and the deployment's first" \
+          "registration record together, and the run has $([ -s "$IO_LIMITS" ] && echo "its limits" || echo "no limits")" \
+          "and $([ -n "${DREG_DIGEST:-}" ] && echo "that record" || echo "no such record")"
+      fi
+    fi
     out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period open "$D/pearlplus" \
       --gate "$PEARLC_CHALLENGER_GATE" --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local}}" \
-      --circuit-record "$PEARLPLUS_CIRCUIT" 2>&1) && PEARL_PERIOD=1
+      --circuit-record "$PEARLPLUS_CIRCUIT" "${signs[@]}" 2>&1) && PEARL_PERIOD=1
   else
     [ "${PEARL_PERIOD:-}" = 1 ] || return 0
     out=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" pearlplus-period close "$D/pearlplus" \
@@ -930,8 +948,10 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
     [ -f "$D/period.json" ] && period=1
   fi
-  # the policy is written before serve-openai's start, which the verdict reads as the serve's beginning
-  [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; (cd "$TREE" && inference_policy); pearl_period open; }
+  # the policy is written before serve-openai's start, which the verdict reads as the serve's beginning. Under
+  # SIGNED_LIMITS the period opens after weights() instead: its open signs the digest of the record weights() writes,
+  # whose roots need the loaded engine's tables, and a tied window reserves its salt session at its first step
+  [ -z "$PEARLPLUS_TIE" ] || { pearl_circuit; (cd "$TREE" && inference_policy); signed_limits || pearl_period open; }
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal \
@@ -957,6 +977,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
+  ! signed_limits || pearl_period open  # before the first request, which opens window 0 and reserves its salt session
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
@@ -1096,7 +1117,14 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # Boolean gates by its gate table (the count rule's unit; the run's own are in LIMITS_UNIT, which it states). They go to
 # IO_LIMITS beside the policy, with the count rule's (c, k, n) and the policy file's SHA-512, and the deferral and the
 # compose hand-off carry them as ALPHA and GAMMA (`fixed_limits`), so no later step reads them off the served window's
-# division. The developer writes them: no auditor's device signs them.
+# division. The developer writes them. No auditor's device signs them unless SIGNED_LIMITS=1 (off by default; under
+# PEARLPLUS_TIE with a gate): the lane's Pearl-C period then opens after weights() and before the first request, not
+# before serve-openai starts, and its open asks the gate to sign the policy's id (LIMITS_POLICY, default
+# verity/inference-only/v0, which names the limits' form and unit to the gate), these limits and the digest of the
+# deployment's first registration record, all four or none (`pearlplus-period open --policy --alpha --gamma
+# --registration`); PEARLPLUS-PERIOD says whether the gate's answer holds them. That record's roots need the loaded
+# engine's tables, so the open can't come before the endpoint, and a tied window reserves its salt session only at its
+# first step, so the period is open by then.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
 limits() {
   local out
@@ -1115,15 +1143,16 @@ doc = {"format": "verity-bench/inference-only-limits/v1", "alpha": [a.numerator,
        "unit": (unit or "not stated") if given else "Boolean gates by the policy's gate table, the unit of its c",
        "count": {x: p.get(x) for x in ("c", "k", "n")},
        "from": "the run's ALPHA and GAMMA" if given else "the policy's c and k (alpha = k/c, gamma = c)",
-       "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer; no auditor's device signed them"}
+       "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer"}
 with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}")
 EOF
 ) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case reads them off its own division:" \
            "$(echo "$out" | tail -1 | cut -c1-300)"; return 0; }
-  say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and signed by no" \
-      "auditor's device (inference-only-limits.json)"
+  say "INFERENCE-ONLY LIMITS $out: fixed with the policy before the serve, written by the developer and" \
+      "$(signed_limits && echo "signed by the lane's period at its open, where PEARLPLUS-PERIOD says so" \
+        || echo "signed by no auditor's device") (inference-only-limits.json)"
 }
 fixed_limits() {  # ALPHA and GAMMA as the run fixed them before its serve (IO_LIMITS), where it did
   local got

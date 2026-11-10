@@ -2055,6 +2055,47 @@ def test_the_pearlplus_period_opens_around_the_retained_serve_and_closes_before_
                 str(record), "--cubin", str(cubin)])
 
 
+def test_the_pearlplus_periods_open_asks_the_gate_to_sign_the_policy_and_the_registration_all_four_or_none(
+        tmp_path, monkeypatch, capsys):
+    """``pearlplus-period open --policy ID --alpha N/D --gamma G --registration SHA512``: the open's words carry all four
+    after the circuit, as given, ``period.json`` holds what was asked (α as ``[N, D]``) with whether the gate's answer's
+    body holds each, and the line says the open signs them. A gate whose answer holds them not opened the period all the
+    same: exit 0, the line saying it signs none. A part of the four, or an α that is no N/D, is refused before the gate
+    is asked."""
+    calls, digest = [], "d0" * 64
+    signed = {"policy": "verity/inference-only/v0", "alpha": [3, 7], "gamma": 14, "registration": digest}
+
+    def gate_out(gate: str, *words: str) -> bytes:
+        calls.append(words)
+        return json.dumps({"kind": "period-open", "body": {"period": words[2], **(signed if words[2] == "signing" else {})}}).encode()
+    monkeypatch.setattr(S, "_gate_out", gate_out)
+    (record := tmp_path / "circuit-record.json").write_bytes(PEARL_RECORD)
+    circuit, piece = hashlib.sha512(PEARL_RECORD).hexdigest(), tmp_path / "serve" / "pearlplus"
+    asks = ["--policy", "verity/inference-only/v0", "--alpha", "3/7", "--gamma", "14", "--registration", digest]
+
+    def opened(name: str, *more: str) -> int:
+        return S.main(["pearlplus-period", "open", str(piece), "--gate", GATE, "--name", name, "--circuit-record",
+                       str(record), *more])
+    said = (f"policy verity/inference-only/v0, alpha 3/7, gamma 14 and the deployment's first registration record "
+            f"{digest[:16]}...")
+    head = "PERIOD opened {}: Pearl-C, cap 1, circuit " + f"{circuit[:16]}... (the window's circuit record {record})"
+    assert opened("signing", *asks) == 0
+    assert calls == [("period-open", "--name", "signing", "--cap", "1", "--circuit", circuit, *asks)]
+    assert json.loads((piece / S.PERIOD).read_text())["policy"] == {**signed, "signed": True}
+    assert capsys.readouterr().out == f"{head.format('signing')}; its open signs {said}\n"
+    assert opened("deaf", *asks) == 0
+    assert json.loads((piece / S.PERIOD).read_text())["policy"] == {**signed, "signed": False}
+    assert capsys.readouterr().out == (f"{head.format('deaf')}; ITS OPEN SIGNS NONE OF {said}: they are not in the gate's "
+                                       "answer\n")
+    assert opened("plain") == 0 and "policy" not in json.loads((piece / S.PERIOD).read_text())
+    assert capsys.readouterr().out == f"{head.format('plain')}\n"
+    assert opened("part", *asks[:6]) == 1 and opened("odd", *asks[:2], "--alpha", "0.4", *asks[4:]) == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("PERIOD refused: ValueError: a period's open signs its policy and its registration together")
+    assert out[1].startswith("PERIOD refused: ValueError: alpha 0.4 and gamma 14: alpha is N/D")
+    assert [c[2] for c in calls] == ["signing", "deaf", "plain"]
+
+
 @pytest.mark.parametrize("case", ["held", "stray", "unread", "unsalted", "unparsed"])
 def test_the_tied_period_closes_holding_its_reserves_to_the_windows_salt_sessions(tmp_path, monkeypatch, capsys, case):
     """``pearlplus-period close --lane L --windows PEARL_DIR`` (PEARLPLUS_TIE's, in serve()): the ledger read before the
@@ -2524,7 +2565,7 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
         "unit": "Boolean gates by the policy's gate table, the unit of its c", "count": {"c": 14, "k": 6, "n": 16},
         "from": "the policy's c and k (alpha = k/c, gamma = c)",
         "policy_sha512": hashlib.sha512(policy.encode()).hexdigest(),
-        "written_by": "the developer; no auditor's device signed them"}
+        "written_by": "the developer"}
     rc, lines, _ = _inference_only(tmp_path / "given", "inference-policy", IO_WRITE=policy, ALPHA="2/4", GAMMA="100",
                                    LIMITS_UNIT="Program gates in a block")
     assert rc == 0 and lines[1:] == ["INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA" + LIMITS_SAID]
@@ -3523,6 +3564,77 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
     _rc, _argv = _serve_argv(tmp_path / "in-process", {**PEARL_TIES, **cubin})
     assert steps(tmp_path / "in-process" / "calls")[-4:] == [
         "serve-phi", "class-circuit", "inference_only.py policy", "serve-openai"]
+
+
+def _serve_listening(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh serve` under PEARLPLUS_TIE with a gate, in a toy tree whose venv python notes each call: the
+    class circuit and the policy (c 14, k 6) written, serve-openai listening until it is stopped, the weights registered
+    with a deployment record of digest ``d0...`` (refused under FAKE_REFUSES), and the load closing and sealing one
+    window. -> the exit status, the calls by name and the verdict lines."""
+    tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
+    for p in (tree / "integrations" / "vllm", bin_, venv):
+        p.mkdir(parents=True)
+    os.mkfifo(tmp_path / "hold")
+    out_of = 'while [ $# -gt 0 ]; do case "$1" in {}) printf \'{}\\n\' > "$2";; esac; shift; done'
+    _script(venv / "python", f"""printf '%s\\n' "$*" >> {tmp_path}/calls
+case "$*" in
+  *prove_path.py\\ class-circuit*) {out_of.format("--out", "{}")}; exit 0;;
+  *inference_only.py\\ policy*) {out_of.format("--out", '{"c": 14, "k": 6, "n": 16}')}; echo INFERENCE-ONLY POLICY said; exit 0;;
+  *prove_path.py\\ weights-registration*) [ -z "$FAKE_REFUSES" ] || exit 2
+    {out_of.format("--out|--deployment-record", '{"values": {}}')}
+    printf '{{"roots": 0, "deployment": "%s"}}\\n' {"d0" * 64}; exit 0;;
+  *prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;;
+  *serve-openai*) echo SERVE-OPENAI listening on 127.0.0.1:1; exec cat {tmp_path}/hold;;
+  *serve_load.py*) echo w > {d}/windows.jsonl; echo s > {d}/seals.jsonl; exit 0;;
+esac
+exit 1""")
+    _script(bin_ / "sleep", "exit 0")
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d),
+           "OUT": str(tmp_path / "out"), **PEARL_TIES, "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/k.cubin",
+           "PEARLC_CHALLENGER_GATE": GATE, "PEARLC_CHALLENGER_PEER": "vy-dc-h200", "PEARLC_CHALLENGER_LANE": "vllm",
+           "RESEARCH_RUN_ID": "r1", "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    names = []
+    for c in (tmp_path / "calls").read_text().splitlines():
+        words = c.split()
+        names.append("serve-openai" if "serve-openai" in words else
+                     " ".join(words[1:3]) if "pearlplus-period" in words else
+                     next((w for w in ("class-circuit", "serve-phi", "weights-registration", "policy") if w in words[:3]),
+                          Path(words[0]).name))
+    return rc, names, (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+
+
+def test_signed_limits_opens_the_period_after_the_weights_and_before_the_first_request_signing_them(tmp_path):
+    """SIGNED_LIMITS=1: the lane's period opens once the endpoint listens and weights() has written the deployment's
+    first registration record, before the load's first request, and its open carries the policy's id, the limits fixed
+    before the serve (α = k/c reduced, Γ = c) and that record's digest; the LIMITS and DEPLOYMENT-REGISTRATION lines say
+    the period signs them. Without it the period opens before serve-openai starts and carries none of the four, as
+    before. With SIGNED_LIMITS=1 and no deployment record, the period opens all the same, signing nothing, and a line
+    says why."""
+    digest, calls = "d0" * 64, lambda p: (p / "calls").read_text().splitlines()
+    signed = (f"--policy verity/inference-only/v0 --alpha 3/7 --gamma 14 --registration {digest}")
+    flow = ["serve-phi", "class-circuit", "policy", "serve-openai", "weights-registration"]
+    rc, names, lines = _serve_listening(tmp_path / "signed", {"SIGNED_LIMITS": "1"})
+    names = [n for n in names if n in (*flow, "pearlplus-period open", "pearlplus-period close", "serve_load.py")]
+    assert rc == 0 and names == [*flow, "pearlplus-period open", "serve_load.py", "pearlplus-period close"], (rc, names)
+    opened = next(c for c in calls(tmp_path / "signed") if "pearlplus-period open" in c)
+    assert opened.endswith(f"--name pearlplus-r1 --circuit-record {tmp_path}/signed/serve/pearlplus/circuit-record.json {signed}")
+    assert any(x.startswith("INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14") and "signed by the lane's period at its "
+               "open, where PEARLPLUS-PERIOD says so" in x for x in lines), lines
+    assert any(x.startswith("DEPLOYMENT-REGISTRATION ") and x.endswith("(the lane's period signs its digest at its open: "
+               f"PEARLPLUS-PERIOD), digest {digest}") for x in lines), lines
+    rc, names, lines = _serve_listening(tmp_path / "plain", {})
+    names = [n for n in names if n in (*flow, "pearlplus-period open", "pearlplus-period close", "serve_load.py")]
+    assert rc == 0 and names == [*flow[:3], "pearlplus-period open", *flow[3:], "serve_load.py", "pearlplus-period close"]
+    assert "--policy" not in next(c for c in calls(tmp_path / "plain") if "pearlplus-period open" in c)
+    assert any(x.startswith("INFERENCE-ONLY LIMITS ") and x.endswith(LIMITS_SAID) for x in lines), lines
+    assert any(x.startswith("DEPLOYMENT-REGISTRATION ") and "(no auditor holds its digest)" in x for x in lines), lines
+    rc, names, lines = _serve_listening(tmp_path / "bare", {"SIGNED_LIMITS": "1", "FAKE_REFUSES": "1"})
+    assert rc == 0 and "--policy" not in next(c for c in calls(tmp_path / "bare") if "pearlplus-period open" in c)
+    assert names.index("pearlplus-period open") > names.index("weights-registration")
+    assert any(x.startswith("PEARLPLUS-PERIOD signs no limits (SIGNED_LIMITS=1)") and x.endswith("the run has its limits "
+               "and no such record") for x in lines), lines
 
 
 def test_under_pearlplus_tie_the_inference_only_policy_states_serve_phis_phi_cut_at_pearl_plus_linears(tmp_path):

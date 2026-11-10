@@ -14,6 +14,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
                                  [--main FILE] [--coin COIN_PUT]
     served_verdicts.py pearlplus-period open DIR --gate CMD --name P [--scheme S] [--cubin FILE | --circuit-record FILE]
+                                             [--policy ID --alpha N/D --gamma G --registration SHA512]
     served_verdicts.py pearlplus-period close DIR --gate CMD [--lane L --windows PEARL_DIR [--wait S]]
     served_verdicts.py pearlplus-period rule DIR --gate CMD --lane L --coin COIN_RECORD
     served_verdicts.py coin DIR --record FILE [--run RUN_ID] [--run-dir DIR]
@@ -129,7 +130,10 @@ first condition it fails.
 one salt session joins it) and circuit the SHA-512 of ``DIR/pearlplus-descriptor.json``: with ``--circuit-record``, the
 served window's circuit record (served_verdicts.sh's PEARLPLUS-CIRCUIT, the circuit cut at Pearl+'s linears that step 3's
 window-circuit writes), byte for byte; without it, `pearlplus_descriptor` (Pearl+'s protocol, ``--scheme`` and
-``--cubin``'s SHA-512), which names no model. Its answer goes in ``DIR/period.json``; ``pearlplus-period close`` closes it
+``--cubin``'s SHA-512), which names no model. With ``--policy``, ``--alpha``, ``--gamma`` and ``--registration`` (all
+four or none) the open also asks the gate to sign the inference-only policy's id, its limits and the digest of the
+deployment's first registration record, and its line says whether the gate's answer holds them. Its answer goes in
+``DIR/period.json``; ``pearlplus-period close`` closes it
 once the serve's session has ended (the untied piece's right before the verifier's draw), and the draw, which joins no
 period, must be the lane's first reserve after the close. With ``--lane`` and ``--windows`` (the serve dir's ``pearl/``,
 under PEARLPLUS_TIE) the close first reads the ledger, with ``--wait S`` for up to S seconds until it ends each window's
@@ -952,24 +956,64 @@ def pearlplus_descriptor(scheme: str, cubin: Path | None) -> bytes:
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
 
 
+#: what an inference-only period's open signs beside its circuit, each the gate's flag of that name: all four or none
+PERIOD_POLICY = ("policy", "alpha", "gamma", "registration")
+
+
+def period_policy(given: Mapping[str, Any] | None) -> tuple[list[str], dict[str, Any] | None]:
+    """The gate's ``period-open`` words for an inference-only period's policy and registration, and what its signed
+    body must then hold: the policy's id, α as ``[N, D]`` (given as ``N/D``, signed as given), Γ and the digest of the
+    deployment's first registration record. ``given`` names all four of `PERIOD_POLICY` or none (no words, None);
+    ValueError for a part of them, or an α or Γ that is no natural."""
+    given = {k: v for k, v in (given or {}).items() if v is not None}
+    if not given:
+        return [], None
+    if set(given) != set(PERIOD_POLICY):
+        raise ValueError(f"a period's open signs its policy and its registration together ({', '.join(PERIOD_POLICY)}), "
+                         f"and this one names only {sorted(given)}")
+    n, _, d = str(given["alpha"]).partition("/")
+    if not (n.isdecimal() and d.isdecimal() and int(d) and str(given["gamma"]).isdecimal()):
+        raise ValueError(f"alpha {given['alpha']} and gamma {given['gamma']}: alpha is N/D and gamma G, naturals, D at least 1")
+    want = {"policy": str(given["policy"]), "alpha": [int(n), int(d)], "gamma": int(given["gamma"]),
+            "registration": str(given["registration"])}
+    return [w for k in PERIOD_POLICY for w in (f"--{k}", str(given[k]))], want
+
+
 def pearlplus_period_open(piece_dir: Path, gate: str, name: str, scheme: str, cubin: Path | None = None,
-                          record: Path | None = None) -> dict[str, Any]:
+                          record: Path | None = None, policy: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``pearlplus-period open``: the lane's Pearl-C period `name` opened at `gate` before Pearl+'s serve, of cap 1 (the
     serve's one salt-only session, `bench_arm._LiveSession` or a tied window's `serve_pearl.live`, which joins it) and
     circuit the SHA-512 of its descriptor, written to ``piece_dir/PEARLPLUS_DESCRIPTOR``: the served window's circuit
     record `record` byte for byte where it is given, else `pearlplus_descriptor`. That descriptor is each pass's
     ``descriptor`` for credit's circuit clause (`challenger.circuit_reason`). The open and what it committed go to
     ``piece_dir/PERIOD``, which `period_close` closes. The run's draw session is reserved after the close, so it joins
-    no period (`bench_arm.LiveDraw`) and the close lists the salt session alone (`credit.pearl_c_period_credit`)."""
+    no period (`bench_arm.LiveDraw`) and the close lists the salt session alone (`credit.pearl_c_period_credit`). With
+    `policy` (`period_policy`) the open asks the gate to sign them too, and ``policy`` in the document is what was asked
+    with ``signed``, whether the answer's body holds each as asked: a gate that signs none of them still opened the
+    period, so that is said and never raised."""
+    words, want = period_policy(policy)
     raw = record.read_bytes() if record is not None else pearlplus_descriptor(scheme, cubin)
     piece_dir.mkdir(parents=True, exist_ok=True)
     (piece_dir / PEARLPLUS_DESCRIPTOR).write_bytes(raw)
     circuit = hashlib.sha512(raw).hexdigest()
     doc = {"name": name, "circuit": circuit, "cap": 1, "descriptor": PEARLPLUS_DESCRIPTOR,
            "circuit_record": None if record is None else str(record),
-           "open": _gate_json(gate, ["period-open", "--name", name, "--cap", "1", "--circuit", circuit])}
+           "open": _gate_json(gate, ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, *words])}
+    if want is not None:
+        body = doc["open"].get("body")
+        doc["policy"] = {**want, "signed": isinstance(body, dict) and all(body.get(k) == v for k, v in want.items())}
     (piece_dir / PERIOD).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
+
+
+def period_policy_said(doc: Mapping[str, Any]) -> str:
+    """The open line's clause for the policy `pearlplus_period_open` asked the gate to sign; empty where it asked none."""
+    pol = doc.get("policy")
+    if not pol:
+        return ""
+    what = (f"policy {pol['policy']}, alpha {pol['alpha'][0]}/{pol['alpha'][1]}, gamma {pol['gamma']} and the deployment's "
+            f"first registration record {pol['registration'][:16]}...")
+    return f"; its open signs {what}" if pol["signed"] else f"; ITS OPEN SIGNS NONE OF {what}: they are not in the gate's answer"
 
 
 def period_reserves(lines: Sequence[str], lane: str, period: str) -> list[str] | None:
@@ -2216,6 +2260,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     described.add_argument("--cubin", type=Path)
     described.add_argument("--circuit-record", type=Path, help="the served window's circuit record (PEARLPLUS-CIRCUIT's), "
                                                                "whose bytes are the period's descriptor")
+    for flag, what in (("--policy", "the inference-only policy's id, which names its limits' form and unit"),
+                       ("--alpha", "its alpha, as N/D"), ("--gamma", "its gamma"),
+                       ("--registration", "the digest of the deployment's first registration record")):
+        ppe.add_argument(flag, help=f"open, all four or none, for the gate's open to sign: {what}")
     ppe.add_argument("--lane", help="close, rule: the lane whose gate key reserves the run's sessions (PEARLC_CHALLENGER_LANE)")
     ppe.add_argument("--windows", type=Path, help="close, with --lane: the serve dir's pearl/, whose w<k>/served.json name "
                                                   "each window's salt session, the period's reserves held to them first")
@@ -2406,13 +2454,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             if not a.name:
                 raise ValueError("pearlplus-period open needs --name")
-            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin, a.circuit_record)
+            doc = pearlplus_period_open(a.piece_dir, a.gate, a.name, a.scheme, a.cubin, a.circuit_record,
+                                        {k: getattr(a, k) for k in PERIOD_POLICY})
         except (OSError, RuntimeError, ValueError, KeyError) as e:
             said = "RULE not read" if a.verb == "rule" else "PERIOD refused"
             print(f"{said}: {type(e).__name__}: {e}"[:1200], flush=True)
             return 1
         of = f"the window's circuit record {a.circuit_record}" if a.circuit_record else PEARLPLUS_DESCRIPTOR
-        print(f"PERIOD opened {doc['name']}: Pearl-C, cap 1, circuit {doc['circuit'][:16]}... ({of})", flush=True)
+        print(f"PERIOD opened {doc['name']}: Pearl-C, cap 1, circuit {doc['circuit'][:16]}... ({of})"
+              f"{period_policy_said(doc)}", flush=True)
         return 0
     if a.cmd == "coin":
         try:
