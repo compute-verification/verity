@@ -30,7 +30,7 @@ Statements only: definitions, no proofs.
 namespace WeightSecurity.SecurityProofs
 
 open Claims Claims.Sampling Claims.SamplingGeneric
-open FlockSoundness.Game hiding Msg
+open FlockSoundness.Game
 open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
