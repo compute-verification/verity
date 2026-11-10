@@ -279,9 +279,9 @@ def test_a_stopped_node_2_costs_its_probe_a_few_seconds_and_the_placement_says_o
     assert auto.off(share(free=8)) is None
 
 
-def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_until_when_and_why(tmp_path, monkeypatch):
-    """A node 2 that one lane has whole took `--on auto` jobs unless it also carried the slot-only marker, which says neither
-    until when nor why. The probe as node 2 runs it, with the clock it is given."""
+@pytest.fixture
+def node_2(tmp_path, monkeypatch):
+    """(HOLD_FILE's path, `read`): the probe as an idle node 2 runs it, with the clock `read` is given (a UTC time)."""
     monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
@@ -298,6 +298,13 @@ def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_u
             m.setattr(auto, "SPILL", ())                                       # node 2 alone is asked
             return {"share": auto.read(src, 4, reach=lambda name: [sys.executable, "-"], now=at)[N2]["share"]}
 
+    return hold, read
+
+
+def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_until_when_and_why(tmp_path, node_2):
+    """A node 2 that one lane has whole took `--on auto` jobs unless it also carried the slot-only marker, which says neither
+    until when nor why."""
+    hold, read = node_2
     assert read("2030-01-31T17:00")["share"]["free"] == 48, "no file, no hold"
     hold.write_text("2030-02-01T00:00Z one lane has the whole node\nany later line is a note\n")
     n2 = read("2030-01-31T17:00")
@@ -322,6 +329,45 @@ def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_u
     (tmp_path / "no-via-slot").write_text("")
     hold.write_text("2030-02-01T00:00Z one lane has the whole node\n")
     assert auto.off(read("2030-01-31T17:00")) == said, "the hold says more than the slot-only marker beside it"
+
+
+def test_a_hold_file_that_is_there_but_cant_be_read_or_names_no_time_holds_node_2_and_says_why(tmp_path, monkeypatch, node_2):
+    """The hold fails closed: a hold infra wrote must not open on a wrong mode, a typo or the node's zone. A probe that read
+    an unreadable file as no hold passed every other test here."""
+    hold, read = node_2
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+
+    def held(why: str, at: str = "2040-01-01T00:00") -> str:
+        """The hold as the launcher reads it, once node 2's answer at `at` is checked to be a hold with no end that says `why`."""
+        n2 = read(at)
+        assert n2 == {"share": {"hold": {"until": None, "why": why}}}
+        target, said = auto.choose({N2: n2, CPU1: full}, 4, 16)
+        assert target == (CPU1, "research"), "an idle node 2 that is held takes no job"
+        with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job"):
+            auto.choose({N2: n2, CPU1: pool(slot("r0"))}, 64, 300)
+        return said.split("; ")[0]
+
+    carries = f"{N2} takes no `--on auto` job while it carries {hold}"
+    hold.mkdir()
+    assert held("it can't be read (IsADirectoryError)") == f"{carries}: it can't be read (IsADirectoryError)"
+    hold.rmdir()
+    hold.write_bytes(b"\xff\xfe2030-02-01T00:00Z\n")
+    assert held("it can't be read (UnicodeDecodeError)") == f"{carries}: it can't be read (UnicodeDecodeError)"
+    hold.unlink()
+    hold.symlink_to(hold)                                           # stat fails on it, so os.path.exists calls it absent
+    assert held("it can't be read (OSError)") == f"{carries}: it can't be read (OSError)"
+    hold.unlink()
+    hold.symlink_to(tmp_path / "gone")
+    assert read("2030-01-31T17:00")["share"]["free"] == 48, "a link to no file is no hold file"
+    hold.unlink()
+    for line in ("2030-02-01 00:00Z one lane has the whole node", "2030-02-01", "00:00Z", "tomorrow"):
+        hold.write_text(line + "\n")
+        assert held(line) == f"{carries}: {line}", "a date alone, or one apart from its time, is no time: it holds, never ends early"
+    monkeypatch.setenv("TZ", "XXX-9")                               # the probe's zone, nine hours east: UNTIL is UTC all the same
+    for line in ("2030-02-01T00:00", "2030-02-01T00:00Z", "2030-02-01T02:00+02:00", "2030-01-31T19:00-05:00"):
+        hold.write_text(line + " why\n")
+        assert read("2030-01-31T23:59") == {"share": {"hold": {"until": "2030-02-01T00:00Z", "why": "why"}}}, line
+        assert read("2030-02-01T00:00")["share"]["free"] == 48, f"{line}: it ends at that instant, in no other zone's"
 
 
 def test_on_auto_tells_the_launcher_until_when_and_why_node_2_is_held(tmp_path, monkeypatch, capsys):

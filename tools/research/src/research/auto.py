@@ -53,8 +53,11 @@ NODE_CONNECT_S = 5
 #: how `read` words a machine whose ssh connection fails (it is stopped, or off the network); `off` reads it back for node 2
 NO_SSH = "its ssh doesn't answer"
 #: the hold, a file on node 2 that infra writes when one lane has the whole node: its first line is `UNTIL REASON`, UNTIL a UTC
-#: time as 2030-01-31T17:00Z. Until then `--on auto` places no job there and tells the launcher UNTIL and REASON; after it the
-#: file means nothing, so it needs no removing. A first line that names no time holds until the file is removed
+#: time as 2030-01-31T17:00Z (with no zone it is UTC, whatever the node's; an offset is honoured). Until then `--on auto` places
+#: no job there and tells the launcher UNTIL and REASON; from UNTIL on the file means nothing, so it needs no removing. It
+#: fails closed: a file that is there but can't be read (a wrong mode, a directory, bytes that are no text), or whose first
+#: line names no time (empty, a typo, a date alone), holds until it is removed, and the launcher is shown what it says or why
+#: it can't be read. Only a file that isn't there, or a time that has passed, opens the node
 HOLD_FILE = "/etc/vy/auto-hold"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
@@ -81,14 +84,17 @@ def load(name, src, env):
 
 
 def hold():
-    if not os.path.exists(HOLD):
-        return None
     try:
-        line = (Path(HOLD).read_text().splitlines() or [""])[0].strip()
+        text = Path(HOLD).read_text()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
     except (OSError, UnicodeDecodeError) as e:
         return {"until": None, "why": f"it can't be read ({type(e).__name__})"}
+    line = (text.splitlines() or [""])[0].strip()
     until, _, why = line.partition(" ")
     try:
+        if "T" not in until:
+            raise ValueError("a date alone is no time")
         end = datetime.fromisoformat(until.replace("Z", "+00:00"))
     except ValueError:
         return {"until": None, "why": line}
