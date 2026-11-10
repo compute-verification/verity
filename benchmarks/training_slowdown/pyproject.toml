@@ -9,6 +9,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price;
 # `integrations/vllm/verity_vllm`: the training-step frontend `capture.lower` lowers a step to; the lf model
 # (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator (`benchmarks/rho`), whose
-# registry, fleets and periods `calculator.py` reads, and the census's deployments, whose reference window it reads
+# registry, fleets and periods `calculator.py` reads, with the files outside its directory it may load them from: the
+# census's deployments (the reference window, which `calculator.py` reads too) and adversary, and the inference-only
+# policy's calibrations
 inputs = ["verity", "integrations/vllm/verity_vllm", "integrations/vllm/tests/program/train_step_lf.py",
-          "benchmarks/rho", "benchmarks/census/deployments.json"]
+          "benchmarks/rho", "benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
+          "benchmarks/nci/calibrations.json"]

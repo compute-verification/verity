@@ -65,8 +65,9 @@ config's records, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`)
 - **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
 - **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the traced search record;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
-- **the bound of record** at the same policy, what any attack must pay, beside S (what this attack pays) and never
-  mixed into it; "not available", with what is missing, where the calculator has no function that gives it;
+- **the bound of record** at the same policy, what every partition of the attack's traced circuit must pay, beside S
+  (what this attack pays) and never mixed into it; "not available", with what is missing, where the calculator has
+  no function that gives it;
 - **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over a
   window, a week, a month and a year, with the measured, proved and scaled parts named.
 
