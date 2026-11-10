@@ -28,7 +28,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 - `RemoteChallenger` (`verity/core/protocols/spot/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `InferenceOnly.Guarantees.SlowdownRemote` (the inference-only policy's Lean is still named
-  `InferenceOnly`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
+  `InferenceOnly`) and `benchmarks/slowdown`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
   part 6 of the security argument below);
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
 
@@ -525,10 +525,10 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `SlowdownRemote`: the slowdown
-calculator, `benchmarks/rho` (`verity bench rho`).
+calculator, `benchmarks/slowdown` (`verity bench rho`).
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
-(`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
+(`uv run python benchmarks/slowdown/periods.py --scenario reference-remote-h200`):
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|
