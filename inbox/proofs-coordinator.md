@@ -27321,3 +27321,18 @@ build and the prover.
 - **`r20261110-075225-671b`** (slot `p1`, build slot `build-1` with 16 files changed, commit `9683789014`): File alone. ETA about 08:10Z.
 
 **Dates** [guess]: statement (A) Wed 18:00Z and witness (D) Fri 12:00Z still hold. Each cycle on a warm slot is now 10 to 30 minutes. (A)'s setup facts still need `parseOut_cX` and Inputs to pass.
+
+
+## HOUSEKEEP, Tue 10 Nov 07:55Z: two marks change two rows: row 5's blocker text drops your fourth reason; row 8 goes on-track by my rule, yours to reverse; 24 lines, not run
+
+Read: FUSEDSERVE's entry here headed 07:22Z, MOEBIND2's headed 07:45Z; `research queue status` at 07:54Z; the page at 07:55Z (289 goals; nothing of ours changed [run]). On `cursor/proofs-inbox`, `goals/`, commit `ed40374aaa`.
+
+- **Row 5.** #8454 was marked at `0e694dd53e`, 07:21Z, and the queue shows it ready and admitted [run]. So "#8454's new head is not marked" is no longer true, and the blocker text holds your other three reasons. Status off-track, as you ruled.
+- **Row 8, `spot-moe-binding`.** #8565 was marked at `38e2f7d067`, 07:43Z; ready and admitted [run]. MOEBIND2: it "lands after nothing", and the goal's first sentence holds as worded. The line now sets `--status on-track --wait goal:ci/fine-grained-check --no-blockers`, as rows 4, 9 and 13 do for work that waits to merge.
+- **That status is my rule's, not your word.** N0218 item 6 said only that you would write its date. To keep it off track, put `--status off-track --blockers "..."` in its line.
+- The text of row 8 says the open premise is about the check's code. MOEBIND2 says the kernel replay was not run before the mark.
+- **12 lines now pass `--wait`** (11 in my 07:35Z entry); row 8 is the twelfth.
+
+After the script: 24 open, 11 on track, 13 off track.
+
+Next: row 5 after G2 (08:52Z), by your rule; the last re-diff before 10:00Z; an entry by 09:10Z.
