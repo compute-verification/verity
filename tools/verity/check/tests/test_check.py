@@ -899,7 +899,7 @@ def test_the_agreement_scripts_import_only_the_standard_library_and_each_other()
 
 
 def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_in_it(tmp_path, monkeypatch):
-    """`flock-verify` is built from the Lean package alone: its proofs (`Security/Proofs/Flock/`) and any Lake package
+    """`flock-verify` is built from the Lean package alone: its proofs (`security/Proofs/Flock/`) and any Lake package
     nested in it are no input, unless the package's lakefile requires something, which keeps everything in.  Nor is the
     package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
@@ -908,8 +908,8 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
     assert "verity/flock/agreement/ci.py" in closure and "verity/flock/verifier/FlockVerify.lean" in closure
     assert "verity/flock/agreement/upstream.json" in closure
-    assert not [f for f in closure if f.startswith("Security/")]
-    assert [f for f in files if f.startswith("Security/Proofs/Flock/")]
+    assert not [f for f in closure if f.startswith("security/")]
+    assert [f for f in files if f.startswith("security/Proofs/Flock/")]
     nested = ["verity/flock/verifier/lakefile.toml", "verity/flock/verifier/nested/lakefile.toml",
               "verity/flock/verifier/nested/N.lean"]
     (tmp_path / "verity/flock/verifier/nested").mkdir(parents=True)
