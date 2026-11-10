@@ -14,11 +14,11 @@ from test_rec_outer import BIN
 from verity.core.protocols.spot.one_stage import partition as P
 from verity.ml.circuits.codec import program_digest
 
-POD = Path(__file__).resolve().parents[1] / "pod"
+REC_INNER = Path(__file__).resolve().parents[4] / "verity/ml/flock/pod/rec_inner.py"
 
 
 def _rec_inner():
-    spec = importlib.util.spec_from_file_location("rec_inner", POD / "rec_inner.py")
+    spec = importlib.util.spec_from_file_location("rec_inner", REC_INNER)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

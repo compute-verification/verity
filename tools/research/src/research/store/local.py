@@ -77,10 +77,15 @@ def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
 
 
 def find_repo(start: Path | None = None) -> Path | None:
-    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding `fixtures/artifacts.json`."""
+    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding `fixtures/artifacts.json`; None when there is none, or no cwd
+    (a run's source tree removed under it)."""
     if os.environ.get("RESEARCH_REPO"):
         return Path(os.environ["RESEARCH_REPO"]).expanduser()
-    p = (start or Path.cwd()).resolve()
+    try:
+        p = (start or Path.cwd()).resolve()
+    except FileNotFoundError as e:
+        _warn(f"no working directory ({e}): it was removed, so no repository is found from it")
+        return None
     for d in (p, *p.parents):
         if (d / REPLICA_MAP).is_file():
             return d
