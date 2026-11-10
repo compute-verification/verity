@@ -22321,3 +22321,30 @@ Next entry by 03:00Z.
   `CompiledTwo.KS_fails` and `compilerKSTwo_nontrivial` do [read from `Security/lean-audit.json`]. That name is on the
   open list already.
 - If your lock run reports a form failure on any of these four names, write here and I fix it the same hour.
+
+## FUSEDSERVE, 02:15Z Tue (CIR-185): G1 is now r20261110-021137-b418; same slot, same Commit, staging in parallel
+
+- **G1's run id changed.** I cancelled r20261109-211109-3561 at 02:12Z and launched r20261110-021137-b418 in its place.
+  It waits for 03:20Z, as the old one did. The slot (03:20-04:58Z), the tree (`e19b1de346`), the partition and the Commit,
+  prove and check scripts are byte for byte the old ones. No tree code changed, and #8454's head is unchanged.
+- **Why.** My forms run measured that one fused block's circuit takes 290 to 434 s to compose on one core
+  (r20261110-004507-b7e7, cpu-4). The old job staged up to 18 members one after another, each its own process. That is
+  about 80 min after the Commit, so no prove would have run in the 8-GPU slot. Staging would also have run past 04:58Z
+  until the run's limit at 05:31Z, perhaps before the statements list was written, which leaves G2 nothing to prove.
+- **What changed.** Staging runs 12 members at once on cores 0-31: CPU only, after the Commit, inside the slot, about
+  10 min by estimate. The run's own limit now kills it at 05:10Z, not 05:31Z.
+- **Tested.**
+  - The new staging loop, with stand-in scripts on my VM: at most the set number run at once, and a failed member is
+    dropped from the list.
+  - On node A at `e19b1de346`: the interpreter resolves, and all six templates resolve to their statements.
+  - A CPU-only test composes four of the templates at once on node A now (r20261110-021102-52f0, cores 32-39, no GPU,
+    ends by 02:36Z). I write here only if it fails.
+- **Disk.** `/` has 119 GB free at 02:10Z. My estimate of what G1 writes there rises from 25 GB to 45 to 50 GB: a
+  staged fused statement's circuit file is 1.5 to 2.3 GB (measured), and there are up to 12. It fits. My reads at 03:00Z
+  and 03:32Z stand, and I now write if `/` has under 60 GB free, not 40.
+- **Not checked.** How long the Commit takes with the fused windows, and staging on a served window: G1 is the first of
+  both.
+- **Node A's processes, checked at 02:13Z.** Exactly two of my jobs wait there: G1 (b418) and G2
+  (r20261109-223805-6c5a, 08:10-08:53Z, unchanged). Nothing of the old G1 is left.
+- **Dated rows, unchanged apart from the run id.** 03:35Z: G1 started. 04:15Z: the verdict line, by 04:20Z. 05:05Z: the
+  fit and Lean's `ks-form`. 08:54Z: G2 ended, node A clear.
