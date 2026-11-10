@@ -890,8 +890,9 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
     ``previous`` (the boundary registration's digest ``boundary`` by default) under the window ``{kind, run, row,
     interior: true, replay_sample}``: ``row`` the served workload's row, ``replay_sample`` the replay sample in order
-    (round 2's ``second-interior-order``), ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS;
-    ``salt_key``: tests only, the salts derived from it (`ml.windows.rows.commit`). ``device``: the commitment made on the
+    (round 2's ``second-interior-order``), ``replay`` the replay's run when given. Every leaf's salt is fresh from the OS,
+    but at a port ``links`` name, whose rows keep their value's salts; ``salt_key``: tests only, the salts derived from it
+    (`ml.windows.rows.commit`). ``device``: the commitment made on the
     rows' device (`committed`), registered in place of committing the spans' rows, which it never reads. ``wires``: the
     replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers' output rows, which
     are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
@@ -991,7 +992,9 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                                      "which another unit reads as another row" if isinstance(x, Operand)
                                      else "the value the verifier supplies it"))
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
-        fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
+        linked = {window.members[k].port(x.port) for x, k, _at in placed}
+        fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
+                                                   if p not in linked}
         c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}

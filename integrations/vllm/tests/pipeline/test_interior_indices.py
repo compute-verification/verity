@@ -121,7 +121,7 @@ def staged():
 
 
 def _interior(reg, first, per, **kw) -> IR.Interior:
-    return IR.interior(per, CELLS, reg.digest, first.units, row=ROW, salt_key=SALT, **{"links": LINKS, **kw})
+    return IR.interior(per, CELLS, reg.digest, first.units, row=ROW, **{"salt_key": SALT, "links": LINKS, **kw})
 
 
 def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_bytes(staged):
@@ -220,6 +220,35 @@ def test_an_operand_row_is_the_one_row_every_unit_at_it_replayed():
     assert [list(r) for r in ref.value.rows] == np.concatenate([p[1].data["rows"]["best"][:W] for p in per]).tolist()
     x0 = c.given[w.members[0].port("x0")]
     assert x0.positions == (0, 1, 2, 4, 5, 6) and [x0.value.rows[r] for r in (3, 7)] == [(0,), (0,)]
+
+
+def test_an_interior_without_a_test_key_salts_its_own_ports_and_leaves_a_linked_ports_to_its_value(staged):
+    """Serving gives no test key: every salt is fresh from the OS but a linked port's, whose rows keep their value's.
+    So the interior commits, a supplied value's entry is the keyed interior's (its salts are public), an operand's
+    root is new each time while its rows, words and domain stand, and a port of the interior's own gets a new root
+    each time. The stream registers the operands' interior made that way."""
+    _stream, reg, first = staged
+    per = [_spans(s) for s in first.units]
+    keyed, one, two = (_interior(reg, first, per, **kw) for kw in ({}, {"salt_key": None}, {"salt_key": None}))
+    entries = [{e["value"]: e for e in it.record["registered"]} for it in (keyed, one, two)]
+    assert all(list(got) == [x.value for x in LINKS] for got in entries)
+    for x in SUPPLIES:
+        assert entries[0][x.value] == entries[1][x.value] == entries[2][x.value]
+    for x in OPERANDS:
+        a, b = entries[1][x.value], entries[2][x.value]
+        assert a["root"] != b["root"] and {**a, "root": None} == {**b, "root": None} == {**entries[0][x.value], "root": None}
+    roots = [{r["port"]: r["root"] for r in it.record["roots"]} for it in (one, two)]
+    w = one.committed.window
+    own = [m.port(o) for m in w.members for o, _w in m.outs]
+    assert own and all(roots[0][p] != roots[1][p] for p in own)
+    for x in LINKS:
+        k = [m.template for m in w.members].index(x.template)
+        ref = one.committed.given[w.members[k].port(x.port)]
+        assert ref.value.entry() == entries[1][x.value]
+    stream, reg, first = _first(OPERANDS)
+    it = _interior(reg, first, [_spans(s) for s in first.units], links=OPERANDS, salt_key=None)
+    assert IR.register(stream, first, it, registered=IR.link_words(OPERANDS),
+                       schemas=IR.link_schemas(MEMBERS, OPERANDS)).digest
 
 
 def test_one_value_is_read_by_ports_of_several_templates():

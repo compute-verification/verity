@@ -134,8 +134,8 @@ def _spans(tables) -> list[IR.Span]:
 
 
 def _interior(reg, first, rec, drawn, spans=None, **kw) -> IR.Interior:
-    return IR.interior(_spans(drawn) if spans is None else spans, CELLS, reg.digest, first.units, row=ROW, salt_key=SALT,
-                       **{"tables": drawn, "served": rec, "positions": C, "links": LINKS, **kw})
+    return IR.interior(_spans(drawn) if spans is None else spans, CELLS, reg.digest, first.units, row=ROW,
+                       **{"salt_key": SALT, "tables": drawn, "served": rec, "positions": C, "links": LINKS, **kw})
 
 
 def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
@@ -263,6 +263,21 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     short = _tables(fill=False)
     with pytest.raises(ValueError, match=f"holds 5 strings, not its class's {C}"):
         _interior(reg, first, rec, [short[u] for u in first.units])
+
+
+def test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain(staged):
+    """Serving gives no test key: the reads' interior commits with every salt fresh from the OS but its linked ports',
+    whose rows keep their value's. Its ``root`` and ``domain`` register the entries the keyed interior's do (a supplied
+    value's salts are public), and each value the replay gives the same rows, words and domain under a new root."""
+    _stream, reg, first, rec, tables = staged
+    drawn = [tables[u] for u in first.units]
+    keyed, served = _interior(reg, first, rec, drawn), _interior(reg, first, rec, drawn, salt_key=None)
+    a, b = ({e["value"]: e for e in it.record["registered"]} for it in (keyed, served))
+    assert list(b) == [x.value for x in LINKS]
+    for x in SUPPLIES:
+        assert a[x.value] == b[x.value]
+    for x in OPERANDS:
+        assert a[x.value]["root"] != b[x.value]["root"] and {**a[x.value], "root": None} == {**b[x.value], "root": None}
 
 
 def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
