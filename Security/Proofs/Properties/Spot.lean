@@ -1566,7 +1566,7 @@ theorem history_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Pu
           jeq (getD x "root") (getD r "root") = true ∧ jeq (getD x "domain") (getD r "domain") = true ∧
           int? (getD x "leaves") = int? (getD r "leaves") := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2 hv).1 u q hreg hu honly hs
+  exact history_of_R7 c.record p.verifier (hr.2.2.2.2.2.2.1 hv).1 u q hreg hu honly hs
 
 /-- `PinnedHeld` at what the check accepts (`acceptMeans`): the record's entry for each value the verifier pinned and
 takes from no earlier run, the window's arrivals at the root the network certifier signed among them, has its pinned
@@ -1574,6 +1574,6 @@ root. -/
 theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact (hr.2.2.2.2.2.2 hv).2.2
+  exact (hr.2.2.2.2.2.2.1 hv).2.2
 
 end Properties.Spot
