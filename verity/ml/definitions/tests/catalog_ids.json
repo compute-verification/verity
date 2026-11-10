@@ -351,6 +351,7 @@
 "DsaTopKMaskBlock_v1",
 "DsaTopKMaskCounted_v1",
 "DsaTopKMaskCounted_v2",
+"DsaTopKMaskWhole_v1",
 "DsaTopKMask_v1",
 "DsaTopKMask_v2",
 "DsaTopKOneHot_v1",

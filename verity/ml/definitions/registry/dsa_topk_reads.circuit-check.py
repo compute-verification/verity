@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-#: the index units at the served statics (TOPK 2,048, blocks of `dsa_topk_reads.BLOCK` = 16,384 keys, a row's class N a
-#: multiple of TOPK from 4,096 to 131,072): a block of N keys from AT, a last one of 2,048 to 16,384, and the merge of M blocks
+#: the index units at the served statics (TOPK 2,048, blocks of `dsa_topk_reads.index_block` keys, a row's class N a
+#: multiple of TOPK from 4,096 to 131,072): a block of N keys from AT (the whole row up to `dsa_topk_mask_cut.WHOLE_MAX`, then
+#: 16,384 keys and a last one of 2,048 to 16,384), and the merge of M blocks
 RANGES = {
-    "DsaMaskPositions_v1{N=2048..16384 step 2048,AT=0..114688 step 16384,K=2048}": (
-        # a whole block first and last, the shortest last block after the first and last, the first class's one block and a
-        # last block mid-row
+    "DsaMaskPositions_v1{N=2048..40960 step 2048,AT=0..114688 step 16384,K=2048}": (
+        # a whole block first and last, the shortest last block after the first and last, the first class's one block, a
+        # last block mid-row, and the first and last whole rows past one block
         "N=16384,AT=0", "N=16384,AT=114688", "N=2048,AT=16384", "N=2048,AT=114688", "N=4096,AT=0", "N=10240,AT=49152",
+        "N=18432,AT=0", "N=40960,AT=0",
     ),
     "DsaPositionsMerge_v1{M=1..8,K=2048}": ("M=1", "M=8", "M=3"),
 }
@@ -18,9 +20,9 @@ RANGES = {
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The index units at small statics (a first block and one from AT, the merge of one list and of three, chunks of two of
-    four slots and of five, a slot of four and of five), the long row over three blocks of 4 keys, two reads of a 16-row
-    table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 32, N 2^17): the merge
-    and the chunk over `targets.MAX_GATES`, each held to its digest pin."""
+    four slots and of five, a slot of four and of five), the long row of 12 keys (its mask whole, so one block), two reads of
+    a 16-row table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 32, N 2^17): the
+    merge and the chunk over `targets.MAX_GATES`, each held to its digest pin."""
     from verity.ml.circuits.defs import bind
     from verity.ml.commitments.gates.embedding import read
     from verity.ml.definitions.registry import dsa_topk_reads as R

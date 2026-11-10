@@ -9,9 +9,12 @@ READ is the read, `commitments.gates.embedding`'s `EmbeddingRead_v1{V, H}` where
 and Row its H u16 words): a static, as `boolean_fp8_moe`'s is, so this module imports no commitment code.  Root, domain, Salt
 and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, each a unit or several (`cut`, `CUTS`):
 
-* the mask, `DsaTopKMaskCounted_v2{N,TOPK}` (scores, n), itself cut past `dsa_topk_mask_cut.WHOLE_MAX` keys;
-* the index, over the row's blocks of BLOCK keys (`dsa_topk_mask_cut.blocks`): per block,
-  ``DsaMaskPositions_v1{N,AT,K}`` compacts its members to their positions, ascending, and counts them; then
+* the mask, `DsaTopKMaskCounted_v2{N,TOPK}` (scores, n), cut past `dsa_topk_mask_cut.WHOLE_MAX` keys and up to it a unit,
+  `DsaTopKMaskWhole_v1{N,TOPK}`;
+* the index, over a block a mask unit (`index_block`): the row's blocks of BLOCK keys (`dsa_topk_mask_cut.blocks`) where the
+  mask is cut, and the whole row where it is one unit.  Per block,
+  ``DsaMaskPositions_v1{N,AT,K}`` compacts its members (its mask in u16 words, `dsa_topk_mask_cut.words`) to their positions,
+  ascending, and counts them; then
   ``DsaPositionsMerge_v1{M,K}`` writes the M blocks' lists one after another, each at the count of those before it, and 0 past
   them.  So slot j holds the row's j-th member by position, the rows network's order (`dsa_topk_mask.rows`), whenever the mask
   has at most TOPK members, as a counted mask always has.  Each block's list and count is a port of the merge's own
@@ -62,7 +65,8 @@ READ_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
 def _positions(B, S, mask):
     """`DsaMaskPositions_v1{N,AT,K}`: `DsaButterflyRows_v2{N,K,1,32}` at the block's `DsaButterflySettings_v2{N,K}` over the
-    constant positions AT..AT+N-1, and `DsaTopKPopCount_v1{N}` of the mask."""
+    constant positions AT..AT+N-1, and `DsaTopKPopCount_v1{N}` of the mask (its words' first N bits)."""
+    mask = X.low(mask, S.N)
     sw = B.call(bind(BM.DsaButterflySettingsV2, N=S.N, K=S.K), mask)
     zero, one = B.call(BL.constant(0)), B.call(BL.constant(1))
     at = concat([(one if (S.AT + j) >> i & 1 else zero).refs for j in range(S.N) for i in range(32)])
@@ -85,12 +89,13 @@ def _refuse_positions(b: dict) -> str | None:
 
 DsaMaskPositions = CompositeDefinition(
     "DsaMaskPositions", 1, ("N", "AT", "K"),
-    lambda S: ((("mask", Array(S.N, BIT)),), Tuple(Array(S.K, I32), I32)), _positions,
+    lambda S: ((("mask", X.words(S.N)),), Tuple(Array(S.K, I32), I32)), _positions,
     conformance="exact-model-tested: the rows network's order (DsaTopKRow_v2's construction over a block's positions), held to "
                 "dsa_topk_mask.butterfly_apply by the definitions' test_dsa_topk_reads.py",
     refuse=_refuse_positions,
-    doc="(pos, count) of a block of N keys AT..AT+N-1: count its mask's members (u32), pos[s] the s-th of them by position for "
-        "s < count, ascending, and what the rows network leaves past count")
+    doc="(pos, count) of a block of N keys AT..AT+N-1, its mask in u16 words (`dsa_topk_mask_cut.words`): count its mask's "
+        "members (u32), pos[s] the s-th of them by position for s < count, ascending, and what the rows network leaves past "
+        "count")
 
 
 def _merge(S):
@@ -208,12 +213,21 @@ DsaPositionsSlot = EW.specialized(
                 "more, by the definitions' test_dsa_topk_reads.py")
 
 
+def index_block(N: int, TOPK: int, block: int) -> int:
+    """The index's block at a row of N keys: ``block`` past `dsa_topk_mask_cut.WHOLE_MAX`, where the mask is cut a block a
+    unit, and N up to it, where the mask is one unit, so that each `DsaMaskPositions_v1` reads one mask unit's whole output.
+    The whole mask with a block an output instead would have 5 rows at 40,960 keys, so 8 hm96 slots for its 3 rows' 4, and
+    be past Flock's 2^27 bits."""
+    return block if N > X.WHOLE_MAX else N
+
+
 def index(B, N: int, K: int, block: int, mask) -> Coll:
-    """The K positions of a row's mask (Array<N, BIT>, a Coll of ``B``): a `DsaMaskPositions_v1` per block, then the merge,
-    its ``pos_b`` and ``count_b`` block b's two outputs."""
+    """The K positions of a row's mask (Array<N, BIT>, a Coll of ``B``): a `DsaMaskPositions_v1` per block of ``block`` keys,
+    on the block's mask in u16 words, then the merge, its ``pos_b`` and ``count_b`` block b's two outputs."""
     lists, counts = [], []
     for lo, hi in X.blocks(N, K, block):
-        out = B.call(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=K), Coll(Array(hi - lo, BIT), mask.refs.slice(lo, hi)))
+        out = B.call(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=K),
+                     X.to_words(B, Coll(Array(hi - lo, BIT), mask.refs.slice(lo, hi)), hi - lo))
         lists.append(out[0])
         counts.append(out[1])
     return B.call(bind(DsaPositionsMerge, M=len(lists), K=K), *lists, *counts)
@@ -247,7 +261,7 @@ def _rows_sig(S):
 def _rows(B, S, scores, n, root, domain, row, salt, path):
     _, row_t = _read(S)
     mask = B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n)
-    tok = index(B, S.N, S.TOPK, S.BLOCK, mask)
+    tok = index(B, S.N, S.TOPK, index_block(S.N, S.TOPK, S.BLOCK), mask)
     out = B.batch(S.READ, tok, root, domain, row, salt, path, axes=(0, None, None, 0, 0, 0))
     w = row_t.leaves
     return tuple_of(Coll(Array(S.TOPK, row_t), strided_view(out, 0, w, w + 1, 1, S.TOPK * w)),
@@ -263,7 +277,8 @@ def _refuse_rows(b: dict) -> str | None:
             return str(e)
     if TOPK is not None and block is not None and block < TOPK:
         return f"a block of BLOCK >= TOPK keys (BLOCK={block}, TOPK={TOPK})"
-    if N is not None and TOPK is not None and block is not None and any(e - a < 2 for a, e in X.blocks(N, TOPK, block)):
+    if (N is not None and TOPK is not None and block is not None
+            and any(e - a < 2 for a, e in X.blocks(N, TOPK, index_block(N, TOPK, block)))):
         return f"blocks of at least 2 keys, as a block's positions take (N={N}, TOPK={TOPK}, BLOCK={block})"
     return None
 
@@ -275,23 +290,24 @@ DsaTopKReadRows = CompositeDefinition(
                 "definitions' test_dsa_topk_reads.py",
     refuse=_refuse_rows,
     doc="(kv, ok): the TOPK rows READ opens at the positions of the counted mask's members (DsaTopKMaskCounted_v2{N,TOPK}), "
-        "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of BLOCK keys, DsaPositionsMerge_v1), "
-        "ok[j] read j's verdict")
+        "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of index_block(N, TOPK, BLOCK) keys, "
+        "DsaPositionsMerge_v1), ok[j] read j's verdict")
 
 DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPositionsSlot, DsaTopKReadRows]
 
 
 def cut(t) -> list[tuple[Any, int]]:
     """The units a binding of `DsaTopKReadRows_v1` is cut into, each Definition bound and how many of it: the mask's own (its
-    `dsa_topk_mask_cut.cut`, else the mask whole), a `DsaMaskPositions_v1` a block, the merge, ceil(TOPK/CHUNK) of
+    `dsa_topk_mask_cut.cut`, else the mask whole, `DsaTopKMaskWhole_v1{N,TOPK}`), a `DsaMaskPositions_v1` a block of
+    `index_block` keys, block b's reading the mask unit of block b, the merge, ceil(TOPK/CHUNK) of
     `DsaPositionsChunk_v1{K=TOPK,W=CHUNK}`, chunk c's c its input, TOPK of `DsaPositionsSlot_v1{K=CHUNK,N}`, slot j's
     slots chunk j // CHUNK's output and its j the input j mod CHUNK, and TOPK of READ, read j at slot j's output.  The body
     computes the same function with the reads over the merge's slots directly: a slot's output is the merge's slot j
     wherever that is below N, as every one is."""
     N, TOPK, block, READ = int(t.bindings["N"]), int(t.bindings["TOPK"]), int(t.bindings["BLOCK"]), t.bindings["READ"]
     mask = bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=TOPK)
-    bl = X.blocks(N, TOPK, block)
-    units: Counter = Counter(dict(X.cut(mask) or [(mask, 1)]))
+    bl = X.blocks(N, TOPK, index_block(N, TOPK, block))
+    units: Counter = Counter(dict(X.cut(mask) or [(bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK), 1)]))
     units.update(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=TOPK) for lo, hi in bl)
     units[bind(DsaPositionsMerge, M=len(bl), K=TOPK)] += 1
     units[bind(DsaPositionsChunk, K=TOPK, W=CHUNK)] += -(-TOPK // CHUNK)
@@ -330,9 +346,9 @@ def slot(slots: Sequence[int], j: int, N: int) -> int:
 
 
 def values(mask: Sequence[int], K: int, block: int = BLOCK) -> dict[tuple, tuple]:
-    """Each index unit's outputs on a row's mask (N bits), by key: ("positions", b) block b's (K positions, count), ("merge",)
-    the K positions, ("chunk", c) chunk unit c's CHUNK positions, ("slot", j) slot unit j's position (its chunk's slot
-    j mod CHUNK)."""
+    """Each index unit's outputs on a row's mask (N bits) in blocks of ``block`` keys (the long row's: `index_block`), by key:
+    ("positions", b) block b's (K positions, count), ("merge",) the K positions, ("chunk", c) chunk unit c's CHUNK
+    positions, ("slot", j) slot unit j's position (its chunk's slot j mod CHUNK)."""
     mask = [int(m) & 1 for m in mask]
     out: dict[tuple, tuple] = {}
     lists, counts = [], []

@@ -6,7 +6,9 @@ to the whole mask:
   outputs), computes the twin's outputs, and the mask units' outputs in block order are the Call's mask: on rows that tie at the
   boundary, straddle signed zero and hold NaNs and infinities, at n from 0 past N, at small statics (blocks of a few keys, a
   short last block joined to the one before, TOPK 1 and TOPK a whole block) and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the
-  served ones (TOPK 2,048, the first class past `WHOLE_MAX` and 131,072);
+  served ones (TOPK 2,048, the first class past `WHOLE_MAX` and 131,072).  Every port is whole u16 words: each writer's bits
+  past its value are 0, and each reader's outputs are the same with them random;
+* `DsaTopKMaskWhole_v1`, the mask up to `WHOLE_MAX` a unit, is the counted mask in u16 words;
 * `DsaTopKDigitPick_v1`, block b's counts its own port ``counts_b``, is gate for gate the pick over one port of the M blocks'
   counts, at small statics and at the served ones (M = 8, each round, TOPK 2,048);
 * `plan` wires each parameter to one earlier unit's output of its width and `cut` counts its units, None up to `WHOLE_MAX`.
@@ -61,16 +63,26 @@ def _fields(defn) -> list[int]:
     return [sum(BL.elements(f[1] if isinstance(f, tuple) else f)) for f in (getattr(ret, "fields", None) or (ret,))]
 
 
-def _chain(rows, ns, TOPK: int, block: int) -> dict[tuple, list[np.ndarray]]:
+def _read(u: X.Unit, param: str, TOPK: int) -> int | None:
+    """The bits of a wired parameter its unit reads: a prefix its low 8K, an r its low RB; None for all of them."""
+    return {"prefix": X.DIGIT * u.defn.bindings.get("K", 0), "r": X._rb(TOPK)}.get(param)
+
+
+def _chain(rows, ns, TOPK: int, block: int, rng: random.Random | None = None) -> dict[tuple, list[np.ndarray]]:
     """Every unit of the plan evaluated on bits (`evaluate_bits`, a row an instance) on its block of the rows, n and its
-    writers' outputs as the units before it computed them: each unit's output fields, by key."""
+    writers' outputs as the units before it computed them: each unit's output fields, by key.  With ``rng``, the bits of a
+    wired input past those its unit reads (`_read`) are random in place of its writer's."""
     R, N = len(rows), len(rows[0])
     scores, out = np.asarray(rows, dtype=np.uint64), {}
     for u in X.plan(N, TOPK, block):
         args = []
         if u.keys != (0, 0):
             args += [_bits(scores[:, u.keys[0]:u.keys[1]], 32).reshape(R, -1), _bits(ns, 32)]
-        args += [out[w][f] for _, w, f in u.wires]
+        for p, w, f in u.wires:
+            a, lo = out[w][f].copy(), _read(u, p, TOPK)
+            if rng is not None and lo is not None:
+                a[:, lo:] = np.asarray([[rng.getrandbits(1) for _ in range(a.shape[1] - lo)] for _ in range(R)], dtype=a.dtype)
+            args.append(a)
         got = np.asarray(BS.evaluate_bits(u.defn, *args)).reshape(R, -1)
         at = np.cumsum([0, *_fields(u.defn)])
         out[u.key] = [got[:, a:b] for a, b in zip(at, at[1:])]
@@ -80,15 +92,19 @@ def _chain(rows, ns, TOPK: int, block: int) -> dict[tuple, list[np.ndarray]]:
 def _check(N: int, TOPK: int, block: int, R: int, seed: int) -> None:
     rows, ns = _rows(random.Random(seed), N, R, TOPK)
     out = _chain(rows, ns, TOPK, block)
+    junk = _chain(rows, ns, TOPK, block, random.Random(seed + 1))
+    assert all(np.array_equal(a, b) for k in out for a, b in zip(out[k], junk[k])), (N, TOPK, block)
     whole = np.asarray(E.evaluate_batch(bind(M.DsaTopKMaskCounted, N=N, TOPK=TOPK), rows, ns)).reshape(len(rows), -1)
-    mask = np.concatenate([out[("mask", b)][0] for b in range(len(X.blocks(N, TOPK, block)))], axis=1)
+    bl = X.blocks(N, TOPK, block)
+    assert all(not out[("mask", b)][0][:, e - a:].any() for b, (a, e) in enumerate(bl)), (N, TOPK, block)
+    mask = np.concatenate([out[("mask", b)][0][:, :e - a] for b, (a, e) in enumerate(bl)], axis=1)
     assert np.array_equal(mask, whole), (N, TOPK, block)
     for i, (row, n) in enumerate(zip(rows, ns)):
         for key, want in X.values(row, n, TOPK, block).items():
             if key[0] == "count":
                 got = (tuple(_words(out[key][0][i].reshape(X.BINS, 32))),)
             elif key[0] == "mask":
-                got = (tuple(int(x) for x in out[key][0][i]),)
+                got = (tuple(int(x) for x in out[key][0][i][:len(want[0])]),)
             else:
                 got = tuple(_words(f[i:i + 1])[0] for f in out[key])
             assert got == want, (N, TOPK, block, key, i)
@@ -106,8 +122,20 @@ def test_the_twin_is_the_counted_mask(N, TOPK, block) -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("N,TOPK,block", [(20, 4, 8), (18, 4, 8), (9, 1, 4), (30, 16, 16)])
 def test_each_unit_is_its_twin_and_the_units_compose_to_the_counted_mask(N, TOPK, block) -> None:
-    """Blocks of 8 keys over 20 (a last block of 4) and 18 (its 2 keys joined to the block before), TOPK 1, and one block."""
+    """Blocks of 8 keys over 20 (a last block of 4) and 18 (its 2 keys joined to the block before), TOPK 1, and one block.
+    Each writer's bits past its value are 0, and each reader's outputs are the same with them random."""
     _check(N, TOPK, block, 24, N * 7 + TOPK)
+
+
+@pytest.mark.parametrize("N,TOPK", [(20, 4), (16, 4), (9, 1), (30, 16), (40, 5)])
+def test_the_whole_mask_is_the_counted_mask_in_words(N, TOPK) -> None:
+    """`DsaTopKMaskWhole_v1`'s output is `DsaTopKMaskCounted_v1`'s mask, then 0 to its last u16 word."""
+    rows, ns = _rows(random.Random(N * 31 + TOPK), N, 24, TOPK)
+    whole = np.asarray(E.evaluate_batch(bind(M.DsaTopKMaskCounted, N=N, TOPK=TOPK), rows, ns)).reshape(len(rows), -1)
+    t = bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK)
+    got = np.asarray(BS.evaluate_bits(t, _bits(rows, 32).reshape(len(rows), -1), _bits(ns, 32))).reshape(len(rows), -1)
+    assert _fields(t) == [X.wide(N)] and t.signature()[1] == X.words(N)
+    assert np.array_equal(got[:, :N], whole) and not got[:, N:].any()
 
 
 @pytest.mark.slow

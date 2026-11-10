@@ -23,6 +23,11 @@ those of the blocks before it.  Every unit reads its own block of the scores and
 one whole output row of a unit before it (`Unit.wires`), each port's own: the prefix and r of the pick before, a block's counts,
 the threshold's key and r_b.  The Call's mask is the mask units' outputs in block order.  Units a row: 5M + 4, M = ceil(N / `BLOCK`) blocks (44 at
 131,072 keys).
+
+Every port of a unit is whole u16 words, as a row of `verity.ml.windows.interface.layout` is: a mask of n bits is
+`words`(n), Array<ceil(n/16), Array<16, BIT>>, bit j word j // 16's bit j mod 16, and a prefix or an r is `wide` of its bits.  A
+writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopKMaskWhole_v1{N,TOPK}`` is the counted mask up to
+`WHOLE_MAX` keys, a unit, in u16 words.
 """
 from __future__ import annotations
 
@@ -38,7 +43,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, sub
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity.ml.circuits.refs import Coll, strided_view
+from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
 from verity.ml.definitions.registry.boolean_dsa_topk import decode, key
@@ -59,6 +64,34 @@ BINS = 1 << DIGIT
 
 def _rb(TOPK: int) -> int:
     return TOPK.bit_length()
+
+
+def wide(bits: int) -> int:
+    """``bits`` rounded up to whole u16 words."""
+    return -(-bits // 16) * 16
+
+
+def words(n: int) -> Array:
+    """A mask of ``n`` bits as whole u16 words: Array<ceil(n/16), Array<16, BIT>>."""
+    return Array(-(-n // 16), Array(16, BIT))
+
+
+def low(c: Coll, bits: int) -> Coll:
+    """The first ``bits`` bits of the Boolean collection ``c``, the value a reader takes from a port wider than it."""
+    return Coll(Array(bits, BIT), c.refs.slice(0, bits))
+
+
+def to_words(B, mask: Coll, n: int) -> Coll:
+    """The mask of ``n`` bits ``mask`` (a Coll of ``B``) as `words`(n), the last word's bits past n 0."""
+    pad = wide(n) - n
+    if not pad:
+        return Coll(words(n), mask.refs)
+    zero = B.call(BL.constant(0))
+    return Coll(words(n), concat([mask.refs, BM._rep(zero, pad)]))
+
+
+def _pad(bits: list, width: int) -> list:
+    return list(bits) + [ZERO] * (width - len(bits))
 
 
 def _row_valid_from(S):
@@ -112,13 +145,14 @@ DsaTopKPopCount = EW.specialized("DsaTopKPopCount", 1, ["N"], _pop_count, lambda
 
 
 def _count_sig(S):
-    return ((("scores", Array(S.N, F32)), ("n", I32), *((("prefix", Array(DIGIT * S.K, BIT)),) if S.K else ())),
+    return ((("scores", Array(S.N, F32)), ("n", I32), *((("prefix", Array(wide(DIGIT * S.K), BIT)),) if S.K else ())),
             Array(BINS, I32))
 
 
 def _count(B, S, scores, n, *prefix):
     """`DsaTopKDigitCount_v1{N,AT,K}`, keys AT..AT+N-1 of a row: for each v < 256, how many of them below n are level with the
-    prefix and have digit K v (`DsaTopKDigitOneHot_v1{K}` per key, `DsaTopKPopCount_v1{N}` per v)."""
+    prefix (its low 8K bits) and have digit K v (`DsaTopKDigitOneHot_v1{K}` per key, `DsaTopKPopCount_v1{N}` per v)."""
+    prefix = tuple(low(p, DIGIT * S.K) for p in prefix)
     valid = _valid(B, S.N, S.AT, n)
     hot = B.batch(bind(DsaTopKDigitOneHot, K=S.K), scores, valid, *prefix, axes=(0, 0, *(None for _ in prefix)))
     cols = Coll(Array(BINS, Array(S.N, BIT)), strided_view(hot, 0, S.N, 1, BINS, BINS * S.N))
@@ -133,14 +167,15 @@ def _pick(S):
     """`DsaTopKDigitPick_v1{M,K,TOPK}`: round K's digit from the M blocks' counts (``counts_b`` block b's), with T(v) the level
     keys at digit v or above: the largest v with T(v) >= r, else 0; returns (prefix with the digit below it, r - T(digit + 1)),
     and at the last round (the threshold's key, r_b for each block b: that r less the keys equal to the key in blocks 0..b-1,
-    at least 0)."""
+    at least 0).  It reads the prefix's low 8K bits and r's low RB, and writes 0 past each value's bits."""
     RB, last = _rb(S.TOPK), S.K == ROUNDS - 1
     if not 0 <= S.K < ROUNDS or S.M < 1:
         raise ValueError(f"DsaTopKDigitPick: 0 <= K < {ROUNDS} and M >= 1 (M={S.M}, K={S.K})")
 
     def build(C, *els):
         cnt = [[list(els[b * BINS + v]) for v in range(BINS)] for b in range(S.M)]
-        prefix, r = (els[S.M * BINS], list(els[S.M * BINS + 1])) if S.K else ((), const_bits(S.TOPK, RB))
+        prefix, r = ((list(els[S.M * BINS])[:DIGIT * S.K], list(els[S.M * BINS + 1])[:RB]) if S.K
+                     else ((), const_bits(S.TOPK, RB)))
         h = [cnt[0][v] for v in range(BINS)]
         for b in range(1, S.M):
             h = [add(C, h[v], cnt[b][v], width=32) for v in range(BINS)]
@@ -161,11 +196,11 @@ def _pick(S):
             digit = [d ^ sel[v] if v >> i & 1 else d for i, d in enumerate(digit)]
         left = sub(C, r, pick(T[1:]), RB)[0]
         if not last:
-            return [digit + list(prefix), left]
+            return [_pad(digit + list(prefix), wide(DIGIT * (S.K + 1))), _pad(left, wide(RB))]
         out, before = [digit + list(prefix)], [ZERO] * 32
         for b in range(S.M):
             d, borrow = sub(C, left, before, 32)
-            out.append([C.AND(NOT(borrow), x) for x in d[:RB]])
+            out.append(_pad([C.AND(NOT(borrow), x) for x in d[:RB]], wide(RB)))
             if b < S.M - 1:
                 before = add(C, before, pick(cnt[b]), width=32)
         return out
@@ -173,9 +208,9 @@ def _pick(S):
 
 
 def _pick_sig(S):
-    RB, width = _rb(S.TOPK), DIGIT * (S.K + 1)
+    RB, width = wide(_rb(S.TOPK)), wide(DIGIT * (S.K + 1))
     params = (*((f"counts_{b}", Array(BINS, I32)) for b in range(S.M)),
-              *((("prefix", Array(DIGIT * S.K, BIT)), ("r", Array(RB, BIT))) if S.K else ()))
+              *((("prefix", Array(wide(DIGIT * S.K), BIT)), ("r", Array(RB, BIT))) if S.K else ()))
     if S.K < ROUNDS - 1:
         return params, Tuple(Array(width, BIT), Array(RB, BIT))
     return params, Tuple(I32, *[Array(RB, BIT)] * S.M)
@@ -201,20 +236,31 @@ DsaTopKKeyCompare = EW.specialized("DsaTopKKeyCompare", 1, [], _compare,
 
 
 def _mask_sig(S):
-    return ((("scores", Array(S.N, F32)), ("n", I32), ("key", I32), ("r", Array(_rb(S.TOPK), BIT))), Array(S.N, BIT))
+    return ((("scores", Array(S.N, F32)), ("n", I32), ("key", I32), ("r", Array(wide(_rb(S.TOPK)), BIT))), words(S.N))
 
 
 def _mask(B, S, scores, n, theta, r):
-    """`DsaTopKMaskBlock_v1{N,AT,TOPK}`, keys AT..AT+N-1 of a row: those below n above the threshold's key, and the first r of
-    those equal to it (`DsaTopKKeyCompare_v1` per key, `DsaRadixTies_v1{N,TOPK}`)."""
+    """`DsaTopKMaskBlock_v1{N,AT,TOPK}`, keys AT..AT+N-1 of a row: those below n above the threshold's key, and the first r (its
+    low RB bits) of those equal to it (`DsaTopKKeyCompare_v1` per key, `DsaRadixTies_v1{N,TOPK}`), in u16 words."""
     valid = _valid(B, S.N, S.AT, n)
     cmp = B.batch(DsaTopKKeyCompare, scores, valid, theta, axes=(0, 0, None))
     eq, gt = (Coll(Array(S.N, BIT), strided_view(cmp, i, 1, 2, 1, S.N)) for i in (0, 1))
-    return B.call(bind(BM.DsaRadixTies, N=S.N, TOPK=S.TOPK), eq, gt, r)
+    return to_words(B, B.call(bind(BM.DsaRadixTies, N=S.N, TOPK=S.TOPK), eq, gt, low(r, _rb(S.TOPK))), S.N)
 
 
 DsaTopKMaskBlock = CompositeDefinition("DsaTopKMaskBlock", 1, ("N", "AT", "TOPK"), _mask_sig, _mask, doc=_mask.__doc__,
                                        conformance="exact-model-tested")
+
+
+def _whole(B, S, scores, n):
+    """`DsaTopKMaskWhole_v1{N,TOPK}`: `DsaTopKMaskCounted_v2{N,TOPK}`'s mask in u16 words, the mask a unit up to `WHOLE_MAX`
+    keys.  `_v2` itself keeps `_v1`'s Array<N, BIT>, as `_v1`'s Boolean version must."""
+    return to_words(B, B.call(bind(BM.DsaTopKMaskCountedV2, N=S.N, TOPK=S.TOPK), scores, n), S.N)
+
+
+DsaTopKMaskWhole = CompositeDefinition("DsaTopKMaskWhole", 1, ("N", "TOPK"),
+                                       lambda S: ((("scores", Array(S.N, F32)), ("n", I32)), words(S.N)), _whole,
+                                       doc=_whole.__doc__, conformance="exact-model-tested")
 
 
 @dataclass(frozen=True)
@@ -276,7 +322,8 @@ def keys_of(scores) -> np.ndarray:
 
 def values(scores, n: int, TOPK: int, block: int = BLOCK) -> dict[tuple, tuple]:
     """Each unit of `plan`(len(scores), TOPK, block)'s outputs on a row (f32 words) and its n, by unit key: a count unit's 256
-    counts, a pick's (prefix, r) and the last one's (key, r_0, ..., r_{M-1}), a mask unit's bits."""
+    counts, a pick's (prefix, r) and the last one's (key, r_0, ..., r_{M-1}), a mask unit's bits (its block's, the words'
+    padding apart)."""
     k = keys_of(scores)
     N, bl = len(k), blocks(len(k), TOPK, block)
     valid = np.arange(N) < n
@@ -308,8 +355,8 @@ def values(scores, n: int, TOPK: int, block: int = BLOCK) -> dict[tuple, tuple]:
 
 
 CUT_DEFINITIONS = [DsaRowValidFrom, DsaTopKDigitOneHot, DsaTopKPopCount, DsaTopKDigitCount, DsaTopKDigitPick, DsaTopKKeyCompare,
-                   DsaTopKMaskBlock]
+                   DsaTopKMaskBlock, DsaTopKMaskWhole]
 
-__all__ = ["BLOCK", "WHOLE_MAX", "Unit", "blocks", "plan", "cut", "values", "keys_of", "CUT_DEFINITIONS", "DsaRowValidFrom",
-           "DsaTopKDigitOneHot", "DsaTopKPopCount", "DsaTopKDigitCount", "DsaTopKDigitPick", "DsaTopKKeyCompare",
-           "DsaTopKMaskBlock"]
+__all__ = ["BLOCK", "WHOLE_MAX", "Unit", "blocks", "plan", "cut", "values", "keys_of", "wide", "words", "low", "to_words",
+           "CUT_DEFINITIONS", "DsaRowValidFrom", "DsaTopKDigitOneHot", "DsaTopKPopCount", "DsaTopKDigitCount", "DsaTopKDigitPick",
+           "DsaTopKKeyCompare", "DsaTopKMaskBlock", "DsaTopKMaskWhole"]
