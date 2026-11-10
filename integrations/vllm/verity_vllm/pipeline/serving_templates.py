@@ -124,7 +124,7 @@ class Template:
     ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, fused blocks, table reads and router slots
     (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``); ``"bits"`` for a row template that is a Boolean Definition with no word
     Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits and no words: each port is committed
-    as a bit row, its bits low first and zero-padded to whole u16 words (`chunk_rows.unit_rows`); else ``"row"``).
+    as a bit row, its bits low first (`interface.unit_rows`, which holds each to whole u16 words); else ``"row"``).
     ``packed``: a row, coordinate, slice, part, K-chunk, split, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),

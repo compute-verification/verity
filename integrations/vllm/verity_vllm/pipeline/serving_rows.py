@@ -261,8 +261,8 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     if tp.layout in ("row", "part"):
         return 1
     if tp.layout == "bits":
-        raise ValueError(f"{t}: a bits template's rows are its ports' bits padded to whole u16 words (chunk_rows.unit_rows), "
-                         f"which no reader of a served row gives: its units are a replay block's, staged from the replay")
+        raise ValueError(f"{t}: a bits template's rows are its ports' bits (chunk_rows.unit_rows), which no reader of a served "
+                         f"row gives: its units are a replay block's, staged from the replay")
     S = d["statics"]
     if tp.layout in READERS:
         return int(READERS[tp.layout][0](tp, S))
