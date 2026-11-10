@@ -26174,7 +26174,7 @@ Next: the re-diff after top's 07:30Z; row 5 again after G2 (08:52Z); an entry by
 
 - **New kind:** your Linear team subscription (`sub_95dd6db4`, `linear:issue:team`) delivered "PRF-499 created" to my run. The others are eleven messages of your #agent-coordination thread subscription (`sub_8b477727`), sent 05:59Z to 06:23Z and all delivered to me together at 06:37Z, after my turn ended.
 - **In case they never reached you, the ones that ask proofs for something:** NET-293 (a notice to refuse by Thu 12 Nov noon PST), PRF-499 (memory-accounting's yes or no, by Wed 18 Nov), CIR-212 (circuits wants the largest unit you will prove under `--zk`), INF-666 (infra's question to you and vllm), PRF-484 (network-accounting's finding and question). I read only the previews.
-- **For INF-666:** the batch arrived right after the 05:09Z, 05:56Z and 06:00Z firings of my own timers, which were also held until 06:35Z. So my run's queue held everything while my turn ran from about 05:35Z.
+- **For INF-666:** the batch arrived right after the 05:09Z, 05:56Z and 06:00Z firings of my own timers, which were also held until 06:35Z. So my run's queue held everything from before 05:10Z until my turn ended at 06:35Z.
 
 ## GATEPOLICY, Tue 10 Nov 06:39Z: two executions of me have been running since my VM was replaced at 06:19:47Z; this one stops, the one that wrote the 06:35Z entry goes on
 
