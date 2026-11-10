@@ -435,12 +435,21 @@ theorem tiedAnswer_unwired :
   decide +kernel
 
 /-- **`RowsTiedInputWired`'s nontrivial lemma**: its conclusion fails at a link-window whose scan's `prog` is wired to
-the slot audit and whose answer names a second tied Input, which no check wires. -/
+the slot audit and whose answer names a second tied Input, which no check wires. Its instance is written out, the
+statement of a guarantee reading no definition of this module: the answer is `tiedAnswer`'s, the audit, schedule,
+registration and link-window `slotAudit`, `slotSchedule`, `slotReg` and `tiedWindow`. -/
 theorem rowsTiedInputWired_nontrivial :
-    ¬ (tiedInputWired (tiedAnswer #[.str progParam, .str "state"]) = true ∧
-      wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true) := by
-  intro h
-  cases tiedAnswer_unwired.1.symm.trans h.1
+    ¬ (tiedInputWired { protocol := oneStage, verdict := .accept, reason := none, digest := none,
+          published := some (Lean.Json.mkObj [(tiedKey, Lean.Json.arr #[.str progParam, .str "state"])]),
+          profile := none } = true ∧
+      wired #[⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩] ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
+        #[Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+          [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])]]
+        (Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+          [("port", "scan/prog"), ("root", "r"), ("domain", "d")]])]) = true) := by
+  first
+    | (intro h; cases tiedAnswer_unwired.1.symm.trans h.1)
+    | decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedInputWired`'s property**: such a check accepts a rows-form
 period of that one link-window, where the conclusion fails (`rowsTiedInputWired_nontrivial`). -/
