@@ -10,10 +10,10 @@ import json
 import pytest
 from verity_vllm.pipeline import ingress_rows as IR, serving_rows as SRW
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.definitions.registry import b1 as B1
-from verity.ml.windows import interface as IF
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.definitions.registry import b1 as B1
+from verity.windows import interface as IF
 
 FN = bind(B1.BiasAdd, N=8)
 T = descriptor_id(FN)

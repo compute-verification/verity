@@ -39,11 +39,11 @@ from verity_vllm.check.match import program_compare as C
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
 from verity_vllm.records import workload as WL
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat, runs
-from verity.ml.circuits.types import Array, RecordType, Value
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat, runs
+from verity.circuits.types import Array, RecordType, Value
 
 # ------------------------------------------------------------------------------------------------------------------ toy definitions
 # distinct ids from test_workload_program's toys (both may be imported into one process; REGISTRY refuses a second body under one id)
@@ -596,7 +596,7 @@ from verity_vllm.check.match import global_match as gm  # noqa: E402
 from verity_vllm.check.match import sampler_geometry as SG  # noqa: E402
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture
-from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
+from verity.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
 
 NSM = 4   # a num_SMs at which vLLM's own S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
 S_REG = registered_splits(NSM)   # 4: the split count the pinned engine launches at every batch

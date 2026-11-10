@@ -3,7 +3,7 @@
 Contract:
 
     result = fold(events, profile)          # events: Iterable[Event] (e.g. `log.read_log(path)`)
-    result.program                          # verity.ml.circuits.program.Program over an unregistered CompositeDefinition
+    result.program                          # verity.circuits.program.Program over an unregistered CompositeDefinition
     result.spec                             # the SpecializedDefinition (Captured_v1 bound to PROFILE, WORKLOAD)
     result.report                           # resolver.ResolutionReport + memory stats + step summaries
     result.digest                           # program digest (str)
@@ -12,7 +12,7 @@ Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity.ml.definitions.registry.b1.weights_type(C)` RecordType, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.definitions.registry.b1.weights_type(C)` RecordType, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -88,15 +88,15 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
+from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.defs import Builder, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.replay import replayer
-from verity.ml.circuits.types import Array, RecordType, Type, Value
-from verity.ml.circuits.types import Tuple as TupleT
+from verity.definitions.registry import b1
+from verity.definitions.replay import replayer
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import (
@@ -174,7 +174,7 @@ class FoldResult:
     instances: list[dict] = field(default_factory=list)
     memory: dict = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
-    body: Any = None                      # the flat verity.ml.circuits.defs.Body (nodes = instances in log order)
+    body: Any = None                      # the flat verity.circuits.defs.Body (nodes = instances in log order)
     steps: list[dict] = field(default_factory=list)      # per-step summaries
     errors: list[dict] = field(default_factory=list)     # Unresolved / fold errors recorded in development mode
     timings: dict = field(default_factory=dict)
@@ -206,7 +206,7 @@ class FoldResult:
     #: a `registered_values` profile's supplied inputs (`_Fold.supplied`): the registered `values` and each request's `run_<i>`,
     #: every field's name, width, bits and leaf offset; empty otherwise
     supplied: dict = field(default_factory=dict)
-    #: the Program's descriptor (`verity.ml.circuits.codec.encode_program`) as built for the digest: `persist_program`
+    #: the Program's descriptor (`verity.circuits.codec.encode_program`) as built for the digest: `persist_program`
     #: writes THIS instead of encoding the same Program a second time (36 s + a second digest at B8 1024/128; the descriptor is the
     #: digest's input, so program.json's `program` and `digest` come from one encoding by construction)
     descriptor: Any = None

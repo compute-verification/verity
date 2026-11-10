@@ -7,7 +7,7 @@ public import Lms.Sign
 # N2's execution phase verdict of record: what its Lean code (`NetworkCheck.LinkWindow`) does
 
 The property of `NetworkCheck.LinkWindow.verdict`, the verdict of record on one execution phase of N2
-(`service.OF_RECORD` in `verity/core/protocols/certifier/service.py`), stated against its functions as they run: for
+(`service.OF_RECORD` in `verity/protocols/certifier/verifier/service.py`), stated against its functions as they run: for
 every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
 3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a network certifier link, which
 declares none, nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids

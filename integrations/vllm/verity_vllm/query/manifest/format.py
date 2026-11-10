@@ -166,7 +166,7 @@ REGISTRY_UNAVAILABLE_EXIT = 3                                                   
 
 
 class RegistryUnavailable(ImportError):
-    """The core `verity` package (verity.ml.circuits.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
+    """The core `verity` package (verity.circuits.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
     (infra / precondition: PYTHONPATH, the shipped tree's root, an incomplete venv), never a semantic result: without the
     registry no Definition's signature can be derived, so a manifest built here would misreport every promoted family as `unmodelled`
     (complete: false).  Raised instead of
@@ -176,7 +176,7 @@ class RegistryUnavailable(ImportError):
     kind = "infra/precondition"
 
     def __init__(self, cause: BaseException):
-        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.ml.circuits.defs: "
+        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.circuits.defs: "
                          f"{type(cause).__name__}: {cause}); the required-value manifest cannot be built without the registry "
                          f"(sys.path lacks the tree's root? an incomplete venv?) -- an environment fault, not a manifest result")
         self.cause = cause

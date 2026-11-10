@@ -13,18 +13,18 @@ import re
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import evaluate
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
-from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
+from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import sparse_mla_split_twins as TW
+from verity.definitions.registry import boolean_sparse_mla_split as BX
 from verity_vllm.program import mla_capture as MC
-from verity.ml.definitions.registry import sparse_mla as M
-from verity.ml.definitions.registry import sparse_mla_split as W
+from verity.definitions.registry import sparse_mla as M
+from verity.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
 

@@ -59,7 +59,7 @@ leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the tree m
 archived with the int8 checkpoints' manifest
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
-    git archive --format=tar.gz -o gate-tree.tgz COMMIT verity benchmarks/live_challenger \\
+    git archive --format=tar.gz -o gate-tree.tgz COMMIT verity verity/composite/device/live_challenger \\
       integrations/vllm/manifests/checkpoints-int8.json
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
@@ -133,7 +133,7 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     import gzip
     import resource
     import time
-    from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
+    from verity.circuits.codec import canonical_json, encode_program, program_digest
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
     from tests.protocols.pouw_h1_gpu import layout_of
@@ -378,7 +378,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
-    from verity.core.protocols.pouw import window as Wd
+    from verity.protocols.pouw.verifier import window as Wd
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -416,7 +416,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
              main: list[str] | None = None) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
     `gate` (the local gate's), challenge phases forged through it; `main` is the verifier's first-parent history of main."""
-    from verity.core.protocols.pouw import salt as PS
+    from verity.protocols.pouw.verifier import salt as PS
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())
     c = record["commitment"]
@@ -450,7 +450,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("pins_cut", record_path, pn=[rt / "pins-cut.jsonl"])
     logged = [ln for ln in (g / "pins.jsonl").read_text().split("\n") if ln]
     if logged:
-        from verity.core.protocols.spot import challenger as LC
+        from verity.spot.device import challenger as LC
         e = json.loads(logged[0])
         logged[0] = LC.pin_line(e["commit"], e["main"], "2000-01-01T00:00:00Z")
     (rt / "pins-rewritten.jsonl").write_text("".join(ln + "\n" for ln in logged))
@@ -622,7 +622,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
 
 def _main_of(a: argparse.Namespace) -> list[str] | None:
     """The verifier's own first-parent history of main at ``--main`` (`remote.main_lines`), or None without one."""
-    from verity.core.protocols.spot import remote
+    from verity.spot.device import remote
     return None if a.main is None else remote.main_lines(a.main)
 
 
