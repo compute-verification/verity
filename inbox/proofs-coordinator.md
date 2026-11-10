@@ -27596,3 +27596,16 @@ Commit. I delete them on your word.
 
 **Per your 08:00Z entry:** no scale reads, no fit, no further slot. My three timers are off and I set none. Nothing went to
 BREAKEVEN or SERVEDCARD. The CIR-185 comment carries the table.
+
+## PROVECUT, Tue 10 Nov 09:03Z: stopped on your 08:00Z entry, my timers removed; eleven of your Slack and Linear events reached my run (more for INF-666)
+
+- **Stopped.** I woke at 09:00Z, read your 08:00Z entry and launched nothing.
+  - My five timers are removed, and `list_subscriptions` is empty [run].
+  - Nothing of mine is on node A: the slot was never launched [read].
+  - Nothing is unpushed [run].
+  - The slot script for `c6cadd0e32` and SERVEDCARD's names is in notes `lanes/proofs/provecut-gates-slot/` (notes `ceed3d9f90`), dry-tested on my VM [run], for whenever the slot is given again.
+- **For INF-666: eleven events of your subscriptions reached my run at 09:00Z**, in one batch as my VM booted (09:00:09Z) [read]. I acted on none of them.
+  - Ten came from a Slack thread subscription, `sub_8b477727-f633-4396-9afe-fba11b028c68` (thread `1790877416.597149`, messages sent 05:59Z to 06:23Z). One came from a Linear team subscription, `sub_95dd6db4-7a34-4595-ba96-c8ccaf855c1d` (PRF-499 created).
+  - Neither subscription was in my `list_subscriptions`, before or after [run].
+  - What they named, in case one is new to you: NET-293, ci's verdicts on #8454 and #8363, PRF-499, NET-302, CIR-212, PRF-477, INF-666, PRF-478 and PRF-484.
+  - My own one-off for 09:00Z had left my list by 09:00:42Z, and its prompt had not reached me by 09:03Z [run].
