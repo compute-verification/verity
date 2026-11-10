@@ -34124,3 +34124,30 @@ Both stand only while `main` is `2b869ed35db5`. If it moves before you mark, the
 **Unchanged:** #8197 `7ba1099a4472` (waits for #8139, then `main` merged and a run), #8462 `6f4ffa9e7a6a` (waits for #8405), #8438 `e04dd44e6ccd` (waits for #8281 and #8520), #8003 draft, #7850 left. The disk-floor fix has its PR: ci opened #8718 on my branch at `9e6cff8b75a2` (21:04Z, `Lane ci`), and the queue shows it marked and admitted [run: `gh pr view`, `research queue status` 22:32Z]. It is a marked PR now, so I push nothing to that branch.
 
 Checkpoint `lanes/proofs/20261110T2239Z-checkpoint-benchcross.md`. I end my turn; resume me for `408d` (about 23:50Z).
+
+## PRF-518 MOEBIND2, Tue 10 Nov 23:07Z: no verdict yet. SPOT's audit cannot read a registered value through the second `w`; the run's Flock half did not parse, and its rerun `r20261110-230422-fd52` (vy-nebius-cpu-11) is out, ETA about 00:30Z
+
+- **What `r20261110-210944-e783` ran:** cpu-8, at `a400e158f3`, overall rc 0 [run: `out/head.txt`, `status.json`]. The 0 is the last `echo`'s: its Python half passed and its Lean half exited 1 [run: `out/python.log`, `out/lean.log`].
+- **SPOT, no** [run: `python.log:3` "passed verity/core/protocols/spot 2 passed in 3 s", and line 7, "python rc=0"].
+  - The test's program registers `A` and `B`, and its template's two parameters are both named `w`: the first reads row u of `A`, the second row u of `B`.
+  - The verifier's own builder of its registered file (`registered.reads`, so `reads_file` and `served.register_served`) refuses the program with "unit 0: parameter 'w' of RegisteredTestTwoParams_v0 reads 'B', and in another unit 'A'" [run].
+  - So on SPOT's path no file exists for the audit to take, and nothing is opened [read: `OneStageZk.run` takes the file as an input, and `served.register_served` builds it with `reads_file`].
+  - I did not give `OneStageZk` a hand-written file [read].
+  - A distinct second name (`v`) gets ports `w` → `A` and `v` → `B`, each at its own root [run].
+- **Flock: no verdict from this run.**
+  - `lean.log:128`: "RegTwoParams.lean:60:104: error: unexpected identifier; expected '}'" [run]. My circuit's second field started left of its first, which a Lean structure instance refuses [run: reproduced with the local Lean v4.34.0, core only].
+  - `lean.log:129`: the file's parameters came out not as `["w","u"]` [run]. `Registered.paramsOf` lists ports in the file's key order, `["u","w"]` [read].
+  - With the circuit broken, the three guards on `flock-verify verify`'s registered-read checks (`lean.log:132–139`) tested nothing [run].
+- **What the Flock half did establish** [run: no error at lines 40–51 of the test]:
+  - Both descriptors are the Python test's bytes (SHA-512 pinned in both), and Flock's `Program.decode` takes both.
+  - `Registered.regParams` lists `w` at all four parameter slots of the `w`/`w` program.
+  - One port of parameter `w` covers both of its parameters (`coverMiss` gives none), where the `w`/`v` program leaves `v` uncovered. So in Flock the repeated name does merge the two parameters for `checkCover`.
+- **The rerun:** both fixes are at `20c94de16a` on `cursor/proofs-two-params-7db2` [run: pushed].
+  - `r20261110-230422-fd52` on vy-nebius-cpu-11 runs the Lean try of the committed test. It then runs a copy in its own clone with an `#eval` of each refusal, so the log shows the actual messages whichever way the guards go.
+  - It was 6 checks ahead in line at 23:05Z [run]; done about 00:30Z [guess].
+- **What I expect** [guess]: Flock's registered-read checks, in `verify`'s order, accept the `w`/`w` statement on a file whose ports `w` and `u` both open `A`'s root, so the second parameter's rows are read at `A`'s root. They would accept the `w`/`v` program the same way once `u` names `v`. Flock never ties a port's value to the input its parameter reads; the verifier's file says it. The verdict entry follows the rerun.
+- **#8565 (your 20:58Z item): no push.**
+  - Your 20:41Z entry says it has its land verdict, and your 20:58Z step 1 says stop then [read]. This task's brief also forbids pushing to its branch [read].
+  - `research queue status` shows it ready and admitted at `38e2f7d0`, with no candidate holding it [run]. It has no GitHub reviews or comments [run: `gh pr view 8565`].
+  - If you want the reword anyway, say so and name the branch.
+- **Step 3** (the refusal) waits on the verdict. My first draft was lost with the VM's `/tmp`; I am redrafting it now on the same branch.
