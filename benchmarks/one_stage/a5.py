@@ -162,7 +162,7 @@ import shutil
 import sys
 import time
 from collections.abc import Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
@@ -177,6 +177,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
+import a5_pool as POOL  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
@@ -839,10 +840,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    def member_session(i: int, mm: dict, local: list[int]) -> dict:
-        """Member ``mm``'s firewalled session on its proved units ``local`` (drawn, and a work sample's closure), on port
-        ``port + i`` (``i`` its place among the members with proved units, `port_refusal`); `member_checks` adds Lean's
-        verdicts on it."""
+    def staged(mm: dict, local: list[int]) -> dict:
+        """Member ``mm``'s statement on its proved units ``local`` (drawn, and a work sample's closure), staged: its prover's
+        file and circuit (`stage`) and its session's draw. Every drawn member's is staged before any session starts."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
@@ -852,20 +852,26 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
-        staged_s = time.time() - t
+        return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "draw": session_draw, "law": session_law}
+
+    def member_session(i: int, st: dict) -> dict:
+        """The one session of staged statement ``st`` (`staged`), firewalled, on port ``port + i`` (``i`` its place among the
+        members with proved units, `port_refusal`); `member_checks` adds Lean's verdicts on it."""
+        mm, local, sdir = st["mm"], st["local"], st["sdir"]
+        m = mm["m"]
         t = time.time()
         env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env={**env, **threads(mm)}, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
-        v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
-        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "session_s": session_s, "record": record, "live": live,
+        v = V.check_draw(draw_t, {"population": st["draw"]["population"]}, st["law"])
+        return {"mm": mm, "sdir": sdir, "staged_s": st["staged_s"], "session_s": session_s, "record": record, "live": live,
                 "draw_t": draw_t, "draw_check": v}
 
     def member_checks(s: dict) -> dict:
         """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
-        session's archive, so they run while the next member is proved."""
+        session's archive, so they run beside the other members' sessions."""
         mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
         m, k, session_s = mm["m"], mm["k"], s["session_s"]
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -891,11 +897,30 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                               "lean_verify_s": lean_v.get("verify_s"), "lean_partition": lean_v.get("partition")},
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
 
-    # outer proofs go through the ZK server one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
-    # only Lean's checks of one member, outside the ZK server, overlap the next member's session
-    with ThreadPoolExecutor(1) as lean:
-        checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
-        done = [c.result() for c in checks]
+    # outer proofs go through the ZK server as independent sessions (AGENTS.md, "Live coins only"): every drawn member's
+    # statement is staged here before any session starts, and each gets its one session, in its own process pair on its own
+    # port with its own live coins, reading no other session's transcript. `POOL.run` runs each session and then Lean's checks
+    # of it once, never again whatever its outcome: side by side up to ``--session-jobs`` and ``--lean-jobs``, each admitted
+    # when its template's measured peak memory fits under ``--memory-budget-gb``; one of each is the members' order
+    statements = [staged(mm, local) for mm, local in drawn]
+    limits = {POOL.SESSION: getattr(a, "session_jobs", 1), POOL.LEAN: getattr(a, "lean_jobs", 1)}
+    budget, needs = getattr(a, "memory_budget_gb", None), POOL.Needs.read(getattr(a, "pool_memory", None))
+
+    def need(kind: str, mm: dict) -> float | None:
+        return needs.need(kind, mm["m"].template, mm["st"]["meta"].get("k_log"))
+
+    def threads(mm: dict) -> dict:
+        """Side-by-side provers share the cores (`POOL.threads`); one at a time, a prover keeps the caller's environment."""
+        if limits[POOL.SESSION] == 1:
+            return {}
+        return {"RAYON_NUM_THREADS": str(POOL.threads(need(POOL.SESSION, mm), budget, limits[POOL.SESSION], len(os.sched_getaffinity(0))))}
+
+    def job(kind: str, mm: dict, run: Callable[[], dict]) -> POOL.Job:
+        return POOL.Job(kind, f"{kind}-m{mm['k']}", need(kind, mm), run)
+
+    done, summary["pool"] = POOL.run(
+        [job(POOL.SESSION, st["mm"], lambda i=i, st=st: member_session(i, st)) for i, st in enumerate(statements)],
+        lambda session, s: job(POOL.LEAN, s["mm"], lambda: member_checks(s)), limits, budget)
     for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
@@ -1180,15 +1205,18 @@ def streamed(a: argparse.Namespace) -> bool:
     return a.coins is not None
 
 
-#: AGENTS.md's live-coins rule, which keeps an audit's drawn members' sessions one after another
-ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
-
-
-def one_session(s: str) -> int:
-    """``--session-jobs``: 1, the only value, kept so commands that pass it still run; anything else is refused."""
-    if s.strip() != "1":
-        raise argparse.ArgumentTypeError(f"{s}: {ONE_AT_A_TIME}, so an audit runs its sessions one at a time; pass 1 or omit it")
-    return 1
+def pool_options(ap: argparse.ArgumentParser) -> None:
+    """The session pool's options (`a5_pool`), for every command line that reaches `audit`."""
+    ap.add_argument("--session-jobs", type=POOL.jobs, default=1,
+                    help="the drawn members' sessions run side by side, at most this many; each is its statement's one session "
+                         "with its own live coins and is never rerun (default 1: one at a time, in the members' order)")
+    ap.add_argument("--lean-jobs", type=POOL.jobs, default=1, help="Lean's checks of finished sessions run side by side, at most this many")
+    ap.add_argument("--memory-budget-gb", type=float, default=None,
+                    help="admit a session or a Lean check only while its template's measured peak memory plus 10%% fits under this "
+                         "beside the jobs running (--pool-memory); a job with no measured peak, or over the budget alone, runs alone")
+    ap.add_argument("--pool-memory", default=None,
+                    help='the measured peaks in GB, a JSON file {"session": {KEY: GB}, "lean": {KEY: GB}}, KEY a template or its '
+                         "size class NAME@k_log=K")
 
 
 def plain(a: argparse.Namespace) -> bool:
@@ -1410,7 +1438,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
-    ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    pool_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
