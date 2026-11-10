@@ -31,14 +31,6 @@ A verifier bound to a stream and a prover (`binding`: its stream's digest and th
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
 for one prover's stream is refused in any other's.
 
-<<<<<<< ours
-A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
-declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
-declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
-day's.
-
-||||||| base
-=======
 A verifier holds the record's window to name the window's seed salt it read from the challenger's log (`seedSalt`,
 `Challenger.seedSaltOf`: the one coin of the seed-salt family released after the window's open root), and to name none
 when it read none (`R6-seed-salt`), so a seed salt the server chose is refused by name.
@@ -48,22 +40,12 @@ declarations) holds R2's program to the day's one declared circuit (`declaredCod
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
->>>>>>> theirs
 A value that is an output of an earlier run (`outputs`; never NCI's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
 digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
 registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
-<<<<<<< ours
-
-A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
-proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most drawn units under the
-law the draw runs on, over the draws that end, give different link points, a law it can't draw on, or one no draw of
-which ends (`link-points`, `linkRefused`): some draw ends, a draw that ends gives each member one count, and one that
-runs out of coins fails the window (`OneStageZk.RAN_OUT`).
-||||||| base
-=======
 
 An output value the parameters give only a port (`{"port"}`, a window's history) is that port of the previous record, the
 log's last, which R6 holds `previous` to (`lastDigest`): the verifier names the record itself, so the value is held to the
@@ -84,7 +66,12 @@ before it (`R6-pool-reset-week`). The resets are serving's choice, so they are a
 windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 1009, 9.98 bits, for 600-second windows),
 which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
 record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
->>>>>>> theirs
+
+A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
+proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most sampled proof blocks under the
+sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
+which ends (`link-points`, `linkRefused`): some sample ends, a sample that ends gives each member one count, and one that
+runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 -/
 module
 
@@ -92,7 +79,7 @@ public import Flock.WindowRecord
 public import Spot.Draw
 public import Spot.Registered
 public import Spot.Supplied
-public import SampledProofs.LinkPoints
+public import Spot.LinkPoints
 public import Std.Data.HashMap
 
 @[expose] public section
@@ -199,10 +186,16 @@ structure Verifier where
   windowRoot : Option String := none
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
   held : Array String := #[]
-<<<<<<< ours
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
-  draws; none when it reads no declarations -/
+  samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
+  /-- the window's seed salt, lowercase hex of 64 bytes: the coin of the challenger's seed-salt family it read from the
+  challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
+  seedSalt : Option String := none
+  /-- the pool its windows carry, whose `pin` its parameters add to `outputs` or `supplied` (`OneStage.paramsParsed`)
+  and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
+  program that carries none -/
+  pool : Option Pool := none
   /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
   link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
   members : Array (Array (Nat × Nat) × Nat) := #[]
@@ -220,33 +213,6 @@ def declaredCode (program : Json) : Option (Nat × Array (Nat × String)) → Op
     | [] => some "R2-undeclared"
     | [p] => if jeq program (Json.str p) then none else some "R2-declared"
     | _ => some "R2-declared-twice"
-||||||| base
-=======
-  /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
-  samples; none when it reads no declarations -/
-  declared : Option (Nat × Array (Nat × String)) := none
-  /-- the window's seed salt, lowercase hex of 64 bytes: the coin of the challenger's seed-salt family it read from the
-  challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
-  seedSalt : Option String := none
-  /-- the pool its windows carry, whose `pin` its parameters add to `outputs` or `supplied` (`OneStage.paramsParsed`)
-  and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
-  program that carries none -/
-  pool : Option Pool := none
-
-/-- The programs the declarations declare for `day`, in the log's order. -/
-def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
-  (ds.filter (·.1 == day)).toList.map (·.2)
-
-/-- R2's declared day (`registration._declared`): `R2-undeclared` when the window's day has no declaration,
-`R2-declared-twice` when it has more than one, `R2-declared` when the record's `program` is not the day's declared one,
-and none when it is or the verifier reads no declarations. -/
-def declaredCode (program : Json) : Option (Nat × Array (Nat × String)) → Option String
-  | none => none
-  | some (day, ds) => match declaredOf day ds with
-    | [] => some "R2-undeclared"
-    | [p] => if jeq program (Json.str p) then none else some "R2-declared"
-    | _ => some "R2-declared-twice"
->>>>>>> theirs
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -502,9 +468,8 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
-<<<<<<< ours
-/-- `registration.link_refused`: the verifier names members, and the law the draw runs on doesn't derive, no draw under
-it ends, or some member's fewest and most drawn units under it, over the draws that end, give different link points
+/-- `registration.link_refused`: the verifier names members, and the sampling design the sample runs on doesn't derive, no sample under
+it ends, or some member's fewest and most sampled proof blocks under it, over the samples that end, give different link points
 (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
@@ -512,11 +477,7 @@ def linkRefused (v : Verifier) : Bool :=
     | .ok rs => !rs.isEmpty
     | .error _ => true
 
-/-- `registration.check`'s failure codes, R1–R7 in order, then `link-points` (`linkRefused`): empty when the record
-holds. -/
-||||||| base
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
-=======
+
 /-- The codes `c`, with `code` added unless `ok`. It names `c` once, where `if ok then c else addCode c code` names it
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
@@ -532,8 +493,8 @@ def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array Stri
         (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
     "R6-pool-reset-week"
 
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
->>>>>>> theirs
+/-- `registration.check`'s failure codes, R1–R7 in order, then `link-points` (`linkRefused`): empty when the record
+holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
@@ -599,14 +560,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-<<<<<<< ours
-  return if linkRefused v then addCode c "link-points" else c
-||||||| base
-  return c
-=======
     c := kept (poolChained rec v) c "R7-pool-chain"
-  return c
->>>>>>> theirs
+  return if linkRefused v then addCode c "link-points" else c
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
@@ -676,14 +631,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
       v.outputs v.log
-<<<<<<< ours
-  return if linkRefused v then addCode c "link-points" else c
-||||||| base
-  return c
-=======
     c := kept (poolChained rec v) c "R7-pool-chain"
-  return c
->>>>>>> theirs
+  return if linkRefused v then addCode c "link-points" else c
 
 /-! ## `check` is `checkRef` -/
 
@@ -776,13 +725,9 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
-<<<<<<< ours
--- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and matches them step by step
+-- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and each join point of
+-- both checks into both of its branches
 set_option maxHeartbeats 800000 in
-||||||| base
-=======
-set_option maxHeartbeats 400000 in -- its `simp` unfolds each join point of both checks into both of its branches
->>>>>>> theirs
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
   simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
