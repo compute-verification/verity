@@ -169,10 +169,11 @@ def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, ho
 
 def left(tree: Path) -> dict:
     """The document this command left in the run whose records are under `tree`; empty when it left none."""
-    try:
-        doc = json.loads((tree / "out" / "memory.json").read_text())
-    except FileNotFoundError:
+    path = tree / "out" / "memory.json"
+    if not path.is_file():
         return {}
+    try:
+        doc = json.loads(path.read_text())
     except (OSError, ValueError) as e:
         raise Unreadable(f"the run's out/memory.json doesn't read as this command's document ({type(e).__name__}: {e})") from e
     if not isinstance(doc, dict):
