@@ -343,24 +343,24 @@ NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_
 TRUST_UPGRADE = ("ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root' || exit 0; "
                  "sudo -n apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive "
                  "NEEDRESTART_MODE=l apt-get -o DPkg::Lock::Timeout=120 install -y -qq --only-upgrade ca-certificates 'libnss3*'")
-CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
+#: what a control pod with no door yet is sent for a wake (pods/nebius/wake.py); its gate takes `wake INSTANCE` (pods/door.py)
+CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"
 
 
 def wake_on_control(iid: str, *, run=None) -> str | None:
     """Ask the control pod to start instance `iid` (pods/nebius/wake.py there, which starts only an instance the registry names,
-    before its deadline, under a live budget line) over the ssh path `pods create` reads the budgets guard through; -> the state
+    before its deadline, under a live budget line) through the pod's door, as `pods create` reads the budgets guard; -> the state
     it was in. Refused with the pod's reason."""
-    from .pods import budgets
-    from .pods.connect import ssh_base
+    from .pods import budgets, door
 
-    host = os.environ.get("RESEARCH_GUARD_HOST") or budgets.GUARD_HOST
+    host = budgets.guard_host()
     try:
-        r = (run or subprocess.run)([*ssh_base(host), f"{CONTROL_WAKE} {shlex.quote(iid)}"], capture_output=True, text=True, timeout=180)
+        r = door.ask(["wake", iid], f"{CONTROL_WAKE} {shlex.quote(iid)}", host=host, timeout=180, run=run)
     except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
         raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
     if r.returncode != 0:
         why = (r.stderr or r.stdout).strip().splitlines()
-        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}")
+        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}{door.hint(host, r.stderr)}")
     return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
 
 
