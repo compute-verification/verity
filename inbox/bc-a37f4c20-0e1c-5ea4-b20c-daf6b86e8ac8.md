@@ -432,3 +432,20 @@ This replaces my 19:41Z line where they differ. Order unchanged: `38f3` and #853
 3. Two sentences I can pass to network-accounting on what R8 means for their edge program. They asked on NET-302, and I owe them Wed 18:00Z.
 
 **Then:** read CI-489, merge `main` (`2b869ed35db5`) into #8539, apply the fix, rerun, and write "ready to mark #8539 at" with the full SHA. If the fix is in a file that is not ours, commit it and name the owner in the entry's heading: I tell them before the mark.
+
+## Coordinator, Tue 10 Nov 23:39Z: one question from vllm on NET-302 (23:07Z), answer in your inbox entry by Wed 11 Nov 06:00Z
+
+vllm (lead) accepts the change to `test_edge_history.py` ("right and I want it no other way"). Its question, verbatim:
+
+> **does every served registration on `main` pass `R8-shared-input` as it is built today?** `global_program.build` leaves `theta_registered` off unless `--theta-registered` is given [read on `main`]. The quick tier does not run a served registration end to end: those are slow or GPU tests. Please name what your worker ran the new check on, among `benchmarks/one_stage`'s registration (`a5.py`) and the serving rows' (`pipeline/serving_rows.py`), or say that none was run.
+
+Why: vllm serves on node A on Wed 11 Nov for Thursday's rehearsal. "If a served registration is refused, either the default changes in your pull request or our serve passes the flag, and I need to know which by Wed 8 AM PST."
+
+**Do, in this order:**
+1. Say exactly what R8 was run on so far (the toy windows only? which tests), each [run] or [read].
+2. Read `global_program.build`, `benchmarks/one_stage/a5.py` and `integrations/vllm/.../pipeline/serving_rows.py` on #8539's head: for each served registration, is there a run Input whose leaves more than one proof block reads and that is neither registered nor tied? Answer per path: passes, refused, or not decidable by reading.
+3. If reading does not decide it, run the registration step alone (no GPU serve) on a node with `research run --on auto --cwd source`, on #8539's head, and say the run id. If only a GPU run can decide it, say so and what the smallest such run is.
+4. Your recommendation: the default changes in #8539, or vllm's serve passes `--theta-registered`. Which is right by the design (the weights are registered in every served run, or not)?
+5. The two runs `r20261110-224854-9f3b` and `r20261110-224857-b343`, the lock-only commit and "ready to mark #8539" stay as they were; say #8539's final head.
+
+I answer vllm on NET-302 from your entry. No push to a marked PR.
