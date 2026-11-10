@@ -24,3 +24,28 @@ All ten suites are running at `01055e6191c9` (`r20261110-205254-71fc`); the tabl
 Correction: my message headed 11:36 AM PST was sent at 11:30 AM PST; I wrote the time from memory.
 Least sure: the `test_tick.py` mend until the stand-in run reads it; and code of ours no test runs (scripts, CLIs), checked only by name resolution.
 
+[2026-11-10T21:15Z] 7761e9684256
+CROSS to network-accounting, NET-311: #8477's mend, as you ruled at 12:41 PM PST. 1:15 PM PST.
+
+**Head: `cursor/net311-main-8477-a9af` e19064f6d3819c1c05094108c68de5b0b6664243** [run], four commits on 831156e972, which is `main` 5482988e3496f12fe6683ccf355583a486cf4246 merged into 2986a0cdb3; `main` has not moved since [run]. Against `main` the branch holds the three maps and nothing else; against 96de5d04f2 two of them differ, `warden_term_map.toml` and `warden_tokens_map.toml` [run]. #8477's own branch is untouched at 96de5d04f2 [run].
+
+**Suites:** `r20261110-204925-8d12` at e19064f6d3 (its `source_sha`), rc 0 [run]: `tools/move` 158 passed in 38 s, `repository` 282 passed in 311 s. Last line: "2 suites: 2 passed (0 cached), 0 failed; 5.8 min of test time". One run for both suites, as before. Two earlier runs at 6b4c70fc5b never left the line and are cancelled.
+
+**`test_maps.py`: green, 2 passed, 0 words with two names across the 21 word maps** [run, on the VM at the head; 7 at 96de5d04f2].
+
+**WARDEN: 2b.** 2a fails twice over [run]: with the row in `warden_map.toml`'s `[words]` the names step's `move_check.py` exits 1, "28 paths are not part of a pure move", each "edit beyond moved paths and module names" (19 .py, 6 .sh, 3 .md), and one site is left unrenamed, `{WARDEN_WHERE}` in an f-string of `corpus.py`. 2b: 32 rows, each a constant or environment variable whole, and the 14 form rows you accepted; every one of the 46 renames at least one site [run].
+
+**The staged steps**, in scratch worktrees on 831156e972, 96de5d04f2's maps against the head's [run]:
+- all three steps run, both certified steps certify (term: "0 renames, 74 edits by the map's words"; names: "1 renames, 140 path-only edits"), and each step's rerun changes 0 files;
+- the tokens step's diff is byte for byte the bare row's: 362,360 bytes, 88 files, 271 sites of `WARDEN`, sha256 e3764e04f7bd2c0e in both;
+- the term step's diff of the two Tap files differs at the one site only: line 8 of `Security/Definitions/NetworkCertifier/Tap.lean` now comes out "The network certifier (…)", where it was "The relay (…)". The other nine sites read "relay" as before, and nothing else in the 74 files differs;
+- on a scratch base that carries the hand edit of that line, every step's tree is the one 96de5d04f2's maps give, outside the two maps: all ten sites read "relay" and no "warden" is left in either Tap file.
+
+**For #8477's body** (I do not change a PR, so the line is yours to paste): "After the three staged steps `git grep -I -w WARDEN -- . ':!tools/move' | wc -l` prints 0 [run on 831156e972, with and without the hand edit], and so does the same without `-w`; whoever stages the move reruns it, since the tokens map lists today's names and forms and a later use in another form would stand."
+
+**The other Tap file:** `Security/Proofs/NetworkCertifier/Tap.lean` holds no site of that kind: its five sites each have a longer phrase and all read "relay" after the term step [run].
+
+**Least sure of:** the comment above the Tap table says the docstring "opens with the word before a name in backticks"; the sentence is its second, after "Definitions only." [read]. And the form rows are matched as parts of identifiers, so `in WARDEN` also renames `in WARDEN_FILES` first: same bytes, but a row's count is not its form's count [run].
+
+Next: the hand edit. Its commit is made (2e1b847463 on `cursor/net311-tap-relay-a9af`, off `main` 5482988e34, not yet pushed) and `verity lean try` on it is queued as `r20261110-210155-b4a5`. One thing you should know now: this run has no tool that opens a PR, and its `gh` is read-only by my run's rules, so I will push the branch and send you the title and body to open it with.
+
