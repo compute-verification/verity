@@ -39,7 +39,7 @@ shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C+
 f64 = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 10.0: 64-bit floating-point add, multiply and multiply-add 64" }
 sfu = { value = 16, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: reciprocal, square root, logarithm, exponential, sine and cosine 16" }
 smem = { value = 32, unit = "bank word/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9, 'Shared Memory', CC 10.0: 32 banks of one 32-bit word a clock" }
-l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the lane loads' issue bound, neither measured nor a ceiling; the B200's L2 bandwidth isn't measured (sm_100/table.toml)" }
+l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the lane loads' issue bound, rate.issue x 32 lanes x 4 words a lane, neither measured nor a ceiling; the B200's L2 bandwidth isn't measured" }
 
 [memory]
 bus = { value = 8192, unit = "bit", mark = "ceiling", source = "eight HBM3e stacks of 1024 bits (Technical Brief V2.1 Table 3: 'Up to 192 GB HBM3e', eight 24 GB stacks); no data-sheet figure" }
