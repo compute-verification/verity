@@ -41,6 +41,12 @@ theorem windowSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : Window
     V.SpotSound k
 ```
 
+**Status of this form.** At `388586f624` the statement carries one more hypothesis, `hε` (over every member's stops
+the openings' gaps and empty classes are at most the hiding term), and is off `linkEmpty`/`roundEmpty`; that form
+is built and probed (the Runs table). The form above, without `hε` and off the count-aware events, is committed from
+`a8013ac42d` (`Window/Charge.lean`) and is **not yet built**: its try and its records run are queued (Runs). Until
+they pass, the proved statement is the one with `hε`.
+
 `V.SpotSound k` is the same target the one-member leg meets (`Vocab.SpotSound`): at every parameters, files,
 commitment and strategy, the plays v2's sampled verdict accepts while the claim fails are at most `V.error`, which is
 conditional on the vocabulary's finder premises. So the conclusion plugs into `Verity.Soundness` where the one-member
@@ -54,7 +60,7 @@ How it is put together, each layer proved once:
 | the projection through m sessions in order, under its joint law | `prob_seqP`, `seqOff_le_prob`, `windowLogged`, `windowCouplingTarget_of_logged` | `Window/Walk.lean` |
 | the run-of-record walk a member at a time | `SeqReach.chain`, `SeqChain.forall₂`, `windowDecodes_of_members` | `Window/Reach.lean` |
 | what a member's trace keeps and logs (`StopsAt`, the play's start, the released coins) | `MemberReach.stopsAt`, `MemberReach.logged`, `MemberSteps`, `memberDecodes_of_stops` | `Window/Logged.lean` |
-| the draw to member subsets and its marginals; the coin map's premise over the window | `Member.mem_part`, `Window.sum_part_card`, `Window.avg_design`, `Window.eps_extend`, `windowCouples_of_close`, `windowSampleMap_couples` | `Window/Draw.lean` |
+| the draw to member subsets and its marginals; the coin map's premise over the window | `Member.mem_part`, `Window.sum_part_card`, `Window.avg_design`, `Window.eps_extend`, `windowCouples_of_close`, `windowSampleMap_fresh`, `windowSampleMap_start` | `Window/Draw.lean` |
 | the stops' term within the hiding term at every strategy | `seqErr_le`, `windowErr_le_of_charge`, `windowErr_sampleMap_le_at`, `windowCouplingTarget_of_sample_at` | `Window/Charge.lean` |
 | the composition | `windowSpotSound_of_sample` | `Window/Leg.lean` |
 | (a), (a') and the sample's coins | `windowSpotSound_assembled` | `Window/Assembled.lean` |
@@ -141,10 +147,10 @@ LmsUnforgeable remote only. Nothing else is introduced.
 6. **Sequential sessions only** (the coordinator's ruling). `SeqReach` walks member `i+1`'s stops after member
    `i`'s; the readings must miss a play that opens two members' coin trees at once.
 7. **`Window.hcls`** stays a field: `JointAuditV5.hcls_of_bounds` discharges it from bounds.
-8. **Left in the tree, unused by the statement**: the forms off the empty classes themselves
-   (`windowOpenMap_couples`, `windowSampleMap_couples`, `windowCouplingTarget_of_sample` in `Window/Draw.lean`), which
-   need a bound on the stops' term that only holds where each opening asks for its stop's count. Delete them once
-   nothing wants them.
+
+The forms off the empty classes themselves (`windowOpenMap_couples`, `windowSampleMap_couples`,
+`windowCouplingTarget_of_sample`), which needed a bound on the stops' term, are deleted: the count-aware forms
+replace them.
 
 ## Runs
 
