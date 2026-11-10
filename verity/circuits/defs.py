@@ -119,6 +119,8 @@ class PrimitiveDefinition(FunctionDefinition):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
         conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
+        if len({n for n, _ in self.params}) != len(self.params):
+            raise ValueError(f"primitive {self.id}: parameters: a name twice")
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
         if bad:
@@ -479,7 +481,10 @@ def _plain_static(v):
 
 def _build_body(sp: SpecializedDefinition) -> Body:
     params, ret_type = sp.signature()
-    B = Builder(params, ret_type)
+    try:
+        B = Builder(params, ret_type)
+    except ValueError as e:
+        raise ValueError(f"definition {sp.id!r}: {e}") from e
     args = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     out = sp.defn.body(B, sp.S(), *args)
     return B.finish(out)
@@ -726,6 +731,8 @@ class Builder:
     its fields) and every node a reference names exists."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
+        if len({n for n, _ in params}) != len(params):
+            raise ValueError("parameters: a name twice")
         self.params = params
         self.ret_type = ret_type
         self.nodes: list[Node] = []

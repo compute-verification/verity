@@ -339,6 +339,10 @@ REJECT = [
     ("a binding unlike the key's record", lambda d: _set_binding(d, "N", 5), "keyed by its id and binding record"),
     ("a composite id that is not Name_vN", lambda d: d["definitions"]["TPair_v1"].update(id="TPair_v01"), "Name_vN"),
     ("a root with a parameter", lambda d: _root(d)["params"].append(["x", ["Value", 32]]), "without parameters"),
+    ("a composite with a parameter name twice", lambda d: d["definitions"]["TPair_v1"]["body"]["params"][1].__setitem__(0, "a"),
+     "parameters: a name twice"),
+    ("a primitive with a parameter name twice", lambda d: d["definitions"]["TAdd32_v1"]["params"][1].__setitem__(0, "a"),
+     "signature differs from the registry"),
     ("an Input node inside a Definition", lambda d: _inner_input(d, "Input32_v1"), "appears only in the root's body"),
     ("a RegisteredInput node inside a Definition", lambda d: _inner_input(d, "RegisteredInput32_v1"), "appears only in the root's body"),
 ]
