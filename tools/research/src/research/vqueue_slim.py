@@ -146,12 +146,14 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), and ``gate`` (`CHECK`) with ``shards``.  None,
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
     dry run, or its queue's shadow), as `Driver._start_slim` does.  Every launch leaves out the tests the loop's list
-    ``deselect`` names (`deselection`), each shard's alike; the nightly uncached check, which reads no list, runs them."""
+    ``deselect`` names (`deselection`) and is a candidate's check (`train.sh --candidate`), whose suites also leave out those the
+    candidate's own candidate list names, each shard's alike; the nightly uncached check, which reads neither, runs them."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs drive's machines: build the Driver with drive.toml's `on` "
                          "(`research.queue.drive_flags(q.workdir)[0].on`)")
     n, auto = shard_count(shards)
     kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
+    kw, flags = {**kw, "candidate": True}, f"{flags} --candidate"
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"

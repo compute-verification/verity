@@ -380,10 +380,11 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  cc_records_from: str | None = None, shard_plan: str | None = None,
                  ratchet_base: str | None = None, rank: int | None = None,
                  bookkeeping_warn: bool = False, script_from: Path | None = None,
-                 deselect: str | None = None) -> tuple[list[str], str] | dict:
+                 deselect: str | None = None, candidate: bool = False) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
-    [--deselect FILE] [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone;
-    ``deselect``, the tests a `--deferred` run's suites leave out): (the run ids it printed,
+    [--deselect FILE] [--candidate] [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's
+    records step alone; ``deselect``, the tests a `--deferred` run's suites leave out; ``candidate``, a candidate's check, whose
+    suites also leave out those its tree's candidate list names): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
@@ -399,7 +400,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else []),
                  *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
-                 *(["--deselect", deselect] if deselect else []),
+                 *(["--deselect", deselect] if deselect else []), *(["--candidate"] if candidate else []),
                  *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci",
            "CHECK_SLOT_RANK": "" if rank is None else str(rank)}
@@ -1244,11 +1245,12 @@ class Driver:
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
-                    train_from=None, deselect=None:
+                    train_from=None, deselect=None, candidate=False:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from, deselect=deselect))
+                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from, deselect=deselect,
+                          candidate=candidate))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
         self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
