@@ -148,8 +148,27 @@ def test_a_map_outside_tools_move_or_of_both_kinds_or_neither_is_refused(tmp_pat
     assert "a map is a file directly in tools/move/" in capsys.readouterr().err
     with pytest.raises(ST.Refused, match=r"both \[words\] and \[paths\]"):
         ST.kind_of("m.toml", WORDS + PATHS.replace("[rewrite]", "[rewrite2]"))
-    with pytest.raises(ST.Refused, match=r"neither \[words\] nor \[paths\]"):
+    with pytest.raises(ST.Refused, match=r"neither \[words\], \[\[words_in\]\] nor \[paths\]"):
         ST.kind_of("m.toml", '[rewrite]\nexclude = []\n')
+
+
+def test_a_word_map_whose_words_are_all_scoped_stages_under_an_empty_words_table(tmp_path, monkeypatch):
+    """A name two modules declare is renamed only where its own module reads it, by a `[[words_in]]` entry under an
+    empty `[words]`: staged and certified, the other module's left as it was. A map without the `[words]` table is
+    refused, naming it, since `rename.py` and `move_check.py` read it."""
+    scoped = ('[words]\n\n[[words_in]]\nfiles = ["Z.lean"]\nwords = { "zorble_le" = "quux_le" }\n\n'
+              '[rewrite]\nexclude = ["tools/**"]\n')
+    lean = {"Z.lean": "namespace Z\ntheorem zorble_le : True := trivial\nexample : True := zorble_le\nend Z\n",
+            "W.lean": "namespace W\ntheorem zorble_le : True := trivial\nend W\n"}
+    repo, base = _repo(tmp_path, {**TREE, **lean, "tools/move/zorble_map.toml": scoped})
+    cert = tmp_path / "cert.json"
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "--base", base, "--certificate", str(cert)) == 0
+    [m] = json.loads(cert.read_text())["moves"]
+    assert m["report"]["certified"] and MC.certify(m["parent"], m["commit"], cwd=str(repo))["certified"]
+    assert _show(repo, m["commit"], "Z.lean") == lean["Z.lean"].replace("zorble_le", "quux_le").strip()
+    assert _show(repo, m["commit"], "W.lean") == lean["W.lean"].strip()
+    with pytest.raises(ST.Refused, match=r"\[\[words_in\]\] but no \[words\]: give it an empty \[words\]"):
+        ST.kind_of("m.toml", scoped.removeprefix("[words]\n\n"))
 
 
 def test_the_scripts_are_the_bases_so_a_base_whose_move_check_refuses_refuses_the_move(tmp_path, monkeypatch, capsys):
@@ -168,6 +187,43 @@ def test_a_map_a_second_run_changes_again_is_refused(tmp_path, monkeypatch, caps
     repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": again})
     assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "--base", base) == 1
     assert "tools/move/zorble_map.toml isn't idempotent" in capsys.readouterr().err
+
+
+def test_a_path_map_that_acknowledges_a_split_reference_stages(tmp_path, monkeypatch, capsys):
+    """A map that splits a directory acknowledges each reference to it in [split], and `layout.py` refuses an
+    acknowledgement no reference needs. On the move's own commit every reference is rewritten, so none needs one: the
+    second run takes the map as `restack.py` runs it on a branch (`--report-splits`), and still must change nothing."""
+    split = PATHS.replace('"alpha/" = "beta/"\n', '"alpha/" = "beta/"\n"alpha/sub/" = "gamma/"\n').replace(
+        '"alpha" = "beta"\n', '"alpha" = "beta"\n"alpha.sub" = "gamma"\n') + '\n[split]\n"gates.toml: alpha" = "the gate"\n'
+    files = {**TREE, "alpha/sub/__init__.py": "", "alpha/sub/z.py": "Z = 1\n", "gates.toml": 'requires = ["alpha/"]\n',
+             "tools/move/alpha_map.toml": split}
+    repo, base = _repo(tmp_path, files)
+    assert _stage(monkeypatch, repo, "tools/move/alpha_map.toml", "--base", base, "--no-lock", "--branch", "staged") == 0, \
+        capsys.readouterr().err
+    assert _show(repo, "staged", "gates.toml") == 'requires = ["beta/"]'
+    assert _show(repo, "staged", "gamma/z.py") == "Z = 1"
+
+
+def test_through_refusals_keeps_what_isnt_certified_and_goes_on_past_a_map_that_fails(tmp_path, monkeypatch, capsys):
+    """A move that lands on its own full check is staged whole: the commit `move_check.py` refuses is kept and the next
+    map runs on it, a map whose script fails makes no commit, and the certificate says which is which. The exit is 1."""
+    refuses = ('import json, sys\nprint(json.dumps({"certified": False, "refusals": [{"path": "a.py", "reason": "not a move"}]}))'
+               '\nprint("move-check: refused", file=sys.stderr)\nsys.exit(1)\n')
+    lands_twice = PATHS.replace('"alpha/" = "beta/"', '"user.py" = "notes.md"').replace('"alpha" = "beta"\n', "")
+    files = {**TREE, "tools/move/zorble_map.toml": WORDS, "tools/move/bad_map.toml": lands_twice,
+             "tools/move/alpha_map.toml": PATHS}
+    repo, base = _repo(tmp_path, files, {ST.MOVE_CHECK: refuses})
+    cert = tmp_path / "cert.json"
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "tools/move/bad_map.toml", "tools/move/alpha_map.toml",
+                  "--base", base, "--no-lock", "--through-refusals", "--branch", "staged", "--certificate", str(cert)) == 1
+    out = capsys.readouterr().out
+    assert "tools/move/bad_map.toml: no commit" in out and "tools/move/zorble_map.toml: 1 paths move_check.py refuses" in out
+    doc = json.loads(cert.read_text())
+    one, two, three = doc["moves"]
+    assert (one["certified"], two["commit"], three["certified"]) == (False, None, False)
+    assert "two files would land at one path" in two["refused"] and three["parent"] == one["commit"]
+    assert doc["head"] == three["commit"] == git(repo, "rev-parse", "staged")
+    assert _show(repo, "staged", "notes.md") == "A quux is `zorble`." and _show(repo, "staged", "beta/x.py").startswith("def f")
 
 
 def test_a_map_that_renames_nothing_is_refused(tmp_path, monkeypatch, capsys):

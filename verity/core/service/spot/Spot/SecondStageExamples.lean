@@ -236,6 +236,30 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
   (exReferring #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]] exOwn)))
   (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
 
+/-- A read of `leaves` leaves, slot `k` reading row `reads[k]`. -/
+private def exRows (leaves : Nat) (reads : List Nat) : Json :=
+  Json.mkObj [("leaves", Lean.toJson leaves), ("reads_from", (0 : Nat)), ("reads", natsJson reads.toArray)]
+
+-- a slot reads its unit's first row, so in a tree of two rows a unit it can't pick its unit's other
+#guard rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 6 [0, 1, 2, 3, 4, 5]) 6 some
+#guard rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [0, 2, 4, 6, 8, 10]) 6 some
+#guard !rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [1, 3, 5, 7, 9, 11]) 6 some
+#guard !rowsOk 2 ⟨"Pair_v0", 0, 3⟩ (exRows 12 [0, 2, 4, 6, 8, 11]) 6 some
+
+/-- `exOwn` with the boundary registering value `w`, a tree of `leaves` leaves. -/
+private def exRegisteringW (leaves : Nat) : Own :=
+  { exOwn with boundary := (exRec 4 [("bx", 5, 6)]).setObjVal! "registered" (Json.arr #[Json.mkObj [("value", "w"),
+    ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson leaves)]]) }
+
+/-- A read of registered value `w` at its root and domain, its tree of `leaves` leaves. -/
+private def exReadW (leaves : Nat) : Json :=
+  Json.mkObj [("value", "w"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson leaves)]
+
+-- a read's positions are 64-bit, so its tree has at most `2^64` leaves
+#guard readOk (exRegisteringW (2 ^ 64)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64))
+#guard !readOk (exRegisteringW (2 ^ 64 + 1)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64 + 1))
+#guard !readOk (exRegisteringW 6) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW 7)
+
 /-- `exOwn`, the interior registration registering values `w1` and `w2`, six leaves each at its own root and domain. -/
 private def exRegistering : Own :=
   { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[

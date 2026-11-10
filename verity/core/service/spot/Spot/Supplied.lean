@@ -14,11 +14,13 @@ holds before the sample, so the prover never chooses it.
   where the parameter's leaves are whole `Digest`s (`digests`: `Array<8, Array<64, Value<1>>>` or an array of them),
   read as a circuit's `Digest` holds them (`digestLeaves`: each big-endian 64-bit word's 64 bits least significant
   first);
-* `root`: the rows, as many as the verifier's own entry's `leaves`, each of its `words` leaves, committed as any registered
-  value's rows (`Registered.commit`: `sha512/row/v1` of its u16 words, hm96-sha512 under the default key, the frame-v3-sha512
-  tree under the value's domain) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over
-  `verity/one-stage/supplied-salt/v1`, the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between
-  them.
+* `root`: the rows, as many as the verifier's own entry's `leaves`, each the parameter's leaves of one row of its `words`
+  leaves in the value's row format (`schemas`, `hm96-sha512/row/v1` where they name none; `Registered.rowLeaves`),
+  committed as any registered value's rows in that format (`Registered.commit`: `sha512/row/v1` of its u16 words, or
+  under `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` the bit row of its leaves packed into `wordBits`-bit words,
+  `pack`; hm96-sha512 under the default key, the frame-v3-sha512 tree under the value's domain, its leaves framed by the
+  format) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over `verity/one-stage/supplied-salt/v1`,
+  the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them.
 -/
 module
 
@@ -150,17 +152,40 @@ def rowWords (row : Array Nat) (wordBits : Nat) : Array Nat :=
   let ws := row.flatMap fun x => (Array.range (wordBits / 16)).map fun j => x / 2 ^ (16 * j) % 2 ^ 16
   ws ++ Array.replicate (Flock.Registered.rowWords row.size wordBits - ws.size) 0
 
-/-- `registered.supplied_root`: the root R7 holds a supplied value's entry to (hex), the rows of `rs` committed under
-`salt` at the verifier's own entry `want`; an error where a source names nothing or the rows are not its shape. -/
+/-- `registered.bit_words`: a row of `bits`-bit leaves as a bit row's `wordBits`-bit leaves, its bits in order, each
+leaf's least significant first. -/
+def pack (bits wordBits : Nat) (row : Array Nat) : Array Nat :=
+  let bit (i : Nat) : Nat := row.getD (i / bits) 0 / 2 ^ (i % bits) % 2
+  (Array.range (row.size * bits / wordBits)).map fun j =>
+    (List.range wordBits).foldl (fun acc t => acc + bit (j * wordBits + t) * 2 ^ t) 0
+
+/-- `registered.row_digest`: a registered row's `x` in `schema`, `sha512/row/v1` of its u16 words (`rowWords`), else the
+bit row of its u16 words, little-endian, under `sha512/row/v2` or `sha512/row-seg/v1`. -/
+def rowDigest (schema : String) (row : Array Nat) (wordBits : Nat) : ByteArray :=
+  if schema == Registered.SCHEMA then Flock.Firewall.rowDigest (rowWords row wordBits) else
+  let ws := row.flatMap fun x => (Array.range (wordBits / 16)).map fun j => x / 2 ^ (16 * j) % 2 ^ 16
+  let bytes := ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) ByteArray.empty
+  if schema == Flock.HmRow.ROW_SCHEMA_V2 then Flock.Sha512.hash (Flock.HmRow.rowPrefixV2 (16 * ws.size) ++ bytes)
+  else Flock.HmRow.segDigest (16 * ws.size) bytes
+
+/-- `registered.supplied_root`: the root R7 holds a supplied value's entry to (hex), the rows of `rs` in the value's row
+format of `schemas` committed under `salt` at the verifier's own entry `want`; an error where a source names nothing or
+the rows are not its shape. -/
 def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
-    (program : String) (supplied : Array String) (value : String) (rs : Rows) (want : Registered.Entry) : V String := do
+    (program : String) (supplied : Array String) (schemas : Array (String × String)) (value : String) (rs : Rows)
+    (want : Registered.Entry) : V String := do
   let got ← rows rec log binding ps supplied value rs
-  if got.size != want.leaves || got.any (·.size != want.words) then
-    throw s!"supplied value {value}: rows of {got.map (·.size)} leaves, not {want.leaves} of {want.words}"
+  let schema := (schemas.find? (·.1 == value)).elim Registered.SCHEMA (·.2)
+  let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
+  let k ← Registered.rowLeaves p schema want.words want.wordBits
+  if got.size != want.leaves || got.any (·.size != k) then
+    throw s!"supplied value {value}: rows of {got.map (·.size)} leaves, not {want.leaves} of {k}"
+  let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
+  let packed := if schema == Registered.SCHEMA then got else got.map (pack w want.wordBits)
   let dom ← Registered.domain program value want.words want.leaves want.wordBits
-  let leaves := got.mapIdx fun i r =>
-    Flock.Registered.rowLeaf dom i (Flock.Hm96.Default512.treeLeaf
-      (Flock.Hm96.Default512.commitString (Flock.Firewall.rowDigest (rowWords r want.wordBits)) (salt program value i)))
+  let leaves := packed.mapIdx fun i r =>
+    Flock.Registered.leafAs schema dom i (Flock.Hm96.Default512.treeLeaf
+      (Flock.Hm96.Default512.commitString (rowDigest schema r want.wordBits) (salt program value i)))
   return Flock.hexOf (Flock.FV3.root dom leaves Flock.Sha512.hash)
 
 end Spot.Supplied

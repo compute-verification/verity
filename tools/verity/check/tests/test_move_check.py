@@ -151,6 +151,38 @@ def test_a_new_file_is_refused(tmp_path):
     assert (f["path"], f["status"], f["reason"]) == ("security_proofs/pous/NEW.md", "A", "added")
 
 
+def test_an_empty_init_for_a_package_level_the_move_makes_is_certified(tmp_path):
+    """`tools/move/layout.py` writes an empty `__init__.py` in each new directory from a moved package module up to its
+    package's root, so the module imports by its new name. Only that is let in: one with a line in it, or one above no
+    module that was a package's at BASE (`verity_pouw/x.py` has no `__init__.py` beside it), is a new file like any other."""
+    roots = {"tools/move/layout_map.toml": '[roots]\nnew = { security = "security", loose = "loose" }\n'}
+    repo, base = _repo(tmp_path, {**BASE_FILES, **roots})
+    _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
+    _move(repo, "protocols/pouw/src/verity_pouw/x.py", "loose/pouw/x.py")
+    _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "", "loose/pouw/__init__.py": "",
+                  "tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "security.pous.codec")})
+    r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
+    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [("loose/pouw/__init__.py", "added")]
+    assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {"security/__init__.py", "security/pous/__init__.py"}
+    _write(repo, {"security/pous/__init__.py": "X = 1\n"})
+    assert ("security/pous/__init__.py", "added") in [(f["path"], f["reason"]) for f in _check(repo, base)["refusals"]]
+
+
+def test_an_empty_init_above_the_packages_root_is_refused(tmp_path):
+    """The mover stops at the root of the moved module's package, which the path map at BASE names. An `__init__.py`
+    above it makes a package of a directory that was none (here `security/`, over the root `security/pous`), which no
+    move needs; and with no map naming a root, no level is the mover's."""
+    for case, maps, let_in in (("root", {"tools/move/layout_one/map.toml": '[roots]\nnew = { pous = "security/pous" }\n'},
+                                {"security/pous/__init__.py"}), ("no-map", {}, set())):
+        repo, base = _repo(tmp_path / case, {**BASE_FILES, **maps})
+        _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
+        _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "",
+                      "tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "pous.codec")})
+        r = _check(repo, base, {"verity_pous.codec": "pous.codec"})
+        assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == let_in, case
+        assert {f["path"] for f in r["refusals"]} == {"security/__init__.py", "security/pous/__init__.py"} - let_in, case
+
+
 def test_names_with_spaces_and_odd_characters(tmp_path):
     files = {"old dir/a file.txt": "one\n", "old dir/tab\there.txt": "two\n", 'old dir/quo"te.txt': "three\n"}
     repo, base = _repo(tmp_path, files)
@@ -1285,6 +1317,29 @@ def test_runs_why_with_any_other_change_is_refused(tmp_path):
     why = WHY.replace("/certifier/", "/network_certifier/").replace("byte for byte", "bit for bit")
     [f] = _certifier(tmp_path, {"L/lean-audit.json": _why(why)})["refusals"]
     assert f["path"] == "L/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "bit for bit" in f["hunk"]
+
+
+FROZEN = "frozen (no-function): Sec: it is about an arbitrary run (Sec/Defs/A.lean:3)"
+
+
+def _renamed(tmp_path: Path, reason: str) -> dict:
+    """The directory `Sec/` renamed `sec/`, whose lock gives a reason that names a file of it and a conclusion `Sec`."""
+    repo, base = _repo(tmp_path, {"Sec/Defs/A.lean": "def a := 1\n",
+                                  "Sec/lean-audit.json": _lock(guarantees={}, shape={"frozen": {"T.Sec": FROZEN}})})
+    _move(repo, "Sec", "sec")
+    _write(repo, {"sec/lean-audit.json": _lock(guarantees={}, shape={"frozen": {"T.Sec": reason}})})
+    return _check(repo, base)
+
+
+def test_a_lock_field_that_leaves_a_moved_directorys_name_as_a_word_is_certified(tmp_path):
+    """A top-level directory's name is also a word, in a lock's reasons as in a text file's lines: the move rewrites
+    the path and leaves the conclusion's name."""
+    moved = FROZEN.replace("Sec/Defs", "sec/Defs")
+    r = _renamed(tmp_path / "left", moved)
+    assert r["certified"], r["refusals"]
+    assert _renamed(tmp_path / "all", moved.replace("Sec:", "sec:"))["certified"]
+    [f] = _renamed(tmp_path / "more", moved.replace("arbitrary", "any"))["refusals"]
+    assert f["path"] == "sec/lean-audit.json" and "`shape` changed beyond moved paths" in f["reason"]
 
 
 TERMS = 'scope = "prose"\n\n[words]\n"draw" = "sample"\n\n[[words_in]]\nfiles = ["c.py"]\nwords = { "draw_one" = "pick_one" }\n'

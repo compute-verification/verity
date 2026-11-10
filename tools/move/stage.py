@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """`tools/move/stage.py MAP... [--base REF] [--branch NAME [--push] [--bundle FILE]] [--certificate FILE] [--map OLD=NEW]...
-[--no-lock] [--no-rerun] [--no-fetch] [--keep]`: stage a move on a base as one certified commit per map, for its lander.
+[--no-lock] [--no-rerun] [--through-refusals] [--no-fetch] [--keep]`: stage a move on a base as one certified commit per
+map, for its lander.
 
 For each map in order, on BASE (default `origin/main`, fetched first) or on the commit the map before it made:
-1. read the map (`tools/move/NAME.toml`) as that commit has it: one with `[words]` runs `rename.py`, one with `[paths]`
-   `layout.py` (`--no-lock` passes on); a map with both or neither is refused, and so is a map the commit lacks, since
-   `move_check.py` reads a word map at the move's base and anyone reruns the move from there;
+1. read the map (`tools/move/NAME.toml`) as that commit has it: one with `[words]` or `[[words_in]]` runs
+   `rename.py` (its `[words]` may be empty, never absent), one with `[paths]` `layout.py` (`--no-lock` passes on); a
+   map with both or neither is refused, and so is a map the commit lacks, since `move_check.py` reads a word map at the
+   move's base and anyone reruns the move from there;
 2. run that script at the root of a fresh worktree of the commit, as BASE has it (`tools/move/*.py`, `move_check.py` and
    the pins list they read, written out as drive's `move_scripts` does), so the move is the one drive regenerates and the
    lander checks, whatever this checkout holds;
@@ -14,14 +16,21 @@ For each map in order, on BASE (default `origin/main`, fetched first) or on the 
    which `restack.py` finds the move and its script;
 4. certify the commit with BASE's `move_check.py PARENT COMMIT --json` (each `--map OLD=NEW` passed on), and refuse it
    unless certified, printing what isn't a pure move;
-5. run the map again on the commit, and refuse it unless that changes nothing (`--no-rerun` skips this): once the moves
-   land, `restack.py BRANCH` carries an open branch across all of them by rerunning each.
+5. run the map again on the commit, as `restack.py` runs it on a branch (a path map with `--report-splits`, since its
+   `[split]` rows name references the move has rewritten), and refuse it unless that changes nothing (`--no-rerun` skips
+   this): once the moves land, `restack.py BRANCH` carries an open branch across all of them by rerunning each.
 
 Nothing in this checkout changes but the branch `--branch` names, created at the last commit (refused if it exists
 here, or on the remote with `--push`); `--push` pushes it, never forced, and `--bundle FILE` writes it as a git bundle
 over BASE, for a staging run on a node, whose clone can't push, to hand back. `--certificate FILE` writes each
 commit's `move_check.py` report as JSON. A git that can't commit (a node has no identity) is refused before anything
 runs. Exit 0 when every map is staged and certified, 1 on a refusal, 2 on a git error.
+
+`--through-refusals` stages a move that lands on its own full check rather than on its certificate: a commit
+`move_check.py` refuses, or that a second run changes, is kept and the next map runs on it, and a map whose script fails
+makes no commit and the next runs on the commit before. `--certificate` then says of each map whether it is certified,
+what was refused (each path's first hunk; `refused_lines.py` lists every line) and what a second run changed; the exit
+is 1 if any map was not clean.
 """
 from __future__ import annotations
 
@@ -49,6 +58,8 @@ MAP = re.compile(r"^tools/move/[\w.-]+\.toml$")
 #: each kind of map's move line, which names its script (`restack.LINE_SCRIPT`) for whoever reruns the move
 LINE = {"words": "Move", "paths": "Layout-move"}
 SCRIPT = {kind: RS.LINE_SCRIPT[line] for kind, line in LINE.items()}
+#: the tables that make a map each kind: a word map's words may all be scoped to files (`[[words_in]]`)
+TABLES = {"words": ("words", "words_in"), "paths": ("paths",)}
 SHOWN = 20
 
 
@@ -78,22 +89,31 @@ def kind_of(path: str, text: str) -> str:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
         raise Refused(f"{path} doesn't parse: {e}") from e
-    kinds = [k for k in SCRIPT if data.get(k)]
+    kinds = [k for k, tables in TABLES.items() if any(data.get(t) for t in tables)]
     if len(kinds) != 1:
-        raise Refused(f"{path} has {'both [words] and [paths]' if kinds else 'neither [words] nor [paths]'}: a map is a word "
-                      "map (rename.py) or a path map (layout.py), and a move that needs both stages two maps in order")
+        has = "both [words] and [paths]" if kinds else "neither [words], [[words_in]] nor [paths]"
+        raise Refused(f"{path} has {has}: a map is a word map (rename.py) or a path map (layout.py), and a move that "
+                      "needs both stages two maps in order")
+    if kinds == ["words"] and "words" not in data:
+        raise Refused(f"{path} has [[words_in]] but no [words]: give it an empty [words], which rename.py and "
+                      "move_check.py read")
     return kinds[0]
 
 
 def _tail(r: subprocess.CompletedProcess, n: int = 12) -> str:
+    if (keep := os.environ.get("STAGE_KEEP_OUTPUT")):      # STAGING ONLY: a failed script's whole output, for the stager
+        with open(keep, "a") as f:
+            f.write(f"==== {shlex.join(map(str, r.args))} (exit {r.returncode})\n{r.stdout}\n---- stderr\n{r.stderr}\n")
     return "\n".join((r.stderr.strip() or r.stdout.strip()).splitlines()[-n:])
 
 
 class Stage:
     """One staging: a worktree of BASE, BASE's scripts written out beside it, and the commits made so far."""
 
-    def __init__(self, repo: Path, base: str, *, extra: list[str], no_lock: bool, rerun: bool, log=print):
+    def __init__(self, repo: Path, base: str, *, extra: list[str], no_lock: bool, rerun: bool, log=print,
+                 through: bool = False):
         self.repo, self.base, self.extra, self.no_lock, self.rerun, self.log = repo, base, extra, no_lock, rerun, log
+        self.through = through
         self.tmp = Path(tempfile.mkdtemp(prefix="move-stage-"))
         self.wt, self.scripts = self.tmp / "wt", self.tmp / "scripts"
         self.env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "GIT_TERMINAL_PROMPT": "0"}
@@ -153,31 +173,51 @@ class Stage:
         except json.JSONDecodeError:
             raise Refused(f"move_check.py couldn't judge {parent[:12]}..{commit[:12]} (exit {c.returncode}):\n{_tail(c)}") from None
         summary = c.stderr.strip().splitlines()[-1] if c.stderr.strip() else ""
-        if c.returncode or not report.get("certified"):
+        certified = not c.returncode and bool(report.get("certified"))
+        if not certified:
             lines = [f"  {f['path']}: {f['reason']}" for f in report.get("refusals", [])]
             more = [f"  ... {len(lines) - SHOWN} more"] if len(lines) > SHOWN else []
-            raise Refused("\n".join([f"{commit[:12]} ({path} on {parent[:12]}) isn't a pure move: {summary}",
-                                     *lines[:SHOWN], *more,
-                                     f"each with its hunk: {shlex.join(['verity', 'check', 'move', parent, commit, *self.extra])}"]))
-        self.log(f"  {summary}")
+            said = "\n".join([f"{commit[:12]} ({path} on {parent[:12]}) isn't a pure move: {summary}", *lines[:SHOWN], *more,
+                              f"each with its hunk: {shlex.join(['verity', 'check', 'move', parent, commit, *self.extra])}"])
+            if not self.through:
+                raise Refused(said)
+            self.log("  kept, not certified (--through-refusals): " + said)
+        else:
+            self.log(f"  {summary}")
+        again: list[str] | None = None
 
         if self.rerun:
-            r = self.run(script, *args, "--root", str(self.wt))
+            # as restack.py reruns it on a branch: on the move's own commit no reference needs its [split] row any more
+            r = self.run(script, *RS.BRANCH_ARGS.get(script, ()), *args, "--root", str(self.wt))
             if r.returncode:
                 raise Refused(f"`{shown}` run again on {commit[:12]} failed (exit {r.returncode}):\n{_tail(r)}")
             status = subprocess.run(["git", "status", "--porcelain"], cwd=self.wt, check=True, capture_output=True, text=True)
-            if changed := [line[3:] for line in status.stdout.splitlines()]:
-                raise Refused(f"{path} isn't idempotent: `{shown}` run again on its move {commit[:12]} changes "
-                              f"{len(changed)} paths ({', '.join(changed[:5])}); restack.py carries branches across a move "
-                              "by rerunning it, so a second run must change nothing")
-            self.log("  run again on it, it changes nothing")
+            again = [line[3:] for line in status.stdout.splitlines()]
+            if again:
+                said = (f"{path} isn't idempotent: `{shown}` run again on its move {commit[:12]} changes "
+                        f"{len(again)} paths ({', '.join(again[:5])}); restack.py carries branches across a move "
+                        "by rerunning it, so a second run must change nothing")
+                if not self.through:
+                    raise Refused(said)
+                self.log("  kept (--through-refusals): " + said)
+                self.clean(commit)
+            else:
+                self.log("  run again on it, it changes nothing")
         return {"map": path, "kind": kind, "command": shown, "parent": parent, "commit": commit, "summary": summary,
-                "check": shlex.join(["verity", "check", "move", parent, commit, *self.extra]), "report": report}
+                "check": shlex.join(["verity", "check", "move", parent, commit, *self.extra]), "report": report,
+                "certified": certified, "second_run_changes": again}
+
+    def clean(self, commit: str) -> None:
+        """The worktree as ``commit`` has it, whatever a script left there."""
+        git(self.wt, "reset", "-q", "--hard", commit)
+        git(self.wt, "clean", "-fdq")
 
 
 def stage(repo: Path, base: str, maps: list[str], *, extra: list[str] = (), no_lock: bool = False, rerun: bool = True,
-          keep: bool = False, log=print) -> list[dict]:
-    """Each of ``maps``' moves, in order, the first on ``base`` and each on the one before: their records."""
+          keep: bool = False, log=print, through: bool = False, each=None) -> list[dict]:
+    """Each of ``maps``' moves, in order, the first on ``base`` and each on the one before: their records. With
+    ``through``, a commit `move_check.py` refuses or a second run changes is kept and recorded so, and a map whose script
+    fails is recorded with no commit, the next map running on the commit before it."""
     if bad := [m for m in maps if not MAP.match(m)]:
         raise Refused(f"{', '.join(bad)}: a map is a file directly in tools/move/ (`tools/move/NAME.toml`), where move_check.py "
                       "reads word maps and a move's `Move:` line names its map")
@@ -185,12 +225,22 @@ def stage(repo: Path, base: str, maps: list[str], *, extra: list[str] = (), no_l
            for v in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT")):
         raise Refused("git has no identity here to commit the moves as (a node has none): set user.name and user.email, or "
                       "GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL")
-    s = Stage(repo, base, extra=[f"--map={x}" for x in extra], no_lock=no_lock, rerun=rerun, log=log)
+    s = Stage(repo, base, extra=[f"--map={x}" for x in extra], no_lock=no_lock, rerun=rerun, log=log, through=through)
     moves, parent = [], base
     try:
         for m in maps:
-            moves.append(s.move(m, parent))
-            parent = moves[-1]["commit"]
+            try:
+                moves.append(s.move(m, parent))
+            except Refused as e:
+                if not through:
+                    raise
+                log(f"  no commit (--through-refusals): {e}")
+                moves.append({"map": m, "parent": parent, "commit": None, "certified": False, "refused": str(e)})
+                s.clean(parent)
+            else:
+                parent = moves[-1]["commit"]
+            if each:
+                each(moves)
     finally:
         s.close(keep)
     return moves
@@ -211,6 +261,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="an extra path (or dotted module) mapping for move_check.py, as `verity check move` takes it")
     ap.add_argument("--no-lock", action="store_true", help="a path map: layout.py skips `uv lock`")
     ap.add_argument("--no-rerun", action="store_true", help="don't check that a second run changes nothing")
+    ap.add_argument("--through-refusals", action="store_true",
+                    help="keep a commit move_check.py refuses or a second run changes, and go on past a map whose script "
+                         "fails: each is recorded in --certificate, and the exit is 1 if any was")
     ap.add_argument("--keep", action="store_true", help="keep the worktree and the scripts, and print where")
     a = ap.parse_args(argv)
     if (a.push or a.bundle) and not a.branch:
@@ -226,11 +279,16 @@ def main(argv: list[str] | None = None) -> int:
             raise Refused(f"the branch {a.branch} exists: name a new one")
         if a.push and git(repo, "ls-remote", "--heads", a.remote, f"refs/heads/{a.branch}"):
             raise Refused(f"{a.remote} has a branch {a.branch}: name a new one (a staged move is pushed, never forced)")
-        moves = stage(repo, base, a.maps, extra=a.extra, no_lock=a.no_lock, rerun=not a.no_rerun, keep=a.keep)
-        head = moves[-1]["commit"]
-        if a.certificate:
-            a.certificate.write_text(json.dumps({"base": base, "head": head, "moves": moves}, indent=1) + "\n")
-        if a.branch:
+        def certificate(moves: list[dict]) -> str:
+            head = next((m["commit"] for m in reversed(moves) if m["commit"]), base)
+            if a.certificate:
+                a.certificate.write_text(json.dumps({"base": base, "head": head, "moves": moves}, indent=1) + "\n")
+            return head
+
+        moves = stage(repo, base, a.maps, extra=a.extra, no_lock=a.no_lock, rerun=not a.no_rerun, keep=a.keep,
+                      through=a.through_refusals, each=certificate if a.through_refusals else None)
+        head = certificate(moves)
+        if a.branch and head != base:
             git(repo, "branch", a.branch, head)
             if a.push:
                 git(repo, "push", "-q", "-u", a.remote, a.branch)
@@ -242,8 +300,15 @@ def main(argv: list[str] | None = None) -> int:
     except subprocess.CalledProcessError as e:
         print(f"stage: {shlex.join(e.cmd)}: {(e.stderr or '').strip()}", file=sys.stderr)
         return 2
-    print(f"\nstaged {len(moves)} move{'s' * (len(moves) > 1)} on {a.base} {base[:12]}: {head}"
+    made = [m for m in moves if m["commit"]]
+    flawed = [m for m in moves if not m["commit"] or not m["certified"] or m.get("second_run_changes")]
+    print(f"\nstaged {len(made)} move{'s' * (len(made) != 1)} on {a.base} {base[:12]}: {head}"
           + (f", branch {a.branch}" + (f" on {a.remote}" if a.push else "") if a.branch else ""))
+    for m in flawed:
+        print(f"  {m['map']}: " + ("no commit" if not m["commit"] else ", ".join(
+            ([] if m["certified"] else [f"{len(m['report'].get('refusals', []))} paths move_check.py refuses"])
+            + ([f"a second run changes {len(m['second_run_changes'])} paths"] if m.get("second_run_changes") else []))))
+    moves = made
     if a.bundle:
         print(f"bundled to {a.bundle}; where it's pushed from: git fetch FILE {a.branch}:{a.branch} && git push -u "
               f"{a.remote} {a.branch}")
@@ -251,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     for m in moves:
         print(f"  {m['check']}")
     print("once they land, an open branch crosses them all: python3 tools/move/restack.py BRANCH --push-to NEWBRANCH")
-    return 0
+    return 1 if flawed else 0
 
 
 if __name__ == "__main__":
