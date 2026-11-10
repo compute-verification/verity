@@ -49,7 +49,7 @@ shared = [
     "verity/core/difftest",
     "tools/config",
     "Security/Properties/SampledProofs/Draw.lean",
-    "Security/Proofs/Properties/RemoteAudit/Sort.lean",
+    "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
     "Security/Properties/SampledProofs/Second.lean",
