@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.ml.circuits.refs import runs
+from verity.circuits.refs import runs
 
 BINDING_TAG = "verity-vllm/tp-binding/v1"
 PEERS = "peers_"

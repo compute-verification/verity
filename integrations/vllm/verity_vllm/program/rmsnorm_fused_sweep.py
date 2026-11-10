@@ -39,8 +39,8 @@ from dataclasses import dataclass
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import option
-from verity.ml.definitions.registry.b1 import B0_CONFIG
-from verity.ml.definitions.numerics.rmsnorm_fused import fused_rows, variance_v1, variance_v2
+from verity.definitions.registry.b1 import B0_CONFIG
+from verity.definitions.numerics.rmsnorm_fused import fused_rows, variance_v1, variance_v2
 
 BUNDLE = REPO / "vllm-poc/bundles/B0-358bb6d66805-ta1eager-commit.tar.xz"
 BUNDLE_SHA256 = "7ba7df9b00699d10740a3c25c8c8bbd207bbe364d281451d3d8134ae8fc97dba"

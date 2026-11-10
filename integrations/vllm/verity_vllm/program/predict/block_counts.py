@@ -10,7 +10,7 @@ a window circuit, and a window is m activations of it. A block class is that Def
 SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `NciCheck.Count` counts a block Definition's (``boolGates``,
-`verity/core/protocols/network/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
+`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
 table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
 (`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
@@ -50,13 +50,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.ml.circuits import codec, partition_v2 as PV2
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.parts import n_members
-from verity.ml.circuits.population import mixed_population_program
-from verity.ml.circuits.program import is_input
-from verity.ml.definitions.boolean import gate_table
-from verity.ml.windows import interface as IF
+from verity.circuits import codec, partition_v2 as PV2
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.parts import n_members
+from verity.circuits.population import mixed_population_program
+from verity.circuits.program import is_input
+from verity.definitions.boolean import gate_table
+from verity.windows import interface as IF
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration
@@ -79,7 +79,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
 def resolve(tid: str) -> Any:
     """`interface.resolve` over the whole registry (`catalog.load`), a refusal naming any registry module that failed to
     import."""
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
     _, errors = load()
     try:
         return IF.resolve(tid)

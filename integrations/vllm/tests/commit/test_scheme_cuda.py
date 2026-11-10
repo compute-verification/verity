@@ -1,4 +1,4 @@
-"""The CUDA copy of the ``vllm-v1`` thread leaf hashes the conformance vectors' bytes (``verity.ml.commitments.vllm_v1``).
+"""The CUDA copy of the ``vllm-v1`` thread leaf hashes the conformance vectors' bytes (``verity_vllm.commitments.vllm_v1``).
 
 One copy, checked on every thread-leaf vector: ``verity_tap.h`` at ``VERITY_TAP=4`` -- the FA2 thread leaf, compiled into a one-thread
 harness against the pod's FA2 tree, beside :mod:`verity_vllm.commit.scheme`'s host rule for the same vector.
@@ -18,7 +18,7 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the CUDA copies need a GPU", allow_module_level=True)
 
-from verity.ml.commitments.vllm_v1 import vectors as VEC  # noqa: E402
+from verity_vllm.commitments.vllm_v1 import vectors as VEC  # noqa: E402
 from verity_vllm.commit import scheme  # noqa: E402
 
 V = VEC.load()

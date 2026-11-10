@@ -8,8 +8,8 @@ from typing import Sequence
 
 import torch
 
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Ref, Refs, Strided, array_of, concat
-from verity.ml.circuits.types import Array, Type, Value
+from verity.circuits.refs import Affine, Coll, Concat, Explicit, Ref, Refs, Strided, array_of, concat
+from verity.circuits.types import Array, Type, Value
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.value_types import shape_of
 

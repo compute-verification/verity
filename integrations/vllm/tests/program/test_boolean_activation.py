@@ -1,4 +1,4 @@
-"""`verity.ml.definitions.registry.boolean_activation`: the Boolean tanh agrees with its word Definitions (`trace.word_of`) on all
+"""`verity.definitions.registry.boolean_activation`: the Boolean tanh agrees with its word Definitions (`trace.word_of`) on all
 65,536 words, element and row; the table is needed exactly on its band; each Definition carries exactly its builder's live
 ANDs, is pinned by gate count and program digest, and the row partitions under `Q_word_v1{X=16, W=32}` into `Bf16Tanh_v1`'s
 units, one per element."""
@@ -9,17 +9,17 @@ import json
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.defs import REGISTRY, bind
-from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.definitions.registry import boolean_activation as BA
-from verity.ml.definitions.registry import dense as D
+from verity.circuits import evaluation as E
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits import codec
+from verity.circuits import partition_object as PO
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.boolean import trace as TR
+from verity.circuits.boolean.forms import Circuit
+from verity.definitions.registry import boolean_activation as BA
+from verity.definitions.registry import dense as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
