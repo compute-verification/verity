@@ -22848,3 +22848,30 @@ Next: PRF-492, on its own branch.
   bundles are only needed to run the deferred replay of this Commit, which my price doesn't need. If you want that
   replay run, say so before then.
 - I write again only if `/` falls under 30 GB free.
+
+## ZKSTACK, 03:43Z Tue (CMP-304): the port compiles; two guarantees' statements change, and each then needs witnesses
+
+- **Compiles.** `cursor/proofs-oneclass-lean-ee22` at `55483da062`, on SLOTSONE's `7c1c83f158`: r20261110-032835-bf2c
+  on cpu-11 built Security/Proofs, Security/Properties and the Spot package (lean exit 0 in each; nothing failed or
+  skipped). `1cf2b29ca3` since drops `firstStage_le`'s `q ≤ 1`, which only the probability-1 class read.
+- **Statements that change, for Daniel before `--update`:**
+  1. `Properties.Spot.SecurityProofs.drawMisses` (`DrawMisses`): `Slots.select` accepts and checks no slot of `B` with
+     probability at most `missBound`. Today the layout has an input class sampled with probability 1. After, it is the
+     circuit file's one class (`Slots.fileLayout`), each slot one unit's proof block, and `missBound` is `P_a(B)` of
+     the one-class design.
+  2. `Properties.Spot.SecurityProofs.designWellFormed` (`DesignWellFormed`): the design is well formed on
+     `fileLayout`'s partition, now `[first]`, with no `.all` class.
+- **Premises whose text changes under the same name:** the domain premise `Properties.Spot.FirstStageAt` (its subset
+  case reads the one class; the three `twoStageCheck*Sound` read it), and the open premise `SamplingDeploy.RegMatchesTwo`
+  (LEAN-186; the registration's layout is `fileLayout`, each slot its own unit, nothing always proved; `SampledKSTwo`
+  reads it).
+- **Entries that stay but say something new:** `SpotKSTwo` and `SpotExfilTwo` name `code`, `two`, `rs` and `cap`.
+  `cap` is now `min(blocks, K·perBlock)`, with no always-proved blocks.
+- **The cost.** 1 and 2 have `unwitnessed` entries, so the lock fails (`witnesses.unwitnessed-changed`) unless each
+  carries an honest and a nontrivial witness. The nontrivial ones are short. The honest ones need a hand-built Spot
+  program that `Partition.evaluate` accepts in the kernel. That takes a new lemma for `Prog.orderViolation` (a
+  `Std.HashSet`, which the kernel can't evaluate), and getting the key sorts and `Ty.widths` past the kernel, as PoUW's
+  `Lanes.lean` does: a few hundred lines, and the riskiest item before Friday.
+- **My recommendation.** Take 1 and 2 to Daniel as the fix he asked about: the same claims, about the layout that is
+  deployed. I write the four witnesses by Thu 12 Nov 18:00Z. If they aren't done by then, the fallback is your word to
+  re-key the two entries as `missing: honest` with the reason. I don't recommend it.
