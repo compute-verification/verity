@@ -3003,7 +3003,7 @@ def test_a_dropped_candidate_s_records_run_is_cancelled_while_it_runs_and_one_th
     env.o.gh.ready.discard((1, one))                                 # its ready mark withdrawn: dropped
     (drop,) = loop.tick()
     assert (drop["action"], drop["sha"], drop["records_cancelled"]) == ("drop", sha, ["regen-1"])
-    assert env.cancelled == [(["regen-1"], f"vqueue: candidate {sha[:12]} was dropped: #1's ready mark was withdrawn")]
+    assert env.cancelled == [(["regen-1"], f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by lane-1")]
     assert loop.tick() == [] and len(env.cancelled) == 1
     two = env.put(2, {"pkg/B.lean": "theorem b : True := trivial\n", "pkg/lean-audit.json": '{"records": 3}\n'})
     built, started = loop.tick()
@@ -3027,7 +3027,7 @@ def test_a_records_run_still_launching_when_its_candidate_is_dropped_is_cancelle
     (settled,) = loop.tick()
     assert (settled["action"], settled["sha"], settled["dropped"], settled["records_cancelled"]) == (
         "regenerate", sha, True, ["regen-9"])
-    assert env.cancelled == [(["regen-9"], f"vqueue: candidate {sha[:12]} was dropped: #1's ready mark was withdrawn")]
+    assert env.cancelled == [(["regen-9"], f"vqueue: candidate {sha[:12]} was dropped: #1 isn't taken now: its ready mark was withdrawn by lane-1")]
     assert loop.tick() == [] and len(records.started) == 1
 
 

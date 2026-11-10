@@ -2595,7 +2595,7 @@ class Loop:
         ejected for it.  A post that fails is rung again by the next tick; with --shadow it is only logged."""
         recs, rung, d = [], t.past.rung(), self.world.slim_driver()
         for c in t.snap.candidates:
-            if (j := t.judged[c.sha]).slim.state not in (PASS, FAIL):
+            if (j := t.judged[c.sha]).slim is None or j.slim.state not in (PASS, FAIL):
                 continue
             base = t.below if c.base == t.main else t.past.slim(c.base)[1]
             for step in sorted({*d._policy(c.base).off_gate, *d.warn_steps}):

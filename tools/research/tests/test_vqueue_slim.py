@@ -512,7 +512,7 @@ def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_
 
     h.d.launch_postland, h.d.launched = launch, lambda got: (printed.get(got["dir"]), "")
     rec = start(h.d, sha, base, shards="auto:6")
-    kw, out = h.d._postland_args({"verified": base}, sha, False)[0], tmp_path / "plan-1"
+    kw, out = h.d.beside_args(sha, base)[0], tmp_path / "plan-1"
     assert plans.asked == [(sha, ",".join(AFTER_LANDING), None, 6)] and h.posted == []
     assert rec == {"ids": [], "plan": {"dir": str(tmp_path / "job-1"), "pid": 7001, "out": str(out), "n": 6,
                                        "deferred": ",".join(AFTER_LANDING), "kw": kw},
