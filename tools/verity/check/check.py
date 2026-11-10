@@ -1476,8 +1476,6 @@ OPT_IN = {
     "tools/verity/circuit_check": ("VERITY_CIRCUIT_CHECK_SLOW", (
         "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
         "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")),
-    "verity/ml/circuits": ("VERITY_ML_CIRCUITS_SLOW", (
-        "tests/test_population_recorded.py::test_every_recorded_population_keeps_its_id_and_digest",)),
     "verity/core/protocols/composition": ("VERITY_SLOW", (
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
