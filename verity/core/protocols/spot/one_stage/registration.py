@@ -227,10 +227,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
     ones that are outputs of an earlier run or reuse an earlier record's registered value (`outputs`: `{parameter:
-    {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and of the ones it
-    doesn't fill,
+    {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and
     those whose rows are not `row/v1` rows (`schemas`: `{parameter: schema}`, `registered.SCHEMAS`), whose rows R7 counts in
-    that format (`registered_entries`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
+    that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which R6 holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
     program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
@@ -281,7 +280,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     pins = _pins(pinned, registered or {}, sup)
     outs = _outputs(outputs, registered or {}, sup, pins, log)
-    formats = _schemas(schemas, registered or {}, sup)
+    formats = _schemas(schemas, registered or {})
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
@@ -459,16 +458,17 @@ def _outputs(outputs: Mapping[str, Mapping[str, str]] | None, registered: Mappin
     return out
 
 
-def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int], supplied: Mapping[str, Any]) -> dict[str, str]:
-    """The verifier's row formats, each of a value it expects registered and doesn't fill, one of `registered.SCHEMAS`;
-    ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+def _schemas(schemas: Mapping[str, str] | None, registered: Mapping[str, int]) -> dict[str, str]:
+    """The verifier's row formats, each of a value it expects registered, one of `registered.SCHEMAS`: a supplied value's
+    is the format R7 commits its rows in (`registered.supplied_root`); ValueError otherwise, which the Lean verifier
+    refuses too (`OneStage.paramsOfJson`)."""
     if schemas is None:
         return {}
     if not isinstance(schemas, Mapping) or not registered:
         raise ValueError(f"row formats are an object of registered values' formats: {schemas!r}")
     for v, s in schemas.items():
-        if v not in registered or v in supplied or not isinstance(s, str) or s not in G.SCHEMAS:
-            raise ValueError(f"row format of {v!r}: not a registered value it doesn't fill, in one of {G.SCHEMAS}: {s!r}")
+        if v not in registered or not isinstance(s, str) or s not in G.SCHEMAS:
+            raise ValueError(f"row format of {v!r}: not a registered value's, in one of {G.SCHEMAS}: {s!r}")
     return dict(schemas)
 
 
@@ -765,7 +765,8 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
         if e is None:
             continue
         try:
-            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding)
+            root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding,
+                                   (schemas or {}).get(v, G.SCHEMA))
         except ValueError as err:
             c.fail("R7-supplied", {"value": v, "verifier": str(err)})
             continue
