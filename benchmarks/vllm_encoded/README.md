@@ -6,6 +6,18 @@ plain stack, the same engine over the same kernels' plain forms. `bench_arm.py` 
 `verity-bench vllm` driver (`benchmarks/harness/README.md`); `benchmarks/harness/setup/vllm_encoded.sh` builds their GPU
 libraries from the dispatched commit.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `verity-bench vllm` with an arm of `bench_arm.py` (Arms, below) | The encoded stack and the plain stack as arms of the shared driver, which runs each and writes its record (`benchmarks/harness/README.md`). |
+| `bash benchmarks/vllm_encoded/run.sh`, with `ARMS` as its header lists them | Llama-3.1-8B or 70B decode in vLLM on one GPU with its linear weights stored only encoded, against the same engine with plain FP8 weights: `ve.cu` built, the layout tests, one `serve.py` process an arm, then `compare.py`'s gates and points. It writes to `$RESEARCH_RUN_DIR/out`. |
+| `bash benchmarks/vllm_encoded/stack.sh`, with `MODE` one of `paged`, `splits`, `window`, `rekey` and `serve` | The encoded stack on one GPU: `paged.cu` built at the stack's codec, then `MODE`'s job (`paged_gate.py`, `paged_splits.py`, `window_gate.py`, `rekey_gate.py`, or `serve.py`'s arms). It writes to `$RESEARCH_RUN_DIR/out`. |
+
+Read from outside `benchmarks/`: `paged.py`, loaded from its file, and `paged.cu`'s build.
+
 ## Arms
 
 | object | id | what it is |
