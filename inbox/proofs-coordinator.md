@@ -30008,3 +30008,61 @@ So three at a time still fit a 755 GB node, and the 48 take about 8 hours and ab
 5. **For PRF-460, ready to paste** (replacing the 17:42Z line):
 
    > PRF-460 TWOWITNESS 17:44Z: blocker for (A). Flock's verifier refuses the no-program statement two ways: with registered reads at setup (`Registered.check` needs units derived from the verifier's program), and without them at the verdict (`ProvedScope.programHeld`, `NO_PROGRAM`), which the Lean predicates don't read, so a no-program witness would be a run the deployed verifier refuses. The statement takes its program back: `Program.decode`, `deriveTemplateUnits` and `HmLinks.check` proved at the instance through `Std.HashMap` lemmas. (A) moves to Thu 12 Nov 18:00Z [guess]; (D) stays Fri 13 Nov 12:00Z. Decision with @proofs.
+
+## PRF-456 ACCOUNTD, Tue 10 Nov 17:44Z: #8539's head is `fa866c78d7`, and it cures the red: `test_served_zk.py` passes there on a node (`r20261110-173157-a1c1`, 34 passed, the nine included). The cause was the one you read. `--changed origin/main --quick` at that head is `r20261110-173251-a509`, running, ETA about 19:15Z
+
+**The cause, confirmed.**
+- `e040` ran at `b3a5cc07e5` itself (its `tree_sha`), and `test_r1_r6_of_a_window_are_leans` failed on `of_record`'s `Disagree`. [run]
+- Since R8, Lean's registration piece answers `fanout` beside the codes under a template query that applies. Every PoUW window has one, with F = 1. `of_record.py`'s reference gave `{"codes": ...}` alone, and `_same` compares the whole answer, so every window refused with `lean-python-disagree: registration`. [read]
+- The other refusal in `e040`'s output (`public-items`, `shapes` registered but not declared) is not a second fault. It is the CLI test's own expected refusal (`test_served_zk.py:1294`, `--expect-refused`). [read]
+- At `fa866c78d7`, which changes only the reference, all nine pass. [run: `a1c1`, 34 passed and 1 skip, the opt-in `SZ_PARITY_E2E` test]
+- I cancelled `r20261110-172621-6422`, the same test file at `b3a5cc07e5` with full logs. It waited 16 min for a slot on cpu-11 and never started.
+
+**The fix, as you preferred.** It needs no new import, and `_same` is unchanged.
+- `of_record.registration_answer(v)` gives the verdict's codes, plus `fanout` and `rests_on_period_check` under the same conditions Lean writes them (from `Verdict.to_json`). So the comparison stays whole, as `_decide` holds it.
+- `Record.registration` now takes the verdict. Both callers pass it whole instead of `.codes`: `served_commit.py`'s R1-R8 step and the R1-R8 test.
+- The test now also asserts that the honest window's Lean answer equals Python's and carries F = 1, which is what would have caught this.
+- The module docstring said R1-R6; it now says R1-R8.
+- Ruff matches the baseline in all three files. [run]
+
+**Other callers of the registration piece** (`git grep`). [read]
+- `verity/core/service/spot/tests/test_difftest.py`: its `REGISTRATION` port's reference (line 807) already writes both keys under Lean's conditions.
+- `one_stage/verifier.py`: compares through `_decide`, strictly on both keys.
+- `spot/tests/test_verifier.py`: reads only `["codes"]` and `"refused"`.
+- `benchmarks/verifier_cost/run.py`: calls only the `partition` piece.
+
+`of_record.py` was the only whole comparison missing the keys.
+
+**Pushed** at 17:42Z to `cursor/proofs-accountd-6a92`, a fast-forward from `b3a5cc07e5`. I checked that `research queue status` said "not marked ready at b3a5cc07" first, and I did not mark it. No candidate and no `next` were merged in, and there was no force push. I also pushed the same commit to the scratch branch `cursor/proofs-accountd-6a92-cure`.
+
+**#8539's body is updated** (`research queue edit`, 17:45Z). It now has:
+- Daniel's "this is fine" line beside the R8 statement change;
+- the stream's `tied` passed through to Lean's run;
+- a paragraph on the served window's whole comparison;
+- the runs `c555`, `cd03`, `a1c1` and `a509` (running).
+
+I will edit `a509`'s verdict in when it reads.
+
+**`cd03` passed** all nine suites at `b3a5cc07e5`, 0 cached. [run] But the list was hand-picked and lacked `verity-pouw-benchmarks`, which is why it missed this. `a509` is the whole `--changed` set:
+- 68 suites under `--quick`;
+- against the node's `origin/main`, which is GitHub's `e7b03e4a6c` [run], at the merge base `a63c6b8ed6`;
+- network-traces passed first.
+
+`4a2d` passed nine of nine at the scratch cross `dad8d911f9`. [run] The cross predates the cure.
+
+**review-1's line**, now that `cd03` has passed and the red is fixed: "Passed `tied` through (`b3a5cc07e5`, test `d10aeecd4c`). The stream's run of record gives Lean's `Run.run` its check's tied values (`verifier.run(tied=)`), and a tied window runs to an accepted outcome on both verifiers. Named nothing, or the other parameter instead, both verifiers refuse it (`R8-shared-input`). Without the fix the same test fails on `run` (`r20261110-160628-c555`); with it the touched suites pass (`r20261110-165842-cd03`). #8539's head is now `fa866c78d7`, which adds the served window's registration fix."
+
+**For NET-302, ready to paste:**
+> #8539's head is now `fa866c78d7`, and it cures the red on `verity-pouw-benchmarks`. Since R8, Lean's registration piece answers the fan-out F beside the codes, under a template query, which every PoUW window has, and any tied names. PoUW's served window held that answer against a Python reference giving the codes alone, so every window refused with `lean-python-disagree: registration`. The reference now gives the verdict's whole answer under the same conditions, so the comparison is still whole. At `fa866c78d7`, `test_served_zk.py` passes on a node: `r20261110-173157-a1c1`, 34 passed, among them the nine that failed in `r20261110-162209-e040`. `suites.py --changed origin/main --quick` at that head is `r20261110-173251-a509`; its verdict follows.
+
+**Runs:**
+
+| run | what | state | ETA |
+|---|---|---|---|
+| `r20261110-173251-a509` | `--changed origin/main --quick` at `fa866c78d7` (68 suites) | cpu-1, running | about 19:15Z [guess] |
+| `r20261110-162926-c46e` | nine suites at the pooled branch `dd61f36688` | cpu-8, running | about 18:15Z |
+| `r20261110-163702-cb4b` | Lean tries at the scratch cross | cpu-8, waiting | about 18:45Z |
+
+**Needs your word:** nothing for the cure. One choice is yours. The scratch cross `cursor/proofs-accountd-cross-034a` predates `fa866c78d7`. I will merge `fa866c78d7` into it, which touches only the scratch branch, so the PRF-504 commit branches off a cross that carries the cure. Unless you say otherwise, I do it after `a509` reads.
+
+**Unchanged:** the PRF-504 commit (Wed 12:00Z) and text (Wed 16:00Z), and the `RequestsCover` recommendation (Wed 16:00Z).
