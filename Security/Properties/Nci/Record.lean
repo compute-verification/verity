@@ -17,16 +17,41 @@ written and read the same on any check that exports them.
 
 **The record's circuit** (`Served`). Its gates are the Program's gates that no wire covers; a gate that read a wired
 input leaf reads instead the writer's gates whose bits that leaf holds, a writer's pass-through of its own wired input
-followed in turn (`Lands`). Its registered inputs θ are the leaves of the rows the check holds (`Form.held`), and its
-inference blocks are the slots (`Form.slot`): a block is a set of units, and a root node that batches the units of
-several slots lies in several blocks. A record lays out a circuit only where every unit's rows are its own input
-gates (`OwnRows`) and every wire lands whole (`Aligned`: a writer's leaf lies inside one leaf of the row that reads it).
-`Spot.Wires.check` compares a wire's two rows in words alone, so a check that stops there leaves a 16-bit reader leaf
-free to read sixteen gates of 16 bits through a writer that passes one-bit leaves on. A writer's leaf may instead
-straddle leaves of the row that reads it where the reader's unit passes on none of the leaves it meets (`PassedOn`:
-the leaf is also a leaf of an output row of that unit). A leaf that is not passed on is read by its own unit's gates
-alone, and through it they read leaves of the writer's row whole, which hold no more bits than the reader's row has
-words for: a row of 32 one-bit leaves takes one 32-bit leaf so.
+followed in turn (`Lands`). Its registered inputs θ are the leaves of the rows the check holds (`Form.held`), none of
+which has a writer, and its inference blocks are the slots (`Form.slot`): a block is a set of units, and a root node
+that batches the units of several slots lies in several blocks.
+
+A record lays out a circuit only where the wiring's templates are the Program's (`Templates`): a template's units are
+the units the Program's root has of it, its rows their Definition's parameters, each whole 16-bit words under its
+outer length, and its outputs that Definition's output rows, each its bits rounded up to whole words (`TemplateOf`).
+`Spot.Wires.check` bounds a wire's units, finds its rows and divides a cut by the wiring's templates alone: with them
+the Program's, the writer it finds for a row is a unit and an output row of the Program, and a cut divides its port's
+leaves. No two parameters of a Definition have one name, so a row's leaves are one parameter's and share no bit.
+
+Every unit's rows are its own input gates (`OwnRows`), and every wire lands whole (`Aligned`: a writer's leaf lies
+inside one leaf of the row that reads it). `Spot.Wires.check` compares a wire's two rows in words alone, so a check
+that stops there leaves a 16-bit reader leaf free to read sixteen gates of 16 bits through a writer that passes
+one-bit leaves on. A writer's leaf may instead straddle leaves of the row that reads it where the reader's unit passes
+on none of the leaves it meets (`PassedOn`: the leaf is also a leaf of an output row of that unit). A leaf that is not
+passed on is read by its own unit's gates alone, and through it they read leaves of the writer's row whole, which hold
+no more bits than the reader's row has words for: a row of 32 one-bit leaves takes one 32-bit leaf so. That a writer's
+leaf inside one leaf of the row is read through that leaf alone rests on a row's leaves sharing no bit: were two
+parameters of one name one row, a writer's leaf inside its wide leaf would meet its narrow leaves too, which the unit
+may pass on.
+
+Every bit of a wired row lies in a leaf of its writer (`Filled`), so none is read as padding. `Spot.Wires.check`
+holds a reader row to its writer's words, an output row's bits rounded up, so a row wired to an output row that is
+not whole words has bits past its writer's and lays out no circuit.
+
+**The record's text.** A record lays out a circuit only where its wiring is its text's (`Served`): the text parses,
+and the wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson` reads of it (`wiresOf`). The text states no
+template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
+order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). Nothing ties the slots and
+the held rows to the text. `RowsOfText` is the shape of that tie, against readers SPOT's Lean does not have
+(`Readers`), each given the Program beside the text: one of the record's inference blocks, giving each unit's slot,
+and one of its registered reads, table reads and openings, giving what each row is declared to hold. With the readers
+left free it says only that the Program and the text fix the slots and each held row's reason, which any such check
+meets at readers of its own.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
@@ -36,9 +61,10 @@ it complies (`Nci.CompliesRate`). It follows from four statements about the chec
 **Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
 row the check holds is a registered read or a table read of a parameter that the log's first record registers under
 the root the run commits it under, or a port of an opening whose reader is pinned (`Good`). A pin is a Definition's
-closure digest (`NciCheck.DefinitionDigest.closureDigest`). A pinned reader's roles, which of its ports are the key,
-the root, the domain id, the opened rows and the verdict, are the check's layout of its Definition (`Form.layout`),
-never the record's word, so that an opening's key is never a row it registers.
+closure digest (`NciCheck.DefinitionDigest.closureDigest`) that the instance lists (`Carries`). A pinned reader's
+roles, which of its ports are the key, the root, the domain id, the opened rows and the verdict, are the check's
+layout of its Definition (`Form.layout`), never the record's word, so that an opening's key is never a row it
+registers.
 
 **A pin fixes the Definition** (`DigestPins`): two Program texts that give a Definition one closure digest decode it
 to the same Definition, callees and all (`Same`), or two of the byte strings the two digests hashed (`Hashed`) differ
@@ -50,9 +76,10 @@ counting, and a statement that offered it would say nothing.
 that pin, and the reader has the reference's roles, up to such a collision. It follows from `DigestPins`,
 `Provenance` and a layout that reads a Definition's signature alone (`LayoutReads`).
 
-What these do not say: that a unit's verdict output is 1 (a statement about the committed values, the proof block's);
-that equal roots hold equal rows, or that the data the log's first record registers was public
-(`Nci.Assumptions.ThetaRegistered`).
+What these do not say: that the slots and the held rows are the record's text's, which nothing says until the two
+readers have one definition that SPOT's audit also reads; that a unit's verdict output is 1 (a statement about the
+committed values, the proof block's); that equal roots hold equal rows, or that the data the log's first record
+registers was public (`Nci.Assumptions.ThetaRegistered`).
 -/
 
 @[expose] public section
@@ -87,7 +114,8 @@ structure Roles where
 
 /-- Why the check holds a row in θ: it is a registered read of the parameter `param`; a table read of the root
 (`root`), else the domain id, of the table `name` over `param`; or a port of an opening of that table by a reader
-whose closure digest is the pin `pin`. -/
+whose closure digest is the pin `pin`. This file imports no check of a circuit record, so `Held` is its own until a
+module of `nci_check` that is not such a check's holds it, with `wiresOf` and the readers of `RowsOfText`. -/
 inductive Held where
   | read (param : String)
   | table (name param : String) (root : Bool)
@@ -172,6 +200,32 @@ def OutLeaf (P : Prog) (sc : Scope) (out : String) (l g lo hi : ℕ) : Prop :=
 def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l g lo hi : ℕ) : Prop :=
   ∃ sc, UnitAt P rs r.tid r.unit sc ∧ InLeaf P sc (W.cutsOf r.tid r.port) r.port r.row l g lo hi
 
+/-- A type's bits: its leaves' widths, summed. -/
+def bitsOf (t : Ty) : ℕ := t.widths.foldl (· + ·) 0
+
+/-- A parameter's outer length, which a cut divides: its outermost array's, 1 when it is not an array. -/
+def outerOf : Ty → ℕ
+  | .array n _ => n
+  | _ => 1
+
+/-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
+`t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
+rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
+words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. -/
+def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
+  (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
+    (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
+    (∀ (p : String) (q : Spot.Wires.Port), (p, q) ∈ t.rows ↔ ∃ i, i < d.params.size ∧ p = d.params[i]!.1 ∧
+      q.words = bitsOf d.params[i]!.2 / 16 ∧ q.outer = outerOf d.params[i]!.2) ∧
+    ∀ (o : String) (n : ℕ), (o, n) ∈ t.outs ↔ ∃ f, f < (fieldsOf d.ret).size ∧ o = "o" ++ toString f ∧
+      n = (bitsOf (fieldsOf d.ret)[f]! + 15) / 16
+
+/-- **The wiring's templates are the Program's**: a template of the wiring has the units the Program's root has of it,
+and is the template of their Definition. -/
+def Templates (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
+  ∀ (tid : String) (t : Spot.Wires.Template), (tid, t) ∈ W.templates →
+    (∀ u, u < t.units ↔ ∃ sc, UnitAt P rs tid u sc) ∧ ∀ u sc, UnitAt P rs tid u sc → TemplateOf (P.defs[sc.d]!) t
+
 /-- **Every unit's rows are its own input gates**: a leaf of a reader row is an input gate, and no gate is a leaf of
 two rows, or two leaves of one. -/
 def OwnRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
@@ -199,8 +253,14 @@ def Aligned (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wir
     (∃ l g lo hi, RowLeaf P rs W r l g lo hi ∧ lo ≤ lo' ∧ hi' ≤ hi) ∨
       ∀ l g lo hi, RowLeaf P rs W r l g lo hi → lo < hi' → lo' < hi → ¬ PassedOn P rs r g
 
-/-- The wired gate `g` reads `g'`: `g'` is a leaf of the output row `g`'s row is wired to, and their bits meet. A wired
-leaf past its writer's bits, the row's zero padding, reads nothing. -/
+/-- **A wired row is its writer's bits**: every bit of a leaf of a reader row that has a writer lies in a leaf of the
+output row it is wired to. -/
+def Filled (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
+  ∀ (r : Row) l g lo hi, (S.writerOf r.tid r.unit r.port r.row).isSome → RowLeaf P rs W r l g lo hi →
+    ∀ b, lo ≤ b → b < hi → ∃ l' g' lo' hi', WriterLeaf P rs S r l' g' lo' hi' ∧ lo' ≤ b ∧ b < hi'
+
+/-- The wired gate `g` reads `g'`: `g'` is a leaf of the output row `g`'s row is wired to, and their bits meet. Under
+`Filled` every bit of `g` is in such a leaf. -/
 def Feeds (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (g' g : ℕ) : Prop :=
   ∃ r l l' lo hi lo' hi', RowLeaf P rs W r l g lo hi ∧ WriterLeaf P rs S r l' g' lo' hi' ∧ lo < hi' ∧ lo' < hi
 
@@ -231,27 +291,72 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
   ∀ x, D.isInput x = false → ∃ tid u sc s, UnitAt P rs tid u sc ∧ sc.off ≤ at_ x ∧
     at_ x < sc.off + (P.defs[sc.d]!).gates ∧ slot tid u = some s ∧ (U.unit x).map Fin.val = some s
 
-/-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes; the record's wiring passes
-`Spot.Wires.check` and its templates are the Program's root nodes (`Flock.TemplateQuery.evaluate`); every unit's rows
-are its own input gates and every wire lands whole; and `d` is the wired circuit, θ the rows the check holds and `𝓘`
-the slots. -/
+/-- What `Spot.Wires.Wiring.ofJson` is given of the record `doc`: its `cuts`, none where it states none, and its
+`wires`, with no template. Like `Held`, it is this file's own until a module of `nci_check` that is not a record
+check's holds it. -/
+def wiresOf (doc : Json) : Json :=
+  Json.mkObj [("templates", Json.mkObj []), ("cuts", (doc.getObjVal? "cuts").toOption.getD (Json.mkObj [])),
+    ("wires", getD doc "wires")]
+
+/-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes; the record's text parses, and the
+wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson` reads of it (`wiresOf`); the wiring passes
+`Spot.Wires.check`, and its templates are the Program's: the root's nodes (`Flock.TemplateQuery.evaluate`), with
+their units, rows and outputs (`Templates`); every unit's rows are its own input gates, every wire lands whole, and
+every bit of a wired row is its writer's; no row the check holds has a writer; and `d` is the wired circuit, θ the
+rows the check holds and `𝓘` the slots. -/
 def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
-  ∃ (P : Prog) (S : Spot.Wires.Summary) (rs : Array TRange) (at_ : Fin d.D.N → ℕ),
-    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧ Spot.Wires.check (F.wiring c) = .ok S ∧
+  ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
+      (at_ : Fin d.D.N → ℕ),
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
+    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W ∧
+    (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ Spot.Wires.check (F.wiring c) = .ok S ∧
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
-    OwnRows P rs (F.wiring c) ∧ Aligned P rs (F.wiring c) S ∧ LaysOut P rs (F.wiring c) S d.D at_ ∧
+    Templates P rs (F.wiring c) ∧ OwnRows P rs (F.wiring c) ∧ Aligned P rs (F.wiring c) S ∧
+    Filled P rs (F.wiring c) S ∧ (∀ r, (F.held c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) ∧
+    LaysOut P rs (F.wiring c) S d.D at_ ∧
     Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘
+
+/-! ## The slots and the held rows, of the record's text -/
+
+/-- What a record's text declares a row to hold: `Held`'s reasons, an opening's without its pin, which is the
+check's. -/
+inductive Declared where
+  | read (param : String)
+  | table (name param : String) (root : Bool)
+  | opened (name param : String)
+
+/-- The reason `h` as a record's text declares it. -/
+def Held.declared : Held → Declared
+  | .read p => .read p
+  | .table name p root => .table name p root
+  | .opened name p _ => .opened name p
+
+/-- Readers of a record's text, given the Program: of the parsed text, `slot` the block of each unit, and `declared`
+what the text declares each row to hold. -/
+structure Readers where
+  slot : Prog → Json → String → ℕ → Option ℕ
+  declared : Prog → Json → Row → Option Declared
+
+/-- **The slots and the held rows are the record's text's**, by the readers `R`: where the instance's Program decodes,
+the text of a record the check reads parses, its slots are the ones `R` reads of that text, and each row it holds is
+one `R` reads the text to declare, for the reason it declares. -/
+def RowsOfText (F : Form) (R : Readers) : Prop :=
+  ∀ (j tr : Json) (c : F.Case) (P : Prog), F.read j tr = .ok c →
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P → ∃ doc,
+      Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ F.slot c = R.slot P doc ∧
+      ∀ r h, F.held c r = some h → R.declared P doc r = some h.declared
 
 /-! ## The rate rule -/
 
-/-- The record `c` carries the instance `j`'s own fields: the Program's and the record's texts, `gamma` a natural, and
-`alpha` a pair of naturals `[num, den]` with `den > 0`. -/
+/-- The record `c` carries the instance `j`'s own fields: the Program's and the record's texts, `gamma` a natural,
+`alpha` a pair of naturals `[num, den]` with `den > 0`, and `pins` the list of its pins, each a string. -/
 def Carries (F : Form) (j : Json) (c : F.Case) : Prop :=
   j.getObjVal? "program" = .ok (.str (F.inst c).program) ∧ j.getObjVal? "record" = .ok (.str (F.inst c).record) ∧
     (∃ v, j.getObjVal? "gamma" = .ok v ∧ natOf? v = some (F.inst c).gamma) ∧
     (∃ a b, j.getObjVal? "alpha" = .ok (.arr #[a, b]) ∧ natOf? a = some (F.inst c).num ∧
-      natOf? b = some (F.inst c).den) ∧ 0 < (F.inst c).den
+      natOf? b = some (F.inst c).den) ∧ 0 < (F.inst c).den ∧
+    j.getObjVal? "pins" = .ok (.arr ((F.inst c).pins.map Json.str).toArray)
 
 /-- The check accepts the instance `j` and the trusted input `tr`, reading the record `c`: it reads them, and the
 rate rule complies on the record's summary at the instance's `Γ` and `α`. -/
