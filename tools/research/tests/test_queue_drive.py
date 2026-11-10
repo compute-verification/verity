@@ -102,8 +102,8 @@ def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_p
     """A train that fails in lean-audit isn't told as naming no file, to be attributed by hand."""
     from research.drive import implicated, lean_errors
 
-    assert lean_errors(LEAN_AUDIT_LOG) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean",
-                                           "Security/Definitions/Claims/Sampling.lean"}
+    assert lean_errors(LEAN_AUDIT_LOG) == {"security/Proofs/Flock/Claims/NumbersRadius.lean",
+                                           "security/Definitions/Claims/Sampling.lean"}
     assert implicated(_lean_run(tmp_path)) == lean_errors(LEAN_AUDIT_LOG)
     assert implicated(_lean_run(tmp_path / "b", "AUDIT /x/lean-audit-scratch-1/Security: FAIL\n    error: build failed\n")) is None
 
@@ -208,7 +208,7 @@ def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
-    assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
+    assert not forces_cold(["security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
     assert not forces_cold([])
 
 
@@ -419,11 +419,11 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
            "    Some required targets logged failures:\n    - Proofs.Flock.Claims.NumbersRadius\n    error: build failed\n"
            "AUDIT /w/lean-audit-scratch-1-x/Security: FAIL\n    Some required targets logged failures:\n"
            "    - Definitions.Claims.Sampling\n")
-    assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
+    assert lean_errors(log) == {"security/Proofs/Flock/Claims/NumbersRadius.lean", "security/Definitions/Claims/Sampling.lean"}
 
 
 def test_a_lean_audit_whose_replay_was_killed_is_a_machines_fault(tmp_path):
-    """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
+    """A security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
     on Lean sources mustn't revert landings that broke nothing."""
     from research.drive import killed
 

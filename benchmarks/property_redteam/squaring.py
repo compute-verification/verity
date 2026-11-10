@@ -1,6 +1,6 @@
 """Squaring mod p1024 in 6b's circuit model, measured in budgeted and nonlinear units: the attack on `SquaringFloor`.
 
-**The target** (`Security/Definitions/Accounting/Assumptions/SquaringChain.lean`). The encode bound rests on
+**The target** (`security/Definitions/Accounting/Assumptions/SquaringChain.lean`). The encode bound rests on
 `SquaringFloor F e ε`, a squaring costs `e` nonlinear units (`Gates.nonlinear`: budgeted units plus data products, an
 `mma` lane whose two multiplicands both depend on run or coin data, one unit whatever their range), and `ChainSum`, a
 word's `k·S` chained squarings cost their sum, so `E = k·S·e`. `e = (2L − 1) + (L − d(ε))`, `L = n/8 = 128`,
@@ -536,7 +536,7 @@ def main() -> None:
                 "column_bits": [_iv_bits(iv) for iv in cols]}
     best = rows["seam_square"]["fixed_units"]
     result = {
-        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747 on the canonical circuit (gates.py); "
+        "model": "security/Definitions/Accounting/Gates/Model.lean @ 8225774747 on the canonical circuit (gates.py); "
                  "lean_units is the count before the gather fix",
         "constructions": rows,
         "seam": {"samples": args.seam_samples, "fails": fails, "c_top_mean": sum(ctops) / len(ctops),

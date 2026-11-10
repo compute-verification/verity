@@ -55,10 +55,10 @@ step's design in place of the FLOP model, after a table of the step beside it (`
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
-- The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
+- The Lean locks (`security/lean-audit.json`, `security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
 - `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
-  algorithms and their traits), which the tests hold the data to; `Security/Definitions/Nci/Remote.lean`, whose
+  algorithms and their traits), which the tests hold the data to; `security/Definitions/Nci/Remote.lean`, whose
   `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to.
 
 ## The model

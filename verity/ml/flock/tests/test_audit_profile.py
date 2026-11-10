@@ -15,7 +15,7 @@ import pytest
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import IntegrityProfile, Subset
 
-AUDIT = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Flock" / "Soundness" / "Audit"
+AUDIT = Path(__file__).resolve().parents[4] / "security" / "Proofs" / "Flock" / "Soundness" / "Audit"
 SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
 AUDIT_COUNT = "L.miss K + εks + δlink"
 
