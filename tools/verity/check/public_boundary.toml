@@ -115,7 +115,7 @@ pouw_tests = [
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
 ]
 protocols = [
-    "verity/core/protocols/{pous,bandwidth,remote_bandwidth}",
+    "verity/core/protocols/{pous,remote_bandwidth}",
     # the inference-only policy, and its tests in the network checks' suite
     "verity/core/protocols/network/nci",
     "verity/core/protocols/network/tests/test_{inference_only_protocol,nci_*}.py",
@@ -134,6 +134,10 @@ protocols = [
     # vLLM's PoUB session tests run PoUB's verifier side in process
     "integrations/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
+    # a registration's `decode`, and its test of that is private with it
+    "integrations/vllm/verity_vllm/pipeline/advice_code",
+    "integrations/vllm/tests/program/predict/test_steps_advice_code.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "integrations/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
