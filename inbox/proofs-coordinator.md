@@ -31,3 +31,48 @@
   - The records run's build confirms that the files elaborate.
 - **One step beyond your list:** the guard fixture predates `rows`, and `heldOf` refuses a `held.json` without them. I regenerate it at `6373364e00`, register it, and run the guard tests on it before the mark.
 - **Runs, all on cpu-12's proofs pool:** records (`--records Security/Proofs --update`), the fixture, and suites at `6373364e00` (`--changed 7af4d24fca`, `main`'s tip). After the lock and registry commits come the suites those change, at the head I mark. The ids are in my turn's report.
+
+## TWOINSTANCE, Tue 10 Nov 02:40Z: the dated plan for Friday's concrete `Ref` (due Fri 13 Nov 12:00Z)
+
+The concrete `Ref` has five pieces: A is `R.x` (TWOWITNESS), B the scope (mine), C the run's messages and round 2 (mine), D the Flock witness (TWOWITNESS), E `Addresses` and the assembly (mine). Non-vacuity stays "not proved" in every file until all five are in and the whole check passes.
+
+**Already elaborated on #8363:**
+- an accepted run from a `Session` (`InstanceRun`);
+- round 2 reduced to the checks that read the statement's bytes (`InstanceCodes`, `14f4faf53d`);
+- the interior record `m₁` (`e492ca7c78`, try `r20261109-220218-a984`) and the boundary record `x` (`99d339bf0b`, try `r20261109-230648-0b0f`), each decoded from its bytes (C).
+
+**Tue 10 Nov (today):**
+- **02:20Z, C.** The header's bindings at the run: `portBinding_i0` and `portBinding_o0` equal `bindOf "i0" s 1` and `bindOf "o0" s 2` at any schema `s`, with SHA-512 left as a term. Commit `0498c47dd5`, try `r20261110-021930-a2e6` on cpu-12, ETA 03:00Z.
+- **02:22Z, review-4.** `designOver0`, `deriveDesign0`, `flockDesign0`, and the retired words in prose. Commit `8a18b1aac0`, try `r20261110-022214-b2cc` on cpu-12, ETA 03:00Z.
+- **When TWOOPENS names the integration head:** one merge. Then `held`'s rows (`per 1`, `runs #[⟨0,2,0,0⟩]` at `i0` and `o0`), the `Addresses` rename, and `InstanceSites` → `InstanceAddresses` on the new linked arm. Lean check and quick suites by `research run`. Mark about 3 h after the head is named. Needs #8309.
+- **18:00Z, the freeze of `R.x`'s bytes (A).** Before it, I instantiate `x0` with TWOWITNESS's `rI`, `dI`, `rO`, `dO`. That needs TWOWITNESS's files on a branch I can merge; `cursor/proofs-twowitness-0d28` isn't on origin yet.
+
+**Wed 11 Nov:**
+- **12:00Z, C.** `headerOk` at TWOWITNESS's `hdrJ`: `atRun` writes `"served/run-0/m0"` and the two `bindOf`s into its run fields, so its `Run` is `⟨"served/run-0/m0", bindOf "i0" s 1, bindOf "o0" s 2⟩`.
+- **18:00Z, A.** `decode R.x` and `stmtJsonOf` (TWOWITNESS).
+- **B.** `Ref.scope` through #8368's `ScopeDesc` (open, `f040c59a8b`). The kernel can't evaluate `scopeOk` itself here, because the statement is about 30 MB (TWOWITNESS's probe). So B lands only once #8368 is in #8363's base. I write it against #8368's head on Wed.
+
+**Thu 12 Nov:**
+- **12:00Z, C.** The checks left to prove:
+  - population, roots, sample, `refsOk` and `valuesOk`;
+  - `verified` and `tables`, from A's `checked_stmt`;
+  - `readOk` at both linked ports, which needs #8309's arm (`rowsOf`, `placedOk`, `linkedRow`);
+  - `recordsOk`, if #8406 has landed; its names are `i0` and `o0`.
+- **18:00Z, E.** `Addresses` at the concrete `R`, and `InstanceRef.lean`: the concrete `Ref` and an accepted run at it, with D's `check xS wF = true` as its one hypothesis. It elaborates by then.
+
+**Fri 13 Nov:**
+- **06:00Z, D.** TWOWITNESS's `wF` goes in, and the hypothesis is dropped.
+- **07:00Z, the run that shows the whole thing compiles.** `verity lean try InstanceRef.lean --siblings` on cpu-12, then #8363's Lean check by `research run` with `--timeout 10800`. ETA 10:00–11:00Z; mark by 12:00Z.
+
+**What needs #8309's new definitions:**
+- **Needs them:** `held`'s rows, `readOk` at the linked ports, `InstanceAddresses` and the assembly.
+- **Doesn't:** the records, the bindings, the header, population, roots and sample, `refsOk` and `valuesOk`, and B, A and D.
+
+**The cut, decided Thu 18:00Z if Friday is at risk.** Each cut keeps non-vacuity open and names the one fact it still needs. No guarantee changes.
+1. **D late:** ship `InstanceRef` with Flock's `check xS wF = true` as the one named hypothesis. `flock-verify` accepting the same bytes is evidence, not a Lean fact.
+2. **#8368 late:** add `Ref.scope` as a second named hypothesis, worded the same way.
+
+**Risks:**
+- D's kernel cost.
+- A's terms aren't on a branch yet, and C needs them Tue and Wed.
+- #8368's landing date.
