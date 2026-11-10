@@ -6,14 +6,14 @@ public import Proofs.Core.Circuit
 /-!
 # Pulling a division back through a containment
 
-Each IU of a containing declaration, intersected with the contained circuit's gates, is a piece of the contained circuit
-(`pull`): the pieces divide `c` into IUs no larger, and each piece reads no more novel information than its IU, since a
+Each inference block of a containing declaration, intersected with the contained circuit's gates, is a piece of the contained circuit
+(`pull`): the pieces divide `c` into inference blocks no larger, and each piece reads no more novel information than its inference block, since a
 novel value it reads is either a computed gate of `c` outside the piece or a novel input gate of `c`, and the containment
-carries both to novel values its IU reads.
+carries both to novel values its inference block reads.
 
 Through a partial containment the pieces (`piece`) divide only the gates `S` that `d` computes, and the dark gates are in
 none. The same holds of each piece, with one more case for what it reads (`novelReads_piece`): a dark value enters `d` as
-an input gate, which lies in no IU, so the IU reads it too, and it is outside `d`'s θ by `ThetaRegistered`. A
+an input gate, which lies in no inference block, so the inference block reads it too, and it is outside `d`'s θ by `ThetaRegistered`. A
 total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `ThetaRegistered` for
 it keeps the novel inputs of `c` that a piece reads out of `d`'s θ (`novelReads_pull`).
 -/
@@ -51,7 +51,7 @@ theorem card_pull_gates_le (u : Fin n) : ((pull M P).gates u).card ≤ (P.gates 
 theorem width_map (S : Finset (Fin C.N)) : C.width S = D.width (S.map ⟨M.emb, M.emb_inj⟩) := by
   simp [Circuit.width, Finset.sum_map, M.emb_w]
 
-/-- A gate outside a piece that the piece reads is, through the containment, a gate outside its IU that the IU reads. -/
+/-- A gate outside a piece that the piece reads is, through the containment, a gate outside its inference block that the inference block reads. -/
 theorem into_pull_map (u : Fin n) :
     (C.into ((pull M P).gates u)).map ⟨M.emb, M.emb_inj⟩ ⊆ D.into (P.gates u) := by
   intro b hb
@@ -109,7 +109,7 @@ theorem ofContainment_S {c d : RegisteredCircuit} (M : Containment c.D d.D) :
 
 variable {c d : RegisteredCircuit} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 
-/-- The piece of `c` that IU `u` of `d` computes: the gates of `S` whose images lie in `u`. -/
+/-- The piece of `c` that inference block `u` of `d` computes: the gates of `S` whose images lie in `u`. -/
 def piece (u : Fin n) : Finset (Fin c.D.N) := M.S.filter fun g => P.unit (M.emb g) = some u
 
 variable {M P}
@@ -140,15 +140,15 @@ theorem into_piece_subset (u : Fin n) : c.D.into (piece M P u) ⊆ M.S ∪ c.D.i
     simp only [Circuit.into, mem_filter, mem_univ, true_and]
     exact ⟨haS, g, piece_subset u hg, hag⟩
 
-/-- A piece has no more gates than its IU: `emb` is injective on `S`. -/
+/-- A piece has no more gates than its inference block: `emb` is injective on `S`. -/
 theorem card_piece_le (u : Fin n) : (piece M P u).card ≤ (P.gates u).card :=
   card_le_card_of_injOn M.emb (fun g hg => mem_coe.2 (mem_piece.1 (mem_coe.1 hg)).2)
     fun a ha b hb h => M.emb_inj a (mem_union_left _ (piece_subset u (mem_coe.1 ha))) b
       (mem_union_left _ (piece_subset u (mem_coe.1 hb))) h
 
-/-- **A piece reads no more novel information than its IU.** A novel value the piece reads is a gate of `S` outside the
-piece, whose image is a computed gate outside the IU, or a gate outside `S`, whose image is an input gate of `d` outside
-its θ (`ThetaRegistered`) and so in no IU; either way the IU reads the image, which is as wide. -/
+/-- **A piece reads no more novel information than its inference block.** A novel value the piece reads is a gate of `S` outside the
+piece, whose image is a computed gate outside the inference block, or a gate outside `S`, whose image is an input gate of `d` outside
+its θ (`ThetaRegistered`) and so in no inference block; either way the inference block reads the image, which is as wide. -/
 theorem novelReads_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
     novelReads c (piece M P u) ≤ novelReads d (P.gates u) := by
   have hA : ∀ a ∈ c.D.into (piece M P u) \ c.θ, a ∈ M.S ∪ c.D.into M.S := fun a ha =>
@@ -183,7 +183,7 @@ theorem novelReads_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
         exact sum_congr rfl fun a ha => (M.emb_w a (hA a ha)).symm
     _ ≤ ∑ b ∈ d.D.into (P.gates u) \ d.θ, d.D.w b := sum_le_sum_of_subset (image_subset_iff.2 hmaps)
 
-/-- **The pieces divide `S`**: a gate of `S` is in the piece of its image's IU, and in no other. -/
+/-- **The pieces divide `S`**: a gate of `S` is in the piece of its image's inference block, and in no other. -/
 theorem sum_card_filter_piece {β : Type*} (B : Finset β) (f : β → Fin c.D.N) :
     ∑ u, (B.filter fun b => f b ∈ piece M P u).card = (B.filter fun b => f b ∈ M.S).card := by
   rw [card_eq_sum_card_fiberwise (s := B.filter fun b => f b ∈ M.S) (f := fun b => P.unit (M.emb (f b)))

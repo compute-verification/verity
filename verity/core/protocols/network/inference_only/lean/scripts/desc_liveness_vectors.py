@@ -6,7 +6,7 @@ Writes `DIR/desc_liveness/cases.jsonl`, one case per line: `{"id", "mode", "smal
 `InferenceOnlyCheck.Desc` (θ and the owners per root node) on one Program shape, with `n` (a scan's iterations, a batch's members)
 small and past anything walked one by one (2^22 to 2^52). `InferenceOnlyCheck/DescLivenessMain.lean` fails unless
 `InferenceOnlyCheck.Desc.check` gives on `small` what `InferenceOnlyCheck.check` gives on it expanded gate by gate, and on `big` a verdict
-equal to `small`'s (`mode` `same`) or with the same novel reads per IU (`novel`, where the gates grow with `n`).
+equal to `small`'s (`mode` `same`) or with the same novel reads per inference block (`novel`, where the gates grow with `n`).
 
 The shapes are the fuzzer's, on which `InferenceOnlyCheck.Desc` once
 overflowed its stack, ran for a time linear in `n` or ran out of memory, and the closed forms that replaced those walks:
@@ -115,7 +115,7 @@ def aff(s, i, b, c):
 
 
 def finish(P: Program, root: Body, ret_node: int, theta: tuple[int, ...] = ()) -> dict:
-    """The instance: every other root node in IU 0, and θ the inputs `theta`, which a read then doesn't count."""
+    """The instance: every other root node in inference block 0, and θ the inputs `theta`, which a read then doesn't count."""
     P.composite("R_v1", root, V(8), aff("n", ret_node, 0, 1))
     owner = ["input" if k in root.inputs else 0 for k in range(len(root.nodes))]
     return {"program": P.text(), "theta": list(theta), "owner": owner, "gamma": 10, "alpha": [8, 1]}
