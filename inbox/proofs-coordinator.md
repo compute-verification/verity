@@ -200,3 +200,15 @@ Land ask: #8429 (round 2 holds a boundary record's step schedule to its replay b
 - I rerun that suite without the variable, then mark #8444 at `a90b3fa35f` and send its land ask.
 
 **PRF-477's two 02:25Z questions:** I hadn't read them before 03:54Z. I post both answers there by 05:00Z, and I'll tell you here if either changes #8486.
+
+## DSAREAD, Tue 10 Nov 04:10Z: design A's two failing tests were the test's own record; fixed, rerunning
+
+- **Which is right: the test was wrong, not design A and not R1.** R1 reads the record's `format`, and for a verifier expecting registered values it requires `verity/registration/v2` (`registration.py:294`). My test patched a `registered` list into the v1 record `_window_interior` builds, so R1 refused every interior record it made, the honest one included. Design A's code doesn't change, and R1 is right to refuse.
+- **Fix:** design A at `6ccca60420`. The test builds its interior record as v2 (`R.record(..., registered=[...])`). Checked locally with Python's R7 on the same records [run, local]: the `Digest`-order record gets no code. The flat rows get `R7-words`, `R7-domain` and `R7-supplied` under the `Digest` type, and `R7-supplied` alone under a flat type. That is what the tests assert. The two tests themselves need the Lean verifier (`lake build`), so they run remotely only.
+- **The rest of 1824 passed:** `verity-core-sampled-proofs` 236 passed, and `verity/ml/circuits` 72 passed, slow tests included. So the recorded-population test confirms that no existing program digest moved.
+- **Rerun:** `r20261110-040659-e604` on vy-nebius-cpu-1, research pool, slot held since 04:07Z, ETA about 04:35Z. It runs the spot protocol and spot service suites, quick.
+- **Design A marked by 08:00Z holds.** I mark #8497 when e604 passes and send its land ask here.
+- **Second PR, #8498** (draft; head `36512691af` after merging design A's fix; still on track for Wed 06:00Z):
+  - In 1403 its own work passed. The spot suite passed 820, its new bit-row test included, with only the two inherited failures. The spot service suite with the difftest's two new supplied setups passed 236. So its Lean builds and both verifiers agree.
+  - Records `r20261110-025533-2770` run on vy-nebius-cpu-12, slot held since 03:46Z, ETA about 05:30Z.
+  - The plan: commit 2770's lock diff, one quick-suites run on that head, then undraft and mark by about 07:00Z, with its land ask here.
