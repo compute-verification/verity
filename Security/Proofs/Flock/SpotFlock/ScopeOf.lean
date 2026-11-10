@@ -24,7 +24,8 @@ members' programs side by side (`bitsProgs`), their proof blocks (`membersPart`)
   requests' (`FilesFill`); slot `p < n_t` of request `ρ` in member `t` is proof block `filesBlockOf ms ns ρ t p`
   (`replayOf_filesReplay_iff_filesBlockOf`), distinct for distinct `p` (`injective_filesBlockOf`).
 * `scopeOk_members`, `two_eq_filesReplay`, `isSome_two`: `scopeOk` accepts the members, and `two` returns their replay
-  design, for members that fit (`MemberFits`), a layout that fits and fills their files, and a well-formed design.
+  design, for members that fit (`MemberFits`), a layout that fits and fills their files, a well-formed design, and
+  templates whose reference statements read as members' (`templateOk`).
 -/
 
 @[expose] public section
@@ -637,22 +638,24 @@ theorem scopeOk_members {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slot
   exact hk
 
 /-- **`two` returns the members' replay design** for members that fit, a replay layout that fits (`filesOk`) and fills
-their files, a well-formed first-stage design and second-stage counts of at least `1`, one for each member. -/
+their files, a well-formed first-stage design, second-stage counts of at least `1`, one for each member, and templates
+whose reference statements each read as a member's (`templateOk`). -/
 theorem two_eq_filesReplay (h : Held) (s : AuditStatement) {l : Spot.Slots.Layout} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)
     (hwf : d.WellFormed (filesReplay h.ms h.reg.ns l)) (hk : h.k.length = h.ms.length) (hk1 : ∀ x ∈ h.k, 1 ≤ x)
-    (hf : filesOk h.reg h.ms l h.k = true) : two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
+    (hf : filesOk h.reg h.ms l h.k = true) (ht : ∀ t < h.ms.length, templateOk h t = true) :
+    two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
   have hs := scopeOk_members hm (filesOk_sound hf).2.2.1 hfill hwf hk hk1
   unfold two
   rw [hl, hd]
-  simp [hs, hf]
+  simpa [hs, hf] using ht
 
 theorem isSome_two (h : Held) (s : AuditStatement) {l : Spot.Slots.Layout} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hm : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfill : Flock.Bridge.Members.FilesFill h.ms h.reg.ns l)
     (hwf : d.WellFormed (filesReplay h.ms h.reg.ns l)) (hk : h.k.length = h.ms.length) (hk1 : ∀ x ∈ h.k, 1 ≤ x)
-    (hf : filesOk h.reg h.ms l h.k = true) : (two h s).isSome := by
-  simp [two_eq_filesReplay h s hl hd hm hfill hwf hk hk1 hf]
+    (hf : filesOk h.reg h.ms l h.k = true) (ht : ∀ t < h.ms.length, templateOk h t = true) : (two h s).isSome := by
+  simp [two_eq_filesReplay h s hl hd hm hfill hwf hk hk1 hf ht]
 
 end SpotFlock
