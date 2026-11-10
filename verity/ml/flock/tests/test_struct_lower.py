@@ -124,6 +124,22 @@ def test_a_definition_two_calls_read_different_columns_of_is_evaluated_for_each(
     assert want[0][0] == int(lanes[0, 0] & lanes[1, 0]) and want[1][0] == int(lanes[2, 0] ^ lanes[3, 0])
 
 
+def test_a_column_its_caller_writes_inside_a_copy_is_refused_not_evaluated_as_zero():
+    """A copy at 128 of a callee whose row at its column 2 copies its column 1, which the callee leaves unwritten and the
+    caller writes (x at 129). `tmpl.ordered` accepts it and unrolled its output is x, but a copy evaluated on its own reads
+    zero there, so `tmpl.evaluate` refuses the template; without the caller's row it reads the zero the unroll reads."""
+    K = 385
+    q = T.Def(3, 0, ((2, (1,), (3,)),), ())
+    rows = ((0, (0,), (0,)), (129, (0,), (K,)), (256, (130,), (K,)))
+    t = T.Tmpl("t", 1, [str(x) for x in (1, 0, 1, 1, 1, 1, 2, 1, 1, 1)], [q, T.Def(K, 0, rows, (T.Call(0, 1, 128, 3, ()),))])
+    lanes = np.array([[0b10]], np.uint64)
+    assert T.ordered(t)["ok"] and S.evaluate(T.unroll(t), [0b10], 1)[256] == 0b10
+    with pytest.raises(ValueError, match="inside a copy's columns"):
+        T.evaluate(t, lanes)
+    t.defs[1] = T.Def(K, 0, rows[::2], t.defs[1].calls)
+    assert T.evaluate(t, lanes).tolist() == [[S.evaluate(T.unroll(t), [0b10], 1)[256]]] == [[0]]
+
+
 #: a library table of 256 bytes whose bit 6 is always 0 and bit 7 always 1, so a read folds both into the constant
 TOY_TABLE = "struct-lower-toy"
 TOY_WORDS = (np.random.default_rng(7).integers(0, 1 << 6, 256) | 0x80).astype(np.uint32)
