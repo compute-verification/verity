@@ -24,8 +24,8 @@ fails for a work that multiplies by a word of registered inputs (`untie_hH_false
 gates as inputs that multiplies by a word `d` computes from `θ` alone (`asInputs_hH_false`). On the toy with its `w`
 gate registered and then untied, the premises of `Untied.bound_untie_he` hold together, with (H) at the untied
 circuit, and (H) at `d` fails at every `k` and all positive costs (`toyR_premises`). On `CZ`, with a gate computed
-from `θ` as an input and a work that multiplies by it, (H) holds at the circuit with that gate as an input and fails
-at `d` (`toyZ_premises`).
+from `θ` as an input and a work that multiplies by it, the premises of `Untied.bound_asInputs_he` hold together, with
+(H) at the circuit with that gate as an input, and (H) at `d` fails (`toyZ_premises`).
 -/
 
 @[expose] public section
@@ -193,7 +193,8 @@ theorem HEShared_nontrivial : Guarantees.HEShared_nontrivial := by
 /-! ### (H) at the untied circuit
 
 `Untied.bound_untie_he` and `Untied.bound_asInputs_he` take (H) at the untied circuit. Two toys multiply by an untied
-word: there (H) holds at the untied circuit, and (H) at `d` fails at every `k` and all positive costs. -/
+word: there every premise of the bound holds, with (H) at the untied circuit, and (H) at `d` fails at every `k` and all
+positive costs. -/
 
 /-- (H) holds at costs 1 and every `k` where each word of the two arrays is one input gate outside `θ` and no word is
 in both: every separator from those gates holds each of them. -/
@@ -413,15 +414,42 @@ theorem toyZ_hardness_asInputs (k : ℕ) :
     Assumptions.Hardness (dZ.asInputs TZ) ![WZ.allW, WZ.allX] valZ ![1, 1] k :=
   hardness_of_input_words (dZ.asInputs TZ) WZ.allW WZ.allX valZ (by decide) (by decide) k
 
-/-- **(H) with a gate as an input, on a work that multiplies by that gate.** `CZ` computes gate 2 from `θ` alone. With
-it as an input, and a work that multiplies by it, (H) holds at the circuit with the gate as an input, at costs 1 and
-every `k`: the premise `Untied.bound_asInputs_he` takes. (H) at `d` fails at every `k` and all positive costs: the
-word's `κ` at `d` is 0. -/
+/-- One block holding both computed gates of `CZ`. -/
+def PZ : Partition CZ 1 where
+  unit := fun g => if g.val < 2 then none else some 0
+  input_iff := by decide
+
+/-- The block reads one gate outside `θ`, the `x` gate: the other gate it reads is the registered input. -/
+theorem toyZ_reads : ReadsAtMost dZ PZ 1 := by
+  unfold ReadsAtMost
+  decide
+
+/-- The MAC is its output's one wire, so a set holding the MAC holds a wire of the output. -/
+theorem toyZ_clear (B : Finset (Fin (CZ.asInputs TZ).N)) : WZ.clear B = ∅ := by
+  refine filter_false_of_mem fun o _ h => ?_
+  obtain ⟨⟨s, rfl, hsB⟩, hdis⟩ := h
+  exact disjoint_left.1 hdis (mem_singleton_self _) (hsB (mem_singleton_self _))
+
+theorem toyZ_exports (b : ℝ) : Assumptions.Exports WZ b := by
+  intro B _
+  rw [toyZ_clear, card_empty, Nat.cast_zero, mul_zero]
+  exact Nat.cast_nonneg _
+
+theorem toyZ_values : ValuesInjective WZ valZ := fun _ => ⟨Set.injOn_id _, Set.injOn_id _⟩
+
+theorem toyZ_noSharedPair : NoSharedPair WZ valZ := fun a a' h => absurd (Subsingleton.elim a a') h
+
+/-- **The premises of `Untied.bound_asInputs_he` hold together on a work that multiplies by a word of `T`.** `CZ`
+computes gate 2 from `θ` alone, and one block holds both computed gates (`PZ`); the block read 1 gate outside `θ`. With
+gate 2 as an input (`T = TZ`), and a work that multiplies by it: at the circuit with the gate as an input,
+`dZ.asInputs TZ`, (H) holds at costs 1 and every `k`; (E) holds and the values are distinct. (H) at `d` fails at every
+`k` and all positive costs: the word's `κ` at `d` is 0. -/
 theorem toyZ_premises :
-    (∀ g ∈ TZ, CZ.isInput g = false) ∧
+    (∀ g ∈ TZ, CZ.isInput g = false) ∧ ReadsAtMost dZ PZ 1 ∧
       (∀ k, Assumptions.Hardness (dZ.asInputs TZ) ![WZ.allW, WZ.allX] valZ ![1, 1] k) ∧
+      Assumptions.Exports WZ 1 ∧ ValuesInjective WZ valZ ∧ NoSharedPair WZ valZ ∧
       ∀ βw βx : ℝ, 0 < βw → 0 < βx → ∀ k, ¬ Assumptions.Hardness dZ ![WZ.allW, WZ.allX] valZ ![βw, βx] k :=
-  ⟨by decide, toyZ_hardness_asInputs,
+  ⟨by decide, toyZ_reads, toyZ_hardness_asInputs, toyZ_exports 1, toyZ_values, toyZ_noSharedPair,
     fun _ _ hw hx k => asInputs_hH_false dZ TZ WZ valZ hw hx (Or.inl toyZ_word) toyZ_kappa k⟩
 
 end Nci.Cut.SecurityProofs
