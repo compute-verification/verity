@@ -10,6 +10,8 @@ public import Mathlib.Data.Fintype.Pigeonhole
 public import Batteries.Lean.Except
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Range.Basic
 import all Init.Data.Repr
 
 /-!
