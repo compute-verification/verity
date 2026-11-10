@@ -1,38 +1,5 @@
 # Network certifier (`verity.core.protocols.certifier`)
 
-## Interface
-
-- **Python**: `verity.core.protocols.certifier`. Code outside this directory imports every module but `boundary`,
-  `capacity` and `pacer`. Its importers: the prover side, `verity/ml/protocols/certifier`; `../network`'s tests and
-  vector script; `../../devices/certifier`'s vector scripts; `integrations/vllm` (`active`, `advice`, `blocks`,
-  `compile_slice`, `io_tie`, `release`, `served_rows`, `warden`); the tests of `../pouw` and `tools/verity`; and in
-  `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`, `pouw`, `remote_session`,
-  `live_challenger`, `mempool` and `compile_cost`. `../spot`, `verity/core/service` and `verity/ml/flock` import none.
-- **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
-- **Lean here**: `lean/`, the certifier program, is the Lake package `certifier_program`, whose library
-  `NetworkCertifier` the packages at `../network/lean`, `../../devices/certifier/lean` and `Security/Proofs` require by
-  path. Its executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`,
-  each `INSTANCES PYTHON N`. The Lean check runs each `lean/scripts` script, then its difftest (`lean/lean-audit.json`).
-- **Lean beside it**: `../network/lean` is the Lake package `network_check`, whose library `NetworkCheck` the
-  packages at `../../devices/certifier/lean`, `../onsite` and `Security/Properties` require by path. Its executables:
-  - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
-    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`;
-  - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
-    a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
-  - `network-check-difftest INSTANCES PYTHON N`.
-- **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads.
-- **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
-  tests of `integrations/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`,
-  `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
-  `benchmarks/network_e2e/encodings` writes; and in `../network/tests`, `period_case.py` (`benchmarks/network_traces`)
-  and `test_network_period_protocol.py` (the tests of `../composition`).
-- **Loads from**: `lean/`, no package. The modules, `verity.ml.circuits`, `verity.ml.commitments`, `verity.ml.crypto`
-  and `verity.core.protocols.spot`, never the prover side, which `lean/scripts/window_vectors.py` and the tests import.
-- **Not here**: the certifier's host programs, which are in `benchmarks/network_traces`.
-
-## Overview
-
 A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
@@ -79,7 +46,7 @@ A spec-level reference for network accounting's timing channel:
   permutation, each request on its ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier
   computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
   hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
-  root). The cells are the network certifier's: a connection's r slots a bucket, a `PAD` on its stream before
+  root). The cells are the network certifier's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before
   its first cell and after its `END`, one id event a `DATA` cell. The network certifier commits each bucket's cells as
   one hiding row. It has the reference and the proof block's Boolean Definition, one a bucket row (`IoTieBucket`: the
   row and the port's rows read as registered rows, the network certifier's and the Commit's (`port_reads`), then
