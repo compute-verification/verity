@@ -24495,3 +24495,23 @@ Next: the 12:00Z items (review-1's findings on #8359, and who stages `SparseMlaS
 **Blocker for the deploy, not mine.** [read] infra's note of 01:42Z, updated 04:53Z: infra's lead cannot log in as vy-admin to vy-challenger-1 (Permission denied at 04:30Z; the key was asked of the previous lead). Until that is fixed nobody can repin the gate, and nobody can run `policy-register`.
 
 **Could not verify.** The pin the gate runs now, at source (I hold no gate key). That ci's loop takes a PR stacked on another's commits without trouble. Whether Lean's ledger check accepts `policy_name` (run `fe7c`, in line). Whether `vllm/serve-registers-weights` is the goal you want on these PRs. Nothing on the auditor host was run: every gate result above is a local gate with a test key.
+
+## BINDKSAT, Tue 10 Nov 05:16Z: both witness files elaborate, and each rc 1 is the siblings check on a stale slot build; no rerun; #8512's records are in at `5eb93b2b01`
+
+**1. The cause is the slot, not my files.** Both runs shipped their branch heads: `job.json` reads `eb4466782a` and `fad88b51f7`.
+- `r20261110-043916-83db` (slot `build-0`): `RegWitnesses.lean: lean exit 0 in 1113 s`. Its axiom probe: none of its 5 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The rc 1 is `--siblings`: `Identity.Domains` and `Identity.Domains.Pouw` both declare `Domains.POUW_PERIOD_SIDE_DOMAIN_B`. That is a second stale-build clash besides `stepWith.eq_1`, and neither module is mine.
+- `r20261110-044445-9a0a` (slot `build-1`): `TwoRegWitnesses.lean: lean exit 0 in 762 s`. Its probe: all 3 theorems use only the three standard axioms. The rc 1 is `--siblings` refusing `Claims.stepWith.eq_1` (`CompleteFails` against `Finder`), which is TWOWITNESS's cause.
+
+**2. No rerun:** neither file needs a change. If you want an rc 0 try for the record, I rerun each after a `lean_changed.py --build` of its clashing pair; say so.
+
+**3. `fad88b51f7` stands.** The records are committed on top of it, so #8512's head is `5eb93b2b01`.
+- `r20261110-042215-93e6` passed (rc 0, `AUDIT: PASS`) at `278453abc5`. `Security/lean-audit.json` is unchanged from there to `fad88b51f7`, which adds only `TwoRegWitnesses.lean` (no lock entry) and its aggregator line. So the records apply.
+- Against the branch's lock, the regenerated lock adds three things: the eleven new guarantees' records, `KSRegTwo`'s domain digest, and `Definitions.Claims.SamplingTwoReg` under `reads`. No existing guarantee record moved.
+- It also drops three of `CommOfPeriodLeakAccepted`'s six `shape.inline` entries. They are stale renderings (`Claims.Sampling.κ D δ`) of premises it keeps as `D.κ δ`, which is bookkeeping.
+
+**4. Next:** `suites.py --changed 7af4d24fca --quick` at `5eb93b2b01` is `r20261110-051610-c75b` on cpu-11, ETA about 06:00Z. After it passes, I send the land ask by Tue 18:00Z. On the lock question, option (a) stands.
+
+**5. Your other points:**
+- **#8536's aggregator:** neither PR touches `Security/Proofs/Flock/SampledGeneric.lean`. #8512 touches `Proofs/Flock/SamplingGeneric.lean` and `Proofs/WeightSecurity.lean`; #8527 touches only `Proofs/WeightSecurity.lean`.
+- **Spot README:** neither PR touches it.
+- **#8512 and #8527:** both add import lines and a docstring sentence to `Proofs/WeightSecurity.lean`, so whichever lands second merges the other's lines.
