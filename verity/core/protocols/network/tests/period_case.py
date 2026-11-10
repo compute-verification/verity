@@ -21,24 +21,12 @@ sampled network certifier session, its clock certificate signing a sync of Σ_sy
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
-<<<<<<< 99c8914848
-none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
-of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
-smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
-`ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
+none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and
+the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
+and domain of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1`
+at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan
+slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
-||||||| merged common ancestors
-none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
-that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
-pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
-=======
-none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
-that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
-pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
->>>>>>> 7af4d24fca3e
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
@@ -46,31 +34,15 @@ the checker form is a bad scan (`bad_scans`), as is each check's negative of wha
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
-<<<<<<< 99c8914848
-draw (a work law's) and its bound on incorrect proof blocks, every unit drawn for an audit a scan's `prog` is tied to,
-or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part (`tied-partial`, a
-stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`, `subset:k`, the demo's
-sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`, `tied-slots-sampled`), and a
-link-window whose scan's state is not its
+sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's
+`prog` is tied to, or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part
+(`tied-partial`, a stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`,
+`subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`,
+`tied-slots-sampled`), and a link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
-||||||| merged common ancestors
-draw (a work law's) and its bound on wrong units, every unit drawn for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
-=======
-sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
->>>>>>> 7af4d24fca3e
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -503,19 +475,9 @@ def slot_entry_digest(j: dict, key: str) -> str:
 
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
-<<<<<<< 99c8914848
     each committing its template's return; a root with no template refused; its slot entries' templates
     (`ENTRY_IDS`) with their closure digests. It reads the descriptor's root nodes, signatures and the slot entries'
-    Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
-||||||| merged common ancestors
-    each committing its template's return; a root with no template refused; its slot entries' templates with their
-    closure digests. It reads the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's
-    decoder, which Lean runs on it, refuses no descriptor this module writes."""
-=======
-    each committing its template's return; a root with no template refused; its slot entries' templates with their
-    closure digests. It reads the descriptor's root nodes, signatures and the slot entries' Definitions; Flock's
-    decoder, which Lean runs on it, refuses no descriptor this module writes."""
->>>>>>> 7af4d24fca3e
+    Definitions; Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
     _exactly(a, ["free", "program", "steps"], ctx)
     free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -537,19 +499,9 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
-<<<<<<< 99c8914848
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
     own input node of its slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
-||||||| merged common ancestors
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
-=======
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
     the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
->>>>>>> 7af4d24fca3e
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")

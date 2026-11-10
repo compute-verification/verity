@@ -465,8 +465,8 @@ class P2(Scheme):
         if (p.w, p.c0, p.blocks_per_segment) != POINT:
             return None
         return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                           theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
-                           claims=P2_CLAIMS)
+                             theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
+                             claims=P2_CLAIMS)
 
     def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
         out = []
@@ -500,7 +500,7 @@ def family_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+                         theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
 
 
 def wide_certificate(params: P2Params) -> CapacityBound | None:
@@ -513,7 +513,7 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+                         theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
 def wide320_certificate(params: P2Params) -> CapacityBound | None:

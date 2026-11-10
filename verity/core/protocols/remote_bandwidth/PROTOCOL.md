@@ -1335,29 +1335,13 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 - **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
-<<<<<<< 99c8914848
-  `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
-  the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
-  period. They take windows of one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ
-  in \(U_t\), and its draws are distinct, which only lowers the chance that they all pass. `pooled` applies the same
-  argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
-  on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
-||||||| merged common ancestors
-  `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
-  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
-  one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
-  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
-  on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
-=======
   `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
-  the horizon and every window at once, both from `PooledSampling`, the causal horizon bound. They take windows of
-  one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ in \(U_t\), and its samples are
-  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
+  the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
+  period. They take windows of one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ
+  in \(U_t\), and its samples are distinct, which only lowers the chance that they all pass. `pooled` applies the same
+  argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each sample's first
->>>>>>> 7af4d24fca3e
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
   \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
@@ -1654,16 +1638,8 @@ values, by name, before the first coin, and so does the Lean, naming each in `p2
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-<<<<<<< 99c8914848
-- No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
-||||||| merged common ancestors
-- No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
-=======
 - No property in `Security/Properties/Accounting/Remote` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
->>>>>>> 7af4d24fca3e
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).
 

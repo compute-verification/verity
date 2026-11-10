@@ -172,20 +172,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-<<<<<<< 99c8914848
 from verity.core import site as ST  # noqa: E402
 from verity.core.protocols import registration as G  # noqa: E402
-from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-||||||| merged common ancestors
-from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-=======
 from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
->>>>>>> 7af4d24fca3e
 from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import history as HW, interface as IF  # noqa: E402
 
@@ -644,7 +635,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.spot import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -925,7 +916,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
         if a.day_ledger:
-            from verity.core.protocols.sampled_proofs import challenger as Ch, remote as SPR
+            from verity.core.protocols.spot import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
@@ -956,17 +947,11 @@ def audit(a: argparse.Namespace) -> int:
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
-<<<<<<< 99c8914848
     a.tie, a.declared = tied, day
     if tied:
         named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
         (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
-||||||| merged common ancestors
-    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
-=======
-    a.tie = tied
->>>>>>> 7af4d24fca3e
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,

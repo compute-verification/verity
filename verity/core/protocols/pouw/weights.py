@@ -38,16 +38,8 @@ import re
 from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-<<<<<<< 99c8914848
 from verity.core.protocols.pouw.protocol import fold_roots
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-||||||| merged common ancestors
-from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-=======
-from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.spot.one_stage import registered as G
->>>>>>> 7af4d24fca3e
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import merkle_depth

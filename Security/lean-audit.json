@@ -3599,6 +3599,7 @@
   "Evaluate.Casts",
   "Evaluate.TC.Spec",
   "Evaluate.TC.Dots",
+  "Evaluate.TC.Fp8Atom",
   "Evaluate.Prims",
   "Identity.Sha512",
   "Identity.Tagged",
@@ -28555,27 +28556,28 @@
     "∀ (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) bad).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
-    "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
-    "instLENat.le (instHMul.hMul m T) (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
-    "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
     "instLEENat.le As.encard (instHPow.hPow 2 c).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets d P δ) F → instLENat.le (NetTiming.faultyBits C P F) β": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
-    "instLENat.le (instHMul.hMul m T) (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z (instHMul.hMul m T))) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (I.obsRun z (instHMul.hMul e₀ (instHMul.hMul g T))) p": "an equation, the prefix the per-execution-block form restates beside its grandfathered bounds: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)))) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
     "∀ (m : Msg), Set.instMembership.mem Ms m → ∀ (ℓ : Fin L), (NetTiming.linkFrames (I.obsRun m n) ℓ).IsPrefix (c ℓ)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28602,7 +28604,7 @@
     "∀ (msg : Msg), Set.instMembership.mem Ms msg → Eq (dec (I.obsRun msg (instHMul.hMul m T))) msg": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.ExpectedRowCausal": {
-    "∀ (w : Fin W), instLENat.le w.val (instHDiv.hDiv t T) → Eq (syncs w) (syncs' w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (e : Fin E), Eq e.val (instHDiv.hDiv t (instHMul.hMul g T)) → Eq (a e) (a' e)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.PeriodLeakAccepted": {
     "∀ (i : Fin n), Eq (D.partition (sw i)) (Option.some (Pw i))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
