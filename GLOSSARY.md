@@ -116,7 +116,7 @@ Anyone who finds a reason this is wrong says so at once.
 ## Workload
 
 A **workload** (`ARCHITECTURE.md`'s Glossary) covers inference and training alike, and workloads
-run side by side are one workload. vLLM's workload files (`integrations/vllm/workloads/*.json`,
+run side by side are one workload. vLLM's workload files (`adapters/vllm/workloads/*.json`,
 `verity-vllm/workload/v2`) each state one with the runtime that serves it (engine, target, execution).
 
 ## Older names
@@ -182,7 +182,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "stage", outside a sampling design's stages (one-stage, two-stage, the first and second stage) and a pipeline stage; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
-| "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
+| "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `adapters/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
 | "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
@@ -286,7 +286,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - In a kernel, a **warp** is CUDA's 32 threads that issue together, and a **lane** is one thread's index among them.
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`).
-- In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
+- In `adapters/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
 - Six words still carry two senses in the code:
   - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
@@ -348,7 +348,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   binding unit whose roots reach it.
 - **Transformer sublayer**: one of a transformer layer's two halves, its attention or its FFN (MLP or MoE), each with its
   residual add; in DeepSeek-V4, each sits inside the hyper-connections' pre and post mixes.
-- **Value acquisition** and **native tap** (`integrations/vllm`'s `acquire/`): value acquisition takes a required value's
+- **Value acquisition** and **native tap** (`adapters/vllm`'s `acquire/`): value acquisition takes a required value's
   bytes where vLLM computes it, by a Python hook or a native tap (a capture compiled into a kernel).
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
   clock (one bucket, `bucket_ms`): its row of that direction's record (`WardenParams.grid`), proved as its own proof

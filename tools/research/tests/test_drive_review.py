@@ -1033,7 +1033,7 @@ def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monke
     here is the gate's own, run on the merges drive landed."""
     import sys
 
-    p01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+    p01 = "adapters/vllm/tests/lint/allowlists/p01_core.json"
 
     def allowlist(*files: str) -> str:
         return json.dumps({"rule": "p01", "entries": [{"file": f, "kind": "k", "symbol": "s", "detail": "d"} for f in files]})
@@ -1051,7 +1051,7 @@ def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monke
     merge2 = _git(world.origin, "rev-parse", "main^1")
     assert _subject(world, merge2).startswith("Queue: #2")
     _git(world.dev, "fetch", "-q", "origin")
-    gate = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "integrations/vllm/tools/ratchet_gate.py"),
+    gate = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "adapters/vllm/tools/ratchet_gate.py"),
                            base, tip], cwd=world.dev, capture_output=True, text=True, env={**os.environ, "RATCHET_GATE_CACHE": ""})
     assert gate.returncode == 1 and f"  #2 ({merge2[:12]}): failed: grows {p01} 2 -> 3 entries" in gate.stdout, gate
     run = _steps_run(tmp_path, "r-post-0", {s: "passed" for s in EVERY if s != "ratchet-gate"})

@@ -195,16 +195,16 @@ BENCHMARKS_IMPORTERS = {
     "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
                                                                  "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
-    "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
+    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
                                                        "`config.P2_POUS` and `config.P2_STAGE`",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
                                                                           "`config.REMOTE_SESSION`) and `paged.py` "
                                                                           "(`benchmarks/vllm_encoded`)",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
-    "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
+    "adapters/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
                                                        "reference (`benchmarks/pous/band_gpu/memory_challenger.py`)",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
@@ -252,18 +252,18 @@ BENCHMARKS_IMPORTERS = {
                     "(`benchmarks/pous/band_gpu`)"),
     "verity/ml/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
-                     "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
-                     "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
+    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py",
+                     "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
+                     "adapters/vllm/tests/protocols/test_pouw_h1_circuits.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `benchmarks/live_challenger`)"),
-    **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
+    **dict.fromkeys(("adapters/vllm/tests/protocols/challenger_host.py", "adapters/vllm/tests/protocols/local_gate.py"),
                     "proofs: the live challenger's gate and model registry (`benchmarks/live_challenger`)"),
-    **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
-                     "integrations/vllm/tests/engine/int8_store_gpu.py"),
+    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py",
+                     "adapters/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
                     "and `benchmarks/vllm_encoded/paged.py`"),
-    "integrations/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
+    "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each

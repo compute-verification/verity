@@ -19,7 +19,7 @@ SELFTEST_ALL=${MU_SELFTEST_ALL:-1024:4:4}
 MU_CASES=${MU_CASES:-private_cut_word_tampered unit_internal_bit_flipped output_row_committed_false tail_swapped}
 export HZ_CONFIGS=multi-unit HZ_N=1 HZ_MEM_GB=${CHECK_SLOT_MEM_GB:-${MU_MEM_GB:?}} HZ_RUNS=1 HZ_WARM=0
 [ -n "${MU_CACHE:-}" ] && export HZ_CACHE=$MU_CACHE
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
 source benchmarks/pouw/hidden_zk/job.sh
 
 build_tests() {   # build_tests DEST: DEST/flock-live-tests, flock-live's lib tests (sha512, glue)

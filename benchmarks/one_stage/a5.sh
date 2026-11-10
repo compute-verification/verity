@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through registration, the verifier's Lean
-# draw, M0's prover and the Lean verifier of record (a5.py). The Commit is the CPU RoPE d64 fixture (integrations/vllm
+# draw, M0's prover and the Lean verifier of record (a5.py). The Commit is the CPU RoPE d64 fixture (adapters/vllm
 # tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and the window is
 # `verity-vllm serving-rows` on it; with WINDOW=served it is the in-Commit hook's over the same members (served_rope --served),
 # which A5 takes only over a SHA-512 run root of record. The fixture's members are committed under rows-sha512, which the window
@@ -56,10 +56,10 @@ if [ "$WINDOW" = served ] && [ -n "${A5_ROW_DIR:-}" ]; then
   WIN=${A5_WINDOW:?A5_ROW_DIR with WINDOW=served needs A5_WINDOW, the window the Commit committed}
   [ ! -e $WIN/error.txt ] || { echo "a5.sh: the Commit's window failed:"; tail -20 $WIN/error.txt; exit 8; }
 elif [ "$WINDOW" = served ]; then
-  (cd integrations/vllm && $PY -m tests.pipeline.served_rope $S --served) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
+  (cd adapters/vllm && $PY -m tests.pipeline.served_rope $S --served) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }
   WIN=$S/hook
 else
-  [ -n "${A5_ROW_DIR:-}" ] || { (cd integrations/vllm && $PY -m tests.pipeline.served_rope $S) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }; }
+  [ -n "${A5_ROW_DIR:-}" ] || { (cd adapters/vllm && $PY -m tests.pipeline.served_rope $S) > $O/commit.json 2> $O/commit.err || { tail -20 $O/commit.err; exit 8; }; }
   t0=$(date +%s%N)
   $REPO/.venv/bin/verity-vllm serving-rows $BUNDLE --row-dir $ROWD --partition $PART --out $S/window \
     > $O/serving-rows.log 2>&1 || { tail -20 $O/serving-rows.log; exit 8; }
@@ -71,7 +71,7 @@ mkdir -p $O/window && cp $WIN/{registration,window,partition,index}.json $WIN/m*
 # the verifier's lowering: a synthetic input set of the template (its values are never read)
 $PY -m verity_numerical.bench.generate --subcircuit ${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16} --n 4 --seed 1 --out $W/sets > $O/sets.log 2>&1 || exit 9
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 $PY benchmarks/one_stage/a5.py --bundle $BUNDLE --row-dir $ROWD --partition $PART --window $WIN \
   --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/a5 2>&1 | tee $O/a5.log | cut -c1-4000

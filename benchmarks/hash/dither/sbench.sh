@@ -201,7 +201,7 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 [ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 # the credit gate at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
-git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
+git show "$CREDIT_GATE_SHA:adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
 # H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
 # this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
@@ -233,7 +233,7 @@ if [ -n "${J10R_SHA:-}" ]; then
 fi
 # the per-call challenger round's measured round trips (paced samples in percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
-cd integrations/vllm
+cd adapters/vllm
 [ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
 PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
 export PATH=$(dirname "$PY"):$PATH

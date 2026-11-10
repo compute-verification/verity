@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "modeled",
  "provisional": true,
- "source": "art:9ec1d8b37286bdd5ec3cee7d39da27d97866eece6018d994c4921d068bc49abb: benchmarks/one_stage/a11_kinds.py's census of GLM-5.3's request Program, rank 0 of the TP8 B1 row (request-r0), by `glm53_partition.py`; the weights' bytes from integrations/vllm/manifests/checkpoints.json, role GLM53, and its parameters from the hub's safetensors metadata at that revision",
+ "source": "art:9ec1d8b37286bdd5ec3cee7d39da27d97866eece6018d994c4921d068bc49abb: benchmarks/one_stage/a11_kinds.py's census of GLM-5.3's request Program, rank 0 of the TP8 B1 row (request-r0), by `glm53_partition.py`; the weights' bytes from adapters/vllm/manifests/checkpoints.json, role GLM53, and its parameters from the hub's safetensors metadata at that revision",
  "runs": [],
  "owner": "@proofs",
  "value": {

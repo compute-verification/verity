@@ -97,16 +97,16 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
   how long it takes.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
-  integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
-  pods list`; `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
-  `integrations/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone.
+  adapters/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
+  pods list`; `adapters/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `adapters/vllm/verity_vllm/program/`,
+  `adapters/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone.
 - **GPU, pod and vLLM tests skip themselves** without the hardware or runtime; their real runs are recorded runs on a pod.
 - **Skip on a third-party package, never on a module of this checkout** (the guard fails that skip):
   `pytest.importorskip("torch")`, then import ours plainly.
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is
   not reachable` (a recorded `check`, `VERITY_STORE_REQUIRED=1`, fails that skip). Inside `check` and `research run --on`
   the store is reachable only through the run's custody key, so fetch through a helper that hands it to the store CLI
-  (integrations/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
+  (adapters/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares

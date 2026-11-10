@@ -1520,7 +1520,7 @@ def test_the_logs_on_every_word():
     assert counts == {"NvLogf_v1": 1 << 32, "NvLogf_v2": 1 << 32}, counts
 
 
-STORE_IO = Path(__file__).resolve().parents[5] / "integrations/vllm/tests/regression/store_io.py"
+STORE_IO = Path(__file__).resolve().parents[5] / "adapters/vllm/tests/regression/store_io.py"
 #: the L40S / H100 probe of `__nv_logf` / `__nv_log1pf` under every FTZ build (`test_sampling_rows`' `PROBE`)
 LOG_PROBE = "art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5"
 

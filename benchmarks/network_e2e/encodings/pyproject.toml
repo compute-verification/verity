@@ -28,6 +28,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/one_stage/produced.py",
           "verity/core/protocols/sampled_proofs/one_stage/registered.py",
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
-          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
-          "integrations/vllm/verity_vllm/pipeline/serve_admit.py", "integrations/vllm/verity_vllm/engine/__init__.py",
-          "integrations/vllm/verity_vllm/engine/hooks.py"]
+          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
+          "adapters/vllm/verity_vllm/pipeline/serve_admit.py", "adapters/vllm/verity_vllm/engine/__init__.py",
+          "adapters/vllm/verity_vllm/engine/hooks.py"]

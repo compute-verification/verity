@@ -24,7 +24,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
-- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `adapters/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
 - `examples/`: one directory per demo: its workload, placement, commands and doneness (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit

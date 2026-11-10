@@ -317,7 +317,7 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     pythonpath, argv = ran.stdout.splitlines()
-    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/integrations/vllm"]
+    assert pythonpath.split(":")[:2] == [f"{root}/benchmarks/harness", f"{root}/adapters/vllm"]
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
