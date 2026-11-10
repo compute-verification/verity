@@ -9,9 +9,11 @@ outputs are the last net's ports tagged ``ret``, in order. Each net is read as `
 is uninterpreted on both sides (`structural.Canon.READ`: one node a bit per table and index form), and the flat lowering
 reads each read of a slot table that way (`structural.lowering_bits` with ``slots``), so a syntactic verdict says the split
 computes the lowering's function of its inputs and the tables' words, whatever the tables hold. The semantic fallback reads
-the tables. Refused by name, besides what `structural` refuses of a net: an input port no wire fills or two do, a wire into
-the unit or into a port that isn't there, a wire from a port that isn't there or from a net that isn't earlier, a width
-that disagrees, and port tags that aren't the last net's ports."""
+the tables. Refused by name, besides what `structural` refuses of a net: a wire that isn't six fields, its nets named and
+its indices and ports ints; a slot none of the split's lookups is, or whose index is a slot's word rather than an earlier
+net's output port (so no wire loops); an input port no wire fills or two do, a wire into the unit or into a port that isn't
+there, a wire from a port that isn't there or from a net that isn't earlier, a width that disagrees, and port tags that
+aren't the last net's ports."""
 from __future__ import annotations
 
 import operator
@@ -37,21 +39,53 @@ class Split:
         self.into = self._wires()
 
     def _wires(self) -> dict[tuple, tuple]:
+        """Each wire checked before any net is composed: an index or a port is an int; a slot end is one of the split's
+        lookups, port 0; a slot's index is a net's output port, never a slot's word, so no wire loops; a stage's input port
+        is a port of the stage, wired once, from a net's output port or a slot's word; and every slot has an index."""
         net_of = {nm: s for s, nm in enumerate(self.names)}
+        count: dict[str, int] = {}
+        for lk in self.sp.lookups if isinstance(self.sp.lookups, list) else [None]:
+            if not (isinstance(lk, tuple) and len(lk) == 2 and isinstance(lk[0], str) and lk[0] in self.slots):
+                raise ST.Refused("wires", f"slot {lk} is not (table, net) of a slot table {sorted(self.slots)}")
+            count[lk[0]] = count.get(lk[0], 0) + 1
+
+        def slot(net: str, i: int, p: int, what: str) -> bool:
+            if not net.startswith("lookup:"):
+                return False
+            if not 0 <= i < count.get(net.removeprefix("lookup:"), 0) or p != 0:
+                raise ST.Refused("wires", f"{what} {net}[{i}] port {p}: no slot's {'index' if what == 'into' else 'word'} "
+                                          f"(the split's lookups are {count})")
+            return True
+
+        def out_port(net: str, i: int, p: int, what: str) -> None:
+            t = net_of.get(net)
+            if t is None or i != 0 or not 0 <= p < len(self.ports[t][1]):
+                raise ST.Refused("wires", f"{what} reads {net}[{i}] port {p}: no net's output port")
+
         into: dict[tuple, tuple] = {}
-        for w in self.sp.wires:
-            if len(w) != 6:
-                raise ST.Refused("wires", f"wire {w} is not [dst net, dst index, dst port, src net, src index, src port]")
+        for w in self.sp.wires if isinstance(self.sp.wires, list) else [None]:
+            if not (isinstance(w, list) and len(w) == 6 and isinstance(w[0], str) and isinstance(w[3], str)
+                    and all(type(x) is int for x in (w[1], w[2], w[4], w[5]))):
+                raise ST.Refused("wires", f"wire {w} is not [dst net, dst index, dst port, src net, src index, src port], "
+                                          f"nets named and indices and ports ints")
             dst, di, dp, src, si, spt = w
-            s = net_of.get(dst)
-            if isinstance(dst, str) and dst.startswith("lookup:"):
-                if dst.removeprefix("lookup:") not in self.slots or dp != 0:
-                    raise ST.Refused("wires", f"a wire into {dst}[{di}] port {dp}: no slot's index")
-            elif not s or di != 0 or not 0 <= dp < len(self.ports[s][0]):
-                raise ST.Refused("wires", f"a wire into {dst}[{di}] port {dp}: no input port of a stage")
+            if slot(dst, di, dp, "into"):
+                if src.startswith("lookup:"):
+                    raise ST.Refused("wires", f"{dst}[{di}]'s index is {src}[{si}]'s word: a slot's index is an earlier "
+                                              f"net's output port")
+                out_port(src, si, spt, f"{dst}[{di}]'s index")
+            else:
+                s = net_of.get(dst)
+                if not s or di != 0 or not 0 <= dp < len(self.ports[s][0]):
+                    raise ST.Refused("wires", f"a wire into {dst}[{di}] port {dp}: no input port of a stage")
+                if not slot(src, si, spt, f"{dst} port {dp} reads"):
+                    out_port(src, si, spt, f"{dst} port {dp}")
             if (dst, di, dp) in into:
                 raise ST.Refused("wires", f"{dst}[{di}] port {dp} is wired twice")
             into[(dst, di, dp)] = (src, si, spt)
+        unwired = [f"lookup:{t}[{i}]" for t, n in count.items() for i in range(n) if (f"lookup:{t}", i, 0) not in into]
+        if unwired:
+            raise ST.Refused("wires", f"{unwired[0]}'s index has no wire")
         return into
 
     def counts(self) -> dict:
@@ -71,26 +105,21 @@ class Split:
         nets = []
 
         def port(src: tuple, s: int) -> list:
+            """The bits of ``src`` (a checked wire's source) for net ``s``: a slot's index is a net's port (`_wires`), so
+            this recurses at most once."""
             sn, si, spt = src
-            if isinstance(sn, str) and sn.startswith("lookup:"):
+            if sn.startswith("lookup:"):
                 table = sn.removeprefix("lookup:")
-                if table not in self.slots or spt != 0:
-                    raise ST.Refused("wires", f"{names[s]} reads {sn}[{si}] port {spt}: no slot's word")
                 if (table, si) not in words:
-                    ix = into.get((sn, si, 0))
-                    if ix is None:
-                        raise ST.Refused("wires", f"{sn}[{si}]'s index has no wire")
-                    idx = port(ix, s)
+                    idx = port(into[(sn, si, 0)], s)
                     if len(idx) != self.slots[table][0]:
                         raise ST.Refused("wires", f"{sn}[{si}]'s index is {len(idx)} bits, the table's "
                                                   f"{self.slots[table][0]}")
                     words[(table, si)] = READ(table, idx)
                 return words[(table, si)]
-            t = net_of.get(sn)
-            if t is None or t >= s or si != 0:
-                raise ST.Refused("wires", f"{names[s]} reads {sn}[{si}], no earlier net")
-            if not 0 <= spt < len(outs[t]):
-                raise ST.Refused("wires", f"{names[s]} reads {sn} port {spt}, which {sn} hasn't")
+            t = net_of[sn]
+            if t >= s:
+                raise ST.Refused("wires", f"{names[s]} reads {sn}, no earlier net")
             return outs[t][spt]
 
         for s, net in enumerate(self.sp.nets):
@@ -114,11 +143,11 @@ class Split:
                 total[k] += rec[k]
             nets.append({"net": names[s], "rows": rec["rows"], "evaluated_rows": rec["evaluated_rows"]})
         last = len(outs) - 1
-        tags = self.sp.outs[last]
-        if len(tags) != len(outs[last]):
-            raise ST.Refused("ports", f"{names[last]} has {len(outs[last])} output ports, {len(tags)} tagged")
-        rets = [p for p, tag in enumerate(tags) if tag and tag[0] == "ret"]
-        if [tags[p][1] for p in rets] != list(range(len(rets))):
+        tags = self.sp.outs[last] if isinstance(self.sp.outs, list) and len(self.sp.outs) == len(outs) else None
+        if not isinstance(tags, list) or len(tags) != len(outs[last]):
+            raise ST.Refused("ports", f"{names[last]} has {len(outs[last])} output ports, tagged {tags}")
+        rets = [p for p, tag in enumerate(tags) if isinstance(tag, tuple) and tag[:1] == ("ret",)]
+        if [tags[p][1:] for p in rets] != [(j,) for j in range(len(rets))] or any(type(tags[p][1]) is not int for p in rets):
             raise ST.Refused("ports", f"{names[last]}'s ret ports are not the outputs in order")
         mine = [b for p in rets for b in outs[last][p]]
         return mine, {**total, "input_widths": [len(p) for p in self.ports[0][0]], "output_bits": len(mine),
