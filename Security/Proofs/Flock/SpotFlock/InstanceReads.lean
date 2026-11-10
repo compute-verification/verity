@@ -61,6 +61,14 @@ theorem getObjVal_setKey {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (
     rw [Std.TreeMap.Raw.get?_eq_getElem?]
     exact Std.TreeMap.Raw.getElem?_insert_self hm)
 
+/-- A field `Spot.getD` reads as anything but `null` is present. -/
+theorem getObjVal_of_getD {j : Json} {k : String} (h : Spot.getD j k ≠ .null) :
+    j.getObjVal? k = .ok (Spot.getD j k) := by
+  unfold Spot.getD Spot.field? at *
+  cases hj : j.getObjVal? k with
+  | error e => simp [hj, Except.toOption] at h
+  | ok v => simp [hj, Except.toOption]
+
 /-- A key an object built from a list holds is one of the list's. -/
 theorem mem_keys_of_getObjVal {l : List (String × Json)} {k : String} {v : Json}
     (h : (Json.mkObj l).getObjVal? k = .ok v) : k ∈ l.map Prod.fst := by
@@ -122,7 +130,7 @@ theorem wf_blankReads {own : Spot.SecondStage.Own} {t : String} {r : Json} (hr :
     rw [blankReads_obj hg]
     have hp : r.getObjVal? "ports" = .ok (.obj m) := by
       rw [← hg]
-      exact ReadsAt.getObjVal_of_getD (by rw [hg]; nofun)
+      exact getObjVal_of_getD (by rw [hg]; nofun)
     have hw := HeaderRoots.wf_of_getObjVal hr hp
     have hm : m.WF := by cases hw with | obj hm _ => exact hm
     exact wf_setKey _ hr (wf_mkObj (distinct_blankList own t hm) (wf_blankList own t hw))
@@ -162,7 +170,7 @@ theorem port_mem_of_jeq {own : Spot.SecondStage.Own} {t : String} {a b : Json} (
   case obj mb =>
     have hpb : b.getObjVal? "ports" = .ok (.obj mb) := by
       rw [← hgb]
-      exact ReadsAt.getObjVal_of_getD (by rw [hgb]; nofun)
+      exact getObjVal_of_getD (by rw [hgb]; nofun)
     obtain ⟨mb₀, rfl⟩ := FlockComplete.JsonRT.obj_of_getObjVal hpb
     have hmb₀ : mb₀.WF := by cases hwb with | obj hm _ => exact hm
     rw [blankReads_obj hgb, getObjVal_setKey hmb₀] at hBp
@@ -203,7 +211,7 @@ theorem regName_mem {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) (hwr : C
     have h4 := hSr bR hbR
     rw [hjR] at h4
     exact (Option.some.inj h4).symm
-  obtain ⟨kvs, hports, hrds⟩ := ReadsAt.portsOf_reads (portsOf_of_ofJson hoj)
+  obtain ⟨kvs, hports, hrds, -⟩ := portsOf_entries (portsOf_of_ofJson hoj)
   obtain ⟨e, hm, -⟩ := hrds reg hreg
   obtain ⟨-, -, -, -, -, -, -, -, -, -, hv⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   obtain ⟨rr, hrr, hj⟩ := Spot.SecondStage.valuesOk_ref hv
