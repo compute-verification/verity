@@ -117,3 +117,5 @@ def test_a_whole_directory_is_one_row_and_a_shared_one_is_a_row_a_file():
     assert G.compress(mine, dirs) == {"v/p/": "n/p/", "v/g/a.py": "n/defs/a.py"}
     assert G.compress({**mine, "v/p/a.py": "n/q/a.py"}, dirs) == {"v/p/a.py": "n/q/a.py", "v/p/lean/": "n/p/lean/",
                                                                    "v/g/a.py": "n/defs/a.py"}
+    assert G.compress({**mine, "v/p/a.py": "n/q/a.py"}, dirs, own=["v/p/a.py"]) == {
+        "v/p/": "n/p/", "v/p/a.py": "n/q/a.py", "v/g/a.py": "n/defs/a.py"}

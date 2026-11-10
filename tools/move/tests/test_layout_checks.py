@@ -124,6 +124,16 @@ def test_an_imported_module_outside_the_inputs_is_named(repo: Path) -> None:
         ("old/lib/deep.py", "new/elsewhere/deep.py", "old/lib/mod.py", "new/elsewhere")]
 
 
+def test_an_import_inside_a_function_is_told_from_one_a_test_file_runs(repo: Path) -> None:
+    rows = ROOTS + "[paths]\n" + PARTS + '[tokens]\n"old/lib/" = "new/lib/"\n'
+    assert [(x["module"], x["at_import"]) for x in suites(repo, rows)["inputs"]] == [("old/lib/deep.py", True)]
+    (repo / "old/lib/mod.py").write_text("def later():\n    from . import deep\n    return deep\n")
+    subprocess.run(["git", "commit", "-qam", "lazy"], cwd=repo, check=True, env={**os.environ, **ENV})
+    r = suites(repo, rows)
+    assert [(x["module"], x["at_import"]) for x in r["inputs"]] == [("old/lib/deep.py", False)]
+    assert r["reached"] == 2 and r["outside_today"] == []
+
+
 def test_an_archived_module_a_test_that_stays_imports_is_named_once(repo: Path) -> None:
     rows = PARTS.replace("new/elsewhere/deep.py", "archive/old/lib/deep.py")
     r = suites(repo, ROOTS + "[paths]\n" + rows + '[tokens]\n"old/lib/" = "new/lib/"\n')
