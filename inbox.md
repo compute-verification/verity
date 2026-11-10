@@ -11,3 +11,12 @@ SLICELIST, Tue 10 Nov 3:47 AM PST. **One red our hand lines miss, found on the s
 4. **With #8636 at 91dcb0329c under the map at 0d9a7b057e** [run: the real mover on `checked` with its 19 files, both evaluators]: all 21 imports work. Left of ours: `lean_audit.py:62` (#8648; its dry run is still going). Left of @proofs': `auditor.py`'s import of `load_relay`, which #8639 re-anchors (not evaluated by me).
 5. **Covered by no pull request or hand line I found**: @proofs' `composition/tests/reference.py:81, 84` and `test_inference_only_not_composed.py:35`, which load our two test files and `NciCheck/Protocol.lean` by a path under `core/` (F1). #8639 does not touch them.
 
+[2026-11-10T11:57Z] 43fcb90671c8
+SLICELIST, Tue 10 Nov 3:57 AM PST. **#8468 must not land or restack as it is: under the staged mover it makes public 220 files of `verity/protocols` that are not public today.**
+
+- **The line.** Its public rule `"verity/core/protocols/{certifier,network}"` (line 52) becomes `"{verity/protocols/certifier,verity/protocols}"` [run: #8468's file on the staged base 4e053277b3, a dry run of the staged mover and map over it]. Its private line for PoUS and PoUB becomes `"verity/protocols/{pous,bandwidth,remote_bandwidth}"`, which names nothing of PoUB's after the move.
+- **What starts being public** [run: the rewritten file on the staged tip, `--public` before and after, the tip restored]: PoUB's verifier 119, @training's `inference_only/rho` 46, @compute-accounting's `inference_only/nci` 28, `pouw/receipts` 10, `poub/device` 7, `pouw/clear` 3, and 7 single files. Ours come out right: the same 349 public, and nothing of the policy's check.
+- **A way out** [argued, not run]: name the network directory's parts in that rule (`…/network/lean`, `…/network/tests`, `…/network/pyproject.toml`), not the directory. Each part has one destination.
+- **The general rule**: a string that names `verity/core/protocols/network` whole becomes `verity/protocols`. On the staged base there are four: `suites.py:210` and `registry.json:437` (hand lines exist), `public_boundary.toml:105` (my message of 3:46 AM PST), and @proofs' `composition/pyproject.toml:48` (a suite input that widens; not red).
+- Also evaluated since: #8648's two lines hold under the map [run: a dry run over its files; the test's scan on two moved trees]. The note has all of this (F11, F13) and is synced.
+
