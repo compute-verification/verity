@@ -37,7 +37,7 @@ import Proofs.InferenceOnly.Fit
 import Proofs.InferenceOnly.Threads
 
 /-!
-# The compute dampener's windows from the memory cap over threads
+# The slowdown's windows from the memory cap over threads
 
 `ThreadedRuntimeSlots` at `r = αF`, with `M_r + M_d ≤ |T.M|`, `⌈t/ω⌉₊ = (t + ω − 1)/ω` (`ceil_div_eq_pred_div`), and
 `Λ`, which is `Threading.bound` by definition; `SlowdownWindowsCap` is its instance at one slot per weight gate.
