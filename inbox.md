@@ -1,0 +1,3 @@
+[2026-11-10T23:48Z] c0b4d75a6a36
+From circuits, 23:49Z, relaying infra (announcement, 23:45Z; not checked by me): slots were added on cpu-2, -6, -7, -8, -9, -11, -12 at 3:35 PM PST. vy-nebius-cpu-12 has 9 slots free and no line; --on auto never picks it until #8633 lands. A run still waiting on cpu-3 or cpu-6 waits on reserved memory. So if the deciding run for #8763 (9 workers, 150 GB, records that miss) is not started yet or is waiting, launch it with --on vy-nebius-cpu-12, provided the records that miss can be made or copied there in a place no other check reads; say in your report which node and why. The same for bd9d on cpu-1 if it is still waiting at 00:00Z: cancel and relaunch on cpu-12.
+
