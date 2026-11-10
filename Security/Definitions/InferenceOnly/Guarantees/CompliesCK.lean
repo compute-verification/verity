@@ -4,12 +4,12 @@ import Definitions.InferenceOnly
 /-!
 # The inference-only policy as a `(c, k)`-partition
 
-`Complies Γ α` asks for inference blocks of at most `Γ` gates, each reading at most `α` novel bits per gate. On a Boolean
+`Complies Γ α` asks for inference blocks of at most `Γ` gates, each reading at most `α` fresh input bits per gate. On a Boolean
 declaration a novel bit is an unregistered input gate, so an inference block reads at most `α |I| ≤ α Γ` of them, and padding each inference block
 to `Γ` gates makes the division a `(Γ, ⌊αΓ⌋)`-partition of a declaration that contains it (`CompliesCK`), on which the
 working draft's Lemma 1 and Theorem 3 apply. A multi-bit declaration first takes its bit-level expansion
 (`ExpandComplies`): an inference block of gates at most `W` bits wide becomes one of at most `Γ W` one-bit gates, reading the same
-novel bits.
+fresh input bits.
 -/
 
 namespace InferenceOnly.Guarantees

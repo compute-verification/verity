@@ -15,9 +15,9 @@ gates compute:
   others pad each gate to `W` bits;
 * a real bit reads every real bit of every gate its gate reads (`BitView.bitPred`), so it may depend on all of the bits
   its gate's value does; a padding bit reads nothing;
-* the registered parameters are the free bits (`BitView.free`): those that read nothing and are not real bits of a novel
-  input gate. They are θ's bits, a constant gate's bits and the padding. A real bit of an input gate outside θ is novel
-  information, which a block that uses it is handed.
+* the registered parameters are the free bits (`BitView.free`): those that read nothing and are not real bits of a fresh
+  input gate. They are θ's bits, a constant gate's bits and the padding. A real bit of an input gate outside θ is fresh
+  input, which a block that uses it is handed.
 
 Bit `(g, i)` is numbered `i + W g` (`finProdFinEquiv`), so the bits a bit reads, of gates of smaller index, have smaller
 numbers. `wordBits d S` is the set of the real bits of the gates of `S`, a set of whole words.

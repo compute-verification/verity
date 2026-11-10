@@ -28,7 +28,7 @@ def RefineWrong : Prop :=
   ∀ (C : Circuit) (nf nc : ℕ) (Pf : Partition C nf) (Pc : Partition C nc), Pf.Refines Pc →
     ∀ X Y : C.Transcript, (∀ g ∈ Pc.committed, Y g = X g) → (Pc.wrong X).card ≤ (Pf.wrong Y).card
 
-/-- A declaration that contains another, through a containment that sends no novel input gate of `t` into `d`'s
+/-- A declaration that contains another, through a containment that sends no fresh input gate of `t` into `d`'s
 baseline, implements it. -/
 def ContainsImplements : Prop :=
   ∀ (t d : Declaration) (M : Containment t.D d.D), (∀ g, t.D.isInput g = true → M.emb g ∈ d.θ → g ∈ t.θ) →

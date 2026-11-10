@@ -17,8 +17,8 @@ open Verity
 /-- **Weights are incompressible in support form, each value charged once over its copies**: if no value's fan-out over
 its copies exceeds, at `b_a` per `e` counted multiplications, the `log₂ n` bits a value of the activations' format
 carries (`Sources.FanOutBound`), and every counted multiplication reads a weight at least `k₀` optimizer steps from the
-baseline (`Sources.OffFresh`), then every subcircuit `R` of the reference circuit `c` small by information has novel
-reads that take at least `2^(b_w · #(sources of the weights R uses) + b_a · Σ_t min(d, m_t / e))` distinct values over
+baseline (`Sources.OffFresh`), then every subcircuit `R` of the reference circuit `c` small by information has fresh
+input bits that take at least `2^(b_w · #(sources of the weights R uses) + b_a · Σ_t min(d, m_t / e))` distinct values over
 the runs with the baseline at `θv`, where `m_t` is the number of thread `t`'s counted multiplications in `R`.
 
 It is `WeightsSupportFmt` with four changes, at the deployed point (`d = 2048`, E4M3 at `b_a = 4`, `S = 2·10⁷`,
@@ -51,8 +51,8 @@ It fails at a `k₀` below those. The chain values bound the support from above 
 step, so they refute soundly and their not refuting proves nothing; chains longer than 64 steps are untried, and at
 7.3·10⁻⁶ and σ = 0.02 the `b_w` above which a chain refutes it still falls slowly at 64 steps. It fails where counted
 multiplications read activations that take fewer than `n` values (a one-hot embedding matmul), and the fan-out bound
-pays only for values counted multiplications read directly: a subcircuit that computes its activations from fewer novel
-reads pays only by those. -/
+pays only for values counted multiplications read directly: a subcircuit that computes its activations from fewer fresh
+input bits pays only by those. -/
 def WeightsSupportFmt2 (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources) (Γ : ℕ)
     (S b_w b_a : ℝ) (d e n k₀ : ℕ) : Prop :=
   Src.FanOutBound b_a e n → Src.OffFresh k₀ →

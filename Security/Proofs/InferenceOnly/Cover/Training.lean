@@ -8,7 +8,7 @@ import Proofs.InferenceOnly.Cover.Sum
 # The cover theorem on a declaration that complies with the inference-only policy, proved
 
 Pull a compliant division of `d` back to `c` (`pull`): piece `u` has at most `σ_u ≤ Γ` gates (`card_pull_gates_le`) and
-reads at most `α σ_u` bits of novel information (`novelReads_pull`). Its block in `c`'s bit view (`block`) is handed
+reads at most `α σ_u` fresh input bits (`novelReads_pull`). Its block in `c`'s bit view (`block`) is handed
 `k_u ≤ α σ_u` bits outside the free bits (`translation`) and has at most `s` bits (`card_block_le`), so it finishes at
 most `(k_u² + b k_u) / b` counted products (`intensity`). Every counted product's output bit reads something,
 so its gate is a computed gate of `c`, in some piece, whose block computes it (`mem_computed_block_of_pred`). Summed over

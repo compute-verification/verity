@@ -53,7 +53,7 @@ class Profile:
     bcol: float | None = None
 
     # Threads (`Threading`, `ThreadedThrottled`)
-    #: `d`: novel values of a thread a small subcircuit may read before `e` stops binding
+    #: `d`: fresh input values of a thread a small subcircuit may read before `e` stops binding
     thread_d: int | None = None
     #: `e`: counted multiplications per value read from a thread
     thread_e: float | None = None

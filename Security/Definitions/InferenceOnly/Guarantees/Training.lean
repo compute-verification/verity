@@ -10,7 +10,7 @@ with `TrainingIncompressible` as their only named assumption, in place of `Weigh
 `ActivationsSupport` and `PartialSumsSupport` for the chain forms. Each statement names both the chain and the threading
 the assumption charges, and uses one of them.
 
-The assumption is in reads, so a dark gate of a partial containment absorbs at most its novel reads of the partial sums,
+The assumption is in reads, so a dark gate of a partial containment absorbs at most its fresh input bits of the partial sums,
 where in support form it absorbed at most its width: the dark-gate term of `IncompressibleContainedMatMulOn` is the dark
 gates' reads. At `μ = 1` that term goes, and with it the partial sums: `ContainedFanOutOn` bounds the products a
 declaration computes under the activations' half of the assumption alone, `ActivationsIncompressible` on the reference

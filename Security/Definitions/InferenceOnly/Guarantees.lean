@@ -85,7 +85,7 @@ open Verity Finset
 open Classical in
 /-- **What an inference block reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"): "By the lemmas
 and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an inference block `R` of at most `Γ` computed
-gates that reads at most `K` bits of novel information, under `Assumptions.ActivationsSupport` at cap `K + b_w + b_a`
+gates that reads at most `K` fresh input bits, under `Assumptions.ActivationsSupport` at cap `K + b_w + b_a`
 for some committed values `θv` of θ. `p_R` is the number of weight entries `R` uses, `τ_R` its number of full
 positions, `Q_R` the number of input entries it uses at positions that are not full, and `d` the smallest inner
 dimension. -/

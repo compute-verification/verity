@@ -12,7 +12,7 @@ the baseline at its committed values, the values of any gates of `R` take at mos
 whatever `R`'s gates compute. The support form charges a set of gates by how many distinct values it takes over those
 assignments, which wiring cannot change.
 
-* `admissible d θv`: the assignments to `d`'s gates that give the baseline `θ` its committed values `θv`, every novel
+* `admissible d θv`: the assignments to `d`'s gates that give the baseline `θ` its committed values `θv`, every fresh
   input free;
 * `values T a`: the values of the gates in `T` on the evaluation of `a`;
 * `support d θv T`: the number of distinct `values T` over the admissible assignments;
@@ -25,7 +25,7 @@ namespace InferenceOnly
 open Verity Finset
 
 open Classical in
-/-- The assignments to `d`'s gates that give each baseline gate its committed value in `θv`; the novel inputs range
+/-- The assignments to `d`'s gates that give each baseline gate its committed value in `θv`; the fresh inputs range
 freely. Evaluation reads only the input gates, so these are the runs `d` can have once `θ` is committed. -/
 noncomputable def admissible (d : Declaration) (θv : d.D.Transcript) : Finset d.D.Transcript :=
   univ.filter fun a => ∀ g ∈ d.θ, a g = θv g

@@ -7,7 +7,7 @@ import InferenceOnlyCheck.Difftest
 `scripts/desc_difftest_vectors.py` writes instances of `InferenceOnlyCheck.Desc` (θ and the owners per root node), each one expanded
 gate by gate where it is well-formed, and `scripts/inference_only_reference.py`'s `check_desc` on each. `InferenceOnlyCheck/DescDifftestMain.lean`
 fails unless `InferenceOnlyCheck.Desc.check` gives Python's result on every instance and `InferenceOnlyCheck.check`'s on every expansion: per
-inference block its size and novel reads, the verdict and the first failing inference block, or the first malformation's code. The Lean audit runs
+inference block its size and fresh input bits, the verdict and the first failing inference block, or the first malformation's code. The Lean audit runs
 it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
