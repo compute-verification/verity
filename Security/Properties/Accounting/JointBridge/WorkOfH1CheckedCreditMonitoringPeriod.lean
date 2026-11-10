@@ -105,7 +105,7 @@ def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accou
     (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
     (∀ t : Fin 144, 0 < shareCone Sc Cd 144 t → tileLuck Sc Cd 144 t ≤ 7 / 8 ∧ tileLuck0 Sc Cd 144 t ≤ 1 / 2) →
     (∀ ξ, (Pl ξ).game = monitoringPeriodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 (Wp ξ)) →
-    (∀ ξ, (Wp ξ).EveryWindow (fun live _ => DeadConeDead Sc Cd 144 live)) →
+    (∀ ξ, (Wp ξ).EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd 144 live)) →
     (∀ ξ, PrefixOf (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat))
       (Pl ξ).game) →
     (∀ ξ w, prob (fun x =>
@@ -114,9 +114,9 @@ def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accou
     (∀ ξ, RegisteredBeforeDraw (ws ξ)) → (∀ ξ, SampleIsCoin hK prm (ws ξ)) →
     (∀ ξ, ServiceSound prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) δks) →
     (∀ ξ, SaltIsLiveCoin hr (salt ξ) enc) → StagedPins staged flat →
-    (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G))) →
-    (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G))) →
-    (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) →
+    (∀ ξ, (Wp ξ).EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G))) →
+    (∀ ξ, (Wp ξ).EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G))) →
+    (∀ ξ, (Wp ξ).EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) →
     (∀ ξ, UnitFixed (Pl ξ)
       (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat))
       (monitoringPeriodMode Cd (Wp ξ) (checkedRun hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)))

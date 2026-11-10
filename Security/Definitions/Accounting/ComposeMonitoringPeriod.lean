@@ -57,7 +57,7 @@ period's coins, which the cheater may steer, and the tail at a stopping time is 
 `RoundGame.deficiencyUpTo`).
 
 * `consGame`: a window's one round, then the rest of the period.
-* `ExecutionPhasePlay`, `ExecutionPhasePlay.EveryWindow`, `ExecutionPhasePlay.windowAt`, `ExecutionPhasePlay.liveAt`: the cheater's play over `n`
+* `ExecutionPhasePlay`, `ExecutionPhasePlay.EveryExecutionPhase`, `ExecutionPhasePlay.executionPhaseAt`, `ExecutionPhasePlay.liveAt`: the cheater's play over `n`
   windows, each window's live tiles and split stages (`SplitStages`) chosen after every earlier window's coins (its
   rounds' coins, its sample and its proofs' coins); a claim of every window, whatever the past; the window played, and its
   live tiles, at window `w` along the period's coins.
@@ -133,15 +133,15 @@ variable {C Ω V : Type} {M : ℕ}
 
 /-- **`P` of every window, whatever the past**: of each window's live tiles and split stages along every path of
 earlier windows' coins. -/
-def EveryWindow (P : (V → Bool) → SplitStages C V M → Prop) : {n : ℕ} → ExecutionPhasePlay C Ω V M n → Prop
+def EveryExecutionPhase (P : (V → Bool) → SplitStages C V M → Prop) : {n : ℕ} → ExecutionPhasePlay C Ω V M n → Prop
   | _, .done => True
-  | _, .window live W next => P live W ∧ ∀ ω, EveryWindow P (next ω)
+  | _, .window live W next => P live W ∧ ∀ ω, EveryExecutionPhase P (next ω)
 
 /-- **The window played at window `w`** along the period's coins `x`. -/
-def windowAt : {n : ℕ} → ExecutionPhasePlay C Ω V M n → Paths Ω n → Fin n → SplitStages C V M
+def executionPhaseAt : {n : ℕ} → ExecutionPhasePlay C Ω V M n → Paths Ω n → Fin n → SplitStages C V M
   | _, .done, _, w => w.elim0
   | _, .window _ W next, x, w =>
-    Fin.cases (motive := fun _ => SplitStages C V M) W (fun w' => (next x.1).windowAt x.2 w') w
+    Fin.cases (motive := fun _ => SplitStages C V M) W (fun w' => (next x.1).executionPhaseAt x.2 w') w
 
 /-- **The live tiles of window `w`** along the period's coins `x`. -/
 def liveAt : {n : ℕ} → ExecutionPhasePlay C Ω V M n → Paths Ω n → Fin n → V → Bool
@@ -214,7 +214,7 @@ noncomputable def monitoringPeriodMode {ι C B V : Type} {s Np n : ℕ} (Cd : De
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (pr : Outcomes C B Cd.rounds s Np n V)
     (x : Paths (Paths C Cd.rounds × B) n) (u : Fin n × Fin Np) : Mode :=
   if pr.Credited x u.1 ∧ Wp.liveAt x u.1 u.2 = true then
-    ((Wp.windowAt x u.1).joint (tileStage Cd Np)).mode (coinAt x u.1).1 u.2
+    ((Wp.executionPhaseAt x u.1).joint (tileStage Cd Np)).mode (coinAt x u.1).1 u.2
   else .whole
 
 /-- **A claim of every live credited tile at its stage, whatever the past**: `PerTile` on the tiles `live` names. A
