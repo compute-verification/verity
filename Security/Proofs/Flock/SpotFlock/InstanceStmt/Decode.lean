@@ -65,6 +65,11 @@ bytes (`TemplateQuery.Desc.parse`), `descX`, whose digest is `progHex` (`descX_h
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
+open private Flock.Program.DecState.mk Flock.Program.DecState.defs Flock.Program.DecState.index
+  Flock.Program.DecState.busy Flock.Program.DecState.walked from Flock.Program
 
 namespace SpotFlock.InstanceStmt.Decode
 
@@ -257,8 +262,18 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     change out = _ at ho
     subst ho
     rw [Array.eq_empty_of_size_eq_zero ha]
-    simp [Widths.bodyBad, Widths.seqBad, Widths.partOk, Widths.Src.ty?, Widths.Src.homo?, homo_A,
-      Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size]
+    simp only [Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
+      List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
+      Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
+      homo_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
+      List.nil_append, Int.cast_ofNat_Int, Int.zero_mul, Int.add_zero, Int.natCast_ediv, Int.natCast_emod,
+      List.foldl_cons, Nat.min_assoc, Nat.max_assoc, List.all_eq_true, bne_iff_ne, ne_eq, ite_not,
+      Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.sub_zero, Nat.add_one_sub_one, Nat.div_one,
+      Bool.not_eq_eq_eq_not, Bool.not_true, Nat.toString_eq_repr, bind_assoc, Nat.reduceAdd, Nat.lt_add_one,
+      Nat.div_self, List.range'_one, List.forIn_cons, getElem?_pos, List.getElem_cons_zero, Option.getD_some,
+      List.range'_zero, Nat.not_lt_zero, not_false_eq_true, getElem!_neg, ↓reduceIte, List.forIn_nil, pure_bind,
+      Nat.lt_one_iff, Option.isSome_some, Bool.true_and, List.forIn_toArray, Bool.false_eq_true, Option.join_some,
+      Bool.true_eq_false, EStateM.run_bind]
     rfl
 
 /-! ## The canonical JSON domain, with fuel
