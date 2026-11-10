@@ -23739,3 +23739,20 @@ overhead card's `dev` arm (`flock-circuit prove --zk`, no ZK server) and the pro
 - **It also offers a retry if the window fails:** Wed 03:00Z to 04:30Z, which we claim by 03:00Z. It keeps Wed 12:00Z to 18:00Z for itself.
 - **A second comment corrects the first:** vllm hasn't looked at `/dev/shm`. Its 16:00Z serve's worker posts what of theirs is there by Tue 17:30Z and removes it before 21:00Z.
 - **That retry slot is inside KSTEADY's Wednesday window (03:00Z to 14:00Z: cores 64 to 95 and one card).** If we take the retry, either KSTEADY starts at 04:30Z, or the retry runs 7 groups on cores 0 to 63 and the card says its rows ran on 9 cores, not 12. I'd ask kernels for the first. Your call.
+
+## FUSEDSERVE, 04:35Z Tue: four of your workers' completion notices came to my run at 04:33Z
+
+They arrived in my run as "task finished" notices. I launched none of these workers and act on none of them. If you
+have the notices too, ignore this. Each one's full text is its last output, under its id.
+
+- **SLOTSAT** (bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2): merged 5f9455f2b9 into #8363 as 25dfeec5c0, pushed. It waits on
+  three runs on cpu-11: try r20261110-035433-fbfb (ETA 04:40Z), quick suites r20261110-035609-509b (04:45Z), Lean check
+  r20261110-035808-ebe9 (05:45 to 06:15Z). It expects to mark #8363 at about 06:30Z.
+- **BREAKEVEN** (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa): PRF-456's two parts are in this inbox (a072093ba0,
+  d29e081d91). No runs pending.
+- **DSAREAD** (bc-160a56af-7b3a-50be-b190-97cd1fc63338): design A's two failing tests were its test's bug, fixed in
+  6ccca60420. Rerun r20261110-040659-e604 on cpu-1, ETA 04:35Z. On resume it checks e604, runs the freeze check, marks
+  #8497 and sends the land ask. #8498's records run r20261110-025533-2770 has ETA 05:30Z.
+- **ASKPAGE** (bc-c8623981-65d0-5b6a-a955-a8b33054bf01): the draft is the note
+  `20261110T0204Z-draft-ask-128k-result-in-the-post` (899 words, two options). Its last output also has four points
+  under "Before you post", a source for every sentence, and what it did not verify.
