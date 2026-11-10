@@ -27,7 +27,7 @@ import statistics
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 CONTROL = "vy-control-verity"
@@ -250,9 +250,9 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     """Everything the table reads, as one JSON-able document."""
     from .queue import label_target
 
-    now = now or datetime.now(timezone.utc).timestamp()
-    day = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%d")
-    y = datetime.fromtimestamp(now - 86400, timezone.utc)
+    now = now or datetime.now(UTC).timestamp()
+    day = datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%d")
+    y = datetime.fromtimestamp(now - 86400, UTC)
     control, err = _remote(CONTROL, CONTROL_SCRIPT, LIVE, f"{y:%Y-%m-%d}T00:00:00Z")
     doc: dict = {"now": now, "day": day, "errors": [f"{CONTROL}: {err}"] if control is None else [], "control": control or {}}
     checks = check_nodes((control or {}).get("args", ""))
@@ -291,7 +291,7 @@ def ts(s: str) -> float:
 
 def rid_time(rid: str) -> float:
     """When a run's id was made: the moment its owner asked for the run."""
-    return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc).timestamp()
+    return datetime.strptime(rid[1:16], "%Y%m%d-%H%M%S").replace(tzinfo=UTC).timestamp()
 
 
 def pct(vals: list[float], q: float) -> float | None:
@@ -695,7 +695,7 @@ def largest(doc: dict) -> str:
 
 
 def render(rows: list[dict], doc: dict) -> str:
-    at = datetime.fromtimestamp(doc["now"], timezone.utc)
+    at = datetime.fromtimestamp(doc["now"], UTC)
     lines = [f"The merge queue's numbers at {at:%Y-%m-%d %H:%MZ}. Windows: now; the last hour; today since 00:00Z. Times in minutes unless said.",
              "", "| # | Number | Now | Last hour | Today | Target | How it is measured |", "|---|---|---|---|---|---|---|"]
     lines += ["| " + " | ".join(str(r[k]).replace("|", "/") for k in ("row", "name", "now", "hour", "today", "target", "how")) + " |" for r in rows]
