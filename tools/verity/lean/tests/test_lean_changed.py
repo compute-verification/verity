@@ -609,7 +609,11 @@ def test_a_prover_s_roots_beyond_its_default_targets_are_built_so_its_spec_s_gua
     """`s`'s one guarantee is proved in `sp`, whose lock has a root of its own, `Sp.Alone`, that nothing under the
     lakefile's default target imports. To read the guarantee `Facts.lean` imports every root of `sp`'s lock, so the step
     builds them by name at `sp`'s turn, as the audit does. Left to the default target, `Facts.lean` found no `.olean` for
-    `Sp.Alone`, and `s`'s guarantees were skipped in a run that passed having compared none."""
+    `Sp.Alone`, and `s`'s guarantees were skipped in a run that passed having compared none.
+
+    `s` declares its named assumptions in `D.Assumptions`, a module of `d`, which it requires by path. The audit hands
+    `judge` the modules of the packages `s` requires, and so does the comparison: handed `s`'s build alone, `judge` found
+    no such module and failed the lock the audit passes."""
     def facts(modules: list[str], pins: dict) -> dict:
         return {"offenders": [], "declared_axioms": [], "escapes": [], "modules": modules, "imports": {m: [] for m in modules},
                 "pins": pins, "oleans": [], "axioms": [], "lean": "v1", "declarations": 1}
@@ -625,13 +629,17 @@ def test_a_prover_s_roots_beyond_its_default_targets_are_built_so_its_spec_s_gua
     pin, canon = proved("def s := 1")
     sha = {r["id"]: hashlib.sha256(r["canon"].encode()).hexdigest() for r in canon}
     recorded = pin | {"type_sha256": sha["pin:Sp.s_eq"], "reads": [pin["reads"][0] | {"sha256": sha["read:s"]}]}
-    lock = LC.AUDIT.judge({"roots": ["S"], "proved_in": ["../sp"], "guarantees": {"Sp.s_eq": {"owner": "@lean"}}},
-                          facts(["S"], {"Sp.s_eq": recorded}), {}, update=True)[1]
+    fails, lock = LC.AUDIT.judge({"roots": ["S"], "proved_in": ["../sp"], "assumptions_module": "D.Assumptions",
+                                  "guarantees": {"Sp.s_eq": {"owner": "@lean"}}},
+                                 facts(["S"], {"Sp.s_eq": recorded}) | {"source_modules": ["D.Assumptions", "S"]}, {}, update=True)
+    assert fails == []
+    d = {"name": "d", "type": "path", "dir": "../d"}
     files = {
+        "d/D/Assumptions.lean": "def D.Hyp : Prop := True\n",
         "s/lakefile.toml": 'name = "s"\ndefaultTargets = ["S"]\n', "s/lean-toolchain": "v1\n", "s/S.lean": "def s := 1\n",
-        "s/lean-audit.json": json.dumps(lock),
+        "s/lake-manifest.json": json.dumps({"packages": [d]}), "s/lean-audit.json": json.dumps(lock),
         "sp/lakefile.toml": 'name = "sp"\ndefaultTargets = ["Sp"]\n', "sp/lean-toolchain": "v1\n",
-        "sp/lake-manifest.json": json.dumps({"packages": [{"name": "s", "type": "path", "dir": "../s"}]}),
+        "sp/lake-manifest.json": json.dumps({"packages": [{"name": "s", "type": "path", "dir": "../s"}, d]}),
         "sp/lean-audit.json": json.dumps({"roots": ["Sp", "Sp.Alone"]}),
         "sp/Sp.lean": "import S\ntheorem Sp.s_eq : s = 1 := rfl\n", "sp/Sp/Alone.lean": "import S\n",
     }
