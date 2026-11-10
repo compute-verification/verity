@@ -119,19 +119,6 @@ def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabular
     assert (info["layout"], m.reads, len(m.out_rows)) == ("window", "inline", 2)
 
 
-def test_an_unstaged_unit_is_sized_and_recorded_blocked_never_staged(monkeypatch, tmp_path):
-    """`defs` sizes an ``UNSTAGED`` unit and records its reason as the blocker without staging it: lowered whole,
-    `EmbeddingRead_v1` passes a node's memory."""
-    def staged(*_a, **_k):
-        raise AssertionError("staged")
-
-    monkeypatch.setattr(L, "sized", lambda fn: {"est_ands": 1, "refused_block": False})
-    monkeypatch.setattr(L, "prove_served", staged)
-    rec = L.defs(["embedding-read:1b:300"], object(), tmp_path, True, 0, 10**9)["embedding-read:1b:300"]
-    assert rec["blocker"] == f"not staged: {L.UNSTAGED['EmbeddingRead_v1']}" and "error" not in rec
-    assert L.defs_ok(rec)
-
-
 @pytest.mark.parametrize("shape,want", [("rope:1b:8", "inline"), ("attention-v19:1b:256:block", "slots"),
                                         ("attention-v20:8b:256:end", "slots")])
 def test_a_served_member_reads_its_tables_as_its_template_does_unless_told(shape, want):

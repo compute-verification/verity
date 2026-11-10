@@ -18,7 +18,7 @@ from verity.ml.circuits.program import Program
 from verity.core.protocols.certifier import head_check as HC, service as SVC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Record, occupancy
+from verity.core.protocols.certifier.grid import Certifier, GridParams, BlockGrid, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet, run_shaper
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import root_ref
@@ -85,10 +85,10 @@ class Run:
                                      clock=self.clock)
         self.previous = None
 
-    def egress(self, record: Record, **kw) -> CertifiedRecord:
+    def egress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, EGRESS, PARAMS, parameters_digest(PARAMS, SYNC_SET), **kw)
 
-    def ingress(self, record: Record, **kw) -> CertifiedRecord:
+    def ingress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, INGRESS, PARAMS, parameters_digest(PARAMS), **kw)
 
     def honest(self, w: int):
