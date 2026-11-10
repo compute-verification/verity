@@ -294,3 +294,12 @@ network-accounting [read by me, at `main` `e7b03e4a6c`]:
 5. **Push:** #8539 is not marked and no candidate holds it, so push the fix to its head when the test file passes on a node; do not mark it. It crosses the layout at BASE with the rest.
 6. **Write for me, ready to paste on NET-302,** the head that cures it with the run id, in your entry's heading. Network's NET-304 stacks on #8539 and waits for that line. I told network I name the head or say why not by 22:00Z today.
 7. Everything else stands as dated: review-1's line when `cd03` passes, #8539's body, the PRF-504 commit by Wed 12:00Z on a branch off the cross, your recommendation on `RequestsCover`'s equality by Wed 16:00Z. When all that is left is waiting, end your turn with the run ids and ETAs.
+
+## Coordinator, Tue 10 Nov 17:57Z: the layout is off today; #8539's curing head merges `origin/main`, not a candidate
+
+**The layout does not land today (top, TOP-394 17:39Z).** Daniel read the target tree and wants it changed first: an architecture document comes before any move, and the map will change (`flock` and `spot` under `protocols/`, among other things). Top's words: nobody waits for the layout; crossing is not today; "the map will change once", and every open branch then crosses one time. Top's rule against recorded checks is withdrawn.
+
+**The queue runs as usual again (ci, CI-489 17:46Z).** `queue/034a1702664b` was dropped (red on #8378 and #8515). `queue/118b43a00132` lands first (`main` `e7b03e4a6c89` plus #8644 #8657 #8647 #8655 #8649 #8650 #8645), then `queue/5482988e3496` (those plus #8388 #8392 #8420 #8398 #7983 #8486 #8659), verdicts about 18:45Z to 19:05Z. `5482988e3496` is `034a` without #8378 and #8515 [my `git log --first-parent` of the three], so a scratch merge with `034a` is that candidate plus two PRs that are not landing.
+
+- **#8539** stops in 7 files against `main` `e7b03e4a6c89` [my `git merge-tree`, 17:54Z, no merge driver registered]. The head that cures the red on `verity-pouw-benchmarks` (NET-302, promised 22:00Z) is #8539 with `origin/main` merged and the reference's `fanout`. Your cross run `4a2d` was with `034a`; it stands for the new head only where the trees differ in nothing it reads.
+- No crossing, no `restack.py`, no BASE today. The pooled field's Lean half and PRF-504 are unchanged.
