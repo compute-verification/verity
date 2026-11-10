@@ -10,10 +10,16 @@ GLM-5.3's V = 154,880, 3,924 of 85 Definitions; at V = 16, 392 of 59), and a win
 
 `test_a_row_reads_the_program_s_constants_and_the_sampler_s_words_at_its_step` holds `stage_rows._operand` to the replay's
 reads of those operands; the others replace `serving_rows._slices`, which reads the rest.
+
+A stage proved under ``--zk`` is its Boolean version (`boolean_topp_stages`): a partition naming it holds the same units on the
+same rows, and `test_each_stage_on_bits_is_staged_in_the_form_verify_zk_takes` composes one of each family as serving's stager
+does and holds its statement's form to `one_stage.proofs.ks_form_why`.
 """
 from __future__ import annotations
 
 import re
+from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -25,9 +31,11 @@ from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
 from verity_vllm.query.program_view import spec_statics
 
+from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.definitions import boolean as BB
 from verity.ml.definitions.registry import sampling as SA
 from verity.ml.definitions.registry import sampling_rows as SR
 from verity.ml.definitions.registry import topp_keep_builder as K
@@ -99,6 +107,20 @@ def stager(t: str) -> UnitStager:
     st = object.__new__(UnitStager)     # reference_check reads only these: the circuit needn't be composed
     st.definition, st.name, st.public_inputs, st.in_rows = SRW.template(t).fn, "stage-test", {}, CR.unit_rows(SRW.template(t))[0]
     return st
+
+
+def boolean(t: str) -> str:
+    """Stage template ``t``'s Boolean version (`boolean_topp_stages`), the template a ``--zk`` partition names."""
+    return descriptor_id(BB.boolean_version(SRW.template(t).fn))
+
+
+def composed(t: str, d: Path) -> UnitStager:
+    """Template ``t``'s statement as serving's stager composes it (its rows `chunk_rows.unit_rows`, its table reads laid out
+    as `chunk_rows.statement` says, bound as ``compose_circuit.py --template`` binds it), its circuit ``d/circuit.txt``."""
+    tp = SRW.template(t)
+    in_rows, out_rows = CR.unit_rows(tp)
+    return UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=d / "circuit.txt",
+                      bind={"partition": "0" * 128, "program": "0" * 128}, **CR.statement(tp))
 
 
 def places(ms, tmpls, rows: int = 1, v: int = V) -> dict[int, tuple[int, tuple]]:
@@ -180,6 +202,24 @@ def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
         stager(t).reference_check(g["rows"], {**g["outs"], "o0": g["outs"]["o0"] ^ np.uint16(1)})
 
 
+def test_a_partition_of_the_stages_on_bits_holds_the_same_units_on_the_same_rows():
+    """Each stage's Boolean version is a ``stage`` template of the same word on the same rows, laid out flat (it has no table
+    to read); a partition naming them wires and reads the row's units as one naming the words does."""
+    bits = [boolean(t) for t in TMPLS]
+    assert len(set(bits)) == len(TMPLS) and not set(bits) & set(TMPLS)
+    for b, t in zip(bits, TMPLS):
+        tb = SRW.template(b)
+        assert (tb.layout, tb.word, CR.reads(tb), CR.statement(tb)) == ("stage", t, "inline", {"reads": "inline"}), b
+        assert CR.unit_rows(tb) == CR.unit_rows(SRW.template(t)) and tb.fn is not SRW.template(t).fn, b
+    s = Served(n=2)
+    ms, mb = members(s), members(s, bits, dict.fromkeys(bits, 7))
+    WI.validate(mb)
+    of = dict(zip(bits, TMPLS))
+    assert [replace(m, template=of[m.template], name=x.name) for m, x in zip(mb, ms, strict=True)] == ms
+    for (g, e), (gb, eb) in zip(read(s, ms), read(s, mb, bits), strict=True):
+        assert e == eb and all(np.array_equal(g[part_][q], gb[part_][q]) for part_ in ("rows", "outs") for q in g[part_])
+
+
 def test_a_row_whose_served_token_is_not_the_twin_s_is_refused():
     s = Served()
     s.tok[0] = (int(s.tok[0]) + 1) % V
@@ -241,3 +281,46 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_3924_units():
     last = descriptor_id(T.plan(SERVED_V)[-1].defn)
     (m,) = [m for m in ms if m.template == last]
     assert int(words[m.port("o0")][0].view("<u4")[0]) == int(s.tok[0])
+
+
+#: one unit Definition of each stage family whose word reads a table, (V, family, statics), at the least statics run here
+#: that its rows compose at: a stats block's rows are past one SHA-512 block, as a staged row must be, only from 56 lanes
+ZK_UNITS = ((64, "TopPStatsHead", {"N": 64}), (64, "TopPStatsExp", {"N": 64}), (16, "TopPProbs", {"S": 2, "HEAD": False}),
+            (16, "TopPStep", {"S": 2, "COMBINE": 0}), (16, "GumbelTopPSelect", {"LAST": True}))
+
+
+@pytest.mark.slow
+def test_each_stage_on_bits_is_staged_in_the_form_verify_zk_takes(tmp_path):
+    """`verify --zk` takes a statement whose unit returns its own outputs and refuses one whose last stage returns them
+    (`one_stage.proofs.ks_form_why`, the mirror of Lean's `KsScope`).  A stage's word template is staged with its table reads
+    in lookup slots, the refused form.  Its Boolean version has no table to read: one unit Definition of each of the five
+    families, in a partition naming every stage on bits, is staged flat, the form it takes, and its circuit on the unit's rows
+    returns the words serving commits for it (the twin's).  Minutes, all of them composing the six circuits (a select chunk's
+    one lane of Philox and two logarithms is most of it): the form is the composed circuit's (its META ``out_net``), and the
+    words are its gates', which nothing short of composing it reads."""
+    refused = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
+    seen = []
+    for v in sorted({v for v, _name, _statics in ZK_UNITS}):
+        spec = descriptor_id(bind(SA.GumbelTopPTokenSelectSharedGreedy, V=v))
+        want = {descriptor_id(u.defn): u.defn.name for u in T.plan(v) for x, name, statics in ZK_UNITS
+                if x == v and u.defn.name == name and all(u.defn.bindings[k] == y for k, y in statics.items())}
+        bits = [boolean(t) for t, _n in SRW.unit_templates(spec)[1:]]
+        s = Served(spec, n=1, seed=v)
+        ms = members(s, bits, dict.fromkeys(bits, 2))
+        for m, (g, _e) in zip(ms, read(s, ms, bits)):
+            name = want.pop(SRW.template(m.template).word, None)
+            if name is None:
+                continue
+            d = tmp_path / name
+            st = composed(m.template, d)
+            assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), m.template
+            got = st.stage(g["rows"], d, bytes(32), indices=range(m.base, m.base + m.n))
+            assert g["outs"] and all(np.array_equal(got["outs"][q], a) for q, a in g["outs"].items()), m.template
+            assert PF.ks_form_why(d / "circuit.txt", d / "pub.bin") is None, m.template
+            seen.append(name)
+        assert want == {}
+    assert sorted(seen) == sorted(d.name for d in T.STAGE_DEFINITIONS)
+    (probs,) = [t for t in TMPLS if SRW.template(t).fn.name == "TopPProbs" and spec_statics(t)["S"] == 2 and not spec_statics(t)["HEAD"]]
+    word = composed(probs, tmp_path / "word")
+    assert set(word.meta["lookups"]) == {"ex2", "rcp"} and word.meta["out_net"].startswith("stage")
+    assert PF.ks_form_why(tmp_path / "word" / "circuit.txt", tmp_path / "word" / "pub.bin") == refused
