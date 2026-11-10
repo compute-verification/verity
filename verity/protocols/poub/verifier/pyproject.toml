@@ -44,4 +44,5 @@ inputs = ["verity/core/protocols/sampled_proofs/coins.py", "verity/core/protocol
           "verity/protocols/pouw/verifier/protocol.py", "verity/protocols/pouw/verifier/salt.py",
           "verity/protocols/pouw/verifier/window.py", "verity/spot/verifier/one_stage/__init__.py",
           "verity/spot/verifier/one_stage/partition.py",
-          "verity/spot/verifier/one_stage/registered.py"]
+          "verity/spot/verifier/one_stage/registered.py",
+          "verity/configuration/__init__.py", "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/spot/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py", "verity/spot/device/__init__.py"]

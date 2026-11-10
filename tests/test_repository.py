@@ -73,6 +73,7 @@ ALLOWLIST = {
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
 =======
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
+    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "integrations/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
 >>>>>>> 7af4d24fca3e
@@ -187,7 +188,7 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/protocols/certifier/"
+    certifier = "verity/protocols/certifier/verifier/"
     assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
     assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None

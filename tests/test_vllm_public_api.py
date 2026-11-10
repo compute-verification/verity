@@ -182,6 +182,11 @@ KNOWN = frozenset({
     "verity_vllm.commit.scheme",
     "verity_vllm.commit.step_rows",
     "verity_vllm.commit.store_dump",
+    # verity/commitments/tests' test_scheme.py and test_sha512_framings.py import these three: they go when those cases are tests
+    # under integrations/vllm/
+    "verity_vllm.commitments.leaves",
+    "verity_vllm.commitments.vllm_v1",
+    "verity_vllm.commitments.vllm_v1.vectors_sha512",
     "verity_vllm.correspondence.reader_for_query",
     "verity_vllm.correspondence.runtime",
     "verity_vllm.engine.arrivals",
@@ -234,6 +239,9 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
+    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
+    "verity_vllm.program.frontend.rules",
+    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
     "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",

@@ -1,5 +1,6 @@
 """A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
+<<<<<<< HEAD
 A scan over the Lean under `verity/core/` (the verifiers and the code they run) and over `Security/`'s verifier code
 models (each `Security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `Security` modules it imports
 and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
@@ -8,6 +9,12 @@ through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a range or
 bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`; `let gs := C.gates.toArray` … `List.range
 gs.size`), a range or loop over a key program's gates, inputs or units (`List.range kp.size`, `List.range kp.units`: a
 `Spot.Bits.KeyProg` lays a member's units out side by side), a range or
+=======
+A scan over the Lean under `verity/` outside `verity/flock/prover/` (the verifiers and the code they run) refuses the forms an unrolled
+walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
+range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
+array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
+>>>>>>> 42fc411e9f3daa40a45f9a5545da9e3242c60739
 loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`), or a member's key
@@ -193,8 +200,12 @@ def _security_code(tracked: list[str]) -> set[str]:
 
 
 def _scanned() -> list[str]:
+<<<<<<< HEAD
     tracked = _tracked()
     return sorted({p for p in tracked if p.startswith("verity/core/") and p.endswith(".lean")} | _security_code(tracked))
+=======
+    return sorted(p for p in _tracked() if p.startswith("verity/") and not p.startswith("verity/flock/prover/") and p.endswith(".lean"))
+>>>>>>> 42fc411e9f3daa40a45f9a5545da9e3242c60739
 
 
 def test_no_verifier_of_record_walks_the_unrolled_circuit():
