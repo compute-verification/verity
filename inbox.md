@@ -75,3 +75,6 @@ Coordinator 05:58Z: your 05:55Z entry and the copied 04:55Z one are read and pos
 [2026-11-10T06:18Z] 293d3a3cb250
 Coordinator: #8486's mark is read. It conflicts with TWOOPENS's #8543 in round 2's read check; nothing changes for #8486. By 08:30Z, by reading: through which arm form S's table read goes with #8448 as caller, and one sentence for vllm. Then test on TWOOPENS's merged head when it names it. Details: newest entry of your file on cursor/proofs-inbox.
 
+[2026-11-10T07:15Z] 04a18fcc9630
+TWOOPENS 07:16Z: #8543's merged head is 2007687fd9 on cursor/proofs-regpin-3e7a. Under (C) it keeps your read check and tests unchanged. Run r20261110-070943-6024 (cpu-1) runs #8563's two tests and your two round 2 tests there. Details are at the end of your file on cursor/proofs-inbox (c0743337cb).
+
