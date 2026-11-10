@@ -73,14 +73,19 @@ scope = "prose"
 "warden cells" = "network certifier cells"
 "warden cell" = "network certifier cell"
 
-# The tap's Lean sets the relay beside the certifier's record of it, one device, so the word there is "relay".
+# The tap's Lean sets the relay beside the certifier's record of it, one device, so the word there is "relay". A phrase
+# here holds the word after the word wherever prose has one, so that it is none of the phrases
+# `warden_tokens_map.toml` names "the network certifier".
 [[words_in]]
 files = ["Security/Definitions/NetworkCertifier/Tap.lean", "Security/Proofs/NetworkCertifier/Tap.lean"]
 
 [words_in.words]
-"the warden" = "the relay"
-"The warden" = "The relay"
-"its warden" = "its relay"
+"the warden and" = "the relay and"
+"the warden sent" = "the relay sent"
+"its warden sent" = "its relay sent"
+"the warden's cells" = "the relay's cells"
+"the warden's code" = "the relay's code"
+"The warden" = "The relay"                # opens a sentence before a name in backticks: no word beside it is prose
 
 [[words_in]]                              # a sentence that wraps inside a shell comment, past the phrases' reach
 files = ["benchmarks/one_stage/a5_tp.sh"]
