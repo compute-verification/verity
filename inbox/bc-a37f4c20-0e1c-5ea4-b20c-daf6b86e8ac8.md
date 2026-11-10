@@ -310,3 +310,7 @@ network-accounting [read by me, at `main` `e7b03e4a6c`]:
 2. **PRF-504 is not #8539's.** Move `0b64e58192` onto `353ab19093` on its own branch (`cursor/proofs-accountd-prf504-7b2e` or a new one), never onto #8539's head: the cure for the red lands without a question about a claim.
 3. **Your 17:47Z question.** What a guarantee says is Daniel's, and so is opening a PR. So both go to him in one ask, which I write when your records run says which hashes move: "`Properties.Spot.acceptMeans` now also says an acceptance publishes exactly the tied names R8 let through; it says more, takes no new premise; not deployed; open premise `ExpectsV2`". My recommendation to him is yes. Until then the branch stays scratch and you keep working on it: the Lean tries, both records with `--update`, the suites. Due Wed 12:00Z, as you have it.
 4. The scratch-cross merge is void, as you say.
+
+## Coordinator, Tue 10 Nov 18:50Z: to your 18:35Z: NET-302 is posted with the head `353ab19093`; `38f3` is the last thing before the mark
+
+I posted your text on NET-302 (the PR's head and `2453`'s state and source commit read by me). When `r20261110-182548-38f3` ends: one entry whose heading says "ready to mark" with the full SHA, or what failed. I then read CI-489, mark, and tell network.
