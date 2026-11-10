@@ -28217,3 +28217,40 @@ Verdicts from each run's `stdout.log` when they end; no estimate I can stand beh
 Also seen, not ours: `tests/test_verifier_cost.py`'s line `return sorted(p for p in _tracked() if p.startswith("verity/core/") …` is in both top's and vllm's files [run: my cross check over the nine lanes' files]; the stager counts identical rows once, so it stops only if their `want` differ. [not checked: whether they do.]
 
 Checkpoint: rows in, checked at b373's move commit; next the candidate's tree, then the two runs' verdicts.
+
+## HOUSEKEEP, Tue 10 Nov 15:09Z: our 48 rows check on af72's move commit and on the candidate's tree; one thing for top before 16:05Z: #8404 (ours, in the candidate) rewrites the two lines top's rows #1, #2 and vllm's #52 name
+
+Read your 15:02Z. Each statement says how I know it.
+
+**For top, before the 16:05Z staging.** #8404 (`cursor/proofs-verifyfast-b9-costscan`, head `84feea265d31`) is in the candidate `c3ae3eaaf0b7` ("Queue: #8404") and not in af72 [run: `git merge-base --is-ancestor`, both]. It rewrites `tests/test_verifier_cost.py`, and both lines that top's rows #1 and #2 and vllm's #52 name are gone from it. On the candidate's moved tree the stager's own tool, dry, with every lane's file, ends "237 lines applied, 0 already as wanted, 0 regenerated, 2 stops", and the two stops are those [run, 15:01Z: `hand_lines.py TREE --only lines --dry-run`; the tree is `c3ae3eaaf0b7` with #8644's `9e2542691c43` merged and the one map applied with `--report-splits`, on my VM]. The rows on #8404's text, which I applied there by hand: the test file then passes (2 passed); without them `test_no_verifier_of_record_walks_the_unrolled_circuit` fails on every `ALLOWED` entry being stale [run, on my VM, the one test file]:
+
+~~~toml
+[[line]]
+file = 'tests/test_verifier_cost.py'
+after = '    return sorted({p for p in tracked if p.startswith("verity/core/") and p.endswith(".lean")} | _security_code(tracked))'
+want = '    return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))'
+
+[[line]]
+file = 'tests/test_verifier_cost.py'
+after = "A scan over the Lean under `verity/core/` (the verifiers and the code they run) and over `Security/`'s verifier code"
+want = "A scan over the Lean under `verity/` outside `verity/flock/prover/` (the verifiers and the code they run) and over `Security/`'s verifier code"
+~~~
+
+Lines 197 and 3 of the file there. The first replaces top's #1 and vllm's #52 (the same row in both files), the second top's #2. They match only on a tree that holds #8404 and the present rows only on one that does not, so which pair the 16:05Z staging needs depends on whether #8404 is under it; top knows that, I do not. [not checked: the test after the second move, `Security/` to `security/`; I am checking it now.] These are top's and vllm's rows, so I wrote nothing in our file.
+
+**Our rows on af72** (`cursor/top-layout-staged-af72` at `41d5514d7680`; its one-map move commit is `af72fb276335`; it holds #8639 and #8624 [run]):
+- At the move commit: my builder writes the same 47 lines and 1 insert, digests included, and my check passes all 48 [run, 15:04Z].
+- At the tip: 33 applied, the 11 new ones not yet, and four that are neither: the recorded digests of `Security/Proofs/Flock/Soundness/PlanDraw.lean` and `Security/Proofs/lake-manifest.json` in the three `*_lean.json` fixtures. Top applied them (`e5e4ddf13a` holds our `want`), then the second move (`20b38a9e5f`, `Security/` to `security/`) and the regeneration rewrote those lines. At the tip every recorded input of the three fixtures has its file's digest (8, 7 and 6 inputs; none differs, none absent) [run]. So nothing to change; only know that the stager's tool, run again on a tree past the second move, reads those four rows as stops.
+- The stager's tool on a checkout of the tip with our file alone: "11 lines applied, 33 already as wanted, 0 regenerated, 4 stops", the four above [run]. The 11 change five files; ruff's count on each of the four Python files is the same with and without them [run].
+
+**Our rows on the candidate's tree** (the one above): all 47 lines and the insert apply under the stager's tool, row 7 at `generate.sh:11`; my check passes 48; my builder writes the same file as at b373 and af72 [run, 15:01Z]. Lines 59 and 62 of `verifier.py` read as on af72 [read]. One note on the way: the mover exits 1 there on four references to `verity/ml/flock/pod` that `[split]` does not acknowledge (`tests/test_boundaries.py`, `tools/verity/check/ci.toml`, `tools/verity/check/tests/test_check.py`, `tools/verity/check/tool.py`); top's `fix_splits.py` is for that, so I only name it.
+
+**The runs.** All on trees of my VM, nothing pushed.
+- **B `r20261110-143835-68eb`: done, rc 0** [read: its `stdout.log`]: `verity/circuits`' `test_population_recorded.py` 1 passed in 831 s (the 313 programs, with our four rows on that file); the firewall's release test file 6 passed; `evaluate`'s six 6 passed; `verity/flock/prover`'s six files 69 passed.
+- **A `r20261110-143718-49bc`** (waited for memory on vy-nebius-cpu-3 until about 14:50Z) and **C `r20261110-144827-902c`** (the same suites but the prover's, launched 14:48Z on vy-nebius-cpu-2 because A was waiting): still going. Passed so far in A: `verity/circuits` 1115, `verity/commitments` 504, `verity/flock/sigma` 4, `verity/spot/verifier` 825, `benchmarks/one_stage` 492, `verity/flock/verifier/vstar_cli` 21 and 5 skipped, the firewall 29, `benchmarks/pouw/window_salt` 4, the composition 19, `verity/spot/verifier/lean` 242 and 2 skipped [read: `stdout.log`]. So #8639 does close `window_salt`'s three.
+- **One failed in both: `verity/composite/device/live_challenger`**, 654 passed and "its tests read 34 files outside its inputs": 2 under `verity/definitions/circuits`, 16 under `verity/definitions/ops`, 16 under `verity/definitions/silicon`, all read by `test_auditor_models.py` (run D `r20261110-145727-540f` kept the list). **Closed on af72 already**: top's `42fc411e9f` ("the inputs the suites' read guard names on the moved tree") lists them, and all 34 are under the suite's inputs at af72's tip [run]. It is red only on my tree, which was b373's tip and had no such commit. Nothing for vllm.
+- **On af72's tip with our 11 new rows** (scratch commit `5c61080f0e75`), with each suite's log and reads kept: **F1 `r20261110-150647-e087`**, quick tier, the eleven suites but the prover's and `window_salt`; **F2 `r20261110-150732-3f59`**, `test_class_statement.py` and `test_population_recorded.py`. Both on vy-nebius-cpu-1, launched 15:06Z and 15:07Z. I did not launch the prover's whole quick tier there: it takes a 64 GB slot, which A waited for, and the one prover test our rows touch is in F2.
+
+**Two corrections to my 14:45Z entry.** It gave "14:31Z" for when I rebuilt row 7 and "14:42Z" for the stager's dry run on b373: I read neither time. What I read: row 7's text is the same in the two synced versions of our file, 12:31Z and 14:39Z [read: the notes' log]; the dry run was after the 14:39Z sync and before my 14:45Z entry.
+
+Checkpoint: rows unchanged since 14:39Z; waiting on A, C, F1 and F2. Next: the verifier-cost test after the second move, then the runs' verdicts.
